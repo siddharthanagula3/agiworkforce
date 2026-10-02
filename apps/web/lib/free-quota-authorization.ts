@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { KeyValueStore } from '@agiworkforce/key-value';
 import {
   MODEL_STUDIO_ACCOUNT_BILLING_HINT,
-  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+  MODEL_STUDIO_MODEL_RETIRED_HINT,
   classifyModelStudioError,
 } from '@agiworkforce/provider-runtime';
 import {
@@ -156,6 +156,10 @@ export interface FreeQuotaState {
   used: ReadonlyMap<string, number>;
 }
 
+function holdInForce(hold: z.infer<typeof HoldSchema>, attestedAtMs: number | null): boolean {
+  return hold.cause !== 'withdrawn' || attestedAtMs === null || hold.atMs >= attestedAtMs;
+}
+
 export async function readFreeQuotaState(
   store: KeyValueStore,
   input: { apiKey: string; observedOn: string; offeringKeys: readonly string[] },
@@ -171,10 +175,12 @@ export async function readFreeQuotaState(
   const [attestation, suspension, holds, ...used] = await batch.exec();
   const parsedAttestation = QuotaAttestationSchema.safeParse(decoded(attestation));
   const parsedSuspension = SuspensionSchema.safeParse(decoded(suspension));
+  const attestedAtMs = parsedAttestation.success ? parsedAttestation.data.checkedAtMs : null;
   const holdEntries = new Map<string, FreeQuotaHoldCause>();
   for (const [key, value] of Object.entries((holds ?? {}) as Record<string, unknown>)) {
     const hold = HoldSchema.safeParse(decoded(value));
-    holdEntries.set(key, hold.success ? hold.data.cause : 'billing');
+    if (!hold.success) holdEntries.set(key, 'billing');
+    else if (holdInForce(hold.data, attestedAtMs)) holdEntries.set(key, hold.data.cause);
   }
   const usedEntries = new Map<string, number>();
   input.offeringKeys.forEach((key, index) => {
@@ -280,8 +286,7 @@ export type FreeQuotaUnavailableReason =
   | 'attestation_other_credential'
   | 'attestation_stale'
   | 'attestation_excludes_offering'
-  | 'managed_route_shares_allowance'
-  | 'provider_withdrawn';
+  | 'managed_route_shares_allowance';
 
 export type FreeQuotaDecision =
   | { status: Extract<FreeQuotaStatus, 'ready'>; usable: number; used: number }
@@ -343,7 +348,7 @@ export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuot
   if (!apiKey) return unavailable('credential_missing');
   if (!state) return unavailable('shared_state_unavailable');
   const hold = state.holds.get(entry.offeringKey);
-  if (hold === 'withdrawn') return unavailable('provider_withdrawn');
+  if (hold === 'withdrawn') return { status: 'expired' };
   if (hold) return { status: 'exhausted', cause: 'provider' };
   const usable = usableAllowance(entry, policy);
   const used = state.used.get(entry.offeringKey) ?? 0;
@@ -458,7 +463,7 @@ export function classifyFreeQuotaRefusal(failure: {
     case 'context_overflow':
       return 'too_long';
     case 'invalid_model':
-      return classified.providerHint === MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT
+      return classified.providerHint === MODEL_STUDIO_MODEL_RETIRED_HINT
         ? 'withdrawn'
         : 'unavailable';
     case 'safety':

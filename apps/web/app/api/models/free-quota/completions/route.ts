@@ -114,7 +114,7 @@ const REFUSAL_FAILURE: Readonly<Record<FreeQuotaRefusal, FreeQuotaFailure>> = {
   interrupted: 'interrupted',
   too_long: 'too_long',
   unavailable: 'unavailable',
-  withdrawn: 'unavailable',
+  withdrawn: 'expired',
   blocked: 'blocked',
   failed: 'provider_failed',
 };
@@ -259,6 +259,12 @@ async function recordRefusal(
     logger.error(
       { offering: ledger.offeringKey, signal: refusal.signal },
       '[free-quota] provider reported an account billing state; every free model is withdrawn until a newer attestation',
+    );
+  }
+  if (refusal.kind === 'unavailable') {
+    logger.warn(
+      { offering: ledger.offeringKey, signal: refusal.signal },
+      '[free-quota] provider refused this free model for one turn; it stays on offer',
     );
   }
 }
@@ -479,10 +485,11 @@ async function handlePost(request: NextRequest): Promise<Response> {
     );
   }
   const endsOn = freeQuotaEndsOn(entry, offering);
+  const today = new Date(context.nowMs).toISOString().slice(0, 10);
   const copy: CopyContext = {
     ...baseCopy,
     modelName: offering.displayName,
-    expiresOn: endsOn,
+    expiresOn: endsOn !== null && endsOn <= today ? endsOn : null,
   };
   const refuseTurn = async (failure: FreeQuotaFailure) => {
     const reason = FREE_LIMIT_REASON[failure];

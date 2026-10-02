@@ -201,9 +201,17 @@ describe('provider refusals on a free model', () => {
       { status: 429, code: 'CommodityNotPurchased', message: 'Commodity has not purchased yet' },
       'account_billing',
     ],
-    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'withdrawn'],
-    [{ status: 403, code: 'AccessDenied', message: 'Access denied.' }, 'withdrawn'],
-    [{ status: 403, code: 'access_denied', message: 'Access denied.' }, 'withdrawn'],
+    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'unavailable'],
+    [{ status: 403, code: 'AccessDenied', message: 'Access denied.' }, 'unavailable'],
+    [{ status: 403, code: 'access_denied', message: 'Access denied.' }, 'unavailable'],
+    [
+      {
+        status: 403,
+        code: 'AccessDenied',
+        message: 'current user api does not support synchronous calls.',
+      },
+      'unavailable',
+    ],
     [
       { status: 403, code: 'Endpoint.AccessDenied', message: 'Workspace endpoint access denied.' },
       'withdrawn',

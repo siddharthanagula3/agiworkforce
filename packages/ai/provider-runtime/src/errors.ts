@@ -507,6 +507,7 @@ export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_TIER_ONLY_PROVIDER_HINT = 'free_tier_only';
 export const MODEL_STUDIO_ACCOUNT_BILLING_HINT = 'account_billing';
 export const MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT = 'model_access_denied';
+export const MODEL_STUDIO_MODEL_RETIRED_HINT = 'model_retired';
 
 const MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGES: readonly string[] = [
   'free tier of the model has been exhausted',
@@ -535,10 +536,10 @@ const MODEL_STUDIO_MODEL_NOT_FOUND_CODES: ReadonlySet<string> = new Set([
 const MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE = 'model not exist';
 const MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES: ReadonlySet<string> = new Set([
   'model.accessdenied',
-  'endpoint.accessdenied',
   'accessdenied',
   'access_denied',
 ]);
+const MODEL_STUDIO_MODEL_RETIRED_CODES: ReadonlySet<string> = new Set(['endpoint.accessdenied']);
 const MODEL_STUDIO_CONTENT_INSPECTION_CODES: ReadonlySet<string> = new Set([
   'datainspectionfailed',
   'data_inspection_failed',
@@ -1218,7 +1219,12 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       message,
     };
   }
-  if (named(MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES)) {
+  const modelRefusalHint = named(MODEL_STUDIO_MODEL_RETIRED_CODES)
+    ? MODEL_STUDIO_MODEL_RETIRED_HINT
+    : named(MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES)
+      ? MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT
+      : null;
+  if (modelRefusalHint) {
     return {
       category: 'invalid_model',
       code: 'model_tier_restricted',
@@ -1226,7 +1232,7 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       fallbackable: true,
       ...withStatus,
       message,
-      providerHint: MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+      providerHint: modelRefusalHint,
     };
   }
   if (

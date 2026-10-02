@@ -797,21 +797,53 @@ describe('Qwen free quota turns on the Free plan', () => {
   });
 
   it.each([
+    ['AccessDenied', 'current user api does not support synchronous calls.'],
     ['AccessDenied', 'Access denied.'],
-    ['Endpoint.AccessDenied', 'Workspace endpoint access denied.'],
-  ])('withdraws a model the provider answers with %s for every account', async (code, message) => {
-    mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status: 403 }));
+    ['Model.AccessDenied', 'Model access denied.'],
+  ])(
+    'refuses only this turn when the provider answers %s "%s", and keeps the model on offer',
+    async (code, message) => {
+      mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status: 403 }));
+      const response = await post();
+      expect(response.status).toBe(503);
+      expect((await response.json()).error.code).toBe('free_quota_unavailable');
+      expect((await sharedState()).holds.has(model!)).toBe(false);
+
+      mocks.stream.mockResolvedValue(sse('[DONE]'));
+      const again = await post(
+        { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+        'after-refusal',
+      );
+      expect(again.status).toBe(200);
+      expect(mocks.stream).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('ends the free offer for every account when the provider retired the model endpoint', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        { error: { code: 'Endpoint.AccessDenied', message: 'Workspace endpoint access denied.' } },
+        { status: 403 },
+      ),
+    );
     const response = await post();
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.code).toBe('free_quota_unavailable');
+    expect(response.status).toBe(410);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_expired');
+    expect(error.message).toContain(`The free offer for ${modelName}`);
+    expect(error.message).toContain('has ended');
+    expect(error.message).not.toContain('ended on');
+    const freeLimit = FreeLimitSchema.parse(error.free_limit);
+    expect(freeLimit).toMatchObject({ model, reason: 'allowance_ended' });
+    expect(freeLimit.alternative_model).not.toBe(model);
     expect((await sharedState()).holds.get(model!)).toBe('withdrawn');
 
     const again = await post(
       { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
-      'after-withdrawal',
+      'after-retirement',
     );
-    expect(again.status).toBe(503);
-    expect((await again.json()).error.code).toBe('free_quota_unavailable');
+    expect(again.status).toBe(410);
+    expect((await again.json()).error.code).toBe('free_quota_expired');
     expect(mocks.stream).toHaveBeenCalledTimes(1);
   });
 
@@ -1051,6 +1083,25 @@ describe('Qwen free quota turns on the Free plan', () => {
       reason: 'allowance_used',
     });
     expect((await sharedState()).holds.get(imageModel)).toBe('exhausted');
+  });
+
+  it('keeps a promotional image on offer when the provider refuses the call shape', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'AccessDenied',
+      providerMessage: 'current user api does not support synchronous calls.',
+    });
+
+    const response = await post({
+      model: imageModel,
+      messages: [{ role: 'user', content: 'A blue paper boat' }],
+    });
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('free_quota_unavailable');
+    expect((await sharedState()).holds.has(imageModel)).toBe(false);
   });
 
   it('never exposes the provider URL when generated image persistence fails', async () => {

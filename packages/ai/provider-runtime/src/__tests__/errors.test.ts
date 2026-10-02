@@ -10,6 +10,7 @@ import {
   FREE_TIER_ONLY_PROVIDER_HINT,
   MODEL_STUDIO_ACCOUNT_BILLING_HINT,
   MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+  MODEL_STUDIO_MODEL_RETIRED_HINT,
   SPENDING_CAP_PROVIDER_HINT,
   classifyError,
   classifyModelStudioError,
@@ -624,16 +625,33 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
     [403, 'Model.AccessDenied', 'Model access denied.'],
     [403, 'AccessDenied', 'Access denied.'],
     [403, 'access_denied', 'Access denied.'],
-    [403, 'Endpoint.AccessDenied', 'Workspace endpoint access denied.'],
-  ])('reads %i %s as a refusal of that model, never of the credential', (status, code, message) => {
-    const c = classifyModelStudioError(compatibleModeError(status, code, message));
+    [403, 'AccessDenied', 'current user api does not support synchronous calls.'],
+  ])(
+    'reads %i %s as a refusal of that model the account can still fix, never of the credential',
+    (status, code, message) => {
+      const c = classifyModelStudioError(compatibleModeError(status, code, message));
+      expect(c).toMatchObject({
+        category: 'invalid_model',
+        code: 'model_tier_restricted',
+        providerHint: MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+        retryable: false,
+        fallbackable: true,
+        status,
+      });
+    },
+  );
+
+  it('reads a deprecated model endpoint as that model retired, never as the credential', () => {
+    const c = classifyModelStudioError(
+      compatibleModeError(403, 'Endpoint.AccessDenied', 'Workspace endpoint access denied.'),
+    );
     expect(c).toMatchObject({
       category: 'invalid_model',
       code: 'model_tier_restricted',
-      providerHint: MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+      providerHint: MODEL_STUDIO_MODEL_RETIRED_HINT,
       retryable: false,
       fallbackable: true,
-      status,
+      status: 403,
     });
   });
 

@@ -262,7 +262,7 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     expect(result.get(target!)).toEqual({ status: 'exhausted', cause: 'provider' });
   });
 
-  it('reports a model the provider no longer serves as unavailable for every account', async () => {
+  it('reports a model whose endpoint the provider retired as ended for every account', async () => {
     const store = await attested(createMemoryKeyValueStore());
     const [target] = readyKeys(await statuses(context({ store })));
     await recordFreeQuotaHold(store, {
@@ -271,9 +271,36 @@ describe('a free quota model is offered only on current quota-only evidence', ()
       cause: 'withdrawn',
       nowMs: NOW,
     });
-    expect((await statuses(context({ store }))).get(target!)).toEqual({
-      status: 'unavailable',
-      reason: 'provider_withdrawn',
+    expect((await statuses(context({ store }))).get(target!)).toEqual({ status: 'expired' });
+  });
+
+  it('offers a retired model again once a console check newer than the retirement is recorded', async () => {
+    const store = await attested(createMemoryKeyValueStore());
+    const [target] = readyKeys(await statuses(context({ store })));
+    await recordFreeQuotaHold(store, {
+      apiKey: API_KEY,
+      offeringKey: target!,
+      cause: 'withdrawn',
+      nowMs: NOW,
+    });
+    await writeQuotaAttestation(store, attestation({ checkedAtMs: NOW + 1 }));
+    const after = await statuses(context({ store, nowMs: NOW + 2 }));
+    expect(after.get(target!)?.status).toBe('ready');
+  });
+
+  it('keeps a spent model spent when a newer console check is recorded', async () => {
+    const store = await attested(createMemoryKeyValueStore());
+    const [target] = readyKeys(await statuses(context({ store })));
+    await recordFreeQuotaHold(store, {
+      apiKey: API_KEY,
+      offeringKey: target!,
+      cause: 'exhausted',
+      nowMs: NOW,
+    });
+    await writeQuotaAttestation(store, attestation({ checkedAtMs: NOW + 1 }));
+    expect((await statuses(context({ store, nowMs: NOW + 2 }))).get(target!)).toEqual({
+      status: 'exhausted',
+      cause: 'provider',
     });
   });
 
