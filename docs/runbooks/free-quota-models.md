@@ -160,9 +160,10 @@ review gate on `/operator#quota` reads valid until the new date.
 
 ### Renewing it
 
-A reminder goes out three days before `expiresAtMs` and again when it passes
-(see Reminders). Start the renewal when the first one arrives, since a merge and
-a deploy take time:
+A reminder goes out fourteen days before `expiresAtMs`
+(`quotaExperimentPolicy.termsReviewReminderLeadMs`) and again when it passes
+(see Reminders). Start the renewal when the first one arrives, since re-reading
+the terms, a review, a merge and a deploy take time:
 
 1. Re-read the governing documents first: the Qwen Cloud Customer Agreement,
    Models Supplemental §2, and the Product Terms §4.48, at the URLs above. If a
@@ -309,16 +310,16 @@ until the record is gone:
 with its logic in `apps/web/lib/server/free-quota-renewal.ts`. It tells platform
 admins:
 
-| Reason                                                   | When                                                  | Severity |
-| -------------------------------------------------------- | ----------------------------------------------------- | -------- |
-| terms review runs out soon                               | inside `renewalReminderLeadMs` (3 days) of its expiry | warning  |
-| terms review ran out                                     | at `expiresAtMs`                                      | critical |
-| console check runs out soon                              | inside 3 days of the end of its 30 days               | warning  |
-| console check ran out                                    | at the end of its 30 days                             | critical |
-| no console check is recorded while the review is current | once a day until a check is recorded                  | critical |
-| the key changed after the console check                  | the first run after the rotation                      | critical |
-| the provider reported an account billing code            | the first run after the signal                        | critical |
-| a billing signal record cannot be read                   | once a day until the record is removed                | critical |
+| Reason                                                   | When                                                                  | Severity |
+| -------------------------------------------------------- | --------------------------------------------------------------------- | -------- |
+| terms review runs out soon                               | inside `termsReviewReminderLeadMs` (14 days) of its expiry            | warning  |
+| terms review ran out                                     | at `expiresAtMs`                                                      | critical |
+| console check runs out soon                              | inside `attestationReminderLeadMs` (3 days) of the end of its 30 days | warning  |
+| console check ran out                                    | at the end of its 30 days                                             | critical |
+| no console check is recorded while the review is current | once a day until a check is recorded                                  | critical |
+| the key changed after the console check                  | the first run after the rotation                                      | critical |
+| the provider reported an account billing code            | the first run after the signal                                        | critical |
+| a billing signal record cannot be read                   | once a day until the record is removed                                | critical |
 
 A missing console check covers both the launch, before the first check is
 recorded, and a recorded check that was lost or no longer parses, for example

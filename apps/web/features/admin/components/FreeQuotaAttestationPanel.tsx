@@ -97,7 +97,7 @@ function liveTermsStanding(status: ConfiguredStatus, nowMs: number): FreeQuotaTe
   if (!isLive(standing) || !review) return standing;
   const left = review.expiresAtMs - nowMs;
   if (left <= 0) return 'expired';
-  return left <= status.reminderLeadMs ? 'expiring' : 'current';
+  return left <= status.termsReviewReminderLeadMs ? 'expiring' : 'current';
 }
 
 function liveAttestationStanding(
@@ -108,7 +108,7 @@ function liveAttestationStanding(
   if (!isLive(standing) || !record) return standing;
   const left = record.freshUntilMs - nowMs;
   if (left <= 0) return 'stale';
-  return left <= status.reminderLeadMs ? 'expiring' : 'current';
+  return left <= status.consoleCheckReminderLeadMs ? 'expiring' : 'current';
 }
 
 function lapsedSinceRead(status: FreeQuotaAttestationStatus | null, nowMs: number): boolean {

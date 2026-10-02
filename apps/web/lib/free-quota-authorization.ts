@@ -47,7 +47,8 @@ export const PolicySchema = z.object({
   pollIntervalMs: z.number().int().positive(),
   maxPolls: z.number().int().positive(),
   attestationMaxAgeMs: z.number().int().positive(),
-  renewalReminderLeadMs: z.number().int().positive(),
+  attestationReminderLeadMs: z.number().int().positive(),
+  termsReviewReminderLeadMs: z.number().int().positive(),
   chatMaxOutputTokens: z.number().int().positive(),
   chatImageReserveTokens: z.number().int().positive(),
   chatRequestTimeoutMs: z.number().int().positive(),
@@ -300,7 +301,7 @@ export function attestationStanding(input: {
     ? 'other_credential'
     : attestation.checkedAtMs > nowMs || nowMs >= freshUntilMs
       ? 'stale'
-      : freshUntilMs - nowMs <= policy.renewalReminderLeadMs
+      : freshUntilMs - nowMs <= policy.attestationReminderLeadMs
         ? 'expiring'
         : 'current';
   return { standing, attestation, freshUntilMs };

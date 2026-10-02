@@ -71,7 +71,7 @@ export function freeQuotaRenewalAlerts(input: {
 }): FreeQuotaRenewalAlert[] {
   const { termsReview, attestation, policy, nowMs } = input;
   const alerts: FreeQuotaRenewalAlert[] = [];
-  const terms = termsReviewStanding(termsReview, nowMs, policy.renewalReminderLeadMs);
+  const terms = termsReviewStanding(termsReview, nowMs, policy.termsReviewReminderLeadMs);
   if (termsReview && (terms === 'expiring' || terms === 'expired')) {
     alerts.push({
       reason: terms === 'expiring' ? 'terms_review_expiring' : 'terms_review_expired',

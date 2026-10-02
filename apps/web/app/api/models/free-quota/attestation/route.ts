@@ -82,7 +82,7 @@ function termsReviewStatus(
   nowMs: number,
 ): FreeQuotaTermsReviewStatus {
   return {
-    standing: termsReviewStanding(review, nowMs, policy.renewalReminderLeadMs),
+    standing: termsReviewStanding(review, nowMs, policy.termsReviewReminderLeadMs),
     review: review
       ? {
           reviewedBy: review.reviewedBy,
@@ -181,7 +181,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     consolePage: QuotaAttestationSchema.shape.sourceUrl.value,
     validForMs: policy.attestationMaxAgeMs,
     recordWindowMs: recordWindowMs(policy),
-    reminderLeadMs: policy.renewalReminderLeadMs,
+    consoleCheckReminderLeadMs: policy.attestationReminderLeadMs,
+    termsReviewReminderLeadMs: policy.termsReviewReminderLeadMs,
     termsReview: termsReviewStatus(inventory.termsReview, policy, nowMs),
     attestation: {
       standing: attestationStanding({ state, apiKey, policy, nowMs }).standing,

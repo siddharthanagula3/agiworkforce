@@ -84,7 +84,8 @@ function configured(overrides: Partial<ConfiguredStatus> = {}): ConfiguredStatus
     consolePage: 'https://home.qwencloud.com/benefits',
     validForMs: 30 * DAY_MS,
     recordWindowMs: 60 * 60 * 1000,
-    reminderLeadMs: 3 * DAY_MS,
+    consoleCheckReminderLeadMs: 3 * DAY_MS,
+    termsReviewReminderLeadMs: 14 * DAY_MS,
     termsReview: { standing: 'current', review: review() },
     attestation: { standing: 'current', record: record() },
     billingSignalAtMs: null,
@@ -331,6 +332,23 @@ describe('FreeQuotaAttestationPanel, the terms review gate', () => {
       'data-tone',
       'danger',
     );
+  });
+
+  it('warns about the review inside its own lead, before the console check would warn', async () => {
+    serve([
+      configured({
+        termsReview: {
+          standing: 'current',
+          review: review({ expiresAtMs: SERVER_NOW + 7 * DAY_MS }),
+        },
+      }),
+    ]);
+    render(<FreeQuotaAttestationPanel />);
+
+    const terms = await screen.findByRole('group', { name: 'Terms review' });
+    const notice = within(terms).getByText(/Renew the terms review/);
+    expect(notice).toHaveAttribute('data-tone', 'warn');
+    expect(notice).toHaveTextContent('7 d from now');
   });
 
   it('warns to renew the review inside the reminder lead', async () => {

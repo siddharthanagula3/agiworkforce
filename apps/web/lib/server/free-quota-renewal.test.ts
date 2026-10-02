@@ -69,7 +69,8 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const NOW = Date.UTC(2026, 9, 2, 15);
 const policy = loadFreeQuotaPolicy();
-const LEAD_MS = policy.renewalReminderLeadMs;
+const CHECK_LEAD_MS = policy.attestationReminderLeadMs;
+const TERMS_LEAD_MS = policy.termsReviewReminderLeadMs;
 const VALID_MS = policy.attestationMaxAgeMs;
 const inventory = loadFreePools().inventory!;
 
@@ -181,11 +182,15 @@ describe('which free quota gates need a reminder', () => {
     expect(alerts({})).toEqual([]);
   });
 
-  it('warns three days before the terms review runs out, and not a moment earlier', () => {
-    expect(reasons(alerts({ termsReview: review({ expiresAtMs: NOW + LEAD_MS }) }))).toEqual([
+  it('warns about the terms review earlier than the console check, since renewing it means a deploy', () => {
+    expect(TERMS_LEAD_MS).toBeGreaterThan(CHECK_LEAD_MS);
+    expect(
+      reasons(alerts({ termsReview: review({ expiresAtMs: NOW + CHECK_LEAD_MS + DAY_MS }) })),
+    ).toEqual(['terms_review_expiring']);
+    expect(reasons(alerts({ termsReview: review({ expiresAtMs: NOW + TERMS_LEAD_MS }) }))).toEqual([
       'terms_review_expiring',
     ]);
-    expect(alerts({ termsReview: review({ expiresAtMs: NOW + LEAD_MS + 1 }) })).toEqual([]);
+    expect(alerts({ termsReview: review({ expiresAtMs: NOW + TERMS_LEAD_MS + 1 }) })).toEqual([]);
   });
 
   it('tells again when the terms review has run out', () => {
@@ -213,7 +218,7 @@ describe('which free quota gates need a reminder', () => {
   });
 
   it('warns three days before the console check runs out', () => {
-    const checkedAtMs = NOW - VALID_MS + LEAD_MS;
+    const checkedAtMs = NOW - VALID_MS + CHECK_LEAD_MS;
     expect(alerts({ attestation: attestation({ checkedAtMs }) })).toEqual([
       { reason: 'console_check_expiring', checkedAtMs, freshUntilMs: checkedAtMs + VALID_MS },
     ]);
@@ -285,7 +290,7 @@ describe('what a reminder says', () => {
     [{ reason: 'terms_review_expiring', review: review() }, 'warning', /renew the terms review/],
     [{ reason: 'terms_review_expired', review: review() }, 'critical', /terms review ran out/],
     [
-      { reason: 'console_check_expiring', checkedAtMs: NOW, freshUntilMs: NOW + LEAD_MS },
+      { reason: 'console_check_expiring', checkedAtMs: NOW, freshUntilMs: NOW + CHECK_LEAD_MS },
       'warning',
       /renew the console check/,
     ],

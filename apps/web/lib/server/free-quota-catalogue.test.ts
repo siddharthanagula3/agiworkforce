@@ -224,7 +224,8 @@ describe('a free quota model is offered only on current quota-only evidence', ()
   });
 
   it('keeps serving through the renewal reminder window and stops when the check runs out', async () => {
-    const checkedAtMs = NOW - policy.attestationMaxAgeMs + policy.renewalReminderLeadMs - 60_000;
+    const checkedAtMs =
+      NOW - policy.attestationMaxAgeMs + policy.attestationReminderLeadMs - 60_000;
     const store = await attested(createMemoryKeyValueStore(), { checkedAtMs });
     expect(readyKeys(await statuses(context({ store })))).not.toEqual([]);
     const lapsedAtMs = checkedAtMs + policy.attestationMaxAgeMs;

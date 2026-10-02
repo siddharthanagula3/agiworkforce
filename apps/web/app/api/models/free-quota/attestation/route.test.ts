@@ -277,6 +277,7 @@ it('shows the terms review as its own gate, naming the terms it refuses', async 
 
 it.each([
   ['expiring', () => review({ expiresAtMs: Date.now() + DAY_MS })],
+  ['expiring', () => review({ expiresAtMs: Date.now() + 7 * DAY_MS })],
   [
     'expired',
     () => review({ verifiedAtMs: Date.now() - 91 * DAY_MS, expiresAtMs: Date.now() - DAY_MS }),
@@ -286,6 +287,12 @@ it.each([
 ] as const)('reads a %s terms review', async (standing, build) => {
   mocks.termsReview = build();
   expect((await configuredStatus()).termsReview.standing).toBe(standing);
+});
+
+it('reports how early each gate warns', async () => {
+  const body = await configuredStatus();
+
+  expect(body.termsReviewReminderLeadMs).toBeGreaterThan(body.consoleCheckReminderLeadMs);
 });
 
 it('counts as serving only what both gates let through', async () => {
