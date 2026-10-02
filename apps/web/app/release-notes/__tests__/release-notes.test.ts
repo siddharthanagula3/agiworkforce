@@ -90,6 +90,17 @@ describe('release notes describe capabilities the code actually carries', () => 
     );
   });
 
+  it('speaks of the Tauri build only in the past tense once it has left the public download flows', () => {
+    expect(noteFor('2026-09-15').body.join(' ')).toContain(
+      'The earlier Tauri build leaves the public download flows',
+    );
+    const tauri = noteFor('2026-02 to 2026-05').body.join(' ');
+    expect(tauri).toMatch(/\bTauri\b/);
+    for (const present of [/\byet\b/i, /\bcarries\b/i, /\blinks open\b/i, /\bare available\b/i]) {
+      expect(tauri).not.toMatch(present);
+    }
+  });
+
   it('keeps the desktop entries short of GA while no installer is published', () => {
     expect(noteFor('2026-09-15').maturity).not.toBe('ga');
     expect(noteFor('2026-09-15').body.join(' ')).toContain('no installer has been published yet');

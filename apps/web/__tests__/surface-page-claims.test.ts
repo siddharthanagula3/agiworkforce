@@ -792,9 +792,9 @@ describe('/changelog, desktop signing is a pipeline and is dated as one', () => 
     expect(workflow).toMatch(/target\/release\/bundle\/appimage\/\*\.AppImage\.sig/u);
   });
 
-  it('states that no signed installer has been published from it', () => {
+  it('states that no signed installer was published from it', () => {
     const entries = collapsed('lib/changelog-entries.ts');
-    expect(entries).toMatch(/No signed installer has been published from it yet/u);
+    expect(entries).toMatch(/No signed installer was published from it/u);
     expect(entries).toMatch(/\.AppImage, \.deb and \.rpm assets and no signature/u);
   });
 

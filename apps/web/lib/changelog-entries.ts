@@ -93,8 +93,8 @@ export const RELEASES: readonly Release[] = [
     date: '2026-02 to 2026-05',
     headline: 'Desktop · early releases',
     body: [
-      'Tauri + React desktop, with the release signing and installer publishing pipeline aligned to the public release path. No signed installer has been published from it yet: the newest desktop release carries .AppImage, .deb and .rpm assets and no signature.',
-      'Public download links open only after verified GitHub release assets or configured signed-asset URLs are available.',
+      'Tauri + React desktop, with the release signing and installer publishing pipeline aligned to the public release path. No signed installer was published from it: its newest release carried .AppImage, .deb and .rpm assets and no signature.',
+      'Public download links were gated on verified GitHub release assets or configured signed-asset URLs.',
     ],
   },
 ];

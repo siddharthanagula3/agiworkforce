@@ -591,6 +591,16 @@ describe('/changelog lists policy changes', () => {
     }
   });
 
+  it('makes no promise to list only what is actively maintained while it lists releases of the retired Tauri build', () => {
+    render(<ChangelogPage />);
+    const releases = within(screen.getByRole('list', { name: 'Releases' }))
+      .getAllByRole('listitem')
+      .map((row) => row.textContent ?? '');
+
+    expect(releases.some((row) => /\bTauri\b/.test(row))).toBe(true);
+    expect(document.body.textContent).not.toMatch(/\bactively maintain/i);
+  });
+
   it("promises no 'in progress' items while no row shows that state", () => {
     render(<ChangelogPage />);
     const rows = screen.getAllByRole('listitem').map((row) => row.textContent ?? '');
