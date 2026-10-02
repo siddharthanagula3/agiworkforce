@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionRowActionFailureMessage } from '@shared/components/layout/sidebar-session-actions';
@@ -386,5 +386,37 @@ describe('WebChatPage conversation title slot', () => {
     expect(screen.queryByTestId('chat-sidebar')).toBeNull();
     expect(screen.queryByTestId('research-panel')).toBeNull();
     expect(screen.queryByTestId('artifacts-panel')).toBeNull();
+  });
+});
+
+describe('WebChatPage tab title', () => {
+  const SERVER_TITLE = 'Pineapple identity check · AGI';
+  let titleBefore: string;
+
+  beforeEach(() => {
+    titleBefore = document.title;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    );
+  });
+
+  afterEach(() => {
+    document.title = titleBefore;
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the server title until the routed conversation is known, then follows it', async () => {
+    useChatStore.getState().reset();
+    document.title = SERVER_TITLE;
+
+    render(<WebChatPage />);
+    await screen.findByTestId('chat-sidebar');
+
+    expect(document.title).toBe(SERVER_TITLE);
+
+    act(() => listConversationOnly());
+
+    await waitFor(() => expect(document.title).toBe(`${TITLE} · AGI`));
   });
 });

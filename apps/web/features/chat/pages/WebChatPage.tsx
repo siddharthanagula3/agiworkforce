@@ -1848,7 +1848,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // a disclosure/expiry dialog, and only the dialog's explicit confirmation
   // creates a public snapshot.
   const activeConversationTitle = displayedConversation?.title;
-  useDocumentTitleSync(activeConversationId, activeConversationTitle);
+  useDocumentTitleSync(displayedConversationId);
   const temporaryChatActive = displayedConversation
     ? Boolean(displayedConversation.isTemporary)
     : resolveNewChatTemporary(pendingTemporaryChat, newChatsTemporary);
