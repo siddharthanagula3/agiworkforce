@@ -12,7 +12,7 @@ delete this file when it is empty. An entry marked "same fix as" closes with its
 primary. Codex's raw report stays outside the repository, in its read-only
 worktree `.worktrees/codex-reaudit/audit/codex-reaudit-2026-09-30/`.
 
-Open now: 438 entries (153 defects, 285 half-built).
+Open now: 439 entries (153 defects, 286 half-built).
 
 ## Signaling relay
 
@@ -156,6 +156,7 @@ Open now: 438 entries (153 defects, 285 half-built).
 - **06/1894** (half-built): Add a 'Making your allowance last' section to the usage-and-credits help article (start new chats, keep context short, use standard models, projects) and regenerate the support corpus. Same fix as 01/335. Files: `apps/web/content/support/usage-and-credits.md`, `apps/web/lib/support/agent/corpus.generated.json`, `apps/web/content/support/support-claims.json`.
 - **06/2018** (half-built, security): Implement an enforce-SSO org setting honoured by sign-in, session and recovery paths for verified-domain members, with an owner break-glass, and lift the rejection in the org route and the Not yet available notice. Same fix as 02/673. Files: `apps/web/app/api/settings/organization/route.ts`, `apps/web/lib/server/sso/`, `apps/web/features/workspace-console/components/WorkspaceIdentityPanels.tsx`.
 - **06/2030** (half-built, security): Add an owner-only workspace data export and surface an export offer on the delete-workspace page before scheduling deletion. Same fix as 01/366. Files: `apps/web/features/admin/pages/WorkspaceDeletionPage.tsx`, `apps/web/app/api/settings/organization/export/route.ts`, `apps/web/lib/services/organization-export-service.ts`.
+- **WEB-SMOOTH-SCROLL-01** (half-built): Restore the animated scroll-to-bottom in the web transcript. Since 355131b6a2 moved react-window to 2.3.3, scrollToRow on a list with dynamic row heights ignores the requested behavior and jumps instantly before settling the target in a requestAnimationFrame loop, so the smooth scroll the scroll-to-bottom control and new turns ask for became a jump. Files: `apps/web/features/chat/components/messages/ChatMessageList.tsx`.
 
 ## Desktop
 

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-09-23
+Last updated: 2026-10-01
 
 Every defect this repository knows about and has not fixed, one section per surface,
 open rows only. Check it before reporting a bug as new.
@@ -109,6 +109,7 @@ No open rows.
 | AUDIT-REACHABILITY-EVIDENCE-UNCHECKED-01 | Medium   | Older reachability inventory accepts fabricated implementation evidence                                                                                                                       | `scripts/check-audit-inventory.mjs:148`                                                                    | 2026-09-29 | Platform + surface maintainers | Revalidated `49d0c30f`; [source, proof and limits](../prior-audits/active-issues-register.md#audit-reachability-evidence-unchecked-01).                                                                                                                                                                                |
 | AUDIT-DECLINED-COUNTED-DONE-01           | Medium   | Declined connector capability is counted as implemented                                                                                                                                       | `audit/ledger/ecosystem-capability-ledger.jsonl:1`                                                         | 2026-09-29 | Platform + surface maintainers | Revalidated `49d0c30f`; [source, proof and limits](../prior-audits/active-issues-register.md#audit-declined-counted-done-01).                                                                                                                                                                                          |
 | AUDIT-FILE-LEDGER-IDENTITY-LOST-01       | Medium   | Per-file ledger regeneration loses review evidence and does not bind dirty source                                                                                                             | `scripts/generate-surface-file-ledger.mjs:33`                                                              | 2026-09-29 | Platform + surface maintainers | Revalidated `49d0c30f`; [source, proof and limits](../prior-audits/active-issues-register.md#audit-file-ledger-identity-lost-01).                                                                                                                                                                                      |
+| NODE-FORGE-PKCS1-DIGEST-ALGORITHM-01     | Low      | node-forge 1.4.0 carries GHSA-86w9-cpqp-85rv (RSA PKCS1 v1.5 signature forgery) with no patched release; the JS audit gate waives it until 2026-10-31                                         | `.github/security-gate-policy.json` exclusion `node-forge-pkcs1-digest-algorithm`                          | 2026-10-01 | Platform lead                  | Scope: Expo CLI build tooling only, no shipped runtime (apps/mobile reaches it through @expo/cli). Expires 2026-10-31, after which `check-security-gates.mjs` fails the build. Close on a patched node-forge or an @expo/cli update that drops it, removing the `pnpm.auditConfig` ignore and the exclusion.           |
 
 ## Billing
 
