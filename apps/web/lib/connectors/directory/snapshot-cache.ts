@@ -78,35 +78,46 @@ function iconIndexFor(records: readonly DirectoryRecord[]): Record<string, strin
   return index;
 }
 
-async function migrateLegacySnapshot(
+async function refreshCompressedSnapshot(
   records: readonly DirectoryRecord[],
   expiresAt: number | undefined,
+  seenCompressedStamp: number | null,
 ): Promise<void> {
   const keepUntil = expiresAt ?? Date.now() + SNAPSHOT_TTL_MS;
+  const entry = {
+    value: await encodeStoredJson(records),
+    expiresAt: keepUntil,
+    scope: 'public' as const,
+  };
   try {
-    const inserted = await cacheStore.insertIfAbsent(snapshotKey(), {
-      value: await encodeStoredJson(records),
-      expiresAt: keepUntil,
-      scope: 'public',
-    });
-    if (inserted === null) return;
-    await cacheStore.insertIfAbsent(iconIndexKey(), {
+    const written =
+      seenCompressedStamp === null
+        ? await cacheStore.insertIfAbsent(snapshotKey(), entry)
+        : await cacheStore.replaceIfStamp(snapshotKey(), entry, seenCompressedStamp);
+    if (written === null) return;
+    await cacheStore.set(iconIndexKey(), {
       value: await encodeStoredJson(iconIndexFor(records)),
       expiresAt: keepUntil,
       scope: 'public',
     });
   } catch (error) {
-    logger.warn({ error }, 'Connector directory snapshot migration failed');
+    logger.warn({ error }, 'Connector directory snapshot refresh failed');
   }
 }
 
 async function loadSnapshotRecords(): Promise<readonly DirectoryRecord[] | null> {
-  const current = await cacheStore.get(snapshotKey());
-  if (current) {
-    try {
-      return (await decodeStoredJson(current.value)) as DirectoryRecord[];
-    } catch (error) {
-      throw new DirectorySnapshotUnreadableError(SNAPSHOT_PARAMS, error);
+  const [compressedStamp, legacyStamp] = await Promise.all([
+    cacheStore.getStamp(snapshotKey()),
+    cacheStore.getStamp(legacySnapshotKey()),
+  ]);
+  if (compressedStamp !== null && (legacyStamp === null || compressedStamp > legacyStamp)) {
+    const current = await cacheStore.get(snapshotKey());
+    if (current) {
+      try {
+        return (await decodeStoredJson(current.value)) as DirectoryRecord[];
+      } catch (error) {
+        throw new DirectorySnapshotUnreadableError(SNAPSHOT_PARAMS, error);
+      }
     }
   }
   const legacy = await cacheStore.get(legacySnapshotKey());
@@ -117,14 +128,18 @@ async function loadSnapshotRecords(): Promise<readonly DirectoryRecord[] | null>
   } catch (error) {
     throw new DirectorySnapshotUnreadableError(LEGACY_SNAPSHOT_PARAMS, error);
   }
-  await migrateLegacySnapshot(records, legacy.expiresAt);
+  await refreshCompressedSnapshot(records, legacy.expiresAt, compressedStamp);
   return records;
 }
 
 export async function readSnapshotStamp(): Promise<number | null> {
-  return (
-    (await cacheStore.getStamp(snapshotKey())) ?? (await cacheStore.getStamp(legacySnapshotKey()))
-  );
+  const [compressedStamp, legacyStamp] = await Promise.all([
+    cacheStore.getStamp(snapshotKey()),
+    cacheStore.getStamp(legacySnapshotKey()),
+  ]);
+  if (compressedStamp === null) return legacyStamp;
+  if (legacyStamp === null) return compressedStamp;
+  return Math.max(compressedStamp, legacyStamp);
 }
 
 export async function readSnapshotRecords(): Promise<readonly DirectoryRecord[] | null> {
@@ -148,17 +163,16 @@ export async function writeSnapshotRecords(records: readonly DirectoryRecord[]):
     expiresAt,
     scope: 'public',
   });
-  const stamp = await cacheStore.set(snapshotKey(), {
-    value: await encodeStoredJson(records),
-    expiresAt,
-    scope: 'public',
-  });
   await cacheStore.set(legacySnapshotKey(), {
     value: JSON.stringify(records),
     expiresAt,
     scope: 'public',
   });
-  return stamp;
+  return cacheStore.set(snapshotKey(), {
+    value: await encodeStoredJson(records),
+    expiresAt,
+    scope: 'public',
+  });
 }
 
 export async function readIconIndexStamp(): Promise<number | null> {

@@ -48,6 +48,17 @@ vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
       store.rows.set(store.keyOf(key), { value: entry.value, stamp, expiresAt: entry.expiresAt });
       return stamp;
     }
+    async replaceIfStamp(
+      key: { method: string; params?: string },
+      entry: { value: string; expiresAt?: number },
+      expectedStamp: number,
+    ) {
+      const row = store.rows.get(store.keyOf(key));
+      if (!row || row.stamp !== expectedStamp) return null;
+      const stamp = store.mint();
+      store.rows.set(store.keyOf(key), { value: entry.value, stamp, expiresAt: entry.expiresAt });
+      return stamp;
+    }
     async insertIfAbsent(
       key: { method: string; params?: string },
       entry: { value: string; expiresAt?: number },
@@ -66,6 +77,7 @@ vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
 import {
   DirectorySnapshotUnreadableError,
   decodeStoredJson,
+  encodeStoredJson,
   readIconIndex,
   readSnapshotRecords,
   readSnapshotRecordsForIngest,
@@ -125,12 +137,25 @@ describe('connector directory snapshot storage', () => {
     expect(store.rows.has(ICON_INDEX)).toBe(true);
   });
 
-  it('never replaces a compressed row that already exists with legacy data', async () => {
-    const fresh = directory(3);
-    await writeSnapshotRecords(fresh);
+  it('keeps serving the compressed row while it is newer than the legacy row', async () => {
     store.put(LEGACY, JSON.stringify(directory(9)));
+    const fresh = directory(3);
+    store.put(COMPRESSED, await encodeStoredJson(fresh));
 
     await expect(readSnapshotRecords()).resolves.toEqual(fresh);
+    expect(JSON.parse(store.rows.get(LEGACY)!.value)).toHaveLength(9);
+  });
+
+  it('rolls forward onto what an older build wrote during a rollback instead of the stale compressed row', async () => {
+    await writeSnapshotRecords(directory(3));
+    const writtenDuringRollback = directory(5);
+    store.put(LEGACY, JSON.stringify(writtenDuringRollback));
+
+    await expect(readSnapshotRecords()).resolves.toEqual(writtenDuringRollback);
+    expect(await decodeStoredJson(store.rows.get(COMPRESSED)!.value)).toEqual(
+      writtenDuringRollback,
+    );
+    await expect(readSnapshotRecords()).resolves.toEqual(writtenDuringRollback);
   });
 
   it('serves nothing rather than throwing on a corrupt row, but refuses to let an ingest merge onto it', async () => {
