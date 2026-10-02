@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   CONSTANTS,
+  PROVIDER_CATALOG,
   REGISTRY,
   copyDigest,
   publishedCopy,
@@ -15,6 +16,7 @@ import {
   runPolicyArchiveSourceCheck,
   runPolicyVersionsCheck,
 } from './check-policy-versions.mjs';
+import { REGISTRY as MODEL_REGISTRY } from './check-subprocessor-coverage.mjs';
 import {
   archiveExpectations,
   archiveFile,
@@ -243,12 +245,35 @@ function subprocessorsPage(names, providers = PROVIDERS) {
   ].join('\n');
 }
 
-function checkSubprocessors({ names, providers = PROVIDERS, date, versions }) {
+function checkSubprocessors({
+  names,
+  providers = PROVIDERS,
+  date,
+  versions,
+  labels = {},
+  gateways = {},
+}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-versions-subprocessors-'));
   const write = (relative, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);
   };
+  if (labels !== null) {
+    write(
+      PROVIDER_CATALOG,
+      JSON.stringify({
+        providers: Object.fromEntries(Object.entries(labels).map(([id, label]) => [id, { label }])),
+      }),
+    );
+  }
+  write(
+    MODEL_REGISTRY,
+    JSON.stringify({
+      gateways: Object.fromEntries(
+        Object.entries(gateways).map(([id, displayName]) => [id, { id, displayName }]),
+      ),
+    }),
+  );
   write(
     CONSTANTS,
     [
@@ -465,6 +490,55 @@ test('holds a provider added inside a row to a dated entry whose summary names i
     ),
   );
   assert.deepEqual(moved('Gamma now serves Managed Cloud chat for the models it hosts.'), []);
+});
+
+test('counts the label the product shows for a provider as naming it', () => {
+  const moved = (added, summary) => {
+    const providers = [...PROVIDERS, added];
+    return checkSubprocessors({
+      names: LISTED,
+      providers,
+      date: '2026-10-05',
+      labels: { vercel_gateway: 'Vercel AI Gateway' },
+      gateways: { dr_relay: 'Delta Relay' },
+      versions: [
+        LISTED_VERSION,
+        {
+          date: '2026-10-05',
+          digest: copyDigest(subprocessorsPage(LISTED, providers)),
+          summary,
+          subprocessorProviders: ['alpha', 'beta', added],
+        },
+      ],
+    });
+  };
+
+  assert.deepEqual(
+    moved('vercel_gateway', 'Vercel now also serves Managed Cloud chat through Vercel AI Gateway.'),
+    [],
+  );
+  assert.deepEqual(moved('vercel_gateway', 'The vercel_gateway route now serves chat.'), []);
+  assert.ok(
+    moved('vercel_gateway', 'Vercel now also serves Managed Cloud chat.').some((failure) =>
+      failure.includes('the summary does not name vercel_gateway'),
+    ),
+  );
+  assert.deepEqual(moved('dr_relay', 'Delta Relay now serves Managed Cloud chat.'), []);
+});
+
+test('fails when the provider labels cannot be read', () => {
+  const failures = checkSubprocessors({
+    names: LISTED,
+    date: '2026-09-28',
+    versions: [LISTED_VERSION],
+    labels: null,
+  });
+  assert.ok(
+    failures.some(
+      (failure) => failure.includes(PROVIDER_CATALOG) && failure.includes('could not be read'),
+    ),
+    failures.join('\n'),
+  );
 });
 
 test('does not count an Anthropic-dialect route of a listed provider as a new provider', () => {

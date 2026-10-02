@@ -9,7 +9,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { declaredProviderIds, recipientNames } from './check-subprocessor-coverage.mjs';
+import {
+  REGISTRY as MODEL_REGISTRY,
+  declaredProviderIds,
+  recipientNames,
+} from './check-subprocessor-coverage.mjs';
 import {
   ARCHIVE_COMMAND,
   archiveExpectations,
@@ -23,6 +27,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 export const CONSTANTS = 'apps/web/lib/legal-constants.ts';
 export const REGISTRY = 'docs/compliance/policy-versions.json';
+export const PROVIDER_CATALOG = 'packages/contracts/types/src/models.json';
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 const MIN_NOTE_LENGTH = 20;
@@ -114,11 +119,32 @@ const SUBPROCESSOR_RECORDS = [
     listed: (source) =>
       [...declaredProviderIds(source).declared].map((id) => id.replace(/_anthropic$/, '')),
     display: (id) => id,
-    named: (summary, id) => compact(summary).includes(compact(id)),
+    named: (summary, id, labels) =>
+      [id, labels.get(id)]
+        .map((name) => compact(name ?? ''))
+        .some((name) => name.length > 0 && compact(summary).includes(name)),
   },
 ];
 
-function checkSubprocessorRecord(page, source, versions, record, failures) {
+function providerLabels(root, failures) {
+  try {
+    const { gateways = {} } = JSON.parse(fs.readFileSync(path.join(root, MODEL_REGISTRY), 'utf8'));
+    const { providers = {} } = JSON.parse(
+      fs.readFileSync(path.join(root, PROVIDER_CATALOG), 'utf8'),
+    );
+    return new Map([
+      ...Object.values(gateways).map((gateway) => [gateway.id, gateway.displayName]),
+      ...Object.entries(providers).map(([id, provider]) => [id, provider.label]),
+    ]);
+  } catch (error) {
+    failures.push(
+      `the provider labels in ${PROVIDER_CATALOG} and ${MODEL_REGISTRY} could not be read, so a summary can name a provider only by its id: ${error.message}`,
+    );
+    return new Map();
+  }
+}
+
+function checkSubprocessorRecord(page, source, versions, record, labels, failures) {
   const where = `${REGISTRY} "${SUBPROCESSOR_LIST}"`;
   let recorded = null;
   for (const [position, version] of versions.entries()) {
@@ -137,7 +163,9 @@ function checkSubprocessorRecord(page, source, versions, record, failures) {
           `${at}: ${record.subject} changed (${change.text}) under an entry whose date did not move, so /changelog never lists it; move POLICY_LAST_UPDATED.${SUBPROCESSOR_LIST} and record ${record.field} on the entry that moves it`,
         );
       } else {
-        const unnamed = change.names.filter((value) => !record.named(version.summary ?? '', value));
+        const unnamed = change.names.filter(
+          (value) => !record.named(version.summary ?? '', value, labels),
+        );
         if (unnamed.length > 0) {
           failures.push(
             `${at}: the summary does not name ${unnamed.map(record.display).join(', ')}, which this version ${change.text}`,
@@ -229,8 +257,9 @@ function checkDocument(root, key, route, date, entry, failures) {
     );
   }
   if (key === SUBPROCESSOR_LIST) {
+    const labels = providerLabels(root, failures);
     for (const record of SUBPROCESSOR_RECORDS) {
-      checkSubprocessorRecord(page, source, versions, record, failures);
+      checkSubprocessorRecord(page, source, versions, record, labels, failures);
     }
   }
 }
