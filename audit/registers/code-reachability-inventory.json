@@ -423,7 +423,7 @@
     "item": "ssr-or-streaming-ssr",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "Next.js App Router (apps/web/app) with async server components doing DB reads at render time, e.g. apps/web/app/share/[token]/page.tsx:43-71 (await getNeonDb().query then render); route-level loading.tsx skeletons (apps/web/app/loading.tsx, apps/web/app/share/loading.tsx, apps/web/app/shared/loading.tsx) enable React Suspense streaming SSR per Next.js file conventions."
+    "evidence": "Next.js App Router (apps/web/app) with async server components doing DB reads at render time, e.g. apps/web/app/share/[token]/page.tsx:84-102 (awaits the share read, then renders the snapshot or calls notFound()); route-level loading.tsx skeletons (29 segments, e.g. apps/web/app/chat/loading.tsx, apps/web/app/settings/loading.tsx, apps/web/app/billing/loading.tsx) enable React Suspense streaming SSR per Next.js file conventions. /share/[token] and /share/schedules/[token] have no loading boundary by design: a revoked or expired link must answer a real 404, and a streamed loading boundary commits a 200 before the page can call notFound(). apps/web/shared/components/layout/__tests__/route-surface-states.test.ts:116-119 records why, and that test fails if a loading boundary returns above either route."
   },
   {
     "item": "error-boundary",
