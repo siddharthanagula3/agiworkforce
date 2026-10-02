@@ -399,13 +399,18 @@ export default function FreeQuotaAttestationPanel() {
       {dialog}
 
       {loadError ? (
-        <div className={`${CARD_CLASS} flex flex-wrap items-center gap-3`}>
-          <p role="alert" className="text-sm text-danger-text">
-            {loadError}
-          </p>
-          <button type="button" className={ACTION_CLASS} onClick={() => void loadAndSeedForm()}>
-            Retry
-          </button>
+        <div className={`${CARD_CLASS} flex flex-col gap-3`}>
+          {outcome ? (
+            <NoticeLine notice={outcome} role={outcome.tone === 'danger' ? 'alert' : 'status'} />
+          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <p role="alert" className="text-sm text-danger-text">
+              {loadError}
+            </p>
+            <button type="button" className={ACTION_CLASS} onClick={() => void loadAndSeedForm()}>
+              Retry
+            </button>
+          </div>
         </div>
       ) : status === null ? (
         <div className={`${CARD_CLASS} flex items-center gap-3`}>

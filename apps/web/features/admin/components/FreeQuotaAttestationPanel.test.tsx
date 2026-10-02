@@ -113,8 +113,10 @@ const NOTHING_SERVING: ConfiguredStatus['serving'] = {
   ],
 };
 
+type Read = FreeQuotaAttestationStatus | { failWith: number };
+
 interface Network {
-  statuses: FreeQuotaAttestationStatus[];
+  statuses: Read[];
   post: { status: number; body: unknown };
   posts: Array<{ headers: Record<string, string>; body: Record<string, unknown> }>;
 }
@@ -128,12 +130,16 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function serve(statuses: FreeQuotaAttestationStatus[], post?: Network['post']) {
+function serve(statuses: Read[], post?: Network['post']) {
   network = {
     statuses: [...statuses],
     post: post ?? {
       status: 200,
-      body: { checkedAtMs: SERVER_NOW, freshUntilMs: SERVER_NOW + 30 * DAY_MS, offerings: 'all' },
+      body: {
+        checkedAtMs: SERVER_NOW,
+        freshUntilMs: SERVER_NOW + 30 * DAY_MS,
+        offerings: OFFERINGS.length,
+      },
     },
     posts: [],
   };
@@ -152,8 +158,10 @@ function serve(statuses: FreeQuotaAttestationStatus[], post?: Network['post']) {
         });
         return json(network.post.body, network.post.status);
       }
-      const next = network.statuses.length > 1 ? network.statuses.shift() : network.statuses[0];
-      return json(next);
+      const next = network.statuses.length > 1 ? network.statuses.shift()! : network.statuses[0]!;
+      return 'failWith' in next
+        ? json({ error: { message: 'Service unavailable.' } }, next.failWith)
+        : json(next);
     }),
   );
 }
@@ -705,6 +713,20 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
 
     const check = await screen.findByRole('group', { name: 'Console check' });
     expect(within(check).getByText('2 models, 1 listed model not covered')).toBeInTheDocument();
+  });
+
+  it('keeps the success message when reading the gates again fails after recording', async () => {
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null } }), { failWith: 503 }]);
+    render(<FreeQuotaAttestationPanel />);
+
+    await user.click(await screen.findByRole('radio', { name: /Every model listed here/ }));
+    await confirmRecording(user);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText(/Console check recorded at/)).toHaveAttribute('role', 'status');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    expect(network.posts).toHaveLength(1);
   });
 
   it('shows the server refusal as an alert and keeps the form as it was', async () => {
