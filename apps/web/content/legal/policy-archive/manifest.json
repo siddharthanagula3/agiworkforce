@@ -45,7 +45,7 @@
         },
         {
           "date": "2026-09-21",
-          "summary": null,
+          "summary": "Adds how dictation and Voice Mode audio is handled: it goes to OpenAI and we keep none of it. Adds a security incidents section on the breach procedure, its 72-hour clock for notifying a regulator and how a notice would reach you, and says that some models are reached through an inference gateway, each named on the subprocessors page.",
           "status": "archived"
         }
       ]
@@ -106,7 +106,7 @@
         },
         {
           "date": "2026-09-21",
-          "summary": null,
+          "summary": "Adds five recipients: the Cheaper Inference and Experiential Labs inference gateways, Cloudflare Workers AI, Vercel AI Gateway, and OpenAI for dictation and Voice Mode. Removes MiniMax, which was listed but received no Managed Cloud traffic, and corrects when Qwen and Zhipu requests pass through OpenRouter.",
           "status": "archived"
         }
       ]
@@ -157,7 +157,7 @@
         },
         {
           "date": "2026-09-21",
-          "summary": null,
+          "summary": "Corrects the EU AI Act disclosures: the app says it is an AI system on a first-run screen you accept before its first model request, and only the on-device data export marks chat transcripts with a machine-readable AI-generated marker; the per-conversation export sheet does not.",
           "status": "archived"
         }
       ]

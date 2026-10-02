@@ -138,7 +138,7 @@ function versionHref(history: PolicyHistory, version: PolicyVersionEntry): strin
 }
 
 const CHANGES: readonly PolicyChange[] = HISTORIES.flatMap((history) =>
-  history.versions.slice(0, -1).flatMap((version) =>
+  history.versions.flatMap((version) =>
     version.summary
       ? [
           {

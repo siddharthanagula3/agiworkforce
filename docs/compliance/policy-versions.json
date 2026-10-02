@@ -35,7 +35,8 @@
         {
           "date": "2026-09-21",
           "digest": "8a047905eaa64a87",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
+          "summary": "Adds how dictation and Voice Mode audio is handled: it goes to OpenAI and we keep none of it. Adds a security incidents section on the breach procedure, its 72-hour clock for notifying a regulator and how a notice would reach you, and says that some models are reached through an inference gateway, each named on the subprocessors page."
         },
         {
           "date": "2026-09-22",
@@ -181,7 +182,8 @@
         {
           "date": "2026-09-21",
           "digest": "c1b0cefecd9999c0",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
+          "summary": "Adds five recipients: the Cheaper Inference and Experiential Labs inference gateways, Cloudflare Workers AI, Vercel AI Gateway, and OpenAI for dictation and Voice Mode. Removes MiniMax, which was listed but received no Managed Cloud traffic, and corrects when Qwen and Zhipu requests pass through OpenRouter."
         },
         {
           "date": "2026-09-22",
@@ -430,7 +432,8 @@
         {
           "date": "2026-09-21",
           "digest": "e809c74693e2470f",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
+          "summary": "Corrects the EU AI Act disclosures: the app says it is an AI system on a first-run screen you accept before its first model request, and only the on-device data export marks chat transcripts with a machine-readable AI-generated marker; the per-conversation export sheet does not."
         },
         {
           "date": "2026-09-21",

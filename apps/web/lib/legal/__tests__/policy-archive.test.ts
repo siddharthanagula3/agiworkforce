@@ -3,15 +3,44 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import manifest from '@/content/legal/policy-archive/manifest.json';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
   archivedPolicyText,
   olderArchivedVersion,
+  policyChanges,
   policyHistories,
   policyHistoryForKey,
 } from '../policy-archive';
 
 const WEB_DIR = path.join(__dirname, '..', '..', '..');
+
+interface RegistryVersion {
+  date: string | null;
+  summary?: string;
+}
+
+const REGISTRY: { documents: Record<string, { versions: RegistryVersion[] }> } = JSON.parse(
+  readFileSync(
+    path.join(WEB_DIR, '..', '..', 'docs', 'compliance', 'policy-versions.json'),
+    'utf8',
+  ),
+);
+
+function datedRevisions(key: string): RegistryVersion[] {
+  const dates = new Set<string>();
+  return (REGISTRY.documents[key]?.versions ?? []).filter((version) => {
+    if (!version.date || dates.has(version.date)) return false;
+    dates.add(version.date);
+    return true;
+  });
+}
+
+function listedDates(key: string): string[] {
+  return policyChanges()
+    .filter((change) => change.history.key === key)
+    .map((change) => change.date);
+}
 
 describe('policy version history', () => {
   it('names every policy with a history and dates its current version as the page does', () => {
@@ -57,5 +86,38 @@ describe('policy version history', () => {
       const source = readFileSync(path.join(WEB_DIR, 'app', route, 'page.tsx'), 'utf8');
       expect(source, route).toContain(`<PolicyVersionsLink policy="${key}"`);
     }
+  });
+});
+
+describe('policy changes', () => {
+  it('lists every revision that moved a policy date, with the summary the registry records', () => {
+    const summaries = new Map(
+      policyChanges().map((change) => [`${change.history.key} ${change.date}`, change.summary]),
+    );
+    for (const key of Object.keys(REGISTRY.documents)) {
+      for (const revision of datedRevisions(key).slice(1)) {
+        const listed = `${key} ${revision.date}`;
+        expect(summaries.get(listed), listed).toBe(revision.summary);
+      }
+    }
+  });
+
+  it('lists the subprocessor list, privacy policy and mobile app terms from their 21 September 2026 revisions', () => {
+    for (const key of ['subprocessors', 'privacy', 'mobile']) {
+      const dates = datedRevisions(key).map((revision) => revision.date);
+      expect(dates[0], key).toBe('2026-09-21');
+      expect(listedDates(key), key).toEqual(dates.reverse());
+    }
+  });
+
+  it('lists exactly the versions whose history says what changed, newest first', () => {
+    const expected = Object.entries(manifest.policies).flatMap(([key, policy]) =>
+      policy.versions.flatMap((version) => (version.summary ? [`${version.date} ${key}`] : [])),
+    );
+    const listed = policyChanges().map((change) => `${change.date} ${change.history.key}`);
+    const dates = listed.map((entry) => entry.slice(0, 10));
+
+    expect([...listed].sort()).toEqual(expected.sort());
+    expect(dates).toEqual([...dates].sort().reverse());
   });
 });
