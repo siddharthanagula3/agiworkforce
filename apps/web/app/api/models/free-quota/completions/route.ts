@@ -3,6 +3,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import type { KeyValueStore } from '@agiworkforce/key-value';
+import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 import { runQwenQuotaProbe, streamQwenQuotaChat } from '@agiworkforce/providers-factory';
 import type { FreeLimit, FreeLimitReason } from '@agiworkforce/cloud-contracts';
 import {
@@ -69,6 +70,7 @@ import { bytesFromUrl } from '@/lib/server/media-storage';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
+import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
 import {
   ChatAttachmentHydrationError,
@@ -661,7 +663,14 @@ async function handlePost(request: NextRequest): Promise<Response> {
       personalization: body.personalization,
       query: latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : '',
     });
+    const preamble = buildCapabilityPreamble({
+      tools: [],
+      ...(body.client_timezone ? { timeZone: body.client_timezone } : {}),
+    });
     messages.unshift(
+      ...(preamble
+        ? [{ role: 'system' as const, content: stripSystemPromptCacheBoundary(preamble) }]
+        : []),
       ...personalContext.blocks.map((content) => ({ role: 'system' as const, content })),
     );
     memoryCitationsHeader = toMemoryCitationsHeaderValue(personalContext.memoryCitations);

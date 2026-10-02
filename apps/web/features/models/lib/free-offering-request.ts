@@ -68,6 +68,7 @@ export const FreeOfferingRequestSchema = z.object({
   mcp_context: z.undefined().optional(),
   memory_enabled: z.boolean().optional(),
   personalization: z.boolean().optional(),
+  client_timezone: z.string().max(64).optional(),
 });
 
 export type FreeOfferingMessage = z.infer<typeof FreeOfferingRequestSchema>['messages'][number];

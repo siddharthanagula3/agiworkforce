@@ -15,7 +15,13 @@ import {
   sharesManagedRoute,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 import { loadFreePools } from '@/lib/server/free-pools';
+import {
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  chatSystemPromptSection,
+  chatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 type ScanModule0 = typeof import('@/lib/csrf');
 type ScanModule1 = typeof import('@/lib/api-auth');
@@ -332,6 +338,23 @@ afterEach(() => {
 });
 
 describe('Qwen free quota turns on the Free plan', () => {
+  it('gives a free quota model the product system prompt for a turn without tools', async () => {
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    await (await post({ client_timezone: 'Europe/London' })).text();
+
+    const sections = chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION);
+    const [system, ...rest] = mocks.stream.mock.calls[0]![3].messages as {
+      role: string;
+      content: unknown;
+    }[];
+    expect(system!.role).toBe('system');
+    expect(system!.content).toContain(chatSystemPromptSection(sections, 'identity'));
+    expect(system!.content).toContain(chatSystemPromptSection(sections, 'no_tools'));
+    expect(system!.content).toContain('(Europe/London)');
+    expect(system!.content).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY.trim());
+    expect(rest.at(-1)).toEqual({ role: 'user', content: 'Hello' });
+  });
+
   it('persists a threaded user turn before requesting free inference', async () => {
     mocks.stream.mockResolvedValue(sse('[DONE]'));
     const response = await post({
@@ -494,7 +517,7 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('A small image');
     expect(mocks.hydrate).toHaveBeenCalledOnce();
-    expect(mocks.stream.mock.calls[0]![3].messages[0].content).toEqual([
+    expect(mocks.stream.mock.calls[0]![3].messages.at(-1).content).toEqual([
       { type: 'text', text: 'Describe this image' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=' } },
     ]);
@@ -861,18 +884,18 @@ describe('Qwen free quota turns on the Free plan', () => {
       observedOn: inventory.observedOn,
       offeringKey: model!,
       expiresOn: entry.expiresOn,
-      units: usable - 1_000,
+      units: usable - 3_000,
       usable,
       nowMs: Date.now(),
     });
-    const tooLong = await post({ messages: [{ role: 'user', content: 'x'.repeat(2_000) }] });
+    const tooLong = await post({ messages: [{ role: 'user', content: 'x'.repeat(4_000) }] });
     expect(tooLong.status).toBe(400);
     expect((await tooLong.json()).error.code).toBe('context_length_exceeded');
     expect(mocks.stream).not.toHaveBeenCalled();
 
     mocks.stream.mockResolvedValue(sse('[DONE]'));
     await (await post({}, 'short-turn')).text();
-    expect(mocks.stream.mock.calls[0]![2].maxOutputTokens).toBeLessThanOrEqual(1_000);
+    expect(mocks.stream.mock.calls[0]![2].maxOutputTokens).toBeLessThanOrEqual(3_000);
   });
 
   it('refuses tools and attachments before any provider call', async () => {
