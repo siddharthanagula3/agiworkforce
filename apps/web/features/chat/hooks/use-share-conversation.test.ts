@@ -45,12 +45,12 @@ describe('useShareConversation', () => {
   });
 
   beforeEach(() => {
-    useChatStore.setState({ messages: [MESSAGE] });
+    useChatStore.setState({ activeConversationId: 'conv-1', messages: [MESSAGE] });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    useChatStore.setState({ messages: [] });
+    useChatStore.setState({ activeConversationId: null, messages: [] });
   });
 
   it('posts to /api/share (not the legacy /api/shared route) and stores the returned token', async () => {
@@ -130,7 +130,7 @@ describe('useShareConversation', () => {
     expect(body.messages[0].attachments[0].content).toBeUndefined();
   });
 
-  it('revokes the active share via DELETE /api/share/[token]', async () => {
+  it('revokes the chat’s live links via DELETE /api/share?conversation_id', async () => {
     vi.spyOn(global, 'fetch')
       .mockResolvedValueOnce(
         new Response(
@@ -143,7 +143,9 @@ describe('useShareConversation', () => {
           { status: 201 },
         ),
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, revoked: 1 }), { status: 200 }),
+      );
 
     const { result } = renderHook(() => useShareConversation('My session', undefined, 'conv-1'));
 
@@ -155,7 +157,7 @@ describe('useShareConversation', () => {
     });
 
     expect(global.fetch).toHaveBeenLastCalledWith(
-      '/api/share/abc123',
+      '/api/share?conversation_id=conv-1',
       expect.objectContaining({ method: 'DELETE' }),
     );
     expect(result.current.activeShare).toBeNull();

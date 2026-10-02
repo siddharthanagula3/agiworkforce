@@ -24,7 +24,9 @@ import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterpris
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   evaluateActiveWorkspacePolicy,
+  evaluateWorkspacePolicyFor,
   resolveEffectiveWorkspaceControls,
+  type PolicyGateResult,
 } from '@/lib/services/organization-policy-gate';
 import {
   isPolicyUnavailable,
@@ -349,12 +351,31 @@ export async function buildModelPolicyGateResponse(
   );
 }
 
+async function evaluateExternalSharing(
+  userId: string,
+  request: NextRequest,
+  storedOrganizationIds: readonly (string | null)[],
+): Promise<PolicyGateResult> {
+  const db = getNeonDb();
+  const ask = { resource: 'external_sharing' } as const;
+  const active = await evaluateActiveWorkspacePolicy(db, userId, ask, request);
+  if (!active.allowed) return active;
+  for (const organizationId of new Set(storedOrganizationIds)) {
+    if (!organizationId || organizationId === active.organizationId) continue;
+    const stored = await evaluateWorkspacePolicyFor(db, userId, organizationId, ask, request);
+    if (!stored.allowed) return stored;
+  }
+  return active;
+}
+
 /**
- * Refuses a request that would mint an anonymous public link when the caller's
- * workspace has turned public sharing off.
+ * Refuses a request that would publish to an anonymous public link when the
+ * caller's workspace, or a workspace the shared content is stored under, has
+ * turned public sharing off. Routes read the stored workspaces from the rows
+ * being shared, so a `personal` workspace selector cannot skip them.
  *
- * Only NEW links are refused. A link already published stays reachable, because
- * revoking published content is a different decision with different
+ * Only NEW publication is refused. A link already published stays reachable,
+ * because revoking published content is a different decision with different
  * consequences, a member who shared a document with a customer last week
  * should not have it break because an administrator changed a setting today.
  * The policy copy says so, and so does the settings panel.
@@ -362,16 +383,12 @@ export async function buildModelPolicyGateResponse(
 export async function buildExternalSharingGateResponse(
   userId: string,
   request: NextRequest,
+  storedOrganizationIds: readonly (string | null)[] = [],
   headers?: HeadersInit,
 ): Promise<NextResponse | null> {
-  let decision;
+  let decision: PolicyGateResult;
   try {
-    decision = await evaluateActiveWorkspacePolicy(
-      getNeonDb(),
-      userId,
-      { resource: 'external_sharing' },
-      request,
-    );
+    decision = await evaluateExternalSharing(userId, request, storedOrganizationIds);
   } catch (error) {
     logger.error(
       { error, userId },

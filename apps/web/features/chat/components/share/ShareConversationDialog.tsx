@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -10,10 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Spinner,
   translateUiPlural,
   useConfirmAction,
 } from '@agiworkforce/ui';
-import { Building2, Check, Copy, Globe2, ShieldAlert, Trash2 } from 'lucide-react';
+import { Building2, Check, Copy, Globe2, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useShareConversation,
@@ -35,6 +36,7 @@ export interface ShareConversationDialogProps {
   conversationTitle?: string;
   modelId?: string;
   conversationId?: string | null;
+  conversationLoadError?: string | null;
 }
 
 function formatExpiry(value: string): string {
@@ -55,21 +57,34 @@ function ShareConversationDialogImpl({
   conversationTitle,
   modelId,
   conversationId,
+  conversationLoadError,
 }: ShareConversationDialogProps) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [expiryDays, setExpiryDays] = useState<ShareExpiryDays>(7);
   const [copied, setCopied] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const refocusAfterRevokeRef = useRef(false);
+  const confirming = confirmDialog !== null;
   const {
     share,
+    updateLink,
     revoke,
     setAudience,
     isSharing,
     isTemporary,
     activeShare,
+    checkingShare,
+    loadingChat,
     error,
     cancelPending,
-    clearError,
-  } = useShareConversation(conversationTitle, modelId, conversationId);
+  } = useShareConversation(conversationTitle, modelId, conversationId, open);
+  const chatLoadError = loadingChat ? (conversationLoadError ?? null) : null;
+  const shownError = chatLoadError ?? error;
+  const pendingStatus = checkingShare
+    ? 'Checking whether this chat is already shared'
+    : loadingChat && !chatLoadError
+      ? 'Loading this chat'
+      : null;
   const expiryLabel = useMemo(
     () => EXPIRY_OPTIONS.find((option) => option.days === expiryDays)?.label ?? '7 days',
     [expiryDays],
@@ -81,9 +96,14 @@ function ShareConversationDialogImpl({
     other: '{{count}} members',
   });
 
+  useEffect(() => {
+    if (confirming || !refocusAfterRevokeRef.current) return;
+    refocusAfterRevokeRef.current = false;
+    contentRef.current?.focus();
+  }, [confirming]);
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) cancelPending();
-    if (nextOpen) clearError();
     onOpenChange(nextOpen);
   };
 
@@ -98,22 +118,88 @@ function ShareConversationDialogImpl({
           : 'Anyone with the link can open this now',
       );
     };
+    const several = activeShare.linkCount > 1;
     confirm(
       next === 'organization'
         ? {
-            title: 'Limit this to your workspace?',
-            description: `The link stops opening, so anyone outside your workspace who already has it loses access. Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
+            title: several
+              ? `Limit all ${activeShare.linkCount} links to your workspace?`
+              : 'Limit this to your workspace?',
+            description: several
+              ? `All ${activeShare.linkCount} links stop opening, so anyone outside your workspace who already has one loses access. Your ${memberLabel} can open them instead. You can switch back, and the links stay the same.`
+              : `The link stops opening, so anyone outside your workspace who already has it loses access. Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
             confirmLabel: 'Share with workspace',
             onConfirm: apply,
           }
         : {
-            title: 'Make this readable by anyone with the link?',
-            description:
-              'Anyone holding the link can read the transcript without signing in, including people outside your workspace and anyone they forward it to. Sharing it back cannot un-share a copy somebody has already taken.',
-            confirmLabel: 'Open the link',
+            title: several
+              ? `Make all ${activeShare.linkCount} links readable by anyone who has one?`
+              : 'Make this readable by anyone with the link?',
+            description: several
+              ? `Anyone holding one of the ${activeShare.linkCount} links can read the transcript without signing in, including people outside your workspace and anyone they forward it to. Sharing them back cannot un-share a copy somebody has already taken.`
+              : 'Anyone holding the link can read the transcript without signing in, including people outside your workspace and anyone they forward it to. Sharing it back cannot un-share a copy somebody has already taken.',
+            confirmLabel: several ? 'Open all links' : 'Open the link',
             onConfirm: apply,
           },
     );
+  };
+
+  const handleUpdateLink = () => {
+    if (!activeShare) return;
+    const several = activeShare.linkCount > 1;
+    const readers = several
+      ? `This chat has ${activeShare.linkCount} live links, which may have gone to different people, and all of them change. Everyone who can open any of them`
+      : activeShare.audience === 'organization'
+        ? 'Everyone in your workspace'
+        : 'Anyone with the link';
+    const added =
+      activeShare.newMessages > 0
+        ? `, including ${activeShare.newMessagesVary ? 'up to ' : ''}${translateUiPlural(
+            'common',
+            'counts.messages',
+            activeShare.newMessages,
+            { one: '{{count}} message', other: '{{count}} messages' },
+          )} added since ${several ? 'they were' : 'it was'} shared`
+        : '';
+    confirm({
+      title: several ? `Update all ${activeShare.linkCount} links?` : 'Update the shared link?',
+      description: `${readers} will see this chat as it is now${added}. The snapshot ${several ? 'each link shows' : 'it shows'} today is replaced and cannot be restored.`,
+      confirmLabel: several ? 'Update all links' : 'Update link',
+      onConfirm: async () => {
+        if (await updateLink()) toast.success('Link updated');
+      },
+    });
+  };
+
+  const handleRevoke = () => {
+    if (!activeShare) return;
+    const scope = activeShare.mayHaveUnlistedLinks
+      ? {
+          title: 'Revoke every link to this chat?',
+          description:
+            'Every live link to this chat stops working, including any older ones that could not be checked. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.',
+          confirmLabel: 'Revoke all links',
+        }
+      : activeShare.linkCount > 1
+        ? {
+            title: `Revoke all ${activeShare.linkCount} links?`,
+            description: `This chat has ${activeShare.linkCount} live links, and all of them stop working. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.`,
+            confirmLabel: 'Revoke all links',
+          }
+        : {
+            title: 'Revoke this share?',
+            description:
+              activeShare.audience === 'organization'
+                ? 'Everyone in your workspace loses access immediately, and the grant is withdrawn. A new share can be created, but it will be a different URL, the old one stays dead.'
+                : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
+            confirmLabel: 'Revoke share',
+          };
+    confirm({
+      ...scope,
+      onConfirm: async () => {
+        refocusAfterRevokeRef.current = await revoke();
+      },
+    });
   };
 
   const handleCopy = async () => {
@@ -132,7 +218,7 @@ function ShareConversationDialogImpl({
     <>
       {confirmDialog}
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-lg">
+        <DialogContent ref={contentRef} className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {activeShare ? (
@@ -152,13 +238,24 @@ function ShareConversationDialogImpl({
                   ? `Everyone in your workspace can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}. Nobody else can, link or not.`
                   : `Anyone with this link can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}.`
                 : 'Create a read-only snapshot. New messages and future edits will not be added to it.'}
+              {activeShare
+                ? ' Messages added after it was shared stay private until you update the link, which keeps the same address.'
+                : null}
             </DialogDescription>
           </DialogHeader>
 
-          {activeShare ? (
+          {pendingStatus ? (
+            <div
+              role="status"
+              className="flex items-center gap-2 py-2 text-sm text-muted-foreground"
+            >
+              <Spinner size="sm" aria-hidden="true" />
+              <span>{pendingStatus}</span>
+            </div>
+          ) : loadingChat ? null : activeShare ? (
             <div className="space-y-4">
               <div className="flex gap-2">
-                <Input aria-label="Conversation link" readOnly value={activeShare.url} />
+                <Input autoFocus aria-label="Conversation link" readOnly value={activeShare.url} />
                 <Button variant="outline" onClick={() => void handleCopy()} disabled={isSharing}>
                   {copied ? <Check className="me-2 h-4 w-4" /> : <Copy className="me-2 h-4 w-4" />}
                   {copied ? 'Copied' : 'Copy'}
@@ -190,6 +287,13 @@ function ShareConversationDialogImpl({
                     </option>
                   </select>
                 </div>
+              ) : null}
+
+              {activeShare.linkCount > 1 ? (
+                <p className="text-sm text-muted-foreground" data-testid="share-link-count">
+                  This chat has {activeShare.linkCount} live links. Update link and Revoke share act
+                  on all of them.
+                </p>
               ) : null}
 
               {activeShare.audience === 'organization' ? (
@@ -255,32 +359,22 @@ function ShareConversationDialogImpl({
             </div>
           )}
 
-          {error ? (
+          {shownError ? (
             <p role="alert" className="text-sm text-danger">
-              {error}
+              {shownError}
             </p>
           ) : null}
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter key={activeShare ? 'shared' : 'unshared'}>
             {activeShare ? (
               <>
-                <Button
-                  variant="destructive"
-                  onClick={() =>
-                    confirm({
-                      title: 'Revoke this share?',
-                      description:
-                        activeShare.audience === 'organization'
-                          ? 'Everyone in your workspace loses access immediately, and the grant is withdrawn. A new share can be created, but it will be a different URL, the old one stays dead.'
-                          : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
-                      confirmLabel: 'Revoke share',
-                      onConfirm: () => revoke(),
-                    })
-                  }
-                  disabled={isSharing}
-                >
+                <Button variant="destructive" onClick={handleRevoke} disabled={isSharing}>
                   <Trash2 className="me-2 h-4 w-4" />
-                  {isSharing ? 'Revoking…' : 'Revoke share'}
+                  Revoke share
+                </Button>
+                <Button variant="outline" onClick={handleUpdateLink} disabled={isSharing}>
+                  <RefreshCw className="me-2 h-4 w-4" />
+                  Update link
                 </Button>
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   Done
@@ -291,7 +385,10 @@ function ShareConversationDialogImpl({
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button onClick={() => void share(expiryDays)} disabled={isSharing || isTemporary}>
+                <Button
+                  onClick={() => void share(expiryDays)}
+                  disabled={isSharing || isTemporary || checkingShare || loadingChat}
+                >
                   {isSharing ? 'Creating…' : `Create public link · ${expiryLabel}`}
                 </Button>
               </>

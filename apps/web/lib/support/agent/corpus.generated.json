@@ -2037,7 +2037,7 @@
         "pdf",
         "docx"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-10-02",
       "source": "content/support/sharing-conversations.md",
       "chunks": [
         {
@@ -2045,14 +2045,14 @@
           "ordinal": 0,
           "heading": "Create a share link",
           "headingPath": "Share a conversation or an artifact › Create a share link",
-          "text": "Open the conversation's menu and choose **Share conversation**. Two audiences\nare offered:\n\n- **Anyone with the link**, described as best for a quick review.\n- **Share with workspace**, for longer collaboration, which limits the link to\n  members of your workspace.\n\nOnce the link exists the dialog confirms the audience: \"Anyone with the link can\nopen this now\", or \"Only your workspace can open this now\". Copy it from the\ndialog, or open the link to check what a reader sees."
+          "text": "Open the conversation's menu and choose **Share conversation**. Pick how long\nthe link lasts, 1 day, 7 days or 30 days, then choose **Create public link**.\nAnyone with the link can read the snapshot without signing in.\n\nIf you belong to a workspace, **Who can open this** can then limit the link to\nmembers of your workspace, or open it to anyone with the link again.\n\nOnce the link exists the dialog confirms the audience: \"Anyone with the link can\nopen this now\", or \"Only your workspace can open this now\". Copy it from the\ndialog, or open the link to check what a reader sees."
         },
         {
           "id": "sharing-conversations#1",
           "ordinal": 1,
           "heading": "Change or revoke a link",
           "headingPath": "Share a conversation or an artifact › Change or revoke a link",
-          "text": "Switching the audience after the fact asks first, naming the change: \"Make this\nreadable by anyone with the link?\" or \"Limit this to your workspace?\".\n**Revoke share** removes access, and the confirmation says that anyone using the\nlink will immediately lose access."
+          "text": "Choosing **Share** again on a chat that is already shared shows its link, with\n**Copy**, **Update link** and **Revoke share**, instead of offering a second\nlink. Messages you add after sharing are not added to the link until you update it.\n**Update link** replaces the snapshot with the chat as it is now, and the\naddress does not change. It asks first, naming how many messages it adds and who\ncan read them, because the snapshot it replaces cannot be restored.\n\nSwitching the audience after the fact asks first, naming the change: \"Make this\nreadable by anyone with the link?\" or \"Limit this to your workspace?\".\n**Revoke share** removes access, and the confirmation says that anyone using the\nlink will immediately lose access. A chat shared more than once revokes all of\nits live links together, and the confirmation says how many stop working, or,\nwhen the dialog could not check for older links, that every live link to the\nchat stops working. A revoked or expired link opens as a page that does not\nexist."
         },
         {
           "id": "sharing-conversations#2",

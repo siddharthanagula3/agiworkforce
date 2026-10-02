@@ -337,6 +337,31 @@ test('keeps Auto routing profiles out of the compatibility model identity map', 
   );
 });
 
+test('a free-plan model that reasons is never planned less than its whole output cap', () => {
+  const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
+  const catalog = JSON.parse(fs.readFileSync(COMPATIBILITY_CATALOG, 'utf8'));
+  const { auto } = JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8'));
+  const resolveModelKey = (modelKey) =>
+    modelKey.startsWith('family:')
+      ? registry.families[modelKey.slice('family:'.length)]?.activeModelKey
+      : modelKey;
+  const freeModelKeys = new Set(
+    auto.tierAllowedSlots.free.map((slot) => resolveModelKey(auto.slots[slot].modelKey)),
+  );
+  assert.ok(freeModelKeys.size > 0, 'the free plan must route to at least one model');
+
+  for (const modelKey of freeModelKeys) {
+    const model = catalog.models[modelKey];
+    assert.ok(model, `${modelKey} serves a free slot but is missing from the catalog`);
+    if (model.reasoning?.capable !== true) continue;
+    assert.ok(Number.isInteger(model.maxOutputTokens), `${modelKey} must declare maxOutputTokens`);
+    assert.ok(
+      model.responseBudgetFloorTokens >= model.maxOutputTokens,
+      `${modelKey} spends reasoning tokens from the same output budget as its answer, so a short-answer budget below its ${model.maxOutputTokens}-token cap can end in reasoning with no answer`,
+    );
+  }
+});
+
 test('keeps compatibility quality tiers inside the canonical model taxonomy', () => {
   const catalog = JSON.parse(fs.readFileSync(COMPATIBILITY_CATALOG, 'utf8'));
   const allowedQualityTiers = new Set(['fast', 'balanced', 'best']);

@@ -6,6 +6,14 @@ export function conversationSharePath(token: string): string {
   return `${CONVERSATION_SHARES_PATH}/${encodeURIComponent(token)}`;
 }
 
+export const ConversationShareListQuerySchema = z.object({
+  conversation_id: z.string().uuid().optional(),
+});
+
+export function conversationSharesPath(conversationId: string): string {
+  return `${CONVERSATION_SHARES_PATH}?${new URLSearchParams({ conversation_id: conversationId })}`;
+}
+
 export const CONVERSATION_SHARE_VISIBILITIES = ['public', 'organization'] as const;
 
 export const ConversationShareVisibilitySchema = z.enum(CONVERSATION_SHARE_VISIBILITIES);
@@ -41,6 +49,7 @@ export type ConversationShareSummary = z.infer<typeof ConversationShareSummarySc
 
 export const ConversationShareListResponseSchema = z.object({
   shares: z.array(ConversationShareSummarySchema),
+  workspace: ConversationShareWorkspaceSchema.optional(),
 });
 export type ConversationShareListResponse = z.input<typeof ConversationShareListResponseSchema>;
 
@@ -61,6 +70,19 @@ export type ConversationShareAudienceResponse = z.input<
 
 export const ConversationShareRevokedSchema = z.object({ success: z.literal(true) });
 export type ConversationShareRevoked = z.input<typeof ConversationShareRevokedSchema>;
+
+export const ConversationSharesRevokedSchema = z.object({
+  success: z.literal(true),
+  revoked: z.number().int().nonnegative(),
+});
+export type ConversationSharesRevoked = z.input<typeof ConversationSharesRevokedSchema>;
+
+export const ConversationSharesRefreshedSchema = z.object({
+  refreshed: z.number().int().positive(),
+  tokens: z.array(z.string().min(1)).min(1),
+  messageCount: z.number().int().positive(),
+});
+export type ConversationSharesRefreshed = z.input<typeof ConversationSharesRefreshedSchema>;
 
 export const SharedConversationSchema = z.object({
   id: z.string(),

@@ -2333,6 +2333,39 @@ describe('useChatStream', () => {
       expect(getToken).toHaveBeenCalledTimes(2);
     });
 
+    it('lands saves of one message in the order they were made, even when the first one retries', async () => {
+      const messageId = '0b5f1f8e-2a3c-4d6e-9f10-1a2b3c4d5e6f';
+      const landed: string[] = [];
+      let refusedOnce = false;
+      vi.mocked(fetch).mockImplementation(async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as { id: string; content: string };
+        if (body.content === 'the attempt that was discarded' && !refusedOnce) {
+          refusedOnce = true;
+          return new Response('unavailable', { status: 503 });
+        }
+        landed.push(body.content);
+        return new Response(JSON.stringify({ message: { id: body.id } }), { status: 200 });
+      });
+      const getAuthToken = async () => 'token-fresh';
+
+      await Promise.all([
+        saveMessageToDb(
+          'conv-1',
+          { id: messageId, role: 'assistant', content: 'the attempt that was discarded' },
+          getAuthToken,
+          { retryDelayMs: 20 },
+        ),
+        saveMessageToDb(
+          'conv-1',
+          { id: messageId, role: 'assistant', content: 'the answer the reader saw' },
+          getAuthToken,
+          { retryDelayMs: 20 },
+        ),
+      ]);
+
+      expect(landed).toEqual(['the attempt that was discarded', 'the answer the reader saw']);
+    });
+
     it('surfaces a 403 CSRF/auth rejection instead of silently dropping the turn', async () => {
       const getAuthToken = async () => 'token-fresh';
       vi.mocked(fetch).mockResolvedValueOnce(
@@ -2643,6 +2676,110 @@ describe('useChatStream', () => {
       expect(completionCalls).toHaveLength(2);
       const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('answer');
+    });
+
+    function mockAttemptsAndSaves(streams: string[], headers?: HeadersInit) {
+      const assistantSaves: Array<{
+        content?: string;
+        metadata?: { finishReason?: string; thinkingContent?: string };
+      }> = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/api/llm/')) {
+          const encoder = new TextEncoder();
+          const body = streams.shift() ?? sse([]);
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(body));
+                controller.close();
+              },
+            }),
+            { status: 200, headers: new Headers(headers) },
+          );
+        }
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as {
+            id?: string;
+            role?: string;
+            content?: string;
+            metadata?: { finishReason?: string; thinkingContent?: string };
+          };
+          if (body.role === 'assistant') assistantSaves.push(body);
+          return new Response(JSON.stringify({ message: { id: body.id ?? 'saved-row' } }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 200 });
+      });
+      return assistantSaves;
+    }
+
+    const REASONING_THAT_RAN_OUT = sse([
+      {
+        choices: [
+          {
+            delta: { content: '<thinking>Weighing how to introduce myself in a sentence' },
+            finish_reason: 'length',
+          },
+        ],
+      },
+    ]);
+
+    it('saves only the retried answer, never the empty attempt the retry discarded', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+      const assistantSaves = mockAttemptsAndSaves([
+        REASONING_THAT_RAN_OUT,
+        sse([{ choices: [{ delta: { content: 'I am AGI Workforce.' }, finish_reason: 'stop' }] }]),
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('In one sentence, who are you?', {
+          conversationId: PERSISTED_CONV.id,
+          model: 'exact-model',
+        });
+      });
+
+      await vi.waitFor(() =>
+        expect(assistantSaves.map((save) => save.content)).toContain('I am AGI Workforce.'),
+      );
+      expect(assistantSaves).toHaveLength(1);
+      expect(assistantSaves[0]?.metadata?.finishReason).toBe('stop');
+      expect(assistantSaves[0]?.metadata?.thinkingContent).toBeUndefined();
+      expect(
+        useChatStore.getState().messages.find((message) => message.role === 'assistant')?.content,
+      ).toBe('I am AGI Workforce.');
+    });
+
+    it('still saves an empty turn the retry does not take, as it was shown', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+      const assistantSaves = mockAttemptsAndSaves([REASONING_THAT_RAN_OUT], {
+        'X-AGI-Resolved-Model': 'fallback-model',
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('In one sentence, who are you?', {
+          conversationId: PERSISTED_CONV.id,
+          model: 'exact-model',
+        });
+      });
+
+      await vi.waitFor(() => expect(assistantSaves).toHaveLength(1));
+      expect(assistantSaves[0]?.metadata?.finishReason).toBe('length');
+      expect(assistantSaves[0]?.metadata?.thinkingContent).toContain('Weighing how to introduce');
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.filter(([input]) => String(input).includes('/api/llm/v1/chat/completions')),
+      ).toHaveLength(1);
     });
 
     it('does not retry a max-tokens finish with nothing visible once the served model differs from the request', async () => {

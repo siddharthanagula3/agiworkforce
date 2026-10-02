@@ -87,6 +87,20 @@ describe('buildExternalSharingGateResponse', () => {
     expect(body.error.message).toMatch(/already created are unaffected/i);
   });
 
+  it('asks the workspace the content is stored under even when the selected scope is personal', async () => {
+    bind({ organizationId: null, policy: policyRow({ external_sharing_enabled: false }) });
+    const res = await buildExternalSharingGateResponse('user-1', req(), [null, ORG]);
+
+    expect(res?.status).toBe(403);
+    const body = (await res?.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('external_sharing_disabled');
+  });
+
+  it('adds nothing for content stored in personal scope', async () => {
+    bind({ organizationId: null, policy: policyRow({ external_sharing_enabled: false }) });
+    expect(await buildExternalSharingGateResponse('user-1', req(), [null])).toBeNull();
+  });
+
   it('refuses with a 503 when the policy cannot be read, so a blip never publishes past a switched-off policy', async () => {
     bind({ policyThrows: true });
     const res = await buildExternalSharingGateResponse('user-1', req());

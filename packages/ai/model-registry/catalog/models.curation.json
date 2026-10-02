@@ -4042,7 +4042,7 @@
       "openRouterSlug": "openrouter/free",
       "name": "OpenRouter Free Auto",
       "maxOutputTokens": 8192,
-      "responseBudgetFloorTokens": 1024,
+      "responseBudgetFloorTokens": 8192,
       "transientSameRouteRetries": 1,
       "webSearchToolOfferPolicy": "required_only",
       "provider": "open_router",

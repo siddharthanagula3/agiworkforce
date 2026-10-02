@@ -237,29 +237,29 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
    * for the reason its transcript is not stored either.
    */
   if (Object.prototype.hasOwnProperty.call(body, 'draft')) {
-    const draft = body['draft'];
+    const draft = body.draft || null;
     let saved: { id: string; draft_updated_at: string | Date | null } | undefined;
     let stored = true;
     try {
       [saved] = await db.query<{ id: string; draft_updated_at: string | Date | null }>(
         `update web_conversations
             set draft = case when is_temporary then null else $3::text end,
-                draft_updated_at = case when is_temporary then null else greatest(
-                  clock_timestamp(), draft_updated_at + interval '1 microsecond'
-                ) end
+                draft_updated_at = case
+                  when is_temporary then null
+                  else greatest(
+                    date_trunc('milliseconds', clock_timestamp()),
+                    date_trunc('milliseconds', draft_updated_at) + interval '1 millisecond'
+                  )
+                end
           where id = $1
             and user_id = $2
             and organization_id is not distinct from $4
             and deleted_at is null
-            and draft_updated_at is not distinct from $5::timestamptz
+            and draft is distinct from $3::text
+            and date_trunc('milliseconds', draft_updated_at)
+              is not distinct from date_trunc('milliseconds', $5::timestamptz)
           returning id, draft_updated_at`,
-        [
-          id,
-          userId,
-          draft && draft.length > 0 ? draft : null,
-          organizationId,
-          body.draftUpdatedAt ?? null,
-        ],
+        [id, userId, draft, organizationId, body.draftUpdatedAt ?? null],
       );
     } catch (error) {
       // Until 0219 is applied there is nowhere to put a draft. The composer's
@@ -283,17 +283,20 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         [id, userId, organizationId],
       );
       if (!current) throw createError.notFound('Conversation not found');
-      return NextResponse.json(
-        {
-          saved: false,
-          conflict: true,
-          current: {
-            draft: current.draft ?? '',
-            draftUpdatedAt: current.draft_updated_at,
+      if (current.draft !== draft) {
+        return NextResponse.json(
+          {
+            saved: false,
+            conflict: true,
+            current: {
+              draft: current.draft ?? '',
+              draftUpdatedAt: current.draft_updated_at,
+            },
           },
-        },
-        { status: 409 },
-      );
+          { status: 409 },
+        );
+      }
+      saved = current;
     }
     if (Object.keys(body).every((key) => key === 'draft' || key === 'draftUpdatedAt')) {
       return NextResponse.json({ saved: stored, draftUpdatedAt: saved?.draft_updated_at ?? null });

@@ -1,22 +1,19 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useChatStore } from '@shared/stores/web-chat-store';
+import { conversationDocumentTitle } from '../lib/conversation-document-title';
 
-const SUFFIX = 'AGI';
-const MAX_TITLE_CHARS = 60;
-
-export function useDocumentTitleSync(
-  activeConversationId: string | null,
-  conversationTitle: string | undefined,
-): void {
+export function useDocumentTitleSync(displayedConversationId: string | null): void {
+  const conversationTitle = useChatStore((state) =>
+    displayedConversationId
+      ? state.conversations.find((conversation) => conversation.id === displayedConversationId)
+          ?.title
+      : null,
+  );
   useEffect(() => {
     if (typeof document === 'undefined') return;
-
-    const raw = conversationTitle?.trim();
-    const label = raw && raw.length > 0 ? raw : activeConversationId ? 'New chat' : '';
-    const trimmed =
-      label.length > MAX_TITLE_CHARS ? `${label.slice(0, MAX_TITLE_CHARS - 1).trimEnd()}…` : label;
-
-    document.title = trimmed ? `${trimmed} · ${SUFFIX}` : SUFFIX;
-  }, [activeConversationId, conversationTitle]);
+    if (displayedConversationId && conversationTitle === undefined) return;
+    document.title = conversationDocumentTitle(conversationTitle, Boolean(displayedConversationId));
+  }, [displayedConversationId, conversationTitle]);
 }

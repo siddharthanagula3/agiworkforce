@@ -104,6 +104,19 @@ export async function resolveActiveOrganizationId(
   return organizationId;
 }
 
+export async function requireSelectedWorkspace(
+  db: DatabaseAdapter,
+  userId: string,
+  request: WorkspaceScopedRequest,
+  organizationId: string | null,
+  refusal: string,
+): Promise<void> {
+  if (!request.headers.get(MANAGED_CLOUD_ORGANIZATION_HEADER)?.trim()) return;
+  if ((await resolveActiveOrganizationId(db, userId, request)) === organizationId) return;
+  noteSwitchRejection('resource_in_other_workspace', request);
+  throw createError.forbidden(refusal).asUserSafe();
+}
+
 export async function resolveOrganizationMembershipId(
   db: DatabaseAdapter,
   userId: string,

@@ -150,6 +150,7 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   persistActiveWorkspaceSelection: vi.fn(),
   persistProvenActiveWorkspaceSelection: vi.fn(),
   readRecordedActiveWorkspaceId: vi.fn(),
+  requireSelectedWorkspace: vi.fn(),
   resolveActiveOrganizationId: vi.fn(),
   touchesActiveOrganizationNamespace: vi.fn(),
   resolveOrganizationMembershipId: mocks.resolveOrganizationMembershipId,

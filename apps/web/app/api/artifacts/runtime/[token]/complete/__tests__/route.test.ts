@@ -128,6 +128,7 @@ vi.mock('@/lib/services/organization-policy-gate', () => ({
   resolveMfaPolicy: vi.fn(),
   resolveSecretHandlingPolicy: vi.fn(),
   evaluateActiveWorkspacePolicy: mocks.evaluateActiveWorkspacePolicy,
+  evaluateWorkspacePolicyFor: vi.fn(),
   resolveZeroDataRetentionPolicy: mocks.resolveZeroDataRetentionPolicy,
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({

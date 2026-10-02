@@ -59,6 +59,7 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   evaluateActiveWorkspacePolicy: vi.fn(async () => ({ allowed: true, organizationId: null })),
+  evaluateWorkspacePolicyFor: vi.fn(async () => ({ allowed: true, organizationId: null })),
   resolveEffectiveWorkspaceControls: vi.fn(async () => null),
   resolveSecretHandlingPolicy: mocks.resolvePolicy,
   resolveZeroDataRetentionPolicy: async () => ({ required: false, organizationId: null }),

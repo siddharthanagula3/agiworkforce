@@ -1,15 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   CONVERSATION_SHARES_PATH,
   ConversationShareAudienceResponseSchema,
   ConversationShareCreatedSchema,
+  ConversationShareListQuerySchema,
+  ConversationShareListResponseSchema,
+  ConversationSharesRefreshedSchema,
+  ConversationSharesRevokedSchema,
   conversationSharePath,
+  conversationSharesPath,
   type ConversationShareVisibility,
 } from '@agiworkforce/cloud-contracts';
 import { toUserMessage } from '@/lib/user-error-message';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
 import { snapshotArtifacts } from '@features/chat/lib/shared-conversation-snapshot';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -35,11 +40,38 @@ export interface ActiveConversationShare {
   workspace: { memberCount: number } | null;
 }
 
+export interface ConversationShare extends ActiveConversationShare {
+  linkCount: number;
+  mayHaveUnlistedLinks: boolean;
+  newMessages: number;
+  newMessagesVary: boolean;
+}
+
 interface InFlightShareRequest {
   controller: AbortController;
   timeout: ReturnType<typeof setTimeout>;
   dismissed: boolean;
   timedOut: boolean;
+}
+
+interface ConversationLiveShares {
+  conversationId: string;
+  shares: ActiveConversationShare[];
+  lookupFailed: boolean;
+}
+
+const SHARE_LOOKUP_FAILED = 'Could not check whether this chat already has a shared link.';
+const TRANSCRIPT_NOT_READY = 'This chat is still loading. Try again in a moment.';
+const NO_SHARES: ActiveConversationShare[] = [];
+const NO_MESSAGES: Message[] = [];
+
+type ChatStoreState = ReturnType<typeof useChatStore.getState>;
+
+function transcriptOf(
+  state: ChatStoreState,
+  conversationId: string | null | undefined,
+): Message[] | null {
+  return conversationId && state.activeConversationId === conversationId ? state.messages : null;
 }
 
 function readCreatedShare(value: unknown): ActiveConversationShare {
@@ -55,22 +87,142 @@ function readCreatedShare(value: unknown): ActiveConversationShare {
   };
 }
 
+function snapshotMessages(conversationId: string, messages: Message[]) {
+  return messages.map((m) => {
+    const artifacts =
+      m.role === 'assistant'
+        ? snapshotArtifacts(
+            conversationId,
+            m.id,
+            m.content,
+            useArtifactsStore.getState().getMessageArtifacts(m.id),
+          )
+        : [];
+    return {
+      role: m.role,
+      content: m.content,
+      created_at: m.createdAt,
+      ...(m.metadata?.artifactDerivation
+        ? { artifact_derivation: m.metadata.artifactDerivation }
+        : {}),
+      ...(artifacts.length > 0 ? { artifacts } : {}),
+      ...(m.attachments && m.attachments.length > 0
+        ? {
+            attachments: m.attachments.map((a) => ({
+              name: a.name,
+              type: a.type,
+              mimeType: a.mimeType,
+            })),
+          }
+        : {}),
+    };
+  });
+}
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const body: unknown = await res.json().catch(() => ({}));
+  return (body as { error?: { message?: string } }).error?.message ?? fallback;
+}
+
+async function readLiveShares(
+  conversationId: string,
+  signal: AbortSignal,
+): Promise<ActiveConversationShare[]> {
+  const res = await fetch(conversationSharesPath(conversationId), {
+    credentials: 'include',
+    signal,
+  });
+  if (!res.ok) throw new Error(SHARE_LOOKUP_FAILED);
+  const { shares, workspace } = ConversationShareListResponseSchema.parse(await res.json());
+  return shares
+    .filter((share) => !share.expired)
+    .map((share) => ({
+      url: share.shareUrl,
+      token: share.token,
+      expiresAt: share.expiresAt,
+      messageCount: share.messageCount,
+      audience: share.visibility,
+      workspace: workspace ?? null,
+    }));
+}
+
 export function useShareConversation(
   conversationTitle?: string,
   modelId?: string,
   conversationId?: string | null,
+  open = false,
 ) {
   const [isSharing, setIsSharing] = useState(false);
-  const [activeShare, setActiveShare] = useState<ActiveConversationShare | null>(null);
+  const [liveShares, setLiveShares] = useState<ConversationLiveShares | null>(null);
+  const [lookupPending, setLookupPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef<InFlightShareRequest | null>(null);
-  const messages = useChatStore((s) => s.messages);
+  const transcript = useChatStore((s) => transcriptOf(s, conversationId));
   const isTemporary = useChatStore((s) =>
     conversationId
       ? (s.conversations.find((c) => c.id === conversationId)?.isTemporary ?? false)
       : false,
   );
-  const hasMessages = messages.length > 0;
+  const messageCount = (transcript ?? NO_MESSAGES).length;
+  const hasMessages = messageCount > 0;
+  const storedConversationId =
+    conversationId &&
+    !isTemporary &&
+    ConversationShareListQuerySchema.safeParse({ conversation_id: conversationId }).success
+      ? conversationId
+      : null;
+  const checkingShare =
+    open &&
+    storedConversationId !== null &&
+    (lookupPending || liveShares?.conversationId !== storedConversationId);
+  const loadingChat = open && storedConversationId !== null && transcript === null;
+  const shownLiveShares =
+    !checkingShare && !loadingChat && liveShares && liveShares.conversationId === conversationId
+      ? liveShares
+      : null;
+  const shownShares = shownLiveShares?.shares ?? NO_SHARES;
+  const shownLookupFailed = shownLiveShares?.lookupFailed ?? false;
+  const activeShare = useMemo((): ConversationShare | null => {
+    const widest: ShareAudience = shownShares.some((share) => share.audience === 'public')
+      ? 'public'
+      : 'organization';
+    const shown = shownShares.find((share) => share.audience === widest);
+    if (!shown) return null;
+    const fewestShown = Math.min(...shownShares.map((share) => share.messageCount));
+    return {
+      ...shown,
+      linkCount: shownShares.length,
+      mayHaveUnlistedLinks: shownLookupFailed,
+      newMessages: Math.max(0, messageCount - fewestShown),
+      newMessagesVary: shownShares.some((share) => share.messageCount !== fewestShown),
+    };
+  }, [shownShares, shownLookupFailed, messageCount]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    setLookupPending(true);
+    setError(null);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !storedConversationId) return;
+    const controller = new AbortController();
+    readLiveShares(storedConversationId, controller.signal).then(
+      (shares) => {
+        if (controller.signal.aborted) return;
+        setLiveShares({ conversationId: storedConversationId, shares, lookupFailed: false });
+        setLookupPending(false);
+        setError(null);
+      },
+      (caught: unknown) => {
+        if (controller.signal.aborted) return;
+        setLiveShares({ conversationId: storedConversationId, shares: [], lookupFailed: true });
+        setLookupPending(false);
+        setError(toUserMessage(caught, SHARE_LOOKUP_FAILED));
+      },
+    );
+    return () => controller.abort();
+  }, [open, storedConversationId]);
 
   const beginRequest = useCallback((): InFlightShareRequest | null => {
     if (inFlightRef.current) return null;
@@ -134,65 +286,50 @@ export function useShareConversation(
 
   const share = useCallback(
     async (expiresInDays: ShareExpiryDays): Promise<boolean> => {
-      if (!hasMessages || !conversationId) {
+      if (!conversationId) {
         setError('Add a message before creating a public link.');
         return false;
       }
+      const sharedConversationId = conversationId;
       if (isTemporary) {
         setError(TEMPORARY_CHAT_SHARE_REFUSAL);
+        return false;
+      }
+      const sharedMessages = transcriptOf(useChatStore.getState(), sharedConversationId);
+      if (!sharedMessages) {
+        setError(TRANSCRIPT_NOT_READY);
+        return false;
+      }
+      if (sharedMessages.length === 0) {
+        setError('Add a message before creating a public link.');
         return false;
       }
       const request = beginRequest();
       if (!request) return false;
       try {
-        const payload = {
-          conversation_id: conversationId,
-          title: conversationTitle || 'Shared Session',
-          model_id: modelId,
-          expires_in_days: expiresInDays,
-          messages: messages.map((m) => {
-            const artifacts =
-              m.role === 'assistant'
-                ? snapshotArtifacts(
-                    conversationId,
-                    m.id,
-                    m.content,
-                    useArtifactsStore.getState().getMessageArtifacts(m.id),
-                  )
-                : [];
-            return {
-              role: m.role,
-              content: m.content,
-              created_at: m.createdAt,
-              ...(m.metadata?.artifactDerivation
-                ? { artifact_derivation: m.metadata.artifactDerivation }
-                : {}),
-              ...(artifacts.length > 0 ? { artifacts } : {}),
-              ...(m.attachments && m.attachments.length > 0
-                ? {
-                    attachments: m.attachments.map((a) => ({
-                      name: a.name,
-                      type: a.type,
-                      mimeType: a.mimeType,
-                    })),
-                  }
-                : {}),
-            };
-          }),
-        };
         const res = await fetch(CONVERSATION_SHARES_PATH, {
           method: 'POST',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
           credentials: 'include',
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            conversation_id: sharedConversationId,
+            title: conversationTitle || 'Shared Session',
+            model_id: modelId,
+            expires_in_days: expiresInDays,
+            messages: snapshotMessages(sharedConversationId, sharedMessages),
+          }),
           signal: request.controller.signal,
         });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
-          throw new Error(msg);
-        }
-        setActiveShare(readCreatedShare(await res.json()));
+        if (!res.ok) throw new Error(await readErrorMessage(res, 'Failed to share'));
+        const created = readCreatedShare(await res.json());
+        setLiveShares((current) => {
+          const listed = current?.conversationId === sharedConversationId ? current : null;
+          return {
+            conversationId: sharedConversationId,
+            shares: [created, ...(listed?.shares ?? [])],
+            lookupFailed: listed?.lookupFailed ?? false,
+          };
+        });
         return true;
       } catch (err) {
         showRequestError(request, err, 'Could not create the public link.');
@@ -205,8 +342,6 @@ export function useShareConversation(
       conversationTitle,
       modelId,
       conversationId,
-      messages,
-      hasMessages,
       isTemporary,
       beginRequest,
       finishRequest,
@@ -214,12 +349,70 @@ export function useShareConversation(
     ],
   );
 
-  const revoke = useCallback(async (): Promise<boolean> => {
-    if (!activeShare) return false;
+  const updateLink = useCallback(async (): Promise<boolean> => {
+    if (!activeShare || !conversationId) return false;
+    const sharedConversationId = conversationId;
+    const sharedMessages = transcriptOf(useChatStore.getState(), sharedConversationId);
+    if (!sharedMessages) {
+      setError(TRANSCRIPT_NOT_READY);
+      return false;
+    }
+    if (sharedMessages.length === 0) {
+      setError('Add a message before updating the link.');
+      return false;
+    }
     const request = beginRequest();
     if (!request) return false;
     try {
-      const res = await fetch(conversationSharePath(activeShare.token), {
+      const res = await fetch(conversationSharesPath(sharedConversationId), {
+        method: 'PUT',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+        body: JSON.stringify({
+          tokens: shownShares.map((link) => link.token),
+          title: conversationTitle || 'Shared Session',
+          model_id: modelId,
+          messages: snapshotMessages(sharedConversationId, sharedMessages),
+        }),
+        signal: request.controller.signal,
+      });
+      if (!res.ok) throw new Error(await readErrorMessage(res, 'Could not update the link.'));
+      const refreshed = ConversationSharesRefreshedSchema.parse(await res.json());
+      setLiveShares((current) => {
+        const listed = current?.conversationId === sharedConversationId ? current : null;
+        return {
+          conversationId: sharedConversationId,
+          shares: (listed?.shares ?? [])
+            .filter((link) => refreshed.tokens.includes(link.token))
+            .map((link) => ({ ...link, messageCount: refreshed.messageCount })),
+          lookupFailed: listed?.lookupFailed ?? false,
+        };
+      });
+      return true;
+    } catch (err) {
+      showRequestError(request, err, 'Could not update the link.');
+      return false;
+    } finally {
+      finishRequest(request);
+    }
+  }, [
+    activeShare,
+    shownShares,
+    conversationTitle,
+    modelId,
+    conversationId,
+    beginRequest,
+    finishRequest,
+    showRequestError,
+  ]);
+
+  const revoke = useCallback(async (): Promise<boolean> => {
+    if (!activeShare || !conversationId) return false;
+    const sharedConversationId = conversationId;
+    const request = beginRequest();
+    if (!request) return false;
+    try {
+      const res = await fetch(conversationSharesPath(sharedConversationId), {
         method: 'DELETE',
         headers: await addCsrfHeaders(),
         credentials: 'include',
@@ -228,7 +421,8 @@ export function useShareConversation(
       if (!res.ok) {
         throw new Error('Failed to revoke share link');
       }
-      setActiveShare(null);
+      ConversationSharesRevokedSchema.parse(await res.json());
+      setLiveShares({ conversationId: sharedConversationId, shares: [], lookupFailed: false });
       return true;
     } catch (err) {
       showRequestError(request, err, 'Could not revoke the public link.');
@@ -236,11 +430,11 @@ export function useShareConversation(
     } finally {
       finishRequest(request);
     }
-  }, [activeShare, beginRequest, finishRequest, showRequestError]);
+  }, [activeShare, conversationId, beginRequest, finishRequest, showRequestError]);
 
   /**
-   * Move the live share between audiences. The token and the expiry are
-   * untouched, so switching back restores the same URL on the same clock.
+   * Move every live link of the chat to one audience. Tokens and expiries are
+   * untouched, so switching back restores the same URLs on the same clocks.
    */
   const setAudience = useCallback(
     async (audience: ShareAudience): Promise<boolean> => {
@@ -248,26 +442,28 @@ export function useShareConversation(
       const request = beginRequest();
       if (!request) return false;
       try {
-        const res = await fetch(conversationSharePath(activeShare.token), {
-          method: 'PATCH',
-          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-          credentials: 'include',
-          body: JSON.stringify({ visibility: audience }),
-          signal: request.controller.signal,
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const msg =
-            (err as { error?: { message?: string } }).error?.message ??
-            'Could not change who can open this.';
-          throw new Error(msg);
+        for (const link of shownShares.filter((candidate) => candidate.audience !== audience)) {
+          const res = await fetch(conversationSharePath(link.token), {
+            method: 'PATCH',
+            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+            credentials: 'include',
+            body: JSON.stringify({ visibility: audience }),
+            signal: request.controller.signal,
+          });
+          if (!res.ok) {
+            throw new Error(await readErrorMessage(res, 'Could not change who can open this.'));
+          }
+          const body = ConversationShareAudienceResponseSchema.parse(await res.json());
+          setLiveShares(
+            (current) =>
+              current && {
+                ...current,
+                shares: current.shares.map((share) =>
+                  share.token === link.token ? { ...share, audience: body.visibility } : share,
+                ),
+              },
+          );
         }
-        const body = ConversationShareAudienceResponseSchema.parse(await res.json());
-        setActiveShare((current) =>
-          current?.token === activeShare.token
-            ? { ...current, audience: body.visibility }
-            : current,
-        );
         return true;
       } catch (err) {
         showRequestError(request, err, 'Could not change who can open this.');
@@ -276,19 +472,21 @@ export function useShareConversation(
         finishRequest(request);
       }
     },
-    [activeShare, beginRequest, finishRequest, showRequestError],
+    [activeShare, shownShares, beginRequest, finishRequest, showRequestError],
   );
 
   return {
     share,
+    updateLink,
     revoke,
     setAudience,
     isSharing,
     hasMessages,
     isTemporary,
     activeShare,
+    checkingShare,
+    loadingChat,
     error,
     cancelPending,
-    clearError: () => setError(null),
   };
 }
