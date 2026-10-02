@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => {
   const clientIpIdentifier = 'ip:203.0.113.7';
   return {
     clientIpIdentifier,
-    getSnapshotRecords: vi.fn(),
+    getDirectoryIconUrl: vi.fn(),
     getIconForUrl: vi.fn(),
     withRateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
     clientIpRateLimitIdentifier: vi.fn((..._args: unknown[]) => clientIpIdentifier),
@@ -22,7 +22,7 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 vi.mock('@/lib/connectors/directory/memory-cache', () => ({
-  getSnapshotRecords: () => mocks.getSnapshotRecords(),
+  getDirectoryIconUrl: (...args: unknown[]) => mocks.getDirectoryIconUrl(...args),
 }));
 vi.mock('@/lib/connectors/directory/icon-fetch', () => ({
   getIconForUrl: (...args: unknown[]) => mocks.getIconForUrl(...args),
@@ -38,7 +38,7 @@ describe('GET /api/connectors/directory/icon', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('spends from the ip-keyed connector icon bucket, never the per-user conversation bucket', async () => {
-    mocks.getSnapshotRecords.mockResolvedValueOnce([]);
+    mocks.getDirectoryIconUrl.mockResolvedValueOnce(null);
     const incoming = request('?id=notion');
 
     await GET(incoming);
@@ -58,7 +58,7 @@ describe('GET /api/connectors/directory/icon', () => {
     const response = await GET(request('?id=notion'));
 
     expect(response.status).toBe(429);
-    expect(mocks.getSnapshotRecords).not.toHaveBeenCalled();
+    expect(mocks.getDirectoryIconUrl).not.toHaveBeenCalled();
   });
 
   it('requires an id query parameter', async () => {
@@ -66,25 +66,17 @@ describe('GET /api/connectors/directory/icon', () => {
     expect(response.status).toBe(400);
   });
 
-  it('404s when the id is not in the snapshot', async () => {
-    mocks.getSnapshotRecords.mockResolvedValueOnce([]);
+  it('404s without fetching when no icon is recorded for the connector', async () => {
+    mocks.getDirectoryIconUrl.mockResolvedValueOnce(null);
 
     const response = await GET(request('?id=notion'));
     expect(response.status).toBe(404);
-  });
-
-  it('404s when the record has no recorded icon url', async () => {
-    mocks.getSnapshotRecords.mockResolvedValueOnce([{ id: 'notion', iconUrl: null }]);
-
-    const response = await GET(request('?id=notion'));
-    expect(response.status).toBe(404);
+    expect(mocks.getDirectoryIconUrl).toHaveBeenCalledWith('notion');
     expect(mocks.getIconForUrl).not.toHaveBeenCalled();
   });
 
   it('404s when the icon could not be fetched', async () => {
-    mocks.getSnapshotRecords.mockResolvedValueOnce([
-      { id: 'notion', iconUrl: 'https://cdn.example.com/notion.png' },
-    ]);
+    mocks.getDirectoryIconUrl.mockResolvedValueOnce('https://cdn.example.com/notion.png');
     mocks.getIconForUrl.mockResolvedValueOnce(null);
 
     const response = await GET(request('?id=notion'));
@@ -92,9 +84,7 @@ describe('GET /api/connectors/directory/icon', () => {
   });
 
   it('streams the cached icon bytes with the right content type', async () => {
-    mocks.getSnapshotRecords.mockResolvedValueOnce([
-      { id: 'notion', iconUrl: 'https://cdn.example.com/notion.png' },
-    ]);
+    mocks.getDirectoryIconUrl.mockResolvedValueOnce('https://cdn.example.com/notion.png');
     mocks.getIconForUrl.mockResolvedValueOnce({
       contentType: 'image/png',
       base64: Buffer.from([1, 2, 3]).toString('base64'),
@@ -105,6 +95,9 @@ describe('GET /api/connectors/directory/icon', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('image/png');
     expect(response.headers.get('cache-control')).toBe('public, max-age=2592000, immutable');
+    expect(response.headers.get('vercel-cdn-cache-control')).toBe('max-age=2592000');
+    expect(response.headers.get('vary')).toBe('Origin');
+    expect(mocks.getIconForUrl).toHaveBeenCalledWith('https://cdn.example.com/notion.png');
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(bytes)).toEqual([1, 2, 3]);
   });

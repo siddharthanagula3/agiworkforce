@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   readSnapshotStamp: vi.fn(),
   readSnapshotRecords: vi.fn(),
   readSyncState: vi.fn(),
+  readIconIndexStamp: vi.fn(),
+  readIconIndex: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -13,10 +15,13 @@ vi.mock('@/lib/connectors/directory/snapshot-cache', () => ({
   readSnapshotStamp: () => mocks.readSnapshotStamp(),
   readSnapshotRecords: () => mocks.readSnapshotRecords(),
   readSyncState: () => mocks.readSyncState(),
+  readIconIndexStamp: () => mocks.readIconIndexStamp(),
+  readIconIndex: () => mocks.readIconIndex(),
 }));
 
 import {
   __resetSnapshotMemoryCacheForTests,
+  getDirectoryIconUrl,
   getSnapshotRecords,
   getSnapshotView,
 } from '@/lib/connectors/directory/memory-cache';
@@ -149,5 +154,54 @@ describe('getSnapshotView', () => {
     expect(view.records).toEqual([]);
     expect(view.counts.totalRecords).toBe(0);
     expect(view.bootstrapComplete).toBe(false);
+  });
+});
+
+describe('getDirectoryIconUrl', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetSnapshotMemoryCacheForTests();
+  });
+
+  it('answers from the icon index without loading the snapshot', async () => {
+    mocks.readIconIndexStamp.mockResolvedValue(7);
+    mocks.readIconIndex.mockResolvedValue({ notion: 'https://cdn.example.com/notion.png' });
+
+    await expect(getDirectoryIconUrl('notion')).resolves.toBe('https://cdn.example.com/notion.png');
+    await expect(getDirectoryIconUrl('slack')).resolves.toBeNull();
+
+    expect(mocks.readIconIndex).toHaveBeenCalledTimes(1);
+    expect(mocks.readSnapshotRecords).not.toHaveBeenCalled();
+    expect(mocks.readSnapshotStamp).not.toHaveBeenCalled();
+  });
+
+  it('reloads the index only when its stamp changes', async () => {
+    mocks.readIconIndexStamp.mockResolvedValueOnce(7).mockResolvedValueOnce(8);
+    mocks.readIconIndex
+      .mockResolvedValueOnce({ notion: 'https://cdn.example.com/old.png' })
+      .mockResolvedValueOnce({ notion: 'https://cdn.example.com/new.png' });
+
+    await expect(getDirectoryIconUrl('notion')).resolves.toBe('https://cdn.example.com/old.png');
+    await expect(getDirectoryIconUrl('notion')).resolves.toBe('https://cdn.example.com/new.png');
+  });
+
+  it('never resolves an inherited object key as an icon url', async () => {
+    mocks.readIconIndexStamp.mockResolvedValue(7);
+    mocks.readIconIndex.mockResolvedValue({ notion: 'https://cdn.example.com/notion.png' });
+
+    await expect(getDirectoryIconUrl('constructor')).resolves.toBeNull();
+    await expect(getDirectoryIconUrl('__proto__')).resolves.toBeNull();
+    await expect(getDirectoryIconUrl('toString')).resolves.toBeNull();
+  });
+
+  it('falls back to the snapshot before the first index is written', async () => {
+    mocks.readIconIndexStamp.mockResolvedValue(null);
+    mocks.readSnapshotStamp.mockResolvedValue(3);
+    mocks.readSnapshotRecords.mockResolvedValue([
+      directoryRecord({ id: 'notion', iconUrl: 'https://cdn.example.com/notion.png' }),
+    ]);
+
+    await expect(getDirectoryIconUrl('notion')).resolves.toBe('https://cdn.example.com/notion.png');
+    expect(mocks.readIconIndex).not.toHaveBeenCalled();
   });
 });
