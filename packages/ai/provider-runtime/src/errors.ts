@@ -506,8 +506,12 @@ const ALLOCATION_QUOTA_CODES: ReadonlySet<string> = new Set(['allocationquota.fr
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_TIER_ONLY_PROVIDER_HINT = 'free_tier_only';
 export const MODEL_STUDIO_ACCOUNT_BILLING_HINT = 'account_billing';
+export const MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT = 'model_access_denied';
 
-const MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGE = 'free tier of the model has been exhausted';
+const MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGES: readonly string[] = [
+  'free tier of the model has been exhausted',
+  'free allocated quota exceeded',
+];
 const MODEL_STUDIO_THROTTLING_CODES: ReadonlySet<string> = new Set([
   'throttling',
   'throttling.ratequota',
@@ -529,7 +533,12 @@ const MODEL_STUDIO_MODEL_NOT_FOUND_CODES: ReadonlySet<string> = new Set([
   'model_not_found',
 ]);
 const MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE = 'model not exist';
-const MODEL_STUDIO_MODEL_ACCESS_DENIED_CODE = 'model.accessdenied';
+const MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES: ReadonlySet<string> = new Set([
+  'model.accessdenied',
+  'endpoint.accessdenied',
+  'accessdenied',
+  'access_denied',
+]);
 const MODEL_STUDIO_CONTENT_INSPECTION_CODES: ReadonlySet<string> = new Set([
   'datainspectionfailed',
   'data_inspection_failed',
@@ -1162,7 +1171,10 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
   const withStatus = typeof status === 'number' ? { status } : {};
   const named = (set: ReadonlySet<string>) => codes.some((code) => set.has(code));
 
-  if (named(ALLOCATION_QUOTA_CODES) || lower.includes(MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGE)) {
+  if (
+    named(ALLOCATION_QUOTA_CODES) ||
+    MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGES.some((sentence) => lower.includes(sentence))
+  ) {
     return {
       category: 'quota_exhausted',
       code: FREE_QUOTA_EXHAUSTED_CODE,
@@ -1206,7 +1218,7 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       message,
     };
   }
-  if (codes.includes(MODEL_STUDIO_MODEL_ACCESS_DENIED_CODE)) {
+  if (named(MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES)) {
     return {
       category: 'invalid_model',
       code: 'model_tier_restricted',
@@ -1214,6 +1226,7 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       fallbackable: true,
       ...withStatus,
       message,
+      providerHint: MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
     };
   }
   if (

@@ -9,6 +9,7 @@ import {
   EmptyProviderResponseError,
   FREE_TIER_ONLY_PROVIDER_HINT,
   MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
   SPENDING_CAP_PROVIDER_HINT,
   classifyError,
   classifyModelStudioError,
@@ -523,6 +524,8 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
       'AllocationQuota.FreeTierOnly',
       "The free tier of the model has been exhausted. If you want to continue access the model on a paid basis, please disable the 'use free tier only' mode in the management console.",
     ],
+    [429, 'Throttling.AllocationQuota', 'Free allocated quota exceeded.'],
+    [429, 'insufficient_quota', 'Free allocated quota exceeded.'],
   ])('reads %i %s as one model’s spent free tier', (status, code, message) => {
     const c = classifyModelStudioError(compatibleModeError(status, code, message));
     expect(c).toMatchObject({
@@ -535,13 +538,17 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
     });
   });
 
-  it('recognises the spent free tier from the documented sentence when no code survives', () => {
-    const c = classifyModelStudioError(
-      new Error('403 The free tier of the model has been exhausted.'),
-    );
-    expect(c.category).toBe('quota_exhausted');
-    expect(c.providerHint).toBe(FREE_TIER_ONLY_PROVIDER_HINT);
-  });
+  it.each([
+    '403 The free tier of the model has been exhausted.',
+    '429 Free allocated quota exceeded.',
+  ])(
+    'recognises a spent free tier from the documented sentence %s when no code survives',
+    (text) => {
+      const c = classifyModelStudioError(new Error(text));
+      expect(c.category).toBe('quota_exhausted');
+      expect(c.providerHint).toBe(FREE_TIER_ONLY_PROVIDER_HINT);
+    },
+  );
 
   it.each([
     [
@@ -549,7 +556,6 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
       'Throttling.AllocationQuota',
       'Allocated quota exceeded, please increase your quota limit.',
     ],
-    [429, 'Throttling.AllocationQuota', 'Free allocated quota exceeded.'],
     [
       429,
       'insufficient_quota',
@@ -614,11 +620,31 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
     expect(c).toMatchObject({ category: 'invalid_model', code: 'invalid_model' });
   });
 
-  it('reads a model-level access denial as that model, never as the credential', () => {
-    const c = classifyModelStudioError(
-      compatibleModeError(403, 'Model.AccessDenied', 'Model access denied.'),
+  it.each([
+    [403, 'Model.AccessDenied', 'Model access denied.'],
+    [403, 'AccessDenied', 'Access denied.'],
+    [403, 'access_denied', 'Access denied.'],
+    [403, 'Endpoint.AccessDenied', 'Workspace endpoint access denied.'],
+  ])('reads %i %s as a refusal of that model, never of the credential', (status, code, message) => {
+    const c = classifyModelStudioError(compatibleModeError(status, code, message));
+    expect(c).toMatchObject({
+      category: 'invalid_model',
+      code: 'model_tier_restricted',
+      providerHint: MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+      retryable: false,
+      fallbackable: true,
+      status,
+    });
+  });
+
+  it('leaves an account that never activated Model Studio to the credential classifier', () => {
+    const err = compatibleModeError(
+      403,
+      'AccessDenied.Unpurchased',
+      'Access to model denied. Please make sure you are eligible for using the model.',
     );
-    expect(c).toMatchObject({ category: 'invalid_model', code: 'model_tier_restricted' });
+    expect(classifyModelStudioError(err)).toEqual(classifyError(err));
+    expect(classifyModelStudioError(err).category).toBe('auth');
   });
 
   it.each([

@@ -175,4 +175,32 @@ describe('createQwenAdapter Model Studio refusals', () => {
       providerHint: 'free_tier_only',
     });
   });
+
+  it('reports a spent free allocation on a model without pay-as-you-go as exhausted quota', async () => {
+    const chunk = await firstError(
+      refusal(429, 'Throttling.AllocationQuota', 'Free allocated quota exceeded.'),
+    );
+    expect(chunk.classification).toMatchObject({
+      category: 'quota_exhausted',
+      providerHint: 'free_tier_only',
+    });
+    expect(chunk.retryable).toBe(false);
+  });
+
+  it.each([
+    ['Endpoint.AccessDenied', 'Workspace endpoint access denied.'],
+    ['AccessDenied', 'Access denied.'],
+    ['access_denied', 'Access denied.'],
+  ])(
+    'reports a 403 %s as a refusal of that model, so the credential stays in service',
+    async (code, message) => {
+      const chunk = await firstError(refusal(403, code, message));
+      expect(chunk.classification).toMatchObject({
+        category: 'invalid_model',
+        retryable: false,
+        fallbackable: true,
+      });
+      expect(chunk.classification?.category).not.toBe('auth');
+    },
+  );
 });

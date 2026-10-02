@@ -39,6 +39,7 @@ export {
   FREE_POOL_PROVIDER_HINT,
   FREE_TIER_ONLY_PROVIDER_HINT,
   MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
   type ClassifiedError,
   type ErrorCategory,
 } from './errors';
