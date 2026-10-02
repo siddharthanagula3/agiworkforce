@@ -478,6 +478,56 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
   });
 
+  it('announces the check in a status region rather than a bare loading label', () => {
+    vi.spyOn(global, 'fetch').mockImplementationOnce(() => new Promise<Response>(() => {}));
+
+    renderSavedChat();
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Checking whether this chat is already shared',
+    );
+  });
+
+  it('moves focus to the live link when the check finds one, never onto Revoke share', async () => {
+    let answerLookup: (response: Response) => void = () => undefined;
+    vi.spyOn(global, 'fetch').mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          answerLookup = resolve;
+        }),
+    );
+
+    renderSavedChat();
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    await waitFor(() => expect(cancel).toHaveFocus());
+
+    await act(async () => {
+      answerLookup(listed([liveShare('live-token')]));
+    });
+
+    const link = await screen.findByRole('textbox', { name: 'Conversation link' });
+    await waitFor(() => expect(link).toHaveFocus());
+    expect(screen.getByRole('button', { name: 'Revoke share' })).not.toHaveFocus();
+  });
+
+  it('returns focus to the dialog once a revoke has removed the button that asked', async () => {
+    vi.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed([liveShare('live-token')]))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, revoked: 1 }), { status: 200 }),
+      );
+
+    renderSavedChat();
+    const revoke = await screen.findByRole('button', { name: 'Revoke share' });
+    revoke.focus();
+    fireEvent.click(revoke);
+    const confirmation = await screen.findByRole('alertdialog');
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Revoke share' }));
+
+    expect(await screen.findByRole('button', { name: /Create public link/ })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+  });
+
   it('revokes every live link to the chat at once, saying how many stop working', async () => {
     const fetchMock = vi
       .spyOn(global, 'fetch')

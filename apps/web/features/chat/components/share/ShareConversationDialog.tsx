@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -60,6 +60,9 @@ function ShareConversationDialogImpl({
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [expiryDays, setExpiryDays] = useState<ShareExpiryDays>(7);
   const [copied, setCopied] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const refocusAfterRevokeRef = useRef(false);
+  const confirming = confirmDialog !== null;
   const {
     share,
     updateLink,
@@ -82,6 +85,12 @@ function ShareConversationDialogImpl({
     one: '{{count}} member',
     other: '{{count}} members',
   });
+
+  useEffect(() => {
+    if (confirming || !refocusAfterRevokeRef.current) return;
+    refocusAfterRevokeRef.current = false;
+    contentRef.current?.focus();
+  }, [confirming]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) cancelPending();
@@ -175,7 +184,12 @@ function ShareConversationDialogImpl({
                 : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
             confirmLabel: 'Revoke share',
           };
-    confirm({ ...scope, onConfirm: () => revoke() });
+    confirm({
+      ...scope,
+      onConfirm: async () => {
+        refocusAfterRevokeRef.current = await revoke();
+      },
+    });
   };
 
   const handleCopy = async () => {
@@ -194,7 +208,7 @@ function ShareConversationDialogImpl({
     <>
       {confirmDialog}
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-lg">
+        <DialogContent ref={contentRef} className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {activeShare ? (
@@ -221,14 +235,17 @@ function ShareConversationDialogImpl({
           </DialogHeader>
 
           {checkingShare ? (
-            <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-              <Spinner size="sm" />
+            <div
+              role="status"
+              className="flex items-center gap-2 py-2 text-sm text-muted-foreground"
+            >
+              <Spinner size="sm" aria-hidden="true" />
               <span>Checking whether this chat is already shared</span>
             </div>
           ) : activeShare ? (
             <div className="space-y-4">
               <div className="flex gap-2">
-                <Input aria-label="Conversation link" readOnly value={activeShare.url} />
+                <Input autoFocus aria-label="Conversation link" readOnly value={activeShare.url} />
                 <Button variant="outline" onClick={() => void handleCopy()} disabled={isSharing}>
                   {copied ? <Check className="me-2 h-4 w-4" /> : <Copy className="me-2 h-4 w-4" />}
                   {copied ? 'Copied' : 'Copy'}
@@ -338,7 +355,7 @@ function ShareConversationDialogImpl({
             </p>
           ) : null}
 
-          <DialogFooter>
+          <DialogFooter key={activeShare ? 'shared' : 'unshared'}>
             {activeShare ? (
               <>
                 <Button variant="destructive" onClick={handleRevoke} disabled={isSharing}>
