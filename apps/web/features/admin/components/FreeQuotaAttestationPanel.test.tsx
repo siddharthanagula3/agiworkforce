@@ -494,6 +494,9 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
       'href',
       'https://modelstudio.console.alibabacloud.com/ap-southeast-1/costing-balance/free-quota',
     );
+    expect(screen.getByText(/has no switch, so it cannot be on/)).toHaveTextContent(
+      'choose Only the models I select and leave it out',
+    );
   });
 
   it('records nothing until coverage is chosen and the check is confirmed', async () => {

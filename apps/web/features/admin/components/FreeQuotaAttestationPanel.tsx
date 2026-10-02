@@ -479,8 +479,13 @@ function ConfiguredView({
             </li>
             <li>
               The change is not immediate and the page lags by several minutes. Reload it and
-              confirm every covered model shows the switch on. A model whose free quota is used up
-              or expired has no switch to turn on.
+              confirm every covered model shows the switch on.
+            </li>
+            <li>
+              A model whose free quota is used up or expired has no switch, so it cannot be on. If
+              any model shows that, choose Only the models I select and leave it out: a model left
+              out stays off here, while one recorded as on with its switch off bills the account
+              once its quota is gone.
             </li>
             <li>
               If the key was issued in Alibaba Cloud Model Studio instead, use the{' '}
