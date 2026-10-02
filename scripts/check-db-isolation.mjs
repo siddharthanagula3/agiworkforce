@@ -169,7 +169,6 @@ const WORKSPACE_SCOPE_BASELINE = new Map([
   ['apps/web/lib/services/cloud-code-durable-run.ts', 1],
   ['apps/web/lib/services/cloud-agent-run-termination.ts', 1],
   ['apps/web/lib/services/cloud-agent-execution-service.ts', 1],
-  ['apps/web/app/api/share/route.ts', 1],
   ['apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts', 1],
 ]);
 

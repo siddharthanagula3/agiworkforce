@@ -7,7 +7,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import {
+  requireSelectedWorkspace,
+  resolveActiveOrganizationId,
+} from '@/lib/services/active-workspace-service';
 import {
   requireOrganizationPermission,
   SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
@@ -27,8 +30,10 @@ import {
   getOrgReadableSessionByToken,
   getPublicSharedSessionByToken,
   isConversationSharingSchemaUnavailable,
+  readSharedSessionScope,
   resolveSessionShareTarget,
   setSharedSessionVisibility,
+  SHARE_IN_OTHER_WORKSPACE_MESSAGE,
   shareSessionWithOrganization,
   unshareSessionFromOrganization,
 } from '@/lib/services/org-shared-session-service';
@@ -205,13 +210,27 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
   const { db, userId } = await getUserScopedDb(request);
   const visibility = parsed.data.visibility;
 
-  if (visibility === 'public') {
-    const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
-    if (sharingGateResponse) return sharingGateResponse;
-  }
-
   try {
+    const ownerDb = getNeonDb();
+    const stored = await readSharedSessionScope(ownerDb, { userId, token });
+    if (!stored) {
+      throw createError.notFound('Shared session not found');
+    }
+    const conversationOrganizationId = stored.conversation?.organizationId ?? null;
+    if (stored.conversation) {
+      await requireSelectedWorkspace(
+        ownerDb,
+        userId,
+        request,
+        conversationOrganizationId,
+        SHARE_IN_OTHER_WORKSPACE_MESSAGE,
+      );
+    }
+
     const target = await resolveSessionShareTarget(db, { userId, token });
+    if (conversationOrganizationId && conversationOrganizationId !== target.organizationId) {
+      throw createError.forbidden(SHARE_IN_OTHER_WORKSPACE_MESSAGE).asUserSafe();
+    }
 
     let revoked = false;
     if (visibility === 'organization') {
@@ -227,6 +246,11 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
         actorUserId: userId,
       });
     } else {
+      const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
+        conversationOrganizationId,
+        stored.grantOrganizationId,
+      ]);
+      if (sharingGateResponse) return sharingGateResponse;
       revoked = await unshareSessionFromOrganization(
         db,
         target.organizationId,

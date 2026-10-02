@@ -221,12 +221,22 @@ export async function evaluateActiveWorkspacePolicy(
     return { ...unavailableDecisionFor(ask), organizationId: null };
   }
 
-  if (!activeOrganizationId) {
+  return evaluateWorkspacePolicyFor(db, userId, activeOrganizationId, ask, request);
+}
+
+export async function evaluateWorkspacePolicyFor(
+  db: DatabaseAdapter,
+  userId: string,
+  workspaceOrganizationId: string | null,
+  ask: PolicyAsk,
+  request?: ScopedRequest,
+): Promise<PolicyGateResult> {
+  if (!workspaceOrganizationId) {
     const fundingBillingHold = await evaluateFundingOrganizationBillingHold(db, userId, ask);
     if (fundingBillingHold) return fundingBillingHold;
     return { ...UNSCOPED_POLICY_DECISION, organizationId: null };
   }
-  const organizationId = activeOrganizationId;
+  const organizationId = workspaceOrganizationId;
 
   let collectionState = CURRENT_COLLECTION_STATE;
   try {

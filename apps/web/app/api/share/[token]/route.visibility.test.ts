@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   privilegedExecute: vi.fn(),
   role: 'member' as string,
   permissions: ['content.read', 'content.share'] as string[],
+  stored: {} as Record<string, string | null>,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -40,17 +41,19 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+const OTHER_ORG = '33333333-3333-4333-8333-333333333333';
 const SESSION = '22222222-2222-4222-8222-222222222222';
+const CONVERSATION = '44444444-4444-4444-8444-444444444444';
 const TOKEN = 'b'.repeat(24);
 
 const { PATCH } = await import('./route');
 
-function call(visibility: string) {
+function call(visibility: string, headers: Record<string, string> = {}) {
   return PATCH(
     new NextRequest(`https://agiworkforce.com/api/share/${TOKEN}`, {
       method: 'PATCH',
       body: JSON.stringify({ visibility }),
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...headers },
     }),
     { params: Promise.resolve({ token: TOKEN }) },
   );
@@ -60,11 +63,38 @@ function scopedStatements(): string[] {
   return mocks.scopedQuery.mock.calls.map(([sql]) => String(sql));
 }
 
+function policyRow(organizationId: string, externalSharingEnabled: boolean) {
+  return {
+    organization_id: organizationId,
+    default_privacy_mode: 'byok',
+    allowed_privacy_modes: ['local', 'byok'],
+    allow_managed_compute: false,
+    require_local_to_byok_preview: true,
+    chat_sync_surfaces: ['web'],
+    allow_cli_cloud_sync: false,
+    allow_vscode_cloud_sync: false,
+    allow_chrome_cloud_sync: false,
+    audit_export_enabled: true,
+    retention_days: 365,
+    retention_enforced: false,
+    external_sharing_enabled: externalSharingEnabled,
+    allow_memory: true,
+    metadata: {},
+    updated_at: '2026-09-16T00:00:00.000Z',
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.role = 'member';
   mocks.permissions = ['content.read', 'content.share'];
+  mocks.stored = {
+    conversation_id: CONVERSATION,
+    conversation_organization_id: ORG,
+    grant_organization_id: ORG,
+  };
   mocks.privilegedQuery.mockImplementation(async (sql: string) => {
+    if (sql.includes('left join public.web_conversations')) return [mocks.stored];
     if (sql.includes('organization_member_permissions')) {
       return [{ permissions: mocks.permissions }];
     }
@@ -202,28 +232,7 @@ describe('PATCH /api/share/[token], public sharing turned off by the workspace',
     const defaultQuery = mocks.privilegedQuery.getMockImplementation()!;
     mocks.privilegedQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('from public.user_settings')) return [{ organization_id: ORG }];
-      if (sql.includes('from public.organization_admin_policies')) {
-        return [
-          {
-            organization_id: ORG,
-            default_privacy_mode: 'byok',
-            allowed_privacy_modes: ['local', 'byok'],
-            allow_managed_compute: false,
-            require_local_to_byok_preview: true,
-            chat_sync_surfaces: ['web'],
-            allow_cli_cloud_sync: false,
-            allow_vscode_cloud_sync: false,
-            allow_chrome_cloud_sync: false,
-            audit_export_enabled: true,
-            retention_days: 365,
-            retention_enforced: false,
-            external_sharing_enabled: false,
-            allow_memory: true,
-            metadata: {},
-            updated_at: '2026-09-16T00:00:00.000Z',
-          },
-        ];
-      }
+      if (sql.includes('from public.organization_admin_policies')) return [policyRow(ORG, false)];
       return defaultQuery(sql);
     });
   });
@@ -251,5 +260,79 @@ describe('PATCH /api/share/[token], public sharing turned off by the workspace',
         sql.includes('insert into public.organization_shared_sessions'),
       ),
     ).toBe(true);
+  });
+});
+
+describe('PATCH /api/share/[token], the workspace that stores the link decides', () => {
+  let selectedWorkspace: string;
+
+  beforeEach(() => {
+    selectedWorkspace = ORG;
+    const defaultPrivileged = mocks.privilegedQuery.getMockImplementation()!;
+    mocks.privilegedQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('from public.user_settings'))
+        return [{ organization_id: selectedWorkspace }];
+      if (sql.includes('from public.organization_admin_policies')) {
+        return params[0] === ORG ? [policyRow(ORG, false)] : [];
+      }
+      return defaultPrivileged(sql);
+    });
+    const defaultScoped = mocks.scopedQuery.getMockImplementation()!;
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('organization_members')
+        ? [{ organization_id: selectedWorkspace, role: mocks.role }]
+        : defaultScoped(sql),
+    );
+  });
+
+  function wroteNothing(): void {
+    expect(
+      scopedStatements().some((sql) =>
+        /(insert into|delete from) public\.organization_shared_sessions/.test(sql),
+      ),
+    ).toBe(false);
+    expect(scopedStatements().some((sql) => sql.includes('set visibility'))).toBe(false);
+    expect(auditSpy).not.toHaveBeenCalled();
+  }
+
+  it('refuses x-agi-organization-id: personal on a workspace chat link, and writes nothing', async () => {
+    const response = await call('public', { 'x-agi-organization-id': 'personal' });
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.message).toMatch(/belongs to another workspace/);
+    wroteNothing();
+  });
+
+  it('asks the workspace that holds the grant, whatever workspace the request names', async () => {
+    mocks.stored = {
+      conversation_id: null,
+      conversation_organization_id: null,
+      grant_organization_id: ORG,
+    };
+
+    const response = await call('public', { 'x-agi-organization-id': 'personal' });
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('external_sharing_disabled');
+    wroteNothing();
+  });
+
+  it('refuses to reopen a workspace chat link from another selected workspace', async () => {
+    selectedWorkspace = OTHER_ORG;
+
+    const response = await call('public');
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.message).toMatch(/belongs to another workspace/);
+    wroteNothing();
+  });
+
+  it('keeps a workspace chat link out of another workspace', async () => {
+    selectedWorkspace = OTHER_ORG;
+
+    const response = await call('organization');
+
+    expect(response.status).toBe(403);
+    wroteNothing();
   });
 });

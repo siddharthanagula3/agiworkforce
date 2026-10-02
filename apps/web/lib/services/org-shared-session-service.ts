@@ -308,6 +308,45 @@ export async function readSharedSessionSharerName(
   return row?.display_name?.trim() || row?.email?.trim() || null;
 }
 
+export const SHARE_IN_OTHER_WORKSPACE_MESSAGE =
+  'This chat belongs to another workspace. Switch to that workspace, then try again.';
+
+export interface SharedSessionScope {
+  conversation: { organizationId: string | null } | null;
+  grantOrganizationId: string | null;
+}
+
+export async function readSharedSessionScope(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string },
+): Promise<SharedSessionScope | null> {
+  const [row] = await db.query<{
+    conversation_id: string | null;
+    conversation_organization_id: string | null;
+    grant_organization_id: string | null;
+  }>(
+    `select conversation.id as conversation_id,
+            conversation.organization_id as conversation_organization_id,
+            share.organization_id as grant_organization_id
+       from public.shared_sessions session
+       left join public.web_conversations conversation
+         on conversation.id = session.conversation_id
+        and conversation.user_id = session.owner_id
+       left join public.organization_shared_sessions share
+         on share.shared_session_id = session.id
+      where session.token = $1 and session.owner_id = $2
+      limit 1`,
+    [input.token, input.userId],
+  );
+  if (!row) return null;
+  return {
+    conversation: row.conversation_id
+      ? { organizationId: row.conversation_organization_id ?? null }
+      : null,
+    grantOrganizationId: row.grant_organization_id ?? null,
+  };
+}
+
 export interface SessionShareTarget {
   organizationId: string;
   sharedSessionId: string;

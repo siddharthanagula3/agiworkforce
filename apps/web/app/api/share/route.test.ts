@@ -532,6 +532,11 @@ describe('PUT /api/share?conversation_id, Update link', () => {
     { id: 'share-newer', token: 'tok-newer' },
     { id: 'share-older', token: 'tok-older' },
   ];
+  const LIVE_LINKS = REFRESHED.map(({ id }) => ({
+    id,
+    visibility: 'public',
+    organization_id: null,
+  }));
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -539,6 +544,7 @@ describe('PUT /api/share?conversation_id, Update link', () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.query.mockImplementation(async (sql: unknown) => {
       if (/from web_conversations/i.test(String(sql))) return [{ is_temporary: false }];
+      if (/left join organization_shared_sessions/i.test(String(sql))) return LIVE_LINKS;
       if (/update shared_sessions/i.test(String(sql))) return REFRESHED;
       return [];
     });
@@ -612,7 +618,7 @@ describe('PUT /api/share?conversation_id, Update link', () => {
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error?: { message?: string } };
     expect(body.error?.message).toMatch(/revoked or has expired/);
-    expect(sharedSessionWrites()).toEqual([expect.stringMatching(/update shared_sessions/i)]);
+    expect(sharedSessionWrites()).toEqual([]);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
@@ -696,5 +702,164 @@ describe('DELETE /api/share?conversation_id', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST and PUT /api/share, the workspace that stores the chat decides', () => {
+  const ORG = '11111111-1111-4111-8111-111111111111';
+  let selectedWorkspace: string | null;
+  let externalSharing: boolean;
+  let permissions: string[];
+  let links: Array<{ id: string; visibility: string; organization_id: string | null }>;
+
+  function policyRow() {
+    return {
+      organization_id: ORG,
+      default_privacy_mode: 'byok',
+      allowed_privacy_modes: ['local', 'byok'],
+      allow_managed_compute: false,
+      require_local_to_byok_preview: true,
+      chat_sync_surfaces: ['web'],
+      allow_cli_cloud_sync: false,
+      allow_vscode_cloud_sync: false,
+      allow_chrome_cloud_sync: false,
+      audit_export_enabled: true,
+      retention_days: 365,
+      retention_enforced: false,
+      external_sharing_enabled: externalSharing,
+      allow_memory: true,
+      metadata: {},
+      updated_at: '2026-09-16T00:00:00.000Z',
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.rateLimit.mockResolvedValue(null);
+    selectedWorkspace = ORG;
+    externalSharing = false;
+    permissions = ['content.read', 'content.share'];
+    links = [{ id: 'share-live', visibility: 'public', organization_id: null }];
+    mocks.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (/from web_conversations/i.test(sql))
+        return [{ is_temporary: false, organization_id: ORG }];
+      if (/left join organization_shared_sessions/i.test(sql)) return links;
+      if (/from public\.user_settings/i.test(sql)) {
+        return selectedWorkspace ? [{ organization_id: selectedWorkspace }] : [];
+      }
+      if (/from public\.organization_admin_policies/i.test(sql)) {
+        return params[0] === ORG ? [policyRow()] : [];
+      }
+      if (/organization_member_permissions/i.test(sql)) return [{ permissions }];
+      if (/from public\.organization_members/i.test(sql)) {
+        return [{ organization_id: ORG, role: 'member' }];
+      }
+      if (/insert into shared_sessions/i.test(sql)) return [NEW_SHARE];
+      if (/update shared_sessions/i.test(sql)) return [{ id: 'share-live', token: 'tok-live' }];
+      return [];
+    });
+  });
+
+  function create(headers: Record<string, string> = {}) {
+    return POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
+          title: 'Workspace plan',
+          messages: [{ role: 'user', content: 'workspace text' }],
+        }),
+      }),
+    );
+  }
+
+  function update(headers: Record<string, string> = {}) {
+    return PUT(
+      new NextRequest(`https://agiworkforce.com/api/share?conversation_id=${CONVERSATION_ID}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          tokens: ['tok-live'],
+          title: 'Workspace plan',
+          messages: [{ role: 'user', content: 'new workspace text' }],
+        }),
+      }),
+    );
+  }
+
+  const personal = { [MANAGED_CLOUD_ORGANIZATION_HEADER]: 'personal' };
+
+  it('refuses to publish a workspace chat for x-agi-organization-id: personal', async () => {
+    const response = await create(personal);
+
+    expect(response.status).toBe(403);
+    expect(sharedSessionWrites()).toEqual([]);
+  });
+
+  it('refuses to update the links of a workspace chat for x-agi-organization-id: personal', async () => {
+    const response = await update(personal);
+
+    expect(response.status).toBe(403);
+    expect(sharedSessionWrites()).toEqual([]);
+  });
+
+  it('asks the chat’s workspace before publishing while the selected workspace is personal', async () => {
+    selectedWorkspace = null;
+
+    const response = await create();
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('external_sharing_disabled');
+    expect(sharedSessionWrites()).toEqual([]);
+  });
+
+  it('asks the chat’s workspace before updating a public link while the selected workspace is personal', async () => {
+    selectedWorkspace = null;
+
+    const response = await update();
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('external_sharing_disabled');
+    expect(sharedSessionWrites()).toEqual([]);
+  });
+
+  it('still refuses to update a public link while the workspace keeps public sharing off', async () => {
+    const response = await update();
+
+    expect(response.status).toBe(403);
+    expect(sharedSessionWrites()).toEqual([]);
+  });
+
+  it('updates workspace-only links while the workspace keeps public sharing off', async () => {
+    links = [{ id: 'share-live', visibility: 'organization', organization_id: ORG }];
+
+    const response = await update();
+
+    expect(response.status).toBe(200);
+    expect(sharedSessionWrites()).toEqual([expect.stringMatching(/update shared_sessions/i)]);
+  });
+
+  it('writes only the links whose audience it checked', async () => {
+    links = [{ id: 'share-live', visibility: 'organization', organization_id: ORG }];
+
+    await update();
+
+    const write = mocks.query.mock.calls.find((c) => /update shared_sessions/i.test(String(c[0])));
+    expect(write?.[0]).toMatch(/id = any\(\$9::uuid\[\]\)/);
+    expect((write?.[1] as unknown[])[8]).toEqual(['share-live']);
+  });
+
+  it('needs share permission in the workspace to update a workspace-only link', async () => {
+    links = [{ id: 'share-live', visibility: 'organization', organization_id: ORG }];
+    externalSharing = true;
+    permissions = ['content.read'];
+
+    const response = await update();
+
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(await response.json())).toContain('read-only');
+    expect(sharedSessionWrites()).toEqual([]);
   });
 });

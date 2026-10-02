@@ -66,12 +66,14 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
 }));
 vi.mock('@/lib/services/org-shared-session-service', () => ({
   SHARED_SESSION_VISIBILITIES: vi.fn(),
+  SHARE_IN_OTHER_WORKSPACE_MESSAGE: 'This chat belongs to another workspace.',
   SHARE_TOKEN_REGEX: vi.fn(),
   getOrgReadableSessionByToken: vi.fn(),
   getPublicSharedSessionByToken: vi.fn(),
   isConversationSharingSchemaUnavailable: vi.fn(),
   isSharedSessionVisibility: vi.fn(),
   listSharedSessions: vi.fn(),
+  readSharedSessionScope: vi.fn(),
   readSharedSessionSharerName: vi.fn(),
   resolveSessionShareTarget: vi.fn(),
   setSharedSessionVisibility: vi.fn(),

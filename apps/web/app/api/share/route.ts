@@ -26,12 +26,20 @@ import {
   redactSecretsFromValue,
   SecretRedactionIncompleteError,
 } from '@/lib/security/secrets-audit';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import {
+  requireSelectedWorkspace,
+  resolveActiveOrganizationId,
+} from '@/lib/services/active-workspace-service';
 import {
   isConversationSharingSchemaUnavailable,
+  SHARE_IN_OTHER_WORKSPACE_MESSAGE,
   toSharedSessionVisibility,
   type SharedSessionVisibility,
 } from '@/lib/services/org-shared-session-service';
+import {
+  requireOrganizationPermission,
+  SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+} from '@/lib/services/organization-permission-service';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -155,11 +163,15 @@ function requireConversationQuery(request: NextRequest, refusal: string): string
 
 async function requireShareableConversation(
   db: DatabaseAdapter,
+  request: NextRequest,
   conversationId: string,
   userId: string,
-): Promise<void> {
-  const [conversation] = await db.query<{ is_temporary: boolean }>(
-    `select is_temporary
+): Promise<string | null> {
+  const [conversation] = await db.query<{
+    is_temporary: boolean;
+    organization_id: string | null;
+  }>(
+    `select is_temporary, organization_id
        from web_conversations
       where id = $1 and user_id = $2 and deleted_at is null
       limit 1`,
@@ -171,6 +183,76 @@ async function requireShareableConversation(
   if (conversation.is_temporary === true) {
     throw createError.conflict(TEMPORARY_CHAT_SHARE_REFUSAL);
   }
+  const organizationId = conversation.organization_id ?? null;
+  await requireSelectedWorkspace(
+    db,
+    userId,
+    request,
+    organizationId,
+    SHARE_IN_OTHER_WORKSPACE_MESSAGE,
+  );
+  return organizationId;
+}
+
+type LiveLinkRow = { id: string; visibility: string; organization_id: string | null };
+
+function nothingToUpdate() {
+  return createError
+    .notFound(
+      'This link was revoked or has expired, so there is nothing to update. Create a new link instead.',
+    )
+    .asUserSafe();
+}
+
+async function readLiveLinks(
+  db: DatabaseAdapter,
+  userId: string,
+  conversationId: string,
+  tokens: readonly string[],
+): Promise<LiveLinkRow[]> {
+  return db.query<LiveLinkRow>(
+    `select session.id, session.visibility, share.organization_id
+       from shared_sessions session
+       left join organization_shared_sessions share
+         on share.shared_session_id = session.id
+      where session.owner_id = $1
+        and session.conversation_id = $2
+        and session.token = any($3::text[])
+        and session.expires_at > now()`,
+    [userId, conversationId, tokens],
+  );
+}
+
+async function buildLinkAudienceGateResponse(
+  request: NextRequest,
+  userId: string,
+  conversationOrganizationId: string | null,
+  links: readonly LiveLinkRow[],
+): Promise<NextResponse | null> {
+  const workspacesOf = (visibility: SharedSessionVisibility) =>
+    links
+      .filter((link) => toSharedSessionVisibility(link.visibility) === visibility)
+      .flatMap((link) => [link.organization_id, conversationOrganizationId]);
+
+  const publicLinkWorkspaces = workspacesOf('public');
+  if (publicLinkWorkspaces.length > 0) {
+    const sharingGateResponse = await buildExternalSharingGateResponse(
+      userId,
+      request,
+      publicLinkWorkspaces,
+    );
+    if (sharingGateResponse) return sharingGateResponse;
+  }
+  for (const organizationId of new Set(workspacesOf('organization'))) {
+    if (!organizationId) continue;
+    await requireOrganizationPermission(
+      userId,
+      organizationId,
+      'content.share',
+      SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+    );
+  }
+  return null;
 }
 
 async function inspectSnapshot(
@@ -293,9 +375,6 @@ async function handleCreateShare(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
 
-  const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
-  if (sharingGateResponse) return sharingGateResponse;
-
   const db = getNeonDb();
 
   const parsed = CreateShareSchema.safeParse(await readJsonBody(request));
@@ -311,9 +390,14 @@ async function handleCreateShare(request: NextRequest) {
     expires_in_days: expiresInDays,
   } = parsed.data;
 
-  if (conversationId) {
-    await requireShareableConversation(db, conversationId, userId);
-  }
+  const conversationOrganizationId = conversationId
+    ? await requireShareableConversation(db, request, conversationId, userId)
+    : null;
+
+  const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
+    conversationOrganizationId,
+  ]);
+  if (sharingGateResponse) return sharingGateResponse;
 
   const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
 
@@ -385,12 +469,24 @@ async function handleRefreshConversationShares(request: NextRequest) {
   }
   const { tokens, title, model_id, provider, messages } = parsed.data;
 
-  const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
-  if (sharingGateResponse) return sharingGateResponse;
-
   const db = getNeonDb();
 
-  await requireShareableConversation(db, conversationId, userId);
+  const conversationOrganizationId = await requireShareableConversation(
+    db,
+    request,
+    conversationId,
+    userId,
+  );
+  const links = await readLiveLinks(db, userId, conversationId, tokens);
+  if (links.length === 0) throw nothingToUpdate();
+  const audienceGateResponse = await buildLinkAudienceGateResponse(
+    request,
+    userId,
+    conversationOrganizationId,
+    links,
+  );
+  if (audienceGateResponse) return audienceGateResponse;
+
   const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
 
   const refreshed = await db.query<{ id: string; token: string }>(
@@ -404,6 +500,7 @@ async function handleRefreshConversationShares(request: NextRequest) {
         where owner_id = $1
           and conversation_id = $2
           and token = any($3::text[])
+          and id = any($9::uuid[])
           and expires_at > now()
         returning id, token, created_at
      )
@@ -417,16 +514,11 @@ async function handleRefreshConversationShares(request: NextRequest) {
       provider ?? null,
       JSON.stringify(sanitized.messages),
       sanitized.messages.length,
+      links.map((link) => link.id),
     ],
   );
   const [newest] = refreshed;
-  if (!newest) {
-    throw createError
-      .notFound(
-        'This link was revoked or has expired, so there is nothing to update. Create a new link instead.',
-      )
-      .asUserSafe();
-  }
+  if (!newest) throw nothingToUpdate();
 
   const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
   await recordSecretRedaction(request, userId, organizationId, newest.id, sanitized);
