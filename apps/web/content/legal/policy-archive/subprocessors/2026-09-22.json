@@ -3,8 +3,8 @@
   "route": "/subprocessors",
   "date": "2026-09-22",
   "replacedOn": "2026-09-28",
-  "commit": "387026ca90df88c323edfde213b1bec89049a783",
-  "committedAt": "2026-09-28T10:42:21-05:00",
+  "commit": "f3d92fb20e387e0b1a9a61db8fd81a1799132ccd",
+  "committedAt": "2026-09-28T12:42:21-05:00",
   "title": "Subprocessors.",
   "blocks": [
     {

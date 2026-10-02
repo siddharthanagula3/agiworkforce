@@ -3,7 +3,7 @@
   "route": "/refund-policy",
   "date": "2026-08-13",
   "replacedOn": "2026-09-27",
-  "commit": "a2330f51eddc7543d0ebd1e43dfda10f57ba939d",
+  "commit": "cba527d33a5bcfccc19ed7470c2f718668c91392",
   "committedAt": "2026-09-27T08:58:26-05:00",
   "title": "Refunds.",
   "blocks": [

@@ -3,7 +3,7 @@
   "route": "/acceptable-use",
   "date": "2026-08-05",
   "replacedOn": "2026-09-22",
-  "commit": "35750106cec1f72867a5086ecd53d173d17ba56c",
+  "commit": "c97fadc88986e7d9dffd7e8c9d879972d6257f82",
   "committedAt": "2026-09-23T19:15:19-07:00",
   "title": "Acceptable use.",
   "blocks": [
