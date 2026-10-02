@@ -1,11 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const feedbackRouteMocks = vi.hoisted(() => ({
-  auth: vi.fn(),
-  optionalUser: vi.fn(),
-  query: vi.fn(),
-  execute: vi.fn(),
-}));
+const feedbackRouteMocks = vi.hoisted(() => {
+  const query = vi.fn();
+  const execute = vi.fn();
+  const ownerDb: Record<string, unknown> = {
+    query,
+    execute,
+    transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(ownerDb)),
+  };
+  const scopedDb: Record<string, unknown> = {
+    query,
+    execute,
+    transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(scopedDb)),
+  };
+  return {
+    auth: vi.fn(),
+    optionalUser: vi.fn(),
+    query,
+    execute,
+    ownerDb,
+    scopedDb,
+    claimScope: vi.fn((..._args: unknown[]) => scopedDb),
+  };
+});
 
 vi.mock('@/lib/api-auth', () => ({
   getSuspendedAccountUser: vi.fn(async () => null),
@@ -32,10 +49,11 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: feedbackRouteMocks.query,
-    execute: feedbackRouteMocks.execute,
-  })),
+  getNeonDb: vi.fn(() => feedbackRouteMocks.ownerDb),
+}));
+
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: feedbackRouteMocks.claimScope,
 }));
 
 import { POST } from './route';
@@ -86,6 +104,38 @@ describe('POST /api/feedback', () => {
     expect(feedbackRouteMocks.query.mock.calls[0]?.[1]?.[3]).toContain(
       '"conversation_id":"conversation-7"',
     );
+  });
+
+  it("stores a signed-in caller's feedback through a connection scoped to that caller", async () => {
+    await POST(
+      request({
+        subject: 'Something is broken · Web chat',
+        message: 'The artifact did not refresh.',
+        metadata: { source: 'web', platform: 'web', version: '1.2.3', user_agent: 'test' },
+      }),
+    );
+
+    expect(feedbackRouteMocks.claimScope).toHaveBeenCalledWith(feedbackRouteMocks.ownerDb, {
+      userId: 'user-web',
+      organizationId: null,
+    });
+    expect(feedbackRouteMocks.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores signed-out feedback without a user id on the owner connection', async () => {
+    feedbackRouteMocks.optionalUser.mockResolvedValue(null);
+
+    const response = await POST(
+      request({
+        subject: 'Desktop report',
+        message: 'Something happened.',
+        metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(feedbackRouteMocks.claimScope).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query.mock.calls[0]?.[1]?.[0]).toBeNull();
   });
 
   it('keeps existing desktop payloads backward compatible', async () => {
@@ -358,10 +408,25 @@ describe('thumbs-down details', () => {
 
     expect(response.status).toBe(200);
     const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('on conflict (id) do update');
-    expect(sql).toMatch(/public\.feedback\.user_id = excluded\.user_id/);
+    expect(sql).toContain('update public.feedback');
+    expect(sql).toContain("metadata->>'message_id' = $4::jsonb->>'message_id'");
     expect(JSON.parse(String(params[3]))).toMatchObject({ rating: 'up', message_id: 'msg-1' });
     expect(params[4]).toBe(FEEDBACK_ID);
+    expect(feedbackRouteMocks.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('inserts the rating when the caller has no row under that id yet', async () => {
+    feedbackRouteMocks.execute.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+
+    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
+
+    expect(response.status).toBe(200);
+    const [insertSql, insertParams] = feedbackRouteMocks.execute.mock.calls[1] as [
+      string,
+      unknown[],
+    ];
+    expect(insertSql).toContain('on conflict (id) do nothing');
+    expect(insertParams[4]).toBe(FEEDBACK_ID);
   });
 
   it("answers a conflict when a changed vote names a rating that is not the caller's", async () => {
@@ -370,6 +435,31 @@ describe('thumbs-down details', () => {
     const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
 
     expect(response.status).toBe(409);
+  });
+
+  it("writes a signed-in caller's rating through a connection scoped to that caller", async () => {
+    await POST(rating({ feedback_id: FEEDBACK_ID, reason: 'incomplete' }));
+
+    expect(feedbackRouteMocks.claimScope).toHaveBeenCalledWith(feedbackRouteMocks.ownerDb, {
+      userId: 'user-web',
+      organizationId: null,
+    });
+    expect(feedbackRouteMocks.scopedDb.transaction).toHaveBeenCalledTimes(1);
+    expect(feedbackRouteMocks.ownerDb.transaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps the owner connection for a signed-out rating, which can only insert', async () => {
+    feedbackRouteMocks.optionalUser.mockResolvedValue(null);
+
+    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
+
+    expect(response.status).toBe(200);
+    expect(feedbackRouteMocks.claimScope).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.execute).toHaveBeenCalledTimes(1);
+    const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('on conflict (id) do nothing');
+    expect(sql).not.toContain('update');
+    expect(params[0]).toBeNull();
   });
 
   it('completes the same rating with the reason and the comment', async () => {
@@ -383,8 +473,8 @@ describe('thumbs-down details', () => {
 
     expect(response.status).toBe(200);
     const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('on conflict (id) do update');
-    expect(sql).toMatch(/public\.feedback\.user_id = excluded\.user_id/);
+    expect(sql).toContain('update public.feedback');
+    expect(sql).toContain('user_id = $1');
     expect(params[0]).toBe('user-web');
     expect(params[2]).toBe('The date it gave is a year off.');
     expect(JSON.parse(String(params[3]))).toMatchObject({

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import { getOptionalAuthUser } from '@/lib/api-auth';
 import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
@@ -24,15 +26,25 @@ const SCREENSHOT_KEY_PREFIX = 'feedback';
 const INSERT_FEEDBACK_SQL = `insert into public.feedback (user_id, subject, message, metadata)
        values ($1, $2, $3, $4::jsonb)`;
 
-const RECORD_RATING_SQL = `insert into public.feedback (id, user_id, subject, message, metadata)
+const UPDATE_RATING_SQL = `update public.feedback
+          set subject = $2, message = $3, metadata = $4::jsonb
+        where id = $5::uuid
+          and user_id = $1
+          and metadata->>'feedback_context' = 'response_rating'
+          and metadata->>'message_id' = $4::jsonb->>'message_id'`;
+
+const INSERT_RATING_SQL = `insert into public.feedback (id, user_id, subject, message, metadata)
        values ($5::uuid, $1, $2, $3, $4::jsonb)
-       on conflict (id) do update
-          set subject = excluded.subject,
-              message = excluded.message,
-              metadata = excluded.metadata
-        where public.feedback.user_id = excluded.user_id
-          and public.feedback.metadata->>'feedback_context' = 'response_rating'
-          and public.feedback.metadata->>'message_id' = excluded.metadata->>'message_id'`;
+       on conflict (id) do nothing`;
+
+async function recordResponseRating(
+  db: DatabaseAdapter,
+  params: unknown[],
+  ownsRows: boolean,
+): Promise<boolean> {
+  if (ownsRows && (await db.execute(UPDATE_RATING_SQL, params)) > 0) return true;
+  return (await db.execute(INSERT_RATING_SQL, params)) > 0;
+}
 
 async function storeScreenshot(dataUrl: string, userId: string | null): Promise<string | null> {
   const match = SCREENSHOT_DATA_URL.exec(dataUrl);
@@ -196,13 +208,19 @@ async function handleSubmitFeedback(request: NextRequest) {
     }),
   ];
 
-  const db = getNeonDb();
+  const ownerDb = getNeonDb();
+  const db = userId
+    ? createClaimedUserScopedDb(ownerDb, { userId, organizationId: null })
+    : ownerDb;
   let stored = true;
   try {
     if (!metadata.feedback_id) {
       await db.query(INSERT_FEEDBACK_SQL, params);
     } else {
-      stored = (await db.execute(RECORD_RATING_SQL, [...params, metadata.feedback_id])) > 0;
+      const ratingParams = [...params, metadata.feedback_id];
+      stored = await db.transaction((tx) =>
+        recordResponseRating(tx, ratingParams, userId !== null),
+      );
     }
   } catch (error) {
     logger.error(
