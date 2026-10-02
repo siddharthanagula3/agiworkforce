@@ -550,7 +550,7 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
       'https://modelstudio.console.alibabacloud.com/ap-southeast-1/costing-balance/free-quota',
     );
     expect(screen.getByText(/has no switch, so it cannot be on/)).toHaveTextContent(
-      'choose Only the models I select and leave it out',
+      'Compare the models listed below with the consoles. If a console shows no switch for one of them, choose Only the models I select and untick it',
     );
   });
 
@@ -701,6 +701,59 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
     expect(await screen.findByText(/Console check recorded at/)).toHaveTextContent(
       'It covers 3 models',
     );
+  });
+
+  it('shows every model a record of every listed model names, each ticked and fixed', async () => {
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null } })]);
+    render(<FreeQuotaAttestationPanel />);
+
+    await user.click(await screen.findByRole('radio', { name: /Every model listed here \(3\)/ }));
+
+    const group = screen.getByRole('group', { name: 'Models confirmed in the console' });
+    for (const offering of OFFERINGS) {
+      const box = within(group).getByRole('checkbox', {
+        name: new RegExp(offering.providerModelId),
+      });
+      expect(box).toBeChecked();
+      expect(box).toBeDisabled();
+    }
+    expect(within(group).getByText(/free quota ends 2026-10-21/)).toBeVisible();
+    expect(screen.getByText('3 selected')).toBeInTheDocument();
+  });
+
+  it('starts a selection from every listed model, so leaving one out is one untick', async () => {
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null } })], {
+      status: 200,
+      body: { checkedAtMs: SERVER_NOW, freshUntilMs: SERVER_NOW + 30 * DAY_MS, offerings: 2 },
+    });
+    render(<FreeQuotaAttestationPanel />);
+
+    await user.click(await screen.findByRole('radio', { name: /Every model listed here/ }));
+    await user.click(screen.getByRole('radio', { name: 'Only the models I select' }));
+    const group = screen.getByRole('group', { name: 'Models confirmed in the console' });
+    await user.click(within(group).getByRole('checkbox', { name: /fixture-image-model/ }));
+
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    await confirmRecording(user);
+    await waitFor(() => expect(network.posts).toHaveLength(1));
+    expect(network.posts[0]!.body).toEqual({
+      checkedAtMs: 'now',
+      quotaOnlyOfferings: ['fixture-offering-chat', 'fixture-offering-video'],
+    });
+  });
+
+  it('chooses a selection when a model is ticked before any choice', async () => {
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null } })]);
+    render(<FreeQuotaAttestationPanel />);
+
+    const group = await screen.findByRole('group', { name: 'Models confirmed in the console' });
+    await user.click(within(group).getByRole('checkbox', { name: /fixture-chat-model/ }));
+
+    expect(screen.getByRole('radio', { name: 'Only the models I select' })).toBeChecked();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 
   it('offers no record of every model when no model can be listed', async () => {

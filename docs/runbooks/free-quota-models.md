@@ -244,17 +244,22 @@ owner, so the gap is known.
 
 ### Recording it
 
-On `/operator#quota`, under Record a console check, choose every model listed
-or the models you confirmed, tick the confirmation and press Record console
-check. The dialog names what the record asserts; confirm it.
+On `/operator#quota`, under Record a console check, the panel lists every model
+a record can name, with its model id, category and the date its free quota
+ends. Compare it with the consoles, then choose Every model listed here, which
+ticks them all, or Only the models I select. Choosing a selection after every
+model starts from all of them ticked, so leaving one out is one untick. Tick the
+confirmation and press Record console check. The dialog names what the record
+asserts; confirm it.
 
 A record names the models it covers, never "every model from now on". Every
-model listed sends the keys the panel shows, and an API caller's `"all"` is
-stored as the models the inventory can serve at that moment. A model added to
-the inventory later is therefore off until a check names it: after any change
-that adds models to `apps/web/config/free-pools.json`, turn their switch on and
-record a new console check. The panel's Models covered line counts the listed
-models the current record leaves out.
+model listed here sends the keys of the models the panel lists, and an API
+caller's `"all"` is stored as the models the inventory can serve at that
+moment. A model added to the inventory later is therefore off until a check
+names it: after any change that adds models to
+`apps/web/config/free-pools.json`, turn their switch on and record a new console
+check. The panel's Models covered line counts the listed models the current
+record leaves out.
 
 - The server stamps the record with its own clock: the panel sends `"now"`,
   never the browser's time. An API caller may send `checkedAtMs` instead, within

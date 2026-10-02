@@ -332,7 +332,15 @@ export default function FreeQuotaAttestationPanel() {
     if (lapsed) void load();
   }, [lapsed, load]);
 
+  function chooseCoverage(next: Coverage, offerings: ConfiguredStatus['offerings']) {
+    if (next === 'selected' && coverage === 'all') {
+      setSelected(new Set(offerings.map((offering) => offering.key)));
+    }
+    setCoverage(next);
+  }
+
   function toggleOffering(key: string, on: boolean) {
+    setCoverage('selected');
     setSelected((current) => {
       const next = new Set(current);
       if (on) next.add(key);
@@ -446,7 +454,7 @@ export default function FreeQuotaAttestationPanel() {
           confirmed={confirmed}
           busy={busy}
           outcome={outcome}
-          onCoverage={setCoverage}
+          onCoverage={(next) => chooseCoverage(next, status.offerings)}
           onToggle={toggleOffering}
           onConfirmed={setConfirmed}
           onRecord={() => requestRecord(status)}
@@ -483,6 +491,7 @@ function ConfiguredView({
   onConfirmed,
   onRecord,
 }: ConfiguredViewProps) {
+  const everyListed = coverage === 'all';
   const canRecord =
     confirmed &&
     !busy &&
@@ -543,10 +552,11 @@ function ConfiguredView({
               both pages and confirm every covered model shows the switch on.
             </li>
             <li>
-              A model whose free quota is used up or expired has no switch, so it cannot be on. If
-              any model shows that, choose Only the models I select and leave it out: a model left
-              out stays off here, while one recorded as on with its switch off bills the account
-              once its quota is gone.
+              A model whose free quota is used up or expired has no switch, so it cannot be on.
+              Compare the models listed below with the consoles. If a console shows no switch for
+              one of them, choose Only the models I select and untick it: a model left out stays off
+              here, while one recorded as on with its switch off bills the account once its quota is
+              gone.
             </li>
             <li>
               Record it here within {formatDurationMs(status.recordWindowMs)} of checking. The
@@ -606,42 +616,39 @@ function ConfiguredView({
             />
             <span>Only the models I select</span>
           </label>
-          {coverage === 'selected' ? (
-            <>
-              <div
-                role="group"
-                aria-label="Models confirmed in the console"
-                className="max-h-72 overflow-y-auto rounded-xl border border-border p-3"
-              >
-                {status.offerings.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    No inventory model can be served from the free quota.
-                  </p>
-                ) : (
-                  status.offerings.map((offering) => (
-                    <label key={offering.key} className={CHOICE_CLASS}>
-                      <input
-                        type="checkbox"
-                        className={INPUT_CLASS}
-                        checked={selected.has(offering.key)}
-                        onChange={(event) => onToggle(offering.key, event.target.checked)}
-                      />
-                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-                        <span className="break-all font-mono text-xs">
-                          {offering.providerModelId}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {FREE_QUOTA_CATEGORIES[offering.category]}
-                          {offering.expiresOn ? `, free quota ends ${offering.expiresOn}` : ''}
-                        </span>
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">{formatCount(selected.size)} selected</p>
-            </>
-          ) : null}
+          <div
+            role="group"
+            aria-label="Models confirmed in the console"
+            className="max-h-72 overflow-y-auto rounded-xl border border-border p-3"
+          >
+            {status.offerings.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No inventory model can be served from the free quota.
+              </p>
+            ) : (
+              status.offerings.map((offering) => (
+                <label key={offering.key} className={CHOICE_CLASS}>
+                  <input
+                    type="checkbox"
+                    className={INPUT_CLASS}
+                    checked={everyListed || selected.has(offering.key)}
+                    disabled={everyListed}
+                    onChange={(event) => onToggle(offering.key, event.target.checked)}
+                  />
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                    <span className="break-all font-mono text-xs">{offering.providerModelId}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {FREE_QUOTA_CATEGORIES[offering.category]}
+                      {offering.expiresOn ? `, free quota ends ${offering.expiresOn}` : ''}
+                    </span>
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {formatCount(everyListed ? status.offerings.length : selected.size)} selected
+          </p>
         </fieldset>
 
         <label className={CHOICE_CLASS}>
