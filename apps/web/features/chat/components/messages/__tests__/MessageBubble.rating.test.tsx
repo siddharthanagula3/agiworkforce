@@ -25,6 +25,7 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 import { MessageBubble } from '../MessageBubble';
 import {
   RESPONSE_RATING_RATE_LIMITED,
+  RESPONSE_RATING_REMOVE_FAILED,
   RESPONSE_RATING_SHARING_NOTE,
 } from '../ResponseRatingDetails';
 
@@ -168,6 +169,93 @@ describe('rating an assistant response', () => {
       'true',
     );
   });
+
+  it('removes the stored rating when the same verdict is clicked again', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    await userEvent.click(down);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await userEvent.click(down);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe('/api/feedback?message_id=msg-1');
+    expect(init.method).toBe('DELETE');
+    expect(init.headers).toMatchObject({ 'x-csrf-token': 'test-token' });
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull();
+  });
+
+  it('removes a rating given before the page was reloaded', async () => {
+    const onReact = vi.fn();
+    render(
+      <MessageBubble
+        message={{ ...assistantMessage(), metadata: { reaction: 'thumbsDown' as const } }}
+        onReact={onReact}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/feedback?message_id=msg-1');
+    expect(init.method).toBe('DELETE');
+    expect(onReact).toHaveBeenCalledWith('msg-1', null);
+  });
+
+  it('sends a removal only after the vote it takes back', async () => {
+    const vote = pendingResponse();
+    render(<MessageBubble message={assistantMessage()} />);
+
+    const up = screen.getByRole('button', { name: 'Good response' });
+    await userEvent.click(up);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await userEvent.click(up);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vote.settle(true);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect((fetchMock.mock.calls[1] as [string, RequestInit])[1].method).toBe('DELETE');
+  });
+
+  it('puts the rating back and says so when it could not be removed', async () => {
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    const up = screen.getByRole('button', { name: 'Good response' });
+    await userEvent.click(up);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    await userEvent.click(up);
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(RESPONSE_RATING_REMOVE_FAILED),
+    );
+    expect(up).toHaveAttribute('aria-pressed', 'true');
+    expect(onReact.mock.calls).toEqual([
+      ['msg-1', 'up'],
+      ['msg-1', null],
+      ['msg-1', 'up'],
+    ]);
+  });
+
+  it('takes a vote the server refused back off the saved reaction', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Good response' }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+    expect(onReact.mock.calls).toEqual([
+      ['msg-1', 'up'],
+      ['msg-1', null],
+    ]);
+  });
 });
 
 interface RatingBody {
@@ -287,6 +375,28 @@ describe('telling us why an answer was bad', () => {
     });
     await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
     expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it('keeps the vote when its details are stored after the bare vote failed', async () => {
+    const vote = pendingResponse();
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+    vote.settle(false);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Bad response' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(onReact.mock.calls).toEqual([['msg-1', 'down']]);
+    expect(toastMock.error).not.toHaveBeenCalled();
   });
 
   it('sends a vote and its details in the order they were given', async () => {

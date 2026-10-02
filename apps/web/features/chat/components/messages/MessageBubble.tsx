@@ -72,6 +72,8 @@ import {
 import { variantDeleteConfirm } from './variantDeleteConfirm';
 import {
   RESPONSE_RATING_REASON_LABELS,
+  RESPONSE_RATING_REMOVE_FAILED,
+  RESPONSE_RATING_SEND_FAILED,
   ResponseRatingDetails,
   ResponseRatingRequestError,
   responseRatingFailureMessage,
@@ -405,6 +407,12 @@ const SHARED_ATTACHMENTS_NOT_COPIED =
 const LOCAL_PERSONAL_CONTEXT_MISSING =
   'Answered without your instructions and memory: they could not be loaded onto this device.';
 const RESPONSE_RATING_MESSAGE = 'An answer in web chat. The answer text is not attached.';
+
+function reactionRating(reaction: string | null | undefined): 'up' | 'down' | null {
+  if (reaction === 'thumbsUp') return 'up';
+  if (reaction === 'thumbsDown') return 'down';
+  return null;
+}
 
 const PROVIDER_MODE_BY_PRIVACY_MODE = {
   local: 'Local',
@@ -1102,6 +1110,8 @@ const MessageBubbleComponent = function MessageBubble({
    * feedback counts with no new table.
    */
   const ratingRequestsRef = useRef<Promise<void>>(Promise.resolve());
+  const latestRatingActionRef = useRef(0);
+  const savedRatingRef = useRef(reactionRating(message.metadata?.reaction));
   const thumbsDownRef = useRef<HTMLButtonElement>(null);
   const ratingDetailsRef = useRef<HTMLFormElement>(null);
   const [ratingDetailsOpen, setRatingDetailsOpen] = useState(false);
@@ -1111,10 +1121,18 @@ const MessageBubbleComponent = function MessageBubble({
     }
     setRatingDetailsOpen(false);
   }, []);
+  const queueRatingRequest = useCallback((send: () => Promise<Response>): Promise<void> => {
+    const request = ratingRequestsRef.current.then(async () => {
+      const response = await send();
+      if (!response.ok) throw new ResponseRatingRequestError(response.status);
+    });
+    ratingRequestsRef.current = request.catch(() => undefined);
+    return request;
+  }, []);
   const postResponseRating = useCallback(
-    (rating: 'up' | 'down', details?: ResponseRatingDetailsInput): Promise<void> => {
-      const send = async () => {
-        const response = await fetch('/api/feedback', {
+    (rating: 'up' | 'down', details?: ResponseRatingDetailsInput): Promise<void> =>
+      queueRatingRequest(async () =>
+        fetch('/api/feedback', {
           method: 'POST',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
           credentials: 'include',
@@ -1137,32 +1155,26 @@ const MessageBubbleComponent = function MessageBubble({
               ...(details?.comment ? { comment: details.comment } : {}),
             },
           }),
-        });
-        if (!response.ok) throw new ResponseRatingRequestError(response.status);
-      };
-      const request = ratingRequestsRef.current.then(send);
-      ratingRequestsRef.current = request.catch(() => undefined);
-      return request;
-    },
-    [activeConversationId, message.id, message.sessionId],
+        }),
+      ),
+    [activeConversationId, message.id, message.sessionId, queueRatingRequest],
   );
-  const rateMessage = useCallback(
-    async (rating: 'up' | 'down') => {
-      const previous = ratingState;
-      setRatingState(rating);
-      try {
-        await postResponseRating(rating);
-      } catch (error) {
-        // Leaving the button lit would claim a vote the server never took.
-        setRatingState(previous);
-        toast.error(responseRatingFailureMessage(error));
-      }
-    },
-    [postResponseRating, ratingState],
+  const removeResponseRating = useCallback(
+    (): Promise<void> =>
+      queueRatingRequest(async () =>
+        fetch(`/api/feedback?message_id=${encodeURIComponent(message.id)}`, {
+          method: 'DELETE',
+          headers: await addCsrfHeaders(),
+          credentials: 'include',
+        }),
+      ),
+    [message.id, queueRatingRequest],
   );
   const submitRatingDetails = useCallback(
     async (details: ResponseRatingDetailsInput) => {
+      latestRatingActionRef.current += 1;
       await postResponseRating('down', details);
+      savedRatingRef.current = 'down';
       setRatingState('down');
     },
     [postResponseRating],
@@ -1175,27 +1187,36 @@ const MessageBubbleComponent = function MessageBubble({
    * second pair of thumbs used to render beside it, so an answer showed four
    * thumb icons and two independent verdicts.
    */
-  const responseRating: 'up' | 'down' | null =
-    message.metadata?.reaction === 'thumbsUp'
-      ? 'up'
-      : message.metadata?.reaction === 'thumbsDown'
-        ? 'down'
-        : ratingState === 'idle'
-          ? null
-          : ratingState;
+  const responseRating =
+    reactionRating(message.metadata?.reaction) ?? (ratingState === 'idle' ? null : ratingState);
 
   const rateResponse = useCallback(
     (rating: 'up' | 'down') => {
-      const isRepeat = responseRating === rating;
-      onReact?.(message.id, isRepeat ? null : rating);
-      setRatingDetailsOpen(!isRepeat && rating === 'down');
-      if (isRepeat) {
-        setRatingState('idle');
-      } else {
-        void rateMessage(rating);
-      }
+      const next = responseRating === rating ? null : rating;
+      const action = ++latestRatingActionRef.current;
+      onReact?.(message.id, next);
+      setRatingState(next ?? 'idle');
+      setRatingDetailsOpen(next === 'down');
+      void (next ? postResponseRating(next) : removeResponseRating()).then(
+        () => {
+          savedRatingRef.current = next;
+        },
+        (error: unknown) => {
+          if (action !== latestRatingActionRef.current) return;
+          const saved = savedRatingRef.current;
+          onReact?.(message.id, saved);
+          setRatingState(saved ?? 'idle');
+          setRatingDetailsOpen(false);
+          toast.error(
+            responseRatingFailureMessage(
+              error,
+              next ? RESPONSE_RATING_SEND_FAILED : RESPONSE_RATING_REMOVE_FAILED,
+            ),
+          );
+        },
+      );
     },
-    [message.id, onReact, rateMessage, responseRating],
+    [message.id, onReact, postResponseRating, removeResponseRating, responseRating],
   );
 
   const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;

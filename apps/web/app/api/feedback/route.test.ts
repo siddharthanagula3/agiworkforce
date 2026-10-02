@@ -72,7 +72,7 @@ vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
   putPrivateObject: feedbackRouteMocks.putPrivateObject,
 }));
 
-import { POST } from './route';
+import { DELETE, POST } from './route';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
@@ -722,5 +722,100 @@ describe('thumbs-down details', () => {
     expect(response.status).toBe(400);
     expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
     expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('removing a rating', () => {
+  function removal(messageId?: string) {
+    const url = new URL('http://localhost:3000/api/feedback');
+    if (messageId !== undefined) url.searchParams.set('message_id', messageId);
+    return new Request(url, { method: 'DELETE' }) as never;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    feedbackRouteMocks.optionalUser.mockResolvedValue({ userId: 'user-web' });
+  });
+
+  it("deletes the caller's rating, reason and comment for that answer, and nothing else", async () => {
+    const report: StoredFeedback = {
+      user_id: 'user-web',
+      subject: 'Something is broken · Web chat',
+      message: 'The artifact did not refresh.',
+      metadata: { source: 'web', message_id: 'msg-1' },
+    };
+    const rows = feedbackTable([
+      {
+        ...storedRating('user-web', 'msg-1', 'down', { reason: 'inaccurate' }),
+        message: 'My phone number is 555 0100',
+      },
+      storedRating('user-web', 'msg-2', 'up'),
+      storedRating('user-other', 'msg-1', 'up'),
+      report,
+    ]);
+
+    const response = await DELETE(removal('msg-1'));
+
+    expect(response.status).toBe(200);
+    expect(rows).toEqual([
+      storedRating('user-web', 'msg-2', 'up'),
+      storedRating('user-other', 'msg-1', 'up'),
+      report,
+    ]);
+    expect(feedbackRouteMocks.claimScope).toHaveBeenCalledWith(feedbackRouteMocks.ownerDb, {
+      userId: 'user-web',
+      organizationId: null,
+    });
+    expect(feedbackRouteMocks.scopedDb.transaction).toHaveBeenCalledTimes(1);
+    expect(String(feedbackRouteMocks.execute.mock.calls[0]?.[0])).toContain(
+      'pg_advisory_xact_lock',
+    );
+  });
+
+  it('answers the same when there was no rating to remove', async () => {
+    const rows = feedbackTable([storedRating('user-other', 'msg-1', 'up')]);
+
+    const response = await DELETE(removal('msg-1'));
+
+    expect(response.status).toBe(200);
+    expect(rows).toEqual([storedRating('user-other', 'msg-1', 'up')]);
+  });
+
+  it('checks the feedback ceiling before it removes anything', async () => {
+    vi.mocked(withRateLimit).mockResolvedValueOnce(new Response(null, { status: 429 }) as never);
+    const rows = feedbackTable([storedRating('user-web', 'msg-1', 'up')]);
+
+    const response = await DELETE(removal('msg-1'));
+
+    expect(response.status).toBe(429);
+    expect(rateLimitKeys()).toEqual(['feedback']);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('refuses a signed-out caller', async () => {
+    feedbackRouteMocks.optionalUser.mockResolvedValue(null);
+    feedbackTable();
+
+    const response = await DELETE(removal('msg-1'));
+
+    expect(response.status).toBe(401);
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses a removal that does not name the answer', async () => {
+    feedbackTable();
+
+    const response = await DELETE(removal());
+
+    expect(response.status).toBe(400);
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('says so when the rating could not be removed', async () => {
+    feedbackRouteMocks.execute.mockRejectedValue(new Error('connection reset'));
+
+    const response = await DELETE(removal('msg-1'));
+
+    expect(response.status).toBe(500);
   });
 });

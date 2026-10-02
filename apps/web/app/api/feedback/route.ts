@@ -212,13 +212,13 @@ function feedbackRow(
 async function replaceResponseRating(
   userId: string,
   messageId: string,
-  replacement: unknown[],
+  replacement: unknown[] | null,
 ): Promise<void> {
   const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
   await db.transaction(async (tx) => {
     await tx.execute(LOCK_RESPONSE_RATING_SQL, [`agi:response-rating:${userId}:${messageId}`]);
     await tx.execute(DELETE_RESPONSE_RATING_SQL, [userId, messageId]);
-    await tx.execute(INSERT_FEEDBACK_SQL, replacement);
+    if (replacement) await tx.execute(INSERT_FEEDBACK_SQL, replacement);
   });
 }
 
@@ -298,4 +298,32 @@ async function handleSubmitFeedback(request: NextRequest) {
     : submitReport(request, parsed.data);
 }
 
+async function handleRemoveResponseRating(request: NextRequest) {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'feedback');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const userId = (await getOptionalAuthUser(request))?.userId;
+  if (!userId) throw createError.unauthorized('Sign in to remove a rating');
+
+  const target = ResponseRatingTarget.safeParse({
+    message_id: new URL(request.url).searchParams.get('message_id'),
+  });
+  if (!target.success) {
+    throw createError.badRequest('Invalid rating to remove', target.error.flatten());
+  }
+
+  try {
+    await replaceResponseRating(userId, target.data.message_id, null);
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to remove response rating');
+    throw createError.internal('Failed to remove rating');
+  }
+
+  return NextResponse.json({ success: true });
+}
+
 export const POST = withErrorHandler(handleSubmitFeedback);
+export const DELETE = withErrorHandler(handleRemoveResponseRating);

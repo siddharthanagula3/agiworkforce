@@ -34,6 +34,8 @@ export const RESPONSE_RATING_SHARING_NOTE =
 
 export const RESPONSE_RATING_SEND_FAILED = 'Could not send that. Please try again.';
 
+export const RESPONSE_RATING_REMOVE_FAILED = 'Could not remove your rating. Please try again.';
+
 export const RESPONSE_RATING_RATE_LIMITED =
   "You've sent a lot of feedback in the last hour. Try again later.";
 
@@ -46,10 +48,13 @@ export class ResponseRatingRequestError extends Error {
   }
 }
 
-export function responseRatingFailureMessage(error: unknown): string {
+export function responseRatingFailureMessage(
+  error: unknown,
+  fallback: string = RESPONSE_RATING_SEND_FAILED,
+): string {
   return error instanceof ResponseRatingRequestError && error.status === 429
     ? RESPONSE_RATING_RATE_LIMITED
-    : RESPONSE_RATING_SEND_FAILED;
+    : fallback;
 }
 
 export interface ResponseRatingDetailsInput {
