@@ -436,6 +436,63 @@ describe('telling us why an answer was bad', () => {
     expect(down).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('keeps a rating off when it was removed while its details were sending', async () => {
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    await userEvent.click(down);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    const details = pendingResponse();
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await userEvent.click(down);
+    details.settle(true);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const [url, init] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(init.method).toBe('DELETE');
+    expect(url).toBe('/api/feedback?message_id=msg-1');
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+    expect(onReact.mock.calls).toEqual([
+      ['msg-1', 'down'],
+      ['msg-1', null],
+    ]);
+  });
+
+  it('puts back the rating its details stored when removing it fails', async () => {
+    const vote = pendingResponse();
+    const details = pendingResponse();
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    await userEvent.click(down);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+    await userEvent.click(down);
+    vote.settle(false);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    details.settle(true);
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(RESPONSE_RATING_REMOVE_FAILED),
+    );
+    expect((fetchMock.mock.calls[2] as [string, RequestInit])[1].method).toBe('DELETE');
+    expect(down).toHaveAttribute('aria-pressed', 'true');
+    expect(onReact.mock.calls).toEqual([
+      ['msg-1', 'down'],
+      ['msg-1', null],
+      ['msg-1', 'down'],
+    ]);
+  });
+
   it('sends a vote and its details in the order they were given', async () => {
     const vote = pendingResponse();
     render(<MessageBubble message={assistantMessage()} />);

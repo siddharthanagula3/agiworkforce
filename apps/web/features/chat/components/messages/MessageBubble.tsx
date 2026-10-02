@@ -1202,6 +1202,7 @@ const MessageBubbleComponent = function MessageBubble({
         throw error;
       }
       savedRatingRef.current = 'down';
+      if (action !== latestRatingActionRef.current) return;
       setRatingState('down');
       if (responseRating !== 'down') onReact?.(message.id, 'down');
     },
