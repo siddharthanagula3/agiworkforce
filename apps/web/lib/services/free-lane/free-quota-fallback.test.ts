@@ -420,6 +420,42 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
     });
   });
 
+  it.each([
+    [
+      'its first frame is a provider error',
+      () =>
+        sse(
+          JSON.stringify({
+            error: {
+              code: 'DataInspectionFailed',
+              message: 'Input data may contain inappropriate content.',
+            },
+          }),
+        ),
+    ],
+    ['it ends before any text', () => sse('[DONE]')],
+  ])('saves no reply naming the free model on the server when %s', async (_label, upstream) => {
+    mocks.stream.mockResolvedValue(upstream());
+
+    const served = await fallBack(refusal('free_allowance_exhausted'));
+    await served!.text();
+
+    expect(mocks.persistAnswer).not.toHaveBeenCalled();
+  });
+
+  it('saves no reply naming the free model on the server when the reader leaves before any text', async () => {
+    mocks.stream.mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>(), {
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+
+    const served = await fallBack(refusal('free_allowance_exhausted'));
+    await served!.body!.cancel();
+
+    expect(mocks.persistAnswer).not.toHaveBeenCalled();
+  });
+
   it('saves nothing on the server for a temporary chat', async () => {
     mocks.query.mockResolvedValue([{ id: 'conversation', data_region: null, is_temporary: true }]);
     mocks.stream.mockResolvedValue(

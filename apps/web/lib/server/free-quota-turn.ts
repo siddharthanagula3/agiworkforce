@@ -445,6 +445,7 @@ function recordedAnswerStream(
   const settle = async (complete: boolean) => {
     if (recorded) return;
     recorded = true;
+    if (!content.trim()) return;
     await record({ content, usage, complete }).catch((error: unknown) => {
       logger.error({ error }, '[free-quota] the fallback answer could not be saved on the server');
     });
