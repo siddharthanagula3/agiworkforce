@@ -274,6 +274,8 @@ describe('validateStripeKeyModeConsistency', () => {
     savedEnv = { ...process.env };
     delete process.env['STRIPE_SECRET_KEY'];
     delete process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
+    delete process.env['VERCEL_ENV'];
+    delete process.env['AGI_ENFORCE_PRODUCTION_CONFIG'];
   });
 
   afterEach(() => {
@@ -294,6 +296,7 @@ describe('validateStripeKeyModeConsistency', () => {
   });
 
   it('accepts a restricted live key paired with a live publishable key', () => {
+    process.env['VERCEL_ENV'] = 'production';
     process.env['STRIPE_SECRET_KEY'] = 'rk_live_server';
     process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'] = 'pk_live_browser';
 
@@ -313,6 +316,53 @@ describe('validateStripeKeyModeConsistency', () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual([expect.stringContaining('Production deployment')]);
+  });
+
+  it.each(
+    ['preview', 'development'].flatMap((environment) =>
+      [
+        ['STRIPE_SECRET_KEY', 'sk_live_server'],
+        ['STRIPE_SECRET_KEY', 'rk_live_server'],
+        ['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'pk_live_browser'],
+      ].map(([key, value]) => [environment, key!, value!]),
+    ),
+  )('rejects live Stripe %s %s without an enforcement switch', (environment, key, value) => {
+    process.env['VERCEL_ENV'] = environment;
+    process.env[key] = value;
+
+    const result = validateStripeKeyModeConsistency();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([expect.stringContaining('Stripe live mode')]);
+    expect(result.errors[0]).toContain(environment);
+    expect(result.errors.join(' ')).not.toContain(value);
+  });
+
+  it.each(['preview', 'development'])(
+    'rejects live Stripe pairs during a %s build',
+    (environment) => {
+      process.env['VERCEL_ENV'] = environment;
+      process.env['NEXT_PHASE'] = 'phase-production-build';
+      process.env['STRIPE_SECRET_KEY'] = 'sk_live_server';
+      process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'] = 'pk_live_browser';
+
+      expect(validateStripeKeyModeConsistency().valid).toBe(false);
+    },
+  );
+
+  it.each(['preview', 'development'])('accepts test Stripe pairs in %s', (environment) => {
+    process.env['VERCEL_ENV'] = environment;
+    process.env['STRIPE_SECRET_KEY'] = 'rk_test_server';
+    process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'] = 'pk_test_browser';
+
+    expect(validateStripeKeyModeConsistency()).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('preserves live-key mode validation for local runs without a Vercel marker', () => {
+    process.env['STRIPE_SECRET_KEY'] = 'sk_live_server';
+    process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'] = 'pk_live_browser';
+
+    expect(validateStripeKeyModeConsistency()).toEqual({ valid: true, errors: [], warnings: [] });
   });
 });
 

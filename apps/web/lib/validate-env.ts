@@ -337,6 +337,17 @@ export function validateStripeKeyModeConsistency(): ValidationResult {
     );
   }
 
+  const vercelEnvironment = process.env['VERCEL_ENV'];
+  if (
+    (vercelEnvironment === 'preview' || vercelEnvironment === 'development') &&
+    (secretMode === 'live' || publishableMode === 'live')
+  ) {
+    errors.push(
+      `Stripe live mode is not valid for the ${vercelEnvironment} deployment. Configure ` +
+        'test-mode STRIPE_SECRET_KEY and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.',
+    );
+  }
+
   return { valid: errors.length === 0, errors, warnings };
 }
 
