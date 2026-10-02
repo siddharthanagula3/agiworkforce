@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { LOW_POWER_CRON_WINDOW_MINUTES } from '@/lib/server/cron-low-power';
 
 const page = readFileSync(join(process.cwd(), 'app/privacy/page.tsx'), 'utf8');
-const vercel = JSON.parse(
-  readFileSync(resolve(process.cwd(), '../../vercel.json'), 'utf8'),
-) as { crons?: Array<{ path: string; schedule: string }> };
+const vercel = JSON.parse(readFileSync(resolve(process.cwd(), '../../vercel.json'), 'utf8')) as {
+  crons?: Array<{ path: string; schedule: string }>;
+};
 
 const crons = vercel.crons ?? [];
 
@@ -17,7 +18,9 @@ describe('privacy retention claims match the jobs that enforce them', () => {
   it('has the audit-log purge cron the policy now cites', () => {
     const job = crons.find((c) => c.path === '/api/cron/purge-security-audit-logs');
     expect(job, 'policy cites a cron that is not registered in vercel.json').toBeDefined();
-    expect(job?.schedule).toBe('30 2 * * *');
+    const nightly = /^(\d+) 2 \* \* \*$/u.exec(job!.schedule);
+    expect(nightly, 'the policy promises a nightly audit-log purge').not.toBeNull();
+    expect(Number(nightly![1])).toBeLessThan(LOW_POWER_CRON_WINDOW_MINUTES);
   });
 
   it('no longer claims the purge is manual', () => {

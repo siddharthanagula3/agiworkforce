@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type OrgSharedSessionModule = typeof import('@/lib/services/org-shared-session-service');
+type ReportContentLinkModule = typeof import('@/app/copyright/report/ReportContentLink');
+
 const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const NOT_FOUND = 'NEXT_NOT_FOUND';
 
@@ -12,15 +17,15 @@ vi.mock('next/navigation', () => ({
   },
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: () => ({}),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getCurrentUserRlsDb: async () => null,
 }));
 vi.mock('@/lib/services/org-shared-session-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-shared-session-service')>()),
+  ...(await importOriginal<OrgSharedSessionModule>()),
   getPublicSharedSessionByToken: (...args: unknown[]) => mocks.publicSession(...args),
   getOrgReadableSessionByToken: async () => null,
   readSharedSessionSharerName: async () => null,
@@ -29,7 +34,7 @@ vi.mock('@/features/chat/components/share/SharedSessionViewer', () => ({
   SharedSessionViewer: () => null,
 }));
 vi.mock('@/app/copyright/report/ReportContentLink', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/copyright/report/ReportContentLink')>()),
+  ...(await importOriginal<ReportContentLinkModule>()),
   ReportContentLink: () => null,
 }));
 

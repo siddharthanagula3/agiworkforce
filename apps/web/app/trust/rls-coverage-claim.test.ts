@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { ROUTE_ISOLATION_COUNTS } from '@/lib/legal/published-counts';
 
 /**
  * Pins the row-level-isolation figure on /trust to what the tree actually
@@ -95,8 +96,7 @@ describe('/trust row-level isolation claim', () => {
     );
   });
 
-  it('publishes exactly the build-time measurement without forcing static nonce rendering', async () => {
-    const { ROUTE_ISOLATION_COUNTS } = await import('@/lib/legal/published-counts');
+  it('publishes exactly the build-time measurement without forcing static nonce rendering', () => {
     expect(ROUTE_ISOLATION_COUNTS).toEqual({
       rlsScoped: measured.rlsScoped,
       ownerConnection: measured.ownerOnly,

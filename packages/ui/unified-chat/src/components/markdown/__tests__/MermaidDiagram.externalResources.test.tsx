@@ -1,10 +1,12 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+type MermaidModule = typeof import('mermaid');
+
 const renderMock = vi.fn();
 
 vi.mock('mermaid', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('mermaid')>();
+  const actual = await importOriginal<MermaidModule>();
   return {
     default: { ...actual.default, render: (...args: unknown[]) => renderMock(...args) },
   };

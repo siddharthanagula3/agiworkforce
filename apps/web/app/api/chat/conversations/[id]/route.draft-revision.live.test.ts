@@ -3,6 +3,12 @@ import { NextRequest } from 'next/server';
 import { PostgresDatabaseAdapter, type DatabaseAdapter } from '@agiworkforce/data-layer';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type CorsModule = typeof import('@/lib/cors');
+
 const liveDatabaseUrl = process.env['AGI_LIVE_DATABASE_URL'] ?? '';
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -21,7 +27,7 @@ const scope = vi.hoisted(() => ({ db: null as DatabaseAdapter | null, userId: ''
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => ({
     db: scope.db,
     userId: scope.userId,
@@ -29,19 +35,19 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<CorsModule>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));

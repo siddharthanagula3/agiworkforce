@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PRODUCT_ROUTE_PREFIXES } from '@agiworkforce/types/product-routes';
+import { PUBLISHED_RETENTION_CRON_TIMES } from '@/lib/legal/published-cron-schedules';
 
 const APP_DIR = path.resolve(__dirname, '..', '..');
 
@@ -246,7 +247,10 @@ describe('/security, the deletion mechanism matches the jobs that run it', () =>
     expect(hourly, `reclaim-sandboxes is no longer hourly: ${schedule}`).not.toBeNull();
 
     const source = read('security');
-    expect(source).toContain(`${hourly![1]!} minutes past every hour`);
+    expect(PUBLISHED_RETENTION_CRON_TIMES.sandboxMinute).toBe(hourly![1]!);
+    expect(source).toContain(
+      '${PUBLISHED_RETENTION_CRON_TIMES.sandboxMinute} minutes past every hour',
+    );
     expect(
       /reclaim sandboxes at \d{2}:\d{2} UTC/u.test(source),
       '/security gives the hourly sandbox reclaim a daily clock time again',
@@ -255,16 +259,17 @@ describe('/security, the deletion mechanism matches the jobs that run it', () =>
 
   it('keeps the daily account, media and temporary-chat times tied to vercel.json', () => {
     const source = read('security');
-    const daily: Array<[string, string]> = [
-      ['/api/cron/purge-deleted-accounts', 'runs daily at'],
-      ['/api/cron/purge-deleted-media', 'purge deleted media at'],
-      ['/api/cron/purge-temporary-chats', 'temporary chats at'],
+    const daily: Array<[string, string, keyof typeof PUBLISHED_RETENTION_CRON_TIMES]> = [
+      ['/api/cron/purge-deleted-accounts', 'runs daily at', 'deletedAccounts'],
+      ['/api/cron/purge-deleted-media', 'purge deleted media at', 'deletedMedia'],
+      ['/api/cron/purge-temporary-chats', 'temporary chats at', 'temporaryChats'],
     ];
-    for (const [cronPath, phrase] of daily) {
+    for (const [cronPath, phrase, publishedTime] of daily) {
       const parts = cronSchedule(cronPath).split(' ');
       const clock = `${parts[1]!.padStart(2, '0')}:${parts[0]!.padStart(2, '0')} UTC`;
+      expect(PUBLISHED_RETENTION_CRON_TIMES[publishedTime]).toBe(clock);
       expect(source, `/security states the wrong clock time for ${cronPath}`).toContain(
-        `${phrase} ${clock}`,
+        `${phrase} \${PUBLISHED_RETENTION_CRON_TIMES.${publishedTime}}`,
       );
     }
   });
@@ -279,7 +284,10 @@ describe('/security, security-log retention admits the cron that enforces it', (
 
     const source = read('security');
     expect(source).toContain(`Retention is ${SECURITY_AUDIT_LOG_RETENTION_DAYS} days`);
-    expect(source).toContain(`a cron-authenticated job at ${clock}`);
+    expect(PUBLISHED_RETENTION_CRON_TIMES.securityAuditLogs).toBe(clock);
+    expect(source).toContain(
+      'a cron-authenticated job at ${PUBLISHED_RETENTION_CRON_TIMES.securityAuditLogs}',
+    );
   });
 
   it('never denies the schedule again', () => {

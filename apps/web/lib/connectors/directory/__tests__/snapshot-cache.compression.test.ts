@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type LoggerModule = typeof import('@/lib/logger');
+type McpRuntimeCacheModule = typeof import('@/lib/connectors/mcp-runtime-cache');
+
 import { directoryRecord } from './fixtures';
 
 interface StoredRow {
@@ -29,11 +32,11 @@ const store = vi.hoisted(() => {
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/connectors/mcp-runtime-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-runtime-cache')>()),
+  ...(await importOriginal<McpRuntimeCacheModule>()),
   NeonMcpResponseCacheStore: class {
     async getStamp(key: { method: string; params?: string }) {
       return store.rows.get(store.keyOf(key))?.stamp ?? null;
