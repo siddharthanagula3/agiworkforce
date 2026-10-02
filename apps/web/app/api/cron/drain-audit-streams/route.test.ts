@@ -28,6 +28,8 @@ vi.mock('@/lib/logger', () => ({
 
 import { GET } from './route';
 
+type AuditStreamingService = typeof import('@/lib/services/audit-streaming-service');
+
 function req() {
   return new Request('http://localhost/api/cron/drain-audit-streams') as never;
 }
@@ -52,7 +54,7 @@ describe('GET /api/cron/drain-audit-streams', () => {
   });
 
   it('queues an enabled destination after the real redis membership read returns empty', async () => {
-    const service = await vi.importActual<typeof import('@/lib/services/audit-streaming-service')>(
+    const service = await vi.importActual<AuditStreamingService>(
       '@/lib/services/audit-streaming-service',
     );
     const store = createMemoryKeyValueStore();
@@ -84,7 +86,7 @@ describe('GET /api/cron/drain-audit-streams', () => {
   });
 
   it('reports a database failure after the real redis membership read returns empty', async () => {
-    const service = await vi.importActual<typeof import('@/lib/services/audit-streaming-service')>(
+    const service = await vi.importActual<AuditStreamingService>(
       '@/lib/services/audit-streaming-service',
     );
     const store = createMemoryKeyValueStore();
