@@ -8,11 +8,13 @@ import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-consta
 import {
   POLICY_PUBLICATION_FLOOR,
   archivedPolicyText,
+  firstPublishedStanding,
   olderArchivedVersion,
   policyChanges,
   policyHistories,
   policyHistoryForKey,
   versionStanding,
+  type PolicyHistory,
 } from '../policy-archive';
 
 const WEB_DIR = path.join(__dirname, '..', '..', '..');
@@ -114,28 +116,75 @@ describe('policy version history', () => {
     }
   });
 
-  it('says whether a replaced version applied on this site or was replaced before it was published', () => {
+  it('says whether a replaced version applied on this site or was replaced before it was published, and names the first version published after one that never was', () => {
     const privacy = policyHistoryForKey('privacy');
     const terms = policyHistoryForKey('terms');
-    expect(privacy && terms).toBeTruthy();
-    if (!privacy || !terms) return;
+    const subprocessors = policyHistoryForKey('subprocessors');
+    expect(privacy && terms && subprocessors).toBeTruthy();
+    if (!privacy || !terms || !subprocessors) return;
 
     expect(versionStanding(privacy, '2026-09-12')).toBe(
       'This version applied until the version dated 2026-09-29 replaced it on this site.',
     );
     expect(versionStanding(privacy, '2026-09-21')).toBe(
-      'This version was settled on 2026-09-21 and replaced on 2026-09-22 before it was published on this site.',
+      'This version was settled on 2026-09-21 and replaced on 2026-09-22 before it was published on this site; the first version published here after it is dated 2026-09-29.',
     );
     expect(versionStanding(privacy, '2026-09-27')).toBe(
-      'This version was settled on 2026-09-27 and replaced on 2026-09-29 before it was published on this site.',
+      'This version was settled on 2026-09-27 and replaced on 2026-09-29 before it was published on this site; the first version published here after it is dated 2026-09-29.',
+    );
+    expect(versionStanding(subprocessors, '2026-09-21')).toBe(
+      'This version was settled on 2026-09-21 and replaced on 2026-09-22 before it was published on this site; the first version published here after it is dated 2026-09-28.',
     );
     expect(versionStanding(terms, '2026-08-11')).toBe(
       'This version applied until the version dated 2026-09-23 replaced it on this site.',
     );
     expect(versionStanding(terms, '2026-09-22')).toBe(
-      'This version was settled on 2026-09-22 and replaced on 2026-09-23 before it was published on this site.',
+      'This version was settled on 2026-09-22 and replaced on 2026-09-23 before it was published on this site; the first version published here after it is dated 2026-09-23.',
     );
     expect(versionStanding(privacy, privacy.current)).toBeNull();
+  });
+
+  it('says the first version published after versions this site never published is the first to publish their changes', () => {
+    const privacy = policyHistoryForKey('privacy');
+    const terms = policyHistoryForKey('terms');
+    const subprocessors = policyHistoryForKey('subprocessors');
+    const cookies = policyHistoryForKey('cookies');
+    expect(privacy && terms && subprocessors && cookies).toBeTruthy();
+    if (!privacy || !terms || !subprocessors || !cookies) return;
+
+    expect(firstPublishedStanding(subprocessors, '2026-09-28')).toBe(
+      'This version is the first published on this site since the one dated 2026-09-12, so it is the first to publish the changes made in the versions dated 2026-09-21 and 2026-09-22. The window to object to a subprocessor added in those versions runs from the day this version is first published here.',
+    );
+    expect(firstPublishedStanding(privacy, '2026-09-29')).toBe(
+      'This version is the first published on this site since the one dated 2026-09-12, so it is the first to publish the changes made in the versions dated 2026-09-21, 2026-09-22 and 2026-09-27.',
+    );
+    expect(firstPublishedStanding(terms, '2026-09-23')).toBe(
+      'This version is the first published on this site since the one dated 2026-08-11, so it is the first to publish the changes made in the version dated 2026-09-22.',
+    );
+    expect(firstPublishedStanding(privacy, '2026-09-27')).toBeNull();
+    expect(firstPublishedStanding(privacy, '2026-09-12')).toBeNull();
+    expect(firstPublishedStanding(cookies, cookies.current)).toBeNull();
+  });
+
+  it('says a version is the first of its policy published here when no version before it was', () => {
+    const revisedBeforePublication: PolicyHistory = {
+      key: 'subprocessors',
+      label: 'Subprocessors',
+      route: '/subprocessors',
+      slug: 'subprocessors',
+      current: '2026-10-05',
+      versions: [
+        { date: '2026-10-05', summary: 'Second.', status: 'current', published: null },
+        { date: '2026-09-30', summary: 'First.', status: 'archived', published: false },
+      ],
+    };
+
+    expect(firstPublishedStanding(revisedBeforePublication, '2026-10-05')).toBe(
+      'This version is the first of this policy published on this site, so it is the first to publish the changes made in the version dated 2026-09-30. The window to object to a subprocessor added in that version runs from the day this version is first published here.',
+    );
+    expect(versionStanding(revisedBeforePublication, '2026-09-30')).toBe(
+      'This version was settled on 2026-09-30 and replaced on 2026-10-05 before it was published on this site; the first version published here after it is dated 2026-10-05.',
+    );
   });
 
   it('dates the publication floor by the first check of what production served', () => {

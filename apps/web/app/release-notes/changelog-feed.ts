@@ -2,10 +2,11 @@ import { releasePath } from '@/lib/changelog-entries';
 import { LEGAL_ENTITY } from '@/lib/legal-constants';
 import {
   POLICY_PUBLICATION_FLOOR,
+  SUBPROCESSOR_LIST,
   archivedVersionHref,
+  changeStanding,
   policyChangeTitle,
   policyChanges,
-  unpublishedStanding,
   type PolicyChange,
 } from '@/lib/legal/policy-archive';
 import { SITE_NAME, absoluteUrl } from '@/lib/seo/site';
@@ -71,15 +72,13 @@ function releaseEntries(): FeedEntry[] {
   });
 }
 
-const SUBPROCESSOR_LIST = 'subprocessors';
-
 function publicationStanding(change: PolicyChange): string[] {
-  const unpublished = unpublishedStanding(change);
-  if (unpublished) return [unpublished];
-  if (change.date < POLICY_PUBLICATION_FLOOR.date) {
-    return [`Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`];
-  }
-  return [];
+  const standing = changeStanding(change);
+  const floor =
+    change.published !== false && change.date < POLICY_PUBLICATION_FLOOR.date
+      ? [`Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`]
+      : [];
+  return [...floor, ...(standing ? [standing] : [])];
 }
 
 function publicationNotes(change: PolicyChange): string[] {

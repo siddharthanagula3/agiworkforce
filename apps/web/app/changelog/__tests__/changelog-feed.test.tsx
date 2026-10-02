@@ -66,31 +66,52 @@ const SUBPROCESSOR_REVISIONS = (REGISTRY.documents['subprocessors']?.versions ??
   .reverse();
 
 const DESCRIBED_VERSIONS = Object.entries(manifest.policies).flatMap(([key, policy]) =>
-  policy.versions.flatMap((version, position) =>
-    version.summary
-      ? [
-          {
-            key,
-            slug: policy.slug,
-            date: version.date,
-            summary: version.summary,
-            published: version.published,
-            replacedOn: policy.versions[position - 1]?.date ?? null,
-            href:
-              version.status === 'current'
-                ? policy.route
-                : version.status === 'archived'
-                  ? `/legal/archive/${policy.slug}/${version.date}`
-                  : `/legal/archive/${policy.slug}`,
-          },
-        ]
-      : [],
-  ),
+  policy.versions.flatMap((version, position) => {
+    if (!version.summary) return [];
+    const older = policy.versions.slice(position + 1);
+    const previous = older.find((entry) => entry.published !== false);
+    return [
+      {
+        key,
+        slug: policy.slug,
+        date: version.date,
+        summary: version.summary,
+        published: version.published,
+        replacedOn: policy.versions[position - 1]?.date ?? null,
+        firstPublishedAfter:
+          policy.versions
+            .slice(0, position)
+            .reverse()
+            .find((entry) => entry.published !== false)?.date ?? null,
+        previouslyPublished: previous?.date ?? null,
+        neverPublishedBefore: older
+          .slice(0, previous ? older.indexOf(previous) : older.length)
+          .map((entry) => entry.date),
+        href:
+          version.status === 'current'
+            ? policy.route
+            : version.status === 'archived'
+              ? `/legal/archive/${policy.slug}/${version.date}`
+              : `/legal/archive/${policy.slug}`,
+      },
+    ];
+  }),
 );
 
 const NEVER_PUBLISHED = DESCRIBED_VERSIONS.filter((version) => version.published === false);
 
-const REPLACED_BEFORE_PUBLICATION = /\breplaced on \S+ before it was published on this site\./;
+const FIRST_PUBLISHED_AFTER_UNPUBLISHED = DESCRIBED_VERSIONS.filter(
+  (version) => version.published !== false && version.neverPublishedBefore.length > 0,
+);
+
+const REPLACED_BEFORE_PUBLICATION =
+  /\breplaced on \S+ before it was published on this site; the first version published here after it is dated \S+\./;
+
+const FIRST_TO_PUBLISH =
+  /\bThis version is the first (?:published on this site since the one dated \S+|of this policy published on this site), so it is the first to publish the changes made in the versions? dated /;
+
+const SKIPPED_OBJECTION_WINDOW =
+  /\bThe window to object to a subprocessor added in th(?:at version|ose versions) runs from the day this version is first published here\./;
 
 function parseXml(xml: string): Document {
   const parsed = new DOMParser().parseFromString(xml, 'application/xml');
@@ -419,17 +440,25 @@ describe('/changelog lists policy changes', () => {
     expect(rows.filter((row) => row.name.endsWith(' introduced'))).toHaveLength(introduced.length);
   });
 
-  it('says on the page and in the feed that a listed version this site never published was replaced before it was published', async () => {
+  it('says on the page and in the feed that a listed version this site never published was replaced before it was published, and names the first version published after it', async () => {
     const rows = policyRows();
     const entries = atomChildren(await servedFeed(), 'entry');
     const floor = `Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`;
 
-    expect(NEVER_PUBLISHED.map((version) => `${version.key} ${version.date}`)).toEqual(
-      expect.arrayContaining(['subprocessors 2026-09-21', 'terms 2026-09-22']),
+    expect(
+      NEVER_PUBLISHED.map(
+        (version) => `${version.key} ${version.date} ${version.firstPublishedAfter}`,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        'subprocessors 2026-09-21 2026-09-28',
+        'subprocessors 2026-09-22 2026-09-28',
+        'terms 2026-09-22 2026-09-23',
+      ]),
     );
     for (const version of NEVER_PUBLISHED) {
       const where = `${version.key} ${version.date}`;
-      const standing = `This version was settled on ${version.date} and replaced on ${version.replacedOn} before it was published on this site.`;
+      const standing = `This version was settled on ${version.date} and replaced on ${version.replacedOn} before it was published on this site; the first version published here after it is dated ${version.firstPublishedAfter}.`;
       const row = rows.find((entry) => entry.date === version.date && entry.href === version.href);
       const entry = entries.find(
         (node) =>
@@ -450,6 +479,51 @@ describe('/changelog lists policy changes', () => {
         paragraphs(entry).some((line) => REPLACED_BEFORE_PUBLICATION.test(line)),
       ),
     ).toHaveLength(NEVER_PUBLISHED.length);
+  });
+
+  it('says on the page and in the feed that the first version published after versions this site never published is the first to publish their changes, and when their objection window starts', async () => {
+    const rows = policyRows();
+    const entries = atomChildren(await servedFeed(), 'entry');
+
+    expect(
+      FIRST_PUBLISHED_AFTER_UNPUBLISHED.map(
+        (version) => `${version.key} ${version.date} ${version.neverPublishedBefore.join(' ')}`,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        'subprocessors 2026-09-28 2026-09-22 2026-09-21',
+        'terms 2026-09-23 2026-09-22',
+        'privacy 2026-09-29 2026-09-27 2026-09-22 2026-09-21',
+      ]),
+    );
+    for (const version of FIRST_PUBLISHED_AFTER_UNPUBLISHED) {
+      const where = `${version.key} ${version.date}`;
+      const row = rows.find((entry) => entry.date === version.date && entry.href === version.href);
+      const entry = entries.find(
+        (node) =>
+          categoryTerms(node).includes(version.slug) &&
+          text(node, 'updated').startsWith(version.date),
+      );
+      const standing =
+        (entry ? paragraphs(entry) : []).find((line) => FIRST_TO_PUBLISH.test(line)) ?? '';
+
+      expect(standing, where).toContain(
+        version.previouslyPublished
+          ? `the first published on this site since the one dated ${version.previouslyPublished},`
+          : 'the first of this policy published on this site,',
+      );
+      for (const date of version.neverPublishedBefore) {
+        expect(standing, `${where} ${date}`).toContain(date);
+      }
+      expect(SKIPPED_OBJECTION_WINDOW.test(standing), where).toBe(version.key === 'subprocessors');
+      expect(row?.text, where).toContain(standing);
+    }
+    expect(rows.filter((row) => FIRST_TO_PUBLISH.test(row.text))).toHaveLength(
+      FIRST_PUBLISHED_AFTER_UNPUBLISHED.length,
+    );
+    expect(
+      entries.filter((entry) => paragraphs(entry).some((line) => FIRST_TO_PUBLISH.test(line))),
+    ).toHaveLength(FIRST_PUBLISHED_AFTER_UNPUBLISHED.length);
   });
 
   it('names each change link by its policy and date, so no two links share a name', () => {

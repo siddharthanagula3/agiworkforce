@@ -84,7 +84,7 @@ describe('/legal/archive', () => {
     );
   });
 
-  it('says a version this site never published was replaced before it was published, and never that it applied', async () => {
+  it('says a version this site never published was replaced before it was published, names the first version published after it, and never says it applied', async () => {
     const unpublished = replacedVersions(false);
     expect(unpublished.map(({ history, version }) => `${history.key} ${version.date}`)).toEqual(
       expect.arrayContaining([
@@ -96,8 +96,13 @@ describe('/legal/archive', () => {
 
     for (const { history, version } of unpublished) {
       const where = `${history.key} ${version.date}`;
-      const replacedOn = history.versions[history.versions.indexOf(version) - 1]?.date;
-      const standing = `This version was settled on ${version.date} and replaced on ${replacedOn} before it was published on this site.`;
+      const position = history.versions.indexOf(version);
+      const replacedOn = history.versions[position - 1]?.date;
+      const firstPublishedAfter = history.versions
+        .slice(0, position)
+        .reverse()
+        .find((entry) => entry.published !== false)?.date;
+      const standing = `This version was settled on ${version.date} and replaced on ${replacedOn} before it was published on this site; the first version published here after it is dated ${firstPublishedAfter}.`;
       expect(versionStanding(history, version.date), where).toBe(standing);
 
       const row = await historyRowStanding(history, version);

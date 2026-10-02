@@ -4,9 +4,9 @@ import { Header } from '@shared/components/layout/Header';
 import { releasePath } from '@/lib/changelog-entries';
 import {
   POLICY_PUBLICATION_FLOOR,
+  changeStanding,
   policyChangeTitle,
   policyChanges,
-  unpublishedStanding,
 } from '@/lib/legal/policy-archive';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
@@ -123,7 +123,7 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
             <Ledger
               caption="Policy changes"
               rows={POLICY_CHANGES.map((change) => {
-                const unpublished = unpublishedStanding(change);
+                const standing = changeStanding(change);
                 return {
                   label: change.date,
                   value: (
@@ -136,7 +136,7 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                         <strong>{policyChangeTitle(change)}</strong>
                       </Link>
                       <span>{change.summary}</span>
-                      {unpublished ? <span>{unpublished}</span> : null}
+                      {standing ? <span>{standing}</span> : null}
                     </Stack>
                   ),
                 };

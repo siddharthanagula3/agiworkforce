@@ -73,6 +73,8 @@ const POLICY_LABELS: Readonly<Record<string, string>> = {
   agentPermissions: 'Approvals',
 };
 
+export const SUBPROCESSOR_LIST = 'subprocessors';
+
 const ARCHIVE_ROOT = '/legal/archive';
 
 const ARCHIVED: Readonly<Record<string, Readonly<Record<string, unknown>>>> = ARCHIVED_POLICY_TEXT;
@@ -126,20 +128,44 @@ export function olderArchivedVersion(history: PolicyHistory, date: string): stri
   return older?.date ?? null;
 }
 
+const DATE_LIST = new Intl.ListFormat('en-GB', { type: 'conjunction' });
+
+function wasPublished(version: PolicyVersionEntry): boolean {
+  return version.published !== false;
+}
+
 export function versionStanding(history: PolicyHistory, date: string): string | null {
   const position = history.versions.findIndex((version) => version.date === date);
   const version = history.versions[position];
   const newer = history.versions.slice(0, Math.max(position, 0)).reverse();
   const [replacement] = newer;
   if (!version || version.status === 'current' || !replacement) return null;
+  const successor = newer.find(wasPublished) ?? replacement;
   if (version.published === false) {
-    return `This version was settled on ${version.date} and replaced on ${replacement.date} before it was published on this site.`;
+    return `This version was settled on ${version.date} and replaced on ${replacement.date} before it was published on this site; the first version published here after it is dated ${successor.date}.`;
   }
   if (version.published === null) {
     return `This version was replaced by the version dated ${replacement.date}.`;
   }
-  const successor = newer.find((entry) => entry.published !== false) ?? replacement;
   return `This version applied until the version dated ${successor.date} replaced it on this site.`;
+}
+
+export function firstPublishedStanding(history: PolicyHistory, date: string): string | null {
+  const position = history.versions.findIndex((version) => version.date === date);
+  const version = history.versions[position];
+  if (!version || !wasPublished(version)) return null;
+  const older = history.versions.slice(position + 1);
+  const previous = older.find(wasPublished);
+  const skipped = older.slice(0, previous ? older.indexOf(previous) : older.length).reverse();
+  if (skipped.length === 0) return null;
+  const since = previous
+    ? `the first published on this site since the one dated ${previous.date}`
+    : 'the first of this policy published on this site';
+  const several = skipped.length > 1;
+  const dates = DATE_LIST.format(skipped.map((entry) => entry.date));
+  const standing = `This version is ${since}, so it is the first to publish the changes made in the ${several ? 'versions' : 'version'} dated ${dates}.`;
+  if (history.key !== SUBPROCESSOR_LIST) return standing;
+  return `${standing} The window to object to a subprocessor added in ${several ? 'those versions' : 'that version'} runs from the day this version is first published here.`;
 }
 
 const LONG_DATE = new Intl.DateTimeFormat('en-GB', {
@@ -200,6 +226,8 @@ export function policyChangeTitle(change: PolicyChange): string {
   return `${change.history.label} ${change.introduced ? 'introduced' : 'updated'}`;
 }
 
-export function unpublishedStanding(change: PolicyChange): string | null {
-  return change.published === false ? versionStanding(change.history, change.date) : null;
+export function changeStanding(change: PolicyChange): string | null {
+  return change.published === false
+    ? versionStanding(change.history, change.date)
+    : firstPublishedStanding(change.history, change.date);
 }
