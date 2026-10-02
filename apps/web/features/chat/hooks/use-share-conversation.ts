@@ -182,7 +182,9 @@ export function useShareConversation(
   }, [shownShares, messageCount]);
 
   useLayoutEffect(() => {
-    if (open) setLookupPending(true);
+    if (!open) return;
+    setLookupPending(true);
+    setError(null);
   }, [open]);
 
   useEffect(() => {
@@ -193,6 +195,7 @@ export function useShareConversation(
         if (controller.signal.aborted) return;
         setLiveShares({ conversationId: storedConversationId, shares });
         setLookupPending(false);
+        setError(null);
       },
       (caught: unknown) => {
         if (controller.signal.aborted) return;
@@ -452,6 +455,5 @@ export function useShareConversation(
     checkingShare,
     error,
     cancelPending,
-    clearError: () => setError(null),
   };
 }

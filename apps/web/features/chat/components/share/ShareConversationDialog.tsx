@@ -71,7 +71,6 @@ function ShareConversationDialogImpl({
     checkingShare,
     error,
     cancelPending,
-    clearError,
   } = useShareConversation(conversationTitle, modelId, conversationId, open);
   const expiryLabel = useMemo(
     () => EXPIRY_OPTIONS.find((option) => option.days === expiryDays)?.label ?? '7 days',
@@ -86,7 +85,6 @@ function ShareConversationDialogImpl({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) cancelPending();
-    if (nextOpen) clearError();
     onOpenChange(nextOpen);
   };
 

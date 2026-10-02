@@ -679,6 +679,34 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
   });
 
+  it('drops the failed check’s alert when the dialog is reopened and the check succeeds', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(listed([liveShare('live-token')]));
+    const view = (open: boolean) => (
+      <ShareConversationDialog
+        open={open}
+        onOpenChange={vi.fn()}
+        conversationId={SAVED_CONVERSATION_ID}
+        conversationTitle="Private plan"
+      />
+    );
+    const { rerender } = render(view(true));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not check whether this chat already has a shared link.',
+    );
+
+    rerender(view(false));
+    rerender(view(true));
+
+    expect(
+      await screen.findByDisplayValue('https://agiworkforce.com/share/live-token'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('says when it could not check, and still lets the user create a link', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(new Response('{}', { status: 500 }));
 
