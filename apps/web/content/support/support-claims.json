@@ -1209,6 +1209,29 @@
       ]
     },
     {
+      "id": "share-link-lifetime-choices",
+      "doc": "sharing-conversations",
+      "section": "Create a share link",
+      "kind": "prose",
+      "sentence": "Pick how long the link lasts, 1 day, 7 days or 30 days, then choose **Create public link**.",
+      "implementation": [
+        "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+        "apps/web/app/api/share/route.ts#CreateShareSchema"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "does not publish until explicit confirmation and sends the selected expiry"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/share/route.test.ts",
+          "name": "rejects a lifetime outside the allowed set"
+        }
+      ]
+    },
+    {
       "id": "share-dialog-names-the-audience",
       "doc": "sharing-conversations",
       "section": "Create a share link",

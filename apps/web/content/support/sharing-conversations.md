@@ -10,12 +10,12 @@ scope: public
 
 ## Create a share link
 
-Open the conversation's menu and choose **Share conversation**. Two audiences
-are offered:
+Open the conversation's menu and choose **Share conversation**. Pick how long
+the link lasts, 1 day, 7 days or 30 days, then choose **Create public link**.
+Anyone with the link can read the snapshot without signing in.
 
-- **Anyone with the link**, described as best for a quick review.
-- **Share with workspace**, for longer collaboration, which limits the link to
-  members of your workspace.
+If you belong to a workspace, **Who can open this** can then limit the link to
+members of your workspace, or open it to anyone with the link again.
 
 Once the link exists the dialog confirms the audience: "Anyone with the link can
 open this now", or "Only your workspace can open this now". Copy it from the
