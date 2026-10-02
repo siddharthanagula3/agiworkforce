@@ -11,6 +11,11 @@
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; this date is also the terms version every acceptance records, so moving it asks every account to accept again, which is the founder’s decision, reported 2026-09-21."
         },
         {
+          "date": "2026-08-11",
+          "digest": "5fc156baedda5d6b",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
+        },
+        {
           "date": "2026-09-22",
           "digest": "1000ae1c69856cfa",
           "note": "Discloses the founder-approved Experiential Labs promotional route, its Free-plan content capture and potential provider use, with a new terms acceptance version.",
@@ -38,6 +43,11 @@
           "digest": "8a047905eaa64a87",
           "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
           "summary": "Adds how dictation and Voice Mode audio is handled: it goes to OpenAI and we keep none of it. Adds that a picture you attach has its location, camera and time details removed before it leaves your device, and is not sent if that cannot be done. Adds a security incidents section on the breach procedure, its 72-hour clock for notifying a regulator and how a notice would reach you, and says that some models are reached through an inference gateway, each named on the subprocessors page."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "993bfeba73ec3848",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
         },
         {
           "date": "2026-09-22",
@@ -123,6 +133,11 @@
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
         },
         {
+          "date": "2026-08-05",
+          "digest": "7c115383388d0917",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
+        },
+        {
           "date": "2026-09-22",
           "digest": "021c9f2af163b821",
           "note": "Discloses the founder-requested website Skip approvals default and the approval boundaries that still require review.",
@@ -165,6 +180,11 @@
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; this date is part of the cookie notice version, so moving it asks every visitor to choose again, which is the founder’s decision, reported 2026-09-21."
         },
         {
+          "date": "2026-09-12",
+          "digest": "717832b6478ab4a8",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it. The fingerprint above reproduces from no commit under either extractor; this one is of the main-line text archived for this date. This entry changes no published wording or effective date."
+        },
+        {
           "date": "2026-09-23",
           "digest": "5d2ea7656cc0eada",
           "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23.",
@@ -185,6 +205,11 @@
           "digest": "c1b0cefecd9999c0",
           "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
           "summary": "Adds five recipients: the Cheaper Inference and Experiential Labs inference gateways, Cloudflare Workers AI, Vercel AI Gateway, and OpenAI for dictation and Voice Mode. Removes MiniMax, which was listed but received no Managed Cloud traffic, and corrects when Qwen and Zhipu requests pass through OpenRouter."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "889305c347f68610",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
         },
         {
           "date": "2026-09-22",
@@ -579,6 +604,11 @@
           "date": "2026-09-02",
           "digest": "2ad16ca175bea5b0",
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-09-02",
+          "digest": "b4c294f2d55a2404",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
         },
         {
           "date": "2026-09-22",

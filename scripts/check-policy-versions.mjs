@@ -9,7 +9,14 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import { recipientNames } from './check-subprocessor-coverage.mjs';
-import { runPolicyArchiveCheck } from './lib/policy-archive.mjs';
+import {
+  ARCHIVE_COMMAND,
+  archiveExpectations,
+  archiveFile,
+  lastDigest,
+  readGitObjects,
+  runPolicyArchiveCheck,
+} from './lib/policy-archive.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -250,6 +257,60 @@ export function runPolicyVersionsCheck(root) {
   return failures;
 }
 
+export function runPolicyArchiveSourceCheck(root, registry, routes) {
+  const exists = (key, date) => fs.existsSync(path.join(root, archiveFile(key, date)));
+  const sources = Object.entries(archiveExpectations(registry, routes, exists)).flatMap(
+    ([key, policy]) =>
+      policy.versions
+        .filter((version) => version.status === 'archived')
+        .map((version) => {
+          const file = archiveFile(key, version.date);
+          const { commit } = JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+          return { key, date: version.date, file, commit, page: registry.documents[key].page };
+        }),
+  );
+  let objects;
+  try {
+    objects = readGitObjects(
+      root,
+      sources.flatMap((source) => [
+        `${source.commit}:${source.page}`,
+        `${source.commit}:${CONSTANTS}`,
+      ]),
+    );
+  } catch (error) {
+    return [`the archived policy versions' source commits could not be read: ${error.message}`];
+  }
+  const failures = [];
+  for (const [index, source] of sources.entries()) {
+    const [page, constants] = objects.slice(index * 2, index * 2 + 2);
+    if (page === null || constants === null) {
+      failures.push(
+        `${source.file}: names commit ${source.commit}, which this clone does not hold with ${source.page}; fetch the full history, or if that commit is gone, delete the file and run ${ARCHIVE_COMMAND}`,
+      );
+      continue;
+    }
+    const printed = readConstantObject(constants, 'POLICY_LAST_UPDATED')?.[source.key] ?? null;
+    if (printed !== source.date) {
+      failures.push(
+        `${source.file}: renders ${source.page} at ${source.commit}, which printed ${printed ?? 'no date'} rather than ${source.date}; delete it and run ${ARCHIVE_COMMAND}`,
+      );
+      continue;
+    }
+    const digest = copyDigest(page);
+    const expected = lastDigest(registry.documents[source.key], source.date);
+    if (digest !== expected) {
+      const recordedOn = registry.documents[source.key].versions.find(
+        (version) => version.digest === digest,
+      )?.date;
+      failures.push(
+        `${source.file}: holds the text with digest ${digest}${recordedOn ? `, which ${REGISTRY} records under ${recordedOn}` : ''}, not ${expected}, the text ${REGISTRY} last records under ${source.date}; delete it and run ${ARCHIVE_COMMAND}`,
+      );
+    }
+  }
+  return failures;
+}
+
 function main() {
   const flag = process.argv.indexOf('--root');
   const root = flag >= 0 ? path.resolve(process.argv[flag + 1]) : repoRoot;
@@ -260,7 +321,10 @@ function main() {
       fs.readFileSync(path.join(root, CONSTANTS), 'utf8'),
       'CANONICAL_POLICY_ROUTES',
     );
-    failures.push(...runPolicyArchiveCheck(root, registry, routes));
+    failures.push(
+      ...runPolicyArchiveCheck(root, registry, routes),
+      ...runPolicyArchiveSourceCheck(root, registry, routes),
+    );
   }
   if (failures.length > 0) {
     console.error('Published policy text and its dates have drifted apart:\n');

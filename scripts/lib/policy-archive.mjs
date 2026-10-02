@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -16,6 +17,33 @@ export function archiveFile(key, date) {
 
 function identifier(key, date) {
   return `${key}_${date.replace(/-/g, '_')}`;
+}
+
+export function lastDigest(document, date) {
+  return (document.versions ?? []).findLast((version) => version.date === date)?.digest ?? null;
+}
+
+export function readGitObjects(root, names) {
+  if (names.length === 0) return [];
+  const buffer = execFileSync('git', ['-C', root, 'cat-file', '--batch'], {
+    input: `${names.join('\n')}\n`,
+    maxBuffer: 1024 * 1024 * 1024,
+  });
+  const contents = [];
+  let offset = 0;
+  while (offset < buffer.length) {
+    const end = buffer.indexOf(10, offset);
+    const header = buffer.subarray(offset, end).toString('utf8');
+    offset = end + 1;
+    if (header.endsWith(' missing')) {
+      contents.push(null);
+      continue;
+    }
+    const size = Number(header.split(' ')[2]);
+    contents.push(buffer.subarray(offset, offset + size).toString('utf8'));
+    offset += size + 1;
+  }
+  return contents;
 }
 
 export function datedVersions(document) {

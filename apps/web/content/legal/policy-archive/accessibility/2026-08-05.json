@@ -3,8 +3,8 @@
   "route": "/accessibility",
   "date": "2026-08-05",
   "replacedOn": "2026-09-27",
-  "commit": "1eae297c6d1058a0c1d33726f9c55c52a23895de",
-  "committedAt": "2026-09-27T19:29:23-05:00",
+  "commit": "bcc87ae903fd202ef72f3532e0271899ca8dc4d7",
+  "committedAt": "2026-09-27T18:22:17-05:00",
   "title": "Accessibility.",
   "blocks": [
     {
@@ -222,7 +222,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "Signed in, open Settings, Help and choose Report an accessibility barrier; the ticket and every reply stay there. Or email contact@agiworkforce.com. Either way we treat it as a P0."
+          "text": "Email contact@agiworkforce.com and we treat it as a P0."
         }
       ]
     }

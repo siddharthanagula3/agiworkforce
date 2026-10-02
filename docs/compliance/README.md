@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-08-28
+Last updated: 2026-10-02
 
 Verified platform and legal obligations: Apple, Google Play, Microsoft, Chrome
 Web Store, VS Code Marketplace, privacy regimes, and regional requirements.
@@ -68,13 +68,16 @@ per-document revision dates, canonical routes and their aliases) come from
 8. Keep the replaced version readable. When a date moves, give the first entry
    of the new date a public `summary` of what changed, then run
    `node scripts/archive-policy-versions.mjs`. It renders the text the page
-   last published under the old date and adds it to `/legal/archive`, where
-   every policy's version history lives. A version whose text no commit holds
-   gets `"archive": "not-retained"` on its first entry and is listed as not
-   kept. A new policy whose first version is dated after the registry's
-   `recordedSince`, the day these histories began, gets a `summary` on that
-   first version too, and `/changelog` lists it as introduced.
-   `scripts/check-policy-versions.mjs` fails until all of this is done.
+   last published under the old date, taken from the newest commit whose text
+   matches the last version recorded under that date, and adds it to
+   `/legal/archive`, where every policy's version history lives. A version
+   whose text no commit holds gets `"archive": "not-retained"` on its first
+   entry and is listed as not kept. A new policy whose first version is dated
+   after the registry's `recordedSince`, the day these histories began, gets a
+   `summary` on that first version too, and `/changelog` lists it as
+   introduced. `scripts/check-policy-versions.mjs` fails until all of this is
+   done, and when an archived text is not the last version recorded under its
+   date.
 9. Announce every change to the subprocessor list. `/changelog` lists only the
    first entry of each date, so a row added to, removed from or renamed on
    `/subprocessors` moves its date, and the entry that moves it records the

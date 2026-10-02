@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // A replaced policy stays readable. For every dated version the history in
 // docs/compliance/policy-versions.json has moved past, this renders the text
-// the page last published under that date, at the newest commit that still
-// printed it, and writes it where /legal/archive reads it.
+// the page last published under that date, at the newest commit that printed
+// that date with the text the history last records under it, and writes it
+// where /legal/archive reads it.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,12 +11,14 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { CONSTANTS, REGISTRY, readConstantObject } from './check-policy-versions.mjs';
+import { CONSTANTS, REGISTRY, copyDigest, readConstantObject } from './check-policy-versions.mjs';
 import {
   ARCHIVE_INDEX,
   ARCHIVE_MANIFEST,
   archiveExpectations,
   archiveFile,
+  lastDigest,
+  readGitObjects,
   renderIndex,
   renderManifest,
 } from './lib/policy-archive.mjs';
@@ -40,28 +43,6 @@ function blobIds(specs) {
     .map((line) => (line.endsWith(' missing') ? null : line.split(' ')[0]));
 }
 
-function readBlobs(ids) {
-  const buffer = execFileSync('git', ['-C', root, 'cat-file', '--batch'], {
-    input: `${ids.join('\n')}\n`,
-    maxBuffer: 1024 * 1024 * 1024,
-  });
-  const contents = [];
-  let offset = 0;
-  while (offset < buffer.length) {
-    const end = buffer.indexOf(10, offset);
-    const header = buffer.subarray(offset, end).toString('utf8');
-    offset = end + 1;
-    if (header.endsWith(' missing')) {
-      contents.push(null);
-      continue;
-    }
-    const size = Number(header.split(' ')[2]);
-    contents.push(buffer.subarray(offset, offset + size).toString('utf8'));
-    offset += size + 1;
-  }
-  return contents;
-}
-
 function datedCommits() {
   const commits = git(['log', '--format=%H %ct %cI', 'HEAD'])
     .trim()
@@ -72,7 +53,7 @@ function datedCommits() {
     });
   const ids = blobIds(commits.map((commit) => `${commit.sha}:${CONSTANTS}`));
   const unique = [...new Set(ids.filter(Boolean))];
-  const contents = readBlobs(unique);
+  const contents = readGitObjects(root, unique);
   const dates = new Map(
     unique.map((id, index) => [
       id,
@@ -94,7 +75,10 @@ function newestCommit(commits, mainline, target) {
     );
   if (candidates.length === 0) return null;
   const pages = blobIds(candidates.map((commit) => `${commit.sha}:${target.page}`));
-  const index = pages.findIndex(Boolean);
+  const unique = [...new Set(pages.filter(Boolean))];
+  const contents = readGitObjects(root, unique);
+  const digests = new Map(unique.map((id, index) => [id, copyDigest(contents[index] ?? '')]));
+  const index = pages.findIndex((id) => id !== null && digests.get(id) === target.digest);
   return index >= 0 ? candidates[index] : null;
 }
 
@@ -172,6 +156,7 @@ function main() {
           route: policy.route,
           page: registry.documents[key].page,
           date: version.date,
+          digest: lastDigest(registry.documents[key], version.date),
           replacedOn: newer?.date ?? null,
         })),
   );
@@ -203,7 +188,7 @@ function main() {
 
   for (const target of unresolved) {
     console.error(
-      `${target.route} dated ${target.date}: no commit on this branch printed that date, so its text cannot be rendered. If it is lost, set "archive": "not-retained" on its first entry in ${REGISTRY}.`,
+      `${target.route} dated ${target.date}: no commit on this branch printed that date with the text ${REGISTRY} last records under it (digest ${target.digest}), so its text cannot be rendered. If it is lost, set "archive": "not-retained" on its first entry in ${REGISTRY}.`,
     );
   }
   if (unresolved.length > 0) process.exit(1);

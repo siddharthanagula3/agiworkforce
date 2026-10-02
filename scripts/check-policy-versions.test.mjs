@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,10 +11,13 @@ import {
   REGISTRY,
   copyDigest,
   publishedCopy,
+  readConstantObject,
+  runPolicyArchiveSourceCheck,
   runPolicyVersionsCheck,
 } from './check-policy-versions.mjs';
 import {
   archiveExpectations,
+  archiveFile,
   renderManifest,
   runPolicyArchiveCheck,
 } from './lib/policy-archive.mjs';
@@ -437,6 +441,96 @@ test('requires a summary on the first version of a policy published after versio
   );
 });
 
+function archiveRepository(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-archive-source-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-archive-git-'));
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  const config = path.join(home, 'config');
+  fs.writeFileSync(config, '');
+  const environment = {
+    PATH: process.env.PATH,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: config,
+    GIT_AUTHOR_NAME: 'Policy Fixture',
+    GIT_AUTHOR_EMAIL: 'policy@example.invalid',
+    GIT_COMMITTER_NAME: 'Policy Fixture',
+    GIT_COMMITTER_EMAIL: 'policy@example.invalid',
+  };
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, env: environment, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  const write = (relative, contents) => {
+    fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+    fs.writeFileSync(path.join(root, relative), contents);
+  };
+  const commit = (message) => {
+    git('add', '-A');
+    git('commit', '--quiet', '-m', message);
+    return git('rev-parse', 'HEAD');
+  };
+  git('init', '--quiet');
+  return { root, write, commit };
+}
+
+test('fails when an archived version holds the text of the version that replaced it', (t) => {
+  const settled = termsPage();
+  const revised = termsPage('We may cancel your account at any time.');
+  const { root, write, commit } = archiveRepository(t);
+  write(CONSTANTS, constants());
+  write(TERMS_PAGE, settled);
+  const published = commit('the 11 august terms');
+  write(TERMS_PAGE, revised);
+  const early = commit('the revised terms land before their date moves');
+  write(CONSTANTS, constants({ termsDate: '2026-09-21' }));
+  const moved = commit('the terms date moves');
+  const index = registry([
+    { date: '2026-08-11', digest: copyDigest(settled), note: 'Baseline recorded for the fixture.' },
+    {
+      date: '2026-09-21',
+      digest: copyDigest(revised),
+      summary: 'Lets us cancel an account at any time.',
+    },
+  ]);
+  const routes = { terms: '/terms' };
+  const archiveAt = (sha) =>
+    write(archiveFile('terms', '2026-08-11'), JSON.stringify({ commit: sha }));
+
+  archiveAt(early);
+  const failures = runPolicyArchiveSourceCheck(root, index, routes);
+  assert.ok(
+    failures.some(
+      (failure) =>
+        failure.includes(archiveFile('terms', '2026-08-11')) &&
+        failure.includes('records under 2026-09-21'),
+    ),
+    failures.join('\n'),
+  );
+
+  archiveAt(moved);
+  assert.ok(
+    runPolicyArchiveSourceCheck(root, index, routes).some((failure) =>
+      failure.includes('printed 2026-09-21 rather than 2026-08-11'),
+    ),
+  );
+
+  archiveAt(published);
+  assert.deepEqual(runPolicyArchiveSourceCheck(root, index, routes), []);
+});
+
 test('the published policy set passes', () => {
   assert.deepEqual(runPolicyVersionsCheck(repoRoot), []);
+});
+
+test('every archived policy version holds the text its history last records under its date', () => {
+  const index = JSON.parse(fs.readFileSync(path.join(repoRoot, REGISTRY), 'utf8'));
+  const routes = readConstantObject(
+    fs.readFileSync(path.join(repoRoot, CONSTANTS), 'utf8'),
+    'CANONICAL_POLICY_ROUTES',
+  );
+  assert.deepEqual(runPolicyArchiveSourceCheck(repoRoot, index, routes), []);
 });

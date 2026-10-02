@@ -3,8 +3,8 @@
   "route": "/copyright",
   "date": "2026-08-06",
   "replacedOn": "2026-09-27",
-  "commit": "1eae297c6d1058a0c1d33726f9c55c52a23895de",
-  "committedAt": "2026-09-27T19:29:23-05:00",
+  "commit": "7119d8c80ae01fdfa69a0f1b70c65673aab284ac",
+  "committedAt": "2026-09-27T18:50:41-05:00",
   "title": "Copyright and IP complaints.",
   "blocks": [
     {
@@ -261,38 +261,6 @@
         },
         {
           "text": "."
-        }
-      ]
-    },
-    {
-      "type": "heading",
-      "level": 2,
-      "anchor": "impersonation",
-      "content": [
-        {
-          "text": "Impersonation."
-        }
-      ]
-    },
-    {
-      "type": "paragraph",
-      "content": [
-        {
-          "text": "If a shared conversation or published artifact presents itself as you or your organisation, choose Impersonation on the "
-        },
-        {
-          "text": "report form",
-          "href": "/copyright/report?type=impersonation"
-        },
-        {
-          "text": ". Say who is being impersonated and what in the material claims to be them. You get a reference, a person reviews the report, and material that impersonates someone is disabled under the "
-        },
-        {
-          "text": "acceptable use policy",
-          "href": "/acceptable-use"
-        },
-        {
-          "text": ". A telephone number and mailing address are optional for this kind of report."
         }
       ]
     },
