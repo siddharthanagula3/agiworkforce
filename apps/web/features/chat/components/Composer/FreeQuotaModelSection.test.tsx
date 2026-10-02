@@ -1,10 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  getProviderOfferings,
-  providerOfferingFamilyName,
-  providerOfferingLabel,
-} from '@agiworkforce/types';
+import { getProviderOfferings, providerOfferingLabel } from '@agiworkforce/types';
 import type {
   FreeQuotaCatalogue,
   FreeQuotaModel,
@@ -135,19 +131,38 @@ describe('Free section in the composer', () => {
     fireEvent.click(more);
     const expanded = screen.getByRole('group', { name: 'More free models' });
     expect(within(expanded).getAllByRole('button')).toHaveLength(models.length - 2);
-    for (const family of [familyA, familyB]) {
-      expect(
-        within(expanded).getByText(
-          providerOfferingFamilyName(providerOfferingLabel(family[0]!)!.family),
-        ),
-      ).toBeInTheDocument();
-    }
 
     const [first] = within(expanded).getAllByRole('button');
     fireEvent.click(first!);
     expect(onSelect).toHaveBeenCalledWith(
       models.find((entry) => name(entry.key) === first!.getAttribute('aria-label'))!.key,
     );
+  });
+
+  it('heads each model line in More models, not the vendor', () => {
+    renderSection(sources(source('ready', catalogue(familyA.map((key) => model(key))))));
+    const featured = within(screen.getByRole('group', { name: `${ISSUER} free models` }))
+      .getAllByRole('button')
+      .map((row) => row.getAttribute('aria-label'));
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const expanded = screen.getByRole('group', { name: 'More free models' });
+
+    const lines = familyA
+      .filter((key) => !featured.includes(name(key)))
+      .map((key) => providerOfferingLabel(key)!.line);
+    const headings = [...expanded.querySelectorAll('p')].map((heading) => heading.textContent);
+    expect(new Set(lines).size).toBeGreaterThan(1);
+    expect([...headings].sort()).toEqual([...new Set(lines)].sort());
+    for (const heading of expanded.querySelectorAll('p')) {
+      const rows = [...heading.parentElement!.querySelectorAll('button')];
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        const key = familyA.find(
+          (candidate) => name(candidate) === row.getAttribute('aria-label'),
+        )!;
+        expect(providerOfferingLabel(key)!.line).toBe(heading.textContent);
+      }
+    }
   });
 
   it('labels a dated snapshot by its model name, never by the raw provider id', () => {

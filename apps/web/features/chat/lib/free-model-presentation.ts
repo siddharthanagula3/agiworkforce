@@ -50,14 +50,27 @@ function compareWithinFamily(left: FreeModelEntry, right: FreeModelEntry): numbe
   );
 }
 
-function byFamily(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
-  const families = new Map<string, FreeModelEntry[]>();
+function groupBy(
+  entries: readonly FreeModelEntry[],
+  keyOf: (entry: FreeModelEntry) => string,
+): FreeModelEntry[][] {
+  const groups = new Map<string, FreeModelEntry[]>();
   for (const entry of entries) {
-    const family = families.get(entry.label.family);
-    if (family) family.push(entry);
-    else families.set(entry.label.family, [entry]);
+    const group = groups.get(keyOf(entry));
+    if (group) group.push(entry);
+    else groups.set(keyOf(entry), [entry]);
   }
-  return [...families.values()].map((family) => family.sort(compareWithinFamily));
+  return [...groups.values()];
+}
+
+function byFamily(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
+  return groupBy(entries, (entry) => entry.label.family).map((family) =>
+    family.sort(compareWithinFamily),
+  );
+}
+
+function byLine(family: readonly FreeModelEntry[]): FreeModelEntry[] {
+  return groupBy(family, (entry) => entry.label.line).flat();
 }
 
 function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeModelPool {
@@ -70,8 +83,10 @@ function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeMo
   return {
     issuer,
     featured: families.map((family) => family[0]!),
-    more: families.flatMap((family) => family.slice(1)),
-    unavailable: byFamily(entries.filter((entry) => entry.model.status !== 'ready')).flat(),
+    more: families.flatMap((family) => byLine(family.slice(1))),
+    unavailable: byFamily(entries.filter((entry) => entry.model.status !== 'ready')).flatMap(
+      byLine,
+    ),
     pause: null,
   };
 }

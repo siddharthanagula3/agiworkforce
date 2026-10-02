@@ -3,7 +3,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
-import { getProviderOffering, providerOfferingFamilyName } from '@agiworkforce/types';
+import { getProviderOffering } from '@agiworkforce/types';
 import {
   FREE_QUOTA_CATEGORIES,
   FREE_QUOTA_STATUS_LABELS,
@@ -25,11 +25,11 @@ const GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
 
-function familyRuns(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
+function lineRuns(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
   const runs: FreeModelEntry[][] = [];
   for (const entry of entries) {
     const run = runs[runs.length - 1];
-    if (run?.[0]?.label.family === entry.label.family) run.push(entry);
+    if (run?.[0]?.label.line === entry.label.line) run.push(entry);
     else runs.push([entry]);
   }
   return runs;
@@ -358,12 +358,10 @@ export function FreeQuotaModelSection({
                     />
                   </div>
                   {more.flatMap((group) =>
-                    familyRuns(group.entries).map((family) => (
-                      <div key={`${group.issuer}:${family[0]!.label.family}`}>
-                        <p className={SUBHEADING_CLASS}>
-                          {providerOfferingFamilyName(family[0]!.label.family)}
-                        </p>
-                        {family.map(renderEntry)}
+                    lineRuns(group.entries).map((line) => (
+                      <div key={`${group.issuer}:${line[0]!.label.line}`}>
+                        <p className={SUBHEADING_CLASS}>{line[0]!.label.line}</p>
+                        {line.map(renderEntry)}
                       </div>
                     )),
                   )}
