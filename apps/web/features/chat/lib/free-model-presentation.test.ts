@@ -5,7 +5,7 @@ import type {
   FreeQuotaModel,
   FreeQuotaStatus,
 } from '@/features/models/lib/free-quota-types';
-import { presentFreeModels } from './free-model-presentation';
+import { findFreeModels, presentFreeModels } from './free-model-presentation';
 
 const ISSUER = 'Fixture Cloud';
 
@@ -170,6 +170,40 @@ describe('presentFreeModels', () => {
     ]);
     expect(keysOf(listed)).toEqual([familyA![0]]);
     expect(view.pinned).toBeNull();
+  });
+
+  it('finds every listed model a search matches, each family led by its featured model', () => {
+    const view = presentFreeModels(
+      [
+        catalogue([
+          ...familyA!.map((key) => model(key)),
+          ...familyB!.map((key) => model(key, 'unavailable')),
+        ]),
+      ],
+      { category: null, selectedId: 'auto' },
+    );
+    const [pool] = view.pools;
+    const family = pool!.featured[0]!.label.family;
+    const [found] = findFreeModels(view.pools, family);
+
+    expect(found!.issuer).toBe(ISSUER);
+    expect(found!.entries[0]).toBe(pool!.featured[0]);
+    expect(keysOf(found!.entries.filter((entry) => entry.label.family === family))).toEqual(
+      keysOf([pool!.featured[0]!, ...pool!.more.filter((entry) => entry.label.family === family)]),
+    );
+    const firstUnavailable = found!.entries.findIndex((entry) => entry.model.status !== 'ready');
+    if (firstUnavailable >= 0) {
+      for (const entry of found!.entries.slice(firstUnavailable)) {
+        expect(entry.model.status).not.toBe('ready');
+      }
+    }
+    expect(findFreeModels(view.pools, 'no such free model')).toEqual([]);
+
+    const paused = presentFreeModels(
+      [catalogue(familyA!.map((key) => model(key, 'unavailable')))],
+      { category: null, selectedId: 'auto' },
+    );
+    expect(findFreeModels(paused.pools, family)).toEqual([]);
   });
 
   it('keeps each issuer in its own pool', () => {

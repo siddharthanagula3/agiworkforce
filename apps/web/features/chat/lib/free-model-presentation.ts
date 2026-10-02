@@ -34,6 +34,11 @@ export interface FreeModelPresentation {
   pools: FreeModelPool[];
 }
 
+export interface FreeModelMatches {
+  issuer: string;
+  entries: FreeModelEntry[];
+}
+
 function compareGeneration(left: readonly number[], right: readonly number[]): number {
   for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
     const difference = (right[index] ?? -1) - (left[index] ?? -1);
@@ -139,4 +144,31 @@ export function presentFreeModels(
       unavailable: pool.unavailable.filter((entry) => entry !== pinned),
     })),
   };
+}
+
+export function matchesFreeModelQuery(
+  needle: string,
+  ...texts: ReadonlyArray<string | null | undefined>
+): boolean {
+  return texts.some((text) => text?.toLowerCase().includes(needle) ?? false);
+}
+
+export function findFreeModels(
+  pools: readonly FreeModelPool[],
+  needle: string,
+): FreeModelMatches[] {
+  return pools
+    .map((pool) => ({
+      issuer: pool.issuer,
+      entries: [
+        ...pool.featured.flatMap((head) => [
+          head,
+          ...pool.more.filter((entry) => entry.label.family === head.label.family),
+        ]),
+        ...pool.unavailable,
+      ].filter((entry) =>
+        matchesFreeModelQuery(needle, entry.label.displayName, entry.model.providerModelId),
+      ),
+    }))
+    .filter((group) => group.entries.length > 0);
 }

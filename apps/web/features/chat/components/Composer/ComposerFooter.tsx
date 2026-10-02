@@ -1430,14 +1430,19 @@ export function ComposerFooter({
                           <FreeQuotaModelSection
                             sources={freeModelSources}
                             selectedId={selectedModelId}
-                            fallbackModelName={freeDefaultModel?.name ?? null}
+                            fallback={
+                              freeDefaultModel
+                                ? {
+                                    name: freeDefaultModel.name,
+                                    row: renderModelRow(freeDefaultModel),
+                                  }
+                                : null
+                            }
                             onSelect={(id) => {
                               const model = findSelectableModel(id);
                               if (model && !modelChangePending) handleSelectModel(model);
                             }}
-                          >
-                            {freeDefaultModel ? renderModelRow(freeDefaultModel) : null}
-                          </FreeQuotaModelSection>
+                          />
 
                           {!freePlan && shortList.auto && (
                             <AutoRow

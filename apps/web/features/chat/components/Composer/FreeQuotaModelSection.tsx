@@ -17,8 +17,11 @@ import type {
   FreeModelSources,
 } from '@features/chat/hooks/use-free-model-sources';
 import {
+  findFreeModels,
+  matchesFreeModelQuery,
   presentFreeModels,
   type FreeModelEntry,
+  type FreeModelMatches,
   type FreeModelPool,
 } from '@features/chat/lib/free-model-presentation';
 import {
@@ -47,6 +50,7 @@ const CALENDAR_DAY: Intl.DateTimeFormatOptions = {
 };
 
 type PendingAvailability = 'loading' | 'error' | 'unlisted';
+type RowScope = 'list' | 'search';
 
 const PENDING_REASONS: Record<PendingAvailability, string> = {
   loading: 'Checking availability…',
@@ -306,19 +310,17 @@ export function FreeQuotaModelSection({
   sources,
   selectedId,
   onSelect,
-  fallbackModelName,
-  children,
+  fallback,
 }: {
   sources: FreeModelSources;
   selectedId: string;
   onSelect: (id: string) => void;
-  fallbackModelName: string | null;
-  children?: ReactNode;
+  fallback: { name: string; row: ReactNode } | null;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const [unavailableOpen, setUnavailableOpen] = useState(false);
-  const [explainedId, setExplainedId] = useState<string | null>(null);
+  const [explainedRow, setExplainedRow] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const moreId = useId();
@@ -326,8 +328,9 @@ export function FreeQuotaModelSection({
   const featuredNoteId = useId();
   const moreNoteId = useId();
   const { quota, experiential } = sources;
-  if (!children && quota.status === 'hidden' && experiential.status === 'hidden') return null;
+  if (!fallback && quota.status === 'hidden' && experiential.status === 'hidden') return null;
 
+  const fallbackModelName = fallback?.name ?? null;
   const catalogues = [quota.catalogue, experiential.catalogue].filter(
     (catalogue) => catalogue !== null,
   );
@@ -337,17 +340,8 @@ export function FreeQuotaModelSection({
   const settled = !loading && quota.status !== 'error' && experiential.status !== 'error';
   const listedPools = view.pools.filter((pool) => !pool.pause);
   const pausedPools = view.pools.filter((pool) => pool.pause);
-  const needle = query.trim().toLowerCase();
   const more = listedPools
-    .map((pool) => ({
-      issuer: pool.issuer,
-      entries: pool.more.filter(
-        (entry) =>
-          !needle ||
-          entry.label.displayName.toLowerCase().includes(needle) ||
-          (entry.model.providerModelId ?? '').toLowerCase().includes(needle),
-      ),
-    }))
+    .map((pool) => ({ issuer: pool.issuer, entries: pool.more }))
     .filter((group) => group.entries.length > 0);
   const moreCount = listedPools.reduce((total, pool) => total + pool.more.length, 0);
   const unavailable = listedPools.filter((pool) => pool.unavailable.length > 0);
@@ -368,9 +362,39 @@ export function FreeQuotaModelSection({
           fallbackModelName: selection.category === 'chat' ? fallbackModelName : null,
         }
       : null;
+  const needle = query.trim().toLowerCase();
+  const poolMatches = needle ? findFreeModels(listedPools, needle) : [];
+  const fallbackMatch = Boolean(needle) && matchesFreeModelQuery(needle, fallbackModelName);
+  const pendingMatch =
+    Boolean(needle) &&
+    pending !== null &&
+    matchesFreeModelQuery(
+      needle,
+      pending.label.displayName,
+      getProviderOffering(selectedId)?.providerModelId,
+    );
+  const pinnedMatch =
+    needle &&
+    view.pinned &&
+    matchesFreeModelQuery(needle, view.pinned.label.displayName, view.pinned.model.providerModelId)
+      ? view.pinned
+      : null;
+  const noMatch = !fallbackMatch && !pendingMatch && !pinnedMatch && poolMatches.length === 0;
 
-  const renderEntry = (entry: FreeModelEntry, noteId: string | null) =>
-    entry.model.status === 'ready' ? (
+  const renderPending = (scope: RowScope) =>
+    pending && (
+      <UnavailableRow
+        label={pending.label}
+        reason={withVersion(pending.label, PENDING_REASONS[pending.availability])}
+        selected
+        explanation={explainedRow === `${scope}:${selectedId}` ? pendingExplanation(pending) : null}
+        onExplain={() => setExplainedRow(`${scope}:${selectedId}`)}
+      />
+    );
+
+  const renderEntry = (entry: FreeModelEntry, scope: RowScope, noteId: string | null) => {
+    const row = `${scope}:${entry.model.key}`;
+    return entry.model.status === 'ready' ? (
       <ReadyRow
         key={entry.model.key}
         entry={entry}
@@ -386,16 +410,34 @@ export function FreeQuotaModelSection({
         reason={unavailableReason(entry)}
         selected={entry.model.key === selectedId}
         explanation={
-          explainedId === entry.model.key
+          explainedRow === row
             ? unavailableExplanation(
                 entry,
                 entry.model.category === 'chat' ? fallbackModelName : null,
               )
             : null
         }
-        onExplain={() => setExplainedId(entry.model.key)}
+        onExplain={() => setExplainedRow(row)}
       />
     );
+  };
+
+  const renderLines = (group: FreeModelMatches, scope: RowScope, label: string) => {
+    const noteId = group.issuer === promotionalIssuer ? moreNoteId : null;
+    return (
+      <div key={group.issuer} role="group" aria-label={label}>
+        {(groupedByIssuer || noteId !== null) && (
+          <PoolHeading issuer={group.issuer} noteId={noteId} />
+        )}
+        {lineRuns(group.entries).map((line) => (
+          <div key={line[0]!.model.key}>
+            <p className={SUBHEADING_CLASS}>{line[0]!.label.line}</p>
+            {line.map((entry) => renderEntry(entry, scope, noteId))}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="border-b border-[var(--chat-border)]">
@@ -410,7 +452,7 @@ export function FreeQuotaModelSection({
       </button>
       {expanded && (
         <div className="pb-2">
-          {children}
+          {fallback?.row}
           {view.categories.length > 1 && (
             <div className="px-3 py-1">
               <select
@@ -428,22 +470,14 @@ export function FreeQuotaModelSection({
               </select>
             </div>
           )}
-          {pending && (
-            <UnavailableRow
-              label={pending.label}
-              reason={withVersion(pending.label, PENDING_REASONS[pending.availability])}
-              selected
-              explanation={explainedId === selectedId ? pendingExplanation(pending) : null}
-              onExplain={() => setExplainedId(selectedId)}
-            />
-          )}
-          {view.pinned && renderEntry(view.pinned, pinnedNoteId)}
+          {renderPending('list')}
+          {view.pinned && renderEntry(view.pinned, 'list', pinnedNoteId)}
           {listedPools.map((pool) => (
             <div key={pool.issuer} role="group" aria-label={`${pool.issuer} free models`}>
               {pool.issuer === promotionalIssuer && (
                 <PoolHeading issuer={pool.issuer} noteId={featuredNoteId} />
               )}
-              {pool.featured.map((entry) => renderEntry(entry, featuredNoteId))}
+              {pool.featured.map((entry) => renderEntry(entry, 'list', featuredNoteId))}
             </div>
           ))}
           {moreCount > 0 && (
@@ -468,27 +502,27 @@ export function FreeQuotaModelSection({
                       className="h-9 w-full rounded-md border border-[var(--chat-border)] bg-transparent px-2 text-sm text-foreground pointer-coarse:min-h-11"
                     />
                   </div>
-                  {more.map((group) => (
-                    <div
-                      key={group.issuer}
-                      role="group"
-                      aria-label={`More ${group.issuer} free models`}
-                    >
-                      {(groupedByIssuer || group.issuer === promotionalIssuer) && (
-                        <PoolHeading
-                          issuer={group.issuer}
-                          noteId={group.issuer === promotionalIssuer ? moreNoteId : null}
-                        />
+                  {needle ? (
+                    <>
+                      {fallbackMatch && fallback?.row}
+                      {pendingMatch && renderPending('search')}
+                      {pinnedMatch && renderEntry(pinnedMatch, 'search', pinnedNoteId)}
+                      {poolMatches.map((group) =>
+                        renderLines(group, 'search', `Matching ${group.issuer} free models`),
                       )}
-                      {lineRuns(group.entries).map((line) => (
-                        <div key={line[0]!.model.key}>
-                          <p className={SUBHEADING_CLASS}>{line[0]!.label.line}</p>
-                          {line.map((entry) => renderEntry(entry, moreNoteId))}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                  {more.length === 0 && <p className={NOTE_CLASS}>No free models match.</p>}
+                      {noMatch && (
+                        <p className={NOTE_CLASS}>
+                          {view.category && view.categories.length > 1
+                            ? `No matches in ${FREE_QUOTA_CATEGORIES[view.category]}.`
+                            : 'No free models match.'}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    more.map((group) =>
+                      renderLines(group, 'list', `More ${group.issuer} free models`),
+                    )
+                  )}
                 </div>
               )}
             </>
@@ -507,7 +541,7 @@ export function FreeQuotaModelSection({
                   {unavailable.map((pool) => (
                     <div key={pool.issuer}>
                       {groupedByIssuer && <PoolHeading issuer={pool.issuer} noteId={null} />}
-                      {pool.unavailable.map((entry) => renderEntry(entry, null))}
+                      {pool.unavailable.map((entry) => renderEntry(entry, 'list', null))}
                     </div>
                   ))}
                 </div>

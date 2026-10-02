@@ -117,12 +117,15 @@ function renderSection(
       sources={value}
       selectedId={options.selectedId ?? 'auto'}
       onSelect={onSelect}
-      fallbackModelName={FALLBACK}
-    >
-      <button type="button" data-picker-row="">
-        {FALLBACK}
-      </button>
-    </FreeQuotaModelSection>,
+      fallback={{
+        name: FALLBACK,
+        row: (
+          <button type="button" data-picker-row="">
+            {FALLBACK}
+          </button>
+        ),
+      }}
+    />,
   );
   return onSelect;
 }
@@ -520,15 +523,131 @@ describe('Free section in the composer', () => {
       target: { value: found },
     });
 
-    const labs = within(more).getByRole('group', { name: 'More Experiential Labs free models' });
+    const labs = within(more).getByRole('group', {
+      name: 'Matching Experiential Labs free models',
+    });
     expect(within(labs).getByRole('button', { name: found })).toHaveAccessibleDescription(
       PROMOTION_DESCRIPTION,
     );
     expect(within(labs).getByText(DATA_USE_NOTE)).toBeInTheDocument();
     expect(within(labs).getByRole('link', { name: 'Data use' })).toBeInTheDocument();
     expect(
-      within(more).queryByRole('group', { name: `More ${ISSUER} free models` }),
+      within(more).queryByRole('group', { name: `Matching ${ISSUER} free models` }),
     ).not.toBeInTheDocument();
+  });
+
+  it('searches every free model the section lists, not only those behind More models', () => {
+    const ended = familyB[0]!;
+    renderSection(
+      sources(
+        source('ready', catalogue([...familyA.map((key) => model(key)), model(ended, 'expired')])),
+        source(
+          'ready',
+          catalogue(
+            experientialKeys.map((key) => model(key)),
+            'Experiential Labs',
+          ),
+        ),
+      ),
+    );
+    const featured = within(screen.getByRole('group', { name: `${ISSUER} free models` }))
+      .getAllByRole('button')[0]!
+      .getAttribute('aria-label')!;
+    const labsFeatured = within(
+      screen.getByRole('group', { name: 'Experiential Labs free models' }),
+    )
+      .getAllByRole('button')[0]!
+      .getAttribute('aria-label')!;
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const more = screen.getByRole('group', { name: 'More free models' });
+    const search = within(more).getByRole('searchbox', { name: 'Search free models' });
+
+    fireEvent.change(search, { target: { value: featured } });
+    const cloud = within(more).getByRole('group', { name: `Matching ${ISSUER} free models` });
+    expect(within(cloud).getByRole('button', { name: featured })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(within(more).queryByText('No free models match.')).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: labsFeatured } });
+    const labs = within(more).getByRole('group', {
+      name: 'Matching Experiential Labs free models',
+    });
+    expect(within(labs).getByText(DATA_USE_NOTE)).toBeInTheDocument();
+    expect(within(labs).getByRole('button', { name: labsFeatured })).toHaveAccessibleDescription(
+      PROMOTION_DESCRIPTION,
+    );
+
+    fireEvent.change(search, { target: { value: name(ended) } });
+    const endedRow = within(more).getByRole('button', { name: name(ended) });
+    expect(endedRow).toHaveAttribute('aria-disabled', 'true');
+    expect(endedRow).toHaveAccessibleDescription(
+      new RegExp(`Free offer ended ${literal(calendarDay('2026-08-22'))}$`),
+    );
+
+    fireEvent.change(search, { target: { value: FALLBACK } });
+    expect(within(more).getByRole('button', { name: FALLBACK })).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: 'no such free model' } });
+    expect(within(more).queryAllByRole('button')).toHaveLength(0);
+    expect(within(more).getByText('No free models match.')).toBeInTheDocument();
+  });
+
+  it('finds the selected free model in search while it is pinned above the list', () => {
+    const withTail = () => sources(source('ready', catalogue(familyA.map((key) => model(key)))));
+    renderSection(withTail());
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const tail = within(screen.getByRole('group', { name: 'More free models' }))
+      .getAllByRole('button')[0]!
+      .getAttribute('aria-label')!;
+    cleanup();
+
+    renderSection(withTail(), { selectedId: familyA.find((key) => name(key) === tail)! });
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const more = screen.getByRole('group', { name: 'More free models' });
+    fireEvent.change(within(more).getByRole('searchbox', { name: 'Search free models' }), {
+      target: { value: tail },
+    });
+
+    expect(within(more).getByRole('button', { name: tail })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('finds a selected free model its catalogue no longer lists and explains it once', () => {
+    const unlisted = familyB[0]!;
+    renderSection(sources(source('ready', catalogue(familyA.map((key) => model(key))))), {
+      selectedId: unlisted,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const more = screen.getByRole('group', { name: 'More free models' });
+    fireEvent.change(within(more).getByRole('searchbox', { name: 'Search free models' }), {
+      target: { value: name(unlisted) },
+    });
+
+    const found = within(more).getByRole('button', { name: name(unlisted) });
+    expect(found).toHaveAttribute('aria-pressed', 'true');
+    expect(found).toHaveAccessibleDescription(/Not available right now$/);
+    fireEvent.click(found);
+
+    const explanation = `${name(unlisted)} is not available right now. Choose ${FALLBACK} or another free model.`;
+    expect(screen.getAllByText(explanation)).toHaveLength(1);
+    expect(within(more).getByText(explanation)).toHaveAttribute('role', 'status');
+  });
+
+  it('names the category a search found nothing in when free models span several', () => {
+    renderSection(
+      sources(source('ready', catalogue([...familyA.map((key) => model(key)), model(imageKey)]))),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const more = screen.getByRole('group', { name: 'More free models' });
+    fireEvent.change(within(more).getByRole('searchbox', { name: 'Search free models' }), {
+      target: { value: name(imageKey) },
+    });
+
+    expect(within(more).queryAllByRole('button')).toHaveLength(0);
+    expect(within(more).getByText('No matches in Text chat.')).toBeInTheDocument();
   });
 
   it('gives a thumb a 44px target on every control between the model rows', () => {
@@ -562,7 +681,7 @@ describe('Free section in the composer', () => {
         sources={sources(source('ready', catalogue([model(familyA[0]!)])))}
         selectedId="auto"
         onSelect={vi.fn()}
-        fallbackModelName={null}
+        fallback={null}
       />,
     );
     expect(screen.queryByRole('combobox', { name: 'Free model category' })).not.toBeInTheDocument();
@@ -665,7 +784,7 @@ describe('Free section in the composer', () => {
         sources={sources(source('hidden'))}
         selectedId="auto"
         onSelect={vi.fn()}
-        fallbackModelName={null}
+        fallback={null}
       />,
     );
     expect(container).toBeEmptyDOMElement();
