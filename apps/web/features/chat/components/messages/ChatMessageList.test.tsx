@@ -895,15 +895,21 @@ describe('ChatMessageList auto-scroll', () => {
 
     render(<ChatMessageList conversationId="long-thread" messages={messages} />);
 
+    const scrollContainer = screen.getByRole('log');
+    Object.defineProperty(scrollContainer, 'scrollHeight', {
+      value: 122 * 160,
+      configurable: true,
+    });
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 640, configurable: true });
+
     await waitFor(() => {
       expect(screen.getByTestId('bubble-long-119')).toBeInTheDocument();
+      expect(screen.queryByTestId('bubble-long-0')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /show earlier messages/i }),
+      ).not.toBeInTheDocument();
+      expect(document.querySelectorAll('[data-testid^="bubble-long-"]').length).toBeLessThan(30);
     });
-
-    expect(screen.queryByTestId('bubble-long-0')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /show earlier messages/i }),
-    ).not.toBeInTheDocument();
-    expect(document.querySelectorAll('[data-testid^="bubble-long-"]').length).toBeLessThan(30);
   });
 
   it('shows scroll-to-bottom button when user scrolls up', async () => {
