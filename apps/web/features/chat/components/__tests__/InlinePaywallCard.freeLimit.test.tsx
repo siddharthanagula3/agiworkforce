@@ -45,7 +45,7 @@ describe('InlinePaywallCard · free limit variant', () => {
     expect(props.freeLimit.onSwitchModel).toHaveBeenCalledWith('fixture-alternative');
   });
 
-  it('keeps the upgrade path and the way to leave it for later', () => {
+  it('keeps the upgrade path and a way to put the card aside', () => {
     const props = makeProps();
     render(<InlinePaywallCard {...props} />);
 
@@ -54,10 +54,29 @@ describe('InlinePaywallCard · free limit variant', () => {
         name: new RegExp(`^Upgrade to ${getBillingPlanPricing('basic').label}`),
       }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Try later' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
 
     expect(props.onUpgrade).toHaveBeenCalledOnce();
     expect(props.onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['an allowance that does not renew', { reason: 'allowance_used' as const }, '', 'Not now'],
+    ['an offer that has ended', { reason: 'allowance_ended' as const }, '', 'Not now'],
+    ['a shared pool that refills', { reason: 'shared_pool_used' as const }, '', 'Try later'],
+    [
+      'an allowance with a known reset',
+      { reason: 'allowance_used' as const },
+      'Resets in 3 hr',
+      'Try later',
+    ],
+  ])('offers to try later only when waiting helps: %s', (_label, freeLimit, reset, dismiss) => {
+    render(<InlinePaywallCard {...makeProps(freeLimit, reset)} />);
+
+    expect(screen.getByRole('button', { name: dismiss })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: dismiss === 'Not now' ? 'Try later' : 'Not now' }),
+    ).toBeNull();
   });
 
   it('states when the limit resets only when a time is known', () => {
@@ -72,7 +91,7 @@ describe('InlinePaywallCard · free limit variant', () => {
     render(<InlinePaywallCard {...makeProps({ alternativeModel: undefined })} />);
 
     expect(screen.queryByRole('button', { name: /^Switch to/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Try later' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
   });
 
   it('says an ended free offer has ended rather than been used up', () => {

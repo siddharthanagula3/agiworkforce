@@ -283,6 +283,7 @@ const FREE_LIMIT_HEADLINE: Readonly<Record<FreeLimitReason, (modelName: string) 
 
 interface FreeLimitActionsProps {
   freeLimit: FreeLimitRecovery;
+  resetKnown: boolean;
   showUpgradeCta: boolean;
   requiredTier: RequiredTier;
   onUpgrade: () => void;
@@ -291,12 +292,14 @@ interface FreeLimitActionsProps {
 
 const FreeLimitActions = memo(function FreeLimitActions({
   freeLimit,
+  resetKnown,
   showUpgradeCta,
   requiredTier,
   onUpgrade,
   onDismiss,
 }: FreeLimitActionsProps) {
   const { alternativeModel, onSwitchModel } = freeLimit;
+  const waitingHelps = resetKnown || freeLimit.reason === 'shared_pool_used';
   return (
     <div className="flex flex-wrap gap-2">
       {alternativeModel && onSwitchModel ? (
@@ -317,7 +320,7 @@ const FreeLimitActions = memo(function FreeLimitActions({
       ) : null}
 
       <Button variant="ghost" size="sm" onClick={onDismiss}>
-        Try later
+        {waitingHelps ? 'Try later' : 'Not now'}
       </Button>
     </div>
   );
@@ -534,6 +537,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
         {freeLimit ? (
           <FreeLimitActions
             freeLimit={freeLimit}
+            resetKnown={resetLabel !== EMPTY_REASON}
             showUpgradeCta={showUpgradeCta}
             requiredTier={requiredTier}
             onUpgrade={onUpgrade}
