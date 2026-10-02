@@ -62,7 +62,8 @@ vi.mock('react-i18next', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
   getCsrfToken: async () => 'fixture-csrf-token',
 }));
@@ -75,9 +76,10 @@ vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, dismiss: vi.fn() } }));
 
-vi.mock('@/lib/hooks/useConversations', async () => {
+vi.mock('@/lib/hooks/useConversations', async (importOriginal) => {
   const { useChatStore } = await import('@shared/stores/web-chat-store');
   return {
+    ...(await importOriginal()),
     useConversations: () => ({
       conversations: useChatStore((state) => state.conversations),
       isLoading: false,
@@ -93,7 +95,8 @@ vi.mock('@/lib/hooks/useConversations', async () => {
   };
 });
 
-vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
+vi.mock('@/lib/hooks/useManagedUsageSummary', async (importOriginal) => ({
+  ...(await importOriginal()),
   getWorstUsagePercent: () => 0,
   readManagedUsageBuckets: () => [],
   useManagedUsageSummary: () => ({ usage: null }),
@@ -112,20 +115,23 @@ vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
   };
 });
 
-vi.mock('../../components/Composer/ChatComposerNew', () => ({
+vi.mock('../../components/Composer/ChatComposerNew', async (importOriginal) => ({
+  ...(await importOriginal()),
   ChatComposerNew: (props: { onSend: ComposerOnSend }) => {
     mocks.composerOnSend = props.onSend;
     return null;
   },
   SEND_GUARD_BLOCKED: 'guard-blocked',
 }));
-vi.mock('../../components/messages/ChatMessageList', () => ({
+vi.mock('../../components/messages/ChatMessageList', async (importOriginal) => ({
+  ...(await importOriginal()),
   ChatMessageList: () => null,
 }));
 vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
   GreetingBanner: () => null,
 }));
-vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
+  ...(await importOriginal()),
   useChatStreamRuntime: () => ({
     sendMessage: mocks.sendMessage,
     stopGeneration: vi.fn(),
@@ -153,12 +159,14 @@ vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
   useKeyboardShortcuts: vi.fn(),
 }));
 
-vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+vi.mock('@/features/settings/components/SettingsModalProvider', async (importOriginal) => ({
+  ...(await importOriginal()),
   useSettingsModal: () => ({ openSettings: vi.fn() }),
 }));
-vi.mock('@/features/connectors/stores/tool-permissions-store', () => {
+vi.mock('@/features/connectors/stores/tool-permissions-store', async (importOriginal) => {
   const state = { hydrateFromServer: vi.fn() };
   return {
+    ...(await importOriginal()),
     useToolPermissionsStore: Object.assign(
       (selector: (value: typeof state) => unknown) => selector(state),
       { getState: () => state },
@@ -166,7 +174,7 @@ vi.mock('@/features/connectors/stores/tool-permissions-store', () => {
   };
 });
 
-vi.mock('@features/projects', () => {
+vi.mock('@features/projects', async (importOriginal) => {
   const projectState = {
     projects: [],
     activeProjectId: null,
@@ -176,6 +184,7 @@ vi.mock('@features/projects', () => {
     setProjects: vi.fn(),
   };
   return {
+    ...(await importOriginal()),
     useManagedCloudProjects: () => ({ projects: [], isReady: true, retry: vi.fn() }),
     useProjectStore: (selector: (value: typeof projectState) => unknown) => selector(projectState),
     ProjectSettingsDialog: () => null,
@@ -215,18 +224,25 @@ vi.mock('../../components/dialogs/UpgradePlanDialog', () => ({
 vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
   UpgradeConfirmDialog: () => null,
 }));
-vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
+vi.mock('@/features/time-focus/TimeFocusReminder', async (importOriginal) => ({
+  ...(await importOriginal()),
+  TimeFocusReminder: () => null,
+}));
 vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
   ...(await importOriginal<ScanModule5>()),
   ConversationTitleMenu: () => null,
 }));
-vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
+vi.mock('../../components/approvals/ApprovalInbox', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ApprovalInbox: () => null,
+}));
 vi.mock('../../components/work-session/WorkSessionPanel', () => ({
   hasWorkSession: () => false,
   WorkSessionPanel: () => null,
   WorkSessionToggleButton: () => null,
 }));
-vi.mock('../../components/artifacts/ArtifactsPanel', () => ({
+vi.mock('../../components/artifacts/ArtifactsPanel', async (importOriginal) => ({
+  ...(await importOriginal()),
   ArtifactsPanel: () => null,
   ArtifactsToggleButton: () => null,
 }));
