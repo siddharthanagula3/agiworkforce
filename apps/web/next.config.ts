@@ -31,6 +31,19 @@ const TRACED_RUNTIME_FILES = [
 
 const TRACED_STANDALONE_FILES = ['../../node_modules/.pnpm/pg@*/node_modules/pg/**'];
 
+const UNTRACED_TEST_FILES = [
+  './**/__tests__/**',
+  './**/__fixtures__/**',
+  './**/__mocks__/**',
+  './**/*.test.*',
+  './**/*.spec.*',
+  './e2e/**',
+  './test/**',
+  './tests/**',
+  './vitest.config.ts',
+  './playwright.config.ts',
+];
+
 const botProtectionEnabled =
   resolveBotProtectionMode(process.env, isPlatformHosted(process.env)) ===
   BOT_PROTECTION_MODES.platform;
@@ -56,6 +69,9 @@ const nextConfig: NextConfig = {
     [TRACED_ROUTE_GLOB]: standaloneEnabled
       ? [...TRACED_RUNTIME_FILES, ...TRACED_STANDALONE_FILES]
       : TRACED_RUNTIME_FILES,
+  },
+  outputFileTracingExcludes: {
+    [TRACED_ROUTE_GLOB]: UNTRACED_TEST_FILES,
   },
   typescript: {
     ignoreBuildErrors: false,

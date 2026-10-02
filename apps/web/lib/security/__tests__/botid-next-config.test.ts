@@ -1,7 +1,8 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD, PHASE_PRODUCTION_SERVER } from 'next/constants';
@@ -14,6 +15,24 @@ const BOTID_PROXY_SOURCE =
   '/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/:path*';
 const API_HOST = 'api.agiworkforce.com';
 const STANDALONE_ENV_VAR = 'AGI_WEB_STANDALONE';
+const APP_DIR = path.resolve(__dirname, '../../..');
+const WHOLE_APP_TRACING_ROUTE = '/api/admin/audit-coverage';
+const PARITY_FIXTURE = 'lib/security/__fixtures__/secrets-audit-parity.json';
+const UNWALKED_DIRECTORIES = new Set(['node_modules', '.next']);
+const TEST_ONLY_PATTERNS = [
+  /(^|\/)(__tests__|__fixtures__|__mocks__)\//,
+  /\.(test|spec)\.[^/]+$/,
+  /^(e2e|test|tests)\//,
+  /^(vitest|playwright)\.config\.ts$/,
+];
+const NEXT_GLOB_OPTIONS = { dot: true, contains: true };
+
+type GlobMatcher = (candidate: string) => boolean;
+
+const picomatch = createRequire(import.meta.url)('next/dist/compiled/picomatch') as (
+  globs: string[],
+  options: typeof NEXT_GLOB_OPTIONS,
+) => GlobMatcher;
 
 type NextConfigFn = (
   phase: string,
@@ -44,6 +63,29 @@ async function loadRewrites(): Promise<RewriteRule[]> {
     ...(rewrites.afterFiles ?? []),
     ...(rewrites.fallback ?? []),
   ];
+}
+
+function appFiles(directory: string = APP_DIR, found: string[] = []): string[] {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (UNWALKED_DIRECTORIES.has(entry.name)) continue;
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) appFiles(full, found);
+    else if (entry.isFile()) found.push(path.relative(APP_DIR, full).split(path.sep).join('/'));
+  }
+  return found;
+}
+
+function isTestOnly(file: string): boolean {
+  return TEST_ONLY_PATTERNS.some((pattern) => pattern.test(file));
+}
+
+async function tracingExcludesFor(route: string): Promise<GlobMatcher> {
+  const config = await loadNextConfig();
+  const globs = Object.entries(config.outputFileTracingExcludes ?? {})
+    .filter(([routeGlob]) => picomatch([routeGlob], NEXT_GLOB_OPTIONS)(route))
+    .flatMap(([, files]) => files.map((file) => path.join(APP_DIR, file)));
+  const isExcluded = picomatch(globs, NEXT_GLOB_OPTIONS);
+  return (file) => isExcluded(path.join(APP_DIR, file));
 }
 
 afterEach(() => {
@@ -128,5 +170,23 @@ describe('standalone output in next.config', () => {
     const config = await loadNextConfig();
 
     expect(config.output).toBe('standalone');
+  }, 60_000);
+
+  it('ships no test-only file, even from the route whose sweep traces the whole app', async () => {
+    vi.stubEnv(STANDALONE_ENV_VAR, '1');
+    const isExcluded = await tracingExcludesFor(WHOLE_APP_TRACING_ROUTE);
+    const testOnly = appFiles().filter(isTestOnly);
+
+    expect(testOnly).toContain(PARITY_FIXTURE);
+    expect(testOnly.filter((file) => !isExcluded(file))).toEqual([]);
+  }, 60_000);
+
+  it('excludes no runtime file from that trace', async () => {
+    vi.stubEnv(STANDALONE_ENV_VAR, '1');
+    const isExcluded = await tracingExcludesFor(WHOLE_APP_TRACING_ROUTE);
+    const runtime = appFiles().filter((file) => !isTestOnly(file));
+
+    expect(runtime).toContain('app/api/developers/webhooks/[endpointId]/test/route.ts');
+    expect(runtime.filter(isExcluded)).toEqual([]);
   }, 60_000);
 });
