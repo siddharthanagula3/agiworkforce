@@ -108,6 +108,26 @@ function compact(text) {
   return text.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+function namesInWords(summary, name) {
+  const target = compact(name);
+  const words = summary
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return (
+    target.length > 0 &&
+    words.some((_, start) => {
+      let joined = '';
+      for (const word of words.slice(start)) {
+        joined += word;
+        if (joined === target) return true;
+        if (!target.startsWith(joined)) return false;
+      }
+      return false;
+    })
+  );
+}
+
 const SUBPROCESSOR_RECORDS = [
   {
     field: 'subprocessorNames',
@@ -123,9 +143,7 @@ const SUBPROCESSOR_RECORDS = [
       [...declaredProviderIds(source).declared].map((id) => id.replace(/_anthropic$/, '')),
     display: (id) => id,
     named: (summary, id, labels) =>
-      [id, labels.get(id)]
-        .map((name) => compact(name ?? ''))
-        .some((name) => name.length > 0 && compact(summary).includes(name)),
+      [id, labels.get(id)].some((name) => namesInWords(summary, name ?? '')),
   },
 ];
 

@@ -539,6 +539,32 @@ test('counts the label the product shows for a provider as naming it', () => {
   assert.deepEqual(moved('dr_relay', 'Delta Relay now serves Managed Cloud chat.'), []);
 });
 
+test('does not count a provider id that only appears inside a longer word as naming it', () => {
+  const providers = [...PROVIDERS, 'meta'];
+  const moved = (summary) =>
+    checkSubprocessors({
+      names: LISTED,
+      providers,
+      date: '2026-10-05',
+      versions: [
+        LISTED_VERSION,
+        {
+          date: '2026-10-05',
+          digest: copyDigest(subprocessorsPage(LISTED, providers)),
+          summary,
+          subprocessorProviders: ['alpha', 'beta', 'meta'],
+        },
+      ],
+    });
+
+  assert.ok(
+    moved('Pictures now lose their metadata before they are sent.').some((failure) =>
+      failure.includes('the summary does not name meta'),
+    ),
+  );
+  assert.deepEqual(moved("Meta's open models now serve Managed Cloud chat."), []);
+});
+
 test('fails when the provider labels cannot be read', () => {
   const failures = checkSubprocessors({
     names: LISTED,
