@@ -20,6 +20,7 @@ import ProductMetricsPanel from '../components/ProductMetricsPanel';
 import RouteEconomicsPanel from '../components/RouteEconomicsPanel';
 import ServiceDashboardsPanel from '../components/ServiceDashboardsPanel';
 import FeatureFlagsPanel from '../components/FeatureFlagsPanel';
+import FreeQuotaAttestationPanel from '../components/FreeQuotaAttestationPanel';
 import ModelRolloutPanel from '../components/ModelRolloutPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
 import ServiceHealthPanel from '../components/ServiceHealthPanel';
@@ -36,6 +37,7 @@ const TABS = [
   'costs',
   'routing',
   'rollout',
+  'quota',
   'flags',
   'services',
   'dashboards',
@@ -447,6 +449,8 @@ export function OperatorDashboardPage() {
       {tab === 'routing' ? <RoutingHealthPanel /> : null}
 
       {tab === 'rollout' ? <ModelRolloutPanel /> : null}
+
+      {tab === 'quota' ? <FreeQuotaAttestationPanel /> : null}
 
       {tab === 'flags' ? <FeatureFlagsPanel /> : null}
 

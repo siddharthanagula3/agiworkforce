@@ -132,6 +132,14 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     external: true,
   },
   {
+    name: 'Free quota models',
+    href: '/operator#quota',
+    service: 'GET/POST /api/models/free-quota/attestation',
+    detail:
+      'Record the provider console check that keeps free quota models serving free users, see when it runs out, and see why any inventory model is not serving.',
+    external: true,
+  },
+  {
     name: 'Product metrics',
     href: '/operator#product',
     service: 'GET /api/admin/product-metrics',

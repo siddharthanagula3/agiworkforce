@@ -7,8 +7,10 @@ const PERCENT_FRACTION_DIGITS = 1;
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
 const MS_PER_MINUTE = MS_PER_SECOND * SECONDS_PER_MINUTE;
 const MS_PER_HOUR = MS_PER_MINUTE * MINUTES_PER_HOUR;
+const MS_PER_DAY = MS_PER_HOUR * HOURS_PER_DAY;
 const DURATION_FRACTION_DIGITS = 0;
 const UNIT_PRICE_MAX_FRACTION_DIGITS = 4;
 const TOKENS_PER_THOUSAND = 1_000;
@@ -92,9 +94,27 @@ export function formatTokenCount(value: number | null | undefined): string {
   return value.toLocaleString();
 }
 
-export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return NOT_RECORDED;
-  const at = new Date(iso);
+function formatInstant(at: Date): string {
   if (Number.isNaN(at.getTime())) return NOT_RECORDED;
   return at.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return NOT_RECORDED;
+  return formatInstant(new Date(iso));
+}
+
+export function formatEpochMs(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return NOT_RECORDED;
+  return formatInstant(new Date(ms));
+}
+
+export function formatDurationMs(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return NOT_RECORDED;
+  const days = Math.floor(ms / MS_PER_DAY);
+  const hours = Math.floor((ms % MS_PER_DAY) / MS_PER_HOUR);
+  const minutes = Math.floor((ms % MS_PER_HOUR) / MS_PER_MINUTE);
+  if (days > 0) return hours > 0 ? `${days} d ${hours} h` : `${days} d`;
+  if (hours > 0) return minutes > 0 ? `${hours} h ${minutes} min` : `${hours} h`;
+  return `${Math.max(1, minutes)} min`;
 }
