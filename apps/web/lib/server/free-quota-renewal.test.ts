@@ -317,11 +317,14 @@ describe('sending the reminders', () => {
       'free-quota-renewal',
     );
 
+    expect(mocks.identity).toHaveBeenCalledTimes(2);
+
     expect(await remindFreeQuotaRenewals(NOW + 60 * 60 * 1000)).toEqual({
       checked: true,
       reminders: [{ reason: 'console_check_expiring', outcome: 'already_sent' }],
     });
     expect(mocks.email).toHaveBeenCalledTimes(1);
+    expect(mocks.identity).toHaveBeenCalledTimes(2);
   });
 
   it('tells again, as critical, once the same check runs out', async () => {
@@ -352,6 +355,22 @@ describe('sending the reminders', () => {
     });
   });
 
+  it('reminds again for a renewal that only moved the review expiry', async () => {
+    await writeQuotaAttestation(mocks.store, attestation());
+    mocks.termsReview = review({ expiresAtMs: NOW + DAY_MS });
+    await remindFreeQuotaRenewals(NOW);
+
+    mocks.termsReview = review({ expiresAtMs: NOW + 31 * DAY_MS });
+    const later = NOW + 29 * DAY_MS;
+    await writeQuotaAttestation(mocks.store, attestation({ checkedAtMs: later - DAY_MS }));
+
+    expect(await remindFreeQuotaRenewals(later)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'terms_review_expiring', outcome: 'sent' }],
+    });
+    expect(mocks.email).toHaveBeenCalledTimes(2);
+  });
+
   it('falls back to the support mailbox when no platform admin has a verified address', async () => {
     await recordFreeQuotaSuspension(mocks.store, {
       apiKey: API_KEY,
@@ -376,6 +395,19 @@ describe('sending the reminders', () => {
     });
 
     mocks.email.mockResolvedValue({ delivered: true, providerMessageId: 'message-2' });
+    expect(await remindFreeQuotaRenewals(NOW + 60 * 60 * 1000)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_expired', outcome: 'sent' }],
+    });
+  });
+
+  it('keeps a reminder whose sending failed outright for the next run', async () => {
+    await writeQuotaAttestation(mocks.store, attestation({ checkedAtMs: NOW - VALID_MS }));
+    mocks.email.mockRejectedValue(new Error('transport failed'));
+
+    await expect(remindFreeQuotaRenewals(NOW)).rejects.toThrow('transport failed');
+
+    mocks.email.mockResolvedValue({ delivered: true, providerMessageId: 'message-3' });
     expect(await remindFreeQuotaRenewals(NOW + 60 * 60 * 1000)).toEqual({
       checked: true,
       reminders: [{ reason: 'console_check_expired', outcome: 'sent' }],

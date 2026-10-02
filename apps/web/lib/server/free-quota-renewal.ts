@@ -51,14 +51,13 @@ export interface FreeQuotaRenewalMessage {
   text: string;
 }
 
+export type FreeQuotaReminderOutcome = 'sent' | 'already_sent' | 'undelivered';
+
 export type FreeQuotaRenewalRun =
   | { checked: false; missing: Array<'shared_state' | 'credential' | 'inventory'> }
   | {
       checked: true;
-      reminders: Array<{
-        reason: FreeQuotaRenewalReason;
-        outcome: 'sent' | 'already_sent' | 'undelivered';
-      }>;
+      reminders: Array<{ reason: FreeQuotaRenewalReason; outcome: FreeQuotaReminderOutcome }>;
     };
 
 export function freeQuotaRenewalAlerts(input: {
@@ -107,10 +106,14 @@ export function freeQuotaRenewalAlerts(input: {
   return alerts;
 }
 
-function anchorMs(alert: FreeQuotaRenewalAlert): number {
-  if ('review' in alert) return alert.review.verifiedAtMs;
-  if ('signalAtMs' in alert) return alert.signalAtMs;
-  return alert.checkedAtMs;
+function dedupeKey(alert: FreeQuotaRenewalAlert): string {
+  const anchorMs =
+    'review' in alert
+      ? alert.review.expiresAtMs
+      : 'signalAtMs' in alert
+        ? alert.signalAtMs
+        : alert.freshUntilMs;
+  return `${REMINDER_PREFIX}:${alert.reason}:${anchorMs}`;
 }
 
 function at(ms: number): string {
@@ -241,43 +244,54 @@ async function deliver(
   return { paged, emailed: sent.filter((result) => result.delivered).length };
 }
 
-async function remindOnce(
+async function claimReminder(
   store: KeyValueStore,
   alert: FreeQuotaRenewalAlert,
-  recipients: readonly string[],
   nowMs: number,
-): Promise<{ reason: FreeQuotaRenewalReason; outcome: 'sent' | 'already_sent' | 'undelivered' }> {
-  const dedupeKey = `${REMINDER_PREFIX}:${alert.reason}:${anchorMs(alert)}`;
-  const claimed = await store.set(
-    dedupeKey,
+): Promise<boolean> {
+  return store.set(
+    dedupeKey(alert),
     { atMs: nowMs },
     { onlyIfAbsent: true, ttlSeconds: REMINDER_RETENTION_SECONDS },
   );
-  if (!claimed) return { reason: alert.reason, outcome: 'already_sent' };
+}
 
+async function sendClaimedReminder(
+  store: KeyValueStore,
+  alert: FreeQuotaRenewalAlert,
+  recipients: readonly string[],
+): Promise<FreeQuotaReminderOutcome> {
   const message = describeFreeQuotaRenewal(alert, environmentLabel());
-  const { paged, emailed } = await deliver(message, recipients);
-  if (emailed === 0 && paged !== 'paged') {
-    await store.delete(dedupeKey);
-    logger.error(
-      { event: 'free_quota_renewal_reminder_undeliverable', reason: alert.reason, paged },
-      '[free-quota] renewal reminder reached nobody; the next run tries again',
-    );
-    return { reason: alert.reason, outcome: 'undelivered' };
+  let delivered = false;
+  try {
+    const { paged, emailed } = await deliver(message, recipients);
+    delivered = emailed > 0 || paged === 'paged';
+    const fields = {
+      event: delivered
+        ? 'free_quota_renewal_reminder_sent'
+        : 'free_quota_renewal_reminder_undeliverable',
+      reason: alert.reason,
+      severity: message.severity,
+      emailed,
+      paged,
+    };
+    if (!delivered) {
+      logger.error(
+        fields,
+        '[free-quota] renewal reminder reached nobody; the next run tries again',
+      );
+    } else if (message.severity === 'critical') {
+      logger.error(fields, '[free-quota] free quota models are off; platform admins were told');
+    } else {
+      logger.warn(
+        fields,
+        '[free-quota] a free quota gate runs out soon; platform admins were told',
+      );
+    }
+    return delivered ? 'sent' : 'undelivered';
+  } finally {
+    if (!delivered) await store.delete(dedupeKey(alert));
   }
-  const fields = {
-    event: 'free_quota_renewal_reminder_sent',
-    reason: alert.reason,
-    severity: message.severity,
-    emailed,
-    paged,
-  };
-  if (message.severity === 'critical') {
-    logger.error(fields, '[free-quota] free quota models are off; platform admins were told');
-  } else {
-    logger.warn(fields, '[free-quota] a free quota gate runs out soon; platform admins were told');
-  }
-  return { reason: alert.reason, outcome: 'sent' };
 }
 
 export async function remindFreeQuotaRenewals(nowMs: number): Promise<FreeQuotaRenewalRun> {
@@ -307,9 +321,15 @@ export async function remindFreeQuotaRenewals(nowMs: number): Promise<FreeQuotaR
     nowMs,
   });
   if (alerts.length === 0) return { checked: true, reminders: [] };
-  const recipients = await platformAdminAddresses();
-  const reminders = await Promise.all(
-    alerts.map((alert) => remindOnce(store, alert, recipients, nowMs)),
+  const claimed = await Promise.all(alerts.map((alert) => claimReminder(store, alert, nowMs)));
+  const recipients = claimed.some(Boolean) ? await platformAdminAddresses() : [];
+  const outcomes = await Promise.all(
+    alerts.map((alert, index): Promise<FreeQuotaReminderOutcome> | FreeQuotaReminderOutcome =>
+      claimed[index] ? sendClaimedReminder(store, alert, recipients) : 'already_sent',
+    ),
   );
-  return { checked: true, reminders };
+  return {
+    checked: true,
+    reminders: alerts.map((alert, index) => ({ reason: alert.reason, outcome: outcomes[index]! })),
+  };
 }
