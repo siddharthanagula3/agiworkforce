@@ -78,6 +78,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import {
   RESPONSE_RATING_COMMENT_MAX_CHARS,
   RESPONSE_RATING_MESSAGE_MAX_CHARS,
+  WEB_RESPONSE_RATING_MESSAGE,
 } from './response-rating-contract';
 
 function request(body: unknown) {
@@ -621,6 +622,16 @@ describe('thumbs-down details', () => {
         message_id: 'msg-1',
       },
     });
+  });
+
+  it('stores its own note for a web rating without a comment, never the text the page sent', async () => {
+    const rows = feedbackTable();
+
+    const response = await POST(rating({}, { message: 'Paris is the capital of France.' }));
+
+    expect(response.status).toBe(200);
+    expect(rows[0]?.message).toBe(WEB_RESPONSE_RATING_MESSAGE);
+    expect(JSON.stringify(rows)).not.toContain('Paris is the capital of France.');
   });
 
   it('redacts a secret pasted into the comment before it is stored', async () => {

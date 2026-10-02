@@ -15,6 +15,7 @@ import {
   RESPONSE_RATING_COMMENT_MAX_CHARS,
   RESPONSE_RATING_MESSAGE_MAX_CHARS,
   RESPONSE_RATING_REASONS,
+  WEB_RESPONSE_RATING_MESSAGE,
 } from './response-rating-contract';
 
 const MAX_LOGS_CHARS = 20_000;
@@ -180,15 +181,23 @@ interface FeedbackAttachments {
 
 const NO_ATTACHMENTS: FeedbackAttachments = { logs: null, screenshotKey: null };
 
+function storedMessage({ message, metadata }: Feedback): string {
+  if (metadata.comment) return metadata.comment;
+  return metadata.feedback_context === 'response_rating' && metadata.source === 'web'
+    ? WEB_RESPONSE_RATING_MESSAGE
+    : message;
+}
+
 function feedbackRow(
   userId: string | null,
-  { subject, message, user_id: claimedUserId, metadata }: Feedback,
+  feedback: Feedback,
   { logs, screenshotKey }: FeedbackAttachments,
 ): unknown[] {
+  const { subject, user_id: claimedUserId, metadata } = feedback;
   return [
     userId,
     redactTranscriptText(subject),
-    redactTranscriptText(metadata.comment ?? message),
+    redactTranscriptText(storedMessage(feedback)),
     JSON.stringify({
       source: metadata.source ?? 'desktop',
       platform: metadata.platform,

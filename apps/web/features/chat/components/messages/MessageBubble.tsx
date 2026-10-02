@@ -82,6 +82,7 @@ import {
 import { VariantPager } from './VariantPager';
 import { MessageContextChips } from './MessageContextChips';
 import { toast } from 'sonner';
+import { WEB_RESPONSE_RATING_MESSAGE } from '@/app/api/feedback/response-rating-contract';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
@@ -407,7 +408,6 @@ const SHARED_ATTACHMENTS_NOT_COPIED =
   'Attached in the shared chat and kept private to the person who shared it:';
 const LOCAL_PERSONAL_CONTEXT_MISSING =
   'Answered without your instructions and memory: they could not be loaded onto this device.';
-const RESPONSE_RATING_MESSAGE = 'An answer in web chat. The answer text is not attached.';
 
 function reactionRating(reaction: string | null | undefined): 'up' | 'down' | null {
   if (reaction === 'thumbsUp') return 'up';
@@ -1144,7 +1144,7 @@ const MessageBubbleComponent = function MessageBubble({
             subject: details?.reason
               ? `Response rated ${rating}: ${RESPONSE_RATING_REASON_LABELS[details.reason]}`
               : `Response rated ${rating}`,
-            message: RESPONSE_RATING_MESSAGE,
+            message: WEB_RESPONSE_RATING_MESSAGE,
             metadata: {
               source: 'web',
               platform: 'web',
