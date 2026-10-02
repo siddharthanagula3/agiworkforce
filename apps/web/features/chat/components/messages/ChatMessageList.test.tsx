@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act, waitFor, within } from '@testing-librar
 import { ChatMessageList, groupMessages, patchMessageGroups } from './ChatMessageList';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { getSelectableModels } from '@agiworkforce/types';
+import { pickStandardModel } from '@/features/chat/lib/eligible-model';
 
 const ttsMock = vi.hoisted(() => {
   const state = { isSpeaking: false };
@@ -741,6 +742,47 @@ describe('ChatMessageList actions', () => {
         name: 'regenerate',
       }),
     ).not.toBeInTheDocument();
+  });
+
+  it('offers a paid account a standard model, not an upgrade, on a free limit card', () => {
+    const options = getSelectableModels().map((model) => ({ id: model.id, name: model.name }));
+    const standard = pickStandardModel(options, undefined)!;
+    const onRegenerateWithModel = vi.fn();
+    const messages = [
+      makeMessage({ id: 'paid-question', role: 'user', content: 'Draw a paper boat' }),
+      makeMessage({
+        id: 'paid-reply',
+        role: 'assistant',
+        content: '',
+        metadata: {
+          paywall: {
+            feature: 'model_access',
+            requiredTier: 'max',
+            reason: 'The free limit for this model is reached.',
+            recoveryAction: 'upgrade',
+            showUpgradeCta: false,
+            suggestStandardModel: true,
+            freeLimit: {
+              modelId: 'fixture-free-image',
+              modelName: 'Fixture Free Image',
+              reason: 'allowance_used',
+            },
+          },
+        },
+      }),
+    ];
+    render(
+      <ChatMessageList
+        messages={messages}
+        currentTier="pro"
+        onRegenerateWithModel={onRegenerateWithModel}
+        regenerateModelOptions={options}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /^Upgrade to/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: `Switch to ${standard.name}` }));
+    expect(onRegenerateWithModel).toHaveBeenCalledWith('paid-reply', standard.id);
   });
 
   it('keeps the own-key option a saved shared free pool card carries', () => {

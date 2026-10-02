@@ -6,7 +6,13 @@ import {
   type FreeLimit,
   type FreeLimitReason,
 } from '@agiworkforce/cloud-contracts';
-import { getModelMetadataById, getNextUpgradeTier, getProviderOffering } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getNextUpgradeTier,
+  getProviderOffering,
+  isFreeBillingPlanTier,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 
 import type { PaywallSlot } from '@/features/chat/types/message-metadata';
 import {
@@ -55,25 +61,28 @@ export function resolveFreeLimitPaywallSlot(input: {
   const modelName = freeModelLabel(limit.model);
   if (!modelName) return null;
   const alternativeName = limit.alternative_model ? freeModelLabel(limit.alternative_model) : null;
+  const alternativeModel =
+    limit.alternative_model && alternativeName
+      ? { id: limit.alternative_model, name: alternativeName }
+      : null;
   const resetAt = limit.resets_at ?? input.resetAt;
   const byokHref = findRecoveryHref(input.recovery, BYOK_RECOVERY_ACTION);
   const nextTier = getNextUpgradeTier(input.planTier);
+  const freePlan = isFreeBillingPlanTier(normalizeBillingPlanTier(input.planTier));
   return {
     feature: FREE_LIMIT_FEATURE,
     requiredTier: nextTier ?? DEFAULT_REQUIRED_TIER,
     reason: input.message,
     recoveryAction: 'upgrade',
-    showUpgradeCta: nextTier !== null,
+    showUpgradeCta: freePlan && nextTier !== null,
     showResetTime: resetAt !== undefined,
-    suggestStandardModel: false,
+    suggestStandardModel: !freePlan && alternativeModel === null,
     ...(resetAt ? { resetAt } : {}),
     freeLimit: {
       modelId: limit.model,
       modelName,
       reason: limit.reason,
-      ...(limit.alternative_model && alternativeName
-        ? { alternativeModel: { id: limit.alternative_model, name: alternativeName } }
-        : {}),
+      ...(alternativeModel ? { alternativeModel } : {}),
       ...(byokHref ? { byokHref } : {}),
     },
   };

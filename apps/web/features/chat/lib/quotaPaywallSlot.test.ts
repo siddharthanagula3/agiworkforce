@@ -185,6 +185,54 @@ describe('resolveQuotaPaywallSlot · a reached free limit', () => {
     expect(slot?.freeLimit?.alternativeModel).toBeUndefined();
   });
 
+  it('sells no plan on a paid account, since upgrading does not restore a free allowance', () => {
+    const imageOffering = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.category === 'image',
+    )![0];
+    for (const planTier of ['pro', 'max', 'byok']) {
+      const slot = resolveQuotaPaywallSlot({
+        code: 'free_quota_exhausted',
+        message,
+        planTier,
+        subscriptionSource: 'stripe',
+        freeLimit: { model: imageOffering, reason: 'allowance_used' },
+      });
+
+      expect(slot?.showUpgradeCta, planTier).toBe(false);
+      expect(slot?.suggestStandardModel, planTier).toBe(true);
+    }
+  });
+
+  it('offers a paid account the free model the server named instead of a standard one', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_allowance_exhausted',
+      message,
+      planTier: 'pro',
+      subscriptionSource: 'stripe',
+      freeLimit: { model: limitedKey, reason: 'allowance_used', alternative_model: alternativeKey },
+    });
+
+    expect(slot?.showUpgradeCta).toBe(false);
+    expect(slot?.suggestStandardModel).toBe(false);
+    expect(slot?.freeLimit?.alternativeModel).toEqual({
+      id: alternativeKey,
+      name: alternative.displayName,
+    });
+  });
+
+  it('keeps the upgrade path for the Free plan and suggests no standard model there', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_allowance_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      requestedModel: freeRouter,
+    });
+
+    expect(slot?.showUpgradeCta).toBe(true);
+    expect(slot?.suggestStandardModel).toBe(false);
+  });
+
   it('keeps the limit on the turn that hit it rather than blocking the account', () => {
     const slot = resolveQuotaPaywallSlot({
       code: 'free_quota_exhausted',
