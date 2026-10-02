@@ -503,6 +503,14 @@
   }
 }
 
+@media (pointer: coarse) {
+  [data-design='agi'] .agi-ds-ledger-value > .agi-ds-stack > .agi-ds-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 [data-design='agi'] .agi-ds-lane {
   display: inline-flex;
   align-items: center;
