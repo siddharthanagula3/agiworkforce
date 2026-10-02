@@ -242,8 +242,23 @@ describe('which free quota gates need a reminder', () => {
     ]);
   });
 
-  it('asks nothing when no console check was ever recorded', () => {
-    expect(alerts({ attestation: null })).toEqual([]);
+  it('tells, once a day, that no console check is recorded while the terms review serves', () => {
+    expect(alerts({ attestation: null })).toEqual([
+      { reason: 'console_check_missing', day: '2026-10-02' },
+    ]);
+    expect(
+      reasons(alerts({ attestation: null, termsReview: review({ expiresAtMs: NOW + DAY_MS }) })),
+    ).toEqual(['terms_review_expiring', 'console_check_missing']);
+  });
+
+  it.each([
+    ['missing', null],
+    ['expired', review({ expiresAtMs: NOW - 1 })],
+    ['dated after now', review({ verifiedAtMs: NOW + DAY_MS })],
+  ])('asks for no console check while the terms review is %s', (_label, termsReview) => {
+    expect(reasons(alerts({ attestation: null, termsReview }))).not.toContain(
+      'console_check_missing',
+    );
   });
 
   it('reminds about both gates in the same run when both run out', () => {
@@ -278,6 +293,11 @@ describe('what a reminder says', () => {
       /provider key changed/,
     ],
     [{ reason: 'billing_signal', signalAtMs: NOW }, 'critical', /billing state/],
+    [
+      { reason: 'console_check_missing', day: '2026-10-02' },
+      'critical',
+      /no console check is recorded/,
+    ],
   ];
 
   it.each(cases)('names the gate, the effect on users and the fix', (alert, severity, subject) => {
@@ -372,6 +392,28 @@ describe('sending the reminders', () => {
     expect(await remindFreeQuotaRenewals(later)).toEqual({
       checked: true,
       reminders: [{ reason: 'terms_review_expiring', outcome: 'sent' }],
+    });
+    expect(mocks.email).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells admins each day while the stored console check cannot be read', async () => {
+    await mocks.store.set('agi-fquota:attestation', { sourceUrl: 'https://example.com/moved' });
+
+    expect(await remindFreeQuotaRenewals(NOW)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_missing', outcome: 'sent' }],
+    });
+    expect(mocks.email.mock.calls[0]![0]).toMatchObject({
+      subject: expect.stringMatching(/^\[AGI CRITICAL\] .*no console check is recorded/),
+      text: expect.stringContaining('can no longer be read'),
+    });
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_missing', outcome: 'already_sent' }],
+    });
+    expect(await remindFreeQuotaRenewals(NOW + DAY_MS)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_missing', outcome: 'sent' }],
     });
     expect(mocks.email).toHaveBeenCalledTimes(2);
   });

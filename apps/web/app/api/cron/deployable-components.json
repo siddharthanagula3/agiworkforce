@@ -691,7 +691,7 @@
         {
           "version": "1.0.0",
           "date": "2026-10-02",
-          "change": "Added: tells platform admins three days before the free quota terms review or console check runs out, and again when either lapses, the provider key changes or the provider reports a billing state."
+          "change": "Added: tells platform admins three days before the free quota terms review or console check runs out, and again when either lapses, daily while no console check is recorded under a current review, and when the provider key changes or the provider reports a billing state."
         }
       ]
     },

@@ -42,6 +42,7 @@ export type FreeQuotaRenewalAlert =
       checkedAtMs: number;
       freshUntilMs: number;
     }
+  | { reason: 'console_check_missing'; day: string }
   | { reason: 'billing_signal'; signalAtMs: number };
 
 export type FreeQuotaRenewalReason = FreeQuotaRenewalAlert['reason'];
@@ -100,21 +101,39 @@ export function freeQuotaRenewalAlerts(input: {
         });
       }
       break;
-    case 'current':
     case 'missing':
+      if (terms === 'current' || terms === 'expiring') {
+        alerts.push({ reason: 'console_check_missing', day: utcDay(nowMs) });
+      }
+      break;
+    case 'current':
       break;
   }
   return alerts;
 }
 
+function utcDay(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function reminderAnchor(alert: FreeQuotaRenewalAlert): string | number {
+  switch (alert.reason) {
+    case 'terms_review_expiring':
+    case 'terms_review_expired':
+      return alert.review.expiresAtMs;
+    case 'console_check_expiring':
+    case 'console_check_expired':
+    case 'console_check_other_key':
+      return alert.freshUntilMs;
+    case 'console_check_missing':
+      return alert.day;
+    case 'billing_signal':
+      return alert.signalAtMs;
+  }
+}
+
 function dedupeKey(alert: FreeQuotaRenewalAlert): string {
-  const anchorMs =
-    'review' in alert
-      ? alert.review.expiresAtMs
-      : 'signalAtMs' in alert
-        ? alert.signalAtMs
-        : alert.freshUntilMs;
-  return `${REMINDER_PREFIX}:${alert.reason}:${anchorMs}`;
+  return `${REMINDER_PREFIX}:${alert.reason}:${reminderAnchor(alert)}`;
 }
 
 function at(ms: number): string {
@@ -166,6 +185,15 @@ function renewalNotice(alert: FreeQuotaRenewalAlert): {
         body: [
           `The Free quota only console check recorded at ${at(alert.checkedAtMs)} stopped counting at ${at(alert.freshUntilMs)}, so every free quota model is off.`,
           'Check the provider console and record a new check in the operator console.',
+        ],
+      };
+    case 'console_check_missing':
+      return {
+        severity: 'critical',
+        detail: 'no console check is recorded, free models are off',
+        body: [
+          'The terms review is current, but no Free quota only console check is recorded for this deployment, so every free quota model is off. That is the state before the first check, and after a recorded check is lost or can no longer be read.',
+          'Check the provider console and record a check in the operator console. This reminder repeats each day until one is recorded.',
         ],
       };
     case 'console_check_other_key':

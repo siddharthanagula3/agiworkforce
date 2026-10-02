@@ -188,22 +188,27 @@ record covers. Record it before the countdown on the panel reaches zero.
 with its logic in `apps/web/lib/server/free-quota-renewal.ts`. It tells platform
 admins:
 
-| Reason                                        | When                                                  | Severity |
-| --------------------------------------------- | ----------------------------------------------------- | -------- |
-| terms review runs out soon                    | inside `renewalReminderLeadMs` (3 days) of its expiry | warning  |
-| terms review ran out                          | at `expiresAtMs`                                      | critical |
-| console check runs out soon                   | inside 3 days of the end of its 30 days               | warning  |
-| console check ran out                         | at the end of its 30 days                             | critical |
-| the key changed after the console check       | the first run after the rotation                      | critical |
-| the provider reported an account billing code | the first run after the signal                        | critical |
+| Reason                                                   | When                                                  | Severity |
+| -------------------------------------------------------- | ----------------------------------------------------- | -------- |
+| terms review runs out soon                               | inside `renewalReminderLeadMs` (3 days) of its expiry | warning  |
+| terms review ran out                                     | at `expiresAtMs`                                      | critical |
+| console check runs out soon                              | inside 3 days of the end of its 30 days               | warning  |
+| console check ran out                                    | at the end of its 30 days                             | critical |
+| no console check is recorded while the review is current | once a day until a check is recorded                  | critical |
+| the key changed after the console check                  | the first run after the rotation                      | critical |
+| the provider reported an account billing code            | the first run after the signal                        | critical |
 
-Each reason is sent once per deadline (or per billing signal), so a renewal
-that moves a deadline gets its own reminders. It is emailed to the verified
-address of each platform admin, or to `AGI_SUPPORT_FALLBACK_EMAIL` when none
-resolves, which needs `RESEND_API_KEY` and `AGI_SUPPORT_FROM_EMAIL`, and it is
-paged through `PAGER_WEBHOOK_URL` when that is set. A delivered reminder is
-logged as `free_quota_renewal_reminder_sent`, at error level when free models
-are off.
+A missing console check covers both the launch, before the first check is
+recorded, and a recorded check that was lost or no longer parses, for example
+after the shared store was flushed. Either way every free model is off, so it
+repeats daily. Every other reason is sent once per deadline (or per billing
+signal), so a renewal that moves a deadline gets its own reminders.
+
+A reminder is emailed to the verified address of each platform admin, or to
+`AGI_SUPPORT_FALLBACK_EMAIL` when none resolves, which needs `RESEND_API_KEY`
+and `AGI_SUPPORT_FROM_EMAIL`, and it is paged through `PAGER_WEBHOOK_URL` when
+that is set. A delivered reminder is logged as
+`free_quota_renewal_reminder_sent`, at error level when free models are off.
 
 A reminder is held for 15 minutes while it is sent and kept only once it reaches
 someone, so a failure never silences it: each reminder is sent on its own, and
