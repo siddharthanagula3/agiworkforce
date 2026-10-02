@@ -284,4 +284,23 @@ describe('/changelog lists policy changes', () => {
       expect(row.text).toContain(SUBPROCESSOR_REVISIONS[index]?.summary);
     });
   });
+
+  it('says where the list begins and lists the revisions of that day it names', () => {
+    const rows = policyRows();
+    const section = screen.getByRole('region', { name: 'Policy changes, newest first.' });
+    const prose = section.querySelector('p')?.textContent ?? '';
+
+    expect(prose).toContain('on 21 September 2026');
+    expect(prose).not.toMatch(/each time a policy is revised/i);
+    for (const name of [
+      'Privacy policy updated',
+      'Mobile app terms and privacy updated',
+      'Subprocessors updated',
+    ]) {
+      expect(
+        rows.some((row) => row.name === name && row.date === '2026-09-21'),
+        name,
+      ).toBe(true);
+    }
+  });
 });

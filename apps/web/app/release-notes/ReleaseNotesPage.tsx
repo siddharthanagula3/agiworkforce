@@ -89,10 +89,14 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                 Policy changes, newest first.
               </h2>
               <Prose>
-                Each time a policy is revised, the revision is listed here with its date and what
-                changed. The subprocessor list is one of these policies, so a new or replaced
-                subprocessor is listed here with the date the list changed. The Atom feed carries
-                these and the releases above.
+                We began keeping dated version histories for our policies on 21 September 2026.
+                Every revision after that day that moves a policy&rsquo;s date is listed here with
+                the date and what changed, and so are that day&rsquo;s revisions of the privacy
+                policy, the mobile app&rsquo;s terms and privacy policy, and the subprocessor list.
+                A correction that leaves a policy&rsquo;s date unchanged is not listed. The
+                subprocessor list is one of these policies, so a subprocessor added or replaced
+                since 21 September 2026 is listed here with the date the list changed. The Atom feed
+                carries these and the releases above.
               </Prose>
             </div>
             <Ledger
