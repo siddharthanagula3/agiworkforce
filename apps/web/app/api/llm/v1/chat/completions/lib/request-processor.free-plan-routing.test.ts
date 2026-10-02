@@ -1,4 +1,9 @@
-import { getDefaultModelFor, getModelMetadataById } from '@agiworkforce/types';
+import { planResponseBudget } from '@agiworkforce/routing';
+import {
+  getDefaultModelFor,
+  getModelMetadataById,
+  resolveMaxOutputTokens,
+} from '@agiworkforce/types';
 import { describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/logger');
 
@@ -73,5 +78,22 @@ describe('a free plan request that arrives at the route still naming Auto', () =
     const chatRequest = { model: 'auto' };
     applyFreePlanDefaultModel(chatRequest, planTier);
     expect(chatRequest.model).toBe('auto');
+  });
+});
+
+describe('the free plan model asked for a one-sentence answer', () => {
+  const FREE_MODEL = getDefaultModelFor(FREE_TIER, 'chat');
+
+  it('keeps its whole output cap, because its reasoning spends the same budget', () => {
+    const plan = planResponseBudget({
+      message: 'Hi! In one sentence, who are you, and what can you do for me?',
+      taskType: 'simple_chat',
+      modelMaxOutputTokens: resolveMaxOutputTokens(FREE_MODEL),
+      modelMinimumOutputTokens: getModelMetadataById(FREE_MODEL)?.responseBudgetFloorTokens,
+    });
+
+    expect(plan.depth).toBe('one_sentence');
+    expect(plan.instruction).toContain('Use one concise sentence.');
+    expect(plan.outputTokenBudget).toBe(resolveMaxOutputTokens(FREE_MODEL));
   });
 });

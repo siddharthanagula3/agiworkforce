@@ -38694,7 +38694,7 @@
     "openrouter-free": {
       "contextTokens": 200000,
       "maxOutputTokens": 8192,
-      "responseBudgetFloorTokens": 1024
+      "responseBudgetFloorTokens": 8192
     },
     "gpt-oss-safeguard-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "qwen-3.6-27b": { "contextTokens": 131072, "maxOutputTokens": 16384 },
