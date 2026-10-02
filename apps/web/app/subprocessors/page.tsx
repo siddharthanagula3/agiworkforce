@@ -323,10 +323,9 @@ export default function SubprocessorsPage() {
                 Corrections, most recent first.
               </h2>
               <Prose>
-                Three reviews of what actually leaves this product, on 14 August, 12 September and{' '}
-                {POLICY_LAST_UPDATED.subprocessors}, found this page had been wrong in both
-                directions, and we would rather publish the correction than quietly reissue the
-                list.
+                Three reviews of what actually leaves this product, on 14 August, 12 September and
+                21 September, found this page had been wrong in both directions, and we would rather
+                publish the correction than quietly reissue the list.
               </Prose>
             </div>
             <NoteList items={CORRECTIONS} />

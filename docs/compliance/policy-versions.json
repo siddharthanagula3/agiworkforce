@@ -287,6 +287,11 @@
             "xai",
             "zhipu"
           ]
+        },
+        {
+          "date": "2026-09-28",
+          "digest": "f657044742de19f9",
+          "note": "The corrections lede dates the third review of the list to 21 September, the day it found the five missing inference recipients, instead of printing the page's last revision date, which had moved it to 22 and then 28 September although no review happened on either day. No recipient or commitment changed, so the date stays."
         }
       ]
     },
