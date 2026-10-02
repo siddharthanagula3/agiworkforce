@@ -250,6 +250,7 @@
   padding-bottom: 1px;
 }
 
+[data-design='agi'] .agi-ds-prose .agi-ds-link,
 [data-design='agi'] .agi-ds-link:hover,
 [data-design='agi'] .agi-ds-link:focus-visible {
   background-size: 100% 1px;
