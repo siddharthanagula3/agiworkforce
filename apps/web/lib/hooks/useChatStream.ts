@@ -582,6 +582,8 @@ type AuthTokenProvider = () => Promise<string>;
 
 type SaveRetryOptions = ManagedCloudSaveMessageOptions;
 
+const messageSavesInFlight = new Map<string, Promise<unknown>>();
+
 async function saveMessageToDb(
   conversationId: string,
   message: {
@@ -606,14 +608,13 @@ async function saveMessageToDb(
     decorateMutationHeaders: addCsrfHeaders,
     fetchImpl: (input, init) => fetch(input, init),
   });
-  try {
-    const saved = await client.saveMessage(
+  const id =
+    message.id && CLIENT_MESSAGE_ID_PATTERN.test(message.id) ? message.id : crypto.randomUUID();
+  const send = () =>
+    client.saveMessage(
       conversationId,
       {
-        id:
-          message.id && CLIENT_MESSAGE_ID_PATTERN.test(message.id)
-            ? message.id
-            : crypto.randomUUID(),
+        id,
         role: message.role as 'user' | 'assistant' | 'system',
         content: message.content,
         model: message.model,
@@ -624,6 +625,10 @@ async function saveMessageToDb(
       },
       options,
     );
+  const save = (messageSavesInFlight.get(id) ?? Promise.resolve()).then(send, send);
+  messageSavesInFlight.set(id, save);
+  try {
+    const saved = await save;
     return { id: saved.id };
   } catch (error) {
     if (error instanceof ManagedCloudChatHttpError) {
@@ -633,6 +638,8 @@ async function saveMessageToDb(
       throw new Error(`Failed to save message to DB: ${error.status}`);
     }
     throw error;
+  } finally {
+    if (messageSavesInFlight.get(id) === save) messageSavesInFlight.delete(id);
   }
 }
 

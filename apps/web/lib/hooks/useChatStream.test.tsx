@@ -2333,6 +2333,39 @@ describe('useChatStream', () => {
       expect(getToken).toHaveBeenCalledTimes(2);
     });
 
+    it('lands saves of one message in the order they were made, even when the first one retries', async () => {
+      const messageId = '0b5f1f8e-2a3c-4d6e-9f10-1a2b3c4d5e6f';
+      const landed: string[] = [];
+      let refusedOnce = false;
+      vi.mocked(fetch).mockImplementation(async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as { id: string; content: string };
+        if (body.content === 'the attempt that was discarded' && !refusedOnce) {
+          refusedOnce = true;
+          return new Response('unavailable', { status: 503 });
+        }
+        landed.push(body.content);
+        return new Response(JSON.stringify({ message: { id: body.id } }), { status: 200 });
+      });
+      const getAuthToken = async () => 'token-fresh';
+
+      await Promise.all([
+        saveMessageToDb(
+          'conv-1',
+          { id: messageId, role: 'assistant', content: 'the attempt that was discarded' },
+          getAuthToken,
+          { retryDelayMs: 20 },
+        ),
+        saveMessageToDb(
+          'conv-1',
+          { id: messageId, role: 'assistant', content: 'the answer the reader saw' },
+          getAuthToken,
+          { retryDelayMs: 20 },
+        ),
+      ]);
+
+      expect(landed).toEqual(['the attempt that was discarded', 'the answer the reader saw']);
+    });
+
     it('surfaces a 403 CSRF/auth rejection instead of silently dropping the turn', async () => {
       const getAuthToken = async () => 'token-fresh';
       vi.mocked(fetch).mockResolvedValueOnce(
@@ -2643,6 +2676,76 @@ describe('useChatStream', () => {
       expect(completionCalls).toHaveLength(2);
       const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('answer');
+    });
+
+    it('stores the retried answer, not the empty attempt it replaced, when that attempt saves late', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+      const streams = [
+        sse([
+          {
+            choices: [
+              {
+                delta: { content: '<thinking>Weighing how to introduce myself in a sentence' },
+                finish_reason: 'length',
+              },
+            ],
+          },
+        ]),
+        sse([{ choices: [{ delta: { content: 'I am AGI Workforce.' }, finish_reason: 'stop' }] }]),
+      ];
+      const storedAssistantContent: string[] = [];
+      let assistantSaveRefused = false;
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/api/llm/')) {
+          const encoder = new TextEncoder();
+          const body = streams.shift() ?? sse([]);
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(body));
+                controller.close();
+              },
+            }),
+            { status: 200, headers: new Headers() },
+          );
+        }
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as {
+            id?: string;
+            role?: string;
+            content?: string;
+          };
+          if (body.role === 'assistant') {
+            if (!assistantSaveRefused) {
+              assistantSaveRefused = true;
+              return new Response('unavailable', { status: 503 });
+            }
+            storedAssistantContent.push(body.content ?? '');
+          }
+          return new Response(JSON.stringify({ message: { id: body.id ?? 'saved-row' } }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('In one sentence, who are you?', {
+          conversationId: PERSISTED_CONV.id,
+          model: 'exact-model',
+        });
+      });
+
+      await vi.waitFor(() => expect(storedAssistantContent).toHaveLength(2), { timeout: 3_000 });
+      expect(storedAssistantContent.at(-1)).toBe('I am AGI Workforce.');
+      expect(
+        useChatStore.getState().messages.find((message) => message.role === 'assistant')?.content,
+      ).toBe('I am AGI Workforce.');
     });
 
     it('does not retry a max-tokens finish with nothing visible once the served model differs from the request', async () => {
