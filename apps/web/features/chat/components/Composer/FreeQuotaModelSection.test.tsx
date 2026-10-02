@@ -40,8 +40,14 @@ const datedKey = chatKeys.find((key) => {
   );
 })!;
 const experientialKey = chatKeys.find((key) => offerings[key]!.provider === 'experientiallabs')!;
-const imageKey = Object.entries(offerings).find(
-  ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',
+const imageKeys = Object.entries(offerings)
+  .filter(
+    ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',
+  )
+  .map(([key]) => key);
+const imageKey = imageKeys[0]!;
+const videoKey = Object.entries(offerings).find(
+  ([, offering]) => offering.category === 'video' && offering.quotaProbeProtocol === 'video-async',
 )![0];
 
 function name(key: string): string {
@@ -296,6 +302,46 @@ describe('Free section in the composer', () => {
     });
     expect(screen.getByRole('button', { name: name(imageKey) })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: name(familyA[0]!) })).not.toBeInTheDocument();
+  });
+
+  it('opens on the category of a selected media model and shows it as chosen', () => {
+    renderSection(sources(source('ready', catalogue([model(imageKey), model(videoKey)]))), {
+      selectedId: videoKey,
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Free model category' })).toHaveValue('video');
+    expect(screen.getByRole('button', { name: name(videoKey) })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('never points an account offered only media to the free chat model', () => {
+    renderSection(
+      sources(
+        source(
+          'ready',
+          catalogue([model(imageKey, 'unavailable'), model(videoKey, 'unavailable')]),
+        ),
+      ),
+    );
+    expect(screen.queryByText(/paused/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Keep chatting/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Free model category' })).not.toBeInTheDocument();
+  });
+
+  it('explains an unavailable media model without suggesting the chat model', () => {
+    const [ready, unavailable] = imageKeys.filter(
+      (key) => providerOfferingLabel(key)!.family === providerOfferingLabel(imageKey)!.family,
+    );
+    renderSection(
+      sources(source('ready', catalogue([model(ready!), model(unavailable!, 'unavailable')]))),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
+    fireEvent.click(screen.getByRole('button', { name: name(unavailable!) }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(/Choose another free model\.$/);
+    expect(screen.getByRole('status')).not.toHaveTextContent(FALLBACK);
   });
 
   it('renders nothing for an account offered no free models', () => {

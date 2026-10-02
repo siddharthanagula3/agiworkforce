@@ -76,6 +76,21 @@ function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeMo
   };
 }
 
+function poolsIn(
+  entries: readonly FreeModelEntry[],
+  category: ProviderOfferingCategory,
+): FreeModelPool[] {
+  const shown = entries.filter((entry) => entry.model.category === category);
+  return [...new Set(shown.map((entry) => entry.issuer))]
+    .map((issuer) =>
+      presentPool(
+        issuer,
+        shown.filter((entry) => entry.issuer === issuer),
+      ),
+    )
+    .filter((pool) => category === 'chat' || !pool.pause);
+}
+
 export function presentFreeModels(
   catalogues: readonly FreeQuotaCatalogue[],
   options: { category: string | null; selectedId: string },
@@ -86,18 +101,17 @@ export function presentFreeModels(
       return label ? [{ model, issuer: catalogue.issuer, label, order }] : [];
     }),
   );
-  const categories = (Object.keys(FREE_QUOTA_CATEGORIES) as ProviderOfferingCategory[]).filter(
-    (key) => entries.some((entry) => entry.model.category === key),
-  );
-  const category = categories.find((key) => key === options.category) ?? categories[0] ?? null;
-  const shown = entries.filter((entry) => entry.model.category === category);
-  const pools = [...new Set(shown.map((entry) => entry.issuer))].map((issuer) =>
-    presentPool(
-      issuer,
-      shown.filter((entry) => entry.issuer === issuer),
-    ),
-  );
-  const selected = shown.find((entry) => entry.model.key === options.selectedId) ?? null;
+  const offered = (Object.keys(FREE_QUOTA_CATEGORIES) as ProviderOfferingCategory[])
+    .map((key) => ({ key, pools: poolsIn(entries, key) }))
+    .filter(({ pools }) => pools.length > 0);
+  const categories = offered.map(({ key }) => key);
+  const selected = entries.find((entry) => entry.model.key === options.selectedId) ?? null;
+  const category =
+    categories.find((key) => key === options.category) ??
+    categories.find((key) => key === selected?.model.category) ??
+    categories[0] ??
+    null;
+  const pools = offered.find(({ key }) => key === category)?.pools ?? [];
   const pinned =
     selected && !pools.some((pool) => pool.featured.includes(selected)) ? selected : null;
   return {

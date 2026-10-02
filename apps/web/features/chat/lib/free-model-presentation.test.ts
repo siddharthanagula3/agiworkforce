@@ -22,6 +22,15 @@ const [familyA, familyB] = [...families.values()]
   .filter((keys) => keys.length >= 2)
   .sort((left, right) => right.length - left.length);
 
+function servable(category: 'image' | 'video'): string[] {
+  return Object.entries(getProviderOfferings())
+    .filter(([, offering]) => offering.category === category && offering.quotaProbeProtocol)
+    .map(([key]) => key);
+}
+
+const imageKey = servable('image')[0]!;
+const videoKey = servable('video')[0]!;
+
 function model(key: string, status: FreeQuotaStatus = 'ready'): FreeQuotaModel {
   const offering = getProviderOfferings()[key]!;
   return {
@@ -169,5 +178,43 @@ describe('presentFreeModels', () => {
       { category: null, selectedId: 'auto' },
     );
     expect(view.pools.map((pool) => pool.issuer)).toEqual([ISSUER, 'Second Fixture']);
+  });
+
+  it('opens on the category of the selected model and keeps that model in view from any other', () => {
+    const media = catalogue([model(imageKey), model(videoKey)]);
+
+    const opened = presentFreeModels([media], { category: null, selectedId: videoKey });
+    expect(opened.categories).toEqual(['image', 'video']);
+    expect(opened.category).toBe('video');
+    expect(keysOf(opened.pools[0]!.featured)).toEqual([videoKey]);
+    expect(opened.pinned).toBeNull();
+
+    const browsing = presentFreeModels([media], { category: 'image', selectedId: videoKey });
+    expect(browsing.category).toBe('image');
+    expect(browsing.pinned?.model.key).toBe(videoKey);
+  });
+
+  it('leaves out a media pool with nothing ready instead of explaining it', () => {
+    const paused = presentFreeModels(
+      [catalogue([model(imageKey, 'unavailable'), model(videoKey, 'exhausted')])],
+      { category: null, selectedId: 'auto' },
+    );
+    expect(paused.categories).toEqual([]);
+    expect(paused.category).toBeNull();
+    expect(paused.pools).toEqual([]);
+
+    const partly = presentFreeModels(
+      [catalogue([model(imageKey), model(videoKey, 'unavailable')])],
+      { category: 'video', selectedId: 'auto' },
+    );
+    expect(partly.categories).toEqual(['image']);
+    expect(partly.category).toBe('image');
+
+    const selected = presentFreeModels([catalogue([model(videoKey, 'unavailable')])], {
+      category: null,
+      selectedId: videoKey,
+    });
+    expect(selected.pools).toEqual([]);
+    expect(selected.pinned?.model.key).toBe(videoKey);
   });
 });

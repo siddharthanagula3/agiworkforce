@@ -271,7 +271,12 @@ export function FreeQuotaModelSection({
         entry={entry}
         selected={entry.model.key === selectedId}
         explanation={
-          explainedId === entry.model.key ? unavailableExplanation(entry, fallbackModelName) : null
+          explainedId === entry.model.key
+            ? unavailableExplanation(
+                entry,
+                entry.model.category === 'chat' ? fallbackModelName : null,
+              )
+            : null
         }
         onExplain={setExplainedId}
       />
