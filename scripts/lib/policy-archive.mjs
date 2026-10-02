@@ -160,7 +160,7 @@ export function unknownPublications(policies) {
       .filter((version) => version.status !== 'current' && version.published === null)
       .map(
         (version) =>
-          `docs/compliance/policy-versions.json "${key}" ${version.date}: ${policy.route} dated ${version.date} was replaced, and no record in "publications" shows whether this site published it; read the dates production prints, then record a commit on main that prints them and main's head when you checked`,
+          `docs/compliance/policy-versions.json "${key}" ${version.date}: ${policy.route} dated ${version.date} was replaced, and no record in "publications" shows whether this site published it; read the dates production prints, then record as "served" a commit on main that prints them and as "main" a commit that prints a later date for this policy: main's head if main has replaced this version, otherwise the commit on this branch that moves the date`,
       ),
   );
 }

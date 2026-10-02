@@ -87,14 +87,21 @@ per-document revision dates, canonical routes and their aliases) come from
 9. Say whether each replaced version applied. Each record in `publications`
    in `policy-versions.json` names the day production was checked, `served`,
    a commit on main that prints the dates production served then, and `main`,
-   main's head at that moment. A version production served applied until the
-   next version this site published replaced it; a version main had already
+   the commit carrying the replacement at that moment: main's head when main
+   has replaced the version, and otherwise the commit on the branch that
+   moves the date. A version production served applied until the next
+   version this site published replaced it; a version `main` had already
    replaced while production still served an older one was settled and
    replaced before it was published here, and its archive says so. When a
-   version is replaced that no record covers, read the dates production
-   prints, add a record and run the archiver again;
-   `scripts/check-policy-versions.mjs` fails until then, and when production
-   served a version the history does not record.
+   branch replaces a version that no record covers, commit the move, read the
+   dates production prints, add a record whose `main` is that commit and run
+   the archiver again. Main's head cannot clear it while it still prints the
+   date being replaced. `scripts/check-policy-versions.mjs` fails until then,
+   and when production served a version the history does not record. A
+   record's commits must stay on the main line, as an archive's must. If
+   production publishes the replaced version before the branch lands, add a
+   newer record: a version any record shows production serving reads as
+   applied.
 10. Announce every change to the subprocessor list. `/changelog` lists only the
     first entry of each date, so a row added to, removed from or renamed on
     `/subprocessors`, and a provider added to or removed from a row's

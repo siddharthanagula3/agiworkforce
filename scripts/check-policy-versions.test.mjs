@@ -911,6 +911,39 @@ test('says a replaced version applied when production served it, and was never p
   assert.deepEqual(second.unknown, []);
 });
 
+test('clears a replacement made while production lags once a record names the commit that moves the date, which main cannot', (t) => {
+  const { root, commits, versions } = datedTermsHistory(t, [
+    '2026-08-11',
+    '2026-09-23',
+    '2026-10-05',
+  ]);
+  const [served, mainHead, movesDate] = commits;
+  const index = {
+    ...registry(versions),
+    publications: [servedRecord('2026-10-02', served, mainHead)],
+  };
+
+  const unrecorded = publicationsOf(root, index);
+  assert.equal(unrecorded.unknown.length, 1);
+  assert.match(unrecorded.unknown[0], /"terms" 2026-09-23/);
+  assert.match(
+    unrecorded.unknown[0],
+    /as "main" a commit that prints a later date for this policy: main's head if main has replaced this version, otherwise the commit on this branch that moves the date/,
+  );
+
+  index.publications.push(servedRecord('2026-10-05', served, mainHead));
+  assert.equal(publicationsOf(root, index).unknown.length, 1);
+
+  index.publications.push(servedRecord('2026-10-05', served, movesDate));
+  const recorded = publicationsOf(root, index);
+  assert.deepEqual(recorded.unknown, []);
+  assert.deepEqual(recorded.published, [
+    ['2026-10-05', null],
+    ['2026-09-23', false],
+    ['2026-08-11', true],
+  ]);
+});
+
 test('fails when production served a version the history does not record', (t) => {
   const { root, commits, versions } = datedTermsHistory(t, ['2026-08-11', '2026-09-21']);
   const index = {
