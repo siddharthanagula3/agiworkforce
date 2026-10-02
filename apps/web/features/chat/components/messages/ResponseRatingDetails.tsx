@@ -20,6 +20,7 @@ import {
 } from '@/app/api/feedback/response-rating-contract';
 import {
   EMPTY_RESPONSE_RATING_DRAFT,
+  hasResponseRatingDetails,
   useResponseRatingDraftStore,
 } from '../../stores/response-rating-draft-store';
 import { ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE, ACTION_ICON_SIZE } from './messageActionRow';
@@ -89,14 +90,14 @@ export function ResponseRatingDetails({
   const headingId = useId();
   const commentId = useId();
   const firstReasonRef = useRef<HTMLButtonElement>(null);
-  const { reason, comment } =
+  const draft =
     useResponseRatingDraftStore((state) => state.drafts.get(messageId)) ??
     EMPTY_RESPONSE_RATING_DRAFT;
+  const { reason, comment, failure } = draft;
   const updateDraft = useResponseRatingDraftStore((state) => state.updateDraft);
+  const setDraftFailure = useResponseRatingDraftStore((state) => state.setDraftFailure);
   const [sending, setSending] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const trimmedComment = comment.trim();
-  const hasDetails = reason !== null || trimmedComment.length > 0;
+  const hasDetails = hasResponseRatingDetails(draft);
   const canSubmit = hasDetails && !sending;
 
   useEffect(() => {
@@ -107,13 +108,13 @@ export function ResponseRatingDetails({
     event.preventDefault();
     if (!canSubmit) return;
     setSending(true);
-    setFailure(null);
+    setDraftFailure(messageId, null);
     try {
-      await onSubmit({ reason, comment: trimmedComment });
+      await onSubmit({ reason, comment: comment.trim() });
       toast.success('Thanks for your feedback.');
       onClose();
     } catch (error) {
-      setFailure(responseRatingFailureMessage(error));
+      setDraftFailure(messageId, responseRatingFailureMessage(error));
       setSending(false);
     }
   };
@@ -160,10 +161,7 @@ export function ResponseRatingDetails({
               ref={index === 0 ? firstReasonRef : undefined}
               type="button"
               aria-pressed={selected}
-              onClick={() => {
-                updateDraft(messageId, { reason: selected ? null : option, comment });
-                setFailure(null);
-              }}
+              onClick={() => updateDraft(messageId, { reason: selected ? null : option, comment })}
               className={cn(
                 REASON_CHIP_CLASS,
                 selected
@@ -184,10 +182,7 @@ export function ResponseRatingDetails({
         <Textarea
           id={commentId}
           value={comment}
-          onChange={(event) => {
-            updateDraft(messageId, { reason, comment: event.target.value });
-            setFailure(null);
-          }}
+          onChange={(event) => updateDraft(messageId, { reason, comment: event.target.value })}
           maxLength={RESPONSE_RATING_COMMENT_MAX_CHARS}
           rows={2}
           placeholder="What was wrong with this response?"

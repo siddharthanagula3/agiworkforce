@@ -27,6 +27,7 @@ import { useResponseRatingDraftStore } from '../../../stores/response-rating-dra
 import {
   RESPONSE_RATING_RATE_LIMITED,
   RESPONSE_RATING_REMOVE_FAILED,
+  RESPONSE_RATING_SEND_FAILED,
   RESPONSE_RATING_SHARING_NOTE,
 } from '../ResponseRatingDetails';
 
@@ -541,6 +542,85 @@ describe('telling us why an answer was bad', () => {
     } finally {
       focusFixup.disconnect();
     }
+  });
+
+  it('hands focus back to the thumbs-down button when the vote it opened with is refused', async () => {
+    const vote = pendingResponse();
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    expect(within(form).getByRole('button', { name: 'Not factually correct' })).toHaveFocus();
+
+    vote.settle(false);
+
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    expect(down).toHaveFocus();
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+    expect(toastMock.error).toHaveBeenCalledWith(RESPONSE_RATING_SEND_FAILED);
+  });
+
+  it('keeps a started reason and comment, and says why, when the vote they complete is refused', async () => {
+    const vote = pendingResponse();
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    await userEvent.click(down);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Incomplete response' }));
+    const details = within(form).getByRole('textbox', { name: 'Details (optional)' });
+    await userEvent.type(details, 'It stopped at step 3.');
+
+    vote.settle(false);
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent(RESPONSE_RATING_SEND_FAILED);
+    expect(details).toHaveValue('It stopped at step 3.');
+    expect(details).toHaveFocus();
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+    expect(toastMock.error).not.toHaveBeenCalled();
+
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
+    expect(sentBody(1).metadata).toMatchObject({
+      rating: 'down',
+      reason: 'incomplete',
+      comment: 'It stopped at step 3.',
+    });
+    expect(down).toHaveAttribute('aria-pressed', 'true');
+    expect(down).toHaveFocus();
+    expect(onReact.mock.calls).toEqual([
+      ['msg-1', 'down'],
+      ['msg-1', null],
+      ['msg-1', 'down'],
+    ]);
+  });
+
+  it('sends a refused vote again from the thumbs-down button, keeping what was written', async () => {
+    const vote = pendingResponse();
+    render(<MessageBubble message={assistantMessage()} />);
+
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    await userEvent.click(down);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    const details = within(form).getByRole('textbox', { name: 'Details (optional)' });
+    await userEvent.type(details, 'Too short.');
+    vote.settle(false);
+    await within(form).findByRole('alert');
+
+    await userEvent.click(down);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(sentBody(1).metadata).toMatchObject({ rating: 'down', message_id: 'msg-1' });
+    expect(sentBody(1).metadata).not.toHaveProperty('comment');
+    expect(within(form).queryByRole('alert')).toBeNull();
+    expect(details).toHaveValue('Too short.');
+    await waitFor(() => expect(down).toHaveAttribute('aria-pressed', 'true'));
   });
 
   it('waits for a reason or a comment before it can be sent', async () => {

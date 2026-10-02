@@ -193,7 +193,10 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
-import { useResponseRatingDraftStore } from '../../stores/response-rating-draft-store';
+import {
+  hasResponseRatingDetails,
+  useResponseRatingDraftStore,
+} from '../../stores/response-rating-draft-store';
 import {
   useChatToolAllowanceStore,
   useToolsAllowedForChat,
@@ -1118,6 +1121,7 @@ const MessageBubbleComponent = function MessageBubble({
   const ratingDetailsOpen = useResponseRatingDraftStore((state) => state.drafts.has(message.id));
   const openRatingDraft = useResponseRatingDraftStore((state) => state.openDraft);
   const closeRatingDraft = useResponseRatingDraftStore((state) => state.closeDraft);
+  const setRatingDraftFailure = useResponseRatingDraftStore((state) => state.setDraftFailure);
   const [ratingDetailsFocus, setRatingDetailsFocus] = useState(false);
   const closeRatingDetails = useCallback(() => {
     if (ratingDetailsRef.current?.contains(document.activeElement)) {
@@ -1174,16 +1178,6 @@ const MessageBubbleComponent = function MessageBubble({
       ),
     [message.id, queueRatingRequest],
   );
-  const submitRatingDetails = useCallback(
-    async (details: ResponseRatingDetailsInput) => {
-      latestRatingActionRef.current += 1;
-      await postResponseRating('down', details);
-      savedRatingRef.current = 'down';
-      setRatingState('down');
-    },
-    [postResponseRating],
-  );
-
   /*
    * One verdict per answer. The persisted reaction on message metadata is the
    * source of truth when the host wires `onReact`; `ratingState` only stands in
@@ -1193,6 +1187,17 @@ const MessageBubbleComponent = function MessageBubble({
    */
   const responseRating =
     reactionRating(message.metadata?.reaction) ?? (ratingState === 'idle' ? null : ratingState);
+
+  const submitRatingDetails = useCallback(
+    async (details: ResponseRatingDetailsInput) => {
+      latestRatingActionRef.current += 1;
+      await postResponseRating('down', details);
+      savedRatingRef.current = 'down';
+      setRatingState('down');
+      if (responseRating !== 'down') onReact?.(message.id, 'down');
+    },
+    [message.id, onReact, postResponseRating, responseRating],
+  );
 
   const rateResponse = useCallback(
     (rating: 'up' | 'down') => {
@@ -1215,17 +1220,24 @@ const MessageBubbleComponent = function MessageBubble({
           const saved = savedRatingRef.current;
           onReact?.(message.id, saved);
           setRatingState(saved ?? 'idle');
-          closeRatingDraft(message.id);
-          toast.error(
-            responseRatingFailureMessage(
-              error,
-              next ? RESPONSE_RATING_SEND_FAILED : RESPONSE_RATING_REMOVE_FAILED,
-            ),
+          const failure = responseRatingFailureMessage(
+            error,
+            next ? RESPONSE_RATING_SEND_FAILED : RESPONSE_RATING_REMOVE_FAILED,
           );
+          if (
+            next === 'down' &&
+            hasResponseRatingDetails(useResponseRatingDraftStore.getState().drafts.get(message.id))
+          ) {
+            setRatingDraftFailure(message.id, failure);
+            return;
+          }
+          closeRatingDetails();
+          toast.error(failure);
         },
       );
     },
     [
+      closeRatingDetails,
       closeRatingDraft,
       message.id,
       onReact,
@@ -1233,6 +1245,7 @@ const MessageBubbleComponent = function MessageBubble({
       postResponseRating,
       removeResponseRating,
       responseRating,
+      setRatingDraftFailure,
     ],
   );
 
