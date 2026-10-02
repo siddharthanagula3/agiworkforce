@@ -117,7 +117,8 @@ function dedupeKey(alert: FreeQuotaRenewalAlert): string {
 }
 
 function at(ms: number): string {
-  return new Date(ms).toISOString();
+  const instant = new Date(ms);
+  return Number.isNaN(instant.getTime()) ? 'an unrecorded time' : instant.toISOString();
 }
 
 function subjectLine(severity: AlertSeverity, environment: string, detail: string): string {
@@ -261,9 +262,9 @@ async function sendClaimedReminder(
   alert: FreeQuotaRenewalAlert,
   recipients: readonly string[],
 ): Promise<FreeQuotaReminderOutcome> {
-  const message = describeFreeQuotaRenewal(alert, environmentLabel());
   let delivered = false;
   try {
+    const message = describeFreeQuotaRenewal(alert, environmentLabel());
     const { paged, emailed } = await deliver(message, recipients);
     delivered = emailed > 0 || paged === 'paged';
     const fields = {

@@ -371,6 +371,20 @@ describe('sending the reminders', () => {
     expect(mocks.email).toHaveBeenCalledTimes(2);
   });
 
+  it('still tells admins about a billing signal whose record cannot be read', async () => {
+    await mocks.store.set(`agi-fquota:suspended:${credentialSha256(API_KEY).slice(0, 16)}`, {
+      unreadable: true,
+    });
+
+    expect(await remindFreeQuotaRenewals(NOW)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'billing_signal', outcome: 'sent' }],
+    });
+    expect(mocks.email.mock.calls[0]![0]).toMatchObject({
+      text: expect.stringContaining('At an unrecorded time the provider answered'),
+    });
+  });
+
   it('falls back to the support mailbox when no platform admin has a verified address', async () => {
     await recordFreeQuotaSuspension(mocks.store, {
       apiKey: API_KEY,
