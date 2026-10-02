@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
@@ -23,6 +23,7 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 import { MessageBubble } from '../MessageBubble';
+import { RESPONSE_RATING_SHARING_NOTE } from '../ResponseRatingDetails';
 
 const fetchMock = vi.fn();
 
@@ -143,5 +144,126 @@ describe('rating an assistant response', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+interface RatingBody {
+  subject: string;
+  message: string;
+  metadata: {
+    rating: string;
+    message_id: string;
+    feedback_id: string;
+    reason?: string;
+    comment?: string;
+  };
+}
+
+function sentBody(call: number): RatingBody {
+  const [, init] = fetchMock.mock.calls[call] as [string, RequestInit];
+  return JSON.parse(String(init.body)) as RatingBody;
+}
+
+describe('telling us why an answer was bad', () => {
+  it('does not send the answer text with a rating', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Good response' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.stringify(sentBody(0))).not.toContain('Here is an answer.');
+  });
+
+  it('asks for an optional reason and comment after a thumbs-down, not after a thumbs-up', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Good response' }));
+    expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull();
+
+    render(<MessageBubble message={{ ...assistantMessage(), id: 'msg-2' }} />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Bad response' })[1]!);
+
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    expect(within(form).getByRole('button', { name: 'Not factually correct' })).toBeVisible();
+    expect(within(form).getByRole('textbox', { name: 'Details (optional)' })).toBeVisible();
+    expect(within(form).getByText(RESPONSE_RATING_SHARING_NOTE)).toBeVisible();
+  });
+
+  it('sends the reason and the comment with the rating it completes', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Not factually correct' }));
+    await userEvent.type(
+      within(form).getByRole('textbox', { name: 'Details (optional)' }),
+      'The date is a year off.',
+    );
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const vote = sentBody(0);
+    const details = sentBody(1);
+    expect(details.metadata).toMatchObject({
+      rating: 'down',
+      message_id: 'msg-1',
+      reason: 'inaccurate',
+      comment: 'The date is a year off.',
+      feedback_id: vote.metadata.feedback_id,
+    });
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
+    expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it('keeps the rating when the form is closed without a reason', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    await userEvent.click(down);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Close feedback form' }));
+
+    expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull();
+    expect(down).toHaveAttribute('aria-pressed', 'true');
+    expect(sentBody(0).metadata.rating).toBe('down');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes on Escape and hands focus back to the thumbs-down button', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    expect(within(form).getByRole('button', { name: 'Not factually correct' })).toHaveFocus();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Bad response' })).toHaveFocus();
+  });
+
+  it('waits for a reason or a comment before it can be sent', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled();
+  });
+
+  it('keeps the form and says so when the details could not be sent', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      'Could not send that. Please try again.',
+    );
+    expect(screen.getByRole('form', { name: 'Tell us more' })).toBeInTheDocument();
   });
 });

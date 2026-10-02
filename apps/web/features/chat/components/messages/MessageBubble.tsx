@@ -70,6 +70,11 @@ import {
   ACTION_ROW_MIN_HEIGHT,
 } from './messageActionRow';
 import { variantDeleteConfirm } from './variantDeleteConfirm';
+import {
+  RESPONSE_RATING_REASON_LABELS,
+  ResponseRatingDetails,
+  type ResponseRatingDetailsInput,
+} from './ResponseRatingDetails';
 import { VariantPager } from './VariantPager';
 import { MessageContextChips } from './MessageContextChips';
 import { toast } from 'sonner';
@@ -397,6 +402,7 @@ const SHARED_ATTACHMENTS_NOT_COPIED =
   'Attached in the shared chat and kept private to the person who shared it:';
 const LOCAL_PERSONAL_CONTEXT_MISSING =
   'Answered without your instructions and memory: they could not be loaded onto this device.';
+const RESPONSE_RATING_MESSAGE = 'An answer in web chat. The answer text is not attached.';
 
 const PROVIDER_MODE_BY_PRIVACY_MODE = {
   local: 'Local',
@@ -1093,40 +1099,72 @@ const MessageBubbleComponent = function MessageBubble({
    * lands in public.feedback and shows up in the operator dashboard's existing
    * feedback counts with no new table.
    */
+  const ratingFeedbackIdRef = useRef<string | null>(null);
+  const thumbsDownRef = useRef<HTMLButtonElement>(null);
+  const ratingDetailsRef = useRef<HTMLFormElement>(null);
+  const [ratingDetailsOpen, setRatingDetailsOpen] = useState(false);
+  const closeRatingDetails = useCallback(() => {
+    if (ratingDetailsRef.current?.contains(document.activeElement)) {
+      thumbsDownRef.current?.focus();
+    }
+    setRatingDetailsOpen(false);
+  }, []);
+  const postResponseRating = useCallback(
+    async (rating: 'up' | 'down', feedbackId: string, details?: ResponseRatingDetailsInput) => {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+        body: JSON.stringify({
+          subject: details?.reason
+            ? `Response rated ${rating}: ${RESPONSE_RATING_REASON_LABELS[details.reason]}`
+            : `Response rated ${rating}`,
+          message: RESPONSE_RATING_MESSAGE,
+          metadata: {
+            source: 'web',
+            platform: 'web',
+            version: 'web',
+            user_agent:
+              typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent.slice(0, 500),
+            feedback_context: 'response_rating',
+            rating,
+            message_id: message.id,
+            conversation_id: message.sessionId ?? activeConversationId ?? undefined,
+            feedback_id: feedbackId,
+            ...(details?.reason ? { reason: details.reason } : {}),
+            ...(details?.comment ? { comment: details.comment } : {}),
+          },
+        }),
+      });
+      if (!response.ok) throw new Error(`Rating failed: ${response.status}`);
+    },
+    [activeConversationId, message.id, message.sessionId],
+  );
   const rateMessage = useCallback(
     async (rating: 'up' | 'down') => {
       if (ratingState !== 'idle') return;
       const previous = ratingState;
+      const feedbackId = crypto.randomUUID();
+      ratingFeedbackIdRef.current = feedbackId;
       setRatingState(rating);
       try {
-        const response = await fetch('/api/feedback', {
-          method: 'POST',
-          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-          credentials: 'include',
-          body: JSON.stringify({
-            subject: `Response rated ${rating}`,
-            message: (message.content ?? '').slice(0, 500) || '(empty response)',
-            metadata: {
-              source: 'web',
-              platform: 'web',
-              version: 'web',
-              user_agent:
-                typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent.slice(0, 500),
-              feedback_context: 'response_rating',
-              rating,
-              message_id: message.id,
-              conversation_id: message.sessionId ?? activeConversationId ?? undefined,
-            },
-          }),
-        });
-        if (!response.ok) throw new Error(`Rating failed: ${response.status}`);
+        await postResponseRating(rating, feedbackId);
       } catch {
         // Leaving the button lit would claim a vote the server never took.
         setRatingState(previous);
         toast.error('Could not send that. Please try again.');
       }
     },
-    [activeConversationId, message.content, message.id, message.sessionId, ratingState],
+    [postResponseRating, ratingState],
+  );
+  const submitRatingDetails = useCallback(
+    async (details: ResponseRatingDetailsInput) => {
+      const feedbackId = ratingFeedbackIdRef.current ?? crypto.randomUUID();
+      ratingFeedbackIdRef.current = feedbackId;
+      await postResponseRating('down', feedbackId, details);
+      setRatingState('down');
+    },
+    [postResponseRating],
   );
 
   /*
@@ -1149,6 +1187,7 @@ const MessageBubbleComponent = function MessageBubble({
     (rating: 'up' | 'down') => {
       const isRepeat = responseRating === rating;
       onReact?.(message.id, isRepeat ? null : rating);
+      setRatingDetailsOpen(!isRepeat && rating === 'down');
       if (isRepeat) {
         setRatingState('idle');
       } else {
@@ -3220,6 +3259,7 @@ const MessageBubbleComponent = function MessageBubble({
                                 responseRating === 'down' &&
                                   'text-[var(--chat-accent-primary-text)]',
                               )}
+                              ref={thumbsDownRef}
                               onClick={() => rateResponse('down')}
                               aria-label="Bad response"
                               aria-pressed={responseRating === 'down'}
@@ -3502,6 +3542,14 @@ const MessageBubbleComponent = function MessageBubble({
                     {LOCAL_PERSONAL_CONTEXT_MISSING}
                   </span>
                 )}
+              {!isUser && ratingDetailsOpen && (
+                <ResponseRatingDetails
+                  ref={ratingDetailsRef}
+                  onSubmit={submitRatingDetails}
+                  onClose={closeRatingDetails}
+                  className="mt-2 basis-full"
+                />
+              )}
             </div>
           )}
         </div>

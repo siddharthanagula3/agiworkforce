@@ -4,6 +4,7 @@ const feedbackRouteMocks = vi.hoisted(() => ({
   auth: vi.fn(),
   optionalUser: vi.fn(),
   query: vi.fn(),
+  execute: vi.fn(),
 }));
 
 vi.mock('@/lib/api-auth', () => ({
@@ -31,10 +32,15 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ query: feedbackRouteMocks.query })),
+  getNeonDb: vi.fn(() => ({
+    query: feedbackRouteMocks.query,
+    execute: feedbackRouteMocks.execute,
+  })),
 }));
 
 import { POST } from './route';
+import { logger } from '@/lib/logger';
+import { RESPONSE_RATING_COMMENT_MAX_CHARS } from './response-rating-contract';
 
 function request(body: unknown) {
   return new Request('http://localhost:3000/api/feedback', {
@@ -316,5 +322,138 @@ describe('task feedback', () => {
       string,
     ];
     expect(storedMetadata).toContain('"rating":"down"');
+  });
+});
+
+describe('thumbs-down details', () => {
+  const FEEDBACK_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+
+  function rating(metadata: Record<string, unknown>) {
+    return request({
+      subject: 'Response rated down',
+      message: 'An answer in web chat. The answer text is not attached.',
+      metadata: {
+        source: 'web',
+        platform: 'web',
+        version: 'web',
+        user_agent: 'test',
+        feedback_context: 'response_rating',
+        rating: 'down',
+        message_id: 'msg-1',
+        conversation_id: 'conversation-7',
+        ...metadata,
+      },
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    feedbackRouteMocks.optionalUser.mockResolvedValue({ userId: 'user-web' });
+    feedbackRouteMocks.query.mockResolvedValue([]);
+    feedbackRouteMocks.execute.mockResolvedValue(1);
+  });
+
+  it('records a bare rating once under the id the client minted', async () => {
+    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
+
+    expect(response.status).toBe(200);
+    const [sql, params] = feedbackRouteMocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('on conflict (id) do nothing');
+    expect(params[4]).toBe(FEEDBACK_ID);
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('completes the same rating with the reason and the comment', async () => {
+    const response = await POST(
+      rating({
+        feedback_id: FEEDBACK_ID,
+        reason: 'inaccurate',
+        comment: '  The date it gave is a year off.  ',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('on conflict (id) do update');
+    expect(sql).toMatch(/public\.feedback\.user_id = excluded\.user_id/);
+    expect(params[0]).toBe('user-web');
+    expect(params[2]).toBe('The date it gave is a year off.');
+    expect(JSON.parse(String(params[3]))).toMatchObject({
+      feedback_context: 'response_rating',
+      rating: 'down',
+      reason: 'inaccurate',
+      message_id: 'msg-1',
+    });
+    expect(params[4]).toBe(FEEDBACK_ID);
+  });
+
+  it("answers a conflict instead of a silent success when the rating is not the caller's", async () => {
+    feedbackRouteMocks.execute.mockResolvedValue(0);
+
+    const response = await POST(rating({ feedback_id: FEEDBACK_ID, reason: 'incomplete' }));
+
+    expect(response.status).toBe(409);
+  });
+
+  it('redacts a secret pasted into the comment before it is stored', async () => {
+    const apiKey = `sk-${'A'.repeat(40)}`;
+
+    await POST(rating({ feedback_id: FEEDBACK_ID, comment: `It echoed my key ${apiKey}` }));
+
+    const params = feedbackRouteMocks.execute.mock.calls[0]?.[1] as unknown[];
+    expect(String(params[2])).not.toContain(apiKey);
+    expect(String(params[2])).toContain('[redacted:api-key]');
+  });
+
+  it('keeps the comment out of the log when the write fails', async () => {
+    feedbackRouteMocks.execute.mockRejectedValue(new Error('connection reset'));
+
+    const response = await POST(
+      rating({ feedback_id: FEEDBACK_ID, comment: 'My phone number is 555 0100' }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('555 0100');
+  });
+
+  it('refuses a reason on a thumbs-up', async () => {
+    const response = await POST(rating({ rating: 'up', reason: 'inaccurate' }));
+
+    expect(response.status).toBe(400);
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses a reason it does not offer', async () => {
+    const response = await POST(rating({ reason: 'too_polite' }));
+
+    expect(response.status).toBe(400);
+  });
+
+  it('refuses a comment over the limit', async () => {
+    const response = await POST(
+      rating({ comment: 'x'.repeat(RESPONSE_RATING_COMMENT_MAX_CHARS + 1) }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it('refuses rating details on feedback that is not a rating', async () => {
+    const response = await POST(
+      request({
+        subject: 'General feedback · Web chat',
+        message: 'Nice work.',
+        metadata: {
+          source: 'web',
+          platform: 'web',
+          version: 'web',
+          user_agent: 'test',
+          reason: 'other',
+          feedback_id: FEEDBACK_ID,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(400);
   });
 });
