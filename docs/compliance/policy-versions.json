@@ -13,7 +13,7 @@
           "date": "2026-09-22",
           "digest": "1000ae1c69856cfa",
           "note": "Discloses the founder-approved Experiential Labs promotional route, its Free-plan content capture and potential provider use, with a new terms acceptance version.",
-          "summary": "Discloses the Experiential Labs promotional route for Free-plan chats, what it captures and how its provider may use that content.",
+          "summary": "Discloses the Experiential Labs promotional route for Free-plan chats, on which Experiential Labs captures prompts and responses by default, keeps them for up to 30 days and may use them to develop, evaluate and improve its services and hosted models.",
           "archive": "not-retained"
         },
         {
@@ -42,7 +42,7 @@
           "date": "2026-09-22",
           "digest": "8a047905eaa64a87",
           "note": "Adds Experiential Labs Free-plan capture and potential provider use to the privacy notice. The copy-digest instrument does not detect the new JSX text, so this explicit version records the substantive change.",
-          "summary": "Adds how Free-plan chats on the Experiential Labs promotional route are captured and how its provider may use them."
+          "summary": "Adds that on the Experiential Labs promotional route for Free-plan chats, Experiential Labs keeps prompts and responses for up to 30 days and may use them to develop, evaluate and improve its services and hosted models, and that its no-training setting does not stop this capture."
         },
         {
           "date": "2026-09-22",
@@ -53,7 +53,7 @@
           "date": "2026-09-27",
           "digest": "364b3259e3db9d72",
           "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables.",
-          "summary": "Adds the checks the referral program runs and their lawful basis, and states how many user-scoped tables account erasure covers."
+          "summary": "Adds the checks the referral program runs against self-referral, on the basis of legitimate interests: a one-way hash of the network you signed up from, and a comparison of your app installations, your card's Stripe fingerprint and your email address with those of the person who referred you. Updates the number of user-scoped tables account erasure covers."
         },
         {
           "date": "2026-09-27",
@@ -84,7 +84,7 @@
           "date": "2026-09-29",
           "digest": "85f1c06b4c989919",
           "note": "Adds a Google user data section stating how the Gmail, Calendar, Drive and Contacts connectors access, use, store and share Google data, and that this follows the Google API Services User Data Policy including Limited Use. It describes existing practice and narrows no right.",
-          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, so a consent given under an earlier version covers page views only."
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, never your messages or files, so a consent given under an earlier version covers page views only, and a workspace administrator can turn analytics off for every member. Adds that a deleted conversation can be restored for 30 days before a daily job permanently deletes it, and that background jobs are kept for up to 30 days."
         },
         {
           "date": "2026-09-29",
@@ -125,7 +125,7 @@
           "date": "2026-09-22",
           "digest": "021c9f2af163b821",
           "note": "Discloses the founder-requested website Skip approvals default and the approval boundaries that still require review.",
-          "summary": "Describes the website's Skip approvals default and the actions that still need your review."
+          "summary": "The website now starts on Skip approvals instead of asking before every tool action, and the policy describes the actions that still need your review."
         },
         {
           "date": "2026-09-22",
@@ -167,7 +167,7 @@
           "date": "2026-09-23",
           "digest": "5d2ea7656cc0eada",
           "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23.",
-          "summary": "Corrects where the identity provider's cookies come from and removes a browser storage entry the product no longer writes. A visitor who chose under an earlier version is asked to choose again."
+          "summary": "States that we now honour Global Privacy Control, which the policy said we did not read: a browser that sends it is treated as refusing analytics and the product-update list, over any choice stored earlier. Corrects where the identity provider's cookies come from, removes two browser storage entries the product no longer writes, and adds two it does: the account that dismissed the Free plan notice, and a momentary check that local storage works. A visitor who chose under an earlier version is asked to choose again."
         },
         {
           "date": "2026-09-23",
@@ -189,7 +189,7 @@
           "date": "2026-09-22",
           "digest": "31cc4fe511514a62",
           "note": "Corrects the Experiential Labs processor row against its current platform privacy and data-controls documents and records the founder-approved Free promotional route.",
-          "summary": "Corrects the Experiential Labs entry against its current privacy and data-controls documents and records the Free-plan promotional route."
+          "summary": "Corrects the Experiential Labs entry against its current privacy and data-controls documents and adds its Free-plan promotional route, on which Experiential Labs captures prompts and responses by default, keeps them for up to 30 days and may use them to develop, evaluate and improve its services and hosted models."
         },
         {
           "date": "2026-09-22",
@@ -291,7 +291,7 @@
           "date": "2026-09-27",
           "digest": "16e8983458c38814",
           "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK, the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date. Checkout now asks every customer to confirm, in wording version 2026-09-27: 'I ask for immediate access. I understand that if I withdraw within 14 days, my refund is reduced in proportion to the credits I have used.' A withdrawal is prorated by the credits used, as Claude does (support.claude.com/en/articles/12386328), only when that confirmation is recorded on the subscription or payment, and is refunded in full otherwise.",
-          "summary": "Adds the signed-in refund request, the 14-day withdrawal in the EU, EEA and UK, a once-per-account refund within 7 days when no credits were used, and the hold during a payment dispute, and corrects how plan upgrades are billed."
+          "summary": "Adds the signed-in refund request; a refund, once per account, of an unused plan payment or of unspent top-up credits asked for within 7 days; the 14-day withdrawal in the EU, EEA and UK, prorated by the credits used when you asked at checkout for immediate access; and the hold on your plan and credits while a payment dispute is open. Corrects how plan upgrades are billed: an upgrade starts a new billing period on the day you upgrade."
         }
       ]
     },
@@ -556,7 +556,7 @@
           "date": "2026-09-22",
           "digest": "782677e1c104ce25",
           "note": "Updates the published website default authority to match the new account policy while retaining fail-closed and workspace boundaries.",
-          "summary": "Updates the website's default authority to match the account policy, keeping fail-closed checks and workspace boundaries."
+          "summary": "A new website account now starts on Skip approvals instead of Ask before every action: eligible reads, searches, sandboxed code and reversible actions run without a prompt, while destructive or unknown actions, your saved per-tool choices and workspace restrictions still apply, and the server asks when your setting cannot be read."
         },
         {
           "date": "2026-09-22",
