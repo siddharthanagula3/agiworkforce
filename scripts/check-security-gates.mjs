@@ -10,7 +10,6 @@ const MANIFEST_PATH = 'package.json';
 const LOCKFILE_PATH = 'pnpm-lock.yaml';
 const IMPORTER_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies'];
 const RUNTIME_FIELDS = ['dependencies', 'optionalDependencies'];
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 export function collectContinueOnErrorSteps(workflow) {
   const steps = [];
@@ -38,6 +37,12 @@ export function parseDenyAdvisoryIgnores(denyToml) {
     }
   }
   return ignores;
+}
+
+function isCalendarDate(value) {
+  if (typeof value !== 'string') return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function isRecord(value) {
@@ -243,8 +248,10 @@ export function checkSecurityGates({
         failures.push(`exclusion ${entry.id} must state a ${field}`);
       }
     }
-    if (!DATE_PATTERN.test(entry.expires ?? '')) {
-      failures.push(`exclusion ${entry.id} must set expires to a YYYY-MM-DD date`);
+    if (!isCalendarDate(entry.expires)) {
+      failures.push(
+        `exclusion ${entry.id} must set expires to a real calendar date in YYYY-MM-DD form`,
+      );
     } else if (entry.expires < today) {
       failures.push(
         `exclusion ${entry.id} expired on ${entry.expires}: fix the advisory or re-triage the waiver`,

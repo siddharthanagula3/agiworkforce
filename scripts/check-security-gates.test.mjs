@@ -32,6 +32,7 @@ const workflows = Object.fromEntries(
 );
 
 const WAIVER_TODAY = '2026-10-01';
+const WAIVER_ADVISORY = 'GHSA-0000-0000-0000';
 
 function scopedLockfile() {
   return {
@@ -54,10 +55,17 @@ function scopedLockfile() {
   };
 }
 
+function scopedWaiverFailures(options) {
+  return auditWaiverFailures(options).filter((message) =>
+    message.startsWith('exclusion scoped-audit-waiver '),
+  );
+}
+
 function auditWaiverFailures({
   entry = {},
   lockfile: scenario = scopedLockfile(),
   today = WAIVER_TODAY,
+  ignores = [WAIVER_ADVISORY],
 } = {}) {
   const waived = structuredClone(policy);
   waived.exclusions.push({
@@ -75,7 +83,7 @@ function auditWaiverFailures({
   const ignoring = structuredClone(manifest);
   ignoring.pnpm.auditConfig = {
     ...ignoring.pnpm.auditConfig,
-    ignoreGhsas: [...(ignoring.pnpm.auditConfig?.ignoreGhsas ?? []), 'GHSA-0000-0000-0000'],
+    ignoreGhsas: [...(ignoring.pnpm.auditConfig?.ignoreGhsas ?? []), ...ignores],
   };
   return checkSecurityGates({
     policy: waived,
@@ -205,6 +213,27 @@ test('a pnpm audit waiver fails the build once it expires', () => {
   ]);
 });
 
+test('a waiver whose expiry is not a real calendar date fails the build', () => {
+  for (const expires of ['2026-13-99', '2026-02-30']) {
+    assert.deepEqual(scopedWaiverFailures({ entry: { expires }, today: '2026-12-31' }), [
+      'exclusion scoped-audit-waiver must set expires to a real calendar date in YYYY-MM-DD form',
+    ]);
+  }
+});
+
+test('a day-month typo in the expiry does not keep the waiver alive', () => {
+  assert.deepEqual(
+    scopedWaiverFailures({ entry: { expires: '2026-31-10' }, today: '2026-12-31' }),
+    ['exclusion scoped-audit-waiver must set expires to a real calendar date in YYYY-MM-DD form'],
+  );
+});
+
+test('a waiver left registered after package.json stops ignoring it is reported as stale', () => {
+  assert.deepEqual(auditWaiverFailures({ ignores: [] }), [
+    'exclusion scoped-audit-waiver is stale: package.json no longer ignores GHSA-0000-0000-0000',
+  ]);
+});
+
 test('a waiver whose dependents and importers match the lockfile passes', () => {
   assert.deepEqual(auditWaiverFailures(), []);
 });
@@ -216,13 +245,9 @@ test('a waiver that names no package or permitted dependents fails the build', (
 });
 
 test('a waiver cannot be scoped without the lockfile', () => {
-  const failures = auditWaiverFailures({ lockfile: null });
-  assert.deepEqual(
-    failures.filter((message) => message.startsWith('exclusion scoped-audit-waiver ')),
-    [
-      'exclusion scoped-audit-waiver cannot be scoped without the importers and snapshots of pnpm-lock.yaml',
-    ],
-  );
+  assert.deepEqual(scopedWaiverFailures({ lockfile: null }), [
+    'exclusion scoped-audit-waiver cannot be scoped without the importers and snapshots of pnpm-lock.yaml',
+  ]);
 });
 
 test('a new parent of the waived package fails the build', () => {
