@@ -28,10 +28,12 @@ const store = vi.hoisted(() => {
 });
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
+vi.mock('@/lib/connectors/mcp-runtime-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/mcp-runtime-cache')>()),
   NeonMcpResponseCacheStore: class {
     async getStamp(key: { method: string; params?: string }) {
       return store.rows.get(store.keyOf(key))?.stamp ?? null;
