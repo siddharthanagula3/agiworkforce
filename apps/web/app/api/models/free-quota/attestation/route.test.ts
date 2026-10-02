@@ -10,6 +10,7 @@ import {
   recordFreeQuotaSuspension,
 } from '@/lib/free-quota-authorization';
 import { loadFreePools, type FreeQuotaTermsReview } from '@/lib/server/free-pools';
+import { sanitizeAuditDetail, type AuditEvent } from '@/lib/security-audit';
 type ScanModule0 = typeof import('@/lib/auth-guards');
 type ScanModule1 = typeof import('@/lib/csrf');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -107,6 +108,14 @@ async function stored() {
   ).attestation;
 }
 
+function auditedDetails() {
+  return mocks.audit.mock.calls.map(([event]) => sanitizeAuditDetail((event as AuditEvent).detail));
+}
+
+function auditedScopes() {
+  return auditedDetails().flatMap((detail) => detail['scopes'] as string[]);
+}
+
 async function status() {
   const response = await GET(
     new NextRequest('https://agiworkforce.com/api/models/free-quota/attestation'),
@@ -180,11 +189,25 @@ it('records "all" as the models it can list now, so a model added to the invento
   expect(response.status).toBe(200);
   expect((await response.json()).offerings).toBe(listed.length);
   expect((await stored())?.quotaOnlyOfferings).toEqual(listed);
-  expect(mocks.audit).toHaveBeenCalledWith(
-    expect.objectContaining({ detail: expect.objectContaining({ scopes: listed }) }),
-  );
+  expect(auditedScopes()).toEqual(listed);
   const after = await configuredStatus();
   expect(after.attestation.record?.offerings).toBe(listed.length);
+});
+
+it('keeps every key a record names in the audit log, with the total on each event', async () => {
+  const keys = inventory.entries.map((entry) => entry.offeringKey);
+  const checkedAtMs = Date.now() - 60_000;
+
+  expect((await attest({ checkedAtMs, quotaOnlyOfferings: keys })).status).toBe(200);
+
+  expect(auditedScopes()).toEqual(keys);
+  for (const detail of auditedDetails()) {
+    expect(detail).toMatchObject({
+      resourceType: 'free_quota_attestation',
+      resourceId: new Date(checkedAtMs).toISOString(),
+      count: keys.length,
+    });
+  }
 });
 
 it('records nothing for "all" once no inventory model can be served from the free quota', async () => {

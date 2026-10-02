@@ -7,6 +7,7 @@ import { getRequestId } from './observability/trace-context';
 import { getKeyValueStore } from './server/key-value';
 import { trackAuditedProductEvent } from './server/product-analytics';
 import { auditDomainEvent, domainEventAuditFields } from './audit-domain-events';
+import { AUDIT_DETAIL_ARRAY_LIMIT } from './audit-detail-limits';
 
 /**
  * Counts writes to `security_audit_logs` since the last anomaly check, so the
@@ -584,7 +585,6 @@ const SECRET_VALUE_PATTERNS: readonly RegExp[] = [
 
 const REDACTED = '[redacted]';
 const MAX_DETAIL_STRING = 256;
-const MAX_DETAIL_ARRAY = 25;
 
 function scrubString(value: string): string {
   const trimmed = value.length > MAX_DETAIL_STRING ? value.slice(0, MAX_DETAIL_STRING) : value;
@@ -611,7 +611,7 @@ export function sanitizeAuditDetail(detail: AuditEventDetail | undefined): Recor
       safe[key] = value;
     } else if (Array.isArray(value)) {
       safe[key] = value
-        .slice(0, MAX_DETAIL_ARRAY)
+        .slice(0, AUDIT_DETAIL_ARRAY_LIMIT)
         .filter((item): item is string => typeof item === 'string')
         .map(scrubString);
     }

@@ -13,6 +13,7 @@ import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { AUDIT_DETAIL_ARRAY_LIMIT } from '@/lib/audit-detail-limits';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   loadFreePools,
@@ -279,17 +280,22 @@ async function handlePost(request: NextRequest): Promise<Response> {
     quotaOnlyOfferings: covered,
     attestedBy: userId,
   });
-  await recordAuditEvent({
-    userId,
-    eventType: 'admin_policy_changed',
-    severity: 'warning',
-    request,
-    detail: {
-      resourceType: 'free_quota_attestation',
-      resourceId: new Date(checkedAtMs).toISOString(),
-      scopes: covered,
-    },
-  });
+  for (let start = 0; start < covered.length; start += AUDIT_DETAIL_ARRAY_LIMIT) {
+    const scopes = covered.slice(start, start + AUDIT_DETAIL_ARRAY_LIMIT);
+    await recordAuditEvent({
+      userId,
+      eventType: 'admin_policy_changed',
+      severity: 'warning',
+      request,
+      detail: {
+        resourceType: 'free_quota_attestation',
+        resourceId: new Date(checkedAtMs).toISOString(),
+        resourceName: `offering keys ${start + 1}-${start + scopes.length} of ${covered.length}`,
+        count: covered.length,
+        scopes,
+      },
+    });
+  }
 
   const receipt: FreeQuotaAttestationReceipt = {
     checkedAtMs,

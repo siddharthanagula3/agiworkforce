@@ -263,8 +263,13 @@ models the current record leaves out.
   key turns every free model off until a check is recorded for the new key.
 - A record newer than an account billing signal clears that signal, unless the
   signal's record cannot be read (see Billing signal).
-- Each record writes an `admin_policy_changed` audit event for
-  `free_quota_attestation` under the admin who made it.
+- Each record writes `admin_policy_changed` audit events for
+  `free_quota_attestation` under the admin who made it, one for every 25
+  offering keys, the most list entries an audit event keeps
+  (`AUDIT_DETAIL_ARRAY_LIMIT` in `apps/web/lib/audit-detail-limits.ts`). Each
+  event carries the check time as its resource id, the total as `count` and its
+  share of the keys as `scopes`, so the audit log still names every model a
+  record covered after the next check replaces it in the shared store.
 
 ### Renewing it every 30 days
 
