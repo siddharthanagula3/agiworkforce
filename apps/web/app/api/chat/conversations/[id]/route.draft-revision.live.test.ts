@@ -111,7 +111,8 @@ async function inConversation(
     });
 }
 
-describe.runIf(live)('draft revisions against Postgres timestamps', () => {
+// llm-guardrail-allow: needs AGI_TEST_LIVE_CONVERSATION_DRAFTS=1 and a loopback AGI_LIVE_DATABASE_URL, which ci.yml js-verify sets for its migrated Postgres.
+describe.skipIf(!live)('draft revisions against Postgres timestamps', () => {
   it('saves over the revision the client was shown, though Postgres stored microseconds', async () => {
     await inConversation(
       { draft: 'first thought', revision: STORED_MICROSECOND_REVISION },

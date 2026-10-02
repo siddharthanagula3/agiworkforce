@@ -305,6 +305,13 @@ jobs:
         # Vitest/Jest packages already own internal worker pools. Bounding the
         # outer Turbo graph prevents scheduler starvation from turning fast,
         # deterministic tests into timeout flakes on shared CI runners.
+        #
+        # The draft-revision live test runs against the migrated Postgres
+        # above inside a transaction it rolls back. turbo.json's test env
+        # lists both names, or strict env mode drops them.
+        env:
+          AGI_LIVE_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+          AGI_TEST_LIVE_CONVERSATION_DRAFTS: '1'
         run: pnpm test:affected
 
       - name: Test (webview HTML rendering, jsdom)
