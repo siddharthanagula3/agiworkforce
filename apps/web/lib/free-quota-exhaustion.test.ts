@@ -220,6 +220,22 @@ describe('provider refusals on a free model', () => {
     [{ status: 400, code: 'InvalidParameter', message: 'Model not exist.' }, 'refused'],
     [
       {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'The image url is invalid: model not exist in path',
+      },
+      'unavailable',
+    ],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'Input text cannot be used: model not exist.',
+      },
+      'failed',
+    ],
+    [
+      {
         status: 500,
         code: 'InternalError.Algo',
         message: "An error occurred in model serving, error message is: [Cluster 'xxx' not found!]",

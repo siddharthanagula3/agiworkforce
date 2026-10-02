@@ -626,6 +626,24 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
     });
   });
 
+  it('reads the documented not-found sentence when no code survives', () => {
+    const c = classifyModelStudioError({ status: 400, message: 'Model not exist.' });
+    expect(c.providerHint).toBe(MODEL_STUDIO_MODEL_NOT_FOUND_HINT);
+  });
+
+  it.each([
+    'The image url is invalid: model not exist in path',
+    'Input text cannot be used: model not exist.',
+  ])(
+    'leaves a validation message that only quotes the not-found sentence to the shared classifier: %s',
+    (message) => {
+      const err = compatibleModeError(400, 'InvalidParameter', message);
+      const c = classifyModelStudioError(err);
+      expect(c.providerHint).toBeUndefined();
+      expect(c).toEqual(classifyError(err));
+    },
+  );
+
   it('names no model refusal when only the wording of a serving error mentions the model', () => {
     const c = classifyModelStudioError(
       compatibleModeError(

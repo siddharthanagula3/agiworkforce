@@ -835,6 +835,30 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(mocks.stream).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ['The image url is invalid: model not exist in path', 503, 'free_quota_unavailable'],
+    ['Input text cannot be used: model not exist.', 502, 'provider_unreachable'],
+  ])(
+    'refuses only the turn when a validation message only quotes the not-found sentence: %s',
+    async (message, status, code) => {
+      mocks.stream.mockResolvedValue(
+        Response.json({ error: { code: 'InvalidParameter', message } }, { status: 400 }),
+      );
+      const response = await post();
+      expect(response.status).toBe(status);
+      expect((await response.json()).error.code).toBe(code);
+      expect((await sharedState()).holds.has(model!)).toBe(false);
+
+      mocks.stream.mockResolvedValue(sse('[DONE]'));
+      const again = await post(
+        { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+        'after-validation-error',
+      );
+      expect(again.status).toBe(200);
+      expect(mocks.stream).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('ends the free offer for every account when the provider retired the model endpoint', async () => {
     mocks.stream.mockResolvedValue(
       Response.json(

@@ -534,7 +534,7 @@ const MODEL_STUDIO_MODEL_NOT_FOUND_CODES: ReadonlySet<string> = new Set([
   'modelnotfound',
   'model_not_found',
 ]);
-const MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE = 'model not exist';
+const MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE = 'model not exist.';
 const MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES: ReadonlySet<string> = new Set([
   'model.accessdenied',
   'accessdenied',
@@ -1236,9 +1236,10 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       providerHint: modelRefusalHint,
     };
   }
+  const statedMessage = typeof e.error?.message === 'string' ? e.error.message : message;
   if (
     named(MODEL_STUDIO_MODEL_NOT_FOUND_CODES) ||
-    lower.includes(MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE)
+    statedMessage.trim().toLowerCase() === MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE
   ) {
     return {
       category: 'invalid_model',
