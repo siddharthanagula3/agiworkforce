@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-21
+Last updated: 2026-10-02
 
 Until 2026-08-09 nothing in this repository could reach a human when production
 broke. `/api/health` was correct and public, and no scheduled job, uptime
@@ -12,14 +12,15 @@ detection gaps that are still open.
 
 ## What detects an outage
 
-| Detector                            | Where                                                    | Cadence                | Reaches a human?                            |
-| ----------------------------------- | -------------------------------------------------------- | ---------------------- | ------------------------------------------- |
-| `/api/cron/health-probe`            | `apps/web/app/api/cron/health-probe/route.ts`            | every 10 minutes       | yes, through the dispatcher below           |
-| `/api/cron/evaluate-slo-burn`       | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`       | :05 and :35 every hour | yes, when an error budget is burning        |
-| `/api/cron/page-security-anomalies` | `apps/web/app/api/cron/page-security-anomalies/route.ts` | every 15 minutes       | yes, on a triggered security alert          |
-| `/api/cron/reconcile-credits`       | `apps/web/app/api/cron/reconcile-credits/route.ts`       | daily, 00:30 UTC       | yes, by email, only on terminal settlements |
-| `/api/health`                       | `apps/web/app/api/health/route.ts`                       | on request             | only if something polls it                  |
-| `/status` page                      | `apps/web/app/status/page.tsx`                           | on request             | only if a human opens it                    |
+| Detector                              | Where                                                      | Cadence                | Reaches a human?                                                                            |
+| ------------------------------------- | ---------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
+| `/api/cron/health-probe`              | `apps/web/app/api/cron/health-probe/route.ts`              | every 10 minutes       | yes, through the dispatcher below                                                           |
+| `/api/cron/evaluate-slo-burn`         | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`         | :05 and :35 every hour | yes, when an error budget is burning                                                        |
+| `/api/cron/page-security-anomalies`   | `apps/web/app/api/cron/page-security-anomalies/route.ts`   | every 15 minutes       | yes, on a triggered security alert                                                          |
+| `/api/cron/reconcile-credits`         | `apps/web/app/api/cron/reconcile-credits/route.ts`         | daily, 00:30 UTC       | yes, by email, only on terminal settlements                                                 |
+| `/api/cron/remind-free-quota-renewal` | `apps/web/app/api/cron/remind-free-quota-renewal/route.ts` | hourly at :22          | yes, by email and pager, when a free quota gate is about to lapse, has lapsed or is missing |
+| `/api/health`                         | `apps/web/app/api/health/route.ts`                         | on request             | only if something polls it                                                                  |
+| `/status` page                        | `apps/web/app/status/page.tsx`                             | on request             | only if a human opens it                                                                    |
 
 The probe runs the same `runHealthChecks()` the public endpoint and the status
 page run. It calls it directly rather than fetching `/api/health` over HTTP:

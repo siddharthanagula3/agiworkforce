@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getProviderOffering } from '@agiworkforce/types';
 
 import {
   eligibleFreeEligibility,
@@ -6,8 +7,10 @@ import {
   loadFreePools,
   parseFreePoolsDocument,
   reviewedQuotaOfferingKeys,
+  termsReviewStanding,
   toFreeEligibility,
   type FreePoolEntry,
+  type FreeQuotaTermsReview,
 } from './free-pools';
 
 const NOW_MS = Date.UTC(2026, 8, 1);
@@ -183,5 +186,106 @@ describe('the shipped configuration', () => {
         inventory: { ...reviewed, termsReview: { ...review, approvedOfferingKeys: [key, key] } },
       }),
     ).toThrow();
+  });
+});
+
+describe('the terms review standing', () => {
+  const DAY_MS = 24 * HOUR_MS;
+  const LEAD_MS = 3 * DAY_MS;
+
+  function review(overrides: Partial<FreeQuotaTermsReview> = {}): FreeQuotaTermsReview {
+    return {
+      terms: {
+        commercialUseAllowed: true,
+        thirdPartyServingAllowed: true,
+        proxyingAllowed: true,
+        promptsExcludedFromTraining: true,
+      },
+      evidenceUrl: EVIDENCE_URL,
+      reviewedBy: REVIEWER,
+      verifiedAtMs: NOW_MS - DAY_MS,
+      expiresAtMs: NOW_MS + 30 * DAY_MS,
+      approvedOfferingKeys: [loadFreePools().inventory!.entries[0]!.offeringKey],
+      ...overrides,
+    };
+  }
+
+  it('reads a review that is not recorded as missing', () => {
+    expect(termsReviewStanding(null, NOW_MS, LEAD_MS)).toBe('missing');
+  });
+
+  it('reads a review dated after now as not yet valid', () => {
+    expect(termsReviewStanding(review({ verifiedAtMs: NOW_MS + HOUR_MS }), NOW_MS, LEAD_MS)).toBe(
+      'not_yet_valid',
+    );
+  });
+
+  it('reads a review at or past its expiry as expired', () => {
+    expect(termsReviewStanding(review({ expiresAtMs: NOW_MS }), NOW_MS, LEAD_MS)).toBe('expired');
+  });
+
+  it('reads a review with any term false as refusing the terms', () => {
+    const refused = review({ terms: { ...review().terms, promptsExcludedFromTraining: false } });
+    expect(termsReviewStanding(refused, NOW_MS, LEAD_MS)).toBe('terms_refused');
+  });
+
+  it('warns inside the reminder lead and not before it', () => {
+    expect(termsReviewStanding(review({ expiresAtMs: NOW_MS + LEAD_MS }), NOW_MS, LEAD_MS)).toBe(
+      'expiring',
+    );
+    expect(
+      termsReviewStanding(review({ expiresAtMs: NOW_MS + LEAD_MS + 1 }), NOW_MS, LEAD_MS),
+    ).toBe('current');
+  });
+
+  it('still clears its offerings while it is expiring', () => {
+    const inventory = loadFreePools().inventory!;
+    const expiring = review({ expiresAtMs: NOW_MS + HOUR_MS });
+    expect(termsReviewStanding(expiring, NOW_MS, LEAD_MS)).toBe('expiring');
+    expect(reviewedQuotaOfferingKeys({ ...inventory, termsReview: expiring }, NOW_MS)).toEqual(
+      new Set(expiring.approvedOfferingKeys),
+    );
+  });
+});
+
+describe('what a terms review may approve', () => {
+  const inventory = loadFreePools().inventory!;
+  const keys = inventory.entries.map((entry) => entry.offeringKey);
+  const previewKeys = keys.filter((key) =>
+    /preview/i.test(getProviderOffering(key)?.providerModelId ?? ''),
+  );
+  const stableKeys = keys.filter((key) => !previewKeys.includes(key));
+
+  function approving(approvedOfferingKeys: string[]) {
+    return {
+      ...loadFreePools(),
+      inventory: {
+        ...inventory,
+        termsReview: {
+          terms: {
+            commercialUseAllowed: true,
+            thirdPartyServingAllowed: true,
+            proxyingAllowed: true,
+            promptsExcludedFromTraining: true,
+          },
+          evidenceUrl: EVIDENCE_URL,
+          reviewedBy: REVIEWER,
+          verifiedAtMs: NOW_MS - HOUR_MS,
+          expiresAtMs: NOW_MS + HOUR_MS,
+          approvedOfferingKeys,
+        },
+      },
+    };
+  }
+
+  it('accepts a review of every model whose id does not name a preview', () => {
+    expect(() => parseFreePoolsDocument(approving(stableKeys))).not.toThrow();
+  });
+
+  it('refuses a review that approves a preview model, which the Preview Product Terms keep to internal testing', () => {
+    expect(previewKeys.length).toBeGreaterThan(0);
+    for (const key of previewKeys) {
+      expect(() => parseFreePoolsDocument(approving([...stableKeys, key]))).toThrow(/preview/);
+    }
   });
 });

@@ -59,3 +59,157 @@ export const FreeQuotaCatalogueSchema = z.object({
 export type FreeQuotaStatus = z.infer<typeof FreeQuotaModelSchema>['status'];
 export type FreeQuotaModel = z.infer<typeof FreeQuotaModelSchema>;
 export type FreeQuotaCatalogue = z.infer<typeof FreeQuotaCatalogueSchema>;
+
+export const FREE_QUOTA_ATTESTATION_PATH = '/api/models/free-quota/attestation';
+
+export const FREE_QUOTA_UNAVAILABLE_REASONS = [
+  'not_integrated',
+  'quota_only_not_observed',
+  'terms_review_missing',
+  'media_not_served',
+  'allowance_unknown',
+  'credential_missing',
+  'shared_state_unavailable',
+  'account_billing_signal',
+  'attestation_missing',
+  'attestation_other_credential',
+  'attestation_stale',
+  'attestation_excludes_offering',
+  'managed_route_shares_allowance',
+  'provider_withdrawn',
+] as const;
+
+export const FREE_QUOTA_BLOCKED_OUTCOMES = [
+  ...FREE_QUOTA_UNAVAILABLE_REASONS,
+  'exhausted',
+  'expired',
+] as const;
+
+export const FREE_QUOTA_ATTESTATION_STANDINGS = [
+  'current',
+  'expiring',
+  'stale',
+  'missing',
+  'other_credential',
+  'billing_signal',
+] as const;
+
+export const FREE_QUOTA_WITHDRAWAL_CAUSES = ['exhausted', 'billing', 'withdrawn'] as const;
+
+export const FREE_QUOTA_TERMS_REVIEW_STANDINGS = [
+  'current',
+  'expiring',
+  'expired',
+  'not_yet_valid',
+  'terms_refused',
+  'missing',
+] as const;
+
+export const FreeQuotaTermsSchema = z.object({
+  commercialUseAllowed: z.boolean(),
+  thirdPartyServingAllowed: z.boolean(),
+  proxyingAllowed: z.boolean(),
+  promptsExcludedFromTraining: z.boolean(),
+});
+
+export const FreeQuotaAttestedOfferingsSchema = z.union([
+  z.literal('all'),
+  z.array(z.string().min(1)).min(1),
+]);
+
+export const FreeQuotaAttestationRequestSchema = z.object({
+  checkedAtMs: z.union([z.literal('now'), z.number().int().positive()]),
+  quotaOnlyOfferings: FreeQuotaAttestedOfferingsSchema,
+});
+
+export const FreeQuotaAttestationReceiptSchema = z.object({
+  checkedAtMs: z.number().int().positive(),
+  freshUntilMs: z.number().int().positive(),
+  offerings: z.union([z.literal('all'), z.number().int().positive()]),
+});
+
+export const FreeQuotaTermsReviewStatusSchema = z.object({
+  standing: z.enum(FREE_QUOTA_TERMS_REVIEW_STANDINGS),
+  review: z
+    .object({
+      reviewedBy: z.string().min(1),
+      verifiedAtMs: z.number().int().positive(),
+      expiresAtMs: z.number().int().positive(),
+      evidenceUrl: z.url({ protocol: /^https?$/ }),
+      terms: FreeQuotaTermsSchema,
+      approvedOfferings: z.number().int().positive(),
+    })
+    .nullable(),
+});
+
+export const FreeQuotaAttestationStandingStatusSchema = z.object({
+  standing: z.enum(FREE_QUOTA_ATTESTATION_STANDINGS),
+  record: FreeQuotaAttestationReceiptSchema.extend({
+    boundToCurrentKey: z.boolean(),
+    attestedBy: z.string().min(1),
+  }).nullable(),
+});
+
+export const FreeQuotaAttestationStatusSchema = z.discriminatedUnion('configured', [
+  z.object({
+    configured: z.literal(false),
+    sharedState: z.boolean(),
+    credential: z.boolean(),
+    inventory: z.boolean(),
+  }),
+  z.object({
+    configured: z.literal(true),
+    nowMs: z.number().int().positive(),
+    issuer: z.string().min(1),
+    consolePage: z.url({ protocol: /^https$/ }),
+    validForMs: z.number().int().positive(),
+    recordWindowMs: z.number().int().positive(),
+    consoleCheckReminderLeadMs: z.number().int().positive(),
+    termsReviewReminderLeadMs: z.number().int().positive(),
+    termsReview: FreeQuotaTermsReviewStatusSchema,
+    attestation: FreeQuotaAttestationStandingStatusSchema,
+    billingSignalAtMs: z.number().int().positive().nullable(),
+    billingSignalUnreadable: z.boolean(),
+    withdrawn: z.array(
+      z.object({
+        key: z.string().min(1),
+        displayName: z.string().min(1),
+        cause: z.enum(FREE_QUOTA_WITHDRAWAL_CAUSES),
+      }),
+    ),
+    offerings: z.array(
+      z.object({
+        key: z.string().min(1),
+        displayName: z.string().min(1),
+        providerModelId: z.string().min(1),
+        category: FreeQuotaModelSchema.shape.category,
+        expiresOn: z.string().nullable(),
+        attested: z.boolean(),
+      }),
+    ),
+    serving: z.object({
+      ready: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
+      blocked: z.array(
+        z.object({
+          outcome: z.enum(FREE_QUOTA_BLOCKED_OUTCOMES),
+          count: z.number().int().positive(),
+        }),
+      ),
+    }),
+  }),
+]);
+
+export type FreeQuotaUnavailableReason = (typeof FREE_QUOTA_UNAVAILABLE_REASONS)[number];
+export type FreeQuotaBlockedOutcome = (typeof FREE_QUOTA_BLOCKED_OUTCOMES)[number];
+export type FreeQuotaAttestationStanding = (typeof FREE_QUOTA_ATTESTATION_STANDINGS)[number];
+export type FreeQuotaWithdrawalCause = (typeof FREE_QUOTA_WITHDRAWAL_CAUSES)[number];
+export type FreeQuotaTermsReviewStanding = (typeof FREE_QUOTA_TERMS_REVIEW_STANDINGS)[number];
+export type FreeQuotaTerms = z.infer<typeof FreeQuotaTermsSchema>;
+export type FreeQuotaAttestationRequest = z.infer<typeof FreeQuotaAttestationRequestSchema>;
+export type FreeQuotaAttestationReceipt = z.infer<typeof FreeQuotaAttestationReceiptSchema>;
+export type FreeQuotaTermsReviewStatus = z.infer<typeof FreeQuotaTermsReviewStatusSchema>;
+export type FreeQuotaAttestationStandingStatus = z.infer<
+  typeof FreeQuotaAttestationStandingStatusSchema
+>;
+export type FreeQuotaAttestationStatus = z.infer<typeof FreeQuotaAttestationStatusSchema>;

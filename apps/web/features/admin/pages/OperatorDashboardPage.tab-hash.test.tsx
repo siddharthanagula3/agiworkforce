@@ -13,6 +13,9 @@ vi.mock('../components/PrivacyRequestsPanel', () => ({
 vi.mock('@/features/support/components/SupportHandoffQueuePanel', () => ({
   SupportHandoffQueuePanel: () => <div data-testid="support-handoff-panel" />,
 }));
+vi.mock('../components/FreeQuotaAttestationPanel', () => ({
+  default: () => <div data-testid="free-quota-panel" />,
+}));
 vi.mock('@/lib/client/csrf', () => ({ addCsrfHeaders: () => ({}) }));
 
 import { OperatorDashboardPage } from './OperatorDashboardPage';
@@ -53,6 +56,13 @@ describe('operator dashboard tab addressing', () => {
     render(<OperatorDashboardPage />);
 
     expect(await screen.findByTestId('support-handoff-panel')).toBeTruthy();
+  });
+
+  it('opens the free quota tab when the link names it', async () => {
+    setHash('#quota');
+    render(<OperatorDashboardPage />);
+
+    expect(await screen.findByTestId('free-quota-panel')).toBeTruthy();
   });
 
   it('opens the privacy queue tab when the link names it', async () => {

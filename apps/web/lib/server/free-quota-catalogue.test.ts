@@ -223,6 +223,15 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     expect(readyKeys(result)).toEqual([]);
   });
 
+  it('keeps serving through the renewal reminder window and stops when the check runs out', async () => {
+    const checkedAtMs =
+      NOW - policy.attestationMaxAgeMs + policy.attestationReminderLeadMs - 60_000;
+    const store = await attested(createMemoryKeyValueStore(), { checkedAtMs });
+    expect(readyKeys(await statuses(context({ store })))).not.toEqual([]);
+    const lapsedAtMs = checkedAtMs + policy.attestationMaxAgeMs;
+    expect(readyKeys(await statuses(context({ store, nowMs: lapsedAtMs })))).toEqual([]);
+  });
+
   it('offers only the offerings an attestation names', async () => {
     const named = readyKeys(
       await statuses(context({ store: await attested(createMemoryKeyValueStore()) })),

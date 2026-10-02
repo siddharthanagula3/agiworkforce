@@ -1,0 +1,1 @@
+export const AUDIT_DETAIL_ARRAY_LIMIT = 25;

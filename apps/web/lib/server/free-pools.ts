@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { FreeQuotaTermsReviewStanding } from '@agiworkforce/cloud-contracts';
 import { isFreeEligibilityValid, type FreeEligibility } from '@agiworkforce/routing';
 import { z } from 'zod';
 import { getProviderOffering } from '@agiworkforce/types';
@@ -12,6 +13,7 @@ const QUOTA_UNITS = ['requests', 'tokens', 'credits', 'neurons'] as const;
 const MIN_IDENTIFIER_LENGTH = 1;
 const MIN_QUOTA_LIMIT = 1;
 const MIN_SCHEMA_VERSION = 1;
+const PREVIEW_MODEL_MARKER = /preview/i;
 
 const FreePoolTermsSchema = z.object({
   commercialUseAllowed: z.boolean(),
@@ -38,6 +40,10 @@ const FreePoolEntrySchema = z
     message: 'an allocation never resets, so it must carry the expiry that ends it',
     path: ['expiresAtMs'],
   });
+
+function isPreviewOffering(offeringKey: string): boolean {
+  return PREVIEW_MODEL_MARKER.test(getProviderOffering(offeringKey)?.providerModelId ?? '');
+}
 
 const FreeQuotaObservationSchema = z.object({
   offeringKey: z
@@ -109,6 +115,13 @@ export const FreeQuotaInventorySchema = z
             message: 'Terms review must name distinct observed offerings',
           });
         }
+        if (isPreviewOffering(key)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['termsReview', 'approvedOfferingKeys'],
+            message: `Terms review must leave out preview models, which the Preview Product Terms keep to internal testing: ${key}`,
+          });
+        }
         approved.add(key);
       }
     }
@@ -116,20 +129,26 @@ export const FreeQuotaInventorySchema = z
 
 export type FreeQuotaInventory = z.infer<typeof FreeQuotaInventorySchema>;
 export type FreeQuotaObservation = z.infer<typeof FreeQuotaObservationSchema>;
+export type FreeQuotaTermsReview = NonNullable<FreeQuotaInventory['termsReview']>;
+
+export function termsReviewStanding(
+  review: FreeQuotaTermsReview | null,
+  nowMs: number,
+  reminderLeadMs = 0,
+): FreeQuotaTermsReviewStanding {
+  if (!review) return 'missing';
+  if (review.verifiedAtMs > nowMs) return 'not_yet_valid';
+  if (review.expiresAtMs <= nowMs) return 'expired';
+  if (!Object.values(review.terms).every(Boolean)) return 'terms_refused';
+  return review.expiresAtMs - nowMs <= reminderLeadMs ? 'expiring' : 'current';
+}
 
 export function reviewedQuotaOfferingKeys(
   inventory: FreeQuotaInventory,
   nowMs: number,
 ): ReadonlySet<string> {
   const review = inventory.termsReview;
-  if (
-    !review ||
-    review.verifiedAtMs > nowMs ||
-    review.expiresAtMs <= nowMs ||
-    !Object.values(review.terms).every(Boolean)
-  ) {
-    return new Set();
-  }
+  if (!review || termsReviewStanding(review, nowMs) !== 'current') return new Set();
   return new Set(review.approvedOfferingKeys);
 }
 

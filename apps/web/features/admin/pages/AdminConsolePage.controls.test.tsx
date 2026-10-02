@@ -47,6 +47,13 @@ describe('AdminConsolePage, admin control inventory', () => {
     expect(hrefsIn(controlsSection(container))).toContain('/operator#privacy');
   });
 
+  it('links the free quota console check, which no screen called before', () => {
+    const { container } = render(<AdminConsolePage />);
+    const section = controlsSection(container);
+    expect(hrefsIn(section)).toContain('/operator#quota');
+    expect(section.textContent).toContain('/api/models/free-quota/attestation');
+  });
+
   it('names the takedown and privacy services behind their rows', () => {
     const { container } = render(<AdminConsolePage />);
     const text = controlsSection(container).textContent ?? '';
