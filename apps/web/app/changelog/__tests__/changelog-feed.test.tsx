@@ -1,8 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import manifest from '@/content/legal/policy-archive/manifest.json';
 import { RELEASES, releasePath } from '@/lib/changelog-entries';
-import { policyChanges } from '@/lib/legal/policy-archive';
 
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
@@ -20,6 +23,46 @@ import {
 
 const ATOM = 'http://www.w3.org/2005/Atom';
 const RFC_3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+interface RegistryVersion {
+  date: string | null;
+  summary?: string;
+}
+
+const REPO_ROOT = path.join(__dirname, '..', '..', '..', '..', '..');
+
+const REGISTRY: { documents: Record<string, { versions: RegistryVersion[] }> } = JSON.parse(
+  readFileSync(path.join(REPO_ROOT, 'docs', 'compliance', 'policy-versions.json'), 'utf8'),
+);
+
+const SUBPROCESSOR_REVISIONS = (REGISTRY.documents['subprocessors']?.versions ?? [])
+  .filter(
+    (version, position, versions) =>
+      version.date !== null &&
+      versions.findIndex((earlier) => earlier.date === version.date) === position,
+  )
+  .reverse();
+
+const DESCRIBED_VERSIONS = Object.entries(manifest.policies).flatMap(([key, policy]) =>
+  policy.versions.flatMap((version) =>
+    version.summary
+      ? [
+          {
+            key,
+            slug: policy.slug,
+            date: version.date,
+            summary: version.summary,
+            href:
+              version.status === 'current'
+                ? policy.route
+                : version.status === 'archived'
+                  ? `/legal/archive/${policy.slug}/${version.date}`
+                  : `/legal/archive/${policy.slug}`,
+          },
+        ]
+      : [],
+  ),
+);
 
 function parseXml(xml: string): Document {
   const parsed = new DOMParser().parseFromString(xml, 'application/xml');
@@ -106,11 +149,21 @@ describe('/changelog/feed.xml', () => {
     }
   });
 
-  it('lists every release and every policy revision, newest first, and is dated by the newest', async () => {
+  it('lists every release and every policy version that says what changed, newest first, and is dated by the newest', async () => {
     const feed = await servedFeed();
-    const updated = atomChildren(feed, 'entry').map((entry) => text(entry, 'updated'));
+    const entries = atomChildren(feed, 'entry');
+    const updated = entries.map((entry) => text(entry, 'updated'));
+    const policies = entries
+      .filter((entry) => categoryTerms(entry).includes('policy'))
+      .map(
+        (entry) =>
+          `${text(entry, 'updated')} ${categoryTerms(entry).find((term) => term !== 'policy')}`,
+      );
 
-    expect(updated).toHaveLength(RELEASES.length + policyChanges().length);
+    expect(updated).toHaveLength(RELEASES.length + DESCRIBED_VERSIONS.length);
+    expect(policies.sort()).toEqual(
+      DESCRIBED_VERSIONS.map((version) => `${version.date}T00:00:00Z ${version.slug}`).sort(),
+    );
     expect([...updated].sort().reverse()).toEqual(updated);
     expect(text(feed, 'updated')).toBe(updated[0]);
   });
@@ -129,15 +182,14 @@ describe('/changelog/feed.xml', () => {
     const entries = atomChildren(await servedFeed(), 'entry').filter((entry) =>
       categoryTerms(entry).includes('subprocessors'),
     );
-    const changes = policyChanges().filter((change) => change.history.key === 'subprocessors');
 
-    expect(changes.length).toBeGreaterThan(0);
+    expect(SUBPROCESSOR_REVISIONS.length).toBeGreaterThan(1);
     expect(entries.map((entry) => text(entry, 'updated'))).toEqual(
-      changes.map((change) => `${change.date}T00:00:00Z`),
+      SUBPROCESSOR_REVISIONS.map((revision) => `${revision.date}T00:00:00Z`),
     );
     entries.forEach((entry, index) => {
       expect(categoryTerms(entry)).toContain('policy');
-      expect(contentHtml(entry).body.textContent).toBe(changes[index]?.summary);
+      expect(contentHtml(entry).body.textContent).toBe(SUBPROCESSOR_REVISIONS[index]?.summary);
     });
   });
 
@@ -183,20 +235,53 @@ describe('/changelog advertises its feed', () => {
     }
   });
 
-  it('shows a subscribe link to the feed and lists each subprocessor change with its version', () => {
+  it('shows a subscribe link to the feed', () => {
     render(<ChangelogPage />);
 
     const subscribe = screen.getByText(/^Subscribe/).closest('a');
     expect(subscribe).toHaveAttribute('href', CHANGELOG_FEED_PATH);
     expect(subscribe).toHaveAttribute('type', 'application/atom+xml');
+  });
+});
 
-    const changes = policyChanges().filter((change) => change.history.key === 'subprocessors');
-    const links = screen.getAllByText('Subprocessors updated').map((node) => node.closest('a'));
-    expect(links.map((link) => link?.getAttribute('href'))).toEqual(
-      changes.map((change) => change.href),
+describe('/changelog lists policy changes', () => {
+  function policyRows() {
+    render(<ChangelogPage />);
+    return within(screen.getByRole('list', { name: 'Policy changes' }))
+      .getAllByRole('listitem')
+      .map((row) => {
+        const link = within(row).getByRole('link');
+        return {
+          date: row.firstElementChild?.textContent ?? '',
+          name: link.textContent ?? '',
+          href: link.getAttribute('href') ?? '',
+          text: row.textContent ?? '',
+        };
+      });
+  }
+
+  it('lists every policy version that says what changed, newest first, linked to that version', () => {
+    const rows = policyRows();
+    const dates = rows.map((row) => row.date);
+
+    expect(rows.map((row) => `${row.date} ${row.href}`).sort()).toEqual(
+      DESCRIBED_VERSIONS.map((version) => `${version.date} ${version.href}`).sort(),
     );
-    for (const change of changes) {
-      expect(screen.getByText(change.summary)).toBeInTheDocument();
+    expect(dates).toEqual([...dates].sort().reverse());
+    for (const version of DESCRIBED_VERSIONS) {
+      const row = rows.find((entry) => entry.date === version.date && entry.href === version.href);
+      expect(row?.text, `${version.key} ${version.date}`).toContain(version.summary);
     }
+  });
+
+  it('lists each change to the subprocessor list on the date the list changed', () => {
+    const rows = policyRows().filter((row) => row.name === 'Subprocessors updated');
+
+    expect(rows.map((row) => row.date)).toEqual(
+      SUBPROCESSOR_REVISIONS.map((revision) => revision.date),
+    );
+    rows.forEach((row, index) => {
+      expect(row.text).toContain(SUBPROCESSOR_REVISIONS[index]?.summary);
+    });
   });
 });
