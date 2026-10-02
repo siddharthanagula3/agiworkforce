@@ -13,6 +13,7 @@ const QUOTA_UNITS = ['requests', 'tokens', 'credits', 'neurons'] as const;
 const MIN_IDENTIFIER_LENGTH = 1;
 const MIN_QUOTA_LIMIT = 1;
 const MIN_SCHEMA_VERSION = 1;
+const PREVIEW_MODEL_MARKER = /preview/i;
 
 const FreePoolTermsSchema = z.object({
   commercialUseAllowed: z.boolean(),
@@ -39,6 +40,10 @@ const FreePoolEntrySchema = z
     message: 'an allocation never resets, so it must carry the expiry that ends it',
     path: ['expiresAtMs'],
   });
+
+function isPreviewOffering(offeringKey: string): boolean {
+  return PREVIEW_MODEL_MARKER.test(getProviderOffering(offeringKey)?.providerModelId ?? '');
+}
 
 const FreeQuotaObservationSchema = z.object({
   offeringKey: z
@@ -108,6 +113,13 @@ export const FreeQuotaInventorySchema = z
             code: z.ZodIssueCode.custom,
             path: ['termsReview', 'approvedOfferingKeys'],
             message: 'Terms review must name distinct observed offerings',
+          });
+        }
+        if (isPreviewOffering(key)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['termsReview', 'approvedOfferingKeys'],
+            message: `Terms review must leave out preview models, which the Preview Product Terms keep to internal testing: ${key}`,
           });
         }
         approved.add(key);

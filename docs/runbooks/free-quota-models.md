@@ -32,14 +32,70 @@ The key must be a general-purpose pay-as-you-go key: Model Studio states that
 ## Terms review
 
 The owner decided on 2026-10-02 to serve free quota output to users, and records
-the review as its reviewer. The review is the record of that call.
+the review as its reviewer. The review is the record of that call, made on the
+terms below.
 
-### The clause it answers
+### The terms it rests on
 
-Alibaba Cloud Model Studio service-specific terms, section III (Trial services),
-last paragraph, read on 2026-10-02 from
-https://help.aliyun.com/en/model-studio/bailian-service-notes (the page reports
-its last change at 2026-09-28T06:57:57Z):
+Our account is an Alibaba Cloud International account, its key calls the Model
+Studio International endpoint, and the console the record names is QwenCloud's.
+Two documents govern it, with the same model clauses under different names. Both
+were read on 2026-10-02.
+
+**Qwen Cloud Customer Agreement**, Models Supplemental,
+https://www.qwencloud.com/legal/agreement ("Updated: August 27, 2026"):
+
+- §2(b): "you and your end users may provide input to Models (“Input”), and
+  receive generated content from the AI models and applications based on the
+  Input (“Output”)."
+- §2(e): "Models does not claim ownership of any Intellectual Property Rights in
+  the Output. You may use the Input and Output, provided your use complies with
+  applicable laws, the Agreement, and our rules." It ends: "We will not use your
+  Customer Content to develop or improve the models on Models, unless you
+  separately provide your consent."
+- §2(d)(v): you shall not "resell Models or AI models provided through Models".
+- §2(g)(ii): access may be suspended for "circumventing controls, or abusing
+  promotions which we may offer from time to time".
+
+**Alibaba Cloud International Website Product Terms**, §4.48 Alibaba Cloud Model
+Studio,
+https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-product-terms-of-service-v-3-8-0
+("Last Updated: Aug 28, 2026"), which the Model Studio related agreements page,
+https://www.alibabacloud.com/help/en/model-studio/related-agreements ("Last
+Updated: Sep 28, 2026"), lists among "These agreements govern your use of Model
+Studio":
+
+- §4.48.1(b): "you and your end users may provide input to Model Studio
+  (“Input”), and receive generated content from the AI models and applications
+  based on the Input (“Output”)."
+- §4.48.1(e): "You may use the Input and Output, provided your use complies with
+  applicable laws, the Agreement, and our rules." It ends: "Alibaba Cloud will
+  not use your Member Content to develop or improve the models on Model Studio,
+  unless you separately provide your consent."
+- §4.48.1(d)(v): you shall not "resell Model Studio or AI models provided
+  through Model Studio".
+- §4.48.1(g)(ii): access may be suspended for "circumventing controls, or
+  abusing promotions which Alibaba Cloud may offer from time to time".
+
+Neither document has a trial or evaluation-only clause. Models from other
+developers in the inventory can carry their own licence or third-party terms
+(§2(f), §4.48.1(f)); the launch review did not read those.
+
+**Preview models stay out.** The Preview Product Terms,
+https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-beta-testing-terms
+("Last Updated: Aug 20, 2026"), §1.1, license a Preview Product "solely for the
+purposes of internal testing, research and evaluation". Whether a model whose id
+says preview is a Preview Product is not verified, so the stricter reading wins:
+a review never approves an offering whose model id contains "preview", and the
+schema in `apps/web/lib/server/free-pools.ts` refuses a file that does.
+
+### The mainland clause that was considered
+
+The 2026-09-01 research (`docs/research/provider-free-value-matrix-2026-09-01.md`)
+flagged an evaluation-only clause. It is in the mainland China (Bailian)
+service-specific terms, section III (Trial services), last paragraph, read on
+2026-10-02 from https://help.aliyun.com/en/model-studio/bailian-service-notes
+(the page reports its last change at 2026-09-28T06:57:57Z):
 
 > Unless we state otherwise, you agree not to claim any intellectual property
 > rights in the content generated during your trial interactions ("generated
@@ -49,22 +105,24 @@ its last change at 2026-09-28T06:57:57Z):
 > third party in any form or from using or distributing it on any third-party
 > platform.
 
-`help.aliyun.com` paths under `/en/` can serve mainland China content; the same
-page on www.alibabacloud.com answered 404 on 2026-10-02, and QwenCloud's own
-terms were not read. Whether the clause covers the API free quota is a legal
-question the owner has answered; re-read it before every renewal.
+It does not govern our account: the international related agreements page lists
+no such document, and the same page on www.alibabacloud.com answered 404 on
+2026-10-02. It is kept here so every renewal sees it was weighed, and checks
+that it has not reached the international site.
 
 ### What each term asserts
 
 All four must be `true`, and the review must be inside its dates, or no free
-quota model serves.
+quota model serves. The questions are the ones `isFreeEligibilityValid` in
+`packages/ai/routing/src/runtime-state.ts` asks of every free pool, as
+`docs/research/free-inference-tos-workbook-2026-09-01.md` defines them.
 
-| Term                          | Asserts                                                                   |
-| ----------------------------- | ------------------------------------------------------------------------- |
-| `commercialUseAllowed`        | the free quota may be used in a commercial product                        |
-| `thirdPartyServingAllowed`    | its output may be served to other people, not only the account owner      |
-| `proxyingAllowed`             | the provider does not forbid proxying or reselling it through our service |
-| `promptsExcludedFromTraining` | the provider does not train on the prompts we send                        |
+| Term                          | Asserts                                                                | Answered by                                     |
+| ----------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------- |
+| `commercialUseAllowed`        | the free quota may be used in a commercial product                     | §2(e), §4.48.1(e), and no evaluation-only limit |
+| `thirdPartyServingAllowed`    | its output may be served to our users, not only to the account owner   | §2(b), §4.48.1(b): "you and your end users"     |
+| `proxyingAllowed`             | our use, a product built on the models, is permitted; resale stays out | §2(d)(v), §4.48.1(d)(v) forbid only resale      |
+| `promptsExcludedFromTraining` | the provider does not train on the prompts we send                     | the last sentence of §2(e) and §4.48.1(e)       |
 
 ### Shape
 
@@ -78,7 +136,7 @@ quota model serves.
     "proxyingAllowed": <true or false>,
     "promptsExcludedFromTraining": <true or false>
   },
-  "evidenceUrl": "<URL of the terms that were read>",
+  "evidenceUrl": "<URL of the governing terms that were read>",
   "reviewedBy": "<who made the call>",
   "verifiedAtMs": <epoch milliseconds the review was made>,
   "expiresAtMs": <epoch milliseconds it stops counting>,
@@ -87,8 +145,9 @@ quota model serves.
 ```
 
 `approvedOfferingKeys` must name distinct keys that appear in
-`inventory.entries`; the schema refuses the file otherwise, and an offering not
-named stays off. A `verifiedAtMs` after the server clock does not count yet.
+`inventory.entries`, none of them a preview model; the schema refuses the file
+otherwise, and an offering not named stays off. A `verifiedAtMs` after the server
+clock does not count yet.
 
 ### Recording it
 
@@ -105,12 +164,19 @@ A reminder goes out three days before `expiresAtMs` and again when it passes
 (see Reminders). Start the renewal when the first one arrives, since a merge and
 a deploy take time:
 
-1. Re-read the clause at the URL above. If it changed, stop and get the owner's
-   call before renewing.
-2. Set `verifiedAtMs` to the time of the review and `expiresAtMs` to the end of
+1. Re-read the governing documents first: the Qwen Cloud Customer Agreement,
+   Models Supplemental §2, and the Product Terms §4.48, at the URLs above. If a
+   quoted clause changed, or either document gained a trial, evaluation-only or
+   end-user limit, stop and get the owner's call before renewing.
+2. Re-read the Preview Product Terms §1.1 and the mainland clause, and check
+   that the clause has not appeared on www.alibabacloud.com.
+3. Set `verifiedAtMs` to the time of the review and `expiresAtMs` to the end of
    the window the owner chose (90 days for the launch review), and list the
-   offerings it clears.
-3. Get the change reviewed, merge it and deploy it before `expiresAtMs`.
+   offerings it clears. Leave out every offering whose model id contains
+   "preview".
+4. Point `evidenceUrl` at the governing document the review relied on, and
+   update the quotes and dates in this section.
+5. Get the change reviewed, merge it and deploy it before `expiresAtMs`.
 
 ## Console check
 
@@ -137,9 +203,17 @@ https://docs.qwencloud.com/resources/free-quota, read on 2026-10-02.
 Why it matters: "Free quota only is disabled by default", and without it "Tokens
 exceeding free quota are billed based on input/output costs in Model invocation
 pricing. Charges are automatically deducted on a pay-as-you-go basis, which may
-result in overdue payment." QwenCloud also states "Currently, there is no
-notification mechanism" for a used-up quota, so our reminders are the only
-warning.
+result in overdue payment."
+
+Who warns about a spent quota: QwenCloud states "Currently, there is no
+notification mechanism" for a used-up quota, while Model Studio's free quota
+page (cited below) states "When your remaining quota drops to 20% or is fully
+exhausted, the system sends notifications through internal messages and email."
+Our reminders (see
+Reminders) cover only our own records, the terms review and the console check,
+and a billing code the provider returns; they say nothing about how much free
+quota is left. The quota each model has left, and the date it ends, are on the
+consoles' free quota pages.
 
 ### Then the same switch in Alibaba Cloud Model Studio
 

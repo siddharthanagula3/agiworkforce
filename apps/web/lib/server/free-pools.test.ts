@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getProviderOffering } from '@agiworkforce/types';
 
 import {
   eligibleFreeEligibility,
@@ -244,5 +245,47 @@ describe('the terms review standing', () => {
     expect(reviewedQuotaOfferingKeys({ ...inventory, termsReview: expiring }, NOW_MS)).toEqual(
       new Set(expiring.approvedOfferingKeys),
     );
+  });
+});
+
+describe('what a terms review may approve', () => {
+  const inventory = loadFreePools().inventory!;
+  const keys = inventory.entries.map((entry) => entry.offeringKey);
+  const previewKeys = keys.filter((key) =>
+    /preview/i.test(getProviderOffering(key)?.providerModelId ?? ''),
+  );
+  const stableKeys = keys.filter((key) => !previewKeys.includes(key));
+
+  function approving(approvedOfferingKeys: string[]) {
+    return {
+      ...loadFreePools(),
+      inventory: {
+        ...inventory,
+        termsReview: {
+          terms: {
+            commercialUseAllowed: true,
+            thirdPartyServingAllowed: true,
+            proxyingAllowed: true,
+            promptsExcludedFromTraining: true,
+          },
+          evidenceUrl: EVIDENCE_URL,
+          reviewedBy: REVIEWER,
+          verifiedAtMs: NOW_MS - HOUR_MS,
+          expiresAtMs: NOW_MS + HOUR_MS,
+          approvedOfferingKeys,
+        },
+      },
+    };
+  }
+
+  it('accepts a review of every model whose id does not name a preview', () => {
+    expect(() => parseFreePoolsDocument(approving(stableKeys))).not.toThrow();
+  });
+
+  it('refuses a review that approves a preview model, which the Preview Product Terms keep to internal testing', () => {
+    expect(previewKeys.length).toBeGreaterThan(0);
+    for (const key of previewKeys) {
+      expect(() => parseFreePoolsDocument(approving([...stableKeys, key]))).toThrow(/preview/);
+    }
   });
 });
