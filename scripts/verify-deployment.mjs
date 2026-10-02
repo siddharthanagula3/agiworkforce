@@ -73,8 +73,8 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function runProbe(baseUrl, probe) {
-  const response = await fetch(new URL(probe.path, baseUrl), {
+async function runProbe(baseUrl, probe, fetchImpl) {
+  const response = await fetchImpl(new URL(probe.path, baseUrl), {
     headers: { accept: 'application/json', 'x-request-id': `deploy-${randomUUID()}` },
     redirect: 'manual',
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -106,7 +106,7 @@ export async function verifyDeployment(rawBaseUrl, options = {}) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       for (const probe of PROBES) {
-        await runProbe(baseUrl, probe);
+        await runProbe(baseUrl, probe, options.fetchImpl ?? fetch);
       }
       return { baseUrl: baseUrl.href, probes: PROBES.map((probe) => probe.path) };
     } catch (error) {
@@ -119,6 +119,83 @@ export async function verifyDeployment(rawBaseUrl, options = {}) {
   }
 
   throw lastError;
+}
+
+export async function verifyVercelPreview(rawBaseUrl, expectedSha, options = {}) {
+  let baseUrl;
+  try {
+    baseUrl = new URL(rawBaseUrl);
+  } catch {
+    throw new Error('The preview deployment must be an HTTPS Vercel origin');
+  }
+  if (
+    baseUrl.protocol !== 'https:' ||
+    baseUrl.username ||
+    baseUrl.password ||
+    baseUrl.port ||
+    baseUrl.pathname !== '/' ||
+    baseUrl.search ||
+    baseUrl.hash ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app$/u.test(baseUrl.hostname) ||
+    ![baseUrl.origin, `${baseUrl.origin}/`].includes(rawBaseUrl)
+  ) {
+    throw new Error('The preview deployment must be an HTTPS Vercel origin');
+  }
+  if (!/^[0-9a-f]{40}$/u.test(expectedSha ?? '')) {
+    throw new Error('The preview candidate must be a full commit');
+  }
+  const { token, orgId, projectId, bypassSecret, fetchImpl = fetch } = options;
+  if (
+    ![token, bypassSecret].every((value) => typeof value === 'string' && /^[!-~]+$/u.test(value)) ||
+    ![orgId, projectId].every((value) => typeof value === 'string' && value.trim())
+  ) {
+    throw new Error(
+      'The protected preview requires valid Vercel credentials and an automation bypass secret',
+    );
+  }
+  const query = new URLSearchParams();
+  if (orgId.startsWith('team_')) query.set('teamId', orgId);
+  const lookup = await fetchImpl(
+    `https://api.vercel.com/v13/deployments/${encodeURIComponent(baseUrl.hostname)}?${query}`,
+    {
+      headers: { accept: 'application/json', authorization: `Bearer ${token}` },
+      redirect: 'manual',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (lookup.status !== 200) {
+    throw new Error(`Vercel preview lookup returned ${lookup.status}`);
+  }
+  let deployment;
+  try {
+    deployment = await lookup.json();
+  } catch {
+    throw new Error('Vercel preview lookup returned an invalid deployment response');
+  }
+  if (
+    deployment?.url !== baseUrl.hostname ||
+    deployment?.projectId !== projectId ||
+    deployment?.ownerId !== orgId ||
+    deployment?.target !== null ||
+    deployment?.readyState !== 'READY'
+  ) {
+    throw new Error('Vercel did not confirm a ready preview for the configured project and owner');
+  }
+  const protectedFetch = (target, init) => {
+    if (new URL(target).origin !== baseUrl.origin) {
+      throw new Error('The protected probe cannot leave its verified deployment origin');
+    }
+    return fetchImpl(target, {
+      ...init,
+      headers: { ...init.headers, 'x-vercel-protection-bypass': bypassSecret },
+      redirect: 'manual',
+    });
+  };
+  const protectedOptions = { ...options, fetchImpl: protectedFetch };
+  const serving = await verifyDeployment(baseUrl.href, protectedOptions);
+  const commit = await verifyDeployedCommit(baseUrl.href, expectedSha, protectedOptions);
+  return { ...serving, ...commit };
 }
 
 export function apiHostUrlFor(rawAppUrl) {
@@ -270,8 +347,8 @@ function settled(message) {
   return error;
 }
 
-async function readDeployedCommit(baseUrl) {
-  const response = await fetch(new URL('/api/version', baseUrl), {
+async function readDeployedCommit(baseUrl, fetchImpl) {
+  const response = await fetchImpl(new URL('/api/version', baseUrl), {
     headers: { accept: 'application/json', 'x-request-id': `drift-${randomUUID()}` },
     redirect: 'manual',
     cache: 'no-store',
@@ -322,7 +399,7 @@ export async function verifyDeployedCommit(rawBaseUrl, rawExpectedSha, options =
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const deployed = await readDeployedCommit(baseUrl);
+      const deployed = await readDeployedCommit(baseUrl, options.fetchImpl ?? fetch);
       if (!sameCommit(deployed, expected)) {
         const message =
           `${baseUrl.origin} is serving commit ${deployed}, but main is at ${expected}; ` +
@@ -346,11 +423,12 @@ export async function verifyDeployedCommit(rawBaseUrl, rawExpectedSha, options =
 async function main() {
   const argv = process.argv.slice(2);
   const apiHostOnly = argv.includes('--api-host');
+  const vercelPreview = argv.includes('--vercel-preview');
   const awaitPromotion = argv.includes('--await-promotion');
   const [baseUrl, expectedSha] = argv.filter((argument) => !argument.startsWith('--'));
   if (!baseUrl) {
     throw new Error(
-      'Usage: node scripts/verify-deployment.mjs [--api-host] [--await-promotion] ' +
+      'Usage: node scripts/verify-deployment.mjs [--api-host] [--vercel-preview] [--await-promotion] ' +
         '<deployment-url> [expected-commit-sha]',
     );
   }
@@ -358,6 +436,21 @@ async function main() {
   const onRetry = (attempt, error) => {
     console.warn(`attempt ${attempt} failed: ${error instanceof Error ? error.message : error}`);
   };
+
+  if (vercelPreview) {
+    if (apiHostOnly) throw new Error('Preview verification cannot probe a separate API host');
+    const result = await verifyVercelPreview(baseUrl, expectedSha, {
+      token: process.env.VERCEL_TOKEN,
+      orgId: process.env.VERCEL_ORG_ID,
+      projectId: process.env.VERCEL_PROJECT_ID,
+      bypassSecret: process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+      onRetry,
+    });
+    console.log(
+      `Preview serving path and commit verified: ${result.baseUrl} (${result.deployedCommit})`,
+    );
+    return;
+  }
 
   if (apiHostOnly) {
     const apiHost = await verifyApiHost(apiHostUrlFor(baseUrl), { onRetry });

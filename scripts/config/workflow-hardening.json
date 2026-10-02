@@ -67,10 +67,6 @@
       "reason": "it deletes the untagged images the build left behind"
     },
     {
-      "id": "deploy-staging.yml:unprovisioned:statuses",
-      "reason": "it reports the staging verdict as a commit status the production gate waits on"
-    },
-    {
       "id": "deploy-staging.yml:deploy:statuses",
       "reason": "it reports the staging verdict as a commit status the production gate waits on"
     },

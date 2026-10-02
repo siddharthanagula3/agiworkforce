@@ -20,42 +20,9 @@ permissions:
   statuses: write
 
 jobs:
-  unprovisioned:
-    name: Declare the staging tier unprovisioned
-    if: >-
-      vars.STAGING_WEB_URL == '' &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.head_branch == 'main' &&
-          github.event.workflow_run.head_repository.full_name == github.repository
-        )
-      )
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Report no staging verification for this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-          REPOSITORY: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api --method POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
-            -f state=error \
-            -f context=staging-web \
-            -f description='staging tier not provisioned; nothing was verified' \
-            --silent
-          echo "::error::vars.STAGING_WEB_URL is unset; staging verification is required before production"
-          exit 1
-
   deploy:
     name: Deploy and verify the staging web artifact
     if: >-
-      vars.STAGING_WEB_URL != '' &&
       (
         github.event_name == 'workflow_dispatch' ||
         (
@@ -69,7 +36,7 @@ jobs:
     timeout-minutes: 30
     environment:
       name: staging-web
-      url: ${{ vars.STAGING_WEB_URL }}
+      url: ${{ steps.deploy.outputs.url }}
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -77,7 +44,6 @@ jobs:
       AGI_STAGING_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
       AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
       DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
-      STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
     steps:
       - name: Checkout the candidate commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -101,10 +67,12 @@ jobs:
           cache: 'pnpm'
 
       - name: Require the protected staging deployment contract
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID AGI_STAGING_DATABASE_URL STAGING_WEB_URL; do
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID AGI_STAGING_DATABASE_URL VERCEL_AUTOMATION_BYPASS_SECRET; do
             if [ -z "${!name:-}" ]; then
               echo "::error::$name is required in the staging-web environment"
               exit 1
@@ -159,31 +127,15 @@ jobs:
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
 
-      # The deployment's own *.vercel.app alias sits behind Deployment
-      # Protection and answers 401 to any unauthenticated probe, so the smoke
-      # check below has to run against the custom staging domain. Aliasing is
-      # what puts this build there.
-      - name: Point the staging origin at this deployment
-        env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          host="${STAGING_WEB_URL#https://}"
-          host="${host#http://}"
-          host="${host%%/*}"
-          vercel alias set "$DEPLOYMENT_URL" "$host" --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
-
-      # Same verifier the production gate uses, against the same serving path:
-      # /api/health plus routes whose module graph reaches lib/api-auth, and the
-      # commit the origin reports has to be this one.
       - name: Verify the staging serving path
         id: verify
         env:
           HEAD_SHA: ${{ steps.commit.outputs.sha }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: >-
-          node scripts/verify-deployment.mjs --await-promotion
-          "$STAGING_WEB_URL" "$HEAD_SHA"
+          node scripts/verify-deployment.mjs --vercel-preview
+          "$DEPLOYMENT_URL" "$HEAD_SHA"
 
       - name: Record the migration state staging serves
         id: record
@@ -222,7 +174,7 @@ jobs:
             echo "- Commit: \`$DEPLOYMENT_SHA\`"
             echo "- Artifact: prebuilt from $DEPLOYMENT_SHA"
             echo "- URL: $DEPLOYMENT_URL"
-            echo "- Origin: $STAGING_WEB_URL"
+            echo "- Origin: $DEPLOYMENT_URL"
             echo "- Migrations: $migration_state"
             echo "- Serving path: $serving_path"
           } >> "$GITHUB_STEP_SUMMARY"
