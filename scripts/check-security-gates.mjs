@@ -66,8 +66,26 @@ function snapshotDependencies(snapshot) {
   );
 }
 
+function importerDependencyKeys(lockfile, importer) {
+  return IMPORTER_FIELDS.flatMap((field) =>
+    Object.entries(lockfile.importers[importer]?.[field] ?? {})
+      .map(([name, entry]) => [name, String(entry?.version ?? '')])
+      .filter(([, version]) => !version.startsWith('link:'))
+      .map(([name, version]) => lockfileDependencyKey(name, version)),
+  );
+}
+
 function lockfileDependents(lockfile, waivedPackage) {
   const dependents = new Set();
+  for (const importer of Object.keys(lockfile.importers)) {
+    if (
+      importerDependencyKeys(lockfile, importer).some(
+        (dependency) => lockfilePackageName(dependency) === waivedPackage,
+      )
+    ) {
+      dependents.add(importer);
+    }
+  }
   for (const [key, snapshot] of Object.entries(lockfile.snapshots)) {
     if (
       snapshotDependencies(snapshot).some(

@@ -268,6 +268,38 @@ test('a parent that depends on the waived package through an alias fails the bui
   ]);
 });
 
+test('an allowed importer that depends on the waived package directly fails the build', () => {
+  const drifted = scopedLockfile();
+  drifted.importers['apps/mobile'].dependencies['waived-package'] = {
+    specifier: '^1.4.0',
+    version: '1.4.0',
+  };
+  assert.deepEqual(auditWaiverFailures({ lockfile: drifted }), [
+    'exclusion scoped-audit-waiver waives waived-package for build-tool only, but apps/mobile also depends on it in pnpm-lock.yaml',
+  ]);
+});
+
+test('an allowed importer that aliases the waived package fails the build', () => {
+  const drifted = scopedLockfile();
+  drifted.importers['apps/mobile'].dependencies.rsa = {
+    specifier: 'npm:waived-package@1.4.0',
+    version: 'waived-package@1.4.0',
+  };
+  assert.deepEqual(auditWaiverFailures({ lockfile: drifted }), [
+    'exclusion scoped-audit-waiver waives waived-package for build-tool only, but apps/mobile also depends on it in pnpm-lock.yaml',
+  ]);
+});
+
+test('an importer listed as a permitted dependent may depend on the waived package directly', () => {
+  const drifted = scopedLockfile();
+  drifted.importers['apps/mobile'].dependencies['waived-package'] = {
+    specifier: '^1.4.0',
+    version: '1.4.0',
+  };
+  const dependents = { packages: ['apps/mobile', 'build-tool'], importers: ['apps/mobile'] };
+  assert.deepEqual(auditWaiverFailures({ lockfile: drifted, entry: { dependents } }), []);
+});
+
 test('another importer reaching the waived package through a permitted dependent fails the build', () => {
   const drifted = scopedLockfile();
   drifted.importers['packages/shared'].dependencies['build-tool'] = {
