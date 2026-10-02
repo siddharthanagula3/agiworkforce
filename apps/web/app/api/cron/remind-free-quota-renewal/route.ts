@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { isProductionRuntime } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { remindFreeQuotaRenewals } from '@/lib/server/free-quota-renewal';
@@ -19,6 +20,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const run = await remindFreeQuotaRenewals(Date.now());
     if (!run.checked) {
+      if (isProductionRuntime() && !run.missing.includes('inventory')) {
+        logger.error(
+          { event: 'free_quota_renewal_unconfigured', missing: run.missing },
+          'Every free quota model is off: this production deployment lacks the provider key or shared store they need',
+        );
+        return NextResponse.json(run, { status: 500 });
+      }
       logger.info(
         { event: 'free_quota_renewal_skipped', missing: run.missing },
         'Free quota renewal check finished',

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/server/cron-auth');
 type ScanModule1 = typeof import('@/lib/server/free-quota-renewal');
@@ -27,6 +27,10 @@ function request(): NextRequest {
 beforeEach(() => {
   mocks.verify.mockReturnValue(true);
   mocks.remind.mockResolvedValue({ checked: true, reminders: [] });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('free quota renewal cron', () => {
@@ -67,6 +71,45 @@ describe('free quota renewal cron', () => {
     const response = await GET(request());
 
     expect(response.status).toBe(500);
+    expect(await response.json()).toEqual(run);
+  });
+
+  it.each([[['credential']], [['shared_state']], [['shared_state', 'credential']]])(
+    'answers 500 in production when the inventory lists free models but %j is missing, so a removed key is not silent',
+    async (missing) => {
+      vi.stubEnv('VERCEL_ENV', 'production');
+      const run = { checked: false, missing };
+      mocks.remind.mockResolvedValue(run);
+
+      const response = await GET(request());
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual(run);
+    },
+  );
+
+  it.each([[['inventory']], [['credential', 'inventory']]])(
+    'answers 200 in production when the code carries no free quota inventory (%j), since free models are then off on purpose',
+    async (missing) => {
+      vi.stubEnv('VERCEL_ENV', 'production');
+      const run = { checked: false, missing };
+      mocks.remind.mockResolvedValue(run);
+
+      const response = await GET(request());
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(run);
+    },
+  );
+
+  it('answers 200 outside production when free models are not set up', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    const run = { checked: false, missing: ['shared_state', 'credential'] };
+    mocks.remind.mockResolvedValue(run);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
     expect(await response.json()).toEqual(run);
   });
 

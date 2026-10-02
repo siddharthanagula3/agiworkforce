@@ -416,6 +416,13 @@ one that reached nobody, failed, or was cut off with its run is sent again on
 the next run. A run in which any reminder reached nobody answers HTTP 500, so it
 shows in the Vercel cron log.
 
+A production run that finds the inventory in place but the shared store or
+`QWEN_API_KEY` missing cannot read the gates, so it sends no reminder. Every free
+quota model is off then, so it logs `free_quota_renewal_unconfigured` at error
+level and answers HTTP 500, every hour until both are back. A deployment without
+the inventory has free quota models off on purpose, and a preview or local
+deployment may lack them, so those answer 200.
+
 ## What users see when a gate lapses
 
 - The model picker marks every free quota model "Not available right now"
