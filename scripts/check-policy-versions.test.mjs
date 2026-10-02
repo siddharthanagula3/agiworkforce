@@ -13,6 +13,7 @@ import {
   copyDigest,
   publishedCopy,
   readConstantObject,
+  readPublications,
   runPolicyArchiveSourceCheck,
   runPolicyVersionsCheck,
 } from './check-policy-versions.mjs';
@@ -21,6 +22,7 @@ import {
   archiveExpectations,
   archiveFile,
   byArchivePreference,
+  publicationStanding,
   renderManifest,
   runPolicyArchiveCheck,
 } from './lib/policy-archive.mjs';
@@ -617,7 +619,7 @@ test('lists a policy first published after version histories began, and not one 
 
   assert.deepEqual(Object.keys(policies), ['referralTerms']);
   assert.deepEqual(policies.referralTerms.versions, [
-    { date: '2026-09-27', summary, status: 'current' },
+    { date: '2026-09-27', summary, status: 'current', published: null },
   ]);
   assert.equal(JSON.parse(renderManifest(policies, '2026-09-21')).recordedSince, '2026-09-21');
 });
@@ -772,6 +774,161 @@ test('archives from a commit origin/main holds before a newer one only this bran
     commits.sort(byArchivePreference(published, mainline)).map((commit) => commit.sha),
     ['main-tip', 'main-earlier', 'merged-side', 'lane-tip', 'lane-side'],
   );
+});
+
+test('archives a version production served from the commit it served before a newer one with the same text', () => {
+  const commits = [
+    { sha: 'main-tip', time: 30 },
+    { sha: 'main-earlier', time: 20 },
+    { sha: 'served', time: 10 },
+  ];
+  const onMain = new Set(['main-tip', 'main-earlier', 'served']);
+  assert.deepEqual(
+    commits
+      .sort(byArchivePreference(onMain, onMain, new Set(['served'])))
+      .map((commit) => commit.sha),
+    ['served', 'main-tip', 'main-earlier'],
+  );
+});
+
+const TERMS_ROUTES = { terms: '/terms' };
+
+function servedRecord(checkedOn, served, main) {
+  return { checkedOn, served, main, note: 'Production checked for the fixture.' };
+}
+
+function datedTermsHistory(t, dates) {
+  const { root, git, write, commit } = archiveRepository(t);
+  const pages = dates.map((date) => termsPage(`These terms were settled on ${date}.`));
+  const commits = dates.map((date, position) => {
+    write(CONSTANTS, constants({ termsDate: date }));
+    write(TERMS_PAGE, pages[position]);
+    return commit(`the terms dated ${date}`);
+  });
+  const versions = dates.map((date, position) => ({
+    date,
+    digest: copyDigest(pages[position]),
+    ...(position === 0
+      ? { note: 'Baseline recorded for the fixture.' }
+      : { summary: `Revises the fixture terms as settled on ${date}.` }),
+  }));
+  return { root, git, commits, versions };
+}
+
+function publicationsOf(root, index) {
+  const { records, failures } = readPublications(root, index);
+  assert.deepEqual(failures, []);
+  const standing = publicationStanding(records);
+  const published = archiveExpectations(
+    index,
+    TERMS_ROUTES,
+    () => true,
+    standing,
+  ).terms.versions.map((version) => [version.date, version.published]);
+  const unknown = runPolicyArchiveCheck(root, index, TERMS_ROUTES, standing).filter((failure) =>
+    failure.includes('no record in "publications"'),
+  );
+  return { published, unknown };
+}
+
+test('says a replaced version applied when production served it, and was never published when main replaced it first', (t) => {
+  const dates = ['2026-08-11', '2026-09-21', '2026-09-25', '2026-09-30'];
+  const { root, commits, versions } = datedTermsHistory(t, dates);
+  const index = {
+    ...registry(versions),
+    publications: [servedRecord('2026-09-26', commits[0], commits[2])],
+  };
+
+  const first = publicationsOf(root, index);
+  assert.deepEqual(first.published, [
+    ['2026-09-30', null],
+    ['2026-09-25', null],
+    ['2026-09-21', false],
+    ['2026-08-11', true],
+  ]);
+  assert.equal(first.unknown.length, 1);
+  assert.match(first.unknown[0], /"terms" 2026-09-25/);
+
+  index.publications.push(servedRecord('2026-10-01', commits[2], commits[3]));
+  const second = publicationsOf(root, index);
+  assert.deepEqual(second.published, [
+    ['2026-09-30', null],
+    ['2026-09-25', true],
+    ['2026-09-21', false],
+    ['2026-08-11', true],
+  ]);
+  assert.deepEqual(second.unknown, []);
+});
+
+test('fails when production served a version the history does not record', (t) => {
+  const { root, commits, versions } = datedTermsHistory(t, ['2026-08-11', '2026-09-21']);
+  const index = {
+    ...registry([{ ...versions[1], note: 'Baseline recorded for the fixture.' }]),
+    publications: [servedRecord('2026-09-22', commits[0], commits[1])],
+  };
+
+  const { failures } = readPublications(root, index);
+  assert.ok(
+    failures.some(
+      (failure) =>
+        failure.includes('"terms"') &&
+        failure.includes('production served the version dated 2026-08-11') &&
+        failure.includes(commits[0]),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('fails on a publication record that names no readable main-line commit, or on none at all', (t) => {
+  const { root, git, commits, versions } = datedTermsHistory(t, ['2026-08-11', '2026-09-21']);
+  const trunk = git('symbolic-ref', '--short', 'HEAD');
+  git('checkout', '--quiet', '-b', 'deployed');
+  fs.writeFileSync(path.join(root, 'notes.txt'), 'A deploy built from a branch main never held.\n');
+  git('add', '-A');
+  git('commit', '--quiet', '-m', 'a commit only the deploy branch holds');
+  const deployed = git('rev-parse', 'HEAD');
+  git('checkout', '--quiet', trunk);
+  git('branch', '--quiet', '-D', 'deployed');
+  const failuresFor = (publications) =>
+    readPublications(root, { ...registry(versions), publications }).failures;
+
+  assert.ok(
+    failuresFor([servedRecord('2026-09-22', deployed, commits[1])]).some((failure) =>
+      failure.includes('not on the history of this branch'),
+    ),
+  );
+  assert.ok(
+    failuresFor([servedRecord('2026-09-22', 'f'.repeat(40), commits[1])]).some((failure) =>
+      failure.includes('does not hold'),
+    ),
+  );
+  assert.ok(
+    failuresFor([servedRecord('22 September', commits[0].slice(0, 10), commits[1])]).some(
+      (failure) => failure.includes('checkedOn') || failure.includes('full commit id'),
+    ),
+  );
+  assert.ok(failuresFor([]).some((failure) => failure.includes('at least one day')));
+});
+
+test('the published policy set records what production served and words every replaced version by it', () => {
+  const index = JSON.parse(fs.readFileSync(path.join(repoRoot, REGISTRY), 'utf8'));
+  const { records, failures } = readPublications(repoRoot, index);
+  assert.deepEqual(failures, []);
+
+  const standing = publicationStanding(records);
+  assert.equal(standing('privacy', '2026-09-12'), true);
+  assert.equal(standing('terms', '2026-08-11'), true);
+  for (const [key, date] of [
+    ['privacy', '2026-09-21'],
+    ['privacy', '2026-09-22'],
+    ['privacy', '2026-09-27'],
+    ['subprocessors', '2026-09-21'],
+    ['subprocessors', '2026-09-22'],
+    ['mobile', '2026-09-21'],
+    ['terms', '2026-09-22'],
+  ]) {
+    assert.equal(standing(key, date), false, `${key} ${date}`);
+  }
 });
 
 test('the published policy set passes', () => {

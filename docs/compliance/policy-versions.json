@@ -1,6 +1,14 @@
 {
-  "note": "The dated version history of every canonical policy page in apps/web/lib/legal-constants.ts. The last version of each must match the text the page publishes and the date it prints; scripts/check-policy-versions.mjs fails when either moves alone. A change that leaves the date where it is appends a version with a note saying why it is editorial. recordedSince is the day these histories began: a policy whose first version is dated after it is listed on /changelog with that version's summary. The workflow is in docs/compliance/README.md.",
+  "note": "The dated version history of every canonical policy page in apps/web/lib/legal-constants.ts. The last version of each must match the text the page publishes and the date it prints; scripts/check-policy-versions.mjs fails when either moves alone. A change that leaves the date where it is appends a version with a note saying why it is editorial. recordedSince is the day these histories began: a policy whose first version is dated after it is listed on /changelog with that version's summary. Each record in publications names a day production was checked, a commit on main that prints the dates production served then, and main's head at that moment, so a replaced version says whether it applied on this site or was replaced before it was published here. The workflow is in docs/compliance/README.md.",
   "recordedSince": "2026-09-21",
+  "publications": [
+    {
+      "checkedOn": "2026-10-02",
+      "served": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+      "main": "7460f331a2e0a5229dd997805af2de66667614b5",
+      "note": "Vercel's newest production deployment on 2 October 2026 was built on 21 September 2026 from e353673cce, whose tree main holds as 9633cf72ad, and the live policy pages printed the dates POLICY_LAST_UPDATED gives at that commit, checked page by page that day. Main was at 7460f331a2 when this was checked, so a version main had replaced by then was never published on this site."
+    }
+  ],
   "documents": {
     "terms": {
       "page": "apps/web/app/terms/page.tsx",
@@ -39,9 +47,14 @@
       "page": "apps/web/app/privacy/page.tsx",
       "versions": [
         {
+          "date": "2026-09-12",
+          "digest": "5382189b6748c203",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "8a047905eaa64a87",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
+          "note": "Recorded 2026-09-21 from the text main held that day, which printed this date. This site was still serving the version dated 2026-09-12 on 2 October 2026, so this version was replaced before it was published here.",
           "summary": "Adds how dictation and Voice Mode audio is handled: it goes to OpenAI and we keep none of it. Adds that a picture you attach has its location, camera and time details removed before it leaves your device, and is not sent if that cannot be done. Adds a security incidents section on the breach procedure, its 72-hour clock for notifying a regulator and how a notice would reach you, and says that some models are reached through an inference gateway, each named on the subprocessors page."
         },
         {
@@ -201,9 +214,14 @@
       "page": "apps/web/app/subprocessors/page.tsx",
       "versions": [
         {
+          "date": "2026-09-12",
+          "digest": "377ab8e76824394e",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "c1b0cefecd9999c0",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
+          "note": "Recorded 2026-09-21 from the text main held that day, which printed this date. This site was still serving the version dated 2026-09-12 on 2 October 2026, so this version was replaced before it was published here.",
           "summary": "Adds five recipients: the Cheaper Inference and Experiential Labs inference gateways, Cloudflare Workers AI, Vercel AI Gateway, and OpenAI for dictation and Voice Mode. Removes MiniMax, which was listed but received no Managed Cloud traffic, and corrects when Qwen and Zhipu requests pass through OpenRouter."
         },
         {
@@ -399,9 +417,15 @@
       "page": "apps/web/app/trust/page.tsx",
       "versions": [
         {
+          "date": "2026-09-12",
+          "digest": "e1fb49f0572d8803",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "b91459df778d4e39",
-          "note": "Every row re-checked against its evidence on 2026-09-21 and recorded in docs/compliance/trust-claims.json."
+          "note": "Every row re-checked against its evidence on 2026-09-21 and recorded in docs/compliance/trust-claims.json.",
+          "summary": "Corrects three rows against the code: release signing covers the macOS desktop app only, as there is no Windows build; business continuity says the host-neutral restore drill runs every week and only the production database has no scheduled restore test; and security event logging adds the log of each call a connector makes. Records the 21 September review of the subprocessor list, re-measures row-level isolation and the protected route groups, and says /status runs its checks at most once a minute."
         },
         {
           "date": "2026-09-21",
@@ -499,9 +523,14 @@
       "page": "apps/web/app/mobile/legal/page.tsx",
       "versions": [
         {
+          "date": "2026-08-13",
+          "digest": "f74ceb8ba830da6c",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "e809c74693e2470f",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
+          "note": "Recorded 2026-09-21 from the text main held that day, which printed this date. This site was still serving the version dated 2026-08-13 on 2 October 2026, so this version was replaced before it was published here.",
           "summary": "Corrects the EU AI Act disclosures for the planned app: it will tell you it is an AI system on a first-run screen you accept before its first model request, and only its planned on-device data export, not the per-conversation export sheet, will mark chat transcripts with a machine-readable AI-generated marker."
         },
         {

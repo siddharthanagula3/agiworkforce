@@ -15,7 +15,11 @@ test.describe('/legal/archive', () => {
 
     await versions.getByRole('link', { name: 'Read this version' }).click();
     await expect(page).toHaveURL(/\/legal\/archive\/terms\/2026-08-11$/);
-    await expect(page.getByText('This version no longer applies.')).toBeVisible();
+    await expect(
+      page.getByText(
+        'This version applied until the version dated 2026-09-23 replaced it on this site.',
+      ),
+    ).toBeVisible();
     await expect(page.getByRole('heading', { name: '02 · Eligibility and age' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Read the current version' }).click();
@@ -25,6 +29,12 @@ test.describe('/legal/archive', () => {
   test('an archived version steps back to the one before it', async ({ page }) => {
     const response = await page.goto('/legal/archive/privacy/2026-09-22');
     expect(response?.status()).toBe(200);
+
+    await expect(
+      page.getByText(
+        'This version was settled on 2026-09-22 and replaced on 2026-09-27 before it was published on this site.',
+      ),
+    ).toBeVisible();
 
     await page.getByRole('link', { name: 'Previous version, dated 2026-09-21' }).click();
     await expect(page).toHaveURL(/\/legal\/archive\/privacy\/2026-09-21$/);

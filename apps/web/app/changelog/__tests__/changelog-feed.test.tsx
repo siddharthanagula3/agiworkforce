@@ -56,6 +56,7 @@ const SUBPROCESSOR_REVISIONS = (REGISTRY.documents['subprocessors']?.versions ??
       version.date !== null &&
       versions.findIndex((earlier) => earlier.date === version.date) === position,
   )
+  .slice(1)
   .reverse();
 
 const DESCRIBED_VERSIONS = Object.entries(manifest.policies).flatMap(([key, policy]) =>
@@ -419,16 +420,25 @@ describe('/changelog lists policy changes', () => {
 
     expect(prose).toContain('on 21 September 2026');
     expect(prose).not.toMatch(/each time a policy is revised/i);
-    for (const name of [
-      'Privacy policy updated',
-      'Mobile app terms and privacy updated',
-      'Subprocessors updated',
+    for (const named of [
+      'the privacy policy',
+      'the mobile app’s terms and privacy policy',
+      'the subprocessor list',
+      'the trust posture',
     ]) {
-      expect(
-        rows.some((row) => row.name === name && row.date === '2026-09-21'),
-        name,
-      ).toBe(true);
+      expect(prose, named).toContain(named);
     }
+    expect(
+      rows
+        .filter((row) => row.date === '2026-09-21')
+        .map((row) => row.name)
+        .sort(),
+    ).toEqual([
+      'Mobile app terms and privacy updated',
+      'Privacy policy updated',
+      'Subprocessors updated',
+      'Trust posture updated',
+    ]);
   });
 
   it('does not claim its dates are never earlier than publication', () => {

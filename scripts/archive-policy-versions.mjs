@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // A replaced policy stays readable. For every dated version the history in
 // docs/compliance/policy-versions.json has moved past, this renders the text
-// the page last published under that date, at the newest commit that printed
-// that date with the text the history last records under it, preferring one
-// origin/main already holds, and writes it where /legal/archive reads it.
+// the history last records under that date, at the commit production served
+// when a publication record names one that holds it, otherwise at the newest
+// commit that printed that date with that text, preferring one origin/main
+// already holds, and writes it where /legal/archive reads it.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +12,13 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { CONSTANTS, REGISTRY, copyDigest, readConstantObject } from './check-policy-versions.mjs';
+import {
+  CONSTANTS,
+  REGISTRY,
+  copyDigest,
+  readConstantObject,
+  readPublications,
+} from './check-policy-versions.mjs';
 import {
   ARCHIVE_INDEX,
   ARCHIVE_MANIFEST,
@@ -19,9 +26,11 @@ import {
   archiveFile,
   byArchivePreference,
   lastDigest,
+  publicationStanding,
   readGitObjects,
   renderIndex,
   renderManifest,
+  unknownPublications,
 } from './lib/policy-archive.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -80,10 +89,10 @@ function reachable(ref, ...flags) {
   );
 }
 
-function newestCommit(commits, published, mainline, target) {
+function newestCommit(commits, onMain, mainline, served, target) {
   const candidates = commits
     .filter((commit) => commit.dates[target.key] === target.date)
-    .sort(byArchivePreference(published, mainline));
+    .sort(byArchivePreference(onMain, mainline, served));
   if (candidates.length === 0) return null;
   const pages = blobIds(candidates.map((commit) => `${commit.sha}:${target.page}`));
   const unique = [...new Set(pages.filter(Boolean))];
@@ -157,7 +166,13 @@ function main() {
     'CANONICAL_POLICY_ROUTES',
   );
   const exists = (key, date) => fs.existsSync(path.join(root, archiveFile(key, date)));
-  const missing = Object.entries(archiveExpectations(registry, routes, exists)).flatMap(
+  const publications = readPublications(root, registry);
+  if (publications.failures.length > 0) {
+    for (const failure of publications.failures) console.error(failure);
+    process.exit(1);
+  }
+  const standing = publicationStanding(publications.records);
+  const missing = Object.entries(archiveExpectations(registry, routes, exists, standing)).flatMap(
     ([key, policy]) =>
       policy.versions
         .map((version, position) => ({ version, newer: policy.versions[position - 1] }))
@@ -175,16 +190,17 @@ function main() {
   const unresolved = [];
   if (missing.length > 0) {
     const commits = datedCommits();
-    const published = reachable(MAIN_REF);
+    const onMain = reachable(MAIN_REF);
     const mainline = reachable('HEAD', '--first-parent');
+    const served = new Set(registry.publications.map((record) => record.served));
     const byCommit = new Map();
     for (const target of missing) {
-      const commit = newestCommit(commits, published, mainline, target);
+      const commit = newestCommit(commits, onMain, mainline, served, target);
       if (!commit) {
         unresolved.push(target);
         continue;
       }
-      if (published.size > 0 && !published.has(commit.sha)) {
+      if (onMain.size > 0 && !onMain.has(commit.sha)) {
         console.warn(
           `${target.route} dated ${target.date}: archived from ${commit.sha}, which ${MAIN_REF} does not hold yet. Bring this branch into main with a merge commit: a squash or rebase leaves that commit behind, and check-policy-versions then fails on main.`,
         );
@@ -196,10 +212,10 @@ function main() {
     for (const { commit, targets } of byCommit.values()) renderAt(commit, targets, workdir);
   }
 
-  const policies = archiveExpectations(registry, routes, exists);
+  const policies = archiveExpectations(registry, routes, exists, standing);
   fs.writeFileSync(
     path.join(root, ARCHIVE_MANIFEST),
-    renderManifest(policies, registry.recordedSince),
+    renderManifest(policies, registry.recordedSince, registry.publications),
   );
   fs.writeFileSync(path.join(root, ARCHIVE_INDEX), renderIndex(policies));
 
@@ -208,7 +224,9 @@ function main() {
       `${target.route} dated ${target.date}: no commit on this branch printed that date with the text ${REGISTRY} last records under it (digest ${target.digest}), so its text cannot be rendered. If it is lost, set "archive": "not-retained" on its first entry in ${REGISTRY}.`,
     );
   }
-  if (unresolved.length > 0) process.exit(1);
+  const unknown = unknownPublications(policies);
+  for (const failure of unknown) console.error(failure);
+  if (unresolved.length > 0 || unknown.length > 0) process.exit(1);
   console.log(`archive-policy-versions: ${missing.length} version(s) archived.`);
 }
 

@@ -9,6 +9,8 @@ import {
   archivedVersionHref,
   policyHistories,
   policyHistoryBySlug,
+  versionStanding,
+  type PolicyHistory,
   type PolicyVersionEntry,
 } from '@/lib/legal/policy-archive';
 import { buildMetadata } from '@/lib/seo/metadata';
@@ -29,33 +31,34 @@ export async function generateMetadata({ params }: { params: Promise<{ policy: s
   });
 }
 
-function versionValue(
-  version: PolicyVersionEntry,
-  route: string,
-  archiveHref: (date: string) => string,
-) {
+function versionValue(history: PolicyHistory, version: PolicyVersionEntry) {
   const summary = version.summary ?? 'The earliest recorded version.';
   if (version.status === 'current') {
     return (
       <>
         {summary}{' '}
-        <Link href={route} className="agi-ds-link">
+        <Link href={history.route} className="agi-ds-link">
           Current version
         </Link>
       </>
     );
   }
+  const standing = versionStanding(history, version.date);
   if (version.status === 'archived') {
     return (
       <>
-        {summary}{' '}
-        <Link href={archiveHref(version.date)} className="agi-ds-link">
+        {summary} {standing}{' '}
+        <Link href={archivedVersionHref(history, version.date)} className="agi-ds-link">
           Read this version
         </Link>
       </>
     );
   }
-  return <>{summary} The full text of this version was not kept.</>;
+  return (
+    <>
+      {summary} {standing} The full text of this version was not kept.
+    </>
+  );
 }
 
 export default async function PolicyHistoryPage({
@@ -80,8 +83,8 @@ export default async function PolicyHistoryPage({
               <Link href={history.route} className="agi-ds-link">
                 {history.label.toLowerCase()}
               </Link>
-              , newest first, with what changed in each. An earlier version is kept as it was last
-              published under its date.
+              , newest first, with what changed in each and whether this site published it before a
+              later version replaced it.
             </>
           }
           ctas={[]}
@@ -96,14 +99,13 @@ export default async function PolicyHistoryPage({
               caption="Versions"
               rows={history.versions.map((version) => ({
                 label: version.date,
-                value: versionValue(version, history.route, (date) =>
-                  archivedVersionHref(history, date),
-                ),
+                value: versionValue(history, version),
               }))}
             />
             <Prose size="sm">
-              The dates are the ones each version printed as its last update. Earlier versions are
-              shown for reference only; the current version is the one that applies.
+              A version&rsquo;s date is the day its text was settled, which can be earlier than the
+              day this site published it. Earlier versions are shown for reference only; the current
+              version is the one that applies.
             </Prose>
           </Stack>
         </Section>

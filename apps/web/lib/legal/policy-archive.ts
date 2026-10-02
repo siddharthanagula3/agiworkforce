@@ -38,6 +38,7 @@ export interface PolicyVersionEntry {
   date: string;
   summary: string | null;
   status: PolicyVersionStatus;
+  published: boolean | null;
 }
 
 export interface PolicyHistory {
@@ -87,6 +88,7 @@ const HISTORIES: readonly PolicyHistory[] = Object.entries(manifest.policies).ma
       date: version.date,
       summary: version.summary,
       status: version.status as PolicyVersionStatus,
+      published: version.published,
     })),
   }),
 );
@@ -124,7 +126,38 @@ export function olderArchivedVersion(history: PolicyHistory, date: string): stri
   return older?.date ?? null;
 }
 
-export const POLICY_PUBLICATION_FLOOR = { date: '2026-10-02', label: '2 October 2026' } as const;
+export function versionStanding(history: PolicyHistory, date: string): string | null {
+  const position = history.versions.findIndex((version) => version.date === date);
+  const version = history.versions[position];
+  const newer = history.versions.slice(0, Math.max(position, 0)).reverse();
+  const [replacement] = newer;
+  if (!version || version.status === 'current' || !replacement) return null;
+  if (version.published === false) {
+    return `This version was settled on ${version.date} and replaced on ${replacement.date} before it was published on this site.`;
+  }
+  if (version.published === null) {
+    return `This version was replaced by the version dated ${replacement.date}.`;
+  }
+  const successor = newer.find((entry) => entry.published !== false) ?? replacement;
+  return `This version applied until the version dated ${successor.date} replaced it on this site.`;
+}
+
+const LONG_DATE = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+function publicationFloor(): { date: string; label: string } {
+  const [date] = manifest.publicationsCheckedOn;
+  if (!date) {
+    throw new Error('The policy archive manifest records no check of what production served');
+  }
+  return { date, label: LONG_DATE.format(new Date(`${date}T00:00:00Z`)) };
+}
+
+export const POLICY_PUBLICATION_FLOOR = publicationFloor();
 
 export interface PolicyChange {
   history: PolicyHistory;

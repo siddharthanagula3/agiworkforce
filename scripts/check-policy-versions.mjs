@@ -18,7 +18,9 @@ import {
   ARCHIVE_COMMAND,
   archiveExpectations,
   archiveFile,
+  datedVersions,
   lastDigest,
+  publicationStanding,
   readGitObjects,
   runPolicyArchiveCheck,
 } from './lib/policy-archive.mjs';
@@ -30,6 +32,7 @@ export const REGISTRY = 'docs/compliance/policy-versions.json';
 export const PROVIDER_CATALOG = 'packages/contracts/types/src/models.json';
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+const COMMIT_SHAPE = /^[0-9a-f]{40}$/;
 const MIN_NOTE_LENGTH = 20;
 const SUBPROCESSOR_LIST = 'subprocessors';
 const COPY_TOKEN =
@@ -317,6 +320,83 @@ function onHistory(root, commit) {
   );
 }
 
+export function readPublications(root, registry) {
+  const where = `${REGISTRY} "publications"`;
+  const entries = Array.isArray(registry.publications) ? registry.publications : [];
+  if (entries.length === 0) {
+    return {
+      records: [],
+      failures: [
+        `${where}: record what production served on at least one day, so each replaced version can say whether this site published it`,
+      ],
+    };
+  }
+  const failures = [];
+  const checks = entries.map((entry, index) => {
+    const at = `${where} record ${index + 1}`;
+    if (!DATE_SHAPE.test(entry.checkedOn ?? '')) {
+      failures.push(`${at}: checkedOn must be the day production was checked`);
+    }
+    if (index > 0 && entry.checkedOn < entries[index - 1].checkedOn) {
+      failures.push(`${at}: checked on ${entry.checkedOn}, before the record it follows`);
+    }
+    if (typeof entry.note !== 'string' || entry.note.trim().length < MIN_NOTE_LENGTH) {
+      failures.push(`${at}: the note must say how production was checked`);
+    }
+    for (const role of ['served', 'main']) {
+      if (!COMMIT_SHAPE.test(entry[role] ?? '')) {
+        failures.push(`${at}: ${role} must be a full commit id`);
+      }
+    }
+    return { at, entry };
+  });
+  if (failures.length > 0) return { records: [], failures };
+
+  let constants;
+  try {
+    constants = readGitObjects(
+      root,
+      entries.flatMap((entry) => [`${entry.served}:${CONSTANTS}`, `${entry.main}:${CONSTANTS}`]),
+    );
+  } catch (error) {
+    return {
+      records: [],
+      failures: [`${where}: the recorded commits could not be read: ${error.message}`],
+    };
+  }
+
+  const records = [];
+  for (const [index, { at, entry }] of checks.entries()) {
+    const dates = {};
+    for (const [offset, role] of ['served', 'main'].entries()) {
+      const source = constants[index * 2 + offset];
+      const printed = source === null ? null : readConstantObject(source, 'POLICY_LAST_UPDATED');
+      if (!printed) {
+        failures.push(
+          `${at}: ${role} names commit ${entry[role]}, which this clone does not hold with ${CONSTANTS}; fetch the full history`,
+        );
+      } else if (!onHistory(root, entry[role])) {
+        failures.push(
+          `${at}: ${role} names commit ${entry[role]}, which is not on the history of this branch, so a clone of the branch, such as the one CI checks, cannot read it; record a commit on main with the same policy dates`,
+        );
+      } else {
+        dates[role] = printed;
+      }
+    }
+    if (!dates.served || !dates.main) continue;
+    for (const [key, date] of Object.entries(dates.served)) {
+      const recorded = datedVersions(registry.documents?.[key] ?? {});
+      if (recorded.length > 0 && !recorded.some((version) => version.date === date)) {
+        failures.push(
+          `${REGISTRY} "${key}": production served the version dated ${date} when ${at} was checked, and the history does not record it; add it as the version it was, with the digest of its text at ${entry.served}`,
+        );
+      }
+    }
+    records.push({ checkedOn: entry.checkedOn, served: dates.served, main: dates.main });
+  }
+  return { records, failures };
+}
+
 export function runPolicyArchiveSourceCheck(root, registry, routes) {
   const exists = (key, date) => fs.existsSync(path.join(root, archiveFile(key, date)));
   const sources = Object.entries(archiveExpectations(registry, routes, exists)).flatMap(
@@ -387,8 +467,10 @@ function main() {
       fs.readFileSync(path.join(root, CONSTANTS), 'utf8'),
       'CANONICAL_POLICY_ROUTES',
     );
+    const publications = readPublications(root, registry);
     failures.push(
-      ...runPolicyArchiveCheck(root, registry, routes),
+      ...publications.failures,
+      ...runPolicyArchiveCheck(root, registry, routes, publicationStanding(publications.records)),
       ...runPolicyArchiveSourceCheck(root, registry, routes),
     );
   }

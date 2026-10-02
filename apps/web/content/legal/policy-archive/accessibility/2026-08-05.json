@@ -3,8 +3,8 @@
   "route": "/accessibility",
   "date": "2026-08-05",
   "replacedOn": "2026-09-27",
-  "commit": "bcc87ae903fd202ef72f3532e0271899ca8dc4d7",
-  "committedAt": "2026-09-27T18:22:17-05:00",
+  "commit": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+  "committedAt": "2026-09-21T08:04:57-05:00",
   "title": "Accessibility.",
   "blocks": [
     {

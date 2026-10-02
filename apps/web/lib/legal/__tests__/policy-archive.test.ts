@@ -12,6 +12,7 @@ import {
   policyChanges,
   policyHistories,
   policyHistoryForKey,
+  versionStanding,
 } from '../policy-archive';
 
 const WEB_DIR = path.join(__dirname, '..', '..', '..');
@@ -23,6 +24,7 @@ interface RegistryVersion {
 
 const REGISTRY: {
   recordedSince: string;
+  publications: { checkedOn: string }[];
   documents: Record<string, { versions: RegistryVersion[] }>;
 } = JSON.parse(
   readFileSync(
@@ -91,7 +93,54 @@ describe('policy version history', () => {
     expect(privacy).not.toBeNull();
     if (!privacy) return;
     expect(olderArchivedVersion(privacy, '2026-09-22')).toBe('2026-09-21');
-    expect(olderArchivedVersion(privacy, '2026-09-21')).toBeNull();
+    expect(olderArchivedVersion(privacy, '2026-09-21')).toBe('2026-09-12');
+    expect(olderArchivedVersion(privacy, '2026-09-12')).toBeNull();
+  });
+
+  it('starts each history at the version this site served when production was first checked', () => {
+    for (const [key, served] of [
+      ['privacy', '2026-09-12'],
+      ['subprocessors', '2026-09-12'],
+      ['mobile', '2026-08-13'],
+      ['trust', '2026-09-12'],
+      ['terms', '2026-08-11'],
+      ['cookies', '2026-09-12'],
+    ] as const) {
+      expect(policyHistoryForKey(key)?.versions.at(-1), key).toMatchObject({
+        date: served,
+        status: 'archived',
+        published: true,
+      });
+    }
+  });
+
+  it('says whether a replaced version applied on this site or was replaced before it was published', () => {
+    const privacy = policyHistoryForKey('privacy');
+    const terms = policyHistoryForKey('terms');
+    expect(privacy && terms).toBeTruthy();
+    if (!privacy || !terms) return;
+
+    expect(versionStanding(privacy, '2026-09-12')).toBe(
+      'This version applied until the version dated 2026-09-29 replaced it on this site.',
+    );
+    expect(versionStanding(privacy, '2026-09-21')).toBe(
+      'This version was settled on 2026-09-21 and replaced on 2026-09-22 before it was published on this site.',
+    );
+    expect(versionStanding(privacy, '2026-09-27')).toBe(
+      'This version was settled on 2026-09-27 and replaced on 2026-09-29 before it was published on this site.',
+    );
+    expect(versionStanding(terms, '2026-08-11')).toBe(
+      'This version applied until the version dated 2026-09-23 replaced it on this site.',
+    );
+    expect(versionStanding(terms, '2026-09-22')).toBe(
+      'This version was settled on 2026-09-22 and replaced on 2026-09-23 before it was published on this site.',
+    );
+    expect(versionStanding(privacy, privacy.current)).toBeNull();
+  });
+
+  it('dates the publication floor by the first check of what production served', () => {
+    expect(POLICY_PUBLICATION_FLOOR.date).toBe(REGISTRY.publications[0]?.checkedOn);
+    expect(POLICY_PUBLICATION_FLOOR).toEqual({ date: '2026-10-02', label: '2 October 2026' });
   });
 
   it('links every dated policy page to its version history', () => {
@@ -118,11 +167,12 @@ describe('policy changes', () => {
     }
   });
 
-  it('lists the subprocessor list, privacy policy and mobile app terms from their 21 September 2026 revisions', () => {
-    for (const key of ['subprocessors', 'privacy', 'mobile']) {
-      const dates = datedRevisions(key).map((revision) => revision.date);
-      expect(dates[0], key).toBe('2026-09-21');
-      expect(listedDates(key), key).toEqual(dates.reverse());
+  it('lists the subprocessor list, privacy policy, mobile app terms and trust posture from their 21 September 2026 revisions', () => {
+    for (const key of ['subprocessors', 'privacy', 'mobile', 'trust']) {
+      const [served, ...revisions] = datedRevisions(key).map((revision) => revision.date);
+      expect(policyHistoryForKey(key)?.versions.at(-1)?.date, key).toBe(served);
+      expect(revisions[0], key).toBe('2026-09-21');
+      expect(listedDates(key), key).toEqual(revisions.reverse());
     }
   });
 

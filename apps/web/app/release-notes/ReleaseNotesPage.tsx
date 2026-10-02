@@ -97,11 +97,11 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                 Every revision after that day that moves a policy&rsquo;s date is listed here with
                 the date and what changed, and so is the first version of every policy introduced
                 after that day, and so are that day&rsquo;s revisions of the privacy policy, the
-                mobile app&rsquo;s terms and privacy policy, and the subprocessor list. A correction
-                that leaves a policy&rsquo;s date unchanged is not listed. The subprocessor list is
-                one of these policies, so a subprocessor added or replaced since 21 September 2026
-                is listed here with the date the list changed. The Atom feed carries these and the
-                releases above.
+                mobile app&rsquo;s terms and privacy policy, the subprocessor list and the trust
+                posture. A correction that leaves a policy&rsquo;s date unchanged is not listed. The
+                subprocessor list is one of these policies, so a subprocessor added or replaced
+                since 21 September 2026 is listed here with the date the list changed. The Atom feed
+                carries these and the releases above.
               </Prose>
               <Prose>
                 A policy&rsquo;s date is the day its text was settled, not the day it was published

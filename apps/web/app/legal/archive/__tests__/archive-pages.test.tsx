@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
@@ -7,9 +7,50 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 }));
 
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+import {
+  policyHistories,
+  versionStanding,
+  type PolicyHistory,
+  type PolicyVersionEntry,
+} from '@/lib/legal/policy-archive';
 
 import PolicyHistoryPage, { generateStaticParams as historyParams } from '../[policy]/page';
-import ArchivedPolicyPage, { generateStaticParams as versionParams } from '../[policy]/[date]/page';
+import ArchivedPolicyPage, {
+  generateMetadata as versionMetadata,
+  generateStaticParams as versionParams,
+} from '../[policy]/[date]/page';
+
+const CLAIMS_IT_APPLIED = /\bappl(?:y|ies|ied)\b|last published/i;
+
+function replacedVersions(published: boolean) {
+  return policyHistories().flatMap((history) =>
+    history.versions
+      .filter((version) => version.status !== 'current' && version.published === published)
+      .map((version) => ({ history, version })),
+  );
+}
+
+async function historyRowStanding(history: PolicyHistory, version: PolicyVersionEntry) {
+  const { unmount } = render(
+    await PolicyHistoryPage({ params: Promise.resolve({ policy: history.slug }) }),
+  );
+  const row = within(screen.getByRole('list', { name: 'Versions' }))
+    .getAllByRole('listitem')
+    .find((item) => item.firstElementChild?.textContent === version.date);
+  const text = (row?.textContent ?? '').replace(version.summary ?? '', '');
+  unmount();
+  return text;
+}
+
+async function versionPageStanding(history: PolicyHistory, version: PolicyVersionEntry) {
+  const params = Promise.resolve({ policy: history.slug, date: version.date });
+  const metadata = await versionMetadata({ params });
+  const { unmount } = render(await ArchivedPolicyPage({ params }));
+  const standing = versionStanding(history, version.date) ?? '';
+  const lede = screen.getByText(standing).closest('p')?.textContent ?? '';
+  unmount();
+  return { lede, description: String(metadata.description ?? '') };
+}
 
 describe('/legal/archive', () => {
   it('lists every dated version of the terms with what changed', async () => {
@@ -24,7 +65,7 @@ describe('/legal/archive', () => {
     expect(document.body.textContent).toContain('The full text of this version was not kept.');
   });
 
-  it('shows an earlier version in full and says it no longer applies', async () => {
+  it('shows an earlier version in full and says until when it applied', async () => {
     render(
       await ArchivedPolicyPage({
         params: Promise.resolve({ policy: 'terms', date: '2026-08-11' }),
@@ -32,7 +73,9 @@ describe('/legal/archive', () => {
     );
 
     expect(screen.getByRole('heading', { level: 1, name: 'Terms of service.' })).toBeVisible();
-    expect(document.body.textContent).toContain('This version no longer applies.');
+    expect(document.body.textContent).toContain(
+      'This version applied until the version dated 2026-09-23 replaced it on this site.',
+    );
     expect(document.body.textContent).toContain('Last updated: 2026-08-11.');
     expect(screen.getByRole('heading', { name: '02 · Eligibility and age' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Read the current version' })).toHaveAttribute(
@@ -41,9 +84,69 @@ describe('/legal/archive', () => {
     );
   });
 
+  it('says a version this site never published was replaced before it was published, and never that it applied', async () => {
+    const unpublished = replacedVersions(false);
+    expect(unpublished.map(({ history, version }) => `${history.key} ${version.date}`)).toEqual(
+      expect.arrayContaining([
+        'privacy 2026-09-21',
+        'subprocessors 2026-09-22',
+        'terms 2026-09-22',
+      ]),
+    );
+
+    for (const { history, version } of unpublished) {
+      const where = `${history.key} ${version.date}`;
+      const replacedOn = history.versions[history.versions.indexOf(version) - 1]?.date;
+      const standing = `This version was settled on ${version.date} and replaced on ${replacedOn} before it was published on this site.`;
+      expect(versionStanding(history, version.date), where).toBe(standing);
+
+      const row = await historyRowStanding(history, version);
+      expect(row, where).toContain(standing);
+      expect(row, where).not.toMatch(CLAIMS_IT_APPLIED);
+
+      if (version.status !== 'archived') continue;
+      const { lede, description } = await versionPageStanding(history, version);
+      for (const [surface, text] of [
+        ['lede', lede],
+        ['description', description],
+      ] as const) {
+        expect(text, `${where} ${surface}`).toContain(standing);
+        expect(text, `${where} ${surface}`).not.toMatch(CLAIMS_IT_APPLIED);
+      }
+    }
+  });
+
+  it('says a version this site published applied until the next one it published replaced it', async () => {
+    const published = replacedVersions(true);
+    expect(published.map(({ history, version }) => `${history.key} ${version.date}`)).toEqual(
+      expect.arrayContaining([
+        'privacy 2026-09-12',
+        'subprocessors 2026-09-12',
+        'mobile 2026-08-13',
+      ]),
+    );
+
+    for (const { history, version } of published) {
+      const where = `${history.key} ${version.date}`;
+      const successor = history.versions
+        .slice(0, history.versions.indexOf(version))
+        .reverse()
+        .find((entry) => entry.published !== false);
+      const standing = `This version applied until the version dated ${successor?.date} replaced it on this site.`;
+      expect(versionStanding(history, version.date), where).toBe(standing);
+      expect(await historyRowStanding(history, version), where).toContain(standing);
+
+      const { lede, description } = await versionPageStanding(history, version);
+      expect(lede, where).toContain(standing);
+      expect(description, where).toContain(standing);
+    }
+  });
+
   it('prerenders one page per history and per archived version', () => {
     expect(historyParams()).toContainEqual({ policy: 'acceptable-use' });
+    expect(historyParams()).toContainEqual({ policy: 'trust' });
     expect(versionParams()).toContainEqual({ policy: 'privacy', date: '2026-09-21' });
+    expect(versionParams()).toContainEqual({ policy: 'privacy', date: '2026-09-12' });
     expect(versionParams()).not.toContainEqual({ policy: 'terms', date: '2026-09-22' });
   });
 

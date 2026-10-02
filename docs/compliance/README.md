@@ -67,15 +67,16 @@ per-document revision dates, canonical routes and their aliases) come from
    a fresh review of the whole page.
 8. Keep the replaced version readable. When a date moves, give the first entry
    of the new date a public `summary` of what changed, then run
-   `node scripts/archive-policy-versions.mjs`. It renders the text the page
-   last published under the old date, taken from the newest commit whose text
-   matches the last version recorded under that date, preferring one
-   `origin/main` already holds, and adds it to `/legal/archive`, where every
-   policy's version history lives. The commit an archive names must stay on
-   the main line: CI fetches only branches and tags, so it cannot read a
-   commit left behind on a deleted, squashed or rewritten branch. When the
-   archiver warns that `origin/main` does not hold the commit yet, bring the
-   branch into main with a merge commit. A version whose text no commit holds gets
+   `node scripts/archive-policy-versions.mjs`. It renders the last text
+   recorded under the old date, from the commit production served when a
+   publication record names one that holds it, otherwise from the newest
+   commit whose text matches, preferring one `origin/main` already holds, and
+   adds it to `/legal/archive`, where every policy's version history lives.
+   The commit an archive names must stay on the main line: CI fetches only
+   branches and tags, so it cannot read a commit left behind on a deleted,
+   squashed or rewritten branch. When the archiver warns that `origin/main`
+   does not hold the commit yet, bring the branch into main with a merge
+   commit. A version whose text no commit holds gets
    `"archive": "not-retained"` on its first entry and is listed as not kept. A
    new policy whose first version is dated after the registry's
    `recordedSince`, the day these histories began, gets a `summary` on that
@@ -83,21 +84,32 @@ per-document revision dates, canonical routes and their aliases) come from
    `scripts/check-policy-versions.mjs` fails until all of this is done, when an
    archived text is not the last version recorded under its date, and when the
    commit an archive names is not on the history of the branch it checks.
-9. Announce every change to the subprocessor list. `/changelog` lists only the
-   first entry of each date, so a row added to, removed from or renamed on
-   `/subprocessors`, and a provider added to or removed from a row's
-   `registryProviderIds`, such as a new model provider in the Managed Cloud
-   row, moves its date. The entry that moves it records the page's names in
-   `subprocessorNames` and its provider ids, without the `_anthropic` dialect
-   suffix, in `subprocessorProviders`, and names each change in its `summary`;
-   a provider counts as named when the summary spells its id or the label the
-   product shows for it, its `label` in
-   `packages/contracts/types/src/models.json` or a gateway's `displayName` in
-   the model registry, ignoring case, spaces and punctuation, so OpenRouter
-   names `open_router` and Vercel AI Gateway names `vercel_gateway`.
-   `scripts/check-policy-versions.mjs` fails when the page's names or providers
-   differ from the newest recorded ones, or when they change under an entry
-   whose date did not move.
+9. Say whether each replaced version applied. Each record in `publications`
+   in `policy-versions.json` names the day production was checked, `served`,
+   a commit on main that prints the dates production served then, and `main`,
+   main's head at that moment. A version production served applied until the
+   next version this site published replaced it; a version main had already
+   replaced while production still served an older one was settled and
+   replaced before it was published here, and its archive says so. When a
+   version is replaced that no record covers, read the dates production
+   prints, add a record and run the archiver again;
+   `scripts/check-policy-versions.mjs` fails until then, and when production
+   served a version the history does not record.
+10. Announce every change to the subprocessor list. `/changelog` lists only the
+    first entry of each date, so a row added to, removed from or renamed on
+    `/subprocessors`, and a provider added to or removed from a row's
+    `registryProviderIds`, such as a new model provider in the Managed Cloud
+    row, moves its date. The entry that moves it records the page's names in
+    `subprocessorNames` and its provider ids, without the `_anthropic` dialect
+    suffix, in `subprocessorProviders`, and names each change in its `summary`;
+    a provider counts as named when the summary spells its id or the label the
+    product shows for it, its `label` in
+    `packages/contracts/types/src/models.json` or a gateway's `displayName` in
+    the model registry, ignoring case, spaces and punctuation, so OpenRouter
+    names `open_router` and Vercel AI Gateway names `vercel_gateway`.
+    `scripts/check-policy-versions.mjs` fails when the page's names or providers
+    differ from the newest recorded ones, or when they change under an entry
+    whose date did not move.
 
 `apps/web/app/__tests__/legal-policy-set.test.ts` enforces 1, parts of 2, 4 and 7
 mechanically, including a prohibited-claim guard that fails if a removed claim
