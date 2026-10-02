@@ -748,6 +748,17 @@ describe('telling us why an answer was bad', () => {
     );
   });
 
+  it('keeps the close button a 44px target on a touch screen at any width', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+
+    expect(screen.getByRole('button', { name: 'Close feedback form' })).toHaveClass(
+      'pointer-coarse:h-11',
+      'pointer-coarse:w-11',
+    );
+  });
+
   it('waits for a reason or a comment before it can be sent', async () => {
     render(<MessageBubble message={assistantMessage()} />);
 

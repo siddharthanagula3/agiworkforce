@@ -146,7 +146,11 @@ export function ResponseRatingDetails({
           type="button"
           variant="ghost"
           size="icon"
-          className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+          className={cn(
+            ACTION_BUTTON_SIZE,
+            ACTION_BUTTON_TONE,
+            'pointer-coarse:h-11 pointer-coarse:w-11',
+          )}
           onClick={onClose}
           aria-label="Close feedback form"
         >
