@@ -39,11 +39,14 @@ terms below.
 
 Our account is an Alibaba Cloud International account, its key calls the Model
 Studio International endpoint, and the console the record names is QwenCloud's.
-Two documents govern it, with the same model clauses under different names. Both
-were read on 2026-10-02.
+Two sets of terms govern it, with the same clauses under different names:
+QwenCloud's Customer Agreement, whose Models Supplemental holds the model terms,
+and Alibaba Cloud's Membership Agreement, with the model terms in the Product
+Terms §4.48. All were read on 2026-10-02.
 
-**Qwen Cloud Customer Agreement**, Models Supplemental,
-https://www.qwencloud.com/legal/agreement ("Updated: August 27, 2026"):
+**Qwen Cloud Customer Agreement**, https://www.qwencloud.com/legal/agreement
+("Updated: August 27, 2026"). Its general restrictions are quoted under Clauses
+the launch review did not settle. Its Models Supplemental:
 
 - §2(b): "you and your end users may provide input to Models (“Input”), and
   receive generated content from the AI models and applications based on the
@@ -53,17 +56,26 @@ https://www.qwencloud.com/legal/agreement ("Updated: August 27, 2026"):
   applicable laws, the Agreement, and our rules." It ends: "We will not use your
   Customer Content to develop or improve the models on Models, unless you
   separately provide your consent."
-- §2(d)(v): you shall not "resell Models or AI models provided through Models".
+- §2(d)(v): you shall not "resell Models or AI models provided through Models,
+  or use Models, AI models provided through Models (including any Output of
+  such AI models) to train or develop products or services that compete with
+  us and/or our affiliates’ products and services, unless expressly authorised
+  by us."
 - §2(g)(ii): access may be suspended for "circumventing controls, or abusing
   promotions which we may offer from time to time".
 
 **Alibaba Cloud International Website Product Terms**, §4.48 Alibaba Cloud Model
 Studio,
 https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-product-terms-of-service-v-3-8-0
-("Last Updated: Aug 28, 2026"), which the Model Studio related agreements page,
+("Last Updated: Aug 28, 2026"), and the **Alibaba Cloud International Website
+Membership Agreement**,
+https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-membership-agreement
+("Last Updated: Sep 10, 2026"), from which §4.48.1(b) takes its definition of
+Member Content. The Model Studio related agreements page,
 https://www.alibabacloud.com/help/en/model-studio/related-agreements ("Last
-Updated: Sep 28, 2026"), lists among "These agreements govern your use of Model
-Studio":
+Updated: Sep 28, 2026"), lists both among "These agreements govern your use of
+Model Studio". The Membership Agreement's general restrictions are quoted under
+Clauses the launch review did not settle. Product Terms §4.48:
 
 - §4.48.1(b): "you and your end users may provide input to Model Studio
   (“Input”), and receive generated content from the AI models and applications
@@ -73,13 +85,17 @@ Studio":
   not use your Member Content to develop or improve the models on Model Studio,
   unless you separately provide your consent."
 - §4.48.1(d)(v): you shall not "resell Model Studio or AI models provided
-  through Model Studio".
+  through Model Studio, or use Model Studio, AI models provided through Model
+  Studio (including any Output of such AI models) to train or develop products
+  or services that compete with Alibaba Cloud and/or its affiliates’ products
+  and services, unless expressly authorised by us."
 - §4.48.1(g)(ii): access may be suspended for "circumventing controls, or
   abusing promotions which Alibaba Cloud may offer from time to time".
 
-Neither document has a trial or evaluation-only clause. Models from other
-developers in the inventory can carry their own licence or third-party terms
-(§2(f), §4.48.1(f)); the launch review did not read those.
+Neither model text nor either general agreement has a trial or evaluation-only
+clause. Models from other developers in the inventory can carry their own
+licence or third-party terms (§2(f), §4.48.1(f)); the launch review did not read
+those.
 
 **Preview models stay out.** The Preview Product Terms,
 https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-beta-testing-terms
@@ -88,6 +104,42 @@ purposes of internal testing, research and evaluation". Whether a model whose id
 says preview is a Preview Product is not verified, so the stricter reading wins:
 a review never approves an offering whose model id contains "preview", and the
 schema in `apps/web/lib/server/free-pools.ts` refuses a file that does.
+
+### Clauses the launch review did not settle
+
+The launch review rested on the model terms above. It weighed only the resale
+half of §2(d)(v) and §4.48.1(d)(v), and none of the general restrictions below,
+which the Customer Agreement and the Membership Agreement carry word for word
+under the same numbers. §3.2 reads "You shall not (whether through your End
+Users or otherwise):" and lists, among others:
+
+- j) "access or use the Services in a way intended to avoid the relevant fees
+  or charges;"
+- k) "resell or sublicense any Services;"
+
+§2.9 reads "You agree that you will not:" and lists, among others:
+
+- a) "copy, reproduce, download, re-publish, sell, distribute, resell or
+  commercially exploit any information, text, images, graphics, video clips,
+  sound, directories, files, databases, listings, or other content made
+  available via using the Services (“Materials”);"
+- e) "use any Materials for a purpose not expressly permitted by the Terms."
+
+These are questions for the owner or a lawyer, not settled points:
+
+1. §3.2(j): whether serving the public from a promotional free quota, with Free
+   quota only on so that a spent quota stops instead of billing, is a use
+   "intended to avoid the relevant fees or charges".
+2. §3.2(k): whether serving our users through our product sublicenses the
+   Services.
+3. §2.9: whether model output is "Materials", and if so whether "You may use the
+   Input and Output" (§2(e), §4.48.1(e)) is the express permission §2.9(e)
+   asks for.
+4. §2(d)(v) and §4.48.1(d)(v): whether serving the models in our product uses
+   them "to train or develop products or services that compete with" Alibaba
+   Cloud's or its affiliates' products and services.
+
+Record each answer here, with who gave it and when.
 
 ### The mainland clause that was considered
 
@@ -117,12 +169,17 @@ quota model serves. The questions are the ones `isFreeEligibilityValid` in
 `packages/ai/routing/src/runtime-state.ts` asks of every free pool, as
 `docs/research/free-inference-tos-workbook-2026-09-01.md` defines them.
 
-| Term                          | Asserts                                                                | Answered by                                     |
-| ----------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------- |
-| `commercialUseAllowed`        | the free quota may be used in a commercial product                     | §2(e), §4.48.1(e), and no evaluation-only limit |
-| `thirdPartyServingAllowed`    | its output may be served to our users, not only to the account owner   | §2(b), §4.48.1(b): "you and your end users"     |
-| `proxyingAllowed`             | our use, a product built on the models, is permitted; resale stays out | §2(d)(v), §4.48.1(d)(v) forbid only resale      |
-| `promptsExcludedFromTraining` | the provider does not train on the prompts we send                     | the last sentence of §2(e) and §4.48.1(e)       |
+| Term                          | Asserts                                                                | Answered by                                               |
+| ----------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------- |
+| `commercialUseAllowed`        | the free quota may be used in a commercial product                     | §2(e), §4.48.1(e), and no evaluation-only limit           |
+| `thirdPartyServingAllowed`    | its output may be served to our users, not only to the account owner   | §2(b), §4.48.1(b): "you and your end users"               |
+| `proxyingAllowed`             | our use, a product built on the models, is permitted; resale stays out | §2(d)(v), §4.48.1(d)(v) bar resale and competing products |
+| `promptsExcludedFromTraining` | the provider does not train on the prompts we send                     | the last sentence of §2(e) and §4.48.1(e)                 |
+
+Each answer is subject to the questions under Clauses the launch review did not
+settle: §2.9 bears on `commercialUseAllowed`, §3.2(k) on
+`thirdPartyServingAllowed` and `proxyingAllowed`, and §3.2(j) and the
+competing-products bar on `proxyingAllowed`.
 
 ### Shape
 
@@ -165,19 +222,22 @@ A reminder goes out fourteen days before `expiresAtMs`
 (see Reminders). Start the renewal when the first one arrives, since re-reading
 the terms, a review, a merge and a deploy take time:
 
-1. Re-read the governing documents first: the Qwen Cloud Customer Agreement,
-   Models Supplemental §2, and the Product Terms §4.48, at the URLs above. If a
-   quoted clause changed, or either document gained a trial, evaluation-only or
-   end-user limit, stop and get the owner's call before renewing.
-2. Re-read the Preview Product Terms §1.1 and the mainland clause, and check
+1. Re-read the governing documents first, at the URLs above: the Qwen Cloud
+   Customer Agreement (§2.9, §3.2 and the Models Supplemental §2), the
+   Membership Agreement (§2.9 and §3.2) and the Product Terms §4.48. If a quoted
+   clause changed, or a document gained a trial, evaluation-only or end-user
+   limit, stop and get the owner's call before renewing.
+2. Put the questions under Clauses the launch review did not settle to the
+   owner, or a lawyer, and record the answers in that section.
+3. Re-read the Preview Product Terms §1.1 and the mainland clause, and check
    that the clause has not appeared on www.alibabacloud.com.
-3. Set `verifiedAtMs` to the time of the review and `expiresAtMs` to the end of
+4. Set `verifiedAtMs` to the time of the review and `expiresAtMs` to the end of
    the window the owner chose (90 days for the launch review), and list the
    offerings it clears. Leave out every offering whose model id contains
    "preview".
-4. Point `evidenceUrl` at the governing document the review relied on, and
+5. Point `evidenceUrl` at the governing document the review relied on, and
    update the quotes and dates in this section.
-5. Get the change reviewed, merge it and deploy it before `expiresAtMs`.
+6. Get the change reviewed, merge it and deploy it before `expiresAtMs`.
 
 ## Console check
 
