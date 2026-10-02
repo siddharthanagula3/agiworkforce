@@ -3,7 +3,11 @@
 import { useId, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
-import { getProviderOffering } from '@agiworkforce/types';
+import {
+  getProviderOffering,
+  providerOfferingLabel,
+  type ProviderOfferingLabel,
+} from '@agiworkforce/types';
 import {
   FREE_QUOTA_CATEGORIES,
   FREE_QUOTA_STATUS_LABELS,
@@ -14,6 +18,10 @@ import {
   type FreeModelEntry,
   type FreeModelPool,
 } from '@features/chat/lib/free-model-presentation';
+import {
+  freeQuotaSelection,
+  isExperientialFreeOffering,
+} from '@features/chat/lib/free-quota-selection';
 
 const PICKER_ROW = { 'data-picker-row': '' };
 const FOCUS_RING_CLASS =
@@ -25,6 +33,19 @@ const NAME_CLASS = 'block truncate text-sm leading-5';
 const GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
+
+type PendingAvailability = 'loading' | 'error';
+
+const PENDING_REASONS: Record<PendingAvailability, string> = {
+  loading: 'Checking availability…',
+  error: 'Availability could not be checked',
+};
+
+interface PendingSelection {
+  label: ProviderOfferingLabel;
+  availability: PendingAvailability;
+  fallbackModelName: string | null;
+}
 
 function lineRuns(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
   const runs: FreeModelEntry[][] = [];
@@ -52,15 +73,24 @@ function readyGuidance(entry: FreeModelEntry, promotional: boolean): string {
   return [label.version, 'Free quota', use, allocation].filter(Boolean).join(' · ');
 }
 
+function withVersion(label: ProviderOfferingLabel, reason: string): string {
+  return [label.version, reason].filter(Boolean).join(' · ');
+}
+
 function unavailableReason(entry: FreeModelEntry): string {
   const { status, expiresOn } = entry.model;
   const reason = FREE_QUOTA_STATUS_LABELS[status];
-  return [
-    entry.label.version,
+  return withVersion(
+    entry.label,
     status === 'expired' && expiresOn ? `${reason} ${expiresOn}` : reason,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  );
+}
+
+function pendingExplanation({ label, availability, fallbackModelName }: PendingSelection): string {
+  if (availability === 'loading') {
+    return `${label.displayName} stays selected while its availability is checked.`;
+  }
+  return `${label.displayName} could not be checked. Retry, or choose ${fallbackModelName ?? 'another free model'}.`;
 }
 
 function unavailableExplanation(entry: FreeModelEntry, fallbackModelName: string | null): string {
@@ -133,15 +163,17 @@ function ReadyRow({
 }
 
 function UnavailableRow({
-  entry,
+  label,
+  reason,
   selected,
   explanation,
   onExplain,
 }: {
-  entry: FreeModelEntry;
+  label: ProviderOfferingLabel;
+  reason: string;
   selected: boolean;
   explanation: string | null;
-  onExplain: (id: string) => void;
+  onExplain: () => void;
 }) {
   const reasonId = useId();
   const explanationId = useId();
@@ -152,15 +184,15 @@ function UnavailableRow({
         {...PICKER_ROW}
         aria-disabled="true"
         aria-pressed={selected}
-        aria-label={entry.label.displayName}
+        aria-label={label.displayName}
         aria-describedby={explanation ? `${reasonId} ${explanationId}` : reasonId}
-        onClick={() => onExplain(entry.model.key)}
+        onClick={onExplain}
         className={MUTED_ROW_CLASS}
       >
         <span className="min-w-0 flex-1">
-          <span className={`${NAME_CLASS} text-muted-foreground`}>{entry.label.name}</span>
+          <span className={`${NAME_CLASS} text-muted-foreground`}>{label.name}</span>
           <span id={reasonId} className={GUIDANCE_CLASS}>
-            {unavailableReason(entry)}
+            {reason}
           </span>
         </span>
         {selected && (
@@ -256,6 +288,20 @@ export function FreeQuotaModelSection({
   const unavailable = listedPools.filter((pool) => pool.unavailable.length > 0);
   const unavailableCount = unavailable.reduce((total, pool) => total + pool.unavailable.length, 0);
   const groupedByIssuer = listedPools.length > 1;
+  const selection = freeQuotaSelection(selectedId);
+  const selectionSource = isExperientialFreeOffering(selectedId) ? experiential : quota;
+  const selectionLabel = selection ? providerOfferingLabel(selectedId) : null;
+  const pending: PendingSelection | null =
+    selection &&
+    selectionLabel &&
+    !selectionSource.catalogue &&
+    (selectionSource.status === 'loading' || selectionSource.status === 'error')
+      ? {
+          label: selectionLabel,
+          availability: selectionSource.status,
+          fallbackModelName: selection.category === 'chat' ? fallbackModelName : null,
+        }
+      : null;
 
   const renderEntry = (entry: FreeModelEntry) =>
     entry.model.status === 'ready' ? (
@@ -269,7 +315,8 @@ export function FreeQuotaModelSection({
     ) : (
       <UnavailableRow
         key={entry.model.key}
-        entry={entry}
+        label={entry.label}
+        reason={unavailableReason(entry)}
         selected={entry.model.key === selectedId}
         explanation={
           explainedId === entry.model.key
@@ -279,7 +326,7 @@ export function FreeQuotaModelSection({
               )
             : null
         }
-        onExplain={setExplainedId}
+        onExplain={() => setExplainedId(entry.model.key)}
       />
     );
 
@@ -313,6 +360,15 @@ export function FreeQuotaModelSection({
                 ))}
               </select>
             </div>
+          )}
+          {pending && (
+            <UnavailableRow
+              label={pending.label}
+              reason={withVersion(pending.label, PENDING_REASONS[pending.availability])}
+              selected
+              explanation={explainedId === selectedId ? pendingExplanation(pending) : null}
+              onExplain={() => setExplainedId(selectedId)}
+            />
           )}
           {view.pinned && renderEntry(view.pinned)}
           {listedPools.map((pool) => (

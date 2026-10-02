@@ -24,7 +24,6 @@ type SourceState = Omit<FreeModelSource, 'retry'>;
 
 const LOADING: SourceState = { status: 'loading', catalogue: null };
 const HIDDEN: SourceState = { status: 'hidden', catalogue: null };
-const FAILED: SourceState = { status: 'error', catalogue: null };
 
 async function readCatalogue(endpoint: string, signal: AbortSignal): Promise<SourceState> {
   const response = await fetch(endpoint, { signal, cache: 'no-store' });
@@ -41,13 +40,17 @@ function useFreeModelSource(endpoint: string, enabled: boolean): FreeModelSource
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
-    setState((current) => (current.status === 'ready' ? current : LOADING));
+    setState((current) =>
+      current.status === 'ready' ? current : { status: 'loading', catalogue: current.catalogue },
+    );
     readCatalogue(endpoint, controller.signal)
       .then((next) => {
         if (!controller.signal.aborted) setState(next);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setState(FAILED);
+        if (!controller.signal.aborted) {
+          setState((current) => ({ status: 'error', catalogue: current.catalogue }));
+        }
       });
     return () => controller.abort();
   }, [attempt, enabled, endpoint]);

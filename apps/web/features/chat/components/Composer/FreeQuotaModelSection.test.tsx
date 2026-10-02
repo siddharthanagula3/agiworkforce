@@ -258,6 +258,58 @@ describe('Free section in the composer', () => {
     expect(row).toHaveAccessibleDescription(/Not available right now$/);
   });
 
+  it('keeps the selected free model in view, marked as being checked, until its catalogue loads', () => {
+    const selected = familyA[0]!;
+    renderSection(sources(source('loading'), source('loading')), { selectedId: selected });
+
+    const row = screen.getByRole('button', { name: name(selected) });
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(row).toHaveAccessibleDescription(/Checking availability…$/);
+    expect(screen.getByText('Checking free models…')).toBeInTheDocument();
+  });
+
+  it('keeps the selected free model in view with a retry when its catalogue could not load', () => {
+    const selected = familyA[0]!;
+    const failed = source('error');
+    const onSelect = renderSection(sources(failed), { selectedId: selected });
+
+    const row = screen.getByRole('button', { name: name(selected) });
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(row).toHaveAccessibleDescription(/Availability could not be checked$/);
+    fireEvent.click(row);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `${name(selected)} could not be checked. Retry, or choose ${FALLBACK}.`,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading free models' }));
+    expect(failed.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks an Experiential Labs selection against its own source', () => {
+    renderSection(sources(source('ready', catalogue([model(familyA[0]!)])), source('loading')), {
+      selectedId: experientialKey,
+    });
+
+    expect(screen.getByRole('button', { name: name(experientialKey) })).toHaveAccessibleDescription(
+      /Checking availability…$/,
+    );
+  });
+
+  it('keeps the last free models, the selected one and a retry on screen when a refresh fails', () => {
+    const selected = familyB[0]!;
+    renderSection(sources(source('error', catalogue([model(familyA[0]!), model(selected)]))), {
+      selectedId: selected,
+    });
+
+    const row = screen.getByRole('button', { name: name(selected) });
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(row).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('button', { name: name(familyA[0]!) })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry loading free models' })).toBeInTheDocument();
+  });
+
   it('renders the rest of the section while free models load', () => {
     renderSection(sources(source('loading'), source('loading')));
 

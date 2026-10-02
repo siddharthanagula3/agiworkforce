@@ -32,11 +32,14 @@ export function freeQuotaSelection(id: string | null | undefined) {
   return offering?.identityStatus === 'exact' && offering.quotaProbeProtocol ? offering : null;
 }
 
+export function isExperientialFreeOffering(id: string): boolean {
+  return getProviderOffering(id)?.provider === 'experientiallabs';
+}
+
 export function chatCompletionEndpoint(model: string): string {
   // An offering key must never reach normal paid routing, including after deployment.
-  const offering = getProviderOffering(model);
-  if (offering?.provider === 'experientiallabs') {
-    return '/api/models/experiential-free/completions';
-  }
-  return offering ? '/api/models/free-quota/completions' : '/api/llm/v1/chat/completions';
+  if (isExperientialFreeOffering(model)) return '/api/models/experiential-free/completions';
+  return getProviderOffering(model)
+    ? '/api/models/free-quota/completions'
+    : '/api/llm/v1/chat/completions';
 }

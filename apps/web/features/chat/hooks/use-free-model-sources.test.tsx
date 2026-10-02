@@ -75,6 +75,30 @@ describe('useFreeModelSources', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the last catalogue when a refresh fails, and while the retry loads', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(respond(200, CATALOGUE))
+      .mockResolvedValueOnce(respond(503))
+      .mockImplementation(pending);
+    vi.stubGlobal('fetch', (url: string) =>
+      url === FREE_QUOTA_CATALOGUE_PATH ? fetcher() : Promise.resolve(respond(404)),
+    );
+    const { result, rerender } = renderHook(({ open }) => useFreeModelSources(open), {
+      initialProps: { open: true },
+    });
+    await waitFor(() => expect(result.current.quota.status).toBe('ready'));
+
+    rerender({ open: false });
+    rerender({ open: true });
+    await waitFor(() => expect(result.current.quota.status).toBe('error'));
+    expect(result.current.quota.catalogue).toEqual(CATALOGUE);
+
+    act(() => result.current.quota.retry());
+    expect(result.current.quota.status).toBe('loading');
+    expect(result.current.quota.catalogue).toEqual(CATALOGUE);
+  });
+
   it('keeps the last result on screen while a reopened picker refreshes it', async () => {
     const fetcher = vi
       .fn()
