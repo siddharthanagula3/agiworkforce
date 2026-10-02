@@ -40,9 +40,17 @@ export const TEMPORARY_CHAT_END_CONFIRMATION = {
   confirmLabel: 'End and discard',
 } as const;
 
+export const TEMPORARY_CHAT_PROJECT_REFUSAL =
+  'A temporary chat cannot be part of a project. Turn off temporary chat, or start the chat outside the project.';
+
+export function temporaryChatAllowedIn(projectId: string | null | undefined): boolean {
+  return !projectId;
+}
+
 export function resolveNewChatTemporary(
   pendingChoice: boolean | null,
   defaultTemporary: boolean,
+  projectId: string | null | undefined,
 ): boolean {
-  return pendingChoice ?? defaultTemporary;
+  return temporaryChatAllowedIn(projectId) && (pendingChoice ?? defaultTemporary);
 }

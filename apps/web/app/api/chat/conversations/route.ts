@@ -21,6 +21,7 @@ import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-se
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isConfiguredManagedModelRoute } from '@/lib/server/model-catalogue';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
+import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
 
 const PAGE_SORT_COLUMN = 'page_sort_key';
 // Pinned-first then newest-first, as one fixed-width text key: lexicographic
@@ -200,6 +201,10 @@ async function handleCreateConversation(request: NextRequest) {
     throw createError.validation('The selected provider route cannot serve this model');
   }
 
+  if (body.projectId && body.isTemporary) {
+    throw createError.validation(TEMPORARY_CHAT_PROJECT_REFUSAL);
+  }
+
   if (body.projectId) {
     let ownedProject: { id: string } | undefined;
     try {
@@ -216,6 +221,20 @@ async function handleCreateConversation(request: NextRequest) {
     }
     if (!ownedProject) {
       throw createError.notFound('Project not found');
+    }
+    if (body.id) {
+      const [existing] = await db.query<{ is_temporary: boolean | null }>(
+        `select is_temporary
+           from web_conversations
+          where id = $1
+            and user_id = $2
+            and organization_id is not distinct from $3
+            and deleted_at is null`,
+        [body.id, userId, organizationId],
+      );
+      if (existing?.is_temporary) {
+        throw createError.validation(TEMPORARY_CHAT_PROJECT_REFUSAL);
+      }
     }
   }
 
@@ -255,6 +274,10 @@ async function handleCreateConversation(request: NextRequest) {
         where web_conversations.user_id = $1
           and web_conversations.organization_id is not distinct from $7
           and web_conversations.deleted_at is null
+          and not (
+            coalesce(web_conversations.is_temporary, false)
+            and nullif(excluded.project_id, '') is not null
+          )
         returning id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       `,
       [

@@ -8,7 +8,7 @@ import { useChatStore, type Conversation, type Message } from '@shared/stores/we
 import { useModelStore } from '@shared/stores/model-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
-import { resolveNewChatTemporary } from '@/lib/temporary-chat-policy';
+import { resolveNewChatTemporary, temporaryChatAllowedIn } from '@/lib/temporary-chat-policy';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
 import { readPersistedRouteLane } from '@/features/chat/lib/routeLane';
 import { hasPendingDraftClear } from '@/features/chat/lib/pending-draft-clear';
@@ -453,11 +453,13 @@ export function useConversations(): UseConversationsReturn {
             // message is worse than no preference at all. The account-wide
             // default and a one-off "Temporary chat" armed from the composer
             // before this conversation existed are both consumed here.
-            ...((options?.isTemporary ??
-            resolveNewChatTemporary(
-              useChatStore.getState().pendingTemporaryChat,
-              useSettingsStore.getState().newChatsTemporary,
-            ))
+            ...(temporaryChatAllowedIn(projectId) &&
+            (options?.isTemporary ??
+              resolveNewChatTemporary(
+                useChatStore.getState().pendingTemporaryChat,
+                useSettingsStore.getState().newChatsTemporary,
+                projectId,
+              ))
               ? { isTemporary: true }
               : {}),
           }),

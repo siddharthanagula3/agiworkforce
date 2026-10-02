@@ -51,6 +51,7 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 }));
 
 import { GET, PUT, DELETE } from '@/app/api/chat/conversations/[id]/route';
+import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
 
 describe('Single Conversation API', () => {
   const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -376,6 +377,100 @@ describe('Single Conversation API', () => {
           expect.stringContaining('update web_conversations'),
           expect.anything(),
         );
+      });
+
+      it('refuses an update that makes a project chat temporary in one request', async () => {
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ projectId: 'proj-1', isTemporary: true }),
+          },
+        );
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.message).toBe(TEMPORARY_CHAT_PROJECT_REFUSAL);
+        expect(mockQuery).not.toHaveBeenCalled();
+      });
+
+      it('refuses turning on temporary chat inside a project', async () => {
+        mockQuery
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ is_temporary: false, project_id: 'proj-1' }]);
+
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ isTemporary: true }),
+          },
+        );
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.message).toBe(TEMPORARY_CHAT_PROJECT_REFUSAL);
+        const update = String(mockQuery.mock.calls[0]?.[0]).replace(/\s+/g, ' ');
+        expect(update).toContain(
+          "$13::boolean and $14::boolean and nullif(case when $5::boolean then $6::text else project_id end, '') is not null",
+        );
+      });
+
+      it('refuses moving a temporary chat into a project', async () => {
+        mockQuery
+          .mockResolvedValueOnce([{ id: 'proj-1' }])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ is_temporary: true, project_id: null }]);
+
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ projectId: 'proj-1' }),
+          },
+        );
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.message).toBe(TEMPORARY_CHAT_PROJECT_REFUSAL);
+        const update = String(mockQuery.mock.calls[1]?.[0]).replace(/\s+/g, ' ');
+        expect(update).toContain(
+          "$5::boolean and nullif($6::text, '') is not null and coalesce(case when $13::boolean then $14::boolean else is_temporary end, false)",
+        );
+      });
+
+      it('still renames a chat that is already both temporary and in a project', async () => {
+        mockQuery.mockResolvedValueOnce([
+          { ...mockConversation, title: 'Renamed', is_temporary: true, project_id: 'proj-1' },
+        ]);
+
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ title: 'Renamed' }),
+          },
+        );
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(200);
+        expect(mockQuery).toHaveBeenCalledTimes(1);
       });
 
       it('allows clearing the project association (projectId null) without an ownership check', async () => {

@@ -232,3 +232,69 @@ describe('ending a temporary chat', () => {
     expect(routerPush).toHaveBeenCalledWith('/chat');
   });
 });
+
+describe('temporary chat inside a project', () => {
+  const PROJECT_ID = 'project-1';
+  const projectPicker = {
+    projects: [{ id: PROJECT_ID, name: 'Launch' }],
+    activeProjectId: PROJECT_ID,
+    onSelectProject: vi.fn(),
+    onCreateProject: vi.fn(),
+  };
+
+  it('is not offered for a new chat filed under a project', () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={projectPicker} />);
+    openPlusMenu();
+
+    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+  });
+
+  it('is not offered on a project page composer', () => {
+    render(<ChatComposerNew onSend={vi.fn()} projectId={PROJECT_ID} />);
+    openPlusMenu();
+
+    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+  });
+
+  it('is not offered in an existing project conversation', () => {
+    useChatStore.setState({
+      activeConversationId: 'conv-project',
+      conversations: [
+        {
+          ...TEMPORARY_CONVERSATION,
+          id: 'conv-project',
+          isTemporary: false,
+          projectId: PROJECT_ID,
+        },
+      ] as never,
+    });
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="conv-project"
+        onSetTemporaryChat={vi.fn(async () => true)}
+      />,
+    );
+    openPlusMenu();
+
+    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+  });
+
+  it('stays offered on a chat already temporary inside a project, so it can be turned off', () => {
+    useChatStore.setState({
+      activeConversationId: TEMPORARY_CONVERSATION.id,
+      conversations: [{ ...TEMPORARY_CONVERSATION, projectId: PROJECT_ID }] as never,
+    });
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId={TEMPORARY_CONVERSATION.id}
+        onSetTemporaryChat={vi.fn(async () => true)}
+      />,
+    );
+    openPlusMenu();
+
+    expect(temporaryRow()).toHaveAttribute('aria-pressed', 'true');
+  });
+});

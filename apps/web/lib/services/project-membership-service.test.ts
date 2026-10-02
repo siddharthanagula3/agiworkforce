@@ -4,6 +4,7 @@ import {
   ProjectConversationMembershipError,
   replaceProjectConversationMembership,
 } from './project-membership-service';
+import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
 
 function adapter(
   query: DatabaseAdapter['query'],
@@ -29,6 +30,43 @@ describe('replaceProjectConversationMembership', () => {
     ).rejects.toBeInstanceOf(ProjectConversationMembershipError);
 
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses to file a temporary chat under the project', async () => {
+    const query = vi.fn().mockResolvedValue([
+      { id: 'chat-1', is_temporary: false },
+      { id: 'chat-2', is_temporary: true },
+    ]);
+    const execute = vi.fn();
+
+    await expect(
+      replaceProjectConversationMembership(adapter(query, execute), {
+        userId: 'user-1',
+        organizationId,
+        projectId: 'project-1',
+        conversationIds: ['chat-1', 'chat-2'],
+      }),
+    ).rejects.toThrow(TEMPORARY_CHAT_PROJECT_REFUSAL);
+
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('never moves a temporary row even if one turns temporary after the check', async () => {
+    const query = vi.fn().mockResolvedValue([{ id: 'chat-1', is_temporary: false }]);
+    const execute = vi.fn().mockResolvedValue(1);
+
+    await replaceProjectConversationMembership(adapter(query, execute), {
+      userId: 'user-1',
+      organizationId,
+      projectId: 'project-1',
+      conversationIds: ['chat-1'],
+    });
+
+    expect(execute).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/set project_id = \$2[\s\S]*not coalesce\(is_temporary, false\)/),
+      expect.anything(),
+    );
   });
 
   it('deduplicates the requested set and replaces membership in two scoped updates', async () => {

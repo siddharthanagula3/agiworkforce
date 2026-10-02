@@ -119,6 +119,7 @@ import { containsSecrets } from '@/lib/security/secrets-audit';
 import {
   TEMPORARY_CHAT_END_CONFIRMATION,
   resolveNewChatTemporary,
+  temporaryChatAllowedIn,
 } from '@/lib/temporary-chat-policy';
 import { Spinner, useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
@@ -399,6 +400,7 @@ interface ChatComposerProps {
    * per conversation, instead of following the user into the next chat.
    */
   conversationId?: string | null;
+  projectId?: string | null;
   isLoading?: boolean;
   /**
    * True while an SSE stream is actively generating output.
@@ -752,6 +754,7 @@ const ChatComposerNewComponent = ({
   onGenerateImage,
   onGenerateVideo,
   projectPicker,
+  projectId = null,
   onSetTemporaryChat,
   suppressAutoFocus = false,
 }: ChatComposerProps) => {
@@ -1554,12 +1557,18 @@ const ChatComposerNewComponent = ({
     dictationSwitchedOffReason(s.disabledFeatures),
   );
   const setPendingTemporaryChat = useChatStore((s) => s.setPendingTemporaryChat);
+  const newChatProjectId = projectId ?? pickerActiveProjectId;
   const isIncognito = useChatStore((s) => {
     const id = s.activeConversationId;
     return id
       ? (s.conversations.find((c) => c.id === id)?.isTemporary ?? false)
-      : resolveNewChatTemporary(s.pendingTemporaryChat, newChatsTemporary);
+      : resolveNewChatTemporary(s.pendingTemporaryChat, newChatsTemporary, newChatProjectId);
   });
+  const chatProjectId = useChatStore((s) => {
+    const id = s.activeConversationId;
+    return id ? (s.conversations.find((c) => c.id === id)?.projectId ?? null) : newChatProjectId;
+  });
+  const temporaryChatAvailable = isIncognito || temporaryChatAllowedIn(chatProjectId);
   const [isSavingIncognito, setIsSavingIncognito] = useState(false);
   const handleIncognitoToggle = useCallback(async () => {
     // No conversation exists yet: arm the flag createConversation reads at
@@ -5168,7 +5177,10 @@ const ChatComposerNewComponent = ({
                       handleMemoryToggle();
                       closeMenu();
                     }}
-                    showTemporaryChat={!activeConversationId || Boolean(onSetTemporaryChat)}
+                    showTemporaryChat={
+                      temporaryChatAvailable &&
+                      (!activeConversationId || Boolean(onSetTemporaryChat))
+                    }
                     temporaryChatSaving={isSavingIncognito}
                     isIncognito={isIncognito}
                     canToggleIncognito={canToggleIncognito}
@@ -6373,6 +6385,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.projectPicker?.activeProjectId === next.projectPicker?.activeProjectId &&
     prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&
     prev.projectPicker?.onCreateProject === next.projectPicker?.onCreateProject &&
+    prev.projectId === next.projectId &&
     // AUDIT-FIX CMP-3: without an active conversation the handler is unused
     // (the toggle is local-only), but once one exists its presence decides
     // whether the "Temporary chat" control can save, so it must defeat
