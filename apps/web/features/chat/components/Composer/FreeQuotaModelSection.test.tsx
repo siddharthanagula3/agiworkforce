@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { getProviderOfferings, providerOfferingLabel } from '@agiworkforce/types';
 import type {
@@ -38,6 +38,8 @@ const datedKey = chatKeys.find((key) => {
 const experientialKeys = chatKeys.filter((key) => offerings[key]!.provider === 'experientiallabs');
 const experientialKey = experientialKeys[0]!;
 const DATA_USE_NOTE = /providers have not said they keep prompts out of training/;
+const PROMOTION_DESCRIPTION =
+  'Free promotion · text chat · provider quota applies These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
 const imageKeys = Object.entries(offerings)
   .filter(
     ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',
@@ -424,8 +426,36 @@ describe('Free section in the composer', () => {
     expect(screen.getByRole('link', { name: 'Data use' })).toHaveAttribute('href', '/privacy');
     expect(screen.queryByText(/Experiential Labs captures prompts/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: name(experientialKey) })).toHaveAccessibleDescription(
-      'Free promotion · text chat · provider quota applies',
+      PROMOTION_DESCRIPTION,
     );
+  });
+
+  it('reads the data-use note on a selected Experiential Labs model pinned above the list', () => {
+    const withLabs = () =>
+      sources(
+        source('ready', catalogue(familyA.map((key) => model(key)))),
+        source(
+          'ready',
+          catalogue(
+            experientialKeys.map((key) => model(key)),
+            'Experiential Labs',
+          ),
+        ),
+      );
+    renderSection(withLabs());
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const tail = within(screen.getByRole('group', { name: 'More Experiential Labs free models' }))
+      .getAllByRole('button')[0]!
+      .getAttribute('aria-label')!;
+    cleanup();
+
+    renderSection(withLabs(), {
+      selectedId: experientialKeys.find((key) => name(key) === tail)!,
+    });
+
+    const pinned = screen.getByRole('button', { name: tail });
+    expect(pinned).toHaveAttribute('aria-pressed', 'true');
+    expect(pinned).toHaveAccessibleDescription(PROMOTION_DESCRIPTION);
   });
 
   it('heads each pool in More models and repeats the data-use note over Experiential Labs models', () => {
@@ -459,7 +489,10 @@ describe('Free section in the composer', () => {
         experientialKeys.some((key) => name(key) === row.getAttribute('aria-label')),
       );
     expect(labsRows.length).toBeGreaterThan(0);
-    for (const row of labsRows) expect(labs).toContainElement(row);
+    for (const row of labsRows) {
+      expect(labs).toContainElement(row);
+      expect(row).toHaveAccessibleDescription(PROMOTION_DESCRIPTION);
+    }
   });
 
   it('keeps the data-use note over an Experiential Labs model found by search', () => {
@@ -488,7 +521,9 @@ describe('Free section in the composer', () => {
     });
 
     const labs = within(more).getByRole('group', { name: 'More Experiential Labs free models' });
-    expect(within(labs).getByRole('button', { name: found })).toBeInTheDocument();
+    expect(within(labs).getByRole('button', { name: found })).toHaveAccessibleDescription(
+      PROMOTION_DESCRIPTION,
+    );
     expect(within(labs).getByText(DATA_USE_NOTE)).toBeInTheDocument();
     expect(within(labs).getByRole('link', { name: 'Data use' })).toBeInTheDocument();
     expect(

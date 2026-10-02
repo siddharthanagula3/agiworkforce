@@ -171,11 +171,13 @@ function pauseNotice(
 function ReadyRow({
   entry,
   promotional,
+  noteId,
   selected,
   onSelect,
 }: {
   entry: FreeModelEntry;
   promotional: boolean;
+  noteId: string | null;
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
@@ -186,7 +188,7 @@ function ReadyRow({
       {...PICKER_ROW}
       aria-pressed={selected}
       aria-label={entry.label.displayName}
-      aria-describedby={guidanceId}
+      aria-describedby={noteId ? `${guidanceId} ${noteId}` : guidanceId}
       onClick={() => onSelect(entry.model.key)}
       className={ACTIVE_ROW_CLASS}
     >
@@ -251,12 +253,14 @@ function UnavailableRow({
   );
 }
 
-function PoolHeading({ issuer, promotional }: { issuer: string; promotional: boolean }) {
-  if (!promotional) return <p className={POOL_HEADING_CLASS}>{issuer}</p>;
+function PoolHeading({ issuer, noteId }: { issuer: string; noteId: string | null }) {
+  if (!noteId) return <p className={POOL_HEADING_CLASS}>{issuer}</p>;
   return (
     <>
       <p className={POOL_HEADING_CLASS}>{`${issuer} · Free`}</p>
-      <p className="px-3 text-xs leading-5 text-muted-foreground">{PROMOTIONAL_DATA_USE}</p>
+      <p id={noteId} className="px-3 text-xs leading-5 text-muted-foreground">
+        {PROMOTIONAL_DATA_USE}
+      </p>
       <a
         {...PICKER_ROW}
         href="/privacy"
@@ -319,6 +323,8 @@ export function FreeQuotaModelSection({
   const [category, setCategory] = useState<string | null>(null);
   const moreId = useId();
   const unavailableId = useId();
+  const featuredNoteId = useId();
+  const moreNoteId = useId();
   const { quota, experiential } = sources;
   if (!children && quota.status === 'hidden' && experiential.status === 'hidden') return null;
 
@@ -347,6 +353,9 @@ export function FreeQuotaModelSection({
   const unavailable = listedPools.filter((pool) => pool.unavailable.length > 0);
   const unavailableCount = unavailable.reduce((total, pool) => total + pool.unavailable.length, 0);
   const groupedByIssuer = listedPools.length > 1;
+  const pinnedNoteId = listedPools.some((pool) => pool.issuer === promotionalIssuer)
+    ? featuredNoteId
+    : null;
   const selection = freeQuotaSelection(selectedId);
   const selectionSource = isExperientialFreeOffering(selectedId) ? experiential : quota;
   const selectionLabel = selection ? providerOfferingLabel(selectedId) : null;
@@ -360,12 +369,13 @@ export function FreeQuotaModelSection({
         }
       : null;
 
-  const renderEntry = (entry: FreeModelEntry) =>
+  const renderEntry = (entry: FreeModelEntry, noteId: string | null) =>
     entry.model.status === 'ready' ? (
       <ReadyRow
         key={entry.model.key}
         entry={entry}
         promotional={entry.issuer === promotionalIssuer}
+        noteId={entry.issuer === promotionalIssuer ? noteId : null}
         selected={entry.model.key === selectedId}
         onSelect={onSelect}
       />
@@ -427,13 +437,13 @@ export function FreeQuotaModelSection({
               onExplain={() => setExplainedId(selectedId)}
             />
           )}
-          {view.pinned && renderEntry(view.pinned)}
+          {view.pinned && renderEntry(view.pinned, pinnedNoteId)}
           {listedPools.map((pool) => (
             <div key={pool.issuer} role="group" aria-label={`${pool.issuer} free models`}>
               {pool.issuer === promotionalIssuer && (
-                <PoolHeading issuer={pool.issuer} promotional />
+                <PoolHeading issuer={pool.issuer} noteId={featuredNoteId} />
               )}
-              {pool.featured.map(renderEntry)}
+              {pool.featured.map((entry) => renderEntry(entry, featuredNoteId))}
             </div>
           ))}
           {moreCount > 0 && (
@@ -467,13 +477,13 @@ export function FreeQuotaModelSection({
                       {(groupedByIssuer || group.issuer === promotionalIssuer) && (
                         <PoolHeading
                           issuer={group.issuer}
-                          promotional={group.issuer === promotionalIssuer}
+                          noteId={group.issuer === promotionalIssuer ? moreNoteId : null}
                         />
                       )}
                       {lineRuns(group.entries).map((line) => (
                         <div key={line[0]!.model.key}>
                           <p className={SUBHEADING_CLASS}>{line[0]!.label.line}</p>
-                          {line.map(renderEntry)}
+                          {line.map((entry) => renderEntry(entry, moreNoteId))}
                         </div>
                       ))}
                     </div>
@@ -496,8 +506,8 @@ export function FreeQuotaModelSection({
                 <div id={unavailableId} role="group" aria-label="Unavailable free models">
                   {unavailable.map((pool) => (
                     <div key={pool.issuer}>
-                      {groupedByIssuer && <PoolHeading issuer={pool.issuer} promotional={false} />}
-                      {pool.unavailable.map(renderEntry)}
+                      {groupedByIssuer && <PoolHeading issuer={pool.issuer} noteId={null} />}
+                      {pool.unavailable.map((entry) => renderEntry(entry, null))}
                     </div>
                   ))}
                 </div>
