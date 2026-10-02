@@ -1190,8 +1190,17 @@ const MessageBubbleComponent = function MessageBubble({
 
   const submitRatingDetails = useCallback(
     async (details: ResponseRatingDetailsInput) => {
-      latestRatingActionRef.current += 1;
-      await postResponseRating('down', details);
+      const action = ++latestRatingActionRef.current;
+      try {
+        await postResponseRating('down', details);
+      } catch (error) {
+        const saved = savedRatingRef.current;
+        if (action === latestRatingActionRef.current && saved !== 'down') {
+          setRatingState(saved ?? 'idle');
+          if (responseRating !== saved) onReact?.(message.id, saved);
+        }
+        throw error;
+      }
       savedRatingRef.current = 'down';
       setRatingState('down');
       if (responseRating !== 'down') onReact?.(message.id, 'down');

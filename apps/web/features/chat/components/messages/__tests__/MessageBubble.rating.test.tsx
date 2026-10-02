@@ -403,6 +403,39 @@ describe('telling us why an answer was bad', () => {
     expect(toastMock.error).not.toHaveBeenCalled();
   });
 
+  it('takes the vote back, keeping what was written, when the vote and its details are both refused', async () => {
+    const vote = pendingResponse();
+    const details = pendingResponse();
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    const down = screen.getByRole('button', { name: 'Bad response' });
+    await userEvent.click(down);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+    vote.settle(false);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    details.settle(false);
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent(RESPONSE_RATING_SEND_FAILED);
+    expect(within(form).getByRole('button', { name: 'Other' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+    expect(onReact.mock.calls).toEqual([
+      ['msg-1', 'down'],
+      ['msg-1', null],
+    ]);
+    expect(toastMock.error).not.toHaveBeenCalled();
+
+    await userEvent.click(within(form).getByRole('button', { name: 'Close feedback form' }));
+
+    expect(down).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('sends a vote and its details in the order they were given', async () => {
     const vote = pendingResponse();
     render(<MessageBubble message={assistantMessage()} />);
@@ -680,6 +713,10 @@ describe('telling us why an answer was bad', () => {
       'Could not send that. Please try again.',
     );
     expect(screen.getByRole('form', { name: 'Tell us more' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bad response' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('says when the details hit the hourly feedback limit', async () => {
