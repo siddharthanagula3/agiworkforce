@@ -1349,6 +1349,7 @@ interface StreamOutcome {
   pendingDeviceSteps: PendingDeviceStep[];
   pendingInputs: PendingInputCall[];
   runHandle: ManagedCloudAgentRunHandle | null;
+  saveEmptyTurn?: () => void;
 }
 
 interface ConsumeStreamContext {
@@ -1369,6 +1370,7 @@ interface ConsumeStreamContext {
    */
   assistantParentId?: string;
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
+  retriesEmptyTurn?: boolean;
 }
 
 /**
@@ -1430,6 +1432,10 @@ const BLOCKED_STREAM_ERROR_CODES: ReadonlySet<string> = new Set([
 ]);
 const MAX_TOKENS_FINISH_REASONS: ReadonlySet<string> = new Set(['length', 'max_tokens']);
 
+function hasVisibleText(content: string): boolean {
+  return content.replace(/[\u200B\uFEFF]/g, '').trim().length > 0;
+}
+
 /**
  * A finished assistant turn that produced nothing: no text, no tool call, no
  * error. Mirrors the render-time "no visible output" check in MessageBubble
@@ -1443,8 +1449,7 @@ function isEmptyAssistantTurn(
 ): boolean {
   if (!message || message.role !== 'assistant') return false;
   if (message.isStreaming || message.error) return false;
-  const content = message.content.replace(/[\u200B\uFEFF]/g, '').trim();
-  if (content.length > 0) return false;
+  if (hasVisibleText(message.content)) return false;
   if ((message.attachments?.length ?? 0) > 0) return false;
   const meta = message.metadata;
   if (!meta) return true;
@@ -2467,6 +2472,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return Object.keys(metadata).length > 0 ? metadata : undefined;
   };
 
+  let heldEmptyTurnSave: (() => void) | undefined;
+
   const persistAssistant = (streamedContent: string) => {
     const deliveredContent = withProviderCitationMarkers(streamedContent);
     const generatedVideoUrl =
@@ -2504,39 +2511,55 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.finishReason === STOPPED_FINISH_REASON),
     );
     if (!fullContent && !hasMeaningfulMetadata) return;
-    saveMessageToDb(
-      conversationId,
-      {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-        model,
-        metadata,
-        ...(ctx.assistantParentId ? { parentId: ctx.assistantParentId } : {}),
-      },
-      getAuthToken,
-    )
-      .then((saved) => {
-        if (saved?.id && saved.id !== assistantMessageId) {
-          updateMessage(assistantMessageId, { id: saved.id }, conversationId);
-        }
-      })
-      .catch((err) => {
-        notifyPersistenceFailure('assistant', err);
-        // The retries inside saveMessageToDb are spent. Everything the reader
-        // can see that is not the answer text, the tool timeline, the reasoning
-        // blocks, the generated-file list, exists only in this tab now, and a
-        // reload will show an answer that looks as though it never had any of
-        // it. Say so, rather than let them find out.
-        if (!hasMeaningfulMetadata) return;
-        const current = findConversationMessage(conversationId, assistantMessageId);
-        updateMessage(
-          assistantMessageId,
-          { metadata: { ...current?.metadata, metadataNotSaved: true } },
-          conversationId,
-        );
-      });
+    const save = () => {
+      saveMessageToDb(
+        conversationId,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          model,
+          metadata,
+          ...(ctx.assistantParentId ? { parentId: ctx.assistantParentId } : {}),
+        },
+        getAuthToken,
+      )
+        .then((saved) => {
+          if (saved?.id && saved.id !== assistantMessageId) {
+            updateMessage(assistantMessageId, { id: saved.id }, conversationId);
+          }
+        })
+        .catch((err) => {
+          notifyPersistenceFailure('assistant', err);
+          // The retries inside saveMessageToDb are spent. Everything the reader
+          // can see that is not the answer text, the tool timeline, the reasoning
+          // blocks, the generated-file list, exists only in this tab now, and a
+          // reload will show an answer that looks as though it never had any of
+          // it. Say so, rather than let them find out.
+          if (!hasMeaningfulMetadata) return;
+          const current = findConversationMessage(conversationId, assistantMessageId);
+          updateMessage(
+            assistantMessageId,
+            { metadata: { ...current?.metadata, metadataNotSaved: true } },
+            conversationId,
+          );
+        });
+    };
+    if (ctx.retriesEmptyTurn && !suspended && !hasVisibleText(fullContent)) {
+      heldEmptyTurnSave = save;
+      return;
+    }
+    save();
   };
+
+  const settledOutcome = (): StreamOutcome => ({
+    suspended,
+    pendingCalls,
+    pendingDeviceSteps,
+    pendingInputs,
+    runHandle,
+    ...(heldEmptyTurnSave ? { saveEmptyTurn: heldEmptyTurnSave } : {}),
+  });
 
   if (!response.body) {
     throw new Error('No response body');
@@ -2739,7 +2762,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
+    return settledOutcome();
   };
 
   const recordAgentEventOutcome = (event: AgentEvent) => {
@@ -2874,7 +2897,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
+    return settledOutcome();
   };
 
   const drainEventPayloads = (text: string, done: boolean): string[] => {
@@ -2919,7 +2942,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           persistAssistant(fullAssistantContent);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
-          return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
+          return settledOutcome();
         }
 
         try {
@@ -3467,7 +3490,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         useChatStore.getState().setError(errorMessage, conversationId);
         stopStreaming(conversationId);
         setLoading(false, conversationId);
-        return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
+        return settledOutcome();
       }
     }
     flushContentBuffer(true);
@@ -4217,6 +4240,7 @@ export function useChatStream(
             updateMessage(userMessageId, { truncatedAttachments }, conversationId);
           }
 
+          const retriesEmptyTurn = !retriedEmptyTurn && !freeQuotaSelection(model);
           const outcome = await consumeAssistantStream({
             response,
             assistantMessageId,
@@ -4224,6 +4248,7 @@ export function useChatStream(
             conversationId,
             isTemporaryConversation,
             getAuthToken,
+            retriesEmptyTurn,
             ...(latencyTrace ? { latencyTrace } : {}),
             ...(assistantParentId ? { assistantParentId } : {}),
             onRunHandle: (handle) => {
@@ -4307,8 +4332,7 @@ export function useChatStream(
           // duplicate user message) before the reader ever sees the "model
           // finished without returning a response" card.
           if (
-            !retriedEmptyTurn &&
-            !freeQuotaSelection(model) &&
+            retriesEmptyTurn &&
             isEmptyAssistantTurn(findConversationMessage(conversationId, assistantMessageId), model)
           ) {
             retriedEmptyTurn = true;
@@ -4323,6 +4347,7 @@ export function useChatStream(
             continue;
           }
 
+          outcome.saveEmptyTurn?.();
           break;
         }
       } catch (error) {

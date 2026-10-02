@@ -2678,26 +2678,11 @@ describe('useChatStream', () => {
       expect(assistantMsg?.content).toBe('answer');
     });
 
-    it('stores the retried answer, not the empty attempt it replaced, when that attempt saves late', async () => {
-      useChatStore.setState({
-        conversations: [PERSISTED_CONV],
-        activeConversationId: PERSISTED_CONV.id,
-      });
-      const streams = [
-        sse([
-          {
-            choices: [
-              {
-                delta: { content: '<thinking>Weighing how to introduce myself in a sentence' },
-                finish_reason: 'length',
-              },
-            ],
-          },
-        ]),
-        sse([{ choices: [{ delta: { content: 'I am AGI Workforce.' }, finish_reason: 'stop' }] }]),
-      ];
-      const storedAssistantContent: string[] = [];
-      let assistantSaveRefused = false;
+    function mockAttemptsAndSaves(streams: string[], headers?: HeadersInit) {
+      const assistantSaves: Array<{
+        content?: string;
+        metadata?: { finishReason?: string; thinkingContent?: string };
+      }> = [];
       vi.mocked(fetch).mockImplementation(async (input, init) => {
         const url = String(input);
         if (url.includes('/api/llm/')) {
@@ -2710,7 +2695,7 @@ describe('useChatStream', () => {
                 controller.close();
               },
             }),
-            { status: 200, headers: new Headers() },
+            { status: 200, headers: new Headers(headers) },
           );
         }
         if (url.includes('/messages')) {
@@ -2718,19 +2703,65 @@ describe('useChatStream', () => {
             id?: string;
             role?: string;
             content?: string;
+            metadata?: { finishReason?: string; thinkingContent?: string };
           };
-          if (body.role === 'assistant') {
-            if (!assistantSaveRefused) {
-              assistantSaveRefused = true;
-              return new Response('unavailable', { status: 503 });
-            }
-            storedAssistantContent.push(body.content ?? '');
-          }
+          if (body.role === 'assistant') assistantSaves.push(body);
           return new Response(JSON.stringify({ message: { id: body.id ?? 'saved-row' } }), {
             status: 200,
           });
         }
         return new Response('{}', { status: 200 });
+      });
+      return assistantSaves;
+    }
+
+    const REASONING_THAT_RAN_OUT = sse([
+      {
+        choices: [
+          {
+            delta: { content: '<thinking>Weighing how to introduce myself in a sentence' },
+            finish_reason: 'length',
+          },
+        ],
+      },
+    ]);
+
+    it('saves only the retried answer, never the empty attempt the retry discarded', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+      const assistantSaves = mockAttemptsAndSaves([
+        REASONING_THAT_RAN_OUT,
+        sse([{ choices: [{ delta: { content: 'I am AGI Workforce.' }, finish_reason: 'stop' }] }]),
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('In one sentence, who are you?', {
+          conversationId: PERSISTED_CONV.id,
+          model: 'exact-model',
+        });
+      });
+
+      await vi.waitFor(() =>
+        expect(assistantSaves.map((save) => save.content)).toContain('I am AGI Workforce.'),
+      );
+      expect(assistantSaves).toHaveLength(1);
+      expect(assistantSaves[0]?.metadata?.finishReason).toBe('stop');
+      expect(assistantSaves[0]?.metadata?.thinkingContent).toBeUndefined();
+      expect(
+        useChatStore.getState().messages.find((message) => message.role === 'assistant')?.content,
+      ).toBe('I am AGI Workforce.');
+    });
+
+    it('still saves an empty turn the retry does not take, as it was shown', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+      const assistantSaves = mockAttemptsAndSaves([REASONING_THAT_RAN_OUT], {
+        'X-AGI-Resolved-Model': 'fallback-model',
       });
 
       const { result } = renderHook(() => useChatStream());
@@ -2741,11 +2772,14 @@ describe('useChatStream', () => {
         });
       });
 
-      await vi.waitFor(() => expect(storedAssistantContent).toHaveLength(2), { timeout: 3_000 });
-      expect(storedAssistantContent.at(-1)).toBe('I am AGI Workforce.');
+      await vi.waitFor(() => expect(assistantSaves).toHaveLength(1));
+      expect(assistantSaves[0]?.metadata?.finishReason).toBe('length');
+      expect(assistantSaves[0]?.metadata?.thinkingContent).toContain('Weighing how to introduce');
       expect(
-        useChatStore.getState().messages.find((message) => message.role === 'assistant')?.content,
-      ).toBe('I am AGI Workforce.');
+        vi
+          .mocked(fetch)
+          .mock.calls.filter(([input]) => String(input).includes('/api/llm/v1/chat/completions')),
+      ).toHaveLength(1);
     });
 
     it('does not retry a max-tokens finish with nothing visible once the served model differs from the request', async () => {
