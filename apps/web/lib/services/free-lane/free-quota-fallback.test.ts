@@ -251,7 +251,6 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
   it.each([
     ['free_allowance_exhausted', 'free_limit_reached'],
     ['free_capacity_unavailable', 'free_capacity_unavailable'],
-    ['free_trial_token_budget_reached', 'free_usage_limit_reached'],
   ])('answers a turn refused with %s and names the reason %s', async (code, reason) => {
     mocks.stream.mockResolvedValue(
       sse(
@@ -315,6 +314,11 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
 
   it.each([
     ['a refusal that is not a spent free lane', refusal('provider_unreachable', 502), {}],
+    [
+      'an account that reached its own free usage limit',
+      refusal('free_trial_token_budget_reached'),
+      {},
+    ],
     ['a model the reader picked', refusal('free_allowance_exhausted'), { model: textOnlyKeys[0] }],
     ['a turn that is not streamed', refusal('free_allowance_exhausted'), { stream: false }],
     ['web search', refusal('free_allowance_exhausted'), { web_search: true }],

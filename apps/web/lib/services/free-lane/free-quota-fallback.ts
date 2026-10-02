@@ -23,14 +23,12 @@ import {
 } from '@/lib/server/free-quota-catalogue';
 import { serveFreeQuotaTurn } from '@/lib/server/free-quota-turn';
 import type { UserScopedDb } from '@/lib/server/rls-db';
-import { FREE_BUDGET_REACHED_ERROR_CLASS } from '@/lib/services/free-trial-service';
 
 import { FREE_CAPACITY_UNAVAILABLE_CODE } from './stage';
 
 const FALLBACK_REASON_BY_REFUSAL: Readonly<Record<string, FallbackReasonCode>> = {
   [FREE_ALLOWANCE_EXHAUSTED_CODE]: 'free_limit_reached',
   [FREE_CAPACITY_UNAVAILABLE_CODE]: 'free_capacity_unavailable',
-  [FREE_BUDGET_REACHED_ERROR_CLASS]: 'free_usage_limit_reached',
 };
 
 const ReplayedFreeAutoTurnSchema = z.looseObject({

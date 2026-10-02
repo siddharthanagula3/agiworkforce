@@ -33,7 +33,6 @@ export const FALLBACK_REASON_CODES = [
   'research_unsupported_model',
   'free_limit_reached',
   'free_capacity_unavailable',
-  'free_usage_limit_reached',
   UNSPECIFIED_SUBSTITUTION_REASON,
 ] as const;
 
@@ -111,10 +110,6 @@ export function describeFallbackReason(
       return servedBy
         ? `Free Auto had no free capacity right now, so ${servedBy} answered instead.`
         : 'Free Auto had no free capacity right now, so another free model answered instead.';
-    case 'free_usage_limit_reached':
-      return servedBy
-        ? `You reached your free usage limit, so ${servedBy} answered instead.`
-        : 'You reached your free usage limit, so another free model answered instead.';
     case UNSPECIFIED_SUBSTITUTION_REASON:
       return servedBy
         ? `This reply came from ${servedBy}, not the model you picked. The reason was not recorded.`
@@ -142,7 +137,6 @@ export function fallbackStepLabel(
       return 'Switched to web search';
     case 'free_limit_reached':
     case 'free_capacity_unavailable':
-    case 'free_usage_limit_reached':
       return servedBy ? `Switched to ${servedBy}` : 'Switched to another free model';
     case UNSPECIFIED_SUBSTITUTION_REASON:
       return servedBy ? `Switched to ${servedBy}` : 'Switched to a different model';
