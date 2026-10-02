@@ -447,6 +447,24 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     expect(screen.queryByRole('button', { name: /Create public link/ })).toBeNull();
   });
 
+  it('shows a public link under public copy when a newer link is workspace-only', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      listed([
+        liveShare('workspace-token', { visibility: 'organization' }),
+        liveShare('public-token'),
+      ]),
+    );
+
+    renderSavedChat();
+
+    expect(
+      await screen.findByDisplayValue('https://agiworkforce.com/share/public-token'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Public link ready' })).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('https://agiworkforce.com/share/workspace-token')).toBeNull();
+    expect(screen.getByTestId('share-link-count')).toHaveTextContent('This chat has 2 live links.');
+  });
+
   it('offers no second link while it is still checking for the first', () => {
     vi.spyOn(global, 'fetch').mockImplementationOnce(() => new Promise<Response>(() => {}));
 

@@ -167,14 +167,14 @@ export function useShareConversation(
       ? liveShares.shares
       : NO_SHARES;
   const activeShare = useMemo((): ConversationShare | null => {
-    const newest = shownShares[0];
-    if (!newest) return null;
+    const widest: ShareAudience = shownShares.some((share) => share.audience === 'public')
+      ? 'public'
+      : 'organization';
+    const shown = shownShares.find((share) => share.audience === widest);
+    if (!shown) return null;
     const fewestShown = Math.min(...shownShares.map((share) => share.messageCount));
     return {
-      ...newest,
-      audience: shownShares.some((share) => share.audience === 'public')
-        ? 'public'
-        : 'organization',
+      ...shown,
       linkCount: shownShares.length,
       newMessages: Math.max(0, messageCount - fewestShown),
       newMessagesVary: shownShares.some((share) => share.messageCount !== fewestShown),
