@@ -32,7 +32,7 @@ test.describe('/legal/archive', () => {
 
     await expect(
       page.getByText(
-        'This version was settled on 2026-09-22 and replaced on 2026-09-27 before it was published on this site.',
+        'This version was settled on 2026-09-22 and replaced on 2026-09-27 before it was published on this site; the first version published here after it is dated 2026-09-29.',
       ),
     ).toBeVisible();
 
