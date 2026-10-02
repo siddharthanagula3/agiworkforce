@@ -129,7 +129,7 @@ function turnKey(userId: string, requestId: string): string {
 }
 
 const HoldSchema = z.object({
-  cause: z.enum(['exhausted', 'billing', 'withdrawn']),
+  cause: z.enum(['exhausted', 'billing', 'withdrawn', 'refused']),
   atMs: z.number().int().positive(),
 });
 
@@ -156,8 +156,12 @@ export interface FreeQuotaState {
   used: ReadonlyMap<string, number>;
 }
 
+const ATTESTATION_LIFTED_HOLDS: ReadonlySet<FreeQuotaHoldCause> = new Set(['withdrawn', 'refused']);
+
 function holdInForce(hold: z.infer<typeof HoldSchema>, attestedAtMs: number | null): boolean {
-  return hold.cause !== 'withdrawn' || attestedAtMs === null || hold.atMs >= attestedAtMs;
+  return (
+    !ATTESTATION_LIFTED_HOLDS.has(hold.cause) || attestedAtMs === null || hold.atMs >= attestedAtMs
+  );
 }
 
 export async function readFreeQuotaState(
@@ -286,7 +290,8 @@ export type FreeQuotaUnavailableReason =
   | 'attestation_other_credential'
   | 'attestation_stale'
   | 'attestation_excludes_offering'
-  | 'managed_route_shares_allowance';
+  | 'managed_route_shares_allowance'
+  | 'provider_refused';
 
 export type FreeQuotaDecision =
   | { status: Extract<FreeQuotaStatus, 'ready'>; usable: number; used: number }
@@ -349,6 +354,7 @@ export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuot
   if (!state) return unavailable('shared_state_unavailable');
   const hold = state.holds.get(entry.offeringKey);
   if (hold === 'withdrawn') return { status: 'expired' };
+  if (hold === 'refused') return unavailable('provider_refused');
   if (hold) return { status: 'exhausted', cause: 'provider' };
   const usable = usableAllowance(entry, policy);
   const used = state.used.get(entry.offeringKey) ?? 0;

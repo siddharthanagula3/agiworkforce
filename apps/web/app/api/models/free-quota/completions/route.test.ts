@@ -770,22 +770,38 @@ describe('Qwen free quota turns on the Free plan', () => {
   });
 
   it.each([
-    ['AccessDenied', 'current user api does not support synchronous calls.'],
-    ['AccessDenied', 'Access denied.'],
-    ['Model.AccessDenied', 'Model access denied.'],
+    [403, 'AccessDenied', 'current user api does not support synchronous calls.'],
+    [403, 'AccessDenied', 'Access denied.'],
+    [403, 'Model.AccessDenied', 'Model access denied.'],
+    [
+      404,
+      'ModelNotFound',
+      'The model qwen-fixture does not exist or you do not have access to it.',
+    ],
   ])(
-    'refuses only this turn when the provider answers %s "%s", and keeps the model on offer',
-    async (code, message) => {
-      mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status: 403 }));
+    'takes the model out of the ready set when the provider answers %i %s "%s", until a newer console check',
+    async (status, code, message) => {
+      mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status }));
       const response = await post();
       expect(response.status).toBe(503);
-      expect((await response.json()).error.code).toBe('free_quota_unavailable');
-      expect((await sharedState()).holds.has(model!)).toBe(false);
+      const { error } = await response.json();
+      expect(error.code).toBe('free_quota_unavailable');
+      expect(error.message).not.toContain('ended');
+      expect((await sharedState()).holds.get(model!)).toBe('refused');
 
+      const held = await post(
+        { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+        'while-held',
+      );
+      expect(held.status).toBe(503);
+      expect(mocks.stream).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(NOW + 120_000);
+      await attest();
       mocks.stream.mockResolvedValue(sse('[DONE]'));
       const again = await post(
-        { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
-        'after-refusal',
+        { assistant_message_id: 'a2d14f7e-0b3d-40c7-952d-987e841033c6' },
+        'after-console-check',
       );
       expect(again.status).toBe(200);
       expect(mocks.stream).toHaveBeenCalledTimes(2);
@@ -1058,7 +1074,7 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect((await sharedState()).holds.get(imageModel)).toBe('exhausted');
   });
 
-  it('keeps a promotional image on offer when the provider refuses the call shape', async () => {
+  it('takes a promotional image out of the ready set when the provider refuses the call shape', async () => {
     mocks.plan.mockResolvedValue('pro');
     mocks.media.mockResolvedValue({
       status: 'failed',
@@ -1074,7 +1090,7 @@ describe('Qwen free quota turns on the Free plan', () => {
 
     expect(response.status).toBe(503);
     expect((await response.json()).error.code).toBe('free_quota_unavailable');
-    expect((await sharedState()).holds.has(imageModel)).toBe(false);
+    expect((await sharedState()).holds.get(imageModel)).toBe('refused');
   });
 
   it('never exposes the provider URL when generated image persistence fails', async () => {

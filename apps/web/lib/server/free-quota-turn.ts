@@ -61,6 +61,7 @@ import {
   settleFreeQuotaAllowance,
   type AllowanceReservation,
   type FreeQuotaDecision,
+  type FreeQuotaHoldCause,
   type FreeQuotaPolicy,
   type FreeQuotaRefusal,
 } from '@/lib/free-quota-authorization';
@@ -121,6 +122,13 @@ const DECISION_FAILURE: Readonly<
   exhausted: 'exhausted',
   expired: 'expired',
   unavailable: 'unavailable',
+};
+
+const HOLD_BY_REFUSAL: Readonly<Partial<Record<FreeQuotaRefusal, FreeQuotaHoldCause>>> = {
+  exhausted: 'exhausted',
+  billing: 'billing',
+  withdrawn: 'withdrawn',
+  unavailable: 'refused',
 };
 
 const FREE_LIMIT_REASON: Readonly<Partial<Record<FreeQuotaFailure, FreeLimitReason>>> = {
@@ -232,11 +240,12 @@ async function recordRefusal(
   refusal: { kind: FreeQuotaRefusal; signal: string },
 ): Promise<void> {
   const nowMs = Date.now();
-  if (refusal.kind === 'exhausted' || refusal.kind === 'billing' || refusal.kind === 'withdrawn') {
+  const cause = HOLD_BY_REFUSAL[refusal.kind];
+  if (cause) {
     await recordFreeQuotaHold(ledger.store, {
       apiKey: ledger.apiKey,
       offeringKey: ledger.offeringKey,
-      cause: refusal.kind,
+      cause,
       nowMs,
     });
     if (refusal.kind === 'billing') {
@@ -260,7 +269,7 @@ async function recordRefusal(
   if (refusal.kind === 'unavailable') {
     logger.warn(
       { offering: ledger.offeringKey, signal: refusal.signal },
-      '[free-quota] provider refused this free model for one turn; it stays on offer',
+      '[free-quota] provider refused this free model; it is withheld for every account until a newer attestation',
     );
   }
 }
