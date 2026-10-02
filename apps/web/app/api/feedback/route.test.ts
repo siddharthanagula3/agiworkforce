@@ -1,17 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+interface FakeDb {
+  query: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
+  transaction: ReturnType<typeof vi.fn>;
+}
+
 const feedbackRouteMocks = vi.hoisted(() => {
   const query = vi.fn();
   const execute = vi.fn();
-  const ownerDb: Record<string, unknown> = {
+  const ownerDb: FakeDb = {
     query,
     execute,
-    transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(ownerDb)),
+    transaction: vi.fn(async (run: (tx: FakeDb) => unknown) => run(ownerDb)),
   };
-  const scopedDb: Record<string, unknown> = {
+  const scopedDb: FakeDb = {
     query,
     execute,
-    transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(scopedDb)),
+    transaction: vi.fn(async (run: (tx: FakeDb) => unknown) => run(scopedDb)),
   };
   return {
     auth: vi.fn(),
