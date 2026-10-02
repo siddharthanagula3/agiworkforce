@@ -417,6 +417,31 @@ test('fails when the entry that changes the list does not name what was added or
   );
 });
 
+test('does not count a subprocessor name that only appears inside a longer word as naming it', () => {
+  const names = [...LISTED, 'Expo'];
+  const moved = (summary) =>
+    checkSubprocessors({
+      names,
+      date: '2026-10-05',
+      versions: [
+        LISTED_VERSION,
+        {
+          date: '2026-10-05',
+          digest: copyDigest(subprocessorsPage(names)),
+          summary,
+          subprocessorNames: names,
+        },
+      ],
+    });
+
+  assert.ok(
+    moved('Exposes the region each row processes in.').some((failure) =>
+      failure.includes('the summary does not name Expo'),
+    ),
+  );
+  assert.deepEqual(moved('Adds Expo, which delivers push notifications to the mobile app.'), []);
+});
+
 test('fails when no version records the subprocessors the page lists', () => {
   const { subprocessorNames, ...unnamed } = LISTED_VERSION;
   assert.deepEqual(subprocessorNames, LISTED);

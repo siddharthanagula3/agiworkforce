@@ -101,13 +101,15 @@ per-document revision dates, canonical routes and their aliases) come from
     `registryProviderIds`, such as a new model provider in the Managed Cloud
     row, moves its date. The entry that moves it records the page's names in
     `subprocessorNames` and its provider ids, without the `_anthropic` dialect
-    suffix, in `subprocessorProviders`, and names each change in its `summary`;
-    a provider counts as named when the summary spells its id or the label the
-    product shows for it, its `label` in
+    suffix, in `subprocessorProviders`, and names each change in its `summary`.
+    A subprocessor counts as named when the summary spells its name up to any
+    parenthesis, and a provider when the summary spells its id or the label
+    the product shows for it, its `label` in
     `packages/contracts/types/src/models.json` or a gateway's `displayName` in
-    the model registry, as whole words, ignoring case and the spaces and
-    punctuation between them, so OpenRouter names `open_router` and Vercel AI
-    Gateway names `vercel_gateway`, while metadata does not name `meta`.
+    the model registry. Both count only as whole words, ignoring case and the
+    spaces and punctuation between them, so OpenRouter names `open_router` and
+    Vercel AI Gateway names `vercel_gateway`, while metadata does not name
+    `meta` and Exposes does not name Expo.
     `scripts/check-policy-versions.mjs` fails when the page's names or providers
     differ from the newest recorded ones, or when they change under an entry
     whose date did not move.

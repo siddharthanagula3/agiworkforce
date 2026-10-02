@@ -134,7 +134,7 @@ const SUBPROCESSOR_RECORDS = [
     subject: 'the subprocessor list',
     listed: (source) => recipientNames(source),
     display: listedName,
-    named: (summary, name) => summary.includes(listedName(name)),
+    named: (summary, name) => namesInWords(summary, listedName(name)),
   },
   {
     field: 'subprocessorProviders',
