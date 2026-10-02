@@ -10,6 +10,11 @@ import {
   listManagedRoutesForModel,
   type ProviderOffering,
 } from '@agiworkforce/types';
+import {
+  FreeQuotaAttestedOfferingsSchema,
+  type FreeQuotaAttestationStanding,
+  type FreeQuotaUnavailableReason,
+} from '@agiworkforce/cloud-contracts';
 import type { FreeQuotaStatus } from '@/features/models/lib/free-quota-types';
 import type { FreeQuotaObservation } from '@/lib/server/free-pools';
 
@@ -43,6 +48,7 @@ export const PolicySchema = z.object({
   pollIntervalMs: z.number().int().positive(),
   maxPolls: z.number().int().positive(),
   attestationMaxAgeMs: z.number().int().positive(),
+  renewalReminderLeadMs: z.number().int().positive(),
   chatMaxOutputTokens: z.number().int().positive(),
   chatImageReserveTokens: z.number().int().positive(),
   chatRequestTimeoutMs: z.number().int().positive(),
@@ -53,7 +59,7 @@ export const QuotaAttestationSchema = z.object({
   sourceUrl: z.literal(BENEFITS_PAGE),
   checkedAtMs: z.number().int().positive(),
   credentialSha256: z.string().regex(SHA256_HEX),
-  quotaOnlyOfferings: z.union([z.literal('all'), z.array(z.string().min(1)).min(1)]),
+  quotaOnlyOfferings: FreeQuotaAttestedOfferingsSchema,
   attestedBy: z.string().min(1),
 });
 
@@ -263,20 +269,51 @@ export function sharesManagedRoute(offering: ProviderOffering): boolean {
   );
 }
 
-export type FreeQuotaUnavailableReason =
-  | 'not_integrated'
-  | 'quota_only_not_observed'
-  | 'terms_review_missing'
-  | 'media_not_served'
-  | 'allowance_unknown'
-  | 'credential_missing'
-  | 'shared_state_unavailable'
-  | 'account_billing_signal'
-  | 'attestation_missing'
-  | 'attestation_other_credential'
-  | 'attestation_stale'
-  | 'attestation_excludes_offering'
-  | 'managed_route_shares_allowance';
+export type AttestationStanding =
+  | { standing: 'billing_signal'; signalAtMs: number }
+  | { standing: 'missing' }
+  | {
+      standing: Exclude<FreeQuotaAttestationStanding, 'billing_signal' | 'missing'>;
+      attestation: QuotaAttestation;
+      freshUntilMs: number;
+    };
+
+export function attestationFreshUntilMs(checkedAtMs: number, policy: FreeQuotaPolicy): number {
+  return checkedAtMs + policy.attestationMaxAgeMs;
+}
+
+export function attestationStanding(input: {
+  state: Pick<FreeQuotaState, 'attestation' | 'suspendedAtMs'>;
+  apiKey: string;
+  policy: FreeQuotaPolicy;
+  nowMs: number;
+}): AttestationStanding {
+  const { state, apiKey, policy, nowMs } = input;
+  const { attestation, suspendedAtMs } = state;
+  if (suspendedAtMs !== null && (!attestation || attestation.checkedAtMs <= suspendedAtMs)) {
+    return { standing: 'billing_signal', signalAtMs: suspendedAtMs };
+  }
+  if (!attestation) return { standing: 'missing' };
+  const freshUntilMs = attestationFreshUntilMs(attestation.checkedAtMs, policy);
+  const standing = !quotaCredentialMatches(attestation, apiKey)
+    ? 'other_credential'
+    : attestation.checkedAtMs > nowMs || nowMs >= freshUntilMs
+      ? 'stale'
+      : freshUntilMs - nowMs <= policy.renewalReminderLeadMs
+        ? 'expiring'
+        : 'current';
+  return { standing, attestation, freshUntilMs };
+}
+
+const ATTESTATION_REFUSALS = {
+  billing_signal: 'account_billing_signal',
+  missing: 'attestation_missing',
+  other_credential: 'attestation_other_credential',
+  stale: 'attestation_stale',
+} as const satisfies Record<
+  Exclude<FreeQuotaAttestationStanding, 'current' | 'expiring'>,
+  FreeQuotaUnavailableReason
+>;
 
 export type FreeQuotaDecision =
   | { status: Extract<FreeQuotaStatus, 'ready'>; usable: number; used: number }
@@ -333,26 +370,12 @@ export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuot
   if (used + minimumTurnUnits(offering, policy) > usable) {
     return { status: 'exhausted', cause: 'allowance' };
   }
-  const { attestation } = state;
-  if (
-    state.suspendedAtMs !== null &&
-    (!attestation || attestation.checkedAtMs <= state.suspendedAtMs)
-  ) {
-    return unavailable('account_billing_signal');
+  const standing = attestationStanding({ state, apiKey, policy, nowMs });
+  if (standing.standing !== 'current' && standing.standing !== 'expiring') {
+    return unavailable(ATTESTATION_REFUSALS[standing.standing]);
   }
-  if (!attestation) return unavailable('attestation_missing');
-  if (!quotaCredentialMatches(attestation, apiKey))
-    return unavailable('attestation_other_credential');
-  if (
-    attestation.checkedAtMs > nowMs ||
-    nowMs - attestation.checkedAtMs >= policy.attestationMaxAgeMs
-  ) {
-    return unavailable('attestation_stale');
-  }
-  if (
-    attestation.quotaOnlyOfferings !== 'all' &&
-    !attestation.quotaOnlyOfferings.includes(entry.offeringKey)
-  ) {
+  const covered = standing.attestation.quotaOnlyOfferings;
+  if (covered !== 'all' && !covered.includes(entry.offeringKey)) {
     return unavailable('attestation_excludes_offering');
   }
   return { status: 'ready', usable, used };

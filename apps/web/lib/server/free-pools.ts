@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { FreeQuotaTermsReviewStanding } from '@agiworkforce/cloud-contracts';
 import { isFreeEligibilityValid, type FreeEligibility } from '@agiworkforce/routing';
 import { z } from 'zod';
 import { getProviderOffering } from '@agiworkforce/types';
@@ -116,20 +117,26 @@ export const FreeQuotaInventorySchema = z
 
 export type FreeQuotaInventory = z.infer<typeof FreeQuotaInventorySchema>;
 export type FreeQuotaObservation = z.infer<typeof FreeQuotaObservationSchema>;
+export type FreeQuotaTermsReview = NonNullable<FreeQuotaInventory['termsReview']>;
+
+export function termsReviewStanding(
+  review: FreeQuotaTermsReview | null,
+  nowMs: number,
+  reminderLeadMs = 0,
+): FreeQuotaTermsReviewStanding {
+  if (!review) return 'missing';
+  if (review.verifiedAtMs > nowMs) return 'not_yet_valid';
+  if (review.expiresAtMs <= nowMs) return 'expired';
+  if (!Object.values(review.terms).every(Boolean)) return 'terms_refused';
+  return review.expiresAtMs - nowMs <= reminderLeadMs ? 'expiring' : 'current';
+}
 
 export function reviewedQuotaOfferingKeys(
   inventory: FreeQuotaInventory,
   nowMs: number,
 ): ReadonlySet<string> {
   const review = inventory.termsReview;
-  if (
-    !review ||
-    review.verifiedAtMs > nowMs ||
-    review.expiresAtMs <= nowMs ||
-    !Object.values(review.terms).every(Boolean)
-  ) {
-    return new Set();
-  }
+  if (!review || termsReviewStanding(review, nowMs) !== 'current') return new Set();
   return new Set(review.approvedOfferingKeys);
 }
 

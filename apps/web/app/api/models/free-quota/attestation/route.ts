@@ -1,20 +1,42 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  FreeQuotaAttestationRequestSchema,
+  type FreeQuotaAttestationReceipt,
+  type FreeQuotaAttestationStatus,
+  type FreeQuotaBlockedOutcome,
+  type FreeQuotaTermsReviewStatus,
+} from '@agiworkforce/cloud-contracts';
+import { getProviderOffering } from '@agiworkforce/types';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { loadFreePools } from '@/lib/server/free-pools';
+import {
+  loadFreePools,
+  termsReviewStanding,
+  type FreeQuotaTermsReview,
+} from '@/lib/server/free-pools';
 import {
   QuotaAttestationSchema,
+  attestationFreshUntilMs,
+  attestationStanding,
   credentialSha256,
   quotaCredentialMatches,
   readFreeQuotaState,
   writeQuotaAttestation,
+  type FreeQuotaPolicy,
+  type QuotaAttestation,
 } from '@/lib/free-quota-authorization';
-import { loadFreeQuotaPolicy, sharedFreeQuotaStore } from '@/lib/server/free-quota-catalogue';
+import {
+  freeQuotaContextFor,
+  loadFreeQuotaPolicy,
+  resolveFreeQuotaDecisions,
+  sharedFreeQuotaStore,
+  type FreeQuotaDecisions,
+} from '@/lib/server/free-quota-catalogue';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,11 +50,6 @@ const NO_STORE = { 'Cache-Control': 'private, no-store' };
  */
 const CONSOLE_CHECK_RECORD_WINDOW_MS = 60 * 60 * 1000;
 
-const AttestationRequestSchema = QuotaAttestationSchema.pick({
-  checkedAtMs: true,
-  quotaOnlyOfferings: true,
-});
-
 function operatorRefusal(message: string, code: string, status: number) {
   return NextResponse.json({ error: { message, code } }, { status, headers: NO_STORE });
 }
@@ -41,47 +58,150 @@ function currentKey(): string {
   return process.env['QWEN_API_KEY'] ?? '';
 }
 
+function recordWindowMs(policy: FreeQuotaPolicy): number {
+  return Math.min(policy.attestationMaxAgeMs, CONSOLE_CHECK_RECORD_WINDOW_MS);
+}
+
+function coveredCount(offerings: QuotaAttestation['quotaOnlyOfferings']): 'all' | number {
+  return offerings === 'all' ? 'all' : offerings.length;
+}
+
+function covers(attestation: QuotaAttestation | null, offeringKey: string): boolean {
+  if (!attestation) return false;
+  return (
+    attestation.quotaOnlyOfferings === 'all' || attestation.quotaOnlyOfferings.includes(offeringKey)
+  );
+}
+
+type ConfiguredStatus = Extract<FreeQuotaAttestationStatus, { configured: true }>;
+
+function termsReviewStatus(
+  review: FreeQuotaTermsReview | null,
+  policy: FreeQuotaPolicy,
+  nowMs: number,
+): FreeQuotaTermsReviewStatus {
+  return {
+    standing: termsReviewStanding(review, nowMs, policy.renewalReminderLeadMs),
+    review: review
+      ? {
+          reviewedBy: review.reviewedBy,
+          verifiedAtMs: review.verifiedAtMs,
+          expiresAtMs: review.expiresAtMs,
+          evidenceUrl: review.evidenceUrl,
+          terms: review.terms,
+          approvedOfferings: review.approvedOfferingKeys.length,
+        }
+      : null,
+  };
+}
+
+function attestableOfferings(
+  decisions: FreeQuotaDecisions | null,
+  attestation: QuotaAttestation | null,
+): ConfiguredStatus['offerings'] {
+  return (decisions?.offerings ?? []).flatMap(({ entry, offering, decision }) => {
+    if (
+      decision.status === 'expired' ||
+      !entry.quotaOnlyObserved ||
+      offering.identityStatus !== 'exact' ||
+      !offering.providerModelId ||
+      !offering.quotaProbeProtocol
+    ) {
+      return [];
+    }
+    return [
+      {
+        key: entry.offeringKey,
+        displayName: offering.displayName,
+        providerModelId: offering.providerModelId,
+        category: offering.category,
+        expiresOn: entry.expiresOn,
+        attested: covers(attestation, entry.offeringKey),
+      },
+    ];
+  });
+}
+
+function servingSummary(decisions: FreeQuotaDecisions | null): ConfiguredStatus['serving'] {
+  const offerings = decisions?.offerings ?? [];
+  const blocked = new Map<FreeQuotaBlockedOutcome, number>();
+  let ready = 0;
+  for (const { decision } of offerings) {
+    if (decision.status === 'ready') {
+      ready += 1;
+      continue;
+    }
+    const outcome = decision.status === 'unavailable' ? decision.reason : decision.status;
+    blocked.set(outcome, (blocked.get(outcome) ?? 0) + 1);
+  }
+  return {
+    ready,
+    total: offerings.length,
+    blocked: [...blocked]
+      .map(([outcome, count]) => ({ outcome, count }))
+      .sort((left, right) => right.count - left.count),
+  };
+}
+
+function statusResponse(body: FreeQuotaAttestationStatus): NextResponse {
+  return NextResponse.json(body, { headers: NO_STORE });
+}
+
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'admin-operator');
   if (rateLimitResponse) return rateLimitResponse;
-  await requirePlatformAdmin(request);
+  const { userId } = await requirePlatformAdmin(request);
 
   const store = sharedFreeQuotaStore(process.env.NODE_ENV);
   const inventory = loadFreePools().inventory;
   const apiKey = currentKey();
   if (!store || !inventory || !apiKey) {
-    return NextResponse.json(
-      { configured: false, sharedState: Boolean(store), credential: Boolean(apiKey) },
-      { headers: NO_STORE },
-    );
+    return statusResponse({
+      configured: false,
+      sharedState: Boolean(store),
+      credential: Boolean(apiKey),
+      inventory: Boolean(inventory),
+    });
   }
   const policy = loadFreeQuotaPolicy();
-  const state = await readFreeQuotaState(store, {
-    apiKey,
-    observedOn: inventory.observedOn,
-    offeringKeys: [],
-  });
-  const attestation = state.attestation;
-  return NextResponse.json(
-    {
-      configured: true,
-      attestation: attestation
+  const nowMs = Date.now();
+  const [state, decisions] = await Promise.all([
+    readFreeQuotaState(store, { apiKey, observedOn: inventory.observedOn, offeringKeys: [] }),
+    resolveFreeQuotaDecisions(freeQuotaContextFor({ url: request.url, userId, nowMs }), {
+      inventory,
+    }),
+  ]);
+  const { attestation } = state;
+  return statusResponse({
+    configured: true,
+    nowMs,
+    issuer: inventory.issuer,
+    consolePage: QuotaAttestationSchema.shape.sourceUrl.value,
+    validForMs: policy.attestationMaxAgeMs,
+    recordWindowMs: recordWindowMs(policy),
+    reminderLeadMs: policy.renewalReminderLeadMs,
+    termsReview: termsReviewStatus(inventory.termsReview, policy, nowMs),
+    attestation: {
+      standing: attestationStanding({ state, apiKey, policy, nowMs }).standing,
+      record: attestation
         ? {
             checkedAtMs: attestation.checkedAtMs,
-            freshUntilMs: attestation.checkedAtMs + policy.attestationMaxAgeMs,
+            freshUntilMs: attestationFreshUntilMs(attestation.checkedAtMs, policy),
+            offerings: coveredCount(attestation.quotaOnlyOfferings),
             boundToCurrentKey: quotaCredentialMatches(attestation, apiKey),
-            offerings:
-              attestation.quotaOnlyOfferings === 'all'
-                ? 'all'
-                : attestation.quotaOnlyOfferings.length,
             attestedBy: attestation.attestedBy,
           }
         : null,
-      billingSignalAtMs: state.suspendedAtMs,
-      withdrawnOfferings: [...state.holds.keys()],
     },
-    { headers: NO_STORE },
-  );
+    billingSignalAtMs: state.suspendedAtMs,
+    withdrawn: [...state.holds].map(([key, cause]) => ({
+      key,
+      displayName: getProviderOffering(key)?.displayName ?? key,
+      cause,
+    })),
+    offerings: attestableOfferings(decisions, attestation),
+    serving: servingSummary(decisions),
+  });
 }
 
 async function handlePost(request: NextRequest): Promise<Response> {
@@ -91,10 +211,12 @@ async function handlePost(request: NextRequest): Promise<Response> {
   if (csrf) return csrf;
   const { userId } = await requirePlatformAdmin(request);
 
-  const parsed = AttestationRequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = FreeQuotaAttestationRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     return operatorRefusal(
-      'Send checkedAtMs and quotaOnlyOfferings ("all" or a list of offering keys).',
+      'Send checkedAtMs ("now", or when the check was made in epoch milliseconds) and quotaOnlyOfferings ("all" or a list of offering keys).',
       'invalid_attestation',
       400,
     );
@@ -111,9 +233,9 @@ async function handlePost(request: NextRequest): Promise<Response> {
   }
   const policy = loadFreeQuotaPolicy();
   const nowMs = Date.now();
-  const { checkedAtMs, quotaOnlyOfferings } = parsed.data;
-  const recordWindowMs = Math.min(policy.attestationMaxAgeMs, CONSOLE_CHECK_RECORD_WINDOW_MS);
-  if (checkedAtMs > nowMs || nowMs - checkedAtMs >= recordWindowMs) {
+  const { quotaOnlyOfferings } = parsed.data;
+  const checkedAtMs = parsed.data.checkedAtMs === 'now' ? nowMs : parsed.data.checkedAtMs;
+  if (checkedAtMs > nowMs || nowMs - checkedAtMs >= recordWindowMs(policy)) {
     return operatorRefusal(
       'Record the console check within an hour of making it, and never with a time in the future.',
       'attestation_out_of_window',
@@ -148,14 +270,12 @@ async function handlePost(request: NextRequest): Promise<Response> {
     },
   });
 
-  return NextResponse.json(
-    {
-      checkedAtMs,
-      freshUntilMs: checkedAtMs + policy.attestationMaxAgeMs,
-      offerings: quotaOnlyOfferings === 'all' ? 'all' : quotaOnlyOfferings.length,
-    },
-    { headers: NO_STORE },
-  );
+  const receipt: FreeQuotaAttestationReceipt = {
+    checkedAtMs,
+    freshUntilMs: attestationFreshUntilMs(checkedAtMs, policy),
+    offerings: coveredCount(quotaOnlyOfferings),
+  };
+  return NextResponse.json(receipt, { headers: NO_STORE });
 }
 
 export const GET = withErrorHandler(handleGet);

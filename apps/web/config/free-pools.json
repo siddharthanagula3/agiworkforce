@@ -3131,6 +3131,7 @@
     "pollIntervalMs": 5000,
     "maxPolls": 24,
     "attestationMaxAgeMs": 2592000000,
+    "renewalReminderLeadMs": 259200000,
     "chatMaxOutputTokens": 4096,
     "chatImageReserveTokens": 4096,
     "chatRequestTimeoutMs": 240000,
