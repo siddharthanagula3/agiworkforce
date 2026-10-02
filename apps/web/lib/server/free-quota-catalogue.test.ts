@@ -262,6 +262,21 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     expect(result.get(target!)).toEqual({ status: 'exhausted', cause: 'provider' });
   });
 
+  it('reports a model the provider no longer serves as unavailable for every account', async () => {
+    const store = await attested(createMemoryKeyValueStore());
+    const [target] = readyKeys(await statuses(context({ store })));
+    await recordFreeQuotaHold(store, {
+      apiKey: API_KEY,
+      offeringKey: target!,
+      cause: 'withdrawn',
+      nowMs: NOW,
+    });
+    expect((await statuses(context({ store }))).get(target!)).toEqual({
+      status: 'unavailable',
+      reason: 'provider_withdrawn',
+    });
+  });
+
   it('reports a model as exhausted once the shared allowance cannot fit another turn', async () => {
     const store = await attested(createMemoryKeyValueStore());
     const before = await statuses(context({ store }));

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { KeyValueStore } from '@agiworkforce/key-value';
 import {
   MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
   classifyModelStudioError,
 } from '@agiworkforce/provider-runtime';
 import {
@@ -128,7 +129,7 @@ function turnKey(userId: string, requestId: string): string {
 }
 
 const HoldSchema = z.object({
-  cause: z.enum(['exhausted', 'billing']),
+  cause: z.enum(['exhausted', 'billing', 'withdrawn']),
   atMs: z.number().int().positive(),
 });
 
@@ -279,7 +280,8 @@ export type FreeQuotaUnavailableReason =
   | 'attestation_other_credential'
   | 'attestation_stale'
   | 'attestation_excludes_offering'
-  | 'managed_route_shares_allowance';
+  | 'managed_route_shares_allowance'
+  | 'provider_withdrawn';
 
 export type FreeQuotaDecision =
   | { status: Extract<FreeQuotaStatus, 'ready'>; usable: number; used: number }
@@ -340,7 +342,9 @@ export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuot
   if (sharesManagedRoute(offering)) return unavailable('managed_route_shares_allowance');
   if (!apiKey) return unavailable('credential_missing');
   if (!state) return unavailable('shared_state_unavailable');
-  if (state.holds.has(entry.offeringKey)) return { status: 'exhausted', cause: 'provider' };
+  const hold = state.holds.get(entry.offeringKey);
+  if (hold === 'withdrawn') return unavailable('provider_withdrawn');
+  if (hold) return { status: 'exhausted', cause: 'provider' };
   const usable = usableAllowance(entry, policy);
   const used = state.used.get(entry.offeringKey) ?? 0;
   if (used + minimumTurnUnits(offering, policy) > usable) {
@@ -423,6 +427,7 @@ export type FreeQuotaRefusal =
   | 'interrupted'
   | 'too_long'
   | 'unavailable'
+  | 'withdrawn'
   | 'blocked'
   | 'failed';
 
@@ -453,7 +458,9 @@ export function classifyFreeQuotaRefusal(failure: {
     case 'context_overflow':
       return 'too_long';
     case 'invalid_model':
-      return 'unavailable';
+      return classified.providerHint === MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT
+        ? 'withdrawn'
+        : 'unavailable';
     case 'safety':
     case 'content_blocked':
       return 'blocked';

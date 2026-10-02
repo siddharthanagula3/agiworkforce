@@ -772,6 +772,49 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect((await sharedState()).holds.has(model!)).toBe(false);
   });
 
+  it('reads a spent free allocation as the free limit, with another free model and a hold', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 'Throttling.AllocationQuota',
+            type: 'Throttling.AllocationQuota',
+            message: 'Free allocated quota exceeded.',
+          },
+        },
+        { status: 429 },
+      ),
+    );
+    const response = await post();
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_exhausted');
+    const freeLimit = FreeLimitSchema.parse(error.free_limit);
+    expect(freeLimit).toMatchObject({ model, reason: 'allowance_used' });
+    expect(freeLimit.alternative_model).toBeDefined();
+    expect(freeLimit.alternative_model).not.toBe(model);
+    expect((await sharedState()).holds.get(model!)).toBe('exhausted');
+  });
+
+  it.each([
+    ['AccessDenied', 'Access denied.'],
+    ['Endpoint.AccessDenied', 'Workspace endpoint access denied.'],
+  ])('withdraws a model the provider answers with %s for every account', async (code, message) => {
+    mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status: 403 }));
+    const response = await post();
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('free_quota_unavailable');
+    expect((await sharedState()).holds.get(model!)).toBe('withdrawn');
+
+    const again = await post(
+      { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+      'after-withdrawal',
+    );
+    expect(again.status).toBe(503);
+    expect((await again.json()).error.code).toBe('free_quota_unavailable');
+    expect(mocks.stream).toHaveBeenCalledTimes(1);
+  });
+
   it('withdraws a model for every account on a billing signal and never calls it again', async () => {
     mocks.stream.mockResolvedValue(
       Response.json({ error: { message: 'Payment required' } }, { status: 402 }),
@@ -984,6 +1027,30 @@ describe('Qwen free quota turns on the Free plan', () => {
     );
     expect(body).toContain(`/api/files/${MEDIA_ASSET_ID}`);
     expect(body).not.toContain(PROVIDER_ARTIFACT_URL);
+  });
+
+  it('reads a spent free allocation on a promotional image from the provider’s own words', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'Throttling.AllocationQuota',
+      providerMessage: 'Free allocated quota exceeded.',
+    });
+
+    const response = await post({
+      model: imageModel,
+      messages: [{ role: 'user', content: 'A blue paper boat' }],
+    });
+
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_exhausted');
+    expect(FreeLimitSchema.parse(error.free_limit)).toMatchObject({
+      model: imageModel,
+      reason: 'allowance_used',
+    });
+    expect((await sharedState()).holds.get(imageModel)).toBe('exhausted');
   });
 
   it('never exposes the provider URL when generated image persistence fails', async () => {

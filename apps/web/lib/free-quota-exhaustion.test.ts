@@ -177,6 +177,18 @@ describe('provider refusals on a free model', () => {
       'busy',
     ],
     [
+      {
+        status: 429,
+        code: 'Throttling.AllocationQuota',
+        message: 'Free allocated quota exceeded.',
+      },
+      'exhausted',
+    ],
+    [
+      { status: 429, code: 'insufficient_quota', message: 'Free allocated quota exceeded.' },
+      'exhausted',
+    ],
+    [
       { status: 429, code: 'limit_requests', message: 'You have exceeded your request limit.' },
       'busy',
     ],
@@ -189,7 +201,13 @@ describe('provider refusals on a free model', () => {
       { status: 429, code: 'CommodityNotPurchased', message: 'Commodity has not purchased yet' },
       'account_billing',
     ],
-    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'unavailable'],
+    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'withdrawn'],
+    [{ status: 403, code: 'AccessDenied', message: 'Access denied.' }, 'withdrawn'],
+    [{ status: 403, code: 'access_denied', message: 'Access denied.' }, 'withdrawn'],
+    [
+      { status: 403, code: 'Endpoint.AccessDenied', message: 'Workspace endpoint access denied.' },
+      'withdrawn',
+    ],
     [{ status: 404, code: 'model_not_found', message: 'Model can not be found.' }, 'unavailable'],
     [
       {

@@ -114,6 +114,7 @@ const REFUSAL_FAILURE: Readonly<Record<FreeQuotaRefusal, FreeQuotaFailure>> = {
   interrupted: 'interrupted',
   too_long: 'too_long',
   unavailable: 'unavailable',
+  withdrawn: 'unavailable',
   blocked: 'blocked',
   failed: 'provider_failed',
 };
@@ -235,11 +236,11 @@ async function recordRefusal(
   refusal: { kind: FreeQuotaRefusal; signal: string },
 ): Promise<void> {
   const nowMs = Date.now();
-  if (refusal.kind === 'exhausted' || refusal.kind === 'billing') {
+  if (refusal.kind === 'exhausted' || refusal.kind === 'billing' || refusal.kind === 'withdrawn') {
     await recordFreeQuotaHold(ledger.store, {
       apiKey: ledger.apiKey,
       offeringKey: ledger.offeringKey,
-      cause: refusal.kind === 'billing' ? 'billing' : 'exhausted',
+      cause: refusal.kind,
       nowMs,
     });
     if (refusal.kind === 'billing') {
@@ -828,6 +829,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
           ? 'exhausted'
           : classifyFreeQuotaRefusal({
               ...(result.providerCode ? { code: result.providerCode } : {}),
+              ...(result.providerMessage ? { message: result.providerMessage } : {}),
             });
       await settleTurn(ledger, {
         outcome: 'failed',
