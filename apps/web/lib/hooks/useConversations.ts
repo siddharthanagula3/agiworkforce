@@ -457,6 +457,7 @@ export function useConversations(): UseConversationsReturn {
             resolveNewChatTemporary(
               useChatStore.getState().pendingTemporaryChat,
               useSettingsStore.getState().newChatsTemporary,
+              projectId,
             ))
               ? { isTemporary: true }
               : {}),

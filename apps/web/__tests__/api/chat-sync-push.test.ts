@@ -59,6 +59,54 @@ describe('POST /api/chat/sync, revision CAS', () => {
     expect(sql).not.toContain('excluded.updated_at');
   });
 
+  it('answers a conflict and keeps the project when a push files a temporary chat under one', async () => {
+    const conversationId = '0190a000-0000-7000-8000-0000000000cc';
+    const projectId = '0190a000-0000-7000-8000-0000000000ff';
+    const current = {
+      id: conversationId,
+      title: 'Temporary chat',
+      model: null,
+      project_id: null,
+      pinned: false,
+      starred: false,
+      archived: false,
+      active_leaf_message_id: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+      updated_at: '2026-10-01T00:00:00.000Z',
+      deleted_at: null,
+      server_version: '3',
+    };
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('update web_conversations')) {
+        return [{ kind: 'conflict', id: conversationId, server_version: null, current }];
+      }
+      if (sql.includes('from public.user_projects')) return [{ id: projectId }];
+      return [];
+    });
+
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        conversations: [
+          { id: conversationId, title: 'Temporary chat', projectId, baseVersion: '3' },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      applied: { conversations: [] },
+      conflicts: { conversations: [{ id: conversationId, current: { project_id: null } }] },
+    });
+    const pushSql = String(
+      queryMock.mock.calls.find((call) => String(call[0]).includes('update web_conversations'))![0],
+    );
+    const update = pushSql.slice(pushSql.indexOf('updated as ('), pushSql.indexOf('inserted as ('));
+    expect(update).toMatch(
+      /and not \(\s*incoming\.has_project_id\s*and nullif\(incoming\.project_id, ''\) is not null\s*and coalesce\(existing\.is_temporary, false\)\s*\)/,
+    );
+  });
+
   it('returns a non-disclosing conflict for a message id outside the tenant', async () => {
     const res = await POST(
       postReq({

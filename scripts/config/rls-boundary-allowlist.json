@@ -79,7 +79,7 @@
     },
     {
       "path": "apps/web/app/api/feedback/route.ts",
-      "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK; the insert carries the server-derived user id and reads nothing back"
+      "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK: a signed-out report is a plain insert with no user id that reads nothing back. A signed-in caller's report, and every response rating write and removal (a rating needs a signed-in caller), run under RLS through createClaimedUserScopedDb bound to the verified user id, and getNeonDb there is the schema-owner pool that SET ROLE app_rls needs"
     },
     {
       "path": "apps/web/lib/github-install-app-return.ts",

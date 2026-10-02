@@ -568,6 +568,11 @@ async function handlePush(request: NextRequest) {
                and existing.user_id = $1
                and existing.server_version = incoming.base_version
                and (existing.deleted_at is null or incoming.should_delete)
+               and not (
+                 incoming.has_project_id
+                 and nullif(incoming.project_id, '') is not null
+                 and coalesce(existing.is_temporary, false)
+               )
                and (
                  not incoming.has_project_id
                  or incoming.project_id is null

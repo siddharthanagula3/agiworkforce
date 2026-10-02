@@ -216,6 +216,19 @@ describe('local models on the desktop shell', () => {
     expect(conversationHoldsLocalTurns([cloudTurn, localTurn])).toBe(true);
   });
 
+  it('CRITICAL: a local answer still streaming is recognised by the model it runs on', () => {
+    const streaming = {
+      id: 'm3',
+      role: 'assistant',
+      content: '',
+      createdAt: '2026-09-13T00:00:02.000Z',
+      model: 'local:ollama/tiny-chat:1b',
+      isStreaming: true,
+    } as Message;
+
+    expect(conversationHoldsLocalTurns([cloudTurn, streaming])).toBe(true);
+  });
+
   it('sends a local model only the text of the turns, never the placeholder it is filling', () => {
     const placeholder = { ...localTurn, id: 'pending', content: '' } as Message;
     expect(toLocalChatMessages([cloudTurn, localTurn, placeholder], 'pending')).toEqual([

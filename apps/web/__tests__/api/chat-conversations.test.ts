@@ -62,6 +62,7 @@ vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
 
 import { GET, POST } from '@/app/api/chat/conversations/route';
 import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
+import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
 
 describe('Chat Conversations API', () => {
   const mockConversations = [
@@ -454,6 +455,66 @@ describe('Chat Conversations API', () => {
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringMatching(/user_projects[\s\S]*id = \$1[\s\S]*user_id = \$2/),
           ['proj-foreign', 'user-123'],
+        );
+      });
+
+      it('refuses a temporary chat that names a project, and writes nothing', async () => {
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ projectId: 'proj-1', isTemporary: true }),
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.message).toBe(TEMPORARY_CHAT_PROJECT_REFUSAL);
+        expect(mockQuery).not.toHaveBeenCalled();
+      });
+
+      it('refuses to file an existing temporary chat under a project', async () => {
+        const clientId = '0190a000-0000-7000-8000-0000000000bb';
+        mockQuery
+          .mockResolvedValueOnce([{ id: 'proj-1' }])
+          .mockResolvedValueOnce([{ is_temporary: true }]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id: clientId, projectId: 'proj-1' }),
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.message).toBe(TEMPORARY_CHAT_PROJECT_REFUSAL);
+        expect(mockQuery).not.toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_conversations'),
+          expect.anything(),
+        );
+      });
+
+      it('keeps the upsert from filing a temporary row under a project', async () => {
+        const clientId = '0190a000-0000-7000-8000-0000000000cc';
+        mockQuery.mockResolvedValueOnce([{ id: clientId }]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id: clientId }),
+        });
+        await POST(request);
+
+        const upsert = String(mockQuery.mock.calls[0]?.[0]).replace(/\s+/g, ' ');
+        expect(upsert).toContain(
+          "not ( coalesce(web_conversations.is_temporary, false) and nullif(excluded.project_id, '') is not null )",
         );
       });
 

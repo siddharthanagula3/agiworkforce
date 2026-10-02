@@ -4,7 +4,7 @@ title: Privacy controls in Settings
 path: /privacy
 category: privacy
 tags: privacy, data controls, telemetry, crash reports, training, retention, where is my data, encryption, sell data, anonymized usage
-updated: 2026-09-20
+updated: 2026-10-02
 scope: public
 ---
 
@@ -27,10 +27,11 @@ reporting can run when configured and is not controlled by the browser setting.
 
 ## Temporary chats
 
-"Start new chats as temporary" makes every new conversation temporary: no
-message written to your history, no memory, and attachments kept out of the
-Library. The conversation record and any attachment are held for up to 30 days
-and then removed. An individual conversation can still be switched.
+"Start new chats as temporary" makes every new conversation outside a project
+temporary: no message written to your history, no memory, and attachments kept
+out of the Library. The conversation record and any attachment are held for up
+to 30 days and then removed. An individual conversation can still be switched.
+A chat you start inside a project is always saved to it.
 
 ## Your data in the product
 

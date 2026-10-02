@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LocalModel } from '@agiworkforce/local-runtime-contract';
 type ScanModule0 = typeof import('react-i18next');
 type ScanModule1 = typeof import('@/app/settings/_lib/preferences-client');
 type ScanModule2 = typeof import('@/lib/hooks/useMediaGeneration');
@@ -8,23 +8,37 @@ type ScanModule3 = typeof import('@agiworkforce/ui');
 type ScanModule4 = typeof import('@agiworkforce/unified-chat');
 type ScanModule5 = typeof import('../../components/ConversationTitleMenu');
 
-const mocks = vi.hoisted(() => ({
-  temporaryConversation: false,
-  updateConversation: vi.fn(async () => true),
-}));
+type ComposerOnSend = (
+  content: string,
+  attachments?: File[],
+  skillId?: string,
+  meta?: Record<string, unknown>,
+) => unknown;
 
-const CONVERSATION_ID = '00000000-0000-4000-8000-000000000801';
-const FIRST_USER_PROMPT =
-  'Explain in detail how the two-stage conversation titler is supposed to behave end to end';
-const CLIENT_TRUNCATION = FIRST_USER_PROMPT.slice(0, 60);
-const STAGE_ONE_TITLE = `${FIRST_USER_PROMPT.slice(0, 50)}...`;
-const GENERATED_TITLE = 'Two-stage titler behaviour';
+const mocks = vi.hoisted(() => ({
+  composerOnSend: null as ComposerOnSend | null,
+  sendMessage: vi.fn(
+    async (_content: string, options?: { ensureConversationId?: () => Promise<unknown> }) => {
+      await options?.ensureConversationId?.();
+      return true;
+    },
+  ),
+  createConversation: vi.fn(async (..._args: unknown[]) => ({
+    id: '00000000-0000-4000-8000-000000000901',
+    title: 'New Chat',
+    createdAt: '2026-10-02T00:00:00.000Z',
+    updatedAt: '2026-10-02T00:00:00.000Z',
+    isTemporary: true,
+  })),
+  updateConversation: vi.fn(async () => true),
+  toastError: vi.fn(),
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
-  useParams: () => ({ sessionId: CONVERSATION_ID }),
+  useParams: () => ({}),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => `/chat/${CONVERSATION_ID}`,
+  usePathname: () => '/chat',
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -51,6 +65,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
+  getCsrfToken: async () => 'fixture-csrf-token',
 }));
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
@@ -59,24 +74,29 @@ vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));
 
-// The real hook projects the store's conversation map, which is exactly what this
-// suite asserts against: an adopted title must land there without a network write.
-vi.mock('@/lib/hooks/useConversations', async () => {
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, dismiss: vi.fn() } }));
+
+vi.mock('@/lib/hooks/useConversations', async (importOriginal) => {
   const { useChatStore } = await import('@shared/stores/web-chat-store');
   return {
+    ...(await importOriginal()),
     useConversations: () => ({
       conversations: useChatStore((state) => state.conversations),
       isLoading: false,
-      createConversation: vi.fn(),
+      listError: null,
+      getConversationLoadError: () => null,
+      createConversation: mocks.createConversation,
       loadConversation: vi.fn(),
       deleteConversation: vi.fn(),
       updateConversation: mocks.updateConversation,
-      setActiveConversation: vi.fn(),
+      setActiveConversation: (id: string | null) =>
+        useChatStore.getState().setActiveConversation(id),
     }),
   };
 });
 
-vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
+vi.mock('@/lib/hooks/useManagedUsageSummary', async (importOriginal) => ({
+  ...(await importOriginal()),
   getWorstUsagePercent: () => 0,
   readManagedUsageBuckets: () => [],
   useManagedUsageSummary: () => ({ usage: null }),
@@ -95,21 +115,28 @@ vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
   };
 });
 
-vi.mock('../../components/Composer/ChatComposerNew', () => ({
-  ChatComposerNew: () => null,
-  SEND_GUARD_BLOCKED: 'fixture-send-guard-blocked',
+vi.mock('../../components/Composer/ChatComposerNew', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ChatComposerNew: (props: { onSend: ComposerOnSend }) => {
+    mocks.composerOnSend = props.onSend;
+    return null;
+  },
+  SEND_GUARD_BLOCKED: 'guard-blocked',
 }));
-vi.mock('../../components/messages/ChatMessageList', () => ({
-  ChatMessageList: () => <div data-testid="message-list" />,
+vi.mock('../../components/messages/ChatMessageList', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ChatMessageList: () => null,
 }));
 vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
   GreetingBanner: () => null,
 }));
-vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
+  ...(await importOriginal()),
   useChatStreamRuntime: () => ({
-    sendMessage: vi.fn(),
+    sendMessage: mocks.sendMessage,
     stopGeneration: vi.fn(),
     continueGeneration: vi.fn(),
+    resumeInteractiveCardTurn: vi.fn(),
     resolveToolApproval: vi.fn(),
   }),
 }));
@@ -132,12 +159,14 @@ vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
   useKeyboardShortcuts: vi.fn(),
 }));
 
-vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+vi.mock('@/features/settings/components/SettingsModalProvider', async (importOriginal) => ({
+  ...(await importOriginal()),
   useSettingsModal: () => ({ openSettings: vi.fn() }),
 }));
-vi.mock('@/features/connectors/stores/tool-permissions-store', () => {
+vi.mock('@/features/connectors/stores/tool-permissions-store', async (importOriginal) => {
   const state = { hydrateFromServer: vi.fn() };
   return {
+    ...(await importOriginal()),
     useToolPermissionsStore: Object.assign(
       (selector: (value: typeof state) => unknown) => selector(state),
       { getState: () => state },
@@ -145,7 +174,7 @@ vi.mock('@/features/connectors/stores/tool-permissions-store', () => {
   };
 });
 
-vi.mock('@features/projects', () => {
+vi.mock('@features/projects', async (importOriginal) => {
   const projectState = {
     projects: [],
     activeProjectId: null,
@@ -155,7 +184,8 @@ vi.mock('@features/projects', () => {
     setProjects: vi.fn(),
   };
   return {
-    useManagedCloudProjects: () => ({ projects: [], isReady: true }),
+    ...(await importOriginal()),
+    useManagedCloudProjects: () => ({ projects: [], isReady: true, retry: vi.fn() }),
     useProjectStore: (selector: (value: typeof projectState) => unknown) => selector(projectState),
     ProjectSettingsDialog: () => null,
   };
@@ -194,156 +224,116 @@ vi.mock('../../components/dialogs/UpgradePlanDialog', () => ({
 vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
   UpgradeConfirmDialog: () => null,
 }));
-vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
+vi.mock('@/features/time-focus/TimeFocusReminder', async (importOriginal) => ({
+  ...(await importOriginal()),
+  TimeFocusReminder: () => null,
+}));
 vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
   ...(await importOriginal<ScanModule5>()),
   ConversationTitleMenu: () => null,
 }));
-vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
+vi.mock('../../components/approvals/ApprovalInbox', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ApprovalInbox: () => null,
+}));
 vi.mock('../../components/work-session/WorkSessionPanel', () => ({
   hasWorkSession: () => false,
   WorkSessionPanel: () => null,
   WorkSessionToggleButton: () => null,
 }));
-vi.mock('../../components/artifacts/ArtifactsPanel', () => ({
+vi.mock('../../components/artifacts/ArtifactsPanel', async (importOriginal) => ({
+  ...(await importOriginal()),
   ArtifactsPanel: () => null,
   ArtifactsToggleButton: () => null,
 }));
 vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
   ...(await importOriginal()),
-  ResearchPanel: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ResearchPanel: () => null,
   ResearchToggleButton: () => null,
 }));
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+import { useLocalModelSelection } from '@features/desktop-host';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { LOCAL_MODEL_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
 
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+const LOCAL_MODEL: LocalModel = {
+  id: 'local:ollama/qwen2.5:1.5b',
+  serverId: 'ollama',
+  serverLabel: 'Ollama',
+  name: 'qwen2.5:1.5b',
+};
+
+const PROJECT_ID = '0190a000-0000-7000-8000-0000000000aa';
+const PRIVATE_PROMPT = 'my biopsy result says the margins are clear';
+
+function stubFetch() {
+  const fetchMock = vi.fn(
+    async () =>
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
-const LOCAL_MODEL_ID = 'local:ollama/qwen2.5:1.5b';
-
-function seedFirstTurn(options: {
-  title: string;
-  isTemporary?: boolean;
-  answeredOnDevice?: boolean;
-}): void {
-  useChatStore.getState().reset();
-  useChatStore.getState().setConversations([
-    {
-      id: CONVERSATION_ID,
-      title: options.title,
-      createdAt: '2026-08-15T00:00:00.000Z',
-      updatedAt: '2026-08-15T00:00:00.000Z',
-      ...(options.isTemporary ? { isTemporary: true } : {}),
-    },
-  ]);
-  useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, [
-    {
-      id: '00000000-0000-4000-8000-0000000008a1',
-      role: 'user',
-      content: FIRST_USER_PROMPT,
-      createdAt: '2026-08-15T00:00:01.000Z',
-    },
-    {
-      id: '00000000-0000-4000-8000-0000000008a2',
-      role: 'assistant',
-      content: 'Sure.',
-      createdAt: '2026-08-15T00:00:02.000Z',
-      ...(options.answeredOnDevice
-        ? { model: LOCAL_MODEL_ID, metadata: { privacyMode: 'local' as const } }
-        : {}),
-    },
-  ]);
-}
-
-function conversationTitleReads(fetchMock: ReturnType<typeof vi.fn>): string[] {
+function cloudWrites(fetchMock: ReturnType<typeof stubFetch>): string[] {
   return fetchMock.mock.calls
-    .map(([input]) => String(input))
-    .filter((url) => url.includes(`/api/chat/conversations/${CONVERSATION_ID}`));
+    .filter((call) => {
+      const init = (call as unknown[])[1] as RequestInit | undefined;
+      return init?.method === 'PUT' || init?.method === 'PATCH' || init?.method === 'POST';
+    })
+    .map((call) => String((call as unknown[])[0]));
 }
 
-function storeTitle(): string | undefined {
-  return useChatStore.getState().conversations.find((c) => c.id === CONVERSATION_ID)?.title;
-}
-
-describe('WebChatPage auto-title (WEB-85)', () => {
+describe('a chat on a model on this device, started inside a project', () => {
   beforeEach(() => {
-    mocks.temporaryConversation = false;
+    useChatStore.getState().reset();
+    mocks.composerOnSend = null;
+    mocks.sendMessage.mockClear();
+    mocks.createConversation.mockClear();
     mocks.updateConversation.mockClear();
+    mocks.toastError.mockClear();
+    useLocalModelSelection.getState().select(LOCAL_MODEL);
   });
 
   afterEach(() => {
+    useLocalModelSelection.getState().select(null);
     vi.unstubAllGlobals();
   });
 
-  it('adopts the server title instead of writing its own truncation', async () => {
-    seedFirstTurn({ title: 'New Chat' });
-    const fetchMock = vi.fn(async () =>
-      jsonResponse({ conversation: { id: CONVERSATION_ID, title: GENERATED_TITLE } }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('is refused before any conversation, title or draft reaches the server', async () => {
+    const fetchMock = stubFetch();
     render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
-    await waitFor(() => expect(storeTitle()).toBe(GENERATED_TITLE));
-    expect(conversationTitleReads(fetchMock).length).toBeGreaterThan(0);
-    expect(mocks.updateConversation).not.toHaveBeenCalledWith(
-      CONVERSATION_ID,
-      expect.objectContaining({ title: expect.anything() }),
-    );
-  });
-
-  it('lets the background LLM title replace the stage-1 truncation it first read', async () => {
-    seedFirstTurn({ title: 'Image generation' });
-    let reads = 0;
-    const fetchMock = vi.fn(async () => {
-      reads += 1;
-      return jsonResponse({
-        conversation: {
-          id: CONVERSATION_ID,
-          title: reads === 1 ? STAGE_ONE_TITLE : GENERATED_TITLE,
-        },
-      });
+    act(() => {
+      mocks.composerOnSend!(PRIVATE_PROMPT, undefined, undefined, { projectId: PROJECT_ID });
     });
-    vi.stubGlobal('fetch', fetchMock);
 
-    render(<WebChatPage />);
-
-    await waitFor(() => expect(storeTitle()).toBe(STAGE_ONE_TITLE));
-    await waitFor(() => expect(storeTitle()).toBe(GENERATED_TITLE), { timeout: 6000 });
-    expect(mocks.updateConversation).not.toHaveBeenCalledWith(
-      CONVERSATION_ID,
-      expect.objectContaining({ title: expect.anything() }),
-    );
-  }, 15000);
-
-  it('keeps a temporary chat title on this device and never writes it to the server', async () => {
-    seedFirstTurn({ title: 'New Chat', isTemporary: true });
-    const fetchMock = vi.fn(async () => jsonResponse({}));
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<WebChatPage />);
-
-    await waitFor(() => expect(storeTitle()).toBe(CLIENT_TRUNCATION));
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(LOCAL_MODEL_PROJECT_REFUSAL));
+    expect(mocks.createConversation).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
     expect(mocks.updateConversation).not.toHaveBeenCalled();
-    expect(conversationTitleReads(fetchMock)).toEqual([]);
+    expect(cloudWrites(fetchMock).join(' ')).not.toContain('/api/chat/conversations');
+    expect(useChatStore.getState().getDraftContent(null)).toBe(PRIVATE_PROMPT);
   });
 
-  it('keeps the title of a saved chat answered on this device off the server', async () => {
-    seedFirstTurn({ title: 'New Chat', answeredOnDevice: true });
-    const fetchMock = vi.fn(async () => jsonResponse({}));
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('starts a temporary chat filed under no project when no project is in scope', async () => {
+    stubFetch();
     render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
-    await waitFor(() => expect(storeTitle()).toBe(CLIENT_TRUNCATION));
-    expect(mocks.updateConversation).not.toHaveBeenCalled();
-    expect(conversationTitleReads(fetchMock)).toEqual([]);
+    act(() => {
+      mocks.composerOnSend!(PRIVATE_PROMPT, undefined, undefined, { projectId: null });
+    });
+
+    await waitFor(() => expect(mocks.createConversation).toHaveBeenCalledTimes(1));
+    const [, , projectId, options] = mocks.createConversation.mock.calls[0]!;
+    expect(projectId ?? null).toBeNull();
+    expect(options).toEqual({ isTemporary: true });
   });
 });

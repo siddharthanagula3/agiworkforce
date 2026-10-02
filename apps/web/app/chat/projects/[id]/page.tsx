@@ -1093,6 +1093,7 @@ export default function ProjectDetailPage() {
           >
             <ChatComposerNew
               onSend={handleProjectSend}
+              projectId={project.id}
               placeholder={`New chat in ${project.name}`}
             />
           </div>

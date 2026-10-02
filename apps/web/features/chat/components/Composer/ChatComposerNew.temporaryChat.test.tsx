@@ -1,13 +1,17 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatComposerNew } from './ChatComposerNew';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LocalModel } from '@agiworkforce/local-runtime-contract';
+import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
+import { useLocalModelSelection } from '@features/desktop-host';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { EyeOff } from '@agiworkforce/icons';
 import {
+  LOCAL_MODEL_PROJECT_REFUSAL,
   TEMPORARY_CHAT_END_CONFIRMATION,
   TEMPORARY_CHAT_END_LABEL,
   TEMPORARY_CHAT_PRIVACY_EXPLANATION,
+  TEMPORARY_CHAT_PROJECT_NOTICE,
 } from '@/lib/temporary-chat-policy';
 
 const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }));
@@ -230,5 +234,153 @@ describe('ending a temporary chat', () => {
     expect(useChatStore.getState().activeConversationId).toBeNull();
     expect(useChatStore.getState().pendingTemporaryChat).toBeNull();
     expect(routerPush).toHaveBeenCalledWith('/chat');
+  });
+});
+
+describe('temporary chat inside a project', () => {
+  const PROJECT_ID = 'project-1';
+  const projectPicker = {
+    projects: [{ id: PROJECT_ID, name: 'Launch' }],
+    activeProjectId: PROJECT_ID,
+    onSelectProject: vi.fn(),
+    onCreateProject: vi.fn(),
+  };
+
+  it('is not offered for a new chat filed under a project', () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={projectPicker} />);
+    openPlusMenu();
+
+    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+  });
+
+  it('is not offered on a project page composer', () => {
+    render(<ChatComposerNew onSend={vi.fn()} projectId={PROJECT_ID} />);
+    openPlusMenu();
+
+    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+  });
+
+  it('is not offered in an existing project conversation', () => {
+    useChatStore.setState({
+      activeConversationId: 'conv-project',
+      conversations: [
+        {
+          ...TEMPORARY_CONVERSATION,
+          id: 'conv-project',
+          isTemporary: false,
+          projectId: PROJECT_ID,
+        },
+      ] as never,
+    });
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="conv-project"
+        onSetTemporaryChat={vi.fn(async () => true)}
+      />,
+    );
+    openPlusMenu();
+
+    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+  });
+
+  it('stays offered on a chat already temporary inside a project, so it can be turned off', () => {
+    useChatStore.setState({
+      activeConversationId: TEMPORARY_CONVERSATION.id,
+      conversations: [{ ...TEMPORARY_CONVERSATION, projectId: PROJECT_ID }] as never,
+    });
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId={TEMPORARY_CONVERSATION.id}
+        onSetTemporaryChat={vi.fn(async () => true)}
+      />,
+    );
+    openPlusMenu();
+
+    expect(temporaryRow()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('says a new project chat will be saved when new chats start temporary', () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    render(<ChatComposerNew onSend={vi.fn()} projectId={PROJECT_ID} />);
+
+    expect(screen.getByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toHaveAttribute('role', 'status');
+  });
+
+  it('says so when a temporary chat was armed before the project was picked', () => {
+    useChatStore.getState().setPendingTemporaryChat(true);
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={projectPicker} />);
+
+    expect(screen.getByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toBeVisible();
+  });
+
+  it('stays quiet when temporary chat is off or the chat is outside a project', () => {
+    const { unmount } = render(<ChatComposerNew onSend={vi.fn()} projectId={PROJECT_ID} />);
+    expect(screen.queryByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toBeNull();
+    unmount();
+
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    expect(screen.queryByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toBeNull();
+  });
+});
+
+describe('a model on this device inside a project', () => {
+  const LOCAL_MODEL: LocalModel = {
+    id: 'local:ollama/qwen2.5:1.5b',
+    serverId: 'ollama',
+    serverLabel: 'Ollama',
+    name: 'qwen2.5:1.5b',
+  };
+
+  function typeMessage(value: string): HTMLElement {
+    const input = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(input, { target: { value } });
+    return input;
+  }
+
+  beforeEach(() => {
+    resetSendPendingFlagForTests();
+    useLocalModelSelection.getState().select(LOCAL_MODEL);
+  });
+
+  afterEach(() => {
+    useLocalModelSelection.getState().select(null);
+  });
+
+  it('says the chat cannot be saved in the project and does not send it', () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} projectId="project-1" />);
+
+    expect(screen.getByTestId('local-model-project-conflict')).toHaveTextContent(
+      LOCAL_MODEL_PROJECT_REFUSAL,
+    );
+    const input = typeMessage('my biopsy result says');
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('offers to go back to a cloud model', async () => {
+    render(<ChatComposerNew onSend={vi.fn()} projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to a cloud model' }));
+
+    await waitFor(() => expect(useLocalModelSelection.getState().selected).toBeNull());
+    expect(screen.queryByTestId('local-model-project-conflict')).toBeNull();
+  });
+
+  it('stays quiet for a new chat outside any project', () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+
+    expect(screen.queryByTestId('local-model-project-conflict')).toBeNull();
+    typeMessage('hello');
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
   });
 });

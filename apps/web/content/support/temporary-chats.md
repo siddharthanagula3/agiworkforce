@@ -4,7 +4,7 @@ title: Temporary chats
 path: /privacy
 category: chat
 tags: temporary chat, incognito, private chat, not saved, no history, off the record, end temporary chat, ephemeral
-updated: 2026-09-27
+updated: 2026-10-02
 scope: public
 ---
 
@@ -25,13 +25,15 @@ any research report and the log that lets an interrupted reply resume, and any
 file you attach, are held for up to 30 days and then removed, which is what
 keeps an in-flight chat working and an attachment readable while you are still
 in it. A legal hold placed on your workspace keeps that material past the 30
-days until the hold is released.
+days until the hold is released. A rating you give in a temporary chat, with
+any reason or comment, is kept with your account after the chat is removed; it
+carries the chat and response IDs, never the response text.
 
 ## Turning it on
 
 The composer carries a **Temporary chat** control for the conversation you are
-in. To make every new conversation temporary, turn on "Start new chats as
-temporary" in Settings, Privacy.
+in. To make every new conversation outside a project temporary, turn on "Start
+new chats as temporary" in Settings, Privacy.
 
 ## Ending one
 
@@ -45,3 +47,10 @@ reopen or restore it. Copy out anything you still need before you confirm.
 A temporary chat cannot be shared. The share control refuses with "A temporary
 chat cannot be shared. Turn off temporary chat to keep it, then share it." Turn
 the control off first, which starts saving the conversation, and then share it.
+
+A temporary chat cannot be part of a project, so the composer does not offer
+**Temporary chat** inside one. A chat with a model on this device is always
+temporary, so it cannot be started inside a project. A chat you start inside a
+project is always saved to it, and when new chats would otherwise start
+temporary the composer says "Temporary chat isn't available in projects. This
+chat will be saved to the project."

@@ -3,6 +3,7 @@
 import {
   LOCAL_ATTACHMENT_REFUSAL,
   LOCAL_MODEL_SERVER_LABELS,
+  isLocalModelId,
   parseLocalModelId,
   type LocalChatMessage,
   type LocalModel,
@@ -41,7 +42,11 @@ export function resolveLocalModel(
 }
 
 export function conversationHoldsLocalTurns(messages: readonly Message[]): boolean {
-  return messages.some((message) => message.metadata?.privacyMode === 'local');
+  return messages.some(
+    (message) =>
+      message.metadata?.privacyMode === 'local' ||
+      (message.model !== undefined && isLocalModelId(message.model)),
+  );
 }
 
 /**

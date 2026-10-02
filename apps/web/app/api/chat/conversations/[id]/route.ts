@@ -20,6 +20,7 @@ import {
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isConfiguredManagedModelRoute } from '@/lib/server/model-catalogue';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
 import {
   preconditionFailedResponse,
   readIfMatchVersion,
@@ -335,7 +336,13 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (hasActiveLeafUpdate) updates['activeLeafMessageId'] = body['activeLeafMessageId'];
 
   const targetProjectId = updates['projectId'];
-  if (hasProjectIdUpdate && typeof targetProjectId === 'string' && targetProjectId.length > 0) {
+  const movesIntoProject =
+    hasProjectIdUpdate && typeof targetProjectId === 'string' && targetProjectId.length > 0;
+  const turnsTemporaryOn = hasIsTemporaryUpdate && updates['isTemporary'] === true;
+  if (movesIntoProject && turnsTemporaryOn) {
+    throw createError.validation(TEMPORARY_CHAT_PROJECT_REFUSAL);
+  }
+  if (movesIntoProject) {
     let ownedProject: { id: string } | undefined;
     try {
       [ownedProject] = await db.query<{ id: string }>(
@@ -409,6 +416,16 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         and organization_id is not distinct from $15
         and deleted_at is null
         and ($19::bigint is null or server_version = $19::bigint)
+        and not (
+          (
+            $13::boolean and $14::boolean
+            and nullif(case when $5::boolean then $6::text else project_id end, '') is not null
+          )
+          or (
+            $5::boolean and nullif($6::text, '') is not null
+            and coalesce(case when $13::boolean then $14::boolean else is_temporary end, false)
+          )
+        )
       returning id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
         server_version::text as server_version
     `,
@@ -440,6 +457,26 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   );
 
   if (!updated) {
+    if (movesIntoProject || turnsTemporaryOn) {
+      const [current] = await db.query<{ is_temporary: boolean | null; project_id: string | null }>(
+        `select is_temporary, project_id
+           from web_conversations
+          where id = $1
+            and user_id = $2
+            and organization_id is not distinct from $3
+            and deleted_at is null`,
+        [id, userId, organizationId],
+      );
+      if (current) {
+        const endsTemporary = hasIsTemporaryUpdate
+          ? turnsTemporaryOn
+          : Boolean(current.is_temporary);
+        const endsInProject = hasProjectIdUpdate ? movesIntoProject : Boolean(current.project_id);
+        if (endsTemporary && endsInProject) {
+          throw createError.validation(TEMPORARY_CHAT_PROJECT_REFUSAL);
+        }
+      }
+    }
     if (expectedVersion !== null) {
       const [current] = await db.query<VersionedConversationRow>(
         `

@@ -18,6 +18,41 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
+const DIGIT_SHORTCUT = /^[1-9]$/;
+const MENU_CONTENT = '[data-radix-menu-content]';
+
+function isTextEntry(target: EventTarget): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.matches('input, textarea, select'))
+  );
+}
+
+function selectItemByDigitShortcut(event: React.KeyboardEvent<HTMLDivElement>): void {
+  if (event.defaultPrevented) return;
+  if (event.ctrlKey || event.metaKey || event.altKey || event.nativeEvent.isComposing) return;
+  if (!DIGIT_SHORTCUT.test(event.key) || isTextEntry(event.target)) return;
+  const menu = event.currentTarget;
+  if (!(event.target instanceof Element) || event.target.closest(MENU_CONTENT) !== menu) return;
+  const item = Array.from(menu.querySelectorAll<HTMLElement>('[role^="menuitem"]')).find(
+    (candidate) =>
+      candidate.closest(MENU_CONTENT) === menu &&
+      candidate.querySelector('[data-menu-shortcut]')?.textContent?.trim() === event.key,
+  );
+  if (!item || item.hasAttribute('data-disabled')) return;
+  event.preventDefault();
+  item.click();
+}
+
+function withDigitShortcuts(
+  onKeyDown: React.KeyboardEventHandler<HTMLDivElement> | undefined,
+): React.KeyboardEventHandler<HTMLDivElement> {
+  return (event) => {
+    selectItemByDigitShortcut(event);
+    if (!event.defaultPrevented) onKeyDown?.(event);
+  };
+}
+
 interface DropdownMenuSubTriggerProps extends React.ComponentPropsWithoutRef<
   typeof DropdownMenuPrimitive.SubTrigger
 > {
@@ -55,10 +90,16 @@ interface DropdownMenuSubContentProps extends React.ComponentPropsWithoutRef<
   ref?: React.Ref<React.ElementRef<typeof DropdownMenuPrimitive.SubContent>>;
 }
 
-function DropdownMenuSubContent({ className, ref, ...props }: DropdownMenuSubContentProps) {
+function DropdownMenuSubContent({
+  className,
+  ref,
+  onKeyDown,
+  ...props
+}: DropdownMenuSubContentProps) {
   return (
     <DropdownMenuPrimitive.SubContent
       ref={ref}
+      onKeyDown={withDigitShortcuts(onKeyDown)}
       className={cn(
         'z-[var(--z-popover)] min-w-[8rem] rounded-md border bg-popover p-1 text-popover-foreground shadow-e3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         'max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-16px)] overflow-y-auto overflow-x-hidden',
@@ -81,6 +122,7 @@ function DropdownMenuContent({
   sideOffset = 4,
   collisionPadding = 8,
   ref,
+  onKeyDown,
   ...props
 }: DropdownMenuContentProps) {
   const container = usePortalContainer();
@@ -88,6 +130,7 @@ function DropdownMenuContent({
     <DropdownMenuPrimitive.Portal container={container}>
       <DropdownMenuPrimitive.Content
         ref={ref}
+        onKeyDown={withDigitShortcuts(onKeyDown)}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
@@ -220,7 +263,11 @@ DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
 function DropdownMenuShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
   return (
-    <span className={cn('ms-auto text-xs tracking-widest opacity-60', className)} {...props} />
+    <span
+      data-menu-shortcut=""
+      className={cn('ms-auto text-xs tracking-widest opacity-60', className)}
+      {...props}
+    />
   );
 }
 DropdownMenuShortcut.displayName = 'DropdownMenuShortcut';

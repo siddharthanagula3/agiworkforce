@@ -117,8 +117,11 @@ import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { containsSecrets } from '@/lib/security/secrets-audit';
 import {
+  LOCAL_MODEL_PROJECT_REFUSAL,
   TEMPORARY_CHAT_END_CONFIRMATION,
+  TEMPORARY_CHAT_PROJECT_NOTICE,
   resolveNewChatTemporary,
+  temporaryChatAllowedIn,
 } from '@/lib/temporary-chat-policy';
 import { Spinner, useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
@@ -399,6 +402,7 @@ interface ChatComposerProps {
    * per conversation, instead of following the user into the next chat.
    */
   conversationId?: string | null;
+  projectId?: string | null;
   isLoading?: boolean;
   /**
    * True while an SSE stream is actively generating output.
@@ -752,6 +756,7 @@ const ChatComposerNewComponent = ({
   onGenerateImage,
   onGenerateVideo,
   projectPicker,
+  projectId = null,
   onSetTemporaryChat,
   suppressAutoFocus = false,
 }: ChatComposerProps) => {
@@ -1400,6 +1405,9 @@ const ChatComposerNewComponent = ({
   const localSelection = useLocalModelSelection((state) => state.selected);
   const { leaveLocalModel, dialog: leaveLocalModelDialog } = useLeaveLocalModel();
   const localAttachmentConflict = localSelection !== null && attachments.length > 0;
+  const newChatProjectId = projectId ?? pickerActiveProjectId;
+  const localProjectConflict =
+    localSelection !== null && conversationId === null && !temporaryChatAllowedIn(newChatProjectId);
   const compatibleModels = getSelectableModels().filter(
     (model) => model.capabilities.vision && isModelAllowedForTier(model.id, entitlementTier),
   );
@@ -1558,8 +1566,20 @@ const ChatComposerNewComponent = ({
     const id = s.activeConversationId;
     return id
       ? (s.conversations.find((c) => c.id === id)?.isTemporary ?? false)
-      : resolveNewChatTemporary(s.pendingTemporaryChat, newChatsTemporary);
+      : resolveNewChatTemporary(s.pendingTemporaryChat, newChatsTemporary, newChatProjectId);
   });
+  const chatProjectId = useChatStore((s) => {
+    const id = s.activeConversationId;
+    return id ? (s.conversations.find((c) => c.id === id)?.projectId ?? null) : newChatProjectId;
+  });
+  const temporaryChatAvailable = isIncognito || temporaryChatAllowedIn(chatProjectId);
+  const temporaryPreferenceSetAside = useChatStore(
+    (s) =>
+      conversationId === null &&
+      !localProjectConflict &&
+      !temporaryChatAllowedIn(newChatProjectId) &&
+      (s.pendingTemporaryChat ?? newChatsTemporary),
+  );
   const [isSavingIncognito, setIsSavingIncognito] = useState(false);
   const handleIncognitoToggle = useCallback(async () => {
     // No conversation exists yet: arm the flag createConversation reads at
@@ -3052,6 +3072,7 @@ const ChatComposerNewComponent = ({
     if (promotionalToolConflict) return;
     if (searchAllowanceBlocksSend) return;
     if (localAttachmentConflict) return;
+    if (localProjectConflict) return;
     if (attachmentPreparing) {
       deferredSendRef.current = true;
       return;
@@ -3400,6 +3421,7 @@ const ChatComposerNewComponent = ({
     promotionalToolConflict,
     searchAllowanceBlocksSend,
     localAttachmentConflict,
+    localProjectConflict,
     attachmentPreparing,
     trialExhausted,
     freeQuotaSelected,
@@ -4036,6 +4058,7 @@ const ChatComposerNewComponent = ({
     if (mediaAttachmentConflict || hasAttachmentConflict || localAttachmentConflict) {
       return SEND_REASON.attachmentConflict;
     }
+    if (localProjectConflict) return LOCAL_MODEL_PROJECT_REFUSAL;
     if (searchAllowance.status === 'checking' && checkFreeSearchAllowance)
       return SEND_REASON.searchAllowanceChecking;
     if (searchAllowance.status === 'exhausted' && checkFreeSearchAllowance)
@@ -4050,6 +4073,7 @@ const ChatComposerNewComponent = ({
     mediaAttachmentConflict,
     hasAttachmentConflict,
     localAttachmentConflict,
+    localProjectConflict,
     promotionalToolConflict,
     checkFreeSearchAllowance,
     searchAllowance.status,
@@ -4409,6 +4433,31 @@ const ChatComposerNewComponent = ({
             </button>
           </div>
         </div>
+      )}
+
+      {localProjectConflict && (
+        <div
+          role="status"
+          data-testid="local-model-project-conflict"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
+        >
+          <p className="text-foreground">{LOCAL_MODEL_PROJECT_REFUSAL}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => leaveLocalModel()}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
+            >
+              Switch to a cloud model
+            </button>
+          </div>
+        </div>
+      )}
+
+      {temporaryPreferenceSetAside && (
+        <p role="status" className="mb-2 px-2 text-xs text-muted-foreground">
+          {TEMPORARY_CHAT_PROJECT_NOTICE}
+        </p>
       )}
 
       {localAttachmentConflict && (
@@ -5168,7 +5217,10 @@ const ChatComposerNewComponent = ({
                       handleMemoryToggle();
                       closeMenu();
                     }}
-                    showTemporaryChat={!activeConversationId || Boolean(onSetTemporaryChat)}
+                    showTemporaryChat={
+                      temporaryChatAvailable &&
+                      (!activeConversationId || Boolean(onSetTemporaryChat))
+                    }
                     temporaryChatSaving={isSavingIncognito}
                     isIncognito={isIncognito}
                     canToggleIncognito={canToggleIncognito}
@@ -5955,6 +6007,7 @@ const ChatComposerNewComponent = ({
                         searchAllowanceBlocksSend ||
                         mediaAttachmentConflict ||
                         localAttachmentConflict ||
+                        localProjectConflict ||
                         selectedMediaModelUnavailable))
                   }
                   disabledReason={sendDisabledReason}
@@ -6373,6 +6426,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.projectPicker?.activeProjectId === next.projectPicker?.activeProjectId &&
     prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&
     prev.projectPicker?.onCreateProject === next.projectPicker?.onCreateProject &&
+    prev.projectId === next.projectId &&
     // AUDIT-FIX CMP-3: without an active conversation the handler is unused
     // (the toggle is local-only), but once one exists its presence decides
     // whether the "Temporary chat" control can save, so it must defeat

@@ -109,6 +109,13 @@ describe('PrivacySection row density', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
   });
 
+  it('says that chats started inside a project are saved even when new chats start temporary', () => {
+    render(<PrivacySection />);
+
+    expect(screen.getByRole('switch', { name: 'Start new chats as temporary' })).toBeVisible();
+    expect(screen.getByText(/chats you start inside a project are always saved/i)).toBeVisible();
+  });
+
   it('never names the telemetry vendor or implementation detail in the toggle copy', () => {
     render(<PrivacySection />);
     expect(screen.queryByText(/sentry/i)).toBeNull();

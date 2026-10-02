@@ -70,9 +70,19 @@ import {
   ACTION_ROW_MIN_HEIGHT,
 } from './messageActionRow';
 import { variantDeleteConfirm } from './variantDeleteConfirm';
+import {
+  RESPONSE_RATING_REASON_LABELS,
+  RESPONSE_RATING_REMOVE_FAILED,
+  RESPONSE_RATING_SEND_FAILED,
+  ResponseRatingDetails,
+  ResponseRatingRequestError,
+  responseRatingFailureMessage,
+  type ResponseRatingDetailsInput,
+} from './ResponseRatingDetails';
 import { VariantPager } from './VariantPager';
 import { MessageContextChips } from './MessageContextChips';
 import { toast } from 'sonner';
+import { WEB_RESPONSE_RATING_MESSAGE } from '@/app/api/feedback/response-rating-contract';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
@@ -183,6 +193,10 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
+import {
+  hasResponseRatingDetails,
+  useResponseRatingDraftStore,
+} from '../../stores/response-rating-draft-store';
 import {
   useChatToolAllowanceStore,
   useToolsAllowedForChat,
@@ -397,6 +411,12 @@ const SHARED_ATTACHMENTS_NOT_COPIED =
   'Attached in the shared chat and kept private to the person who shared it:';
 const LOCAL_PERSONAL_CONTEXT_MISSING =
   'Answered without your instructions and memory: they could not be loaded onto this device.';
+
+function reactionRating(reaction: string | null | undefined): 'up' | 'down' | null {
+  if (reaction === 'thumbsUp') return 'up';
+  if (reaction === 'thumbsDown') return 'down';
+  return null;
+}
 
 const PROVIDER_MODE_BY_PRIVACY_MODE = {
   local: 'Local',
@@ -1093,19 +1113,42 @@ const MessageBubbleComponent = function MessageBubble({
    * lands in public.feedback and shows up in the operator dashboard's existing
    * feedback counts with no new table.
    */
-  const rateMessage = useCallback(
-    async (rating: 'up' | 'down') => {
-      if (ratingState !== 'idle') return;
-      const previous = ratingState;
-      setRatingState(rating);
-      try {
-        const response = await fetch('/api/feedback', {
+  const ratingRequestsRef = useRef<Promise<void>>(Promise.resolve());
+  const latestRatingActionRef = useRef(0);
+  const savedRatingRef = useRef(reactionRating(message.metadata?.reaction));
+  const thumbsDownRef = useRef<HTMLButtonElement>(null);
+  const ratingDetailsRef = useRef<HTMLFormElement>(null);
+  const ratingDetailsOpen = useResponseRatingDraftStore((state) => state.drafts.has(message.id));
+  const openRatingDraft = useResponseRatingDraftStore((state) => state.openDraft);
+  const closeRatingDraft = useResponseRatingDraftStore((state) => state.closeDraft);
+  const setRatingDraftFailure = useResponseRatingDraftStore((state) => state.setDraftFailure);
+  const [ratingDetailsFocus, setRatingDetailsFocus] = useState(false);
+  const closeRatingDetails = useCallback(() => {
+    if (ratingDetailsRef.current?.contains(document.activeElement)) {
+      thumbsDownRef.current?.focus();
+    }
+    closeRatingDraft(message.id);
+  }, [closeRatingDraft, message.id]);
+  const queueRatingRequest = useCallback((send: () => Promise<Response>): Promise<void> => {
+    const request = ratingRequestsRef.current.then(async () => {
+      const response = await send();
+      if (!response.ok) throw new ResponseRatingRequestError(response.status);
+    });
+    ratingRequestsRef.current = request.catch(() => undefined);
+    return request;
+  }, []);
+  const postResponseRating = useCallback(
+    (rating: 'up' | 'down', details?: ResponseRatingDetailsInput): Promise<void> =>
+      queueRatingRequest(async () =>
+        fetch('/api/feedback', {
           method: 'POST',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
           credentials: 'include',
           body: JSON.stringify({
-            subject: `Response rated ${rating}`,
-            message: (message.content ?? '').slice(0, 500) || '(empty response)',
+            subject: details?.reason
+              ? `Response rated ${rating}: ${RESPONSE_RATING_REASON_LABELS[details.reason]}`
+              : `Response rated ${rating}`,
+            message: WEB_RESPONSE_RATING_MESSAGE,
             metadata: {
               source: 'web',
               platform: 'web',
@@ -1116,19 +1159,25 @@ const MessageBubbleComponent = function MessageBubble({
               rating,
               message_id: message.id,
               conversation_id: message.sessionId ?? activeConversationId ?? undefined,
+              ...(details?.reason ? { reason: details.reason } : {}),
+              ...(details?.comment ? { comment: details.comment } : {}),
             },
           }),
-        });
-        if (!response.ok) throw new Error(`Rating failed: ${response.status}`);
-      } catch {
-        // Leaving the button lit would claim a vote the server never took.
-        setRatingState(previous);
-        toast.error('Could not send that. Please try again.');
-      }
-    },
-    [activeConversationId, message.content, message.id, message.sessionId, ratingState],
+        }),
+      ),
+    [activeConversationId, message.id, message.sessionId, queueRatingRequest],
   );
-
+  const removeResponseRating = useCallback(
+    (): Promise<void> =>
+      queueRatingRequest(async () =>
+        fetch(`/api/feedback?message_id=${encodeURIComponent(message.id)}`, {
+          method: 'DELETE',
+          headers: await addCsrfHeaders(),
+          credentials: 'include',
+        }),
+      ),
+    [message.id, queueRatingRequest],
+  );
   /*
    * One verdict per answer. The persisted reaction on message metadata is the
    * source of truth when the host wires `onReact`; `ratingState` only stands in
@@ -1136,26 +1185,78 @@ const MessageBubbleComponent = function MessageBubble({
    * second pair of thumbs used to render beside it, so an answer showed four
    * thumb icons and two independent verdicts.
    */
-  const responseRating: 'up' | 'down' | null =
-    message.metadata?.reaction === 'thumbsUp'
-      ? 'up'
-      : message.metadata?.reaction === 'thumbsDown'
-        ? 'down'
-        : ratingState === 'idle'
-          ? null
-          : ratingState;
+  const responseRating =
+    reactionRating(message.metadata?.reaction) ?? (ratingState === 'idle' ? null : ratingState);
+
+  const submitRatingDetails = useCallback(
+    async (details: ResponseRatingDetailsInput) => {
+      const action = ++latestRatingActionRef.current;
+      try {
+        await postResponseRating('down', details);
+      } catch (error) {
+        const saved = savedRatingRef.current;
+        if (action === latestRatingActionRef.current && saved !== 'down') {
+          setRatingState(saved ?? 'idle');
+          if (responseRating !== saved) onReact?.(message.id, saved);
+        }
+        throw error;
+      }
+      savedRatingRef.current = 'down';
+      if (action !== latestRatingActionRef.current) return;
+      setRatingState('down');
+      if (responseRating !== 'down') onReact?.(message.id, 'down');
+    },
+    [message.id, onReact, postResponseRating, responseRating],
+  );
 
   const rateResponse = useCallback(
     (rating: 'up' | 'down') => {
-      const isRepeat = responseRating === rating;
-      onReact?.(message.id, isRepeat ? null : rating);
-      if (isRepeat) {
-        setRatingState('idle');
+      const next = responseRating === rating ? null : rating;
+      const action = ++latestRatingActionRef.current;
+      onReact?.(message.id, next);
+      setRatingState(next ?? 'idle');
+      if (next === 'down') {
+        openRatingDraft(message.id);
+        setRatingDetailsFocus(true);
       } else {
-        void rateMessage(rating);
+        closeRatingDraft(message.id);
       }
+      void (next ? postResponseRating(next) : removeResponseRating()).then(
+        () => {
+          savedRatingRef.current = next;
+        },
+        (error: unknown) => {
+          if (action !== latestRatingActionRef.current) return;
+          const saved = savedRatingRef.current;
+          onReact?.(message.id, saved);
+          setRatingState(saved ?? 'idle');
+          const failure = responseRatingFailureMessage(
+            error,
+            next ? RESPONSE_RATING_SEND_FAILED : RESPONSE_RATING_REMOVE_FAILED,
+          );
+          if (
+            next === 'down' &&
+            hasResponseRatingDetails(useResponseRatingDraftStore.getState().drafts.get(message.id))
+          ) {
+            setRatingDraftFailure(message.id, failure);
+            return;
+          }
+          closeRatingDetails();
+          toast.error(failure);
+        },
+      );
     },
-    [message.id, onReact, rateMessage, responseRating],
+    [
+      closeRatingDetails,
+      closeRatingDraft,
+      message.id,
+      onReact,
+      openRatingDraft,
+      postResponseRating,
+      removeResponseRating,
+      responseRating,
+      setRatingDraftFailure,
+    ],
   );
 
   const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
@@ -3226,6 +3327,7 @@ const MessageBubbleComponent = function MessageBubble({
                                 responseRating === 'down' &&
                                   'text-[var(--chat-accent-primary-text)]',
                               )}
+                              ref={thumbsDownRef}
                               onClick={() => rateResponse('down')}
                               aria-label="Bad response"
                               aria-pressed={responseRating === 'down'}
@@ -3508,6 +3610,16 @@ const MessageBubbleComponent = function MessageBubble({
                     {LOCAL_PERSONAL_CONTEXT_MISSING}
                   </span>
                 )}
+              {!isUser && ratingDetailsOpen && (
+                <ResponseRatingDetails
+                  ref={ratingDetailsRef}
+                  messageId={message.id}
+                  onSubmit={submitRatingDetails}
+                  onClose={closeRatingDetails}
+                  autoFocus={ratingDetailsFocus}
+                  className="mt-2 basis-full"
+                />
+              )}
             </div>
           )}
         </div>
