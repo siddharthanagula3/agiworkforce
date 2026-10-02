@@ -18,6 +18,8 @@ const STYLESHEET = readFileSync(
   'utf8',
 );
 
+const BEFORE = '::before';
+
 let sheet: HTMLStyleElement;
 
 beforeEach(() => {
@@ -30,7 +32,7 @@ afterEach(() => {
   sheet.remove();
 });
 
-function coarsePointerStyle(element: Element): Record<string, string> {
+function coarsePointerStyle(element: Element, pseudo?: typeof BEFORE): Record<string, string> {
   const declared: Record<string, string> = {};
   for (const rule of Array.from(sheet.sheet?.cssRules ?? [])) {
     if (!(rule instanceof CSSMediaRule) || !/\(pointer:\s*coarse\)/.test(rule.media.mediaText)) {
@@ -38,9 +40,11 @@ function coarsePointerStyle(element: Element): Record<string, string> {
     }
     for (const inner of Array.from(rule.cssRules)) {
       if (!(inner instanceof CSSStyleRule)) continue;
+      if (pseudo && !inner.selectorText.endsWith(pseudo)) continue;
+      const selector = pseudo ? inner.selectorText.slice(0, -pseudo.length) : inner.selectorText;
       let matches = false;
       try {
-        matches = element.matches(inner.selectorText);
+        matches = element.matches(selector);
       } catch {
         matches = false;
       }
@@ -54,17 +58,19 @@ function coarsePointerStyle(element: Element): Record<string, string> {
 }
 
 describe('/changelog on a touch screen', () => {
-  it('gives every release and policy change link a 44px target', () => {
+  it('widens the tap area of every release and policy change link to 44px without growing the link', () => {
     render(<ReleaseNotesPage titleId="changelog-title" />);
 
     for (const caption of ['Releases', 'Policy changes']) {
       const links = within(screen.getByRole('list', { name: caption })).getAllByRole('link');
       expect(links.length, caption).toBeGreaterThan(0);
       for (const link of links) {
-        expect(coarsePointerStyle(link), `${caption}: ${link.textContent}`).toMatchObject({
-          display: 'inline-flex',
-          'align-items': 'center',
-          'min-height': '44px',
+        const where = `${caption}: ${link.textContent}`;
+        expect(coarsePointerStyle(link), where).toEqual({ position: 'relative' });
+        expect(coarsePointerStyle(link, BEFORE), where).toEqual({
+          content: '""',
+          position: 'absolute',
+          inset: '-11px 0',
         });
       }
     }
@@ -105,7 +111,8 @@ describe('/changelog on a touch screen', () => {
       screen.getByRole('link', { name: 'section 05 of our data processing addendum' }),
       ...within(container).getAllByRole('link'),
     ]) {
-      expect(coarsePointerStyle(link), link.textContent ?? '').not.toHaveProperty('min-height');
+      expect(coarsePointerStyle(link), link.textContent ?? '').toEqual({});
+      expect(coarsePointerStyle(link, BEFORE), link.textContent ?? '').toEqual({});
     }
   });
 });

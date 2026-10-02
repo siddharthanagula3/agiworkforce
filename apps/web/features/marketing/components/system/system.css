@@ -505,9 +505,13 @@
 
 @media (pointer: coarse) {
   [data-design='agi'] .agi-ds-ledger-value > .agi-ds-stack > .agi-ds-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
+    position: relative;
+  }
+
+  [data-design='agi'] .agi-ds-ledger-value > .agi-ds-stack > .agi-ds-link::before {
+    content: '';
+    position: absolute;
+    inset: -11px 0;
   }
 }
 
