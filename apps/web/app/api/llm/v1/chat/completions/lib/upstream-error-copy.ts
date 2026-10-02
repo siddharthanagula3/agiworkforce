@@ -1,6 +1,7 @@
 import {
   classifyError,
   FREE_POOL_PROVIDER_HINT,
+  FREE_TIER_ONLY_PROVIDER_HINT,
   SPENDING_CAP_PROVIDER_HINT,
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
@@ -476,7 +477,10 @@ function upstreamCopy(
               : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or ${clause.toLowerCase()}.`;
       // A spent free pool says nothing about the provider's paid routes, so it
       // must not take the provider out of the ready set for everyone else.
-      if (classified.providerHint !== FREE_POOL_PROVIDER_HINT) {
+      if (
+        classified.providerHint !== FREE_POOL_PROVIDER_HINT &&
+        classified.providerHint !== FREE_TIER_ONLY_PROVIDER_HINT
+      ) {
         markProviderDegraded(provider, classified.category);
       }
       // The shared free pool has its own code: the remedy is not another model
