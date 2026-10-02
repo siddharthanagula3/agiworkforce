@@ -11,14 +11,13 @@ import {
 const at = (minute: number) => Date.UTC(2026, 9, 2, 13, minute, 30);
 
 describe('database low-power cron gate', () => {
-  it('is off unless AGI_DB_LOW_POWER is set to an on value', () => {
+  it('is on only for the value the env registry accepts as on', () => {
     expect(dbLowPowerEnabled({})).toBe(false);
-    for (const value of ['0', 'false', 'off', 'yes', '']) {
+    for (const value of ['0', '', 'false', 'off', 'yes', 'true', 'on']) {
       expect(dbLowPowerEnabled({ AGI_DB_LOW_POWER: value })).toBe(false);
     }
-    for (const value of ['1', 'true', 'on', ' ON ', 'True']) {
-      expect(dbLowPowerEnabled({ AGI_DB_LOW_POWER: value })).toBe(true);
-    }
+    expect(dbLowPowerEnabled({ AGI_DB_LOW_POWER: '1' })).toBe(true);
+    expect(dbLowPowerEnabled({ AGI_DB_LOW_POWER: ' 1 ' })).toBe(true);
   });
 
   it('never skips a run while the mode is off', () => {

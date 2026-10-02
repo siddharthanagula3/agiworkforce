@@ -1137,6 +1137,15 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     validate: isBooleanish,
     description: 'whether the server accepts a checkout or top-up request at all',
   }),
+  published('AGI_DB_LOW_POWER', {
+    type: 'enum',
+    owner: 'apps/web/lib/server/cron-low-power.ts',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('0', '1'),
+    description:
+      'database low-power switch: 1 runs the frequent crons only in the first quarter of each hour so a Free-plan Neon compute can suspend',
+  }),
   published('AGI_BILLING_WAITLIST_OPEN', {
     type: 'enum',
     owner: 'apps/web/lib/server/billing-waitlist-access.ts',

@@ -78,7 +78,7 @@ const APPROVAL_EXPIRED_MESSAGE = `Nobody approved or denied the step this run wa
 export { UNATTENDED_RUN_DENIED_STATUSES } from '@/lib/auth/account-lifecycle';
 const LOW_POWER_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
-function missedExecutionGraceMs(): number {
+export function missedExecutionGraceMs(): number {
   return 2 * (dbLowPowerEnabled() ? LOW_POWER_SWEEP_INTERVAL_MS : SWEEP_INTERVAL_MS);
 }
 const MAX_RETRY_ATTEMPTS = 5;

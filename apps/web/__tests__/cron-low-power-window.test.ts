@@ -9,6 +9,11 @@ import { LOW_POWER_CRON_WINDOW_MINUTES } from '@/lib/server/cron-low-power';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 
+const UNGATED_FREQUENT_CRONS: Readonly<Record<string, string>> = {
+  '/api/cron/page-security-anomalies':
+    'each run counts only the window since the previous run, so skipping one loses alerts; its Redis marker already skips Postgres while idle',
+};
+
 function scheduledCrons(): Array<{ path: string; schedule: string }> {
   const config = JSON.parse(readFileSync(join(REPO_ROOT, 'vercel.json'), 'utf8')) as {
     crons?: Array<{ path: string; schedule: string }>;
@@ -42,22 +47,45 @@ describe('crons fit the database low-power window', () => {
     expect(outside).toEqual([]);
   });
 
+  it('names every ungated frequent cron with the reason it may wake the database', () => {
+    const frequent = new Set(
+      scheduledCrons()
+        .filter(({ schedule }) => {
+          const [minute, hour] = schedule.split(' ');
+          return hour === '*' && minutesOf(minute!).length > 1;
+        })
+        .map(({ path }) => path),
+    );
+    for (const path of Object.keys(UNGATED_FREQUENT_CRONS)) {
+      expect(frequent.has(path), path).toBe(true);
+      expect(routeSource(path).includes('lowPowerCronSkip()'), path).toBe(false);
+    }
+  });
+
   it('gates every cron that runs more than once an hour, so none keeps the database awake', () => {
     const ungated = scheduledCrons()
       .filter(({ schedule }) => {
         const [minute, hour] = schedule.split(' ');
         return hour === '*' && minutesOf(minute!).length > 1;
       })
+      .filter(({ path }) => !(path in UNGATED_FREQUENT_CRONS))
       .filter(({ path }) => !routeSource(path).includes('lowPowerCronSkip()'))
       .map(({ path }) => path);
 
     expect(ungated).toEqual([]);
   });
 
-  it('runs every other cron only inside the window, so it shares the hourly wake', () => {
+  it('runs every cron that is not gated only inside the window, so it shares the hourly wake', () => {
     const late = scheduledCrons()
-      .filter(({ schedule }) => minutesOf(schedule.split(' ')[0]!).length === 1)
-      .filter(({ schedule }) => Number(schedule.split(' ')[0]) >= LOW_POWER_CRON_WINDOW_MINUTES)
+      .filter(({ schedule }) => {
+        const [minute, hour] = schedule.split(' ');
+        return hour !== '*' || minutesOf(minute!).length === 1;
+      })
+      .filter(({ schedule }) =>
+        minutesOf(schedule.split(' ')[0]!).some(
+          (minute) => minute >= LOW_POWER_CRON_WINDOW_MINUTES,
+        ),
+      )
       .map(({ path, schedule }) => `${path} ${schedule}`);
 
     expect(late).toEqual([]);

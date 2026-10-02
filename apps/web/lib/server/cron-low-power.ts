@@ -4,15 +4,17 @@ import { NextResponse } from 'next/server';
 
 export const LOW_POWER_CRON_WINDOW_MINUTES = 15;
 
-export function dbLowPowerEnabled(env: Record<string, string | undefined> = process.env): boolean {
-  const raw = env['AGI_DB_LOW_POWER']?.trim().toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'on';
+type EnvSource = Record<string, string | undefined>;
+
+function lowPowerSetting(env?: EnvSource): string | undefined {
+  return env ? env['AGI_DB_LOW_POWER'] : process.env['AGI_DB_LOW_POWER'];
 }
 
-export function lowPowerCronSkip(
-  nowMs: number = Date.now(),
-  env: Record<string, string | undefined> = process.env,
-): NextResponse | null {
+export function dbLowPowerEnabled(env?: EnvSource): boolean {
+  return lowPowerSetting(env)?.trim() === '1';
+}
+
+export function lowPowerCronSkip(nowMs: number = Date.now(), env?: EnvSource): NextResponse | null {
   if (!dbLowPowerEnabled(env)) return null;
   if (new Date(nowMs).getUTCMinutes() < LOW_POWER_CRON_WINDOW_MINUTES) return null;
   return NextResponse.json({ skipped: 'db_low_power' });

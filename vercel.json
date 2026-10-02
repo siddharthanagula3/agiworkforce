@@ -124,7 +124,7 @@
     },
     {
       "path": "/api/cron/enforce-domain-retention",
-      "schedule": "12 4 * * *"
+      "schedule": "14 4 * * *"
     },
     {
       "path": "/api/cron/drain-audit-streams",

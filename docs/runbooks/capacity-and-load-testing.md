@@ -73,10 +73,13 @@ The Free plan caps two things a quiet deployment can still exhaust: public netwo
 transfer (5 GB a month, every byte Postgres sends to Vercel, CI or a script) and
 compute hours (a compute that never idles for five minutes never suspends).
 
-- **Transfer.** The connector directory snapshot is one row in
-  `mcp_response_cache`. It is stored brotli-compressed (`br64:` prefix), and a
-  legacy plain-JSON row converts itself on first read with a stamp check, so a
-  concurrent sync is never overwritten. The icon route reads the small
+- **Transfer.** The connector directory snapshot lives in `mcp_response_cache`
+  under two keys. `v2` holds it brotli-compressed (`br64:` prefix) and is the
+  only one this build reads; `v1` keeps the plain JSON an older build reads, and
+  every sync rewrites both, so a rollback still serves the full directory (writes
+  cost no transfer). A build that finds only `v1` copies it to `v2` once, with an
+  insert that never replaces an existing row. An ingest refuses to merge onto a
+  row it cannot decode. The icon route reads the small
   `connectors.directory.icon-index` row instead of the snapshot. Icons and the
   public directory listing carry `Vercel-CDN-Cache-Control` with `Vary: Origin`,
   so repeat visits are served by the CDN, not the database.
@@ -88,8 +91,12 @@ compute hours (a compute that never idles for five minutes never suspends).
   `apps/web/__tests__/cron-low-power-window.test.ts` keeps new crons inside it.
 - **What users notice in low-power mode.** Scheduled tasks can start up to an
   hour late; the missed-run grace widens to two hours, so a late run still
-  runs. Background jobs, reapers, reservation recovery and health probes run
-  hourly. Retrieval indexing on upload is unaffected (it runs as a workflow).
+  runs, though the schedule screen still describes the 15-minute cadence.
+  Background jobs, reapers and health probes run hourly. Reservation recovery
+  runs hourly too, so a reservation stranded by a dead turn can hold a user's
+  quota and show "limit reached" for up to an hour; turn the mode off for
+  heavy testing. Retrieval indexing on upload is unaffected (it runs as a
+  workflow).
 - **Leaving low-power mode.** Remove the variable and redeploy once real traffic
   arrives or the plan changes; the cron schedules need no edit.
 
