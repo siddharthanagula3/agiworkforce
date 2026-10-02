@@ -279,6 +279,33 @@ describe('Free section in the composer', () => {
     ]);
   });
 
+  it('names only the paused pool while another free source is still being checked', () => {
+    renderSection(
+      sources(
+        source('ready', catalogue(chatKeys.map((key) => model(key, 'unavailable')))),
+        source('loading'),
+      ),
+    );
+
+    expect(screen.getByText(`${ISSUER} free models are paused right now.`)).toBeInTheDocument();
+    expect(screen.queryByText(/^Free models are paused/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Keep chatting/)).not.toBeInTheDocument();
+    expect(screen.getByText('Checking free models…')).toBeInTheDocument();
+  });
+
+  it('names only the paused pool and offers a retry when another free source failed', () => {
+    const failed = source('error');
+    renderSection(
+      sources(source('ready', catalogue(chatKeys.map((key) => model(key, 'exhausted')))), failed),
+    );
+
+    expect(screen.getByText(`${ISSUER} free allowances are used up.`)).toBeInTheDocument();
+    expect(screen.queryByText(/^Free model allowances are used up/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Keep chatting/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Experiential Labs free models' }));
+    expect(failed.retry).toHaveBeenCalledTimes(1);
+  });
+
   it('always shows the selected model with its reason, even when it is unavailable', () => {
     const selected = familyB[0]!;
     renderSection(sources(source('ready', catalogue([model(selected, 'unavailable')]))), {

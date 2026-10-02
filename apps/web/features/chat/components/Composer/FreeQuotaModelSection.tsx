@@ -144,10 +144,14 @@ function unavailableExplanation(entry: FreeModelEntry, fallbackModelName: string
   return `${label.displayName} from ${issuer} is not available right now. ${nextStep}`;
 }
 
-function pauseNotice(pools: readonly FreeModelPool[], fallbackModelName: string | null): string {
+function pauseNotice(
+  pools: readonly FreeModelPool[],
+  fallbackModelName: string | null,
+  settled: boolean,
+): string {
   const paused = pools.filter((pool) => pool.pause === 'paused').map((pool) => pool.issuer);
   const usedUp = pools.filter((pool) => pool.pause === 'used_up').map((pool) => pool.issuer);
-  if (pools.every((pool) => pool.pause)) {
+  if (settled && pools.every((pool) => pool.pause)) {
     const state =
       paused.length > 0
         ? 'Free models are paused right now.'
@@ -324,6 +328,7 @@ export function FreeQuotaModelSection({
   const view = presentFreeModels(catalogues, { category, selectedId });
   const promotionalIssuer = experiential.catalogue?.issuer ?? null;
   const loading = quota.status === 'loading' || experiential.status === 'loading';
+  const settled = !loading && quota.status !== 'error' && experiential.status !== 'error';
   const listedPools = view.pools.filter((pool) => !pool.pause);
   const pausedPools = view.pools.filter((pool) => pool.pause);
   const needle = query.trim().toLowerCase();
@@ -505,7 +510,7 @@ export function FreeQuotaModelSection({
               tabIndex={-1}
               className={`${NOTE_CLASS} rounded-md ${FOCUS_RING_CLASS}`}
             >
-              {pauseNotice(view.pools, fallbackModelName)}
+              {pauseNotice(view.pools, fallbackModelName, settled)}
             </p>
           )}
           {loading && (
