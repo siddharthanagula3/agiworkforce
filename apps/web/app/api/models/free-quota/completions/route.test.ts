@@ -15,6 +15,7 @@ import {
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+import { logger } from '@/lib/logger';
 import { loadFreePools } from '@/lib/server/free-pools';
 import {
   CHAT_SYSTEM_PROMPT_PINNED_VERSION,
@@ -773,11 +774,15 @@ describe('Qwen free quota turns on the Free plan', () => {
     [403, 'AccessDenied', 'current user api does not support synchronous calls.'],
     [403, 'AccessDenied', 'Access denied.'],
     [403, 'Model.AccessDenied', 'Model access denied.'],
+    [403, 'Workspace.AccessDenied', 'Workspace access denied.'],
+    [403, 'App.AccessDenied', 'App access denied.'],
     [
       404,
       'ModelNotFound',
       'The model qwen-fixture does not exist or you do not have access to it.',
     ],
+    [404, 'model_not_supported', 'Unsupported model qwen-fixture for OpenAI compatibility mode.'],
+    [400, 'InvalidParameter', 'Model not exist.'],
   ])(
     'takes the model out of the ready set when the provider answers %i %s "%s", until a newer console check',
     async (status, code, message) => {
@@ -834,6 +839,25 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(again.status).toBe(200);
     expect(mocks.stream).toHaveBeenCalledTimes(2);
   });
+
+  it.each([
+    [404, 'model_not_supported', 'Unsupported model qwen-fixture for OpenAI compatibility mode.'],
+    [403, 'Workspace.AccessDenied', 'Workspace access denied.'],
+    [403, 'App.AccessDenied', 'App access denied.'],
+  ])(
+    'tells the operator which model the provider refused when it answers %i %s',
+    async (status, code, message) => {
+      const warn = vi.spyOn(logger, 'warn');
+      mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status }));
+
+      await post();
+
+      expect(warn).toHaveBeenCalledWith(
+        { offering: model, signal: code },
+        expect.stringContaining('withheld for every account'),
+      );
+    },
+  );
 
   it.each([
     ['The image url is invalid: model not exist in path', 503, 'free_quota_unavailable'],

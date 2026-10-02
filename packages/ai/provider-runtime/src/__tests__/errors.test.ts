@@ -617,6 +617,7 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
     [404, 'ModelNotFound', 'Model can not be found.'],
     [404, 'model_not_found', 'The model xxx does not exist or you do not have access to it.'],
     [400, 'InvalidParameter', 'Model not exist.'],
+    [404, 'model_not_supported', 'Unsupported model xxx for OpenAI compatibility mode.'],
   ])('reads %i %s as a model this account cannot reach', (status, code, message) => {
     const c = classifyModelStudioError(compatibleModeError(status, code, message));
     expect(c).toMatchObject({
@@ -660,6 +661,8 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
     [403, 'AccessDenied', 'Access denied.'],
     [403, 'access_denied', 'Access denied.'],
     [403, 'AccessDenied', 'current user api does not support synchronous calls.'],
+    [403, 'Workspace.AccessDenied', 'Workspace access denied.'],
+    [403, 'App.AccessDenied', 'App access denied.'],
   ])(
     'reads %i %s as a refusal of that model the account can still fix, never of the credential',
     (status, code, message) => {

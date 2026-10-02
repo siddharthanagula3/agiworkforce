@@ -533,10 +533,13 @@ const MODEL_STUDIO_ACCOUNT_BILLING_CODES: ReadonlySet<string> = new Set([
 const MODEL_STUDIO_MODEL_NOT_FOUND_CODES: ReadonlySet<string> = new Set([
   'modelnotfound',
   'model_not_found',
+  'model_not_supported',
 ]);
 const MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE = 'model not exist.';
 const MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES: ReadonlySet<string> = new Set([
   'model.accessdenied',
+  'workspace.accessdenied',
+  'app.accessdenied',
   'accessdenied',
   'access_denied',
 ]);

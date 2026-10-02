@@ -217,6 +217,19 @@ describe('provider refusals on a free model', () => {
       'withdrawn',
     ],
     [{ status: 404, code: 'model_not_found', message: 'Model can not be found.' }, 'refused'],
+    [
+      {
+        status: 404,
+        code: 'model_not_supported',
+        message: 'Unsupported model xxx for OpenAI compatibility mode.',
+      },
+      'refused',
+    ],
+    [
+      { status: 403, code: 'Workspace.AccessDenied', message: 'Workspace access denied.' },
+      'refused',
+    ],
+    [{ status: 403, code: 'App.AccessDenied', message: 'App access denied.' }, 'refused'],
     [{ status: 400, code: 'InvalidParameter', message: 'Model not exist.' }, 'refused'],
     [
       {
