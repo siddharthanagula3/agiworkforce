@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
+import { FREE_QUOTA_FALLBACK_REQUEST_KEY } from '@agiworkforce/cloud-contracts';
 import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
 import {
   credentialSha256,
@@ -136,6 +137,8 @@ function refusal(code: string, status = 429): Response {
   return Response.json({ error: { code, message: 'Free Auto could not answer.' } }, { status });
 }
 
+const QUESTION = { role: 'user', content: 'Explain photosynthesis in two sentences.' };
+
 function freeAutoBody(patch: Record<string, unknown> = {}) {
   return {
     model: FREE_AUTO,
@@ -143,10 +146,33 @@ function freeAutoBody(patch: Record<string, unknown> = {}) {
     conversation_id: CONVERSATION_ID,
     assistant_message_id: ASSISTANT_ID,
     user_message: { id: USER_MESSAGE_ID, metadata: {} },
-    messages: [{ role: 'user', content: 'Explain photosynthesis in two sentences.' }],
+    messages: [QUESTION],
+    [FREE_QUOTA_FALLBACK_REQUEST_KEY]: true,
     ...patch,
   };
 }
+
+const EXTENSION_TURN = {
+  model: FREE_AUTO,
+  messages: [QUESTION],
+  stream: true,
+  x_interactive_cards: {
+    supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'product-comparison.v1'],
+    canRespond: true,
+  },
+  conversation_id: CONVERSATION_ID,
+  assistant_message_id: ASSISTANT_ID,
+};
+
+const DESKTOP_TURN = {
+  model: FREE_AUTO,
+  messages: [QUESTION],
+  conversation_id: CONVERSATION_ID,
+  stream: true,
+  assistant_message_id: ASSISTANT_ID,
+  client_timezone: 'Europe/London',
+  use_prompt_cache: true,
+};
 
 function chatRequest(body: unknown) {
   return new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
@@ -321,6 +347,22 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
     expect(served).toBeNull();
     expect(mocks.stream).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['the browser extension', EXTENSION_TURN],
+    ['the desktop app', DESKTOP_TURN],
+    [
+      'a web turn that did not ask for it',
+      freeAutoBody({ [FREE_QUOTA_FALLBACK_REQUEST_KEY]: false }),
+    ],
+  ])(
+    'keeps the Free Auto refusal for %s, which would not say another model answered',
+    async (_client, body) => {
+      mocks.stream.mockResolvedValue(sse('[DONE]'));
+      expect(await fallBack(refusal('free_allowance_exhausted'), body)).toBeNull();
+      expect(mocks.stream).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps the Free Auto refusal when no free quota model is ready', async () => {
     mocks.store = createMemoryKeyValueStore();

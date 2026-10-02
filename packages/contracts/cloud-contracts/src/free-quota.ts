@@ -10,6 +10,7 @@ export const FREE_QUOTA_COMPLETIONS_PATH = '/api/models/free-quota/completions';
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_QUOTA_EXPIRED_CODE = 'free_quota_expired';
 export const FREE_ALLOWANCE_EXHAUSTED_CODE = 'free_allowance_exhausted';
+export const FREE_QUOTA_FALLBACK_REQUEST_KEY = 'x_free_quota_fallback' as const;
 
 export const FREE_LIMIT_REASONS = [
   'allowance_used',

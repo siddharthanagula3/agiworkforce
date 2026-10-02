@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import {
+  FREE_QUOTA_FALLBACK_REQUEST_KEY,
   managedCloudAgentRunPath,
   MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
 } from '@agiworkforce/cloud-contracts';
@@ -350,6 +351,23 @@ describe('useChatStream', () => {
     expect(assistant?.requestedModel).toBe(freeRouter);
     expect(assistant?.fallbackReason).toBe('free_limit_reached');
     expect(assistant?.metadata?.paywall).toBeUndefined();
+  });
+
+  it('tells the server it shows another free model answering for Free Auto', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'Ready.' } }] }]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: getRoutingSlotModel('router_zero_cost'),
+      });
+    });
+
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(body[FREE_QUOTA_FALLBACK_REQUEST_KEY]).toBe(true);
   });
 
   it('shows the free limit card, without reading the free catalogue, when Free Auto is refused', async () => {

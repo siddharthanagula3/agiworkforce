@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import {
   FREE_ALLOWANCE_EXHAUSTED_CODE,
+  FREE_QUOTA_FALLBACK_REQUEST_KEY,
   FreeOfferingRequestSchema,
   normalizePromotionalChatHistory,
 } from '@agiworkforce/cloud-contracts';
@@ -35,6 +36,7 @@ const FALLBACK_REASON_BY_REFUSAL: Readonly<Record<string, FallbackReasonCode>> =
 const ReplayedFreeAutoTurnSchema = z.looseObject({
   model: z.string(),
   stream: z.literal(true),
+  [FREE_QUOTA_FALLBACK_REQUEST_KEY]: z.literal(true),
   search_requested: z.literal(false).optional(),
   tools: z.array(z.unknown()).max(0).optional(),
   memory_command: z.undefined().optional(),
