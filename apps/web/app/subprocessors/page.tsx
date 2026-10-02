@@ -14,11 +14,14 @@ import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
+import { CHANGELOG_FEED_LINKS } from '../release-notes/changelog-feed';
+
 export const metadata = buildMetadata({
   title: 'Subprocessors',
   description:
     'Third parties that process customer data on AGI’s behalf, with their purpose and region.',
   path: '/subprocessors',
+  feeds: CHANGELOG_FEED_LINKS,
 });
 
 interface Subprocessor {

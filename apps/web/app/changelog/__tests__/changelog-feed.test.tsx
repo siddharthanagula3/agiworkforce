@@ -16,6 +16,7 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 import ChangelogPage, { metadata as changelogMetadata } from '../page';
 import { GET } from '../feed.xml/route';
 import { metadata as releaseNotesMetadata } from '../../release-notes/page';
+import { metadata as subprocessorsMetadata } from '../../subprocessors/page';
 import {
   CHANGELOG_FEED_PATH,
   CHANGELOG_FEED_TITLE,
@@ -319,12 +320,13 @@ describe('/changelog/feed.xml', () => {
 });
 
 describe('/changelog advertises its feed', () => {
-  it('declares the feed as an Atom alternate in the head of both changelog pages', () => {
-    for (const metadata of [changelogMetadata, releaseNotesMetadata]) {
+  it('declares the feed as an Atom alternate in the head of both changelog pages and the subprocessor list', () => {
+    for (const metadata of [changelogMetadata, releaseNotesMetadata, subprocessorsMetadata]) {
       expect(metadata.alternates?.types).toEqual({
         'application/atom+xml': [{ url: '/changelog/feed.xml', title: CHANGELOG_FEED_TITLE }],
       });
     }
+    expect(subprocessorsMetadata.alternates?.canonical).toMatch(/\/subprocessors$/);
   });
 
   it('shows a subscribe link to the feed', () => {
