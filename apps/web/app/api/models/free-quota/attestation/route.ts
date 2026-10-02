@@ -15,6 +15,7 @@ import {
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { loadFreeQuotaPolicy, sharedFreeQuotaStore } from '@/lib/server/free-quota-catalogue';
+import { expireFreeQuotaCatalogue } from '@/lib/server/free-quota-catalogue-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -136,6 +137,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
     quotaOnlyOfferings,
     attestedBy: userId,
   });
+  expireFreeQuotaCatalogue();
   await recordAuditEvent({
     userId,
     eventType: 'admin_policy_changed',

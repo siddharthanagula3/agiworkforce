@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { revalidateTag } from 'next/cache';
 import { providerOfferingDisplayName } from '@agiworkforce/types';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 import {
@@ -67,4 +68,8 @@ export async function readSharedFreeQuotaCatalogue(
     if (error instanceof UnsharedCatalogue) return error.catalogue;
     throw error;
   }
+}
+
+export function expireFreeQuotaCatalogue(): void {
+  revalidateTag(RENDER_CACHE_TAGS.freeQuotaCatalogue, { expire: 0 });
 }
