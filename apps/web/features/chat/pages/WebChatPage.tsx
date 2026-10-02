@@ -78,6 +78,7 @@ import {
 } from '@features/projects/components/project-answer-save';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
 import { useLocalPersonalContextPrefetch } from '@features/chat/lib/local-personal-context';
+import { conversationHoldsLocalTurns } from '@features/chat/lib/local-turn';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -104,7 +105,11 @@ import { TimeoutPresets } from '@shared/lib/error-utils';
 import { useUIStore } from '@shared/stores/layout-store';
 import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
-import { resolveNewChatTemporary, temporaryChatAllowedIn } from '@/lib/temporary-chat-policy';
+import {
+  LOCAL_MODEL_PROJECT_REFUSAL,
+  resolveNewChatTemporary,
+  temporaryChatAllowedIn,
+} from '@/lib/temporary-chat-policy';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
@@ -2055,21 +2060,26 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       const sendGuardKey =
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
       const sendFingerprint = buildSendFingerprint(content, options.attachments);
-      // Project scope for a NEW conversation: the composer's send meta is the
-      // value the user saw at submit time; fall back to the shared store for
-      // sends that do not originate from the composer picker flow.
       const sendProjectId =
         options.meta?.projectId !== undefined ? options.meta.projectId : activeProjectId;
-      // A chat on a model running on this Mac is temporary by construction:
-      // its turns are answered here and never uploaded, so a durable
-      // conversation row would only ever hold an empty transcript.
+      const localModelTurn = localModelSelection !== null;
+      const startsConversation = !(
+        options.conversationId ||
+        urlConversationId ||
+        bareChatSessionId
+      );
+      if (localModelTurn && startsConversation && !temporaryChatAllowedIn(sendProjectId)) {
+        parkUnsentDraft(null, content);
+        toast.error(LOCAL_MODEL_PROJECT_REFUSAL);
+        return false;
+      }
       const temporaryIntent =
+        localModelTurn ||
         resolveNewChatTemporary(
           useChatStore.getState().pendingTemporaryChat,
           useSettingsStore.getState().newChatsTemporary,
           sendProjectId,
-        ) ||
-        (localModelSelection !== null && temporaryChatAllowedIn(sendProjectId));
+        );
       if (sendingConversationsRef.current.has(sendGuardKey)) {
         // The in-flight call owns this exact content, so the composer must not
         // take it back: this is a suppressed duplicate, not a lost message.
@@ -2199,7 +2209,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               ?.isTemporary === true
           : temporaryIntent;
         const memoryCommandReport =
-          !conversationIsTemporary && localModelSelection === null
+          !conversationIsTemporary && !localModelTurn
             ? runExplicitMemoryCommand(content, {
                 conversationId: existingConvId || null,
                 projectId: sendProjectId ?? null,
@@ -4215,12 +4225,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     const firstUser = displayedMessages[0];
     if (!firstUser || firstUser.role !== 'user') return;
     const placeholderTitle = convo.title;
-    const isTemporary = Boolean(convo.isTemporary);
+    const titleStaysOnDevice =
+      Boolean(convo.isTemporary) ||
+      localModelSelection !== null ||
+      conversationHoldsLocalTurns(displayedMessages);
     autoTitledConversationsRef.current.add(conversationId);
 
     void (async () => {
       let adopted: string | null = null;
-      if (!isTemporary) {
+      if (!titleStaysOnDevice) {
         for (const delayMs of SERVER_TITLE_READ_DELAYS_MS) {
           if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
           let serverTitle: string | null = null;
@@ -4243,7 +4256,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       }
       const fallback = clientFallbackTitle(firstUser.content);
       if (!fallback || fallback === placeholderTitle) return;
-      if (isTemporary) {
+      if (titleStaysOnDevice) {
         useChatStore.getState().updateConversation(conversationId, { title: fallback });
         return;
       }
@@ -4254,6 +4267,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     displayedMessages.length,
     displayedConversationId,
     conversations,
+    localModelSelection,
     updateConversation,
     getToken,
   ]);

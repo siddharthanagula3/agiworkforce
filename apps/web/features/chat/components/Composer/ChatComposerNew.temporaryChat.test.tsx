@@ -1,10 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatComposerNew } from './ChatComposerNew';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LocalModel } from '@agiworkforce/local-runtime-contract';
+import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
+import { useLocalModelSelection } from '@features/desktop-host';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { EyeOff } from '@agiworkforce/icons';
 import {
+  LOCAL_MODEL_PROJECT_REFUSAL,
   TEMPORARY_CHAT_END_CONFIRMATION,
   TEMPORARY_CHAT_END_LABEL,
   TEMPORARY_CHAT_PRIVACY_EXPLANATION,
@@ -296,5 +299,63 @@ describe('temporary chat inside a project', () => {
     openPlusMenu();
 
     expect(temporaryRow()).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('a model on this device inside a project', () => {
+  const LOCAL_MODEL: LocalModel = {
+    id: 'local:ollama/qwen2.5:1.5b',
+    serverId: 'ollama',
+    serverLabel: 'Ollama',
+    name: 'qwen2.5:1.5b',
+  };
+
+  function typeMessage(value: string): HTMLElement {
+    const input = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(input, { target: { value } });
+    return input;
+  }
+
+  beforeEach(() => {
+    resetSendPendingFlagForTests();
+    useLocalModelSelection.getState().select(LOCAL_MODEL);
+  });
+
+  afterEach(() => {
+    useLocalModelSelection.getState().select(null);
+  });
+
+  it('says the chat cannot be saved in the project and does not send it', () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} projectId="project-1" />);
+
+    expect(screen.getByTestId('local-model-project-conflict')).toHaveTextContent(
+      LOCAL_MODEL_PROJECT_REFUSAL,
+    );
+    const input = typeMessage('my biopsy result says');
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('offers to go back to a cloud model', async () => {
+    render(<ChatComposerNew onSend={vi.fn()} projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to a cloud model' }));
+
+    await waitFor(() => expect(useLocalModelSelection.getState().selected).toBeNull());
+    expect(screen.queryByTestId('local-model-project-conflict')).toBeNull();
+  });
+
+  it('stays quiet for a new chat outside any project', () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+
+    expect(screen.queryByTestId('local-model-project-conflict')).toBeNull();
+    typeMessage('hello');
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
   });
 });

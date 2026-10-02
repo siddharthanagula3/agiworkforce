@@ -117,6 +117,7 @@ import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { containsSecrets } from '@/lib/security/secrets-audit';
 import {
+  LOCAL_MODEL_PROJECT_REFUSAL,
   TEMPORARY_CHAT_END_CONFIRMATION,
   resolveNewChatTemporary,
   temporaryChatAllowedIn,
@@ -1403,6 +1404,9 @@ const ChatComposerNewComponent = ({
   const localSelection = useLocalModelSelection((state) => state.selected);
   const { leaveLocalModel, dialog: leaveLocalModelDialog } = useLeaveLocalModel();
   const localAttachmentConflict = localSelection !== null && attachments.length > 0;
+  const newChatProjectId = projectId ?? pickerActiveProjectId;
+  const localProjectConflict =
+    localSelection !== null && conversationId === null && !temporaryChatAllowedIn(newChatProjectId);
   const compatibleModels = getSelectableModels().filter(
     (model) => model.capabilities.vision && isModelAllowedForTier(model.id, entitlementTier),
   );
@@ -1557,7 +1561,6 @@ const ChatComposerNewComponent = ({
     dictationSwitchedOffReason(s.disabledFeatures),
   );
   const setPendingTemporaryChat = useChatStore((s) => s.setPendingTemporaryChat);
-  const newChatProjectId = projectId ?? pickerActiveProjectId;
   const isIncognito = useChatStore((s) => {
     const id = s.activeConversationId;
     return id
@@ -3061,6 +3064,7 @@ const ChatComposerNewComponent = ({
     if (promotionalToolConflict) return;
     if (searchAllowanceBlocksSend) return;
     if (localAttachmentConflict) return;
+    if (localProjectConflict) return;
     if (attachmentPreparing) {
       deferredSendRef.current = true;
       return;
@@ -3409,6 +3413,7 @@ const ChatComposerNewComponent = ({
     promotionalToolConflict,
     searchAllowanceBlocksSend,
     localAttachmentConflict,
+    localProjectConflict,
     attachmentPreparing,
     trialExhausted,
     freeQuotaSelected,
@@ -4045,6 +4050,7 @@ const ChatComposerNewComponent = ({
     if (mediaAttachmentConflict || hasAttachmentConflict || localAttachmentConflict) {
       return SEND_REASON.attachmentConflict;
     }
+    if (localProjectConflict) return LOCAL_MODEL_PROJECT_REFUSAL;
     if (searchAllowance.status === 'checking' && checkFreeSearchAllowance)
       return SEND_REASON.searchAllowanceChecking;
     if (searchAllowance.status === 'exhausted' && checkFreeSearchAllowance)
@@ -4059,6 +4065,7 @@ const ChatComposerNewComponent = ({
     mediaAttachmentConflict,
     hasAttachmentConflict,
     localAttachmentConflict,
+    localProjectConflict,
     promotionalToolConflict,
     checkFreeSearchAllowance,
     searchAllowance.status,
@@ -4415,6 +4422,25 @@ const ChatComposerNewComponent = ({
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
             >
               Leave {mediaModeNoun.toLowerCase()} mode
+            </button>
+          </div>
+        </div>
+      )}
+
+      {localProjectConflict && (
+        <div
+          role="status"
+          data-testid="local-model-project-conflict"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
+        >
+          <p className="text-foreground">{LOCAL_MODEL_PROJECT_REFUSAL}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => leaveLocalModel()}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
+            >
+              Switch to a cloud model
             </button>
           </div>
         </div>
@@ -5967,6 +5993,7 @@ const ChatComposerNewComponent = ({
                         searchAllowanceBlocksSend ||
                         mediaAttachmentConflict ||
                         localAttachmentConflict ||
+                        localProjectConflict ||
                         selectedMediaModelUnavailable))
                   }
                   disabledReason={sendDisabledReason}

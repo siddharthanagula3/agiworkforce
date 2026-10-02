@@ -16,6 +16,8 @@ vi.mock('../services/conversation-draft', () => ({
   clearObservedConversationDraftRevisions: vi.fn(),
 }));
 
+import type { LocalModel } from '@agiworkforce/local-runtime-contract';
+import { useLocalModelSelection } from '@features/desktop-host';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   hasPendingDraftClear,
@@ -25,6 +27,13 @@ import {
 import { useConversationDraftSync } from './use-conversation-draft-sync';
 
 const CONVERSATION = '11111111-1111-4111-8111-111111111111';
+
+const LOCAL_MODEL: LocalModel = {
+  id: 'local:ollama/qwen2.5:1.5b',
+  serverId: 'ollama',
+  serverLabel: 'Ollama',
+  name: 'qwen2.5:1.5b',
+};
 
 function Harness() {
   useConversationDraftSync();
@@ -50,7 +59,12 @@ beforeEach(() => {
   vi.useFakeTimers();
   mockSession.isLoaded = true;
   mockSession.isSignedIn = true;
-  useChatStore.setState({ draftsByConversation: {}, conversations: [] as never });
+  useChatStore.setState({
+    draftsByConversation: {},
+    conversations: [] as never,
+    messagesByConversation: {},
+  });
+  useLocalModelSelection.getState().select(null);
   clearPendingDraftClear(CONVERSATION);
 });
 
@@ -81,6 +95,53 @@ describe('carrying a composer draft to the server', () => {
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).not.toHaveBeenCalled();
+  });
+
+  it('never stores a draft for a chat that holds an answer from a model on this device', async () => {
+    seedConversation();
+    useChatStore.setState({
+      messagesByConversation: {
+        [CONVERSATION]: [
+          {
+            id: 'local-answer',
+            role: 'assistant',
+            content: 'answered on this Mac',
+            createdAt: '2026-01-01T00:00:01.000Z',
+            model: LOCAL_MODEL.id,
+            metadata: { privacyMode: 'local' },
+          },
+        ],
+      } as never,
+    });
+    render(<Harness />);
+
+    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'my biopsy result says' } });
+    await vi.runAllTimersAsync();
+
+    expect(mockSaveConversationDraft).not.toHaveBeenCalled();
+  });
+
+  it('holds a draft back while a model on this device is selected', async () => {
+    seedConversation();
+    useLocalModelSelection.getState().select(LOCAL_MODEL);
+    render(<Harness />);
+
+    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'my biopsy result says' } });
+    await vi.runAllTimersAsync();
+
+    expect(mockSaveConversationDraft).not.toHaveBeenCalled();
+  });
+
+  it('still clears a stored draft for a chat answered on this device', async () => {
+    seedConversation();
+    useLocalModelSelection.getState().select(LOCAL_MODEL);
+    render(<Harness />);
+
+    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: '' } });
+    await vi.runAllTimersAsync();
+
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
+    expect(mockSaveConversationDraft.mock.calls[0]?.slice(0, 2)).toEqual([CONVERSATION, '']);
   });
 
   it('leaves the unsaved surface’s shared slot alone, which has no row to hold it', async () => {

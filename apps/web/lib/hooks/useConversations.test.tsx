@@ -238,6 +238,32 @@ describe('useConversations.createConversation', () => {
     expect(findPostBody()).toMatchObject({ isTemporary: true });
   });
 
+  it('never quietly saves a chat the caller asked to keep temporary, even inside a project', async () => {
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto', 'proj-123', {
+        isTemporary: true,
+      });
+    });
+
+    expect(findPostBody()).toMatchObject({ projectId: 'proj-123', isTemporary: true });
+  });
+
+  it('starts a saved chat inside a project when temporary is only the default', async () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto', 'proj-123');
+    });
+
+    expect(findPostBody()).toMatchObject({ projectId: 'proj-123' });
+    expect(findPostBody()).not.toHaveProperty('isTemporary');
+  });
+
   it('consuming the pending flag at creation clears it for the next chat', async () => {
     useChatStore.getState().setPendingTemporaryChat(true);
     const { result } = renderHook(() => useConversations());

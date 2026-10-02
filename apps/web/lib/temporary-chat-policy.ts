@@ -43,6 +43,9 @@ export const TEMPORARY_CHAT_END_CONFIRMATION = {
 export const TEMPORARY_CHAT_PROJECT_REFUSAL =
   'A temporary chat cannot be part of a project. Turn off temporary chat, or start the chat outside the project.';
 
+export const LOCAL_MODEL_PROJECT_REFUSAL =
+  "Chats with a model on this device are temporary and can't be saved in a project.";
+
 export function temporaryChatAllowedIn(projectId: string | null | undefined): boolean {
   return !projectId;
 }

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useSession } from '@/lib/identity/client';
+import { useLocalModelSelection } from '@features/desktop-host';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { conversationHoldsLocalTurns } from '../lib/local-turn';
 import { clearPendingDraftClear } from '../lib/pending-draft-clear';
 import {
   clearPersistedDraft,
@@ -53,6 +55,7 @@ export interface DraftConflictControls {
 export function useConversationDraftSync(): DraftConflictControls {
   const { getToken, isLoaded, isSignedIn } = useSession();
   const draftsByConversation = useChatStore((state) => state.draftsByConversation);
+  const localModelSelected = useLocalModelSelection((state) => state.selected !== null);
   const [retryTick, setRetryTick] = useState(0);
   const [openConflict, setOpenConflict] = useState<OpenDraftConflict | null>(null);
   const [replacement, setReplacement] = useState<DraftReplacement | null>(null);
@@ -99,10 +102,18 @@ export function useConversationDraftSync(): DraftConflictControls {
 
     const timer = setTimeout(() => {
       for (const [conversationId, draft] of pending) {
-        const conversation = useChatStore
-          .getState()
-          .conversations.find((candidate) => candidate.id === conversationId);
+        const state = useChatStore.getState();
+        const conversation = state.conversations.find(
+          (candidate) => candidate.id === conversationId,
+        );
         if (conversation?.isTemporary) continue;
+        if (
+          draft !== '' &&
+          (localModelSelected ||
+            conversationHoldsLocalTurns(state.messagesByConversation[conversationId] ?? []))
+        ) {
+          continue;
+        }
         lastSavedRef.current[conversationId] = draft;
         const previous = saveQueueRef.current[conversationId] ?? Promise.resolve();
         const queued = previous.then(async () => {
@@ -204,7 +215,7 @@ export function useConversationDraftSync(): DraftConflictControls {
     }, DRAFT_SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [draftsByConversation, isLoaded, isSignedIn, retryTick]);
+  }, [draftsByConversation, isLoaded, isSignedIn, localModelSelected, retryTick]);
 
   const closeConflict = useCallback(() => setOpenConflict(null), []);
   const consumeReplacement = useCallback(() => setReplacement(null), []);
