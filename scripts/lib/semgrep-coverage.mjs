@@ -8,6 +8,7 @@ import { setTimeout, clearTimeout } from 'node:timers';
 import { performance } from 'node:perf_hooks';
 import { spawn, execFileSync } from 'node:child_process';
 
+export const VERIFIED_STRUCTURAL_SEMGREP = '1.178.0';
 const MAX_REPORT_BYTES = 192 * 1024 * 1024;
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 const SCANNER_DEADLINE_MS = 120_000;

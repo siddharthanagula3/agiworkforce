@@ -7,7 +7,9 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, URL } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { parse } from 'yaml';
 import {
+  VERIFIED_STRUCTURAL_SEMGREP,
   qualifyInternalCoverage,
   structuralRules,
   warningIdentity,
@@ -769,6 +771,15 @@ test('a warning cannot select a path outside the original source set', () => {
       },
       new Set([SOURCE]),
     ),
+  );
+});
+
+test('the workflow runs the semgrep engine the structural predicate was verified against', () => {
+  const workflow = parse(fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
+  assert.equal(
+    workflow.jobs.security.env.SEMGREP_VERSION,
+    VERIFIED_STRUCTURAL_SEMGREP,
+    'Raise VERIFIED_STRUCTURAL_SEMGREP only after confirming in the new Semgrep source that taint source and sink formulas still match through Match_search_mode.matches_of_formula with the rule options, that a sink without requires still needs the __SOURCE__ label, and that a finding under a string requires still needs a real source taint.',
   );
 });
 
