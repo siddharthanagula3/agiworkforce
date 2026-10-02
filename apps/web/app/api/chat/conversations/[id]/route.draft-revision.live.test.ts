@@ -20,28 +20,30 @@ const live =
 const scope = vi.hoisted(() => ({ db: null as DatabaseAdapter | null, userId: '' }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
   getUserScopedDb: vi.fn(async () => ({
     db: scope.db,
     userId: scope.userId,
     organizationId: null,
   })),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/cors')>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
-}));
-vi.mock('@/lib/e2b/runtime', () => ({ killE2BSession: vi.fn() }));
-vi.mock('@/lib/e2b/session-store', () => ({
-  managedCloudE2BSessionScope: vi.fn(() => 'scope'),
-}));
-vi.mock('@/lib/services/published-artifact-service', () => ({
-  unpublishArtifactsForConversations: vi.fn(async () => []),
 }));
 
 const { PUT } = await import('./route');

@@ -11,10 +11,16 @@ vi.mock('next/navigation', () => ({
     throw new Error(NOT_FOUND);
   },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
-vi.mock('@/lib/server/rls-db', () => ({ getCurrentUserRlsDb: async () => null }));
-vi.mock('@/lib/services/org-shared-session-service', () => ({
-  SHARE_TOKEN_REGEX: /^[A-Za-z0-9_-]{24}$/,
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: () => ({}),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  getCurrentUserRlsDb: async () => null,
+}));
+vi.mock('@/lib/services/org-shared-session-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/org-shared-session-service')>()),
   getPublicSharedSessionByToken: (...args: unknown[]) => mocks.publicSession(...args),
   getOrgReadableSessionByToken: async () => null,
   readSharedSessionSharerName: async () => null,
@@ -22,7 +28,10 @@ vi.mock('@/lib/services/org-shared-session-service', () => ({
 vi.mock('@/features/chat/components/share/SharedSessionViewer', () => ({
   SharedSessionViewer: () => null,
 }));
-vi.mock('@/app/copyright/report/ReportContentLink', () => ({ ReportContentLink: () => null }));
+vi.mock('@/app/copyright/report/ReportContentLink', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/copyright/report/ReportContentLink')>()),
+  ReportContentLink: () => null,
+}));
 
 import SharedSessionPage, { generateMetadata } from './page';
 

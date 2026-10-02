@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ dynamic: vi.fn(), rlsDb: vi.fn(), query: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/rls-db', () => ({ getCurrentUserRlsDb: () => mocks.rlsDb() }));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  getCurrentUserRlsDb: () => mocks.rlsDb(),
+}));
 vi.mock('next/dynamic', () => ({
   default: (...args: unknown[]) => {
     mocks.dynamic(...args);
