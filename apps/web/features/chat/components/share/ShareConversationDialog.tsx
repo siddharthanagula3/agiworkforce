@@ -154,20 +154,28 @@ function ShareConversationDialogImpl({
 
   const handleRevoke = () => {
     if (!activeShare) return;
-    confirm({
-      title:
-        activeShare.linkCount > 1
-          ? `Revoke all ${activeShare.linkCount} links?`
-          : 'Revoke this share?',
-      description:
-        activeShare.linkCount > 1
-          ? `This chat has ${activeShare.linkCount} live links, and all of them stop working. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.`
-          : activeShare.audience === 'organization'
-            ? 'Everyone in your workspace loses access immediately, and the grant is withdrawn. A new share can be created, but it will be a different URL, the old one stays dead.'
-            : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
-      confirmLabel: activeShare.linkCount > 1 ? 'Revoke all links' : 'Revoke share',
-      onConfirm: () => revoke(),
-    });
+    const scope = activeShare.mayHaveUnlistedLinks
+      ? {
+          title: 'Revoke every link to this chat?',
+          description:
+            'Every live link to this chat stops working, including any older ones that could not be checked. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.',
+          confirmLabel: 'Revoke all links',
+        }
+      : activeShare.linkCount > 1
+        ? {
+            title: `Revoke all ${activeShare.linkCount} links?`,
+            description: `This chat has ${activeShare.linkCount} live links, and all of them stop working. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.`,
+            confirmLabel: 'Revoke all links',
+          }
+        : {
+            title: 'Revoke this share?',
+            description:
+              activeShare.audience === 'organization'
+                ? 'Everyone in your workspace loses access immediately, and the grant is withdrawn. A new share can be created, but it will be a different URL, the old one stays dead.'
+                : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
+            confirmLabel: 'Revoke share',
+          };
+    confirm({ ...scope, onConfirm: () => revoke() });
   };
 
   const handleCopy = async () => {

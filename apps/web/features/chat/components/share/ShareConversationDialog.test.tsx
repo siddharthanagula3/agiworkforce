@@ -793,6 +793,48 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     );
     expect(screen.getByRole('button', { name: /Create public link/ })).toBeEnabled();
   });
+
+  it('names every link to the chat when revoking after a check that failed', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            shareUrl: 'https://agiworkforce.com/share/new-token',
+            token: 'new-token',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            messageCount: 1,
+          }),
+          { status: 201 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, revoked: 3 }), { status: 200 }),
+      );
+
+    renderSavedChat();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not check whether this chat already has a shared link.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke share' }));
+
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('Revoke every link to this chat?');
+    expect(confirmation).toHaveTextContent(
+      'Every live link to this chat stops working, including any older ones that could not be checked.',
+    );
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Revoke all links' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        `/api/share?conversation_id=${SAVED_CONVERSATION_ID}`,
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
+    );
+    expect(await screen.findByRole('button', { name: /Create public link/ })).toBeInTheDocument();
+  });
 });
 
 describe('ShareConversationDialog on a chat the store has not opened', () => {

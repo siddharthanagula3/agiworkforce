@@ -42,6 +42,7 @@ export interface ActiveConversationShare {
 
 export interface ConversationShare extends ActiveConversationShare {
   linkCount: number;
+  mayHaveUnlistedLinks: boolean;
   newMessages: number;
   newMessagesVary: boolean;
 }
@@ -56,6 +57,7 @@ interface InFlightShareRequest {
 interface ConversationLiveShares {
   conversationId: string;
   shares: ActiveConversationShare[];
+  lookupFailed: boolean;
 }
 
 const SHARE_LOOKUP_FAILED = 'Could not check whether this chat already has a shared link.';
@@ -173,10 +175,12 @@ export function useShareConversation(
     open &&
     storedConversationId !== null &&
     (lookupPending || liveShares?.conversationId !== storedConversationId || transcript === null);
-  const shownShares =
+  const shownLiveShares =
     !checkingShare && liveShares && liveShares.conversationId === conversationId
-      ? liveShares.shares
-      : NO_SHARES;
+      ? liveShares
+      : null;
+  const shownShares = shownLiveShares?.shares ?? NO_SHARES;
+  const shownLookupFailed = shownLiveShares?.lookupFailed ?? false;
   const activeShare = useMemo((): ConversationShare | null => {
     const widest: ShareAudience = shownShares.some((share) => share.audience === 'public')
       ? 'public'
@@ -187,10 +191,11 @@ export function useShareConversation(
     return {
       ...shown,
       linkCount: shownShares.length,
+      mayHaveUnlistedLinks: shownLookupFailed,
       newMessages: Math.max(0, messageCount - fewestShown),
       newMessagesVary: shownShares.some((share) => share.messageCount !== fewestShown),
     };
-  }, [shownShares, messageCount]);
+  }, [shownShares, shownLookupFailed, messageCount]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -204,13 +209,13 @@ export function useShareConversation(
     readLiveShares(storedConversationId, controller.signal).then(
       (shares) => {
         if (controller.signal.aborted) return;
-        setLiveShares({ conversationId: storedConversationId, shares });
+        setLiveShares({ conversationId: storedConversationId, shares, lookupFailed: false });
         setLookupPending(false);
         setError(null);
       },
       (caught: unknown) => {
         if (controller.signal.aborted) return;
-        setLiveShares({ conversationId: storedConversationId, shares: [] });
+        setLiveShares({ conversationId: storedConversationId, shares: [], lookupFailed: true });
         setLookupPending(false);
         setError(toUserMessage(caught, SHARE_LOOKUP_FAILED));
       },
@@ -316,13 +321,14 @@ export function useShareConversation(
         });
         if (!res.ok) throw new Error(await readErrorMessage(res, 'Failed to share'));
         const created = readCreatedShare(await res.json());
-        setLiveShares((current) => ({
-          conversationId: sharedConversationId,
-          shares: [
-            created,
-            ...(current?.conversationId === sharedConversationId ? current.shares : []),
-          ],
-        }));
+        setLiveShares((current) => {
+          const listed = current?.conversationId === sharedConversationId ? current : null;
+          return {
+            conversationId: sharedConversationId,
+            shares: [created, ...(listed?.shares ?? [])],
+            lookupFailed: listed?.lookupFailed ?? false,
+          };
+        });
         return true;
       } catch (err) {
         showRequestError(request, err, 'Could not create the public link.');
@@ -371,12 +377,16 @@ export function useShareConversation(
       });
       if (!res.ok) throw new Error(await readErrorMessage(res, 'Could not update the link.'));
       const refreshed = ConversationSharesRefreshedSchema.parse(await res.json());
-      setLiveShares((current) => ({
-        conversationId: sharedConversationId,
-        shares: (current?.conversationId === sharedConversationId ? current.shares : [])
-          .filter((link) => refreshed.tokens.includes(link.token))
-          .map((link) => ({ ...link, messageCount: refreshed.messageCount })),
-      }));
+      setLiveShares((current) => {
+        const listed = current?.conversationId === sharedConversationId ? current : null;
+        return {
+          conversationId: sharedConversationId,
+          shares: (listed?.shares ?? [])
+            .filter((link) => refreshed.tokens.includes(link.token))
+            .map((link) => ({ ...link, messageCount: refreshed.messageCount })),
+          lookupFailed: listed?.lookupFailed ?? false,
+        };
+      });
       return true;
     } catch (err) {
       showRequestError(request, err, 'Could not update the link.');
@@ -411,7 +421,7 @@ export function useShareConversation(
         throw new Error('Failed to revoke share link');
       }
       ConversationSharesRevokedSchema.parse(await res.json());
-      setLiveShares({ conversationId: sharedConversationId, shares: [] });
+      setLiveShares({ conversationId: sharedConversationId, shares: [], lookupFailed: false });
       return true;
     } catch (err) {
       showRequestError(request, err, 'Could not revoke the public link.');
