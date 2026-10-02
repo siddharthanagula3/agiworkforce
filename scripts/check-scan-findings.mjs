@@ -25,6 +25,10 @@ function severityRank(severity) {
   return index === -1 ? 0 : index;
 }
 
+function isText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 export function normalizeTrivyReport(report) {
   const findings = [];
   for (const result of report?.Results ?? []) {
@@ -67,17 +71,23 @@ export function normalizeZapReport(report) {
   for (const site of report?.site ?? []) {
     const siteUrl = site?.['@name'] ?? '<unknown url>';
     for (const alert of site?.alerts ?? []) {
-      const instances = alert?.instances ?? [];
-      const locations = new Set(
-        instances.length > 0 ? instances.map((instance) => instance?.uri ?? siteUrl) : [siteUrl],
-      );
-      for (const location of locations) {
+      const instances = alert?.instances?.length > 0 ? alert.instances : [{}];
+      const seen = new Set();
+      for (const instance of instances) {
+        const location = instance?.uri ?? siteUrl;
+        const evidence = instance?.evidence ?? '';
+        const otherinfo = instance?.otherinfo ?? '';
+        const key = JSON.stringify([location, evidence, otherinfo]);
+        if (seen.has(key)) continue;
+        seen.add(key);
         findings.push({
           id: alert?.alertRef ?? alert?.pluginid ?? '<unknown>',
           location,
           severity: ZAP_RISK_SEVERITY.get(String(alert?.riskcode ?? '0')) ?? 'UNKNOWN',
           title: alert?.alert ?? alert?.name ?? '',
           scanner: 'zap',
+          evidence,
+          otherinfo,
         });
       }
     }
@@ -138,6 +148,24 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
         return;
       }
     }
+    if (entry.otherinfo !== undefined && (entry.scanner !== 'zap' || !isText(entry.otherinfo))) {
+      fail(
+        `${label} (${entry.id}) "otherinfo" belongs to a zap entry and is the line of other info every instance has to carry.`,
+      );
+      return;
+    }
+    if (
+      entry.evidence !== undefined &&
+      (entry.scanner !== 'zap' ||
+        !Array.isArray(entry.evidence) ||
+        entry.evidence.length === 0 ||
+        !entry.evidence.every(isText))
+    ) {
+      fail(
+        `${label} (${entry.id}) "evidence" belongs to a zap entry and is a non-empty array of substrings, one of which every instance's evidence has to contain.`,
+      );
+      return;
+    }
     parsed.push({ ...entry, matched: 0 });
   });
 
@@ -162,9 +190,19 @@ function withinUrlScope(location, candidate) {
   return url.pathname === scope.pathname || url.pathname.startsWith(below);
 }
 
+function carriesPins(entry, finding) {
+  const lines = (finding.otherinfo ?? '').split('\n').map((line) => line.trim());
+  if (entry.otherinfo !== undefined && !lines.includes(entry.otherinfo.trim())) return false;
+  return (
+    entry.evidence === undefined ||
+    entry.evidence.some((value) => (finding.evidence ?? '').includes(value))
+  );
+}
+
 function matches(entry, finding) {
   if (entry.scanner !== finding.scanner) return false;
   if (entry.id !== finding.id) return false;
+  if (!carriesPins(entry, finding)) return false;
   if (entry.locations === undefined) return true;
   return entry.locations.some((candidate) =>
     finding.scanner === 'zap'
@@ -185,9 +223,10 @@ export function gateFindings({ findings, allowlist, minSeverity, scanner, fail }
       entry.matched += 1;
       continue;
     }
-    fail(
-      `unaccepted: ${finding.location} [${finding.severity}] ${finding.id}, ${finding.title}`.trim(),
-    );
+    const detail = (finding.otherinfo || finding.evidence || '').replace(/\s+/gu, ' ').trim();
+    const summary =
+      `unaccepted: ${finding.location} [${finding.severity}] ${finding.id}, ${finding.title}`.trim();
+    fail(detail ? `${summary} (${detail})` : summary);
   }
 
   for (const entry of allowlist) {
