@@ -411,6 +411,31 @@ describe('Free section in the composer', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('gives a thumb a 44px target on every control between the model rows', () => {
+    renderSection(
+      sources(
+        source('ready', catalogue([...familyA.map((key) => model(key)), model(imageKey)])),
+        source(
+          'ready',
+          catalogue(
+            experientialKeys.map((key) => model(key)),
+            'Experiential Labs',
+          ),
+        ),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+
+    const [dataUse] = screen.getAllByRole('link', { name: 'Data use' });
+    expect(dataUse).toHaveClass('min-h-6', 'pointer-coarse:min-h-11', 'pointer-coarse:w-full');
+    expect(screen.getByRole('combobox', { name: 'Free model category' })).toHaveClass(
+      'pointer-coarse:min-h-11',
+    );
+    expect(screen.getByRole('searchbox', { name: 'Search free models' })).toHaveClass(
+      'pointer-coarse:min-h-11',
+    );
+  });
+
   it('offers media categories only when the account receives media offerings', () => {
     const { unmount } = render(
       <FreeQuotaModelSection

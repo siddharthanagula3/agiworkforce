@@ -13,19 +13,25 @@ const [unavailableKey] = chatOfferings.find(
     FAMILY.exec(offering.providerModelId ?? '')?.[0] !==
     FAMILY.exec(readyOffering.providerModelId ?? '')?.[0],
 )!;
+const [imageKey] = Object.entries(getProviderOfferings()).find(
+  ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',
+)!;
+const experientialKeys = Object.entries(getProviderOfferings())
+  .filter(
+    ([, offering]) =>
+      offering.provider === 'experientiallabs' && offering.quotaProbeProtocol === 'chat',
+  )
+  .map(([key]) => key);
 
-function catalogue() {
+function freeCatalogue(issuer: string, entries: ReadonlyArray<readonly [string, string]>) {
   return {
-    issuer: 'Fixture Cloud',
+    issuer,
     observedOn: '2026-10-01',
     evidenceUrl: 'https://provider.example/free',
-    reportedEligible: 2,
+    reportedEligible: entries.length,
     reportedUnavailable: 0,
-    models: [
-      [readyKey, 'ready'],
-      [unavailableKey, 'unavailable'],
-    ].map(([key, status]) => {
-      const offering = getProviderOfferings()[key!]!;
+    models: entries.map(([key, status]) => {
+      const offering = getProviderOfferings()[key]!;
       return {
         key,
         displayName: offering.displayName,
@@ -39,6 +45,13 @@ function catalogue() {
       };
     }),
   };
+}
+
+function catalogue() {
+  return freeCatalogue('Fixture Cloud', [
+    [readyKey, 'ready'],
+    [unavailableKey, 'unavailable'],
+  ]);
 }
 
 async function stubFreeModels(page: Page, delayMs = 0) {
@@ -139,3 +152,42 @@ for (const layout of LAYOUTS) {
     });
   });
 }
+
+test.describe('model picker free section (coarse pointer)', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('controls between the free model rows give a thumb a 44px target', async ({ page }) => {
+    await signIn(page);
+    await page.route('**/api/models/free-quota', (route) =>
+      route.fulfill({
+        json: freeCatalogue('Fixture Cloud', [
+          [readyKey, 'ready'],
+          [imageKey, 'ready'],
+        ]),
+      }),
+    );
+    await page.route('**/api/models/experiential-free', (route) =>
+      route.fulfill({
+        json: freeCatalogue(
+          'Experiential Labs',
+          experientialKeys.map((key) => [key, 'ready'] as const),
+        ),
+      }),
+    );
+    await page.goto('/chat', { waitUntil: 'domcontentloaded' });
+    await page.locator('#model-selector').waitFor({ timeout: 30_000 });
+    await page.locator('#model-selector').click();
+    const panel = page.getByRole('dialog', { name: 'Models' });
+    await panel.getByRole('button', { name: /More models/ }).click();
+
+    for (const control of [
+      panel.getByRole('link', { name: 'Data use' }).first(),
+      panel.getByRole('combobox', { name: 'Free model category' }),
+      panel.getByRole('searchbox', { name: 'Search free models' }),
+    ]) {
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+  });
+});

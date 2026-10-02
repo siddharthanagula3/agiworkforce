@@ -222,7 +222,7 @@ function PoolHeading({ issuer, promotional }: { issuer: string; promotional: boo
       <a
         {...PICKER_ROW}
         href="/privacy"
-        className="mx-3 inline-block text-xs text-muted-foreground underline"
+        className={`flex min-h-6 w-fit items-center rounded-md px-3 text-xs text-muted-foreground underline pointer-coarse:min-h-11 pointer-coarse:w-full ${FOCUS_RING_CLASS}`}
       >
         Data use
       </a>
@@ -371,7 +371,7 @@ export function FreeQuotaModelSection({
                 aria-label="Free model category"
                 value={view.category ?? ''}
                 onChange={(event) => setCategory(event.target.value)}
-                className="h-9 w-full rounded-md border border-[var(--chat-border)] bg-background px-2 text-sm text-foreground"
+                className="h-9 w-full rounded-md border border-[var(--chat-border)] bg-background px-2 text-sm text-foreground pointer-coarse:min-h-11"
               >
                 {view.categories.map((key) => (
                   <option key={key} value={key}>
@@ -418,7 +418,7 @@ export function FreeQuotaModelSection({
                       placeholder="Search free models"
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      className="h-9 w-full rounded-md border border-[var(--chat-border)] bg-transparent px-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-md border border-[var(--chat-border)] bg-transparent px-2 text-sm text-foreground pointer-coarse:min-h-11"
                     />
                   </div>
                   {more.map((group) => (
