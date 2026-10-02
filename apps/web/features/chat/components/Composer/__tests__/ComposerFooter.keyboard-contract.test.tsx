@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 type ScanModule0 = typeof import('@shared/config/llm');
 type ScanModule1 = typeof import('zustand/middleware');
 
@@ -149,6 +149,15 @@ vi.mock('zustand/middleware', async () => {
 
 import { ComposerFooter } from '../ComposerFooter';
 
+const EMPTY_FREE_CATALOGUE = {
+  issuer: 'Fixture Cloud',
+  observedOn: '2026-10-01',
+  evidenceUrl: 'https://provider.example/free',
+  reportedEligible: 0,
+  reportedUnavailable: 0,
+  models: [],
+};
+
 const openPicker = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Change model' }));
   return screen.getByRole('dialog', { name: 'Models' });
@@ -172,7 +181,10 @@ const tabbables = (root: HTMLElement) =>
 describe('ComposerFooter · picker keyboard contract', () => {
   beforeEach(() => {
     sel.id = 'fixture-primary-model';
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify(EMPTY_FREE_CATALOGUE)));
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('short list: Tab closes the menu, matching the reference', () => {
     render(<ComposerFooter />);

@@ -18,7 +18,7 @@ export const FREE_QUOTA_CATEGORIES: Readonly<Record<ProviderOfferingCategory, st
 
 export const FREE_QUOTA_STATUS_LABELS: Readonly<Record<FreeQuotaStatus, string>> = {
   ready: 'Free quota available',
-  exhausted: 'Free quota exhausted · Choose another model',
-  expired: 'Quota expired',
+  exhausted: 'Free allowance used up',
+  expired: 'Free offer ended',
   unavailable: 'Not available right now',
 };

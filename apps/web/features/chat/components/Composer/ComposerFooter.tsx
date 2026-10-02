@@ -51,6 +51,7 @@ import {
 } from '@shared/stores/model-store';
 import { FreeQuotaModelSection } from './FreeQuotaModelSection';
 import { freeQuotaSelection } from '@features/chat/lib/free-quota-selection';
+import { useFreeModelSources } from '@features/chat/hooks/use-free-model-sources';
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { StyleSelector } from './StyleSelector';
 import { ModelCompatibilityNotice } from './ModelCompatibilityNotice';
@@ -1065,6 +1066,7 @@ export function ComposerFooter({
     : `${lockedDisplayModel.name} ${TRIAL_SLOT_SUFFIX}`;
 
   const catalogue = useModelCatalogue(open);
+  const freeModelSources = useFreeModelSources(open);
   const { favouriteModelIds, toggleFavourite } = useModelFavourites();
 
   const lockOverrides = useMemo(() => {
@@ -1422,8 +1424,9 @@ export function ComposerFooter({
                       ) : (
                         <>
                           <FreeQuotaModelSection
-                            enabled={open}
+                            sources={freeModelSources}
                             selectedId={selectedModelId}
+                            fallbackModelName={freeDefaultModel?.name ?? null}
                             onSelect={(id) => {
                               const model = findSelectableModel(id);
                               if (model && !modelChangePending) handleSelectModel(model);
