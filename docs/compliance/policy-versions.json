@@ -200,7 +200,33 @@
           "date": "2026-09-28",
           "digest": "16428e0e9e0b5ee1",
           "note": "Adds the upload malware scanner to Fly.io's row: services/upload-scanner runs on Fly.io, every uploaded file passes through it, and it holds a file in memory only while it scans it.",
-          "summary": "Fly.io now also runs our malware scanner, which every uploaded file passes through and which keeps no copy."
+          "summary": "Fly.io now also runs our malware scanner, which every uploaded file passes through and which keeps no copy.",
+          "subprocessorNames": [
+            "Cheaper Inference (operated by Keak)",
+            "Clerk",
+            "Cloudflare",
+            "E2B",
+            "Experiential Labs (operated by Resolute Labs AI, Inc.)",
+            "Expo",
+            "Fly.io",
+            "GitHub",
+            "Google (Places API)",
+            "Google (Play Android Publisher)",
+            "Google Analytics",
+            "Model providers (Managed Cloud)",
+            "Neon",
+            "OpenAI (dictation and Voice Mode)",
+            "OpenRouter",
+            "OpenStreetMap Foundation (Nominatim)",
+            "Perplexity",
+            "Qwen (Alibaba) and Zhipu",
+            "Resend",
+            "Runway",
+            "Sentry",
+            "Stripe",
+            "Upstash",
+            "Vercel"
+          ]
         }
       ]
     },

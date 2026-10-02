@@ -201,6 +201,171 @@ test('fails on a date that belongs to no canonical route', () => {
   );
 });
 
+const SUBPROCESSORS_PAGE = 'apps/web/app/subprocessors/page.tsx';
+const LISTED = ['Alpha', 'Beta Cloud'];
+const ADDED = 'Gamma Labs (operated by Delta, Inc.)';
+
+function subprocessorsPage(names) {
+  return [
+    "import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';",
+    '',
+    'const SUBS = [',
+    ...names.flatMap((name) => [
+      '  {',
+      `    name: '${name}',`,
+      "    purpose: 'Processes the requests you send.',",
+      '  },',
+    ]),
+    '];',
+    '',
+    'export default function SubprocessorsPage() {',
+    '  return <p>Last updated: {POLICY_LAST_UPDATED.subprocessors}.</p>;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function checkSubprocessors({ names, date, versions }) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-versions-subprocessors-'));
+  const write = (relative, contents) => {
+    fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+    fs.writeFileSync(path.join(root, relative), contents);
+  };
+  write(
+    CONSTANTS,
+    [
+      'export const POLICY_LAST_UPDATED = {',
+      `  subprocessors: '${date}',`,
+      '} as const;',
+      '',
+      'export const CANONICAL_POLICY_ROUTES = {',
+      "  subprocessors: '/subprocessors',",
+      '} as const;',
+      '',
+    ].join('\n'),
+  );
+  write(SUBPROCESSORS_PAGE, subprocessorsPage(names));
+  write(
+    REGISTRY,
+    JSON.stringify(
+      { note: 'fixture', documents: { subprocessors: { page: SUBPROCESSORS_PAGE, versions } } },
+      null,
+      2,
+    ),
+  );
+  return runPolicyVersionsCheck(root);
+}
+
+const LISTED_VERSION = {
+  date: '2026-09-28',
+  digest: copyDigest(subprocessorsPage(LISTED)),
+  note: 'Baseline recorded for the fixture.',
+  subprocessorNames: LISTED,
+};
+
+test('passes when the latest version records the subprocessors the page lists', () => {
+  assert.deepEqual(
+    checkSubprocessors({ names: LISTED, date: '2026-09-28', versions: [LISTED_VERSION] }),
+    [],
+  );
+});
+
+test('fails when a subprocessor is added under a same-date entry that records no names', () => {
+  const failures = checkSubprocessors({
+    names: [...LISTED, ADDED],
+    date: '2026-09-28',
+    versions: [
+      LISTED_VERSION,
+      {
+        date: '2026-09-28',
+        digest: copyDigest(subprocessorsPage([...LISTED, ADDED])),
+        note: 'Adds a row for an existing vendor.',
+      },
+    ],
+  });
+  assert.ok(
+    failures.some(
+      (failure) =>
+        failure.includes(SUBPROCESSORS_PAGE) &&
+        failure.includes('the registry has not recorded') &&
+        failure.includes(`added ${ADDED}`),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('fails when the subprocessor list changes under an entry whose date did not move', () => {
+  const failures = checkSubprocessors({
+    names: [...LISTED, ADDED],
+    date: '2026-09-28',
+    versions: [
+      LISTED_VERSION,
+      {
+        date: '2026-09-28',
+        digest: copyDigest(subprocessorsPage([...LISTED, ADDED])),
+        note: 'Adds a row for an existing vendor.',
+        subprocessorNames: [...LISTED, ADDED],
+      },
+    ],
+  });
+  assert.ok(
+    failures.some((failure) => failure.includes('under an entry whose date did not move')),
+    failures.join('\n'),
+  );
+});
+
+test('accepts a changed list on an entry that moves the date and names the change', () => {
+  const failures = checkSubprocessors({
+    names: [...LISTED, ADDED],
+    date: '2026-10-05',
+    versions: [
+      LISTED_VERSION,
+      {
+        date: '2026-10-05',
+        digest: copyDigest(subprocessorsPage([...LISTED, ADDED])),
+        summary: 'Adds Gamma Labs, which serves inference for the models it hosts.',
+        subprocessorNames: [...LISTED, ADDED],
+      },
+    ],
+  });
+  assert.deepEqual(failures, []);
+});
+
+test('fails when the entry that changes the list does not name what was added or removed', () => {
+  const failures = checkSubprocessors({
+    names: [LISTED[0], ADDED],
+    date: '2026-10-05',
+    versions: [
+      LISTED_VERSION,
+      {
+        date: '2026-10-05',
+        digest: copyDigest(subprocessorsPage([LISTED[0], ADDED])),
+        summary: 'Rewords several rows of the list for clarity.',
+        subprocessorNames: [LISTED[0], ADDED],
+      },
+    ],
+  });
+  assert.ok(
+    failures.some(
+      (failure) =>
+        failure.includes('summary does not name') &&
+        failure.includes('Gamma Labs') &&
+        failure.includes('Beta Cloud'),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('fails when no version records the subprocessors the page lists', () => {
+  const { subprocessorNames, ...unnamed } = LISTED_VERSION;
+  assert.deepEqual(subprocessorNames, LISTED);
+  const failures = checkSubprocessors({ names: LISTED, date: '2026-09-28', versions: [unnamed] });
+  assert.ok(
+    failures.some((failure) => failure.includes('no version records subprocessorNames')),
+    failures.join('\n'),
+  );
+});
+
 test('the published policy set passes', () => {
   assert.deepEqual(runPolicyVersionsCheck(repoRoot), []);
 });

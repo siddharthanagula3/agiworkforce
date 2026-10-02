@@ -8,6 +8,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { recipientNames } from './check-subprocessor-coverage.mjs';
 import { runPolicyArchiveCheck } from './lib/policy-archive.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,6 +18,7 @@ export const REGISTRY = 'docs/compliance/policy-versions.json';
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 const MIN_NOTE_LENGTH = 20;
+const SUBPROCESSOR_LIST = 'subprocessors';
 const COPY_TOKEN =
   /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|(?<=[>}])[^<>{}]+(?=[<{])/g;
 
@@ -68,6 +70,69 @@ export function copyDigest(source) {
 
 export function pageFor(route) {
   return `apps/web/app${route}/page.tsx`;
+}
+
+function listedName(name) {
+  return name.split(' (')[0];
+}
+
+function listChange(before, after) {
+  const added = after.filter((name) => !before.includes(name));
+  const removed = before.filter((name) => !after.includes(name));
+  return {
+    names: [...added, ...removed],
+    text: [
+      ...(added.length > 0 ? [`added ${added.join(', ')}`] : []),
+      ...(removed.length > 0 ? [`removed ${removed.join(', ')}`] : []),
+    ].join('; '),
+  };
+}
+
+function checkSubprocessorNames(page, source, versions, failures) {
+  const where = `${REGISTRY} "${SUBPROCESSOR_LIST}"`;
+  let recorded = null;
+  for (const [position, version] of versions.entries()) {
+    if (version.subprocessorNames === undefined) continue;
+    const at = `${where} version ${position + 1}`;
+    if (
+      !Array.isArray(version.subprocessorNames) ||
+      !version.subprocessorNames.every((name) => typeof name === 'string')
+    ) {
+      failures.push(`${at}: subprocessorNames must list the names the page showed`);
+      continue;
+    }
+    const names = [...new Set(version.subprocessorNames)].sort();
+    const change = recorded ? listChange(recorded, names) : null;
+    if (change && change.names.length > 0) {
+      if (version.date === versions[position - 1]?.date) {
+        failures.push(
+          `${at}: the subprocessor list changed (${change.text}) under an entry whose date did not move, so /changelog never lists it; move POLICY_LAST_UPDATED.${SUBPROCESSOR_LIST} and record the names on the entry that moves it`,
+        );
+      } else {
+        const unnamed = change.names.filter(
+          (name) => !(version.summary ?? '').includes(listedName(name)),
+        );
+        if (unnamed.length > 0) {
+          failures.push(
+            `${at}: the summary does not name ${unnamed.map(listedName).join(', ')}, which this version ${change.text}`,
+          );
+        }
+      }
+    }
+    recorded = names;
+  }
+  if (recorded === null) {
+    failures.push(
+      `${where}: no version records subprocessorNames, so a change to the list cannot be held to a dated entry; record the names ${page} lists on its latest version`,
+    );
+    return;
+  }
+  const change = listChange(recorded, [...new Set(recipientNames(source))].sort());
+  if (change.names.length > 0) {
+    failures.push(
+      `${page}: the subprocessor list changed and the registry has not recorded it (${change.text}); append a version that moves the date, with subprocessorNames and a summary naming the change`,
+    );
+  }
 }
 
 function checkDocument(root, key, route, date, entry, failures) {
@@ -137,6 +202,7 @@ function checkDocument(root, key, route, date, entry, failures) {
       `${page}: the published text changed since its last recorded version. If the change is substantive, move POLICY_LAST_UPDATED.${key} to the day it ships; either way append {"date", "digest": "${digest}"} to ${REGISTRY}, with a note when the date does not move`,
     );
   }
+  if (key === SUBPROCESSOR_LIST) checkSubprocessorNames(page, source, versions, failures);
 }
 
 export function runPolicyVersionsCheck(root) {
