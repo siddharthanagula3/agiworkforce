@@ -1,6 +1,11 @@
 import { releasePath } from '@/lib/changelog-entries';
 import { LEGAL_ENTITY } from '@/lib/legal-constants';
-import { archivedVersionHref, policyChanges } from '@/lib/legal/policy-archive';
+import {
+  POLICY_PUBLICATION_FLOOR,
+  archivedVersionHref,
+  policyChanges,
+  type PolicyChange,
+} from '@/lib/legal/policy-archive';
 import { SITE_NAME, absoluteUrl } from '@/lib/seo/site';
 
 import { RELEASE_NOTES, releaseStateLine } from './release-notes-data';
@@ -64,13 +69,33 @@ function releaseEntries(): FeedEntry[] {
   });
 }
 
+const SUBPROCESSOR_LIST = 'subprocessors';
+
+function publicationNotes(change: PolicyChange): string[] {
+  return [
+    "This policy's date is the day its text was settled, not the day it was published on this site, which can be later.",
+    ...(change.date < POLICY_PUBLICATION_FLOOR.date
+      ? [`Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`]
+      : []),
+    ...(change.history.key === SUBPROCESSOR_LIST
+      ? [
+          `The window to object to a new subprocessor, set in section 05 of our data processing addendum, runs from the day this change is first published on ${absoluteUrl(change.history.route)}, not from this date.`,
+        ]
+      : []),
+  ];
+}
+
 function policyEntries(): FeedEntry[] {
   return policyChanges().map((change) => ({
     id: absoluteUrl(archivedVersionHref(change.history, change.date)),
     title: `${change.history.label} updated`,
     updated: atomTimestamp(change.date),
     link: absoluteUrl(change.href),
-    paragraphs: [`${change.date} · ${change.history.label}`, change.summary],
+    paragraphs: [
+      `${change.date} · ${change.history.label}`,
+      change.summary,
+      ...publicationNotes(change),
+    ],
     categories: [
       { term: 'policy', label: 'Policy change' },
       { term: change.history.slug, label: change.history.label },

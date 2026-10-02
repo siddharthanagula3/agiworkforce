@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import manifest from '@/content/legal/policy-archive/manifest.json';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
+  POLICY_PUBLICATION_FLOOR,
   archivedPolicyText,
   olderArchivedVersion,
   policyChanges,
@@ -121,5 +122,18 @@ describe('policy changes', () => {
 
     expect([...listed].sort()).toEqual(expected.sort());
     expect(dates).toEqual([...dates].sort().reverse());
+  });
+
+  it('never reports what a listed version did to accounts or visitors before it was published here', () => {
+    const unpublished = policyChanges().filter(
+      (change) => change.date < POLICY_PUBLICATION_FLOOR.date,
+    );
+
+    expect(unpublished.length).toBeGreaterThan(0);
+    for (const change of unpublished) {
+      expect(change.summary, `${change.history.key} ${change.date}`).not.toMatch(
+        /\bwere (asked|told|notified|prompted|shown)\b/i,
+      );
+    }
   });
 });

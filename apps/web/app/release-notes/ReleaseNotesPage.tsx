@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 import { Header } from '@shared/components/layout/Header';
 import { releasePath } from '@/lib/changelog-entries';
-import { policyChanges } from '@/lib/legal/policy-archive';
+import { POLICY_PUBLICATION_FLOOR, policyChanges } from '@/lib/legal/policy-archive';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
@@ -20,7 +20,7 @@ const HERO_FACTS = [
 ];
 
 const LEDE =
-  "Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Every 'in progress' item is named openly. We do not backdate, we do not pre-announce, and we do not list things we are not actively maintaining.";
+  "Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Every 'in progress' item is named openly. We do not pre-announce, and we do not list things we are not actively maintaining.";
 
 const POLICY_CHANGES = policyChanges();
 
@@ -97,6 +97,21 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                 subprocessor list is one of these policies, so a subprocessor added or replaced
                 since 21 September 2026 is listed here with the date the list changed. The Atom feed
                 carries these and the releases above.
+              </Prose>
+              <Prose>
+                A policy&rsquo;s date is the day its text was settled, not the day it was published
+                on this site, which can be later. On {POLICY_PUBLICATION_FLOOR.label} this site was
+                still serving versions dated before 21 September 2026, so no version listed here
+                with a date before {POLICY_PUBLICATION_FLOOR.label} had been published on this site
+                before that day. The window to object to a new subprocessor, set in{' '}
+                <Link href="/dpa#s-05" className="agi-ds-link">
+                  section 05 of our data processing addendum
+                </Link>
+                , runs from the day the change is first published on{' '}
+                <Link href="/subprocessors" className="agi-ds-link">
+                  /subprocessors
+                </Link>
+                , not from the date listed here.
               </Prose>
             </div>
             <Ledger

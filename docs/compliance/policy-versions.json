@@ -13,7 +13,7 @@
           "date": "2026-09-22",
           "digest": "1000ae1c69856cfa",
           "note": "Discloses the founder-approved Experiential Labs promotional route, its Free-plan content capture and potential provider use, with a new terms acceptance version.",
-          "summary": "Discloses the Experiential Labs promotional route for Free-plan chats, what it captures and how its provider may use that content. Accounts were asked to accept the terms again.",
+          "summary": "Discloses the Experiential Labs promotional route for Free-plan chats, what it captures and how its provider may use that content.",
           "archive": "not-retained"
         },
         {
@@ -167,7 +167,7 @@
           "date": "2026-09-23",
           "digest": "5d2ea7656cc0eada",
           "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23.",
-          "summary": "Corrects where the identity provider's cookies come from and removes a browser storage entry the product no longer writes. Visitors were asked to choose again."
+          "summary": "Corrects where the identity provider's cookies come from and removes a browser storage entry the product no longer writes. A visitor who chose under an earlier version is asked to choose again."
         },
         {
           "date": "2026-09-23",

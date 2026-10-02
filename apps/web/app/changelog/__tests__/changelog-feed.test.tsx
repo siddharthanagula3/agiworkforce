@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import manifest from '@/content/legal/policy-archive/manifest.json';
 import { RELEASES, releasePath } from '@/lib/changelog-entries';
+import { POLICY_PUBLICATION_FLOOR } from '@/lib/legal/policy-archive';
 
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
@@ -222,7 +223,39 @@ describe('/changelog/feed.xml', () => {
       );
       const lines = entry ? paragraphs(entry) : [];
       expect(lines[0], `${version.key} ${version.date}`).toMatch(new RegExp(`^${version.date}\\b`));
-      expect(lines.at(-1), `${version.key} ${version.date}`).toBe(version.summary);
+      expect(lines[1], `${version.key} ${version.date}`).toBe(version.summary);
+    }
+  });
+
+  it('tells a feed reader that a policy date can precede publication, and when a subprocessor objection window starts', async () => {
+    const entries = atomChildren(await servedFeed(), 'entry').filter((entry) =>
+      categoryTerms(entry).includes('policy'),
+    );
+    const floor = `Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`;
+
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      const date = text(entry, 'updated').slice(0, 10);
+      const lines = paragraphs(entry);
+      const where = `${categoryTerms(entry).join(' ')} ${date}`;
+
+      expect(
+        lines.some((line) =>
+          /date is the day its text was settled, not the day it was published on this site/.test(
+            line,
+          ),
+        ),
+        where,
+      ).toBe(true);
+      expect(lines.includes(floor), where).toBe(date < POLICY_PUBLICATION_FLOOR.date);
+      expect(
+        lines.some((line) =>
+          /window to object to a new subprocessor\b.* runs from the day this change is first published on https?:\/\/\S+\/subprocessors, not from this date\./.test(
+            line,
+          ),
+        ),
+        where,
+      ).toBe(categoryTerms(entry).includes('subprocessors'));
     }
   });
 
@@ -247,7 +280,7 @@ describe('/changelog/feed.xml', () => {
     );
     entries.forEach((entry, index) => {
       expect(categoryTerms(entry)).toContain('policy');
-      expect(paragraphs(entry).at(-1)).toBe(SUBPROCESSOR_REVISIONS[index]?.summary);
+      expect(paragraphs(entry)[1]).toBe(SUBPROCESSOR_REVISIONS[index]?.summary);
     });
   });
 
@@ -372,5 +405,35 @@ describe('/changelog lists policy changes', () => {
         name,
       ).toBe(true);
     }
+  });
+
+  it('does not claim its dates are never earlier than publication', () => {
+    render(<ChangelogPage />);
+
+    expect(document.body.textContent).not.toMatch(/backdate/i);
+  });
+
+  it('says a policy date can precede publication, when the listed versions were first published, and when the objection window starts', () => {
+    render(<ChangelogPage />);
+    const section = screen.getByRole('region', { name: 'Policy changes, newest first.' });
+    const prose = section.textContent ?? '';
+    const { label } = POLICY_PUBLICATION_FLOOR;
+
+    expect(prose).toMatch(
+      /date is the day its text was settled, not the day it was published on this site/,
+    );
+    expect(prose).toContain(
+      `no version listed here with a date before ${label} had been published on this site before that day.`,
+    );
+    expect(prose).toMatch(
+      /window to object to a new subprocessor, set in section 05 of our data processing addendum, runs from the day the change is first published on \/subprocessors, not from the date listed here\./,
+    );
+    expect(
+      within(section).getByRole('link', { name: 'section 05 of our data processing addendum' }),
+    ).toHaveAttribute('href', '/dpa#s-05');
+    expect(within(section).getByRole('link', { name: '/subprocessors' })).toHaveAttribute(
+      'href',
+      '/subprocessors',
+    );
   });
 });

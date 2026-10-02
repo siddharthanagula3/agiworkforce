@@ -124,6 +124,8 @@ export function olderArchivedVersion(history: PolicyHistory, date: string): stri
   return older?.date ?? null;
 }
 
+export const POLICY_PUBLICATION_FLOOR = { date: '2026-10-02', label: '2 October 2026' } as const;
+
 export interface PolicyChange {
   history: PolicyHistory;
   date: string;
