@@ -264,7 +264,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
           ),
           null,
         ).map((offering) => offering.key)
-      : quotaOnlyOfferings;
+      : [...new Set(quotaOnlyOfferings)];
   if (covered.length === 0) {
     return operatorRefusal(
       'No free quota inventory model can be served from the free quota now, so there is nothing to record.',

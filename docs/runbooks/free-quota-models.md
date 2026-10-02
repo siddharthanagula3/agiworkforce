@@ -313,10 +313,10 @@ confirmation and press Record console check. The dialog names what the record
 asserts; confirm it.
 
 A record names the models it covers, never "every model from now on". Every
-model listed here sends the keys of the models the panel lists, and an API
-caller's `"all"` is stored as the models the inventory can serve at that
-moment. A model added to the inventory later is therefore off until a check
-names it: after any change that adds models to
+model listed here sends the keys of the models the panel lists, an API caller's
+`"all"` is stored as the models the inventory can serve at that moment, and a
+key sent more than once is stored once. A model added to the inventory later is
+therefore off until a check names it: after any change that adds models to
 `apps/web/config/free-pools.json`, turn their switch on and record a new console
 check. The panel's Models covered line counts the listed models the current
 record leaves out.

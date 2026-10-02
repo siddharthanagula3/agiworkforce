@@ -210,6 +210,20 @@ it('keeps every key a record names in the audit log, with the total on each even
   }
 });
 
+it('records a key sent more than once as one model, so a long body cannot multiply the audit events', async () => {
+  const [first, second] = inventory.entries.map((entry) => entry.offeringKey);
+  const repeated = [first!, second!, ...Array.from({ length: 60 }, () => first!)];
+
+  const response = await attest({ checkedAtMs: 'now', quotaOnlyOfferings: repeated });
+
+  expect(response.status).toBe(200);
+  expect((await response.json()).offerings).toBe(2);
+  expect((await stored())?.quotaOnlyOfferings).toEqual([first, second]);
+  expect(mocks.audit).toHaveBeenCalledTimes(1);
+  expect(auditedScopes()).toEqual([first, second]);
+  expect(auditedDetails()[0]).toMatchObject({ count: 2 });
+});
+
 it('records nothing for "all" once no inventory model can be served from the free quota', async () => {
   vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2027-06-01T00:00:00.000Z'));
 
