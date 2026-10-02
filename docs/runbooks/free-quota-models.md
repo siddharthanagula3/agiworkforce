@@ -201,10 +201,15 @@ Each reason is sent once per deadline (or per billing signal), so a renewal
 that moves a deadline gets its own reminders. It is emailed to the verified
 address of each platform admin, or to `AGI_SUPPORT_FALLBACK_EMAIL` when none
 resolves, which needs `RESEND_API_KEY` and `AGI_SUPPORT_FROM_EMAIL`, and it is
-paged through `PAGER_WEBHOOK_URL` when that is set. A reminder that reached
-nobody is logged as `free_quota_renewal_reminder_undeliverable` and sent again
-on the next run; a delivered one is logged as `free_quota_renewal_reminder_sent`,
-at error level when free models are off.
+paged through `PAGER_WEBHOOK_URL` when that is set. A delivered reminder is
+logged as `free_quota_renewal_reminder_sent`, at error level when free models
+are off.
+
+A reminder is held for 15 minutes while it is sent and kept only once it reaches
+someone, so a failure never silences it: each reminder is sent on its own, and
+one that reached nobody, failed, or was cut off with its run is sent again on
+the next run. A run in which any reminder reached nobody answers HTTP 500, so it
+shows in the Vercel cron log.
 
 ## What users see when a gate lapses
 

@@ -54,6 +54,22 @@ describe('free quota renewal cron', () => {
     expect(mocks.remind.mock.calls[0]![0]).toBeGreaterThanOrEqual(before);
   });
 
+  it('answers 500 when a reminder reached nobody, so the failed run shows in the cron log', async () => {
+    const run = {
+      checked: true,
+      reminders: [
+        { reason: 'terms_review_expiring', outcome: 'sent' },
+        { reason: 'console_check_expired', outcome: 'undelivered' },
+      ],
+    };
+    mocks.remind.mockResolvedValue(run);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual(run);
+  });
+
   it('answers 500 when the shared state cannot be read, so the next run tries again', async () => {
     mocks.remind.mockRejectedValue(new Error('store unreachable'));
 

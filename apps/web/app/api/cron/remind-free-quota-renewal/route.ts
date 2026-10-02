@@ -18,10 +18,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const run = await remindFreeQuotaRenewals(Date.now());
+    if (!run.checked) {
+      logger.info(
+        { event: 'free_quota_renewal_skipped', missing: run.missing },
+        'Free quota renewal check finished',
+      );
+      return NextResponse.json(run);
+    }
+    if (run.reminders.some((reminder) => reminder.outcome === 'undelivered')) {
+      logger.error(
+        { event: 'free_quota_renewal_undelivered', reminders: run.reminders },
+        'Free quota renewal check could not tell anyone; the next run tries again',
+      );
+      return NextResponse.json(run, { status: 500 });
+    }
     logger.info(
-      run.checked
-        ? { event: 'free_quota_renewal_checked', reminders: run.reminders }
-        : { event: 'free_quota_renewal_skipped', missing: run.missing },
+      { event: 'free_quota_renewal_checked', reminders: run.reminders },
       'Free quota renewal check finished',
     );
     return NextResponse.json(run);

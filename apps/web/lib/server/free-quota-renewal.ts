@@ -26,6 +26,7 @@ import { loadFreePools, termsReviewStanding, type FreeQuotaTermsReview } from '.
 import { loadFreeQuotaPolicy, sharedFreeQuotaStore } from './free-quota-catalogue';
 
 const REMINDER_PREFIX = 'agi-fquota-renewal';
+const REMINDER_LEASE_SECONDS = 15 * 60;
 const REMINDER_RETENTION_SECONDS = 120 * 24 * 60 * 60;
 const PAGER_SOURCE = 'free-quota-renewal';
 const OPERATOR_QUOTA_PATH = '/operator#quota';
@@ -236,63 +237,95 @@ async function deliver(
   const html = alertHtml(message.text);
   const [paged, sent] = await Promise.all([
     pageOnCall(message.severity, message.subject, message.text, undefined, PAGER_SOURCE),
-    Promise.all(
+    Promise.allSettled(
       recipients.map((to) =>
         sendSupportEmail({ to, subject: message.subject, text: message.text, html }),
       ),
     ),
   ]);
-  return { paged, emailed: sent.filter((result) => result.delivered).length };
+  let emailed = 0;
+  for (const result of sent) {
+    if (result.status === 'fulfilled') {
+      if (result.value.delivered) emailed += 1;
+      continue;
+    }
+    logger.error(
+      { event: 'free_quota_renewal_email_failed', error: result.reason },
+      '[free-quota] a renewal reminder email could not be sent',
+    );
+  }
+  return { paged, emailed };
 }
 
-async function claimReminder(
+async function sendReminder(
+  alert: FreeQuotaRenewalAlert,
+  recipients: () => Promise<readonly string[]>,
+): Promise<boolean> {
+  const message = describeFreeQuotaRenewal(alert, environmentLabel());
+  const { paged, emailed } = await deliver(message, await recipients());
+  const delivered = emailed > 0 || paged === 'paged';
+  const fields = {
+    event: delivered
+      ? 'free_quota_renewal_reminder_sent'
+      : 'free_quota_renewal_reminder_undeliverable',
+    reason: alert.reason,
+    severity: message.severity,
+    emailed,
+    paged,
+  };
+  if (!delivered) {
+    logger.error(fields, '[free-quota] renewal reminder reached nobody; the next run tries again');
+  } else if (message.severity === 'critical') {
+    logger.error(fields, '[free-quota] free quota models are off; platform admins were told');
+  } else {
+    logger.warn(fields, '[free-quota] a free quota gate runs out soon; platform admins were told');
+  }
+  return delivered;
+}
+
+async function settleClaim(
+  store: KeyValueStore,
+  alert: FreeQuotaRenewalAlert,
+  delivered: boolean,
+  nowMs: number,
+): Promise<void> {
+  try {
+    if (delivered) {
+      await store.set(
+        dedupeKey(alert),
+        { atMs: nowMs },
+        { ttlSeconds: REMINDER_RETENTION_SECONDS },
+      );
+    } else {
+      await store.delete(dedupeKey(alert));
+    }
+  } catch (error) {
+    logger.error(
+      { event: 'free_quota_renewal_claim_unsettled', reason: alert.reason, delivered, error },
+      '[free-quota] a renewal reminder claim could not be settled; its lease runs out before the next run',
+    );
+  }
+}
+
+async function remindOnce(
   store: KeyValueStore,
   alert: FreeQuotaRenewalAlert,
   nowMs: number,
-): Promise<boolean> {
-  return store.set(
+  recipients: () => Promise<readonly string[]>,
+): Promise<FreeQuotaReminderOutcome> {
+  const claimed = await store.set(
     dedupeKey(alert),
     { atMs: nowMs },
-    { onlyIfAbsent: true, ttlSeconds: REMINDER_RETENTION_SECONDS },
+    { onlyIfAbsent: true, ttlSeconds: REMINDER_LEASE_SECONDS },
   );
-}
-
-async function sendClaimedReminder(
-  store: KeyValueStore,
-  alert: FreeQuotaRenewalAlert,
-  recipients: readonly string[],
-): Promise<FreeQuotaReminderOutcome> {
+  if (!claimed) return 'already_sent';
   let delivered = false;
   try {
-    const message = describeFreeQuotaRenewal(alert, environmentLabel());
-    const { paged, emailed } = await deliver(message, recipients);
-    delivered = emailed > 0 || paged === 'paged';
-    const fields = {
-      event: delivered
-        ? 'free_quota_renewal_reminder_sent'
-        : 'free_quota_renewal_reminder_undeliverable',
-      reason: alert.reason,
-      severity: message.severity,
-      emailed,
-      paged,
-    };
-    if (!delivered) {
-      logger.error(
-        fields,
-        '[free-quota] renewal reminder reached nobody; the next run tries again',
-      );
-    } else if (message.severity === 'critical') {
-      logger.error(fields, '[free-quota] free quota models are off; platform admins were told');
-    } else {
-      logger.warn(
-        fields,
-        '[free-quota] a free quota gate runs out soon; platform admins were told',
-      );
-    }
-    return delivered ? 'sent' : 'undelivered';
+    delivered = await sendReminder(alert, recipients);
   } finally {
-    if (!delivered) await store.delete(dedupeKey(alert));
+    await settleClaim(store, alert, delivered, nowMs);
   }
+  return delivered ? 'sent' : 'undelivered';
 }
 
 export async function remindFreeQuotaRenewals(nowMs: number): Promise<FreeQuotaRenewalRun> {
@@ -322,15 +355,21 @@ export async function remindFreeQuotaRenewals(nowMs: number): Promise<FreeQuotaR
     nowMs,
   });
   if (alerts.length === 0) return { checked: true, reminders: [] };
-  const claimed = await Promise.all(alerts.map((alert) => claimReminder(store, alert, nowMs)));
-  const recipients = claimed.some(Boolean) ? await platformAdminAddresses() : [];
-  const outcomes = await Promise.all(
-    alerts.map((alert, index): Promise<FreeQuotaReminderOutcome> | FreeQuotaReminderOutcome =>
-      claimed[index] ? sendClaimedReminder(store, alert, recipients) : 'already_sent',
-    ),
+  let addresses: Promise<readonly string[]> | undefined;
+  const recipients = () => (addresses ??= platformAdminAddresses());
+  const settled = await Promise.allSettled(
+    alerts.map((alert) => remindOnce(store, alert, nowMs, recipients)),
   );
   return {
     checked: true,
-    reminders: alerts.map((alert, index) => ({ reason: alert.reason, outcome: outcomes[index]! })),
+    reminders: alerts.map((alert, index) => {
+      const result = settled[index]!;
+      if (result.status === 'fulfilled') return { reason: alert.reason, outcome: result.value };
+      logger.error(
+        { event: 'free_quota_renewal_reminder_failed', reason: alert.reason, error: result.reason },
+        '[free-quota] a renewal reminder failed before it reached anyone; the next run tries again',
+      );
+      return { reason: alert.reason, outcome: 'undelivered' };
+    }),
   };
 }

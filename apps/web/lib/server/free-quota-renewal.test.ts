@@ -64,7 +64,8 @@ vi.mock('./free-pools', async (importOriginal) => {
 });
 
 const API_KEY = 'fixture-provider-key';
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 const NOW = Date.UTC(2026, 9, 2, 15);
 const policy = loadFreeQuotaPolicy();
 const LEAD_MS = policy.renewalReminderLeadMs;
@@ -152,6 +153,10 @@ function admin(id: string, email: string, verified = true): IdentityUser {
 
 function emailedTo(): string[] {
   return mocks.email.mock.calls.map(([input]) => (input as { to: string }).to);
+}
+
+function emailedSubjects(): string[] {
+  return mocks.email.mock.calls.map(([input]) => (input as { subject: string }).subject);
 }
 
 beforeEach(() => {
@@ -319,7 +324,7 @@ describe('sending the reminders', () => {
 
     expect(mocks.identity).toHaveBeenCalledTimes(2);
 
-    expect(await remindFreeQuotaRenewals(NOW + 60 * 60 * 1000)).toEqual({
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
       checked: true,
       reminders: [{ reason: 'console_check_expiring', outcome: 'already_sent' }],
     });
@@ -409,7 +414,7 @@ describe('sending the reminders', () => {
     });
 
     mocks.email.mockResolvedValue({ delivered: true, providerMessageId: 'message-2' });
-    expect(await remindFreeQuotaRenewals(NOW + 60 * 60 * 1000)).toEqual({
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
       checked: true,
       reminders: [{ reason: 'console_check_expired', outcome: 'sent' }],
     });
@@ -418,13 +423,84 @@ describe('sending the reminders', () => {
   it('keeps a reminder whose sending failed outright for the next run', async () => {
     await writeQuotaAttestation(mocks.store, attestation({ checkedAtMs: NOW - VALID_MS }));
     mocks.email.mockRejectedValue(new Error('transport failed'));
+    mocks.page.mockResolvedValue('unconfigured');
 
-    await expect(remindFreeQuotaRenewals(NOW)).rejects.toThrow('transport failed');
+    expect(await remindFreeQuotaRenewals(NOW)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_expired', outcome: 'undelivered' }],
+    });
 
     mocks.email.mockResolvedValue({ delivered: true, providerMessageId: 'message-3' });
-    expect(await remindFreeQuotaRenewals(NOW + 60 * 60 * 1000)).toEqual({
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
       checked: true,
       reminders: [{ reason: 'console_check_expired', outcome: 'sent' }],
     });
+  });
+
+  it('counts a reminder the pager delivered while an email transport failed', async () => {
+    await writeQuotaAttestation(mocks.store, attestation({ checkedAtMs: NOW - VALID_MS }));
+    mocks.email.mockRejectedValue(new Error('transport failed'));
+
+    expect(await remindFreeQuotaRenewals(NOW)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_expired', outcome: 'sent' }],
+    });
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_expired', outcome: 'already_sent' }],
+    });
+    expect(mocks.page).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the other reminders when one claim cannot be stored, and that one on the next run', async () => {
+    mocks.termsReview = review({ expiresAtMs: NOW + DAY_MS });
+    await writeQuotaAttestation(mocks.store, attestation({ checkedAtMs: NOW - VALID_MS + DAY_MS }));
+    const set = mocks.store.set.bind(mocks.store);
+    let failures = 1;
+    vi.spyOn(mocks.store, 'set').mockImplementation(async (key, value, options) => {
+      if (key.includes('console_check_expiring') && failures-- > 0) {
+        throw new Error('transient store failure');
+      }
+      return set(key, value, options);
+    });
+
+    expect(await remindFreeQuotaRenewals(NOW)).toEqual({
+      checked: true,
+      reminders: [
+        { reason: 'terms_review_expiring', outcome: 'sent' },
+        { reason: 'console_check_expiring', outcome: 'undelivered' },
+      ],
+    });
+    expect(emailedSubjects()).toEqual([expect.stringContaining('renew the terms review')]);
+
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
+      checked: true,
+      reminders: [
+        { reason: 'terms_review_expiring', outcome: 'already_sent' },
+        { reason: 'console_check_expiring', outcome: 'sent' },
+      ],
+    });
+    expect(emailedSubjects()).toEqual([
+      expect.stringContaining('renew the terms review'),
+      expect.stringContaining('renew the console check'),
+    ]);
+  });
+
+  it('lets the next run send a reminder whose run died while sending it', async () => {
+    let storeNowMs = NOW;
+    mocks.store = createMemoryKeyValueStore({ now: () => storeNowMs });
+    await writeQuotaAttestation(mocks.store, attestation({ checkedAtMs: NOW - VALID_MS }));
+    mocks.page.mockResolvedValue('unconfigured');
+    mocks.email.mockReturnValueOnce(new Promise(() => {}));
+    void remindFreeQuotaRenewals(NOW);
+    await vi.waitFor(() => expect(mocks.email).toHaveBeenCalledTimes(1));
+
+    storeNowMs = NOW + HOUR_MS;
+
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'console_check_expired', outcome: 'sent' }],
+    });
+    expect(mocks.email).toHaveBeenCalledTimes(2);
   });
 });

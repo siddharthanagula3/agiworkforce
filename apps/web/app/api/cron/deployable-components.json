@@ -684,7 +684,7 @@
       "produces": [],
       "consumes": [],
       "inFlightWork": {
-        "holds": "Nothing; each reminder is claimed in the key-value store under its gate and the record it is about before it is sent, and a claim that reached nobody is released for the next run.",
+        "holds": "Nothing beyond a 15-minute lease per reminder in the key-value store: each reminder is claimed under its gate and the record it is about before it is sent, kept only once it reaches someone, and a run that fails or is cut off leaves at most a lease that runs out before the next run.",
         "recovery": "next-tick"
       },
       "changelog": [
