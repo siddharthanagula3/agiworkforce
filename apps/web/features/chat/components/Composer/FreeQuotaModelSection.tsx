@@ -134,17 +134,16 @@ function ReadyRow({
 function UnavailableRow({
   entry,
   selected,
-  explained,
   explanation,
   onExplain,
 }: {
   entry: FreeModelEntry;
   selected: boolean;
-  explained: boolean;
-  explanation: string;
+  explanation: string | null;
   onExplain: (id: string) => void;
 }) {
   const reasonId = useId();
+  const explanationId = useId();
   return (
     <>
       <button
@@ -153,7 +152,7 @@ function UnavailableRow({
         aria-disabled="true"
         aria-pressed={selected}
         aria-label={entry.label.displayName}
-        aria-describedby={reasonId}
+        aria-describedby={explanation ? `${reasonId} ${explanationId}` : reasonId}
         onClick={() => onExplain(entry.model.key)}
         className={MUTED_ROW_CLASS}
       >
@@ -167,11 +166,13 @@ function UnavailableRow({
           <Check className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         )}
       </button>
-      {explained && (
-        <p role="status" className="px-3 pb-2 text-xs leading-5 text-foreground">
-          {explanation}
-        </p>
-      )}
+      <p
+        id={explanationId}
+        role="status"
+        className={explanation ? 'px-3 pb-2 text-xs leading-5 text-foreground' : undefined}
+      >
+        {explanation}
+      </p>
     </>
   );
 }
@@ -269,8 +270,9 @@ export function FreeQuotaModelSection({
         key={entry.model.key}
         entry={entry}
         selected={entry.model.key === selectedId}
-        explained={explainedId === entry.model.key}
-        explanation={unavailableExplanation(entry, fallbackModelName)}
+        explanation={
+          explainedId === entry.model.key ? unavailableExplanation(entry, fallbackModelName) : null
+        }
         onExplain={setExplainedId}
       />
     );

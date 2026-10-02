@@ -48,6 +48,10 @@ function name(key: string): string {
   return providerOfferingLabel(key)!.displayName;
 }
 
+function literal(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function model(key: string, status: FreeQuotaStatus = 'ready'): FreeQuotaModel {
   const offering = offerings[key]!;
   return {
@@ -177,11 +181,31 @@ describe('Free section in the composer', () => {
 
     fireEvent.click(spent);
     expect(onSelect).not.toHaveBeenCalled();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      `${ISSUER}'s free allowance for ${name(exhausted)} is used up.`,
+    expect(spent).toHaveAccessibleDescription(
+      new RegExp(
+        `${ISSUER}'s free allowance for .+ is used up\\..+Choose ${FALLBACK} or another free model\\.$`,
+      ),
     );
-    expect(screen.getByRole('status')).toHaveTextContent(
-      `Choose ${FALLBACK} or another free model.`,
+  });
+
+  it('announces why through a live region that is on the page before the row is pressed', () => {
+    const unavailable = familyB[0]!;
+    renderSection(
+      sources(source('ready', catalogue([model(familyA[0]!), model(unavailable, 'unavailable')]))),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
+    const row = screen.getByRole('button', { name: name(unavailable) });
+    const region = screen.getByRole('status');
+    expect(region).toBeEmptyDOMElement();
+    expect(row).toHaveAccessibleDescription(/Not available right now$/);
+
+    fireEvent.click(row);
+
+    const explanation = `${name(unavailable)} from ${ISSUER} is not available right now. Choose ${FALLBACK} or another free model.`;
+    expect(screen.getByRole('status')).toBe(region);
+    expect(region).toHaveTextContent(explanation);
+    expect(row).toHaveAccessibleDescription(
+      new RegExp(`Not available right now ${literal(explanation)}$`),
     );
   });
 
