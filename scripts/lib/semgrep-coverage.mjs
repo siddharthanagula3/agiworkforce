@@ -292,7 +292,6 @@ function requirement(expression) {
 }
 
 function reachable(requires, present) {
-  if (Array.isArray(requires)) return true;
   const { evaluate, labels } = requirement(requires ?? DEFAULT_LABEL);
   const available = [...labels].filter((label) => present.has(label));
   requireValue(available.length <= 16, 'Taint label requirement is too large to qualify.');
@@ -758,9 +757,14 @@ export async function qualifyInternalCoverage({
             rule[`pattern-${kind}s`].flatMap((_, index) =>
               found.has(`coverage-${kind}-${index}`) ? [index] : [],
             );
-          const sources = indices('source');
           const sinks = indices('sink');
-          if (sources.length === 0 || sinks.length === 0) continue;
+          if (sinks.length === 0) continue;
+          requireValue(
+            sinks.every((index) => !Array.isArray(rule['pattern-sinks'][index].requires)),
+            'Internal warning has a potential sink and remains unresolved.',
+          );
+          const sources = indices('source');
+          if (sources.length === 0) continue;
           const present = new Set([
             ...sources.map((index) => rule['pattern-sources'][index].label ?? DEFAULT_LABEL),
             ...(rule['pattern-propagators'] ?? []).flatMap((propagator) => propagator.label ?? []),

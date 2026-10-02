@@ -383,6 +383,19 @@ test('per-metavariable label requirements are never assumed unreachable', async 
   );
 });
 
+test('per-metavariable label requirements fail closed in a file with no source', async () => {
+  await assert.rejects(
+    fixture((state) => {
+      withMatches('coverage-sink-0')(state);
+      state.bundle.rules[0]['pattern-sinks'][0].requires = [{ $VALUE: 'not CLEAN' }];
+      state.bundle.rules[0]['pattern-propagators'] = [
+        { pattern: 'Object.assign($TO, $FROM)', from: '$FROM', to: '$TO' },
+      ];
+    }, 'replay-warning'),
+    (error) => error.message === unresolved,
+  );
+});
+
 test('a malformed label requirement fails closed', async () => {
   await assert.rejects(
     fixture((state) => {
