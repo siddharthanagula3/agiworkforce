@@ -11,6 +11,7 @@ import {
   isAutoModeModelId,
   normalizeModelId,
 } from '@agiworkforce/types';
+import { FREE_ALLOWANCE_EXHAUSTED_CODE } from '@agiworkforce/cloud-contracts';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import { logger } from '@/lib/logger';
 import { getRequestId, getTraceContext } from '@/lib/observability/trace-context';
@@ -100,8 +101,7 @@ const PICK_A_MODEL = 'pick a specific model from the model picker';
 export const FREE_USAGE_LIMIT_REACHED_MESSAGE =
   'You have reached the free usage limit on your account. Open Usage to see when it resets, or use your own provider key to keep going. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
 
-/** The wire code for the spent allowance every Free account shares; the protocol's name for it. */
-export const FREE_ALLOWANCE_EXHAUSTED_CODE = 'free_allowance_exhausted';
+export { FREE_ALLOWANCE_EXHAUSTED_CODE };
 
 // The free plan has one model and no Auto, so its copy names the only move left.
 const FREE_ROUTER_SHARED_CAPACITY =

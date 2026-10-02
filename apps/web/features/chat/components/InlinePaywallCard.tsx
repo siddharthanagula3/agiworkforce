@@ -55,6 +55,7 @@ import {
 } from '@agiworkforce/types';
 
 export { normalizePaywallFeature };
+import type { FreeLimitReason } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
 import { formatCatalogPrice, planUsageComparisonLabel } from '@features/billing/lib/plan-display';
 import {
@@ -93,6 +94,13 @@ export interface FreeCapacityRecovery {
   onRetry: () => void;
 }
 
+export interface FreeLimitRecovery {
+  modelName: string;
+  reason: FreeLimitReason;
+  alternativeModel?: { id: string; name: string };
+  onSwitchModel?: (modelId: string) => void;
+}
+
 export interface InlinePaywallCardProps {
   feature: PaywallFeature;
   currentTier: UserTier;
@@ -116,6 +124,7 @@ export interface InlinePaywallCardProps {
   recoveryAction?: PaywallRecoveryAction;
   /** Present only for the free lane's capacity refusal; selects that variant. */
   freeCapacity?: FreeCapacityRecovery;
+  freeLimit?: FreeLimitRecovery;
   onUpgrade: () => void;
   onDismiss: () => void;
   alternativeModel?: { id: string; name: string };
@@ -266,6 +275,55 @@ const CtaButtons = memo(function CtaButtons({
 });
 CtaButtons.displayName = 'CtaButtons';
 
+const FREE_LIMIT_HEADLINE: Readonly<Record<FreeLimitReason, (modelName: string) => string>> = {
+  allowance_used: (modelName) => `Free limit reached for ${modelName}`,
+  allowance_ended: (modelName) => `The free offer for ${modelName} has ended`,
+  shared_pool_used: (modelName) => `Free limit reached for ${modelName}`,
+};
+
+interface FreeLimitActionsProps {
+  freeLimit: FreeLimitRecovery;
+  showUpgradeCta: boolean;
+  requiredTier: RequiredTier;
+  onUpgrade: () => void;
+  onDismiss: () => void;
+}
+
+const FreeLimitActions = memo(function FreeLimitActions({
+  freeLimit,
+  showUpgradeCta,
+  requiredTier,
+  onUpgrade,
+  onDismiss,
+}: FreeLimitActionsProps) {
+  const { alternativeModel, onSwitchModel } = freeLimit;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {alternativeModel && onSwitchModel ? (
+        <Button
+          type="button"
+          size="sm"
+          className="font-semibold"
+          onClick={() => onSwitchModel(alternativeModel.id)}
+        >
+          {`Switch to ${alternativeModel.name}`}
+        </Button>
+      ) : null}
+
+      {showUpgradeCta ? (
+        <Button type="button" variant="outline" size="sm" onClick={onUpgrade}>
+          {paywallRecoveryLabel('upgrade', requiredTier)}
+        </Button>
+      ) : null}
+
+      <Button variant="ghost" size="sm" onClick={onDismiss}>
+        Try later
+      </Button>
+    </div>
+  );
+});
+FreeLimitActions.displayName = 'FreeLimitActions';
+
 const COUNTDOWN_TICK_MS = 1_000;
 const FREE_CAPACITY_HEADLINE = 'No free capacity right now';
 const FREE_CAPACITY_BYOK_LABEL = 'Use your own key';
@@ -367,6 +425,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   resetLabel = EMPTY_REASON,
   recoveryAction = 'upgrade',
   freeCapacity,
+  freeLimit,
   onUpgrade,
   onDismiss,
   alternativeModel,
@@ -387,20 +446,23 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   // none of that copy: every `paywallLimitHeadline` says "you have reached
   // your…", which would blame a user whose only mistake was arriving while a
   // shared pool was busy.
-  const headline = freeCapacity
-    ? FREE_CAPACITY_HEADLINE
-    : !showUpgradeCta
-      ? paywallLimitHeadline(feature)
-      : effectiveAction === 'manage_billing'
-        ? `Update billing to continue ${paywallUpgradeLabel(feature)}`
-        : effectiveAction === 'view_usage'
-          ? paywallLimitHeadline(feature)
-          : effectiveAction === 'subscribe'
-            ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`
-            : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`;
+  const headline = freeLimit
+    ? FREE_LIMIT_HEADLINE[freeLimit.reason](freeLimit.modelName)
+    : freeCapacity
+      ? FREE_CAPACITY_HEADLINE
+      : !showUpgradeCta
+        ? paywallLimitHeadline(feature)
+        : effectiveAction === 'manage_billing'
+          ? `Update billing to continue ${paywallUpgradeLabel(feature)}`
+          : effectiveAction === 'view_usage'
+            ? paywallLimitHeadline(feature)
+            : effectiveAction === 'subscribe'
+              ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`
+              : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`;
   const sellsPlan =
     showUpgradeCta &&
     !freeCapacity &&
+    !freeLimit &&
     (effectiveAction === 'upgrade' || effectiveAction === 'subscribe');
   const requiredPlanUsage = sellsPlan ? planUsageComparisonLabel(requiredTier) : null;
 
@@ -413,7 +475,11 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       <CardHeader className="pb-3">
         <div className="flex items-center">
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-fill/10 text-warning-text">
-            <FeatureIcon feature={feature} />
+            {freeLimit ? (
+              <Gauge className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <FeatureIcon feature={feature} />
+            )}
           </span>
           <CardTitle
             id="paywall-card-title"
@@ -424,6 +490,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
             {/* Non-plan recovery must not advertise a tier badge. */}
             {showUpgradeCta &&
             !freeCapacity &&
+            !freeLimit &&
             recoveryAction !== 'manage_billing' &&
             recoveryAction !== 'view_usage' ? (
               <TierBadge tier={requiredTier} />
@@ -464,7 +531,15 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       </CardContent>
 
       <CardFooter className="pt-4">
-        {freeCapacity ? (
+        {freeLimit ? (
+          <FreeLimitActions
+            freeLimit={freeLimit}
+            showUpgradeCta={showUpgradeCta}
+            requiredTier={requiredTier}
+            onUpgrade={onUpgrade}
+            onDismiss={onDismiss}
+          />
+        ) : freeCapacity ? (
           <FreeCapacityActions
             freeCapacity={freeCapacity}
             showUpgradeCta={showUpgradeCta}

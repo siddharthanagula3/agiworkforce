@@ -205,15 +205,63 @@ describe('useChatStream', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('shows quota exhaustion without generic retry guidance', async () => {
-    const message =
-      'This model’s free quota has been exhausted. Choose another model in Free to continue.';
+  it('shows a reached free limit as a limit card, never as an error row', async () => {
+    const [[limitedKey, limited], [alternativeKey, alternative]] = Object.entries(
+      getProviderOfferings(),
+    ).filter(([, offering]) => offering.quotaProbeProtocol === 'chat');
+    const message = `${limited!.displayName} has reached its free limit.`;
     vi.mocked(fetch).mockResolvedValue(
       new Response(
         JSON.stringify({
-          error: { code: 'free_quota_exhausted', message },
+          error: {
+            code: 'free_quota_exhausted',
+            message,
+            free_limit: {
+              model: limitedKey,
+              reason: 'allowance_used',
+              alternative_model: alternativeKey,
+            },
+          },
         }),
         { status: 409 },
+      ),
+    );
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: limitedKey,
+      });
+    });
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.content).toBe('');
+    expect(assistant?.error).toBe(false);
+    expect(assistant?.metadata?.paywall).toMatchObject({
+      reason: message,
+      freeLimit: {
+        modelId: limitedKey,
+        modelName: limited!.displayName,
+        reason: 'allowance_used',
+        alternativeModel: { id: alternativeKey, name: alternative!.displayName },
+      },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries the reset time a usage refusal names onto its card', async () => {
+    const resetsAt = '2099-01-01T00:00:00.000Z';
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'monthly_limit_exceeded',
+            message: 'Usage budget exhausted for this billing period.',
+            resets_at: resetsAt,
+          },
+        }),
+        { status: 402 },
       ),
     );
     const { result } = renderHook(() => useChatStream());
@@ -223,10 +271,7 @@ describe('useChatStream', () => {
     const assistant = useChatStore
       .getState()
       .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
-    expect(assistant?.content).toBe(message);
-    expect(assistant?.metadata?.errorCode).toBe('free_quota_exhausted');
-    expect(assistant?.content).not.toMatch(/try again|start a new chat/i);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(assistant?.metadata?.paywall?.resetAt).toBe(resetsAt);
   });
 
   it('keeps artifact formatting instructions out of the visible and persisted user turn', async () => {

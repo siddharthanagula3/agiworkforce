@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import {
+  getDefaultModelFor,
+  getModelMetadataById,
+  getProviderOfferings,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
+import { isAccountWideUsageBlock } from '@/features/chat/stores/account-usage-block';
 import { resolveQuotaPaywallSlot } from './quotaPaywallSlot';
 
 const base = {
@@ -62,5 +69,101 @@ describe('resolveQuotaPaywallSlot', () => {
 
     expect(slot?.recoveryAction).toBe('upgrade');
     expect(slot?.requiredTier).toBe('pro');
+  });
+});
+
+describe('resolveQuotaPaywallSlot · a reached free limit', () => {
+  const offerings = Object.entries(getProviderOfferings()).filter(
+    ([, offering]) => offering.quotaProbeProtocol === 'chat',
+  );
+  const [limitedKey, limited] = offerings[0]!;
+  const [alternativeKey, alternative] = offerings[1]!;
+  const freeRouter = getDefaultModelFor(normalizeBillingPlanTier(null), 'chat');
+  const message = 'The free limit for this model is reached.';
+
+  it('builds the limit card from the typed refusal, never the generic error row', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_quota_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      freeLimit: { model: limitedKey, reason: 'allowance_used', alternative_model: alternativeKey },
+    });
+
+    expect(slot).toMatchObject({
+      reason: message,
+      recoveryAction: 'upgrade',
+      showUpgradeCta: true,
+      showResetTime: false,
+      freeLimit: {
+        modelId: limitedKey,
+        modelName: limited.displayName,
+        reason: 'allowance_used',
+        alternativeModel: { id: alternativeKey, name: alternative.displayName },
+      },
+    });
+    expect(slot?.resetAt).toBeUndefined();
+  });
+
+  it('carries the reset time the refusal names', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_allowance_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      requestedModel: freeRouter,
+      resetAt: '2026-10-02T20:00:00.000Z',
+    });
+
+    expect(slot).toMatchObject({
+      showResetTime: true,
+      resetAt: '2026-10-02T20:00:00.000Z',
+      freeLimit: { modelId: freeRouter, reason: 'shared_pool_used' },
+    });
+  });
+
+  it('reads the shared free pool from its code when the route sends no typed limit', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_allowance_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      requestedModel: freeRouter,
+    });
+
+    expect(slot?.freeLimit).toEqual({
+      modelId: freeRouter,
+      modelName: getModelMetadataById(freeRouter)!.name,
+      reason: 'shared_pool_used',
+    });
+    expect(slot?.showResetTime).toBe(false);
+  });
+
+  it('drops an alternative it cannot name instead of offering a blank switch', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_quota_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      freeLimit: {
+        model: limitedKey,
+        reason: 'allowance_used',
+        alternative_model: 'not-a-registry-model',
+      },
+    });
+
+    expect(slot?.freeLimit?.alternativeModel).toBeUndefined();
+  });
+
+  it('keeps the limit on the turn that hit it rather than blocking the account', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_quota_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      freeLimit: { model: limitedKey, reason: 'allowance_used' },
+    });
+
+    expect(isAccountWideUsageBlock(slot!)).toBe(false);
   });
 });

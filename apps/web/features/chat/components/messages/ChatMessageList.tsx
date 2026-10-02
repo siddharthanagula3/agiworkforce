@@ -710,6 +710,20 @@ const MessageRow = memo(function MessageRow({
         : undefined,
     [paywall?.freeCapacity, onRegenerate, handleRegenerate],
   );
+  const freeLimitRecovery = useMemo(
+    () =>
+      paywall?.freeLimit
+        ? {
+            modelName: paywall.freeLimit.modelName,
+            reason: paywall.freeLimit.reason,
+            ...(paywall.freeLimit.alternativeModel
+              ? { alternativeModel: paywall.freeLimit.alternativeModel }
+              : {}),
+            ...(onRegenerateWithModel ? { onSwitchModel: handlePaywallSwitchModel } : {}),
+          }
+        : undefined,
+    [paywall?.freeLimit, onRegenerateWithModel, handlePaywallSwitchModel],
+  );
   const handleRegenerateImage = useCallback(
     (opts: ImageRevisionRequest) => onRegenerateImage!(message.id, opts),
     [onRegenerateImage, message.id],
@@ -754,6 +768,7 @@ const MessageRow = memo(function MessageRow({
               resetLabel={paywallResetLabel(paywall)}
               recoveryAction={paywall.recoveryAction ?? 'upgrade'}
               {...(freeCapacityRecovery ? { freeCapacity: freeCapacityRecovery } : {})}
+              {...(freeLimitRecovery ? { freeLimit: freeLimitRecovery } : {})}
               {...(paywallAlternative
                 ? { alternativeModel: paywallAlternative, onSwitchModel: handlePaywallSwitchModel }
                 : {})}

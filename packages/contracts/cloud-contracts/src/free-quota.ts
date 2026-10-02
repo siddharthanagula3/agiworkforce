@@ -4,6 +4,7 @@ export const FREE_QUOTA_CATALOGUE_PATH = '/api/models/free-quota';
 export const FREE_QUOTA_COMPLETIONS_PATH = '/api/models/free-quota/completions';
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_QUOTA_EXPIRED_CODE = 'free_quota_expired';
+export const FREE_ALLOWANCE_EXHAUSTED_CODE = 'free_allowance_exhausted';
 
 export const FREE_LIMIT_REASONS = [
   'allowance_used',

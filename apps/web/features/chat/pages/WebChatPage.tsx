@@ -4943,9 +4943,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRegenerateWithModel = useCallback(
     async (id: string, modelId: string) => {
-      await handleRegenerateMessage(id, resolveSelectableModelId(modelId));
+      const targetModelId = resolveSelectableModelId(modelId);
+      const limitCard = displayedMessages.find((message) => message.id === id)?.metadata?.paywall;
+      if (limitCard && !(await handleConversationModelChange(targetModelId))) return;
+      await handleRegenerateMessage(id, targetModelId);
     },
-    [handleRegenerateMessage],
+    [displayedMessages, handleConversationModelChange, handleRegenerateMessage],
   );
 
   const lastAssistantMessage = useMemo(
