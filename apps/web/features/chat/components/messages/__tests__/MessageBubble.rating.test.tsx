@@ -189,6 +189,25 @@ describe('telling us why an answer was bad', () => {
     expect(within(form).getByText(RESPONSE_RATING_SHARING_NOTE)).toBeVisible();
   });
 
+  it('names everything the rating is stored with, in the note under the form', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const sent = sentBody(0).metadata as unknown as Record<string, unknown>;
+    const note = within(screen.getByRole('form', { name: 'Tell us more' })).getByText(
+      RESPONSE_RATING_SHARING_NOTE,
+    ).textContent;
+    expect(sent['conversation_id']).toBe('conv-1');
+    expect(sent['message_id']).toBe('msg-1');
+    expect(sent['user_agent']).toEqual(expect.any(String));
+    expect(note).toContain('your account');
+    expect(note).toContain('this chat and response IDs');
+    expect(note).toContain('your browser and device details');
+    expect(note).toContain('The response text is not attached.');
+  });
+
   it('sends the reason and the comment with the rating it completes', async () => {
     render(<MessageBubble message={assistantMessage()} />);
 

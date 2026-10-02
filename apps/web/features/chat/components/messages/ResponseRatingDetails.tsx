@@ -30,7 +30,7 @@ export const RESPONSE_RATING_REASON_LABELS: Record<ResponseRatingReason, string>
 };
 
 export const RESPONSE_RATING_SHARING_NOTE =
-  "Your rating, reason and comment go to the AGI team with this response's ID and your browser type. The response text is not attached.";
+  'Your rating, reason and comment are saved with your account, this chat and response IDs, and your browser and device details. The response text is not attached.';
 
 export interface ResponseRatingDetailsInput {
   reason: ResponseRatingReason | null;
