@@ -759,6 +759,58 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
     expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 
+  it('counts and records only listed models when a read after a lapse drops a selected one', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const lapsing = record({
+      checkedAtMs: SERVER_NOW - 30 * DAY_MS + 10_000,
+      freshUntilMs: SERVER_NOW + 10_000,
+      offerings: 2,
+    });
+    serve(
+      [
+        configured({ attestation: { standing: 'expiring', record: lapsing } }),
+        configured({
+          nowMs: SERVER_NOW + 60_000,
+          attestation: { standing: 'stale', record: lapsing },
+          offerings: OFFERINGS.filter((offering) => offering.key !== 'fixture-offering-video'),
+          serving: NOTHING_SERVING,
+        }),
+      ],
+      {
+        status: 200,
+        body: {
+          checkedAtMs: SERVER_NOW + 60_000,
+          freshUntilMs: SERVER_NOW + 31 * DAY_MS,
+          offerings: 1,
+        },
+      },
+    );
+    const user = userEvent.setup();
+    render(<FreeQuotaAttestationPanel />);
+    expect(await screen.findByText('2 selected')).toBeInTheDocument();
+
+    vi.mocked(Date.now).mockReturnValue(SERVER_NOW + CLIENT_AHEAD_MS + 60_000);
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(await screen.findByText(/Free models are off/)).toBeInTheDocument();
+
+    const group = screen.getByRole('group', { name: 'Models confirmed in the console' });
+    expect(within(group).queryByRole('checkbox', { name: /fixture-video-model/ })).toBeNull();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /I checked just now/ }));
+    await user.click(screen.getByRole('button', { name: 'Record console check' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('the models you selected (1)');
+    await user.click(within(dialog).getByRole('button', { name: 'Record check' }));
+
+    await waitFor(() => expect(network.posts).toHaveLength(1));
+    expect(network.posts[0]!.body).toEqual({
+      checkedAtMs: 'now',
+      quotaOnlyOfferings: ['fixture-offering-chat'],
+    });
+  });
+
   it('offers no record of every model when no model can be listed', async () => {
     const user = userEvent.setup();
     serve([configured({ attestation: { standing: 'missing', record: null }, offerings: [] })]);

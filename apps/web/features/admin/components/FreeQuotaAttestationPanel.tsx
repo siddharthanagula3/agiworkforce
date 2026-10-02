@@ -231,6 +231,17 @@ function attestedKeys(status: ConfiguredStatus): Set<string> {
   );
 }
 
+function recordedKeys(
+  status: ConfiguredStatus,
+  coverage: Coverage | null,
+  selected: ReadonlySet<string>,
+): string[] {
+  if (coverage === null) return [];
+  return status.offerings
+    .filter((offering) => coverage === 'all' || selected.has(offering.key))
+    .map((offering) => offering.key);
+}
+
 function modelCount(count: number, qualifier = ''): string {
   return `${formatCount(count)} ${qualifier}${count === 1 ? 'model' : 'models'}`;
 }
@@ -391,8 +402,7 @@ export default function FreeQuotaAttestationPanel() {
 
   function requestRecord(current: ConfiguredStatus) {
     if (coverage === null || tickedAtMs === null) return;
-    const offerings =
-      coverage === 'all' ? current.offerings.map((offering) => offering.key) : [...selected];
+    const offerings = recordedKeys(current, coverage, selected);
     if (offerings.length === 0) return;
     const covered =
       coverage === 'all'
@@ -508,13 +518,10 @@ function ConfiguredView({
   onRecord,
 }: ConfiguredViewProps) {
   const everyListed = coverage === 'all';
+  const recorded = recordedKeys(status, coverage, selected);
   const staleTick = tickLapsed(tickedAtMs, nowMs, status.recordWindowMs);
   const confirmed = tickedAtMs !== null && !staleTick;
-  const canRecord =
-    confirmed &&
-    !busy &&
-    ((coverage === 'all' && status.offerings.length > 0) ||
-      (coverage === 'selected' && selected.size > 0));
+  const canRecord = confirmed && !busy && recorded.length > 0;
 
   return (
     <>
@@ -665,9 +672,7 @@ function ConfiguredView({
               ))
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {formatCount(everyListed ? status.offerings.length : selected.size)} selected
-          </p>
+          <p className="text-xs text-muted-foreground">{formatCount(recorded.length)} selected</p>
         </fieldset>
 
         <label className={CHOICE_CLASS}>
