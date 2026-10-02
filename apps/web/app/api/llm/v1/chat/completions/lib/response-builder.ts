@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import { secureToken } from '@/lib/secure-random';
@@ -451,6 +452,20 @@ export async function buildNonStreamResponse(
   return response;
 }
 
+const MS_PER_SECOND = 1_000;
+
+function sharedPoolFreeLimit(requestedModel: string, shape: UpstreamErrorShape): FreeLimit {
+  return {
+    model: requestedModel,
+    reason: 'shared_pool_used',
+    ...(shape.retryAfterSeconds !== undefined
+      ? {
+          resets_at: new Date(Date.now() + shape.retryAfterSeconds * MS_PER_SECOND).toISOString(),
+        }
+      : {}),
+  };
+}
+
 export function buildUpstreamErrorResponse(
   error: unknown,
   provider: string,
@@ -520,7 +535,12 @@ export function buildUpstreamErrorResponse(
         type: shape.type,
         code: shape.code,
         retryable: classified.retryable,
-        ...(shape.code === FREE_ALLOWANCE_EXHAUSTED_CODE ? { recovery: FREE_LANE_RECOVERY } : {}),
+        ...(shape.code === FREE_ALLOWANCE_EXHAUSTED_CODE
+          ? {
+              recovery: FREE_LANE_RECOVERY,
+              free_limit: sharedPoolFreeLimit(requestedModel, shape),
+            }
+          : {}),
       },
     },
     { status: shape.status },

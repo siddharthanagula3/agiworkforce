@@ -5,6 +5,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn() },
 }));
 
+import { FreeLimitSchema } from '@agiworkforce/cloud-contracts';
+import { getRoutingSlotModel } from '@agiworkforce/types';
 import { buildUpstreamErrorResponse } from './response-builder';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
@@ -65,6 +67,63 @@ describe('buildUpstreamErrorResponse', () => {
         expect.objectContaining({ action: 'upgrade' }),
         expect.objectContaining({ action: 'byok' }),
       ]),
+    );
+  });
+
+  it('states the spent shared allowance as a typed free limit any client can read', async () => {
+    const freeAuto = getRoutingSlotModel('router_zero_cost');
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 2, 12), toFake: ['Date'] });
+    try {
+      const withReset = buildUpstreamErrorResponse(
+        Object.assign(upstreamError('429 Rate limit exceeded: free-models-per-day', 429), {
+          retryAfterSeconds: 3_600,
+        }),
+        'open_router',
+        freeAuto,
+        freeAuto,
+        'user-1',
+        'request-1',
+        'streaming',
+      );
+      const withoutReset = buildUpstreamErrorResponse(
+        upstreamError('429 Rate limit exceeded: free-models-per-day', 429),
+        'open_router',
+        freeAuto,
+        freeAuto,
+        'user-1',
+        'request-2',
+        'non-streaming',
+      );
+
+      const timed = (await withReset.json()) as { error: { free_limit?: unknown } };
+      const untimed = (await withoutReset.json()) as { error: { free_limit?: unknown } };
+      expect(FreeLimitSchema.parse(timed.error.free_limit)).toEqual({
+        model: freeAuto,
+        reason: 'shared_pool_used',
+        resets_at: '2026-10-02T13:00:00.000Z',
+      });
+      expect(FreeLimitSchema.parse(untimed.error.free_limit)).toEqual({
+        model: freeAuto,
+        reason: 'shared_pool_used',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends no free limit for a refusal that is not the shared free allowance', async () => {
+    const response = buildUpstreamErrorResponse(
+      upstreamError('Google API rate limit exceeded (429)', 429),
+      'google',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
+      'user-1',
+      'request-1',
+      'streaming',
+    );
+
+    expect(((await response.json()) as { error: { free_limit?: unknown } }).error.free_limit).toBe(
+      undefined,
     );
   });
 
