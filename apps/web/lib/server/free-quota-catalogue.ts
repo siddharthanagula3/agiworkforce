@@ -190,10 +190,17 @@ export async function resolveReadyFreeQuotaOffering(
     protocol: ProviderOffering['quotaProbeProtocol'];
     needsImageInput: boolean;
     excludeKey?: string;
+    ranking?: readonly string[];
   },
 ): Promise<string | null> {
   const decisions = await resolveFreeQuotaDecisions(context, { inventory: input.inventory });
-  const ready = decisions?.offerings.find(
+  if (!decisions) return null;
+  const candidates = input.ranking
+    ? input.ranking.flatMap((key) =>
+        decisions.offerings.filter(({ entry }) => entry.offeringKey === key),
+      )
+    : decisions.offerings;
+  const ready = candidates.find(
     ({ entry, offering, decision }) =>
       entry.offeringKey !== input.excludeKey &&
       decision.status === 'ready' &&

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { getProviderOffering } from '@agiworkforce/types';
 import {
   eligibleFreeEligibility,
   evaluateFreePoolEntry,
@@ -147,6 +148,31 @@ describe('the shipped configuration', () => {
     const inventory = loadFreePools().inventory!;
     expect(inventory.termsReview).toBeNull();
     expect(reviewedQuotaOfferingKeys(inventory, NOW_MS).size).toBe(0);
+  });
+
+  it('ranks the Free Auto fallback over observed chat offerings, each named once', () => {
+    const pools = loadFreePools();
+    const inventory = pools.inventory!;
+    const fallback = inventory.freeAutoFallback!;
+    expect(fallback.offeringKeys.length).toBeGreaterThan(0);
+    expect(
+      fallback.offeringKeys.every((key) => getProviderOffering(key)?.quotaProbeProtocol === 'chat'),
+    ).toBe(true);
+    const imageKey = inventory.entries.find(
+      (candidate) => getProviderOffering(candidate.offeringKey)?.category === 'image',
+    )!.offeringKey;
+    for (const offeringKeys of [
+      [...fallback.offeringKeys, fallback.offeringKeys[0]!],
+      ['qwen-quota-unobserved'],
+      [imageKey],
+    ]) {
+      expect(() =>
+        parseFreePoolsDocument({
+          ...pools,
+          inventory: { ...inventory, freeAutoFallback: { ...fallback, offeringKeys } },
+        }),
+      ).toThrow();
+    }
   });
 
   it('clears only named offerings during a favorable, current review window', () => {

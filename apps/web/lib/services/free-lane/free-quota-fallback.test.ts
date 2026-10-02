@@ -7,6 +7,7 @@ import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
 import {
   credentialSha256,
   readFreeQuotaState,
+  recordFreeQuotaHold,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { loadFreePools } from '@/lib/server/free-pools';
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   plan: vi.fn(),
   persistUser: vi.fn(),
   hydrate: vi.fn(),
+  spendOnCapacityShortage: null as boolean | null,
 }));
 
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
@@ -95,6 +97,14 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
             expiresAtMs: Date.now() + 86_400_000,
             approvedOfferingKeys: inventory.entries.map((entry) => entry.offeringKey),
           },
+          ...(inventory.freeAutoFallback && mocks.spendOnCapacityShortage !== null
+            ? {
+                freeAutoFallback: {
+                  ...inventory.freeAutoFallback,
+                  spendOnCapacityShortage: mocks.spendOnCapacityShortage,
+                },
+              }
+            : {}),
         },
       };
     },
@@ -132,6 +142,8 @@ const servableChat = servableFreeQuotaOfferings(inventory, { apiKey: API_KEY, no
 const textOnlyKeys = servableChat
   .filter(({ offering }) => offering.quotaChatImageInput !== true)
   .map(({ key }) => key);
+const ranking = inventory.freeAutoFallback?.offeringKeys ?? [];
+const rankedReady = ranking.filter((key) => servableChat.some((entry) => entry.key === key));
 
 function refusal(code: string, status = 429): Response {
   return Response.json({ error: { code, message: 'Free Auto could not answer.' } }, { status });
@@ -227,6 +239,7 @@ beforeEach(async () => {
   mocks.media.mockReset();
   mocks.otherProvider.mockReset();
   mocks.persistUser.mockReset().mockResolvedValue({ id: USER_MESSAGE_ID });
+  mocks.spendOnCapacityShortage = null;
   mocks.hydrate.mockReset().mockImplementation(async (messages) => {
     const latest = messages.at(-1);
     if (latest && Array.isArray(latest.content)) {
@@ -248,10 +261,7 @@ afterEach(() => {
 });
 
 describe('Free Auto falls back to a ready free quota model on the server', () => {
-  it.each([
-    ['free_allowance_exhausted', 'free_limit_reached'],
-    ['free_capacity_unavailable', 'free_capacity_unavailable'],
-  ])('answers a turn refused with %s and names the reason %s', async (code, reason) => {
+  it('answers a turn Free Auto refused for its spent allowance and names the reason', async () => {
     mocks.stream.mockResolvedValue(
       sse(
         JSON.stringify({
@@ -261,16 +271,64 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
       ),
     );
 
-    const served = await fallBack(refusal(code));
+    const served = await fallBack(refusal('free_allowance_exhausted'));
 
     expect(served?.status).toBe(200);
-    expect(served?.headers.get('X-AGI-Fallback-Reason')).toBe(reason);
+    expect(served?.headers.get('X-AGI-Fallback-Reason')).toBe('free_limit_reached');
     const resolved = served?.headers.get('X-AGI-Resolved-Model');
     expect(servableChat.map(({ key }) => key)).toContain(resolved);
     expect(mocks.stream).toHaveBeenCalledTimes(1);
     expect(mocks.stream.mock.calls[0]![0]).toBe(resolved);
     expect(await served!.text()).toContain('Answered for free.');
     expect(mocks.otherProvider).not.toHaveBeenCalled();
+  });
+
+  it('answers from the first ready model of the configured ranking, not the inventory order', async () => {
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    const served = await fallBack(refusal('free_allowance_exhausted'));
+
+    expect(rankedReady.length).toBeGreaterThan(1);
+    expect(served?.headers.get('X-AGI-Resolved-Model')).toBe(rankedReady[0]);
+    expect(rankedReady[0]).not.toBe(servableChat[0]!.key);
+  });
+
+  it('moves down the ranking past a model whose free allowance is spent', async () => {
+    await recordFreeQuotaHold(mocks.store, {
+      apiKey: API_KEY,
+      offeringKey: rankedReady[0]!,
+      cause: 'exhausted',
+      nowMs: Date.now(),
+    });
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+
+    const served = await fallBack(refusal('free_allowance_exhausted'));
+
+    expect(served?.headers.get('X-AGI-Resolved-Model')).toBe(rankedReady[1]);
+  });
+
+  it('keeps the refusal once every ranked model is spent, without spending one left out', async () => {
+    expect(ranking.length).toBeGreaterThan(0);
+    for (const offeringKey of ranking) {
+      await recordFreeQuotaHold(mocks.store, {
+        apiKey: API_KEY,
+        offeringKey,
+        cause: 'exhausted',
+        nowMs: Date.now(),
+      });
+    }
+
+    expect(await fallBack(refusal('free_allowance_exhausted'))).toBeNull();
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('leaves a momentary capacity shortage to Free Auto unless the ranking spends on it', async () => {
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    expect(await fallBack(refusal('free_capacity_unavailable'))).toBeNull();
+    expect(mocks.stream).not.toHaveBeenCalled();
+
+    mocks.spendOnCapacityShortage = true;
+    const served = await fallBack(refusal('free_capacity_unavailable'));
+    expect(served?.headers.get('X-AGI-Fallback-Reason')).toBe('free_capacity_unavailable');
   });
 
   it('leaves the user message to the turn that already saved it', async () => {

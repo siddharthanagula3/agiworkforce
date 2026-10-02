@@ -103,14 +103,28 @@ export async function serveFreeQuotaFallback(input: {
   scopedDb: () => Promise<UserScopedDb>;
 }): Promise<Response | null> {
   const reason = await refusalFallbackReason(input.refusal);
-  if (!reason) return null;
-  const turn = freeAutoTurn(await input.replay.json().catch(() => null));
   const inventory = loadFreePools().inventory;
-  if (!turn || !inventory) return null;
+  const ranking = inventory?.freeAutoFallback;
+  if (
+    !reason ||
+    !inventory ||
+    !ranking ||
+    (reason === 'free_capacity_unavailable' && !ranking.spendOnCapacityShortage)
+  ) {
+    return null;
+  }
+  const turn = freeAutoTurn(await input.replay.json().catch(() => null));
+  if (!turn) return null;
   try {
     const model = await resolveReadyFreeQuotaOffering(
       freeQuotaContextFor({ url: input.request.url, userId: input.userId }),
-      { inventory, category: 'chat', protocol: 'chat', needsImageInput: readsImages(turn) },
+      {
+        inventory,
+        category: 'chat',
+        protocol: 'chat',
+        needsImageInput: readsImages(turn),
+        ranking: ranking.offeringKeys,
+      },
     );
     if (!model) return null;
     const served = await serveFreeQuotaTurn(input.request, await input.scopedDb(), {
