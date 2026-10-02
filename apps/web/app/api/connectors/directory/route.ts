@@ -117,7 +117,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       } satisfies ConnectorDirectoryListResponse,
       {
         status: 200,
-        headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' },
+        headers: {
+          'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+          'Vercel-CDN-Cache-Control': 'max-age=3600, stale-while-revalidate=86400',
+          Vary: 'Origin',
+        },
       },
     );
   } catch (error) {

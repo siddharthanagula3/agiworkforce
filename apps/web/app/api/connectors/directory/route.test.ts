@@ -218,6 +218,18 @@ describe('GET /api/connectors/directory', () => {
     expect(body.categories).toContain('Productivity');
   });
 
+  it('lets the CDN hold the public listing for an hour, keyed by origin, so visits do not reach the database', async () => {
+    const response = await GET(request());
+
+    expect(response.headers.get('vercel-cdn-cache-control')).toBe(
+      'max-age=3600, stale-while-revalidate=86400',
+    );
+    expect(response.headers.get('vary')?.split(/\s*,\s*/)).toContain('Origin');
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=300',
+    );
+  });
+
   it('filters by search across name, publisher, description and tool names', async () => {
     await expect(ids('?search=invoices')).resolves.toEqual(['io.github.someone/tool']);
     await expect(ids('?search=someone')).resolves.toEqual(['io.github.someone/tool']);
