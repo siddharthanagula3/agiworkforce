@@ -90,6 +90,21 @@ describe('release notes describe capabilities the code actually carries', () => 
     );
   });
 
+  it('speaks of the CLI v1.0 release only in the past tense now that the repository no longer holds it', () => {
+    const cli = noteFor('2026-05-03');
+    expect(cli.headline).not.toMatch(/\blive\b/i);
+    const body = cli.body.join(' ');
+    expect(body).toContain('a GitHub release this repository no longer holds');
+    for (const present of [
+      /\byet\b/i,
+      /\bworks against\b/i,
+      /\brefuses\b/i,
+      /\bdoes not carry\b/i,
+    ]) {
+      expect(body).not.toMatch(present);
+    }
+  });
+
   it('speaks of the Tauri build only in the past tense once it has left the public download flows', () => {
     expect(noteFor('2026-09-15').body.join(' ')).toContain(
       'The earlier Tauri build leaves the public download flows',

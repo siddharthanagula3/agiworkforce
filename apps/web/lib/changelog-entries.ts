@@ -83,9 +83,9 @@ export const RELEASES: readonly Release[] = [
   },
   {
     date: '2026-05-03',
-    headline: 'CLI v1.0 · live',
+    headline: 'CLI v1.0',
     body: [
-      'Pure Rust binary on five platforms, published as five archives on the GitHub Release. Neither install route works against that release yet: the Homebrew tap repository is private, and install.sh refuses to install without the signed checksum manifest the release does not carry.',
+      'Pure Rust binary on five platforms, published as five archives on a GitHub release this repository no longer holds. Neither install route worked against it: the Homebrew tap repository is private, and install.sh refused to install without the signed checksum manifest that release did not carry.',
       'Cleanup pass: removed ~70 codex-rs port crates and a large net of dead code. Audit closed most P0/P1 items.',
     ],
   },
