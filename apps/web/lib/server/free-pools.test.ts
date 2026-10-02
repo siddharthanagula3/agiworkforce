@@ -150,10 +150,23 @@ describe('the shipped configuration', () => {
     }
   });
 
-  it('does not clear promotional offerings merely because they appear in a quota inventory', () => {
+  it('clears the owner-reviewed offerings only inside the recorded review window', () => {
     const inventory = loadFreePools().inventory!;
-    expect(inventory.termsReview).toBeNull();
-    expect(reviewedQuotaOfferingKeys(inventory, NOW_MS).size).toBe(0);
+    const review = inventory.termsReview!;
+    expect(review.reviewedBy).toBe('founder');
+    expect(Object.values(review.terms).every(Boolean)).toBe(true);
+    expect(review.expiresAtMs).toBeGreaterThan(review.verifiedAtMs);
+    const active = new Set(
+      inventory.entries
+        .filter((entry) => entry.providerStatus === 'active')
+        .map((entry) => entry.offeringKey),
+    );
+    expect(review.approvedOfferingKeys.every((key) => active.has(key))).toBe(true);
+    expect(reviewedQuotaOfferingKeys(inventory, review.verifiedAtMs - 1).size).toBe(0);
+    expect(reviewedQuotaOfferingKeys(inventory, review.verifiedAtMs).size).toBe(
+      review.approvedOfferingKeys.length,
+    );
+    expect(reviewedQuotaOfferingKeys(inventory, review.expiresAtMs).size).toBe(0);
   });
 
   it('clears only named offerings during a favorable, current review window', () => {
