@@ -159,6 +159,72 @@ test('every url a zap alert lists has to fall inside its locations-scoped accept
   ]);
 });
 
+test('a zap location covers its own path and what sits below it, not every url containing it', () => {
+  const { errors, fail } = collector();
+  gateFindings({
+    findings: normalizeZapReport(
+      zapSite([
+        {
+          pluginid: '10099',
+          alertRef: '10099',
+          alert: 'Source Code Disclosure - Python',
+          riskcode: '2',
+          instances: [
+            { uri: 'http://127.0.0.1:3000/api-docs' },
+            { uri: 'http://127.0.0.1:3000/api-docs/streaming?lang=python#sdk' },
+            { uri: 'http://127.0.0.1:3000/gallery/python-data-pipeline' },
+            { uri: 'http://127.0.0.1:3000/api-docs-internal/dump' },
+            { uri: 'http://127.0.0.1:3000/admin/export?next=http://127.0.0.1:3000/gallery/x' },
+            { uri: 'http://127.0.0.1:3000/gallery' },
+            { uri: 'https://127.0.0.1:3000/api-docs' },
+          ],
+        },
+      ]),
+    ),
+    allowlist: [
+      {
+        ...entry({
+          id: '10099',
+          scanner: 'zap',
+          locations: ['http://127.0.0.1:3000/api-docs', 'http://127.0.0.1:3000/gallery/'],
+        }),
+        matched: 0,
+      },
+    ],
+    minSeverity: 'MEDIUM',
+    scanner: 'zap',
+    fail,
+  });
+
+  assert.deepEqual(errors, [
+    'unaccepted: http://127.0.0.1:3000/api-docs-internal/dump [MEDIUM] 10099, Source Code Disclosure - Python',
+    'unaccepted: http://127.0.0.1:3000/admin/export?next=http://127.0.0.1:3000/gallery/x [MEDIUM] 10099, Source Code Disclosure - Python',
+    'unaccepted: http://127.0.0.1:3000/gallery [MEDIUM] 10099, Source Code Disclosure - Python',
+    'unaccepted: https://127.0.0.1:3000/api-docs [MEDIUM] 10099, Source Code Disclosure - Python',
+  ]);
+});
+
+test('a zap location has to be an absolute url without a query or fragment', () => {
+  for (const location of [
+    '/api-docs',
+    'api-docs',
+    'http://127.0.0.1:3000/api-docs?lang=python',
+    'http://127.0.0.1:3000/gallery/#sql',
+    'file:///api-docs',
+  ]) {
+    const { errors, fail } = collector();
+    const allowlist = parseAllowlist(
+      { entries: [entry({ id: '10099', scanner: 'zap', locations: [location] })] },
+      { allowlistPath: ALLOWLIST_PATH, today: '2026-10-02', fail },
+    );
+
+    assert.equal(allowlist.length, 0, location);
+    assert.deepEqual(errors, [
+      `${ALLOWLIST_PATH} entries[0] (10099) "locations" for a zap entry must be absolute http or https URLs with no query or fragment.`,
+    ]);
+  }
+});
+
 test('an allowlist entry missing an owner, a reason or an expiry is rejected', () => {
   for (const override of [{ owner: 'siddhartha' }, { reason: '  ' }, { expires: 'soon' }]) {
     const { errors, fail } = collector();

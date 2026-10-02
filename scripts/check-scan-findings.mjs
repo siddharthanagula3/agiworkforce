@@ -131,6 +131,12 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
         );
         return;
       }
+      if (entry.scanner === 'zap' && entry.locations.some((value) => urlScope(value) === null)) {
+        fail(
+          `${label} (${entry.id}) "locations" for a zap entry must be absolute http or https URLs with no query or fragment.`,
+        );
+        return;
+      }
     }
     parsed.push({ ...entry, matched: 0 });
   });
@@ -138,11 +144,33 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
   return parsed;
 }
 
+function urlScope(value) {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol) || url.search !== '' || url.hash !== '') {
+    return null;
+  }
+  return url;
+}
+
+function withinUrlScope(location, candidate) {
+  const scope = urlScope(candidate);
+  if (scope === null || !URL.canParse(location)) return false;
+  const url = new URL(location);
+  if (url.origin !== scope.origin) return false;
+  const below = scope.pathname.endsWith('/') ? scope.pathname : `${scope.pathname}/`;
+  return url.pathname === scope.pathname || url.pathname.startsWith(below);
+}
+
 function matches(entry, finding) {
   if (entry.scanner !== finding.scanner) return false;
   if (entry.id !== finding.id) return false;
   if (entry.locations === undefined) return true;
-  return entry.locations.some((candidate) => finding.location.includes(candidate));
+  return entry.locations.some((candidate) =>
+    finding.scanner === 'zap'
+      ? withinUrlScope(finding.location, candidate)
+      : finding.location.includes(candidate),
+  );
 }
 
 export function gateFindings({ findings, allowlist, minSeverity, scanner, fail }) {
