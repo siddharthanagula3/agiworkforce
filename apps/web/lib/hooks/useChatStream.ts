@@ -1729,9 +1729,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const movedFromModel = response.headers.get(MOVED_FROM_MODEL_HEADER)?.trim();
   const movedReason = response.headers.get(MOVED_REASON_HEADER)?.trim();
   const isTurnContinuation = ctx.seedContent !== undefined;
-  if (streamFallbackReason) {
-    updateMessage(assistantMessageId, { fallbackReason: streamFallbackReason }, conversationId);
-  } else if (!isTurnContinuation) {
+  if (!isTurnContinuation) {
     updateMessage(assistantMessageId, { fallbackReason: undefined }, conversationId);
   }
   // Read here rather than at each caller so a continuation and a resumed run
@@ -1780,6 +1778,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   }
   const appendToMessage = store.appendToMessage;
   const appendToThinking = store.appendToThinking;
+  let fallbackDisclosed = false;
   const coalescedAppends = createFrameCoalescedAppender({
     onFlush: (kind, messageId, text) => {
       if (kind === 'thinking') {
@@ -1787,6 +1786,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         return;
       }
       appendToMessage(messageId, text, conversationId);
+      if (streamFallbackReason && !fallbackDisclosed) {
+        fallbackDisclosed = true;
+        updateMessage(messageId, { fallbackReason: streamFallbackReason }, conversationId);
+      }
       latencyTrace?.scheduleFirstPaint();
     },
   });

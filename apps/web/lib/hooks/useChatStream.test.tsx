@@ -3709,6 +3709,50 @@ describe('the transcript says what the turn is actually waiting for', () => {
     expect(activitySummaries()).toEqual([...unrotated, 'Switched to a backup model']);
   });
 
+  const FREE_LIMIT_FALLBACK = new Headers({ 'X-AGI-Fallback-Reason': 'free_limit_reached' });
+
+  function assistantRow() {
+    return useChatStore.getState().messages.find((message) => message.role === 'assistant');
+  }
+
+  it('says another free model answered once its reply arrives', async () => {
+    respondWith(ANSWERED, FREE_LIMIT_FALLBACK);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    expect(assistantRow()?.fallbackReason).toBe('free_limit_reached');
+  });
+
+  it('does not say another free model answered when that model produced no reply', async () => {
+    respondWith(
+      `data: ${JSON.stringify({
+        choices: [
+          {
+            index: 0,
+            delta: {
+              x_stream_error: {
+                message: 'The free model returned no answer.',
+                code: 'free_model_empty_response',
+                retryable: false,
+              },
+            },
+            finish_reason: null,
+          },
+        ],
+      })}\n\ndata: [DONE]\n\n`,
+      FREE_LIMIT_FALLBACK,
+    );
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    expect(assistantRow()?.metadata?.streamError).toBeDefined();
+    expect(assistantRow()?.fallbackReason).toBeUndefined();
+  });
+
   it('closes the waiting step as soon as the first token arrives', async () => {
     mockSseStream([{ choices: [{ delta: { content: 'hello' } }] }]);
     const { result } = renderHook(() => useChatStream());
