@@ -24,6 +24,20 @@ import {
 const ATOM = 'http://www.w3.org/2005/Atom';
 const RFC_3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
+const READER_TIME_ZONES = [
+  'Pacific/Pago_Pago',
+  'Pacific/Honolulu',
+  'America/Los_Angeles',
+  'America/Chicago',
+  'America/New_York',
+  'UTC',
+  'Europe/Berlin',
+  'Asia/Kolkata',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+  'Pacific/Noumea',
+];
+
 interface RegistryVersion {
   date: string | null;
   summary?: string;
@@ -107,6 +121,22 @@ function contentHtml(entry: Element): Document {
   return new DOMParser().parseFromString(text(entry, 'content'), 'text/html');
 }
 
+function paragraphs(entry: Element): string[] {
+  return Array.from(contentHtml(entry).querySelectorAll('p'), (node) => node.textContent ?? '');
+}
+
+function calendarDate(instant: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(instant));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
 function categoryTerms(entry: Element): (string | null)[] {
   return atomChildren(entry, 'category').map((node) => node.getAttribute('term'));
 }
@@ -162,10 +192,38 @@ describe('/changelog/feed.xml', () => {
 
     expect(updated).toHaveLength(RELEASES.length + DESCRIBED_VERSIONS.length);
     expect(policies.sort()).toEqual(
-      DESCRIBED_VERSIONS.map((version) => `${version.date}T00:00:00Z ${version.slug}`).sort(),
+      DESCRIBED_VERSIONS.map((version) => `${version.date}T12:00:00Z ${version.slug}`).sort(),
     );
     expect([...updated].sort().reverse()).toEqual(updated);
     expect(text(feed, 'updated')).toBe(updated[0]);
+  });
+
+  it('shows every entry on the day it is dated to readers from UTC-11 to UTC+11', async () => {
+    const feed = await servedFeed();
+
+    for (const node of [feed, ...atomChildren(feed, 'entry')]) {
+      const updated = text(node, 'updated');
+      for (const timeZone of READER_TIME_ZONES) {
+        expect(calendarDate(updated, timeZone), `${updated} in ${timeZone}`).toBe(
+          updated.slice(0, 10),
+        );
+      }
+    }
+  });
+
+  it('opens every policy entry with the date /changelog prints for it, then says what changed', async () => {
+    const entries = atomChildren(await servedFeed(), 'entry');
+
+    for (const version of DESCRIBED_VERSIONS) {
+      const entry = entries.find(
+        (node) =>
+          categoryTerms(node).includes(version.slug) &&
+          text(node, 'updated').startsWith(version.date),
+      );
+      const lines = entry ? paragraphs(entry) : [];
+      expect(lines[0], `${version.key} ${version.date}`).toMatch(new RegExp(`^${version.date}\\b`));
+      expect(lines.at(-1), `${version.key} ${version.date}`).toBe(version.summary);
+    }
   });
 
   it('dates a release that spans months by the first day of the month it ends in', async () => {
@@ -175,7 +233,7 @@ describe('/changelog/feed.xml', () => {
     );
 
     expect(span).toBeDefined();
-    if (span) expect(text(span, 'updated')).toBe('2026-05-01T00:00:00Z');
+    if (span) expect(text(span, 'updated')).toBe('2026-05-01T12:00:00Z');
   });
 
   it('carries every subprocessor list change the subprocessors page says can be followed', async () => {
@@ -185,11 +243,11 @@ describe('/changelog/feed.xml', () => {
 
     expect(SUBPROCESSOR_REVISIONS.length).toBeGreaterThan(1);
     expect(entries.map((entry) => text(entry, 'updated'))).toEqual(
-      SUBPROCESSOR_REVISIONS.map((revision) => `${revision.date}T00:00:00Z`),
+      SUBPROCESSOR_REVISIONS.map((revision) => `${revision.date}T12:00:00Z`),
     );
     entries.forEach((entry, index) => {
       expect(categoryTerms(entry)).toContain('policy');
-      expect(contentHtml(entry).body.textContent).toBe(SUBPROCESSOR_REVISIONS[index]?.summary);
+      expect(paragraphs(entry).at(-1)).toBe(SUBPROCESSOR_REVISIONS[index]?.summary);
     });
   });
 

@@ -21,6 +21,8 @@ const ATOM_NAMESPACE = 'http://www.w3.org/2005/Atom';
 
 const DATE_AT_END = /(\d{4}-\d{2})(-\d{2})?$/;
 
+const MIDDAY_UTC = 'T12:00:00Z';
+
 const XML_ESCAPES: Readonly<Record<string, string>> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -45,7 +47,7 @@ function escapeXml(text: string): string {
 function atomTimestamp(date: string): string {
   const [, yearMonth, day] = DATE_AT_END.exec(date) ?? [];
   if (!yearMonth) throw new Error(`The changelog date "${date}" does not end in a calendar date`);
-  return `${yearMonth}${day ?? '-01'}T00:00:00Z`;
+  return `${yearMonth}${day ?? '-01'}${MIDDAY_UTC}`;
 }
 
 function releaseEntries(): FeedEntry[] {
@@ -68,7 +70,7 @@ function policyEntries(): FeedEntry[] {
     title: `${change.history.label} updated`,
     updated: atomTimestamp(change.date),
     link: absoluteUrl(change.href),
-    paragraphs: [change.summary],
+    paragraphs: [`${change.date} · ${change.history.label}`, change.summary],
     categories: [
       { term: 'policy', label: 'Policy change' },
       { term: change.history.slug, label: change.history.label },
