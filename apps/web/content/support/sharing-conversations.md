@@ -25,8 +25,10 @@ dialog, or open the link to check what a reader sees.
 
 Choosing **Share** again on a chat that is already shared shows its link, with
 **Copy**, **Update link** and **Revoke share**, instead of offering a second
-link. **Update link** replaces the snapshot with the chat as it is now, and the
-address does not change.
+link. Messages you add after sharing are not added to the link until you update it.
+**Update link** replaces the snapshot with the chat as it is now, and the
+address does not change. It asks first, naming how many messages it adds and who
+can read them, because the snapshot it replaces cannot be restored.
 
 Switching the audience after the fact asks first, naming the change: "Make this
 readable by anyone with the link?" or "Limit this to your workspace?".

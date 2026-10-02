@@ -119,8 +119,31 @@ function ShareConversationDialogImpl({
     );
   };
 
-  const handleUpdateLink = async () => {
-    if (await updateLink()) toast.success('Link updated');
+  const handleUpdateLink = () => {
+    if (!activeShare) return;
+    const several = activeShare.linkCount > 1;
+    const readers = several
+      ? `This chat has ${activeShare.linkCount} live links, which may have gone to different people, and all of them change. Everyone who can open any of them`
+      : activeShare.audience === 'organization'
+        ? 'Everyone in your workspace'
+        : 'Anyone with the link';
+    const added =
+      activeShare.newMessages > 0
+        ? `, including ${activeShare.newMessagesVary ? 'up to ' : ''}${translateUiPlural(
+            'common',
+            'counts.messages',
+            activeShare.newMessages,
+            { one: '{{count}} message', other: '{{count}} messages' },
+          )} added since ${several ? 'they were' : 'it was'} shared`
+        : '';
+    confirm({
+      title: several ? `Update all ${activeShare.linkCount} links?` : 'Update the shared link?',
+      description: `${readers} will see this chat as it is now${added}. The snapshot ${several ? 'each link shows' : 'it shows'} today is replaced and cannot be restored.`,
+      confirmLabel: several ? 'Update all links' : 'Update link',
+      onConfirm: async () => {
+        if (await updateLink()) toast.success('Link updated');
+      },
+    });
   };
 
   const handleRevoke = () => {
@@ -178,7 +201,7 @@ function ShareConversationDialogImpl({
                   : `Anyone with this link can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}.`
                 : 'Create a read-only snapshot. New messages and future edits will not be added to it.'}
               {activeShare
-                ? ' Update link replaces it with the chat as it is now, at the same address.'
+                ? ' Messages added after it was shared stay private until you update the link, which keeps the same address.'
                 : null}
             </DialogDescription>
           </DialogHeader>
@@ -308,11 +331,7 @@ function ShareConversationDialogImpl({
                   <Trash2 className="me-2 h-4 w-4" />
                   Revoke share
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void handleUpdateLink()}
-                  disabled={isSharing}
-                >
+                <Button variant="outline" onClick={handleUpdateLink} disabled={isSharing}>
                   <RefreshCw className="me-2 h-4 w-4" />
                   Update link
                 </Button>

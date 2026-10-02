@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ShareConversationDialog } from './ShareConversationDialog';
@@ -522,6 +522,7 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     renderSavedChat();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Update link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update all links' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const [url, init] = fetchMock.mock.calls[1]!;
@@ -536,6 +537,80 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
       'https://agiworkforce.com/share/newest-token',
     );
     expect(screen.getByTestId('share-link-count')).toHaveTextContent('2 live links');
+  });
+
+  it('asks before updating, naming the new messages, who reads them and that it is final', async () => {
+    useChatStore.setState({
+      messages: ['first', 'second', 'third'].map((content, index) => ({
+        id: `fixture-${index}`,
+        role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+        content,
+        createdAt: `2026-08-11T00:00:0${index}.000Z`,
+      })),
+    });
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed([liveShare('live-token')]))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ refreshed: 1, tokens: ['live-token'], messageCount: 3 }), {
+          status: 200,
+        }),
+      );
+
+    renderSavedChat();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Update link' }));
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('Update the shared link?');
+    expect(confirmation).toHaveTextContent(
+      'Anyone with the link will see this chat as it is now, including 2 messages added since it was shared.',
+    );
+    expect(confirmation).toHaveTextContent('replaced and cannot be restored');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Update link' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        `/api/share?conversation_id=${SAVED_CONVERSATION_ID}`,
+        expect.objectContaining({ method: 'PUT' }),
+      ),
+    );
+  });
+
+  it('warns that every link changes when the chat was shared more than once', async () => {
+    useChatStore.setState({
+      messages: ['first', 'second', 'third'].map((content, index) => ({
+        id: `fixture-${index}`,
+        role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+        content,
+        createdAt: `2026-08-11T00:00:0${index}.000Z`,
+      })),
+    });
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        listed([
+          liveShare('newest-token', { messageCount: 2 }),
+          liveShare('older-token', { messageCount: 1 }),
+        ]),
+      );
+
+    renderSavedChat();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Update link' }));
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('Update all 2 links?');
+    expect(confirmation).toHaveTextContent(
+      'This chat has 2 live links, which may have gone to different people, and all of them change.',
+    );
+    expect(confirmation).toHaveTextContent(
+      'including up to 2 messages added since they were shared',
+    );
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('moves every live link to the chosen audience', async () => {

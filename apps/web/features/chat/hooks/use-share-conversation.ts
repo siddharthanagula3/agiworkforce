@@ -42,6 +42,8 @@ export interface ActiveConversationShare {
 
 export interface ConversationShare extends ActiveConversationShare {
   linkCount: number;
+  newMessages: number;
+  newMessagesVary: boolean;
 }
 
 interface InFlightShareRequest {
@@ -148,7 +150,8 @@ export function useShareConversation(
       ? (s.conversations.find((c) => c.id === conversationId)?.isTemporary ?? false)
       : false,
   );
-  const hasMessages = messages.length > 0;
+  const messageCount = messages.length;
+  const hasMessages = messageCount > 0;
   const storedConversationId =
     conversationId &&
     !isTemporary &&
@@ -166,14 +169,17 @@ export function useShareConversation(
   const activeShare = useMemo((): ConversationShare | null => {
     const newest = shownShares[0];
     if (!newest) return null;
+    const fewestShown = Math.min(...shownShares.map((share) => share.messageCount));
     return {
       ...newest,
       audience: shownShares.some((share) => share.audience === 'public')
         ? 'public'
         : 'organization',
       linkCount: shownShares.length,
+      newMessages: Math.max(0, messageCount - fewestShown),
+      newMessagesVary: shownShares.some((share) => share.messageCount !== fewestShown),
     };
-  }, [shownShares]);
+  }, [shownShares, messageCount]);
 
   useLayoutEffect(() => {
     if (open) setLookupPending(true);

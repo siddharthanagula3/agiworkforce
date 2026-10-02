@@ -1295,6 +1295,49 @@
       ]
     },
     {
+      "id": "share-new-messages-stay-private",
+      "doc": "sharing-conversations",
+      "section": "Change or revoke a link",
+      "kind": "prose",
+      "sentence": "Messages you add after sharing are not added to the link until you update it.",
+      "implementation": [
+        "apps/web/app/api/share/route.ts#handleCreateShare",
+        "apps/web/app/api/share/route.ts#handleRefreshConversationShares"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/share/route.test.ts",
+          "name": "creates a new link and leaves the live one untouched, as a create-only client expects"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+          "text": "Messages added after it was shared stay private until you update the link"
+        }
+      ]
+    },
+    {
+      "id": "share-update-link-asks-first",
+      "doc": "sharing-conversations",
+      "section": "Change or revoke a link",
+      "kind": "prose",
+      "sentence": "It asks first, naming how many messages it adds and who can read them, because the snapshot it replaces cannot be restored.",
+      "implementation": ["apps/web/features/chat/components/share/ShareConversationDialog.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "asks before updating, naming the new messages, who reads them and that it is final"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "warns that every link changes when the chat was shared more than once"
+        }
+      ]
+    },
+    {
       "id": "share-update-link-keeps-the-address",
       "doc": "sharing-conversations",
       "section": "Change or revoke a link",
