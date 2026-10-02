@@ -246,9 +246,10 @@ describe('provider-outage / credit-downgrade fallback reason reaches the streami
     render(
       <MessageBubble
         message={{
-          ...toChatMessage(assistant, CONVERSATION.id),
-          content: 'answer',
-          timestamp: new Date('2026-08-01T00:00:00.000Z'),
+          ...bubbleMessage(),
+          metadata: toChatMessage(assistant, CONVERSATION.id).metadata as Parameters<
+            typeof MessageBubble
+          >[0]['message']['metadata'],
         }}
       />,
     );
