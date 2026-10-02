@@ -7,6 +7,9 @@ import { parse } from 'yaml';
 const POLICY_PATH = '.github/security-gate-policy.json';
 const DENY_PATH = 'deny.toml';
 const MANIFEST_PATH = 'package.json';
+const LOCKFILE_PATH = 'pnpm-lock.yaml';
+const IMPORTER_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies'];
+const RUNTIME_FIELDS = ['dependencies', 'optionalDependencies'];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 export function collectContinueOnErrorSteps(workflow) {
@@ -37,6 +40,107 @@ export function parseDenyAdvisoryIgnores(denyToml) {
   return ignores;
 }
 
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function lockfilePackageName(key) {
+  return key.slice(0, key.indexOf('@', 1));
+}
+
+function lockfileDependencyKey(name, version) {
+  const reference = String(version);
+  return reference.split('(')[0].lastIndexOf('@') > 0 ? reference : `${name}@${reference}`;
+}
+
+function snapshotDependencies(snapshot) {
+  return RUNTIME_FIELDS.flatMap((field) =>
+    Object.entries(snapshot?.[field] ?? {}).map(([name, version]) =>
+      lockfileDependencyKey(name, version),
+    ),
+  );
+}
+
+function lockfileDependents(lockfile, waivedPackage) {
+  const dependents = new Set();
+  for (const [key, snapshot] of Object.entries(lockfile.snapshots)) {
+    if (
+      snapshotDependencies(snapshot).some(
+        (dependency) => lockfilePackageName(dependency) === waivedPackage,
+      )
+    ) {
+      dependents.add(lockfilePackageName(key));
+    }
+  }
+  return [...dependents].sort();
+}
+
+function lockfileImportersReaching(lockfile, waivedPackage) {
+  const reaches = (start) => {
+    const pending = [];
+    const seenImporters = new Set();
+    const seenSnapshots = new Set();
+    const visitImporter = (importer, fields) => {
+      if (seenImporters.has(importer)) return;
+      seenImporters.add(importer);
+      for (const field of fields) {
+        for (const [name, entry] of Object.entries(lockfile.importers[importer]?.[field] ?? {})) {
+          const version = String(entry?.version ?? '');
+          if (version.startsWith('link:')) {
+            visitImporter(path.posix.join(importer, version.slice('link:'.length)), RUNTIME_FIELDS);
+          } else {
+            pending.push(lockfileDependencyKey(name, version));
+          }
+        }
+      }
+    };
+    visitImporter(start, IMPORTER_FIELDS);
+    while (pending.length > 0) {
+      const key = pending.pop();
+      if (seenSnapshots.has(key)) continue;
+      seenSnapshots.add(key);
+      if (lockfilePackageName(key) === waivedPackage) return true;
+      pending.push(...snapshotDependencies(lockfile.snapshots[key]));
+    }
+    return false;
+  };
+  return Object.keys(lockfile.importers).filter(reaches).sort();
+}
+
+function auditWaiverScopeFailures(entry, lockfile) {
+  const scope = entry.dependents;
+  if (
+    typeof entry.package !== 'string' ||
+    !Array.isArray(scope?.packages) ||
+    !Array.isArray(scope?.importers)
+  ) {
+    return [
+      `exclusion ${entry.id} must name the waived package and the dependents and importers allowed to reach it`,
+    ];
+  }
+  if (!isRecord(lockfile?.importers) || !isRecord(lockfile?.snapshots)) {
+    return [
+      `exclusion ${entry.id} cannot be scoped without the importers and snapshots of ${LOCKFILE_PATH}`,
+    ];
+  }
+  const failures = [];
+  for (const dependent of lockfileDependents(lockfile, entry.package)) {
+    if (!scope.packages.includes(dependent)) {
+      failures.push(
+        `exclusion ${entry.id} waives ${entry.package} for ${scope.packages.join(', ')} only, but ${dependent} also depends on it in ${LOCKFILE_PATH}`,
+      );
+    }
+  }
+  for (const importer of lockfileImportersReaching(lockfile, entry.package)) {
+    if (!scope.importers.includes(importer)) {
+      failures.push(
+        `exclusion ${entry.id} waives ${entry.package} for ${scope.importers.join(', ')} only, but ${importer} also reaches it in ${LOCKFILE_PATH}`,
+      );
+    }
+  }
+  return failures;
+}
+
 export function parsePnpmAuditIgnores(manifest) {
   const auditConfig = manifest?.pnpm?.auditConfig ?? {};
   return [...(auditConfig.ignoreGhsas ?? []), ...(auditConfig.ignoreCves ?? [])];
@@ -48,6 +152,7 @@ export function checkSecurityGates({
   denyToml,
   workflows = {},
   manifest,
+  lockfile,
   today = new Date().toISOString().slice(0, 10),
 }) {
   const failures = [];
@@ -145,6 +250,7 @@ export function checkSecurityGates({
         `exclusion ${entry.id} expired on ${entry.expires}: fix the advisory or re-triage the waiver`,
       );
     }
+    failures.push(...auditWaiverScopeFailures(entry, lockfile));
     for (const advisory of entry.advisories ?? []) {
       if (!ignoredAdvisories.includes(advisory)) {
         failures.push(
@@ -163,6 +269,7 @@ function main() {
   const workflow = parse(fs.readFileSync(path.join(root, policy.workflow), 'utf8'));
   const denyToml = fs.readFileSync(path.join(root, DENY_PATH), 'utf8');
   const manifest = JSON.parse(fs.readFileSync(path.join(root, MANIFEST_PATH), 'utf8'));
+  const lockfile = parse(fs.readFileSync(path.join(root, LOCKFILE_PATH), 'utf8'));
 
   const workflows = {};
   for (const relativePath of new Set(
@@ -173,7 +280,14 @@ function main() {
     workflows[relativePath] = parse(fs.readFileSync(absolute, 'utf8'));
   }
 
-  const failures = checkSecurityGates({ policy, workflow, denyToml, workflows, manifest });
+  const failures = checkSecurityGates({
+    policy,
+    workflow,
+    denyToml,
+    workflows,
+    manifest,
+    lockfile,
+  });
   for (const entry of policy.exclusions ?? []) {
     if (entry.kind === 'allowlist-file' && !fs.existsSync(path.join(root, entry.path))) {
       failures.push(`exclusion ${entry.id} points at a missing allowlist: ${entry.path}`);
