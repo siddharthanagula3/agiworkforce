@@ -8,6 +8,7 @@ vi.mock('mermaid', () => ({
   default: {
     initialize: (...args: unknown[]) => initializeMock(...args),
     render: (...args: unknown[]) => renderMock(...args),
+    mermaidAPI: { getDiagramFromText: async () => ({ db: {} }) },
   },
 }));
 

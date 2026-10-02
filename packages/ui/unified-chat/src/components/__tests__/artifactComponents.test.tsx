@@ -27,6 +27,7 @@ vi.mock('mermaid', () => ({
   default: {
     initialize: vi.fn(),
     render: vi.fn().mockResolvedValue({ svg: '<svg data-testid="mermaid-svg"></svg>' }),
+    mermaidAPI: { getDiagramFromText: async () => ({ db: {} }) },
   },
 }));
 

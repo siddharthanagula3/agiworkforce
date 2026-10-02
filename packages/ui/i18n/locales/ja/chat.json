@@ -488,7 +488,14 @@
     "codeTitle": "{{language}} のコード",
     "codeBlockLabel": "{{language}} のコードブロック",
     "edit": "編集",
-    "editLabel": "このコードをチャットの横で編集"
+    "editLabel": "このコードをチャットの横で編集",
+    "imageFrom": "{{host}} の画像",
+    "loadImage": "画像を読み込む",
+    "loadImageLabel": "{{host}} から画像を読み込む",
+    "imageFailed": "画像を読み込めませんでした",
+    "imageFailedLabel": "画像を読み込めませんでした: {{alt}}",
+    "openImage": "画像を新しいタブで開く",
+    "openImageLabel": "画像を新しいタブで開く: {{alt}}"
   },
   "streaming": {
     "reconnecting": "再接続中…",

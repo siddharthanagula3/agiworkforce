@@ -5,7 +5,11 @@ const mermaidRender = vi.fn();
 const highlightToLines = vi.fn();
 
 vi.mock('mermaid', () => ({
-  default: { initialize: vi.fn(), render: (...args: unknown[]) => mermaidRender(...args) },
+  default: {
+    initialize: vi.fn(),
+    render: (...args: unknown[]) => mermaidRender(...args),
+    mermaidAPI: { getDiagramFromText: async () => ({ db: {} }) },
+  },
 }));
 vi.mock('../markdown/shikiHighlighter', () => ({
   readHighlightCache: () => null,

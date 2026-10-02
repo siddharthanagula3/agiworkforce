@@ -4,6 +4,7 @@ import type { MermaidConfig } from 'mermaid';
 import { reportClientFailure } from '../../lib/client-failures';
 import { sanitizeSvg } from '../ArtifactRenderer';
 import { renderMermaidInOwnedHost } from './mermaid-render';
+import { mermaidExternalResource } from './mermaidExternalResources';
 
 type RenderState =
   | { phase: 'idle' }
@@ -203,6 +204,12 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     void (async () => {
       try {
         const { default: mermaid } = await loadMermaid();
+        const externalResource = await mermaidExternalResource(mermaid.mermaidAPI, source);
+        if (cancelled) return;
+        if (externalResource) {
+          setState({ phase: 'failed', reason: externalResource });
+          return;
+        }
         const { svg } = await renderMermaidInOwnedHost(mermaid, diagramId, source, renderHost);
         if (cancelled) return;
         const sanitized = sanitizeSvg(bakeTextAnchor(svg));

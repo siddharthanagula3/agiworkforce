@@ -488,7 +488,14 @@
     "codeTitle": "Code {{language}}",
     "codeBlockLabel": "Bloc de code {{language}}",
     "edit": "Modifier",
-    "editLabel": "Modifier ce code à côté de la conversation"
+    "editLabel": "Modifier ce code à côté de la conversation",
+    "imageFrom": "Image de {{host}}",
+    "loadImage": "Charger l'image",
+    "loadImageLabel": "Charger l'image de {{host}}",
+    "imageFailed": "Impossible de charger l'image",
+    "imageFailedLabel": "Impossible de charger l'image: {{alt}}",
+    "openImage": "Ouvrir l'image dans un nouvel onglet",
+    "openImageLabel": "Ouvrir l'image dans un nouvel onglet: {{alt}}"
   },
   "streaming": {
     "reconnecting": "Reconnexion…",

@@ -488,7 +488,14 @@
     "codeTitle": "{{language}} 代码",
     "codeBlockLabel": "{{language}} 代码块",
     "edit": "编辑",
-    "editLabel": "在聊天旁编辑此代码"
+    "editLabel": "在聊天旁编辑此代码",
+    "imageFrom": "来自 {{host}} 的图片",
+    "loadImage": "加载图片",
+    "loadImageLabel": "从 {{host}} 加载图片",
+    "imageFailed": "图片加载失败",
+    "imageFailedLabel": "图片加载失败: {{alt}}",
+    "openImage": "在新标签页中打开图片",
+    "openImageLabel": "在新标签页中打开图片: {{alt}}"
   },
   "streaming": {
     "reconnecting": "正在重新连接…",

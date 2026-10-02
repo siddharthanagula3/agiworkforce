@@ -11,6 +11,13 @@ describe('MARKDOWN_SANITIZE_SCHEMA', () => {
     expect(srcProtocols).toContain('https');
   });
 
+  it('drops picture and source, whose srcset would fetch around the image gate', () => {
+    expect(defaultSchema.tagNames).toEqual(expect.arrayContaining(['picture', 'source']));
+    expect(MARKDOWN_SANITIZE_SCHEMA.tagNames).not.toContain('picture');
+    expect(MARKDOWN_SANITIZE_SCHEMA.tagNames).not.toContain('source');
+    expect(MARKDOWN_SANITIZE_SCHEMA.tagNames).toContain('img');
+  });
+
   it('does NOT widen href protocols (links cannot smuggle data: payloads)', () => {
     const hrefProtocols = MARKDOWN_SANITIZE_SCHEMA.protocols?.['href'] ?? [];
     const defaultHref = defaultSchema.protocols?.['href'] ?? [];
