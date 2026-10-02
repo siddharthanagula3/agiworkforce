@@ -9,7 +9,7 @@ import {
   type FreeQuotaContext,
   type FreeQuotaDecisions,
 } from './free-quota-catalogue';
-import { RENDER_CACHE_SECONDS, RENDER_CACHE_TAGS, cachedRenderInput } from './render-cache';
+import { RENDER_CACHE_SECONDS, RENDER_CACHE_TAGS, boundedRenderInput } from './render-cache';
 
 class UnsharedCatalogue extends Error {
   readonly #catalogue: FreeQuotaCatalogue;
@@ -59,10 +59,11 @@ export async function readSharedFreeQuotaCatalogue(
 ): Promise<FreeQuotaCatalogue | null> {
   if (context.localAttestation) return readCatalogue(context);
   try {
-    return await cachedRenderInput(() => readCatalogue(context), {
+    return await boundedRenderInput(() => readCatalogue(context), {
       keyParts: [RENDER_CACHE_TAGS.freeQuotaCatalogue],
       tags: [RENDER_CACHE_TAGS.freeQuotaCatalogue],
       revalidate: RENDER_CACHE_SECONDS.liveSignal,
+      nowMs: context.nowMs,
     })();
   } catch (error) {
     if (error instanceof UnsharedCatalogue) return error.catalogue;

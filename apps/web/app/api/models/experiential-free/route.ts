@@ -16,7 +16,7 @@ import {
 import {
   RENDER_CACHE_SECONDS,
   RENDER_CACHE_TAGS,
-  cachedRenderInput,
+  boundedRenderInput,
 } from '@/lib/server/render-cache';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 
@@ -34,12 +34,14 @@ async function verifiedOfferings(
 
 async function sharedOfferings(
   config: ExperientialFreeConfiguration,
+  nowMs: number,
 ): Promise<ExperientialFreeOffering[] | null> {
   try {
-    return await cachedRenderInput(() => verifiedOfferings(config), {
+    return await boundedRenderInput(() => verifiedOfferings(config), {
       keyParts: [RENDER_CACHE_TAGS.experientialFreeCatalogue],
       tags: [RENDER_CACHE_TAGS.experientialFreeCatalogue],
       revalidate: RENDER_CACHE_SECONDS.liveSignal,
+      nowMs,
     })();
   } catch (error) {
     if (error instanceof UnverifiedPromotions) return null;
@@ -59,7 +61,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const config = experientialFreeConfiguration();
   if (!config)
     return NextResponse.json(null, { headers: { 'Cache-Control': 'private, no-store' } });
-  const offerings = await sharedOfferings(config);
+  const nowMs = Date.now();
+  const offerings = await sharedOfferings(config, nowMs);
   if (!offerings) {
     return NextResponse.json(
       { error: 'Provider promotions could not be verified.' },
@@ -68,7 +71,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
   const result: FreeQuotaCatalogue = {
     issuer: 'Experiential Labs',
-    observedOn: new Date().toISOString().slice(0, 10),
+    observedOn: new Date(nowMs).toISOString().slice(0, 10),
     evidenceUrl: new URL('/api/models', config.baseUrl).href,
     reportedEligible: offerings.filter((entry) => entry.promotional).length,
     reportedUnavailable: offerings.filter((entry) => !entry.promotional).length,

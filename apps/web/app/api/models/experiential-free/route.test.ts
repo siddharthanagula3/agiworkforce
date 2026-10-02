@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 import { configuredExperientialFreeOfferings } from '@/lib/server/experiential-free';
+import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 type ScanModule0 = typeof import('next/cache');
 type ScanModule1 = typeof import('@/lib/api-auth');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -11,18 +12,18 @@ type ScanModule4 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule5 = typeof import('@/lib/server/experiential-free');
 
 const mocks = vi.hoisted(() => ({
-  cached: new Map<string, unknown>(),
   plan: 'free',
 }));
 
+const cache = await vi.hoisted(async () => {
+  const { createStaleWhileRevalidateCache } =
+    await import('@/test/next-cache-stale-while-revalidate');
+  return createStaleWhileRevalidateCache();
+});
+
 vi.mock('next/cache', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  unstable_cache:
-    (compute: () => Promise<unknown>, keyParts: string[]) => async (): Promise<unknown> => {
-      const key = keyParts.join('|');
-      if (!mocks.cached.has(key)) mocks.cached.set(key, await compute());
-      return mocks.cached.get(key);
-    },
+  unstable_cache: cache.unstable_cache,
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
@@ -53,7 +54,9 @@ const { GET } = await import('./route');
 const promoted = configuredExperientialFreeOfferings()[0]!;
 const promotedSlug = promoted.offering.providerModelId!;
 
-function provider(options: { grantsStatus?: number } = {}) {
+const LIVE_WINDOW_MS = RENDER_CACHE_SECONDS.liveSignal * 1_000;
+
+function provider(options: { grantsStatus?: number; promotionEnded?: boolean } = {}) {
   return vi.fn(async (url: URL) => {
     if (url.pathname === '/api/v1/models') {
       return options.grantsStatus
@@ -62,7 +65,9 @@ function provider(options: { grantsStatus?: number } = {}) {
             data: [{ id: `vendor/${promotedSlug}:free`, canonical_slug: promotedSlug }],
           });
     }
-    return Response.json({ promotions: [{ free: true, slugs: [promotedSlug] }] });
+    return Response.json({
+      promotions: options.promotionEnded ? [] : [{ free: true, slugs: [promotedSlug] }],
+    });
   });
 }
 
@@ -77,12 +82,20 @@ function ready(body: FreeQuotaCatalogue): string[] {
   return body.models.filter((model) => model.status === 'ready').map((model) => model.key);
 }
 
+function passLiveWindow() {
+  vi.setSystemTime(Date.now() + LIVE_WINDOW_MS + 1);
+}
+
 beforeEach(() => {
-  mocks.cached.clear();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  cache.clear();
   mocks.plan = 'free';
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 it('checks the provider promotions once for every Free account in the window', async () => {
   const fetch = provider();
@@ -119,4 +132,30 @@ it('answers a paid account without asking the provider', async () => {
 
   expect((await catalogue()).status).toBe(403);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('asks the provider again once the live window has passed, so an ended promotion is not served', async () => {
+  vi.stubGlobal('fetch', provider());
+  expect(ready((await catalogue()).body)).toEqual([promoted.key]);
+
+  passLiveWindow();
+  vi.stubGlobal('fetch', provider({ promotionEnded: true }));
+  const ended = await catalogue();
+
+  expect(ended.status).toBe(200);
+  expect(ready(ended.body)).toEqual([]);
+});
+
+it('refuses instead of serving the last promotions while the provider check keeps failing', async () => {
+  vi.stubGlobal('fetch', provider());
+  expect(ready((await catalogue()).body)).toEqual([promoted.key]);
+
+  passLiveWindow();
+  vi.stubGlobal('fetch', provider({ grantsStatus: 503 }));
+  const duringFailure = await catalogue();
+  await cache.settle();
+  const stillFailing = await catalogue();
+
+  expect(duringFailure.status).toBe(503);
+  expect(stillFailing.status).toBe(503);
 });
