@@ -97,6 +97,8 @@ describe('policy changes', () => {
     for (const key of Object.keys(REGISTRY.documents)) {
       for (const revision of datedRevisions(key).slice(1)) {
         const listed = `${key} ${revision.date}`;
+        expect(revision.summary?.trim(), listed).toBeTruthy();
+        expect(summaries.has(listed), listed).toBe(true);
         expect(summaries.get(listed), listed).toBe(revision.summary);
       }
     }
