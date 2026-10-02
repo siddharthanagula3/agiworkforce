@@ -45,6 +45,14 @@
       "expires": "2026-10-20",
       "locations": ["http://127.0.0.1:3000"],
       "reason": "Both flagged tags are Clerk's, served from its Frontend API host: @clerk/nextjs renders clerk-js (/npm/@clerk/clerk-js@6/dist/clerk.browser.js) and preloads @clerk/ui (/npm/@clerk/ui@1/dist/ui.browser.js) with no integrity attribute. Each URL names a major version Clerk updates in place, so no fixed hash can match it. First-party scripts are same-origin and outside this alert. Removing the CDN load means bundling @clerk/clerk-js and @clerk/ui into the build, a dependency change."
+    },
+    {
+      "id": "10099",
+      "scanner": "zap",
+      "owner": "@siddharthanagula3",
+      "expires": "2027-03-31",
+      "locations": ["http://127.0.0.1:3000/api-docs", "http://127.0.0.1:3000/gallery/"],
+      "reason": "Public code samples, not server source. /api-docs renders the SDK examples in apps/web/content/api-docs/code-samples.json (the evidence is their 'for chunk in stream:'), and /gallery/<id> renders the fixed examples in apps/web/app/gallery/inspiration.ts (python-data-pipeline, sql-user-accounts-schema). Both pages exist to show code. Scoped to those two paths, so the same alert on any other URL still fails."
     }
   ]
 }
