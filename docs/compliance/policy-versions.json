@@ -433,7 +433,7 @@
           "date": "2026-09-21",
           "digest": "e809c74693e2470f",
           "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
-          "summary": "Corrects the EU AI Act disclosures: the app says it is an AI system on a first-run screen you accept before its first model request, and only the on-device data export marks chat transcripts with a machine-readable AI-generated marker; the per-conversation export sheet does not."
+          "summary": "Corrects the EU AI Act disclosures for the planned app: it will tell you it is an AI system on a first-run screen you accept before its first model request, and only its planned on-device data export, not the per-conversation export sheet, will mark chat transcripts with a machine-readable AI-generated marker."
         },
         {
           "date": "2026-09-21",
