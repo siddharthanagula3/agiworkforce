@@ -359,6 +359,38 @@ describe('Free section in the composer', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent(FALLBACK);
   });
 
+  it('draws a focus ring on every row the arrow keys reach', () => {
+    const unavailable = familyB[0]!;
+    renderSection(
+      sources(
+        source(
+          'ready',
+          catalogue([...familyA.map((key) => model(key)), model(unavailable, 'unavailable')]),
+        ),
+        source('error'),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
+    const featured = within(screen.getByRole('group', { name: `${ISSUER} free models` }));
+    const rows = [
+      featured.getAllByRole('button')[0]!,
+      within(screen.getByRole('group', { name: 'More free models' })).getAllByRole('button')[0]!,
+      screen.getByRole('button', { name: name(unavailable) }),
+      screen.getByRole('button', { name: /More models/ }),
+      screen.getByRole('button', { name: /Unavailable/ }),
+      screen.getByRole('button', { name: 'Retry Experiential Labs free models' }),
+    ];
+
+    for (const row of rows) {
+      expect(row).toHaveClass(
+        'focus-visible:outline-none',
+        'focus-visible:ring-2',
+        'focus-visible:ring-[var(--chat-focus-ring)]',
+      );
+    }
+  });
+
   it('renders nothing for an account offered no free models', () => {
     const { container } = render(
       <FreeQuotaModelSection

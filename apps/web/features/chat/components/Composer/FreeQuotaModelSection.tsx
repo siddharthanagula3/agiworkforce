@@ -16,10 +16,11 @@ import {
 } from '@features/chat/lib/free-model-presentation';
 
 const PICKER_ROW = { 'data-picker-row': '' };
-const ROW_CLASS =
-  'flex min-h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-start transition-colors focus-visible:outline-none';
+const FOCUS_RING_CLASS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--chat-focus-ring)]';
+const ROW_CLASS = `flex min-h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-start transition-colors ${FOCUS_RING_CLASS}`;
 const ACTIVE_ROW_CLASS = `${ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`;
-const MUTED_ROW_CLASS = `${ROW_CLASS} cursor-default focus-visible:bg-muted/40`;
+const MUTED_ROW_CLASS = `${ROW_CLASS} cursor-default`;
 const NAME_CLASS = 'block truncate text-sm leading-5';
 const GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
@@ -392,7 +393,11 @@ export function FreeQuotaModelSection({
             </>
           )}
           {pausedPools.length > 0 && (
-            <p {...PICKER_ROW} tabIndex={-1} className={`${NOTE_CLASS} focus-visible:bg-muted/40`}>
+            <p
+              {...PICKER_ROW}
+              tabIndex={-1}
+              className={`${NOTE_CLASS} rounded-md ${FOCUS_RING_CLASS}`}
+            >
               {pauseNotice(view.pools, fallbackModelName)}
             </p>
           )}
