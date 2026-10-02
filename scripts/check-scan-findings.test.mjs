@@ -89,6 +89,76 @@ test('a zap report maps risk codes onto the shared severity ladder', () => {
   );
 });
 
+function zapSite(alerts) {
+  return { site: [{ '@name': 'http://127.0.0.1:3000', alerts }] };
+}
+
+test('a zap acceptance names one alert of a plugin, so it never excuses a sibling alert', () => {
+  const { errors, fail } = collector();
+  gateFindings({
+    findings: normalizeZapReport(
+      zapSite([
+        {
+          pluginid: '10055',
+          alertRef: '10055-6',
+          alert: 'CSP: style-src unsafe-inline',
+          riskcode: '2',
+          instances: [{ uri: 'http://127.0.0.1:3000/pricing' }],
+        },
+        {
+          pluginid: '10055',
+          alertRef: '10055-5',
+          alert: 'CSP: script-src unsafe-inline',
+          riskcode: '2',
+          instances: [{ uri: 'http://127.0.0.1:3000/pricing' }],
+        },
+      ]),
+    ),
+    allowlist: [{ ...entry({ id: '10055-6', scanner: 'zap' }), matched: 0 }],
+    minSeverity: 'MEDIUM',
+    scanner: 'zap',
+    fail,
+  });
+
+  assert.deepEqual(errors, [
+    'unaccepted: http://127.0.0.1:3000/pricing [MEDIUM] 10055-5, CSP: script-src unsafe-inline',
+  ]);
+});
+
+test('every url a zap alert lists has to fall inside its locations-scoped acceptance', () => {
+  const { errors, fail } = collector();
+  gateFindings({
+    findings: normalizeZapReport(
+      zapSite([
+        {
+          pluginid: '10099',
+          alertRef: '10099',
+          alert: 'Source Code Disclosure - Python',
+          riskcode: '2',
+          instances: [
+            { uri: 'http://127.0.0.1:3000/api-docs' },
+            { uri: 'http://127.0.0.1:3000/admin/export' },
+            { uri: 'http://127.0.0.1:3000/admin/export' },
+          ],
+        },
+      ]),
+    ),
+    allowlist: [
+      {
+        ...entry({ id: '10099', scanner: 'zap', locations: ['http://127.0.0.1:3000/api-docs'] }),
+        matched: 0,
+      },
+    ],
+    minSeverity: 'MEDIUM',
+    scanner: 'zap',
+    fail,
+  });
+
+  assert.deepEqual(errors, [
+    'unaccepted: http://127.0.0.1:3000/admin/export [MEDIUM] 10099, Source Code Disclosure - Python',
+  ]);
+});
+
 test('an allowlist entry missing an owner, a reason or an expiry is rejected', () => {
   for (const override of [{ owner: 'siddhartha' }, { reason: '  ' }, { expires: 'soon' }]) {
     const { errors, fail } = collector();

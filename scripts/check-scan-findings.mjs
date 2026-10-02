@@ -65,19 +65,21 @@ export function normalizeTrivyReport(report) {
 export function normalizeZapReport(report) {
   const findings = [];
   for (const site of report?.site ?? []) {
+    const siteUrl = site?.['@name'] ?? '<unknown url>';
     for (const alert of site?.alerts ?? []) {
       const instances = alert?.instances ?? [];
-      const location =
-        instances.length > 0
-          ? (instances[0]?.uri ?? site?.['@name'] ?? '<unknown url>')
-          : (site?.['@name'] ?? '<unknown url>');
-      findings.push({
-        id: alert?.pluginid ?? alert?.alertRef ?? '<unknown>',
-        location,
-        severity: ZAP_RISK_SEVERITY.get(String(alert?.riskcode ?? '0')) ?? 'UNKNOWN',
-        title: alert?.alert ?? alert?.name ?? '',
-        scanner: 'zap',
-      });
+      const locations = new Set(
+        instances.length > 0 ? instances.map((instance) => instance?.uri ?? siteUrl) : [siteUrl],
+      );
+      for (const location of locations) {
+        findings.push({
+          id: alert?.alertRef ?? alert?.pluginid ?? '<unknown>',
+          location,
+          severity: ZAP_RISK_SEVERITY.get(String(alert?.riskcode ?? '0')) ?? 'UNKNOWN',
+          title: alert?.alert ?? alert?.name ?? '',
+          scanner: 'zap',
+        });
+      }
     }
   }
   return findings;

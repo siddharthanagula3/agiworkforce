@@ -9,21 +9,34 @@
     "fails CI even though the finding still matches, so an acceptance cannot outlive the",
     "triage that justified it. An entry that matches nothing fails CI as stale.",
     "",
-    "\"scanner\" is \"trivy\" or \"zap\" and scopes the entry to one report, so a ZAP plugin",
-    "id can never excuse a Trivy CVE that happens to share its number. Omit \"locations\"",
+    "\"scanner\" is \"trivy\" or \"zap\" and scopes the entry to one report, so a ZAP alert",
+    "can never excuse a Trivy CVE that happens to share its number. Omit \"locations\"",
     "to accept a finding wherever it appears; each value is matched as a substring of the",
     "finding's location, which is \"<target>:<package>@<version>\" for a Trivy",
-    "vulnerability, the scanned path for a misconfiguration, and the first instance URL",
-    "for a ZAP alert."
+    "vulnerability, the scanned path for a misconfiguration, and a URL for a ZAP alert.",
+    "",
+    "A ZAP alert becomes one finding per URL it lists, and every one of them has to match.",
+    "Its \"id\" is the alert reference, such as 10055-4, not the plugin id: plugin 10055",
+    "alone raises a dozen different Content-Security-Policy alerts, and accepting one must",
+    "not accept the rest. ZAP lists only five URLs for an alert it marks systemic, so an",
+    "entry scoped by \"locations\" vouches for the URLs the report shows and no others."
   ],
   "entries": [
     {
-      "id": "10055",
+      "id": "10055-4",
       "scanner": "zap",
       "owner": "@siddharthanagula3",
       "expires": "2026-10-20",
       "locations": ["http://127.0.0.1:3000"],
-      "reason": "The main UI still uses React inline style attributes and displays user, provider, and connector HTTPS image URLs before or outside same-origin persistence. script-src remains nonce-only. Replace those style call sites and image paths before this acceptance expires."
+      "reason": "img-src admits any https: origin, the only directive ZAP reports as unbounded. Chat renders images whose host is decided at runtime by a model or a search provider: markdown images (MarkdownImage in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx accepts any http or https source) and the favicons search results carry (WebSearchCard.tsx, CitationChip.tsx, ResearchPanel.tsx). A host list would break them. Removing the wildcard needs a same-origin image proxy for those paths, the pattern MCP directory icons and place photos already use."
+    },
+    {
+      "id": "10055-6",
+      "scanner": "zap",
+      "owner": "@siddharthanagula3",
+      "expires": "2026-10-20",
+      "locations": ["http://127.0.0.1:3000"],
+      "reason": "style-src keeps 'unsafe-inline' because a nonce covers style elements, not style attributes: apps/web and packages/ui render about 2,300 React style props across 215 components, and Clerk documents 'unsafe-inline' as required for its components to inject their styles (clerk.com/docs/guides/secure/best-practices/csp-headers, read 2026-10-01). script-src stays nonce-only, which scripts/check-security-response-headers.mjs enforces. The exemption is disclosed on /security and pinned by apps/web/app/trust/posture-claims.test.ts."
     },
     {
       "id": "90003",
@@ -31,7 +44,7 @@
       "owner": "@siddharthanagula3",
       "expires": "2026-10-20",
       "locations": ["http://127.0.0.1:3000"],
-      "reason": "Clerk's Next.js integration injects its browser SDK and UI preload without integrity attributes. The current integration restricts both resources to the identity origin but cannot attach SRI. Replace them with verified same-origin assets before this acceptance expires."
+      "reason": "Both flagged tags are Clerk's, served from its Frontend API host: @clerk/nextjs renders clerk-js (/npm/@clerk/clerk-js@6/dist/clerk.browser.js) and preloads @clerk/ui (/npm/@clerk/ui@1/dist/ui.browser.js) with no integrity attribute. Each URL names a major version Clerk updates in place, so no fixed hash can match it. First-party scripts are same-origin and outside this alert. Removing the CDN load means bundling @clerk/clerk-js and @clerk/ui into the build, a dependency change."
     }
   ]
 }
