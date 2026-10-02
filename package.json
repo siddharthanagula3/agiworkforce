@@ -95,6 +95,11 @@
       "stream-json@<3.7.0": "3.7.0",
       "@types/react": "19.3.0"
     },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-86w9-cpqp-85rv"
+      ]
+    },
     "patchedDependencies": {
       "next-themes@0.4.6": "patches/next-themes@0.4.6.patch",
       "detox@20.51.4": "patches/detox@20.51.4.patch",

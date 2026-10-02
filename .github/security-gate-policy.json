@@ -119,6 +119,15 @@
       "reason": "Triaged Trivy and ZAP findings. Every entry carries an id, a scanner, a reason, an owner and an expiry that scripts/check-scan-findings.mjs enforces, and an entry that matches nothing fails as stale.",
       "owner": "Platform lead",
       "tracking": "SEC-\u00a7111"
+    },
+    {
+      "id": "node-forge-pkcs1-digest-algorithm",
+      "kind": "pnpm-audit-advisory-ignore",
+      "advisories": ["GHSA-86w9-cpqp-85rv"],
+      "reason": "node-forge has no release past the vulnerable 1.4.0. Its only dependents are @expo/cli and @expo/code-signing-certificates, which apps/mobile reaches through expo and expo-updates as build tooling: the expo CLI, the expo-updates codesigning commands and the native build's manifest step. No shipped runtime contains it: web, desktop and both extensions have no dependency path to it, and the exported mobile bundle carries only its license notice. The tooling verifies only signatures it has just made with its own 65537-exponent key, so the low-exponent forgery has nothing to forge.",
+      "owner": "Platform lead",
+      "tracking": "CVE-2026-85393, waiting on an upstream node-forge fix",
+      "expires": "2026-10-31"
     }
   ]
 }

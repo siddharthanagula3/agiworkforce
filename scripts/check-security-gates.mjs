@@ -6,6 +6,8 @@ import { parse } from 'yaml';
 
 const POLICY_PATH = '.github/security-gate-policy.json';
 const DENY_PATH = 'deny.toml';
+const MANIFEST_PATH = 'package.json';
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 export function collectContinueOnErrorSteps(workflow) {
   const steps = [];
@@ -35,7 +37,19 @@ export function parseDenyAdvisoryIgnores(denyToml) {
   return ignores;
 }
 
-export function checkSecurityGates({ policy, workflow, denyToml, workflows = {} }) {
+export function parsePnpmAuditIgnores(manifest) {
+  const auditConfig = manifest?.pnpm?.auditConfig ?? {};
+  return [...(auditConfig.ignoreGhsas ?? []), ...(auditConfig.ignoreCves ?? [])];
+}
+
+export function checkSecurityGates({
+  policy,
+  workflow,
+  denyToml,
+  workflows = {},
+  manifest,
+  today = new Date().toISOString().slice(0, 10),
+}) {
   const failures = [];
 
   // A gate may name its own workflow: the container, IaC and DAST scanners need
@@ -106,6 +120,40 @@ export function checkSecurityGates({ policy, workflow, denyToml, workflows = {} 
     }
   }
 
+  const auditWaivers = (policy.exclusions ?? []).filter(
+    (entry) => entry.kind === 'pnpm-audit-advisory-ignore',
+  );
+  const waivedAdvisories = new Set(auditWaivers.flatMap((entry) => entry.advisories ?? []));
+  const ignoredAdvisories = parsePnpmAuditIgnores(manifest);
+  for (const advisory of ignoredAdvisories) {
+    if (!waivedAdvisories.has(advisory)) {
+      failures.push(
+        `${MANIFEST_PATH} ignores ${advisory} without registering it in ${POLICY_PATH}`,
+      );
+    }
+  }
+  for (const entry of auditWaivers) {
+    for (const field of ['reason', 'owner', 'tracking']) {
+      if (!entry[field]) {
+        failures.push(`exclusion ${entry.id} must state a ${field}`);
+      }
+    }
+    if (!DATE_PATTERN.test(entry.expires ?? '')) {
+      failures.push(`exclusion ${entry.id} must set expires to a YYYY-MM-DD date`);
+    } else if (entry.expires < today) {
+      failures.push(
+        `exclusion ${entry.id} expired on ${entry.expires}: fix the advisory or re-triage the waiver`,
+      );
+    }
+    for (const advisory of entry.advisories ?? []) {
+      if (!ignoredAdvisories.includes(advisory)) {
+        failures.push(
+          `exclusion ${entry.id} is stale: ${MANIFEST_PATH} no longer ignores ${advisory}`,
+        );
+      }
+    }
+  }
+
   return failures;
 }
 
@@ -114,6 +162,7 @@ function main() {
   const policy = JSON.parse(fs.readFileSync(path.join(root, POLICY_PATH), 'utf8'));
   const workflow = parse(fs.readFileSync(path.join(root, policy.workflow), 'utf8'));
   const denyToml = fs.readFileSync(path.join(root, DENY_PATH), 'utf8');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, MANIFEST_PATH), 'utf8'));
 
   const workflows = {};
   for (const relativePath of new Set(
@@ -124,7 +173,7 @@ function main() {
     workflows[relativePath] = parse(fs.readFileSync(absolute, 'utf8'));
   }
 
-  const failures = checkSecurityGates({ policy, workflow, denyToml, workflows });
+  const failures = checkSecurityGates({ policy, workflow, denyToml, workflows, manifest });
   for (const entry of policy.exclusions ?? []) {
     if (entry.kind === 'allowlist-file' && !fs.existsSync(path.join(root, entry.path))) {
       failures.push(`exclusion ${entry.id} points at a missing allowlist: ${entry.path}`);
