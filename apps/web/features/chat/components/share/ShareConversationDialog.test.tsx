@@ -445,6 +445,7 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     expect(screen.getByRole('button', { name: 'Copy' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Revoke share' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Create public link/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Done' }).parentElement).not.toHaveClass('sm:gap-0');
   });
 
   it('shows a public link under public copy when a newer link is workspace-only', async () => {

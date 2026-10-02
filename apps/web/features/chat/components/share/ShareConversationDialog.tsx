@@ -330,7 +330,7 @@ function ShareConversationDialogImpl({
             </p>
           ) : null}
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             {activeShare ? (
               <>
                 <Button variant="destructive" onClick={handleRevoke} disabled={isSharing}>
