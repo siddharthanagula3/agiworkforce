@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getProviderOfferings } from '@agiworkforce/types';
+import { getProviderOfferings, providerOfferingDisplayName } from '@agiworkforce/types';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -11,7 +11,6 @@ import {
   useModelStore,
 } from '@shared/stores/model-store';
 import { CreateConversationSchema, CreateMessageSchema } from '@/lib/validations/chat';
-import { freeModelDisplayName } from '@/features/models/lib/free-model-label';
 
 const qwenOfferingKey = Object.entries(getProviderOfferings()).find(
   ([, entry]) => entry.provider === 'qwen' && entry.quotaProbeProtocol === 'chat',
@@ -59,7 +58,7 @@ describe('free model selection to transport', () => {
       useModelStore.getState().setSelectedModelId(offeringKey);
       expect(useModelStore.getState().selectedModelId).toBe(offeringKey);
       expect(useModelStore.getState().getSelectedModel().name).toBe(
-        freeModelDisplayName(offeringKey),
+        providerOfferingDisplayName(offeringKey),
       );
       expect(resolveSelectableModelId(offeringKey)).toBe(offeringKey);
       expect(CreateConversationSchema.safeParse({ model: offeringKey }).success).toBe(true);

@@ -1,4 +1,4 @@
-import { DEVELOPER_LABELS, getProviderOffering, modelsCatalog } from '@agiworkforce/types';
+import { DEVELOPER_LABELS, getProviderOffering, modelsCatalog } from './model-catalog';
 
 const VERSION_SUFFIX = /^(.+?)-(\d{4}-\d{2}-\d{2}|\d{8}|\d{4}|latest|preview)$/;
 const SNAPSHOT_STAMP = /^[\d-]+$/;
@@ -8,7 +8,7 @@ const FAMILY_PREFIX = /^[a-z]+/i;
 const GENERATION = /\d+(?:\.\d+)*/;
 const NAME_WORD_SEPARATORS = /[\s:()/,-]+/;
 
-export interface FreeModelLabel {
+export interface ProviderOfferingLabel {
   name: string;
   version: string | null;
   displayName: string;
@@ -75,7 +75,7 @@ function generationOf(id: string): number[] {
   return (GENERATION.exec(id)?.[0] ?? '').split('.').filter(Boolean).map(Number);
 }
 
-function label(name: string, version: string | null, baseId: string): FreeModelLabel {
+function label(name: string, version: string | null, baseId: string): ProviderOfferingLabel {
   return {
     name,
     version,
@@ -85,7 +85,7 @@ function label(name: string, version: string | null, baseId: string): FreeModelL
   };
 }
 
-export function freeModelLabel(key: string): FreeModelLabel | null {
+export function providerOfferingLabel(key: string): ProviderOfferingLabel | null {
   const offering = getProviderOffering(key);
   if (!offering) return null;
   const id = offering.providerModelId;
@@ -100,10 +100,10 @@ export function freeModelLabel(key: string): FreeModelLabel | null {
   return label(registryNameFor(base) ?? humanize(base), versionLabel(marker), base);
 }
 
-export function freeModelDisplayName(key: string): string | null {
-  return freeModelLabel(key)?.displayName ?? null;
+export function providerOfferingDisplayName(key: string): string | null {
+  return providerOfferingLabel(key)?.displayName ?? null;
 }
 
-export function freeModelFamilyName(family: string): string {
+export function providerOfferingFamilyName(family: string): string {
   return humanizeWord(family);
 }

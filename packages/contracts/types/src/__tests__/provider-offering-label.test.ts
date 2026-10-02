@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getProviderOfferings, modelsCatalog } from '@agiworkforce/types';
-import { findSelectableModel } from '@shared/stores/model-store';
-import { freeModelDisplayName, freeModelFamilyName, freeModelLabel } from './free-model-label';
+import { getProviderOfferings, modelsCatalog } from '../model-catalog';
+import {
+  providerOfferingDisplayName,
+  providerOfferingFamilyName,
+  providerOfferingLabel,
+} from '../provider-offering-label';
 
 const DATED_ID = /^(.+)-(\d{4}-\d{2}-\d{2}|\d{8}|\d{4})$/;
 const offerings = Object.entries(getProviderOfferings());
@@ -25,17 +28,14 @@ const datedWithRegistryBase = uncurated.flatMap(([key, offering]) => {
     : [];
 });
 
-describe('free model labels', () => {
+describe('provider offering labels', () => {
   it('never labels a dated snapshot with its raw id when the registry names the model', () => {
     expect(datedWithRegistryBase.length).toBeGreaterThan(0);
     for (const { key, id, name } of datedWithRegistryBase) {
-      const label = freeModelLabel(key)!;
+      const label = providerOfferingLabel(key)!;
       expect(label.name).toBe(name);
       expect(label.version).not.toBeNull();
       expect(label.displayName).not.toContain(id);
-      if (getProviderOfferings()[key]?.quotaProbeProtocol) {
-        expect(findSelectableModel(key)?.name).toBe(label.displayName);
-      }
     }
   });
 
@@ -43,7 +43,7 @@ describe('free model labels', () => {
     const known = uncurated.filter(([, offering]) => registryName(offering.providerModelId!));
     expect(known.length).toBeGreaterThan(0);
     for (const [key, offering] of known) {
-      expect(freeModelLabel(key)).toMatchObject({
+      expect(providerOfferingLabel(key)).toMatchObject({
         name: registryName(offering.providerModelId!),
         version: null,
       });
@@ -56,14 +56,14 @@ describe('free model labels', () => {
     );
     expect(curated.length).toBeGreaterThan(0);
     for (const [key, offering] of curated) {
-      expect(freeModelDisplayName(key)).toBe(offering.displayName);
+      expect(providerOfferingDisplayName(key)).toBe(offering.displayName);
     }
   });
 
   it('never shows a raw provider id as the name of a chat offering', () => {
     for (const [key, offering] of offerings) {
       if (offering.category !== 'chat' || !offering.providerModelId) continue;
-      const label = freeModelLabel(key)!;
+      const label = providerOfferingLabel(key)!;
       expect(label.name).not.toBe(offering.providerModelId);
       expect(label.displayName).not.toBe(offering.providerModelId);
     }
@@ -76,8 +76,8 @@ describe('free model labels', () => {
     });
     expect(pairs.length).toBeGreaterThan(0);
     for (const [snapshotKey, baseKey] of pairs) {
-      const snapshot = freeModelLabel(snapshotKey)!;
-      const base = freeModelLabel(baseKey)!;
+      const snapshot = providerOfferingLabel(snapshotKey)!;
+      const base = providerOfferingLabel(baseKey)!;
       expect(snapshot.family).toBe(base.family);
       expect(snapshot.generation).toEqual(base.generation);
       expect(snapshot.name).toBe(base.name);
@@ -87,19 +87,19 @@ describe('free model labels', () => {
   it('names a family the way the registry spells it', () => {
     const families = new Set(
       offerings.flatMap(([key]) => {
-        const label = freeModelLabel(key);
+        const label = providerOfferingLabel(key);
         return label ? [label.family] : [];
       }),
     );
     for (const family of families) {
-      const name = freeModelFamilyName(family);
+      const name = providerOfferingFamilyName(family);
       expect(name.toLowerCase()).toBe(family);
       expect(name).not.toBe(family);
     }
   });
 
   it('has no label for an offering the registry does not know', () => {
-    expect(freeModelLabel('fixture-unknown-offering')).toBeNull();
-    expect(freeModelDisplayName('fixture-unknown-offering')).toBeNull();
+    expect(providerOfferingLabel('fixture-unknown-offering')).toBeNull();
+    expect(providerOfferingDisplayName('fixture-unknown-offering')).toBeNull();
   });
 });

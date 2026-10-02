@@ -10,8 +10,7 @@ vi.mock('next/navigation', () => ({
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FREE_QUOTA_CATALOGUE_PATH } from '@agiworkforce/cloud-contracts';
-import { getProviderOfferings } from '@agiworkforce/types';
-import { freeModelLabel } from '@/features/models/lib/free-model-label';
+import { getProviderOfferings, providerOfferingLabel } from '@agiworkforce/types';
 import type { FreeQuotaCatalogue, FreeQuotaStatus } from '@/features/models/lib/free-quota-types';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
@@ -98,10 +97,10 @@ const chatKeys = Object.entries(getProviderOfferings())
   .map(([key]) => key);
 const READY_KEY = chatKeys[0]!;
 const UNAVAILABLE_KEY = chatKeys.find(
-  (key) => freeModelLabel(key)!.family !== freeModelLabel(READY_KEY)!.family,
+  (key) => providerOfferingLabel(key)!.family !== providerOfferingLabel(READY_KEY)!.family,
 )!;
-const READY_NAME = freeModelLabel(READY_KEY)!.displayName;
-const UNAVAILABLE_NAME = freeModelLabel(UNAVAILABLE_KEY)!.displayName;
+const READY_NAME = providerOfferingLabel(READY_KEY)!.displayName;
+const UNAVAILABLE_NAME = providerOfferingLabel(UNAVAILABLE_KEY)!.displayName;
 
 function catalogue(entries: Array<[string, FreeQuotaStatus]>): FreeQuotaCatalogue {
   return {
@@ -220,14 +219,14 @@ describe('ComposerFooter · free section', () => {
           offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',
       )
       .map(([key]) => key);
-    const family = freeModelLabel(imageKeys[0]!)!.family;
+    const family = providerOfferingLabel(imageKeys[0]!)!.family;
     stubFreeCatalogue(
       Promise.resolve(
         new Response(
           JSON.stringify(
             catalogue(
               imageKeys
-                .filter((key) => freeModelLabel(key)!.family === family)
+                .filter((key) => providerOfferingLabel(key)!.family === family)
                 .map((key): [string, FreeQuotaStatus] => [key, 'ready']),
             ),
           ),

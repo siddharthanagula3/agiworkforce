@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { getProviderOfferings, getSelectableModels } from '@agiworkforce/types';
+import {
+  getProviderOfferings,
+  getSelectableModels,
+  providerOfferingDisplayName,
+} from '@agiworkforce/types';
 import {
   contextBudgetTokens,
   estimateConversationTokens,
@@ -8,7 +12,6 @@ import {
   MIN_CONTEXT_BUDGET_TOKENS,
   type ContextSizedMessage,
 } from './model-compatibility';
-import { freeModelDisplayName } from '@/features/models/lib/free-model-label';
 
 const models = getSelectableModels().filter((meta) => (meta.contextWindow ?? 0) > 0);
 
@@ -120,7 +123,7 @@ describe('evaluateModelCompatibility', () => {
     expect(uncurated.length).toBeGreaterThan(0);
     for (const [key, offering] of uncurated) {
       const { modelName } = evaluateModelCompatibility(key, request());
-      expect(modelName).toBe(freeModelDisplayName(key));
+      expect(modelName).toBe(providerOfferingDisplayName(key));
       expect(modelName).not.toBe(offering.providerModelId);
     }
   });

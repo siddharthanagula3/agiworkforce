@@ -1,11 +1,11 @@
 'use client';
 
 import { freeQuotaSelection } from '@features/chat/lib/free-quota-selection';
-import { freeModelDisplayName } from '@/features/models/lib/free-model-label';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   isRoutingProfileChoice,
+  providerOfferingDisplayName,
   type ModelAvailability,
   type ModelEnvironment,
   type RoutingProfileChoice,
@@ -257,7 +257,7 @@ export function findSelectableModel(modelId: string | null | undefined): AIModel
   if (free)
     return {
       id: modelId,
-      name: freeModelDisplayName(modelId) ?? free.displayName,
+      name: providerOfferingDisplayName(modelId) ?? free.displayName,
       provider: PROVIDER_LABELS[free.provider] ?? free.provider,
       providerKey: free.provider,
       description: `Free quota · ${PROVIDER_LABELS[free.provider] ?? free.provider}`,

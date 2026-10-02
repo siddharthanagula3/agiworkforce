@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getProviderOfferings, providerOfferingDisplayName } from '@agiworkforce/types';
 import {
   createChatModelInfo,
   getManagedModelPresentationLabel,
@@ -131,6 +132,23 @@ describe('getModelPresentationLabel', () => {
     expect(getModelPresentationLabel('fixture-private-gateway-model')).toBe(
       'fixture-private-gateway-model',
     );
+  });
+});
+
+const uncuratedOfferings = Object.entries(getProviderOfferings()).filter(
+  ([, offering]) =>
+    offering.quotaProbeProtocol === 'chat' && offering.displayName === offering.providerModelId,
+);
+
+describe('free offering labels', () => {
+  it('names a free quota answer by its model, never by the raw provider id', () => {
+    expect(uncuratedOfferings.length).toBeGreaterThan(0);
+    for (const [key, offering] of uncuratedOfferings) {
+      const name = providerOfferingDisplayName(key);
+      expect(getModelPresentationLabel(key)).toBe(name);
+      expect(getManagedModelPresentationLabel(key)).toBe(name);
+      expect(getManagedModelPresentationLabel(key)).not.toBe(offering.providerModelId);
+    }
   });
 });
 

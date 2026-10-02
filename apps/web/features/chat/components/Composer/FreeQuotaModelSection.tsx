@@ -3,8 +3,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
-import { getProviderOffering } from '@agiworkforce/types';
-import { freeModelFamilyName } from '@/features/models/lib/free-model-label';
+import { getProviderOffering, providerOfferingFamilyName } from '@agiworkforce/types';
 import {
   FREE_QUOTA_CATEGORIES,
   FREE_QUOTA_STATUS_LABELS,
@@ -355,7 +354,7 @@ export function FreeQuotaModelSection({
                     familyRuns(group.entries).map((family) => (
                       <div key={`${group.issuer}:${family[0]!.label.family}`}>
                         <p className={SUBHEADING_CLASS}>
-                          {freeModelFamilyName(family[0]!.label.family)}
+                          {providerOfferingFamilyName(family[0]!.label.family)}
                         </p>
                         {family.map(renderEntry)}
                       </div>

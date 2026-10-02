@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getProviderOfferings } from '@agiworkforce/types';
-import { freeModelLabel } from '@/features/models/lib/free-model-label';
+import { getProviderOfferings, providerOfferingLabel } from '@agiworkforce/types';
 import type {
   FreeQuotaCatalogue,
   FreeQuotaModel,
@@ -16,7 +15,7 @@ const servableChat = Object.entries(getProviderOfferings())
 
 const families = new Map<string, string[]>();
 for (const key of servableChat) {
-  const family = freeModelLabel(key)!.family;
+  const family = providerOfferingLabel(key)!.family;
   families.set(family, [...(families.get(family) ?? []), key]);
 }
 const [familyA, familyB] = [...families.values()]

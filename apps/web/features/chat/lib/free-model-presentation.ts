@@ -1,5 +1,8 @@
-import type { ProviderOfferingCategory } from '@agiworkforce/types';
-import { freeModelLabel, type FreeModelLabel } from '@/features/models/lib/free-model-label';
+import {
+  providerOfferingLabel,
+  type ProviderOfferingCategory,
+  type ProviderOfferingLabel,
+} from '@agiworkforce/types';
 import {
   FREE_QUOTA_CATEGORIES,
   type FreeQuotaCatalogue,
@@ -10,7 +13,7 @@ import { freeQuotaSelection } from './free-quota-selection';
 export interface FreeModelEntry {
   model: FreeQuotaModel;
   issuer: string;
-  label: FreeModelLabel;
+  label: ProviderOfferingLabel;
   order: number;
 }
 
@@ -79,7 +82,7 @@ export function presentFreeModels(
 ): FreeModelPresentation {
   const entries = catalogues.flatMap((catalogue) =>
     catalogue.models.flatMap((model, order) => {
-      const label = freeQuotaSelection(model.key) ? freeModelLabel(model.key) : null;
+      const label = freeQuotaSelection(model.key) ? providerOfferingLabel(model.key) : null;
       return label ? [{ model, issuer: catalogue.issuer, label, order }] : [];
     }),
   );

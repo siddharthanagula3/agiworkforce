@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { getProviderOfferings } from '@agiworkforce/types';
-import { freeModelFamilyName, freeModelLabel } from '@/features/models/lib/free-model-label';
+import {
+  getProviderOfferings,
+  providerOfferingFamilyName,
+  providerOfferingLabel,
+} from '@agiworkforce/types';
 import type {
   FreeQuotaCatalogue,
   FreeQuotaModel,
@@ -23,7 +26,7 @@ const chatKeys = Object.entries(offerings)
   .map(([key]) => key);
 const byFamily = new Map<string, string[]>();
 for (const key of chatKeys) {
-  const family = freeModelLabel(key)!.family;
+  const family = providerOfferingLabel(key)!.family;
   byFamily.set(family, [...(byFamily.get(family) ?? []), key]);
 }
 const [familyA, familyB] = [...byFamily.values()]
@@ -42,7 +45,7 @@ const imageKey = Object.entries(offerings).find(
 )![0];
 
 function name(key: string): string {
-  return freeModelLabel(key)!.displayName;
+  return providerOfferingLabel(key)!.displayName;
 }
 
 function model(key: string, status: FreeQuotaStatus = 'ready'): FreeQuotaModel {
@@ -124,7 +127,9 @@ describe('Free section in the composer', () => {
     expect(within(expanded).getAllByRole('button')).toHaveLength(models.length - 2);
     for (const family of [familyA, familyB]) {
       expect(
-        within(expanded).getByText(freeModelFamilyName(freeModelLabel(family[0]!)!.family)),
+        within(expanded).getByText(
+          providerOfferingFamilyName(providerOfferingLabel(family[0]!)!.family),
+        ),
       ).toBeInTheDocument();
     }
 
@@ -140,7 +145,7 @@ describe('Free section in the composer', () => {
     renderSection(sources(source('ready', catalogue([model(datedKey)]))));
 
     const row = screen.getByRole('button', { name: name(datedKey) });
-    expect(row).toHaveTextContent(freeModelLabel(datedKey)!.name);
+    expect(row).toHaveTextContent(providerOfferingLabel(datedKey)!.name);
     expect(row).not.toHaveTextContent(offering.providerModelId!);
     expect(screen.queryByText(offering.providerModelId!)).not.toBeInTheDocument();
   });
