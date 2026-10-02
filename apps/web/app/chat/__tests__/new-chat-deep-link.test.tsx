@@ -9,7 +9,7 @@ vi.mock('next/headers', async (importOriginal) => ({
     new Headers(requestedPath.value === null ? {} : { 'x-agi-pathname': requestedPath.value }),
 }));
 
-import Page from '../page';
+import Page, { metadata } from '../page';
 import { WebChatRoot } from '@/features/chat/components/WebChatRoot';
 
 async function landingFor(path: string | null) {
@@ -33,5 +33,11 @@ describe('deep links into a new chat', () => {
 
   it('does not treat a path that only starts with the same letters as Work', async () => {
     expect((await landingFor('/agi-workshop')).workMode).toBeUndefined();
+  });
+});
+
+describe('the new chat tab title', () => {
+  it('names the product, as the open chat will once it loads, not the marketing tagline', () => {
+    expect(metadata.title).toEqual({ absolute: 'AGI' });
   });
 });
