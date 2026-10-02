@@ -332,6 +332,34 @@ test('only a zap entry can pin other info or evidence, and each pin has a shape'
   }
 });
 
+test('a key the gate does not read is rejected, so a misspelled scope or pin cannot widen an entry', () => {
+  for (const [key, value] of [
+    ['otherInfo', 'img-src'],
+    ['evidences', ['https://clerk-ci.invalid/npm/@clerk/clerk-js@']],
+    ['location', ['http://127.0.0.1:3000/api-docs']],
+  ]) {
+    const { errors, fail } = collector();
+    const allowlist = parseAllowlist(
+      {
+        entries: [
+          entry({
+            id: '10055-4',
+            scanner: 'zap',
+            locations: ['http://127.0.0.1:3000'],
+            [key]: value,
+          }),
+        ],
+      },
+      { allowlistPath: ALLOWLIST_PATH, today: '2026-10-02', fail },
+    );
+
+    assert.equal(allowlist.length, 0, key);
+    assert.deepEqual(errors, [
+      `${ALLOWLIST_PATH} entries[0] (10055-4) sets "${key}", which the gate does not read. An entry takes only id, scanner, owner, expires, reason, locations, otherinfo and evidence, and a misspelled scope or pin would accept every instance of 10055-4.`,
+    ]);
+  }
+});
+
 test('an allowlist entry missing an owner, a reason or an expiry is rejected', () => {
   for (const override of [{ owner: 'siddhartha' }, { reason: '  ' }, { expires: 'soon' }]) {
     const { errors, fail } = collector();

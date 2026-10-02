@@ -20,6 +20,17 @@ const ZAP_RISK_SEVERITY = new Map([
   ['3', 'HIGH'],
 ]);
 
+const ENTRY_FIELDS = [
+  'id',
+  'scanner',
+  'owner',
+  'expires',
+  'reason',
+  'locations',
+  'otherinfo',
+  'evidence',
+];
+
 function severityRank(severity) {
   const index = SEVERITY_ORDER.indexOf(String(severity ?? '').toUpperCase());
   return index === -1 ? 0 : index;
@@ -106,6 +117,13 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
     const label = `${allowlistPath} entries[${index}]`;
     if (typeof entry?.id !== 'string' || entry.id.length === 0) {
       fail(`${label} must set "id" to the scanner finding id it accepts.`);
+      return;
+    }
+    const unread = Object.keys(entry).filter((key) => !ENTRY_FIELDS.includes(key));
+    if (unread.length > 0) {
+      fail(
+        `${label} (${entry.id}) sets ${unread.map((key) => `"${key}"`).join(', ')}, which the gate does not read. An entry takes only ${ENTRY_FIELDS.slice(0, -1).join(', ')} and ${ENTRY_FIELDS.at(-1)}, and a misspelled scope or pin would accept every instance of ${entry.id}.`,
+      );
       return;
     }
     if (typeof entry.scanner !== 'string' || !['trivy', 'zap'].includes(entry.scanner)) {

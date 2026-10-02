@@ -28,7 +28,10 @@
     "pin what each instance reports. \"otherinfo\" has to equal a whole line of the",
     "instance's other info: 10055-4 is raised for any directive that admits every host,",
     "and that line lists which. \"evidence\" lists substrings, and the instance's evidence",
-    "has to contain one of them: for 90003 the evidence is the tag that lacks integrity."
+    "has to contain one of them: for 90003 the evidence is the tag that lacks integrity.",
+    "",
+    "Any other key in an entry fails CI, so a misspelled \"locations\", \"otherinfo\" or",
+    "\"evidence\" cannot leave the entry accepting every instance of its id."
   ],
   "entries": [
     {
