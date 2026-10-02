@@ -6,6 +6,7 @@ import {
   FREE_ALLOWANCE_EXHAUSTED_CODE,
   FREE_QUOTA_FALLBACK_REQUEST_KEY,
   FreeOfferingRequestSchema,
+  IDEMPOTENCY_KEY_HEADER,
   normalizePromotionalChatHistory,
 } from '@agiworkforce/cloud-contracts';
 import { getRoutingSlotModel } from '@agiworkforce/types';
@@ -35,6 +36,7 @@ const ReplayedFreeAutoTurnSchema = z.looseObject({
   model: z.string(),
   stream: z.literal(true),
   [FREE_QUOTA_FALLBACK_REQUEST_KEY]: z.literal(true),
+  assistant_parent_id: z.string().uuid().optional(),
   search_requested: z.literal(false).optional(),
   tools: z.array(z.unknown()).max(0).optional(),
   memory_command: z.undefined().optional(),
@@ -71,7 +73,9 @@ async function refusalFallbackReason(refusal: Response): Promise<FallbackReasonC
   return typeof code === 'string' ? (FALLBACK_REASON_BY_REFUSAL[code] ?? null) : null;
 }
 
-function freeAutoTurn(body: unknown): FallbackTurn | null {
+function freeAutoTurn(
+  body: unknown,
+): { turn: FallbackTurn; assistantParentId: string | undefined } | null {
   const replayed = ReplayedFreeAutoTurnSchema.safeParse(body);
   if (!replayed.success || replayed.data.model !== getRoutingSlotModel('router_zero_cost')) {
     return null;
@@ -83,7 +87,7 @@ function freeAutoTurn(body: unknown): FallbackTurn | null {
   if (!turn.success) return null;
   return freeOfferingRequiresWebAccess(turn.data) || freeOfferingRequiresCodeExecution(turn.data)
     ? null
-    : turn.data;
+    : { turn: turn.data, assistantParentId: replayed.data.assistant_parent_id };
 }
 
 function readsImages(turn: FallbackTurn): boolean {
@@ -113,8 +117,10 @@ export async function serveFreeQuotaFallback(input: {
   ) {
     return null;
   }
-  const turn = freeAutoTurn(await input.replay.json().catch(() => null));
-  if (!turn) return null;
+  const replayed = freeAutoTurn(await input.replay.json().catch(() => null));
+  const requestId = input.request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim();
+  if (!replayed || !requestId) return null;
+  const { turn, assistantParentId } = replayed;
   try {
     const model = await resolveReadyFreeQuotaOffering(
       freeQuotaContextFor({ url: input.request.url, userId: input.userId }),
@@ -127,10 +133,17 @@ export async function serveFreeQuotaFallback(input: {
       },
     );
     if (!model) return null;
-    const served = await serveFreeQuotaTurn(input.request, await input.scopedDb(), {
-      ...turn,
-      model,
-    });
+    const served = await serveFreeQuotaTurn(
+      input.request,
+      await input.scopedDb(),
+      { ...turn, model },
+      {
+        requestId,
+        requestedModel: turn.model,
+        reason,
+        ...(assistantParentId ? { assistantParentId } : {}),
+      },
+    );
     if (!served.ok) return null;
     served.headers.set(FALLBACK_REASON_HEADER, reason);
     logger.info(

@@ -20,6 +20,8 @@ type ScanModule4 = typeof import('@/lib/services/managed-content-safety-service'
 type ScanModule5 = typeof import('@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration');
 type ScanModule6 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
 type ScanModule7 = typeof import('@/lib/server/free-pools');
+type ScanModule8 =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -30,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   plan: vi.fn(),
   persistUser: vi.fn(),
   hydrate: vi.fn(),
+  persistAnswer: vi.fn(),
   spendOnCapacityShortage: null as boolean | null,
 }));
 
@@ -61,6 +64,13 @@ vi.mock(
   async (importOriginal) => ({
     ...(await importOriginal<ScanModule5>()),
     hydrateChatAttachments: mocks.hydrate,
+  }),
+);
+vi.mock(
+  '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence',
+  async (importOriginal) => ({
+    ...(await importOriginal<ScanModule8>()),
+    persistAssistantTurn: mocks.persistAnswer,
   }),
 );
 vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => ({
@@ -239,6 +249,7 @@ beforeEach(async () => {
   mocks.media.mockReset();
   mocks.otherProvider.mockReset();
   mocks.persistUser.mockReset().mockResolvedValue({ id: USER_MESSAGE_ID });
+  mocks.persistAnswer.mockReset().mockResolvedValue(undefined);
   mocks.spendOnCapacityShortage = null;
   mocks.hydrate.mockReset().mockImplementation(async (messages) => {
     const latest = messages.at(-1);
@@ -329,6 +340,99 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
     mocks.spendOnCapacityShortage = true;
     const served = await fallBack(refusal('free_capacity_unavailable'));
     expect(served?.headers.get('X-AGI-Fallback-Reason')).toBe('free_capacity_unavailable');
+  });
+
+  it('saves the answer on the server as the reply to the turn Free Auto refused', async () => {
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({
+          choices: [{ index: 0, delta: { content: 'Answered ' }, finish_reason: null }],
+        }),
+        JSON.stringify({
+          choices: [{ index: 0, delta: { content: 'for free.' }, finish_reason: 'stop' }],
+        }),
+        JSON.stringify({
+          choices: [],
+          usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 },
+        }),
+        '[DONE]',
+      ),
+    );
+
+    const served = await fallBack(
+      refusal('free_allowance_exhausted'),
+      freeAutoBody({ assistant_parent_id: USER_MESSAGE_ID }),
+    );
+    await served!.text();
+
+    expect(mocks.persistAnswer).toHaveBeenCalledOnce();
+    const [{ processed, userId, snapshot }] = mocks.persistAnswer.mock.calls[0]!;
+    expect(userId).toBe('fixture-user');
+    expect(processed).toMatchObject({
+      requestId: 'fixture-turn',
+      conversationId: CONVERSATION_ID,
+      assistantMessageId: ASSISTANT_ID,
+      assistantParentId: USER_MESSAGE_ID,
+      conversationIsTemporary: false,
+      requestedModel: FREE_AUTO,
+      usedFallback: true,
+      fallbackReason: 'free_limit_reached',
+      routeLane: 'free',
+    });
+    expect(snapshot).toEqual({
+      content: 'Answered for free.',
+      model: served!.headers.get('X-AGI-Resolved-Model'),
+      provider: 'qwen',
+      inputTokens: 12,
+      outputTokens: 3,
+      truncated: false,
+    });
+  });
+
+  it('keeps what had arrived, marked unfinished, when the reader leaves mid-answer', async () => {
+    mocks.stream.mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify({
+                  choices: [{ index: 0, delta: { content: 'Half an' }, finish_reason: null }],
+                })}\n\n`,
+              ),
+            );
+          },
+        }),
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+    );
+
+    const served = await fallBack(refusal('free_allowance_exhausted'));
+    const reader = served!.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    expect(mocks.persistAnswer).toHaveBeenCalledOnce();
+    expect(mocks.persistAnswer.mock.calls[0]![0].snapshot).toMatchObject({
+      content: 'Half an',
+      truncated: true,
+    });
+  });
+
+  it('saves nothing on the server for a temporary chat', async () => {
+    mocks.query.mockResolvedValue([{ id: 'conversation', data_region: null, is_temporary: true }]);
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({
+          choices: [{ index: 0, delta: { content: 'Gone after.' }, finish_reason: 'stop' }],
+        }),
+        '[DONE]',
+      ),
+    );
+
+    const served = await fallBack(refusal('free_allowance_exhausted'));
+    expect(await served!.text()).toContain('Gone after.');
+    expect(mocks.persistAnswer).not.toHaveBeenCalled();
   });
 
   it('leaves the user message to the turn that already saved it', async () => {

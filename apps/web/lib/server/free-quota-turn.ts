@@ -72,6 +72,7 @@ import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
 import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
+import { persistAssistantTurn } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
 import {
   ChatAttachmentHydrationError,
@@ -388,6 +389,83 @@ function meteredChatStream(
   });
 }
 
+interface RecordedAnswer {
+  content: string;
+  usage: TokenUsage | null;
+  complete: boolean;
+}
+
+function recordedAnswerStream(
+  source: ReadableStream<Uint8Array>,
+  record: (answer: RecordedAnswer) => Promise<void>,
+): ReadableStream<Uint8Array> {
+  const reader = source.getReader();
+  const decoder = new TextDecoder();
+  let pending = '';
+  let content = '';
+  let usage: TokenUsage | null = null;
+  let failed = false;
+  let recorded = false;
+
+  const read = (text: string): boolean => {
+    const lines = (pending + text).split('\n');
+    pending = lines.pop() ?? '';
+    let finished = false;
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice('data:'.length).trim();
+      if (payload === '[DONE]') {
+        finished = true;
+        continue;
+      }
+      let event: { usage?: unknown; choices?: unknown };
+      try {
+        event = JSON.parse(payload) as { usage?: unknown; choices?: unknown };
+      } catch {
+        continue;
+      }
+      usage = readUsage(event.usage) ?? usage;
+      for (const choice of Array.isArray(event.choices) ? event.choices : []) {
+        const delta = (choice as { delta?: { content?: unknown; x_stream_error?: unknown } } | null)
+          ?.delta;
+        if (typeof delta?.content === 'string') content += delta.content;
+        if (delta?.x_stream_error !== undefined) failed = true;
+      }
+    }
+    return finished;
+  };
+
+  const settle = async (complete: boolean) => {
+    if (recorded) return;
+    recorded = true;
+    await record({ content, usage, complete }).catch((error: unknown) => {
+      logger.error({ error }, '[free-quota] the fallback answer could not be saved on the server');
+    });
+  };
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          await settle(false);
+          controller.close();
+          return;
+        }
+        if (read(decoder.decode(value, { stream: true }))) await settle(!failed);
+        controller.enqueue(value);
+      } catch (error) {
+        await settle(false);
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      await reader.cancel(reason).catch(() => undefined);
+      await settle(false);
+    },
+  });
+}
+
 function turnUnits(
   offeringKey: string,
   offering: ProviderOffering,
@@ -432,10 +510,18 @@ export function refuseUnsupportedFreeQuotaPrompt(): Response {
   return refuse('unsupported_prompt', baseCopyFor(loadFreePools().inventory));
 }
 
+export interface FreeQuotaFallbackTurn {
+  requestId: string;
+  requestedModel: string;
+  reason: string;
+  assistantParentId?: string;
+}
+
 export async function serveFreeQuotaTurn(
   request: NextRequest,
   scoped: UserScopedDb,
   body: FreeOfferingRequest,
+  fallbackFor?: FreeQuotaFallbackTurn,
 ): Promise<Response> {
   const inventory = loadFreePools().inventory;
   const baseCopy = baseCopyFor(inventory);
@@ -809,12 +895,41 @@ export async function serveFreeQuotaTurn(
       });
       return refuseTurn(REFUSAL_FAILURE[kind]);
     }
+    const answer = validatePromotionalChatStream(meteredChatStream(upstream.body, ledger, copy), {
+      trustedErrorFrames: true,
+      onFailure: (reason) =>
+        logger.warn({ offering: entry.offeringKey, reason }, '[free-quota] invalid chat stream'),
+    });
     return new Response(
-      validatePromotionalChatStream(meteredChatStream(upstream.body, ledger, copy), {
-        trustedErrorFrames: true,
-        onFailure: (reason) =>
-          logger.warn({ offering: entry.offeringKey, reason }, '[free-quota] invalid chat stream'),
-      }),
+      fallbackFor && conversation.is_temporary !== true
+        ? recordedAnswerStream(answer, ({ content, usage, complete }) =>
+            persistAssistantTurn({
+              processed: {
+                requestId: fallbackFor.requestId,
+                conversationId: body.conversation_id,
+                assistantMessageId: body.assistant_message_id,
+                ...(fallbackFor.assistantParentId
+                  ? { assistantParentId: fallbackFor.assistantParentId }
+                  : {}),
+                organizationId: scoped.organizationId,
+                conversationIsTemporary: false,
+                requestedModel: fallbackFor.requestedModel,
+                usedFallback: true,
+                fallbackReason: fallbackFor.reason,
+                routeLane: 'free',
+              },
+              userId: scoped.userId,
+              snapshot: {
+                content,
+                model: entry.offeringKey,
+                provider: offering.provider,
+                inputTokens: usage?.promptTokens ?? 0,
+                outputTokens: usage?.completionTokens ?? 0,
+                truncated: !complete,
+              },
+            }),
+          )
+        : answer,
       { headers },
     );
   }

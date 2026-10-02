@@ -83,6 +83,32 @@ const PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL = `update web_messages m
           and c.organization_id is not distinct from $5::uuid
           and c.deleted_at is null`;
 
+export type AssistantTurnOrigin = Pick<
+  ProcessedRequest,
+  'requestId' | 'conversationId' | 'requestedModel' | 'usedFallback' | 'fallbackReason'
+> &
+  Partial<
+    Pick<
+      ProcessedRequest,
+      | 'organizationId'
+      | 'conversationIsTemporary'
+      | 'assistantMessageId'
+      | 'assistantParentId'
+      | 'projectSources'
+      | 'routeLane'
+      | 'routePlanId'
+      | 'resolvedSlot'
+      | 'resolvedTaskType'
+      | 'servingHarnessId'
+      | 'movedFromModel'
+      | 'movedReason'
+      | 'retries'
+      | 'toolExecutionObserved'
+      | 'llmRequest'
+      | 'chatRequest'
+    >
+  >;
+
 export interface AssistantTurnSnapshot {
   content: string;
   model: string;
@@ -162,7 +188,7 @@ function evidencedToolKeys(snapshot: AssistantTurnSnapshot): string[] {
  * `||`, so a field a later write leaves out keeps the earlier attempt's value.
  */
 export function buildAssistantTurnAttribution(
-  processed: ProcessedRequest,
+  processed: AssistantTurnOrigin,
   snapshot: AssistantTurnSnapshot,
 ): AssistantTurnAttribution {
   return {
@@ -200,14 +226,14 @@ export function buildAssistantTurnAttribution(
  * True when this turn can be persisted server-side at all. Exported so callers
  * can skip building an expensive snapshot for a turn that would be dropped.
  */
-export function canPersistAssistantTurn(processed: ProcessedRequest): boolean {
+export function canPersistAssistantTurn(processed: AssistantTurnOrigin): boolean {
   return Boolean(
     processed.conversationId && processed.assistantMessageId && !processed.conversationIsTemporary,
   );
 }
 
 export async function persistAssistantTurn(params: {
-  processed: ProcessedRequest;
+  processed: AssistantTurnOrigin;
   userId: string;
   snapshot: AssistantTurnSnapshot;
 }): Promise<void> {
