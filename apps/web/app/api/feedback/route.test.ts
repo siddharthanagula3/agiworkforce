@@ -353,14 +353,23 @@ describe('thumbs-down details', () => {
     feedbackRouteMocks.execute.mockResolvedValue(1);
   });
 
-  it('records a bare rating once under the id the client minted', async () => {
-    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
+  it('records a bare rating under the id the client minted, so a changed vote updates it', async () => {
+    const response = await POST(rating({ feedback_id: FEEDBACK_ID, rating: 'up' }));
 
     expect(response.status).toBe(200);
-    const [sql, params] = feedbackRouteMocks.query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('on conflict (id) do nothing');
+    const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('on conflict (id) do update');
+    expect(sql).toMatch(/public\.feedback\.user_id = excluded\.user_id/);
+    expect(JSON.parse(String(params[3]))).toMatchObject({ rating: 'up', message_id: 'msg-1' });
     expect(params[4]).toBe(FEEDBACK_ID);
-    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+  });
+
+  it("answers a conflict when a changed vote names a rating that is not the caller's", async () => {
+    feedbackRouteMocks.execute.mockResolvedValue(0);
+
+    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
+
+    expect(response.status).toBe(409);
   });
 
   it('completes the same rating with the reason and the comment', async () => {

@@ -1100,6 +1100,7 @@ const MessageBubbleComponent = function MessageBubble({
    * feedback counts with no new table.
    */
   const ratingFeedbackIdRef = useRef<string | null>(null);
+  const ratingRequestsRef = useRef<Promise<void>>(Promise.resolve());
   const thumbsDownRef = useRef<HTMLButtonElement>(null);
   const ratingDetailsRef = useRef<HTMLFormElement>(null);
   const [ratingDetailsOpen, setRatingDetailsOpen] = useState(false);
@@ -1110,45 +1111,48 @@ const MessageBubbleComponent = function MessageBubble({
     setRatingDetailsOpen(false);
   }, []);
   const postResponseRating = useCallback(
-    async (rating: 'up' | 'down', feedbackId: string, details?: ResponseRatingDetailsInput) => {
-      const response = await fetch('/api/feedback', {
-        method: 'POST',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        credentials: 'include',
-        body: JSON.stringify({
-          subject: details?.reason
-            ? `Response rated ${rating}: ${RESPONSE_RATING_REASON_LABELS[details.reason]}`
-            : `Response rated ${rating}`,
-          message: RESPONSE_RATING_MESSAGE,
-          metadata: {
-            source: 'web',
-            platform: 'web',
-            version: 'web',
-            user_agent:
-              typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent.slice(0, 500),
-            feedback_context: 'response_rating',
-            rating,
-            message_id: message.id,
-            conversation_id: message.sessionId ?? activeConversationId ?? undefined,
-            feedback_id: feedbackId,
-            ...(details?.reason ? { reason: details.reason } : {}),
-            ...(details?.comment ? { comment: details.comment } : {}),
-          },
-        }),
-      });
-      if (!response.ok) throw new Error(`Rating failed: ${response.status}`);
+    (rating: 'up' | 'down', details?: ResponseRatingDetailsInput): Promise<void> => {
+      const feedbackId = (ratingFeedbackIdRef.current ??= crypto.randomUUID());
+      const send = async () => {
+        const response = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify({
+            subject: details?.reason
+              ? `Response rated ${rating}: ${RESPONSE_RATING_REASON_LABELS[details.reason]}`
+              : `Response rated ${rating}`,
+            message: RESPONSE_RATING_MESSAGE,
+            metadata: {
+              source: 'web',
+              platform: 'web',
+              version: 'web',
+              user_agent:
+                typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent.slice(0, 500),
+              feedback_context: 'response_rating',
+              rating,
+              message_id: message.id,
+              conversation_id: message.sessionId ?? activeConversationId ?? undefined,
+              feedback_id: feedbackId,
+              ...(details?.reason ? { reason: details.reason } : {}),
+              ...(details?.comment ? { comment: details.comment } : {}),
+            },
+          }),
+        });
+        if (!response.ok) throw new Error(`Rating failed: ${response.status}`);
+      };
+      const request = ratingRequestsRef.current.then(send);
+      ratingRequestsRef.current = request.catch(() => undefined);
+      return request;
     },
     [activeConversationId, message.id, message.sessionId],
   );
   const rateMessage = useCallback(
     async (rating: 'up' | 'down') => {
-      if (ratingState !== 'idle') return;
       const previous = ratingState;
-      const feedbackId = crypto.randomUUID();
-      ratingFeedbackIdRef.current = feedbackId;
       setRatingState(rating);
       try {
-        await postResponseRating(rating, feedbackId);
+        await postResponseRating(rating);
       } catch {
         // Leaving the button lit would claim a vote the server never took.
         setRatingState(previous);
@@ -1159,9 +1163,7 @@ const MessageBubbleComponent = function MessageBubble({
   );
   const submitRatingDetails = useCallback(
     async (details: ResponseRatingDetailsInput) => {
-      const feedbackId = ratingFeedbackIdRef.current ?? crypto.randomUUID();
-      ratingFeedbackIdRef.current = feedbackId;
-      await postResponseRating('down', feedbackId, details);
+      await postResponseRating('down', details);
       setRatingState('down');
     },
     [postResponseRating],

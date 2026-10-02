@@ -136,14 +136,25 @@ describe('rating an assistant response', () => {
     expect(onReact).toHaveBeenNthCalledWith(2, 'msg-1', null);
   });
 
-  it('does not send a second vote for the same message', async () => {
+  it('records a changed vote on the same rating, and keeps it when the form is closed', async () => {
     render(<MessageBubble message={assistantMessage()} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Good response' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
     await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await userEvent.click(screen.getByRole('button', { name: 'Close feedback form' }));
+
+    const first = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    const second = JSON.parse(String((fetchMock.mock.calls[1] as [string, RequestInit])[1].body));
+    expect(first.metadata.rating).toBe('up');
+    expect(second.metadata.rating).toBe('down');
+    expect(second.metadata.feedback_id).toBe(first.metadata.feedback_id);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Bad response' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });
 
@@ -267,6 +278,24 @@ describe('telling us why an answer was bad', () => {
     });
     await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
     expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it('sends a vote and its details in the order they were given', async () => {
+    const vote = pendingResponse();
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Incomplete response' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vote.settle(true);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(sentBody(1).metadata).toMatchObject({ rating: 'down', reason: 'incomplete' });
   });
 
   it('keeps the rating when the form is closed without a reason', async () => {

@@ -26,10 +26,6 @@ const INSERT_FEEDBACK_SQL = `insert into public.feedback (user_id, subject, mess
 
 const RECORD_RATING_SQL = `insert into public.feedback (id, user_id, subject, message, metadata)
        values ($5::uuid, $1, $2, $3, $4::jsonb)
-       on conflict (id) do nothing`;
-
-const RECORD_RATING_DETAILS_SQL = `insert into public.feedback (id, user_id, subject, message, metadata)
-       values ($5::uuid, $1, $2, $3, $4::jsonb)
        on conflict (id) do update
           set subject = excluded.subject,
               message = excluded.message,
@@ -177,7 +173,6 @@ async function handleSubmitFeedback(request: NextRequest) {
     ? await storeScreenshot(screenshot.data_url, userId ?? null)
     : null;
 
-  const ratingDetails = Boolean(metadata.reason || metadata.comment);
   const params = [
     userId ?? null,
     safeSubject,
@@ -206,10 +201,8 @@ async function handleSubmitFeedback(request: NextRequest) {
   try {
     if (!metadata.feedback_id) {
       await db.query(INSERT_FEEDBACK_SQL, params);
-    } else if (!ratingDetails) {
-      await db.query(RECORD_RATING_SQL, [...params, metadata.feedback_id]);
     } else {
-      stored = (await db.execute(RECORD_RATING_DETAILS_SQL, [...params, metadata.feedback_id])) > 0;
+      stored = (await db.execute(RECORD_RATING_SQL, [...params, metadata.feedback_id])) > 0;
     }
   } catch (error) {
     logger.error(
