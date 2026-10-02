@@ -23,6 +23,7 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 import { MessageBubble } from '../MessageBubble';
+import { useResponseRatingDraftStore } from '../../../stores/response-rating-draft-store';
 import {
   RESPONSE_RATING_RATE_LIMITED,
   RESPONSE_RATING_REMOVE_FAILED,
@@ -43,6 +44,7 @@ function assistantMessage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useResponseRatingDraftStore.setState({ drafts: new Map() });
   fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -415,6 +417,55 @@ describe('telling us why an answer was bad', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(sentBody(1).metadata).toMatchObject({ rating: 'down', reason: 'incomplete' });
+  });
+
+  it('keeps an unsent reason and comment when the answer scrolls out of view and back', async () => {
+    const onReact = vi.fn();
+    const { unmount } = render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Incomplete response' }));
+    await userEvent.type(
+      within(form).getByRole('textbox', { name: 'Details (optional)' }),
+      'It stopped at step 3.',
+    );
+
+    unmount();
+    render(
+      <MessageBubble
+        message={{ ...assistantMessage(), metadata: { reaction: 'thumbsDown' as const } }}
+        onReact={onReact}
+      />,
+    );
+
+    const restored = screen.getByRole('form', { name: 'Tell us more' });
+    expect(within(restored).getByRole('button', { name: 'Incomplete response' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(restored).getByRole('textbox', { name: 'Details (optional)' })).toHaveValue(
+      'It stopped at step 3.',
+    );
+    expect(restored).not.toContainElement(document.activeElement as HTMLElement);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not bring back a form that was closed', async () => {
+    const { unmount } = render(<MessageBubble message={assistantMessage()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await userEvent.type(
+      within(screen.getByRole('form', { name: 'Tell us more' })).getByRole('textbox', {
+        name: 'Details (optional)',
+      }),
+      'Never mind.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Close feedback form' }));
+
+    unmount();
+    render(<MessageBubble message={assistantMessage()} />);
+
+    expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull();
   });
 
   it('keeps the rating when the form is closed without a reason', async () => {

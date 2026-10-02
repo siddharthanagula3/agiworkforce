@@ -192,6 +192,7 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
+import { useResponseRatingDraftStore } from '../../stores/response-rating-draft-store';
 import {
   useChatToolAllowanceStore,
   useToolsAllowedForChat,
@@ -1114,13 +1115,16 @@ const MessageBubbleComponent = function MessageBubble({
   const savedRatingRef = useRef(reactionRating(message.metadata?.reaction));
   const thumbsDownRef = useRef<HTMLButtonElement>(null);
   const ratingDetailsRef = useRef<HTMLFormElement>(null);
-  const [ratingDetailsOpen, setRatingDetailsOpen] = useState(false);
+  const ratingDetailsOpen = useResponseRatingDraftStore((state) => state.drafts.has(message.id));
+  const openRatingDraft = useResponseRatingDraftStore((state) => state.openDraft);
+  const closeRatingDraft = useResponseRatingDraftStore((state) => state.closeDraft);
+  const [ratingDetailsFocus, setRatingDetailsFocus] = useState(false);
   const closeRatingDetails = useCallback(() => {
     if (ratingDetailsRef.current?.contains(document.activeElement)) {
       thumbsDownRef.current?.focus();
     }
-    setRatingDetailsOpen(false);
-  }, []);
+    closeRatingDraft(message.id);
+  }, [closeRatingDraft, message.id]);
   const queueRatingRequest = useCallback((send: () => Promise<Response>): Promise<void> => {
     const request = ratingRequestsRef.current.then(async () => {
       const response = await send();
@@ -1196,7 +1200,12 @@ const MessageBubbleComponent = function MessageBubble({
       const action = ++latestRatingActionRef.current;
       onReact?.(message.id, next);
       setRatingState(next ?? 'idle');
-      setRatingDetailsOpen(next === 'down');
+      if (next === 'down') {
+        openRatingDraft(message.id);
+        setRatingDetailsFocus(true);
+      } else {
+        closeRatingDraft(message.id);
+      }
       void (next ? postResponseRating(next) : removeResponseRating()).then(
         () => {
           savedRatingRef.current = next;
@@ -1206,7 +1215,7 @@ const MessageBubbleComponent = function MessageBubble({
           const saved = savedRatingRef.current;
           onReact?.(message.id, saved);
           setRatingState(saved ?? 'idle');
-          setRatingDetailsOpen(false);
+          closeRatingDraft(message.id);
           toast.error(
             responseRatingFailureMessage(
               error,
@@ -1216,7 +1225,15 @@ const MessageBubbleComponent = function MessageBubble({
         },
       );
     },
-    [message.id, onReact, postResponseRating, removeResponseRating, responseRating],
+    [
+      closeRatingDraft,
+      message.id,
+      onReact,
+      openRatingDraft,
+      postResponseRating,
+      removeResponseRating,
+      responseRating,
+    ],
   );
 
   const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
@@ -3567,8 +3584,10 @@ const MessageBubbleComponent = function MessageBubble({
               {!isUser && ratingDetailsOpen && (
                 <ResponseRatingDetails
                   ref={ratingDetailsRef}
+                  messageId={message.id}
                   onSubmit={submitRatingDetails}
                   onClose={closeRatingDetails}
+                  autoFocus={ratingDetailsFocus}
                   className="mt-2 basis-full"
                 />
               )}

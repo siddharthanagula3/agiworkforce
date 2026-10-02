@@ -18,6 +18,10 @@ import {
   RESPONSE_RATING_REASONS,
   type ResponseRatingReason,
 } from '@/app/api/feedback/response-rating-contract';
+import {
+  EMPTY_RESPONSE_RATING_DRAFT,
+  useResponseRatingDraftStore,
+} from '../../stores/response-rating-draft-store';
 import { ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE, ACTION_ICON_SIZE } from './messageActionRow';
 
 export const RESPONSE_RATING_REASON_LABELS: Record<ResponseRatingReason, string> = {
@@ -63,8 +67,10 @@ export interface ResponseRatingDetailsInput {
 }
 
 interface ResponseRatingDetailsProps {
+  messageId: string;
   onSubmit: (details: ResponseRatingDetailsInput) => Promise<void>;
   onClose: () => void;
+  autoFocus?: boolean;
   className?: string;
   ref?: Ref<HTMLFormElement>;
 }
@@ -73,16 +79,20 @@ const REASON_CHIP_CLASS =
   'inline-flex min-h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors duration-instant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11';
 
 export function ResponseRatingDetails({
+  messageId,
   onSubmit,
   onClose,
+  autoFocus = false,
   className,
   ref,
 }: ResponseRatingDetailsProps) {
   const headingId = useId();
   const commentId = useId();
   const firstReasonRef = useRef<HTMLButtonElement>(null);
-  const [reason, setReason] = useState<ResponseRatingReason | null>(null);
-  const [comment, setComment] = useState('');
+  const { reason, comment } =
+    useResponseRatingDraftStore((state) => state.drafts.get(messageId)) ??
+    EMPTY_RESPONSE_RATING_DRAFT;
+  const updateDraft = useResponseRatingDraftStore((state) => state.updateDraft);
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const trimmedComment = comment.trim();
@@ -90,8 +100,8 @@ export function ResponseRatingDetails({
   const canSubmit = hasDetails && !sending;
 
   useEffect(() => {
-    firstReasonRef.current?.focus();
-  }, []);
+    if (autoFocus) firstReasonRef.current?.focus();
+  }, [autoFocus]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -151,7 +161,7 @@ export function ResponseRatingDetails({
               type="button"
               aria-pressed={selected}
               onClick={() => {
-                setReason(selected ? null : option);
+                updateDraft(messageId, { reason: selected ? null : option, comment });
                 setFailure(null);
               }}
               className={cn(
@@ -175,7 +185,7 @@ export function ResponseRatingDetails({
           id={commentId}
           value={comment}
           onChange={(event) => {
-            setComment(event.target.value);
+            updateDraft(messageId, { reason, comment: event.target.value });
             setFailure(null);
           }}
           maxLength={RESPONSE_RATING_COMMENT_MAX_CHARS}
