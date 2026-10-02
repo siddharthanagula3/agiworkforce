@@ -197,13 +197,14 @@ admins:
 | the key changed after the console check       | the first run after the rotation                      | critical |
 | the provider reported an account billing code | the first run after the signal                        | critical |
 
-Each reason is sent once per record (or per billing signal). It is emailed to
-the verified address of each platform admin, or to `AGI_SUPPORT_FALLBACK_EMAIL`
-when none resolves, which needs `RESEND_API_KEY` and `AGI_SUPPORT_FROM_EMAIL`,
-and it is paged through `PAGER_WEBHOOK_URL` when that is set. A reminder that
-reached nobody is logged as `free_quota_renewal_reminder_undeliverable` and sent
-again on the next run; a delivered one is logged as
-`free_quota_renewal_reminder_sent`, at error level when free models are off.
+Each reason is sent once per deadline (or per billing signal), so a renewal
+that moves a deadline gets its own reminders. It is emailed to the verified
+address of each platform admin, or to `AGI_SUPPORT_FALLBACK_EMAIL` when none
+resolves, which needs `RESEND_API_KEY` and `AGI_SUPPORT_FROM_EMAIL`, and it is
+paged through `PAGER_WEBHOOK_URL` when that is set. A reminder that reached
+nobody is logged as `free_quota_renewal_reminder_undeliverable` and sent again
+on the next run; a delivered one is logged as `free_quota_renewal_reminder_sent`,
+at error level when free models are off.
 
 ## What users see when a gate lapses
 
