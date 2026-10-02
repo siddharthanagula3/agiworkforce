@@ -187,8 +187,11 @@ export function parseFreePoolsDocument(value: unknown): FreePoolsDocument {
   return FreePoolsDocumentSchema.parse(value);
 }
 
+let freePools: FreePoolsDocument | null = null;
+
 export function loadFreePools(): FreePoolsDocument {
-  return parseFreePoolsDocument(freePoolsDocument);
+  freePools ??= parseFreePoolsDocument(freePoolsDocument);
+  return freePools;
 }
 
 export function freePoolDecisions(

@@ -132,6 +132,10 @@ describe('the shipped configuration', () => {
     expect(() => loadFreePools()).not.toThrow();
   });
 
+  it('parses the committed document once per process instead of on every request', () => {
+    expect(loadFreePools()).toBe(loadFreePools());
+  });
+
   it('yields no eligible routes, so shipping it changes no routing behaviour', () => {
     expect(eligibleFreeEligibility(NOW_MS)).toEqual({});
   });

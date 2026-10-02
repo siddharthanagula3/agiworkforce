@@ -13,11 +13,31 @@ import {
   freeQuotaPlanAllows,
   freeQuotaPlanAllowsOffering,
   resolveFreeQuotaDecisions,
+  type FreeQuotaContext,
 } from '@/lib/server/free-quota-catalogue';
+import {
+  RENDER_CACHE_SECONDS,
+  RENDER_CACHE_TAGS,
+  cachedRenderInput,
+} from '@/lib/server/render-cache';
 
 export const runtime = 'nodejs';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
+
+async function readCatalogue(context: FreeQuotaContext): Promise<FreeQuotaCatalogue | null> {
+  const decisions = await resolveFreeQuotaDecisions(context);
+  return decisions ? buildFreeQuotaCatalogue(decisions) : null;
+}
+
+function sharedCatalogue(context: FreeQuotaContext): Promise<FreeQuotaCatalogue | null> {
+  if (context.localAttestation) return readCatalogue(context);
+  return cachedRenderInput(() => readCatalogue(context), {
+    keyParts: [RENDER_CACHE_TAGS.freeQuotaCatalogue],
+    tags: [RENDER_CACHE_TAGS.freeQuotaCatalogue],
+    revalidate: RENDER_CACHE_SECONDS.liveSignal,
+  })();
+}
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'model-catalog');
@@ -36,10 +56,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       { status: 403, headers: NO_STORE },
     );
   }
-  const decisions = await resolveFreeQuotaDecisions(
+  const catalogue = await sharedCatalogue(
     freeQuotaContextFor({ url: request.url, userId: scoped.userId }),
   );
-  const catalogue = decisions ? buildFreeQuotaCatalogue(decisions) : null;
   const offered: FreeQuotaCatalogue | null = catalogue
     ? {
         ...catalogue,

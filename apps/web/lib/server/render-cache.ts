@@ -24,6 +24,7 @@ export const RENDER_CACHE_TAGS = {
   sloAttainment: 'slo-attainment',
   pluginCatalog: 'plugin-catalog',
   pluginEntry: (id: string) => `plugin-entry:${id}`,
+  freeQuotaCatalogue: 'free-quota-catalogue',
 } as const;
 
 /**
