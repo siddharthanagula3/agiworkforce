@@ -548,6 +548,7 @@ describe('Free section in the composer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
     const featured = within(screen.getByRole('group', { name: `${ISSUER} free models` }));
     const rows = [
+      screen.getByRole('button', { name: 'Free' }),
       featured.getAllByRole('button')[0]!,
       within(screen.getByRole('group', { name: 'More free models' })).getAllByRole('button')[0]!,
       screen.getByRole('button', { name: name(unavailable) }),

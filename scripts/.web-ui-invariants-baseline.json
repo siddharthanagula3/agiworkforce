@@ -17,7 +17,7 @@
     "raw-palette": 956,
     "raw-bw": 64,
     "opacity-diluted-text": 18,
-    "outline-none-without-focus-ring": 22,
+    "outline-none-without-focus-ring": 21,
     "hover-only-affordance": 14,
     "tiny-type-css": 47,
     "arbitrary-color": 1
@@ -1204,12 +1204,6 @@
       "line": 654,
       "rule": "opacity-diluted-text",
       "literal": "text-foreground/60"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 139,
-      "rule": "outline-none-without-focus-ring",
-      "literal": "outline-none"
     },
     {
       "file": "apps/web/features/chat/components/Composer/ComposerInput.tsx",

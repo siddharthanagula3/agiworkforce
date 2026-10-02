@@ -376,7 +376,7 @@ export function FreeQuotaModelSection({
         {...PICKER_ROW}
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
-        className="flex min-h-11 w-full items-center justify-between rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted/60"
+        className={`flex min-h-11 w-full items-center justify-between rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted/60 focus-visible:bg-muted/60 ${FOCUS_RING_CLASS}`}
       >
         Free <ChevronDown className="h-4 w-4" aria-hidden="true" />
       </button>

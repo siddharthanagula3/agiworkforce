@@ -246,6 +246,21 @@ describe('ComposerFooter · free section', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('draws the free models focus ring on the free default model row too', async () => {
+    const dialog = openPicker();
+    const freeModel = await within(dialog).findByRole('button', { name: READY_NAME });
+    const defaultRow = within(dialog).getByRole('button', { name: /Free Router Fixture/ });
+
+    for (const row of [defaultRow, freeModel]) {
+      expect(row).toHaveClass(
+        'focus-visible:outline-none',
+        'focus-visible:ring-2',
+        'focus-visible:ring-inset',
+        'focus-visible:ring-[var(--chat-focus-ring)]',
+      );
+    }
+  });
+
   it('shows the rest of the picker while the free models are still loading', () => {
     stubFreeCatalogue(new Promise<Response>(() => undefined));
     const dialog = openPicker();
