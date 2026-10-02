@@ -76,6 +76,7 @@ export const FREE_QUOTA_UNAVAILABLE_REASONS = [
   'attestation_stale',
   'attestation_excludes_offering',
   'managed_route_shares_allowance',
+  'provider_withdrawn',
 ] as const;
 
 export const FREE_QUOTA_BLOCKED_OUTCOMES = [
@@ -92,6 +93,8 @@ export const FREE_QUOTA_ATTESTATION_STANDINGS = [
   'other_credential',
   'billing_signal',
 ] as const;
+
+export const FREE_QUOTA_WITHDRAWAL_CAUSES = ['exhausted', 'billing', 'withdrawn'] as const;
 
 export const FREE_QUOTA_TERMS_REVIEW_STANDINGS = [
   'current',
@@ -169,7 +172,7 @@ export const FreeQuotaAttestationStatusSchema = z.discriminatedUnion('configured
       z.object({
         key: z.string().min(1),
         displayName: z.string().min(1),
-        cause: z.enum(['exhausted', 'billing']),
+        cause: z.enum(FREE_QUOTA_WITHDRAWAL_CAUSES),
       }),
     ),
     offerings: z.array(
@@ -198,6 +201,7 @@ export const FreeQuotaAttestationStatusSchema = z.discriminatedUnion('configured
 export type FreeQuotaUnavailableReason = (typeof FREE_QUOTA_UNAVAILABLE_REASONS)[number];
 export type FreeQuotaBlockedOutcome = (typeof FREE_QUOTA_BLOCKED_OUTCOMES)[number];
 export type FreeQuotaAttestationStanding = (typeof FREE_QUOTA_ATTESTATION_STANDINGS)[number];
+export type FreeQuotaWithdrawalCause = (typeof FREE_QUOTA_WITHDRAWAL_CAUSES)[number];
 export type FreeQuotaTermsReviewStanding = (typeof FREE_QUOTA_TERMS_REVIEW_STANDINGS)[number];
 export type FreeQuotaTerms = z.infer<typeof FreeQuotaTermsSchema>;
 export type FreeQuotaAttestationRequest = z.infer<typeof FreeQuotaAttestationRequestSchema>;

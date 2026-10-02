@@ -13,7 +13,6 @@ import {
 import {
   FreeQuotaAttestedOfferingsSchema,
   type FreeQuotaAttestationStanding,
-  type FreeQuotaUnavailableReason,
 } from '@agiworkforce/cloud-contracts';
 import type { FreeQuotaStatus } from '@/features/models/lib/free-quota-types';
 import type { FreeQuotaObservation } from '@/lib/server/free-pools';
@@ -314,6 +313,21 @@ const ATTESTATION_REFUSALS = {
   Exclude<FreeQuotaAttestationStanding, 'current' | 'expiring'>,
   FreeQuotaUnavailableReason
 >;
+
+export type FreeQuotaUnavailableReason =
+  | 'not_integrated'
+  | 'quota_only_not_observed'
+  | 'terms_review_missing'
+  | 'media_not_served'
+  | 'allowance_unknown'
+  | 'credential_missing'
+  | 'shared_state_unavailable'
+  | 'account_billing_signal'
+  | 'attestation_missing'
+  | 'attestation_other_credential'
+  | 'attestation_stale'
+  | 'attestation_excludes_offering'
+  | 'managed_route_shares_allowance';
 
 export type FreeQuotaDecision =
   | { status: Extract<FreeQuotaStatus, 'ready'>; usable: number; used: number }

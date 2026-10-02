@@ -11,6 +11,7 @@ import {
   type FreeQuotaBlockedOutcome,
   type FreeQuotaTerms,
   type FreeQuotaTermsReviewStanding,
+  type FreeQuotaWithdrawalCause,
 } from '@agiworkforce/cloud-contracts';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { FREE_QUOTA_CATEGORIES } from '@/features/models/lib/free-quota-types';
@@ -60,6 +61,7 @@ const OUTCOME_LABEL: Record<FreeQuotaBlockedOutcome, string> = {
   attestation_stale: 'Console check ran out',
   attestation_excludes_offering: 'Not covered by the console check',
   managed_route_shares_allowance: 'Allowance shared with a paid route',
+  provider_withdrawn: 'Withdrawn by the provider',
   exhausted: 'Free allowance used up',
   expired: 'Free allowance ended',
 };
@@ -71,9 +73,10 @@ const TERM_LABEL: Record<keyof FreeQuotaTerms, string> = {
   promptsExcludedFromTraining: 'Prompts excluded from provider training',
 };
 
-const WITHDRAWN_CAUSE: Record<'exhausted' | 'billing', string> = {
+const WITHDRAWN_CAUSE: Record<FreeQuotaWithdrawalCause, string> = {
   exhausted: 'the provider reported its free quota spent',
   billing: 'the provider refused it with a billing code',
+  withdrawn: 'the provider no longer offers it to this account',
 };
 
 type ConfiguredStatus = Extract<FreeQuotaAttestationStatus, { configured: true }>;
