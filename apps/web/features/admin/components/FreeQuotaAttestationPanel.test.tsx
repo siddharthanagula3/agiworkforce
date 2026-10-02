@@ -352,7 +352,9 @@ describe('FreeQuotaAttestationPanel, the console check gate', () => {
     );
     expect(within(check).getByText(/\(25 d left\)/)).toBeInTheDocument();
     expect(within(check).getByText('The key this deployment uses')).toBeInTheDocument();
-    expect(within(check).getByText('Every model in the inventory')).toBeInTheDocument();
+    expect(
+      within(check).getByText('Every inventory model, including any added later'),
+    ).toBeInTheDocument();
     expect(within(check).getByText('user_fixture_operator')).toBeInTheDocument();
     expect(within(check).getByText('None seen')).toBeInTheDocument();
   });
@@ -550,7 +552,7 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
 
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('bills the provider account at pay-as-you-go prices');
-    expect(dialog).toHaveTextContent('stamps it with its own clock');
+    expect(dialog).toHaveTextContent('stamps the record with its own clock');
     expect(dialog).toHaveTextContent('written to the audit log under your account');
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
@@ -576,7 +578,10 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
 
     expect(await screen.findByText(/Console check recorded at/)).toHaveAttribute('role', 'status');
     expect(network.posts).toHaveLength(1);
-    expect(network.posts[0]!.body).toEqual({ checkedAtMs: 'now', quotaOnlyOfferings: 'all' });
+    expect(network.posts[0]!.body).toEqual({
+      checkedAtMs: 'now',
+      quotaOnlyOfferings: OFFERINGS.map((offering) => offering.key),
+    });
     expect(network.posts[0]!.headers['x-csrf-token']).toBe(CSRF_TOKEN);
     expect(await screen.findByText(/The console check is valid until/)).toBeInTheDocument();
     expect(
@@ -620,6 +625,66 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
       checkedAtMs: 'now',
       quotaOnlyOfferings: ['fixture-offering-chat'],
     });
+  });
+
+  it('records every listed model by name, so a model added to the inventory later is not covered', async () => {
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null } })], {
+      status: 200,
+      body: { checkedAtMs: SERVER_NOW, freshUntilMs: SERVER_NOW + 30 * DAY_MS, offerings: 3 },
+    });
+    render(<FreeQuotaAttestationPanel />);
+
+    await user.click(await screen.findByRole('radio', { name: /Every model listed here \(3\)/ }));
+    await user.click(screen.getByRole('checkbox', { name: /I checked/ }));
+    await user.click(screen.getByRole('button', { name: 'Record console check' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('every model listed here (3)');
+    expect(dialog).toHaveTextContent('A model added to the inventory later is not covered');
+    await user.click(within(dialog).getByRole('button', { name: 'Record check' }));
+
+    await waitFor(() => expect(network.posts).toHaveLength(1));
+    expect(network.posts[0]!.body).toEqual({
+      checkedAtMs: 'now',
+      quotaOnlyOfferings: [
+        'fixture-offering-chat',
+        'fixture-offering-image',
+        'fixture-offering-video',
+      ],
+    });
+    expect(await screen.findByText(/Console check recorded at/)).toHaveTextContent(
+      'It covers 3 models',
+    );
+  });
+
+  it('offers no record of every model when no model can be listed', async () => {
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null }, offerings: [] })]);
+    render(<FreeQuotaAttestationPanel />);
+
+    await user.click(await screen.findByRole('radio', { name: /Every model listed here/ }));
+    await user.click(screen.getByRole('checkbox', { name: /I checked/ }));
+
+    expect(screen.getByRole('button', { name: 'Record console check' })).toBeDisabled();
+  });
+
+  it('names the listed models a renewal would leave uncovered', async () => {
+    serve([
+      configured({
+        attestation: {
+          standing: 'expiring',
+          record: record({
+            checkedAtMs: SERVER_NOW - 28 * DAY_MS,
+            freshUntilMs: SERVER_NOW + 2 * DAY_MS,
+            offerings: 2,
+          }),
+        },
+      }),
+    ]);
+    render(<FreeQuotaAttestationPanel />);
+
+    const check = await screen.findByRole('group', { name: 'Console check' });
+    expect(within(check).getByText('2 models, 1 listed model not covered')).toBeInTheDocument();
   });
 
   it('shows the server refusal as an alert and keeps the form as it was', async () => {

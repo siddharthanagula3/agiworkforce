@@ -219,7 +219,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
   );
   if (!parsed.success) {
     return operatorRefusal(
-      'Send checkedAtMs ("now", or when the check was made in epoch milliseconds) and quotaOnlyOfferings ("all" or a list of offering keys).',
+      'Send checkedAtMs ("now", or when the check was made in epoch milliseconds) and quotaOnlyOfferings ("all" for every model listed now, or a list of offering keys).',
       'invalid_attestation',
       400,
     );
@@ -253,12 +253,29 @@ async function handlePost(request: NextRequest): Promise<Response> {
       400,
     );
   }
+  const covered =
+    quotaOnlyOfferings === 'all'
+      ? attestableOfferings(
+          await resolveFreeQuotaDecisions(
+            freeQuotaContextFor({ url: request.url, userId, nowMs }),
+            { inventory },
+          ),
+          null,
+        ).map((offering) => offering.key)
+      : quotaOnlyOfferings;
+  if (covered.length === 0) {
+    return operatorRefusal(
+      'No free quota inventory model can be served from the free quota now, so there is nothing to record.',
+      'attestation_nothing_to_cover',
+      400,
+    );
+  }
 
   await writeQuotaAttestation(store, {
     sourceUrl: QuotaAttestationSchema.shape.sourceUrl.value,
     checkedAtMs,
     credentialSha256: credentialSha256(apiKey),
-    quotaOnlyOfferings,
+    quotaOnlyOfferings: covered,
     attestedBy: userId,
   });
   await recordAuditEvent({
@@ -269,14 +286,14 @@ async function handlePost(request: NextRequest): Promise<Response> {
     detail: {
       resourceType: 'free_quota_attestation',
       resourceId: new Date(checkedAtMs).toISOString(),
-      scopes: quotaOnlyOfferings === 'all' ? ['all'] : quotaOnlyOfferings,
+      scopes: covered,
     },
   });
 
   const receipt: FreeQuotaAttestationReceipt = {
     checkedAtMs,
     freshUntilMs: attestationFreshUntilMs(checkedAtMs, policy),
-    offerings: coveredCount(quotaOnlyOfferings),
+    offerings: covered.length,
   };
   return NextResponse.json(receipt, { headers: NO_STORE });
 }

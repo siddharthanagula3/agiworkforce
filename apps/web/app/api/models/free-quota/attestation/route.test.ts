@@ -136,13 +136,14 @@ afterEach(() => {
 
 it('binds a recent console check to the server key and records who made it', async () => {
   const checkedAtMs = Date.now() - 60_000;
-  const response = await attest({ checkedAtMs, quotaOnlyOfferings: 'all' });
+  const chosen = (await configuredStatus()).offerings.slice(0, 3).map((offering) => offering.key);
+  const response = await attest({ checkedAtMs, quotaOnlyOfferings: chosen });
   expect(response.status).toBe(200);
   expect(await stored()).toEqual({
     sourceUrl: 'https://home.qwencloud.com/benefits',
     checkedAtMs,
     credentialSha256: credentialSha256(API_KEY),
-    quotaOnlyOfferings: 'all',
+    quotaOnlyOfferings: chosen,
     attestedBy: 'fixture-operator',
   });
   expect(mocks.audit).toHaveBeenCalledWith(
@@ -162,9 +163,39 @@ it('stamps a check sent as "now" with the server clock, so no browser clock reac
   expect(await response.json()).toEqual({
     checkedAtMs: serverNowMs,
     freshUntilMs: serverNowMs + 30 * DAY_MS,
-    offerings: 'all',
+    offerings: expect.any(Number),
   });
   expect((await stored())?.checkedAtMs).toBe(serverNowMs);
+});
+
+it('records "all" as the models it can list now, so a model added to the inventory later is not covered', async () => {
+  const listed = (await configuredStatus()).offerings.map((offering) => offering.key);
+  const unlisted = inventory.entries
+    .map((entry) => entry.offeringKey)
+    .filter((key) => !listed.includes(key));
+  expect(unlisted.length).toBeGreaterThan(0);
+
+  const response = await attest({ checkedAtMs: 'now', quotaOnlyOfferings: 'all' });
+
+  expect(response.status).toBe(200);
+  expect((await response.json()).offerings).toBe(listed.length);
+  expect((await stored())?.quotaOnlyOfferings).toEqual(listed);
+  expect(mocks.audit).toHaveBeenCalledWith(
+    expect.objectContaining({ detail: expect.objectContaining({ scopes: listed }) }),
+  );
+  const after = await configuredStatus();
+  expect(after.attestation.record?.offerings).toBe(listed.length);
+});
+
+it('records nothing for "all" once no inventory model can be served from the free quota', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2027-06-01T00:00:00.000Z'));
+
+  const response = await attest({ checkedAtMs: 'now', quotaOnlyOfferings: 'all' });
+
+  expect(response.status).toBe(400);
+  expect((await response.json()).error.code).toBe('attestation_nothing_to_cover');
+  expect(await stored()).toBeNull();
+  expect(mocks.audit).not.toHaveBeenCalled();
 });
 
 it.each([

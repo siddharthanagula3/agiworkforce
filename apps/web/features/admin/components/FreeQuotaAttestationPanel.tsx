@@ -5,6 +5,7 @@ import {
   FREE_QUOTA_ATTESTATION_PATH,
   FreeQuotaAttestationReceiptSchema,
   FreeQuotaAttestationStatusSchema,
+  type FreeQuotaAttestationReceipt,
   type FreeQuotaAttestationRequest,
   type FreeQuotaAttestationStanding,
   type FreeQuotaAttestationStatus,
@@ -218,17 +219,33 @@ function servingNotice(status: ConfiguredStatus): Notice {
 }
 
 function coverageOf(status: ConfiguredStatus): Coverage | null {
-  const { record } = status.attestation;
-  if (!record) return null;
-  return record.offerings === 'all' ? 'all' : 'selected';
+  if (!status.attestation.record) return null;
+  const everyListed =
+    status.offerings.length > 0 && status.offerings.every((offering) => offering.attested);
+  return everyListed ? 'all' : 'selected';
 }
 
 function attestedKeys(status: ConfiguredStatus): Set<string> {
   return new Set(
-    coverageOf(status) === 'selected'
-      ? status.offerings.filter((offering) => offering.attested).map((offering) => offering.key)
-      : [],
+    status.offerings.filter((offering) => offering.attested).map((offering) => offering.key),
   );
+}
+
+function modelCount(count: number, qualifier = ''): string {
+  return `${formatCount(count)} ${qualifier}${count === 1 ? 'model' : 'models'}`;
+}
+
+function coveredModels(status: ConfiguredStatus): string {
+  const { record } = status.attestation;
+  if (!record) return 'None recorded';
+  if (record.offerings === 'all') return 'Every inventory model, including any added later';
+  const uncovered = status.offerings.filter((offering) => !offering.attested).length;
+  const covered = modelCount(record.offerings);
+  return uncovered === 0 ? covered : `${covered}, ${modelCount(uncovered, 'listed ')} not covered`;
+}
+
+function receiptCoverage(offerings: FreeQuotaAttestationReceipt['offerings']): string {
+  return offerings === 'all' ? 'every inventory model' : modelCount(offerings);
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {
@@ -337,7 +354,7 @@ export default function FreeQuotaAttestationPanel() {
       const receipt = FreeQuotaAttestationReceiptSchema.parse(await readJsonResponse(response));
       setOutcome({
         tone: 'ok',
-        text: `Console check recorded at ${formatEpochMs(receipt.checkedAtMs)}. It counts until ${formatEpochMs(receipt.freshUntilMs)}.`,
+        text: `Console check recorded at ${formatEpochMs(receipt.checkedAtMs)}. It covers ${receiptCoverage(receipt.offerings)} and counts until ${formatEpochMs(receipt.freshUntilMs)}.`,
       });
       setConfirmed(false);
       await loadAndSeedForm();
@@ -350,14 +367,16 @@ export default function FreeQuotaAttestationPanel() {
 
   function requestRecord(current: ConfiguredStatus) {
     if (coverage === null) return;
-    const offerings = coverage === 'all' ? 'all' : [...selected];
+    const offerings =
+      coverage === 'all' ? current.offerings.map((offering) => offering.key) : [...selected];
+    if (offerings.length === 0) return;
     const covered =
-      offerings === 'all'
-        ? `every model in the ${current.issuer} inventory`
+      coverage === 'all'
+        ? `every model listed here (${formatCount(offerings.length)})`
         : `the models you selected (${formatCount(offerings.length)})`;
     confirm({
       title: 'Record the console check?',
-      description: `This records that Free quota only is on for ${covered}. The server stamps it with its own clock when you confirm, and it counts for ${formatDurationMs(current.validForMs)}, until about ${formatEpochMs(nowMs + current.validForMs)}. If the switch is off for any of them, usage past that model's free quota bills the provider account at pay-as-you-go prices. The record replaces the current one, cannot be withdrawn here, and is written to the audit log under your account.`,
+      description: `This records that Free quota only is on for ${covered}. A model added to the inventory later is not covered until a new check names it. The server stamps the record with its own clock when you confirm, and it counts for ${formatDurationMs(current.validForMs)}, until about ${formatEpochMs(nowMs + current.validForMs)}. If the switch is off for any of them, usage past that model's free quota bills the provider account at pay-as-you-go prices. The record replaces the current one, cannot be withdrawn here, and is written to the audit log under your account.`,
       confirmLabel: 'Record check',
       destructive: false,
       onConfirm: () => record(offerings),
@@ -460,7 +479,10 @@ function ConfiguredView({
   onRecord,
 }: ConfiguredViewProps) {
   const canRecord =
-    confirmed && !busy && (coverage === 'all' || (coverage === 'selected' && selected.size > 0));
+    confirmed &&
+    !busy &&
+    ((coverage === 'all' && status.offerings.length > 0) ||
+      (coverage === 'selected' && selected.size > 0));
 
   return (
     <>
@@ -558,7 +580,10 @@ function ConfiguredView({
               checked={coverage === 'all'}
               onChange={() => onCoverage('all')}
             />
-            <span>Every model: Free quota only is on for all of them</span>
+            <span>
+              Every model listed here ({formatCount(status.offerings.length)}): Free quota only is
+              on for all of them
+            </span>
           </label>
           <label className={CHOICE_CLASS}>
             <input
@@ -745,13 +770,7 @@ function ConsoleCheckGate({ status, nowMs }: { status: ConfiguredStatus; nowMs: 
             : 'None recorded'}
         </dd>
         <dt className="text-muted-foreground">Models covered</dt>
-        <dd>
-          {record
-            ? record.offerings === 'all'
-              ? 'Every model in the inventory'
-              : `${formatCount(record.offerings)} selected`
-            : 'None recorded'}
-        </dd>
+        <dd>{coveredModels(status)}</dd>
         <dt className="text-muted-foreground">Recorded by</dt>
         <dd className="break-all font-mono text-xs">
           {record ? record.attestedBy : 'None recorded'}
