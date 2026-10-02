@@ -25,6 +25,7 @@ export const RENDER_CACHE_TAGS = {
   pluginCatalog: 'plugin-catalog',
   pluginEntry: (id: string) => `plugin-entry:${id}`,
   freeQuotaCatalogue: 'free-quota-catalogue',
+  experientialFreeCatalogue: 'experiential-free-catalogue',
 } as const;
 
 /**

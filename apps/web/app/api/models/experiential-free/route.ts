@@ -10,10 +10,42 @@ import { freeQuotaPlanAllows } from '@/lib/server/free-quota-catalogue';
 import {
   experientialFreeConfiguration,
   loadExperientialFreeOfferings,
+  type ExperientialFreeConfiguration,
+  type ExperientialFreeOffering,
 } from '@/lib/server/experiential-free';
+import {
+  RENDER_CACHE_SECONDS,
+  RENDER_CACHE_TAGS,
+  cachedRenderInput,
+} from '@/lib/server/render-cache';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 
 export const runtime = 'nodejs';
+
+class UnverifiedPromotions extends Error {}
+
+async function verifiedOfferings(
+  config: ExperientialFreeConfiguration,
+): Promise<ExperientialFreeOffering[]> {
+  const offerings = await loadExperientialFreeOfferings(config);
+  if (!offerings) throw new UnverifiedPromotions('Provider promotions could not be verified.');
+  return offerings;
+}
+
+async function sharedOfferings(
+  config: ExperientialFreeConfiguration,
+): Promise<ExperientialFreeOffering[] | null> {
+  try {
+    return await cachedRenderInput(() => verifiedOfferings(config), {
+      keyParts: [RENDER_CACHE_TAGS.experientialFreeCatalogue],
+      tags: [RENDER_CACHE_TAGS.experientialFreeCatalogue],
+      revalidate: RENDER_CACHE_SECONDS.liveSignal,
+    })();
+  } catch (error) {
+    if (error instanceof UnverifiedPromotions) return null;
+    throw error;
+  }
+}
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const limit = await withRateLimit(request, 'model-catalog');
@@ -27,7 +59,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const config = experientialFreeConfiguration();
   if (!config)
     return NextResponse.json(null, { headers: { 'Cache-Control': 'private, no-store' } });
-  const offerings = await loadExperientialFreeOfferings(config);
+  const offerings = await sharedOfferings(config);
   if (!offerings) {
     return NextResponse.json(
       { error: 'Provider promotions could not be verified.' },
