@@ -18,10 +18,14 @@ const guard = path.join(repoRoot, 'scripts/check-security-response-headers.mjs')
 const PROXY = `
 export function buildCsp(nonce: string): string {
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
+  const uploadOrigins = process.env['UPLOAD_ORIGIN'] ? ' https://uploads.example.com' : '';
+  const sandboxFrameSrc = process.env['SANDBOX_ORIGIN'] ? ' https://sandbox.example.com' : '';
   return \`
     default-src 'self';
     script-src 'self' 'nonce-\${nonce}'\${devUnsafeEval} https://js.stripe.com;
     style-src 'self' 'unsafe-inline';
+    connect-src 'self'\${uploadOrigins} https://api.stripe.com;
+    frame-src 'self' https://js.stripe.com\${sandboxFrameSrc};
     object-src 'none';
   \`.trim();
 }
@@ -113,6 +117,25 @@ test('a directive that governs scripts, connections, frames, workers or objects 
         assert.ok(output.includes(`${directive} admits every host with ${source}`), output);
       },
     );
+  }
+});
+
+test('an every-host source typed against the interpolation after it still fails', () => {
+  for (const [directive, before, after] of [
+    ['script-src', "'nonce-${nonce}'${devUnsafeEval}", "'nonce-${nonce}' https:${devUnsafeEval}"],
+    ['connect-src', "'self'${uploadOrigins}", "'self' https:${uploadOrigins}"],
+    [
+      'frame-src',
+      'https://js.stripe.com${sandboxFrameSrc}',
+      'https://js.stripe.com https:${sandboxFrameSrc}',
+    ],
+  ]) {
+    assert.ok(PROXY.includes(before), before);
+    withTree({ 'apps/web/proxy.ts': PROXY.replace(before, after) }, (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1, directive);
+      assert.ok(output.includes(`${directive} admits every host with https:`), output);
+    });
   }
 });
 
@@ -220,6 +243,16 @@ test('every-host sources are read inside a meta policy and across an escaped new
   assert.deepEqual(everyHostSources("default-src 'self';\\nscript-src 'self' https:"), [
     { directive: 'script-src', source: 'https:' },
   ]);
+});
+
+test('every-host sources are read with each template interpolation taken out', () => {
+  assert.deepEqual(everyHostSources("connect-src 'self' https:${uploadOrigins}${signal()};"), [
+    { directive: 'connect-src', source: 'https:' },
+  ]);
+  assert.deepEqual(
+    everyHostSources("script-src 'self' 'nonce-${nonce}'${devUnsafeEval} wss://${host};"),
+    [],
+  );
 });
 
 test('policyLiterals reads a template across its newlines and a string up to its quote', () => {

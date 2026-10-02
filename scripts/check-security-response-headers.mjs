@@ -66,8 +66,8 @@ export function scriptSourceOf(policy) {
 
 export function everyHostSources(policy) {
   const found = [];
-  const unescaped = policy.replace(/\\[nrt]/g, ' ');
-  for (const [, directive, sources] of unescaped.matchAll(HOST_BOUNDED_DIRECTIVE)) {
+  const text = policy.replace(/\\[nrt]/g, ' ').replace(/\$\{[^}]*\}/g, ' ');
+  for (const [, directive, sources] of text.matchAll(HOST_BOUNDED_DIRECTIVE)) {
     for (const source of sources.trim().split(/\s+/)) {
       if (EVERY_HOST_SOURCE.test(source)) found.push({ directive, source });
     }
