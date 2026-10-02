@@ -207,10 +207,12 @@ describe('useChatStream', () => {
   });
 
   it('shows a reached free limit as a limit card, never as an error row', async () => {
-    const [[limitedKey, limited], [alternativeKey, alternative]] = Object.entries(
-      getProviderOfferings(),
-    ).filter(([, offering]) => offering.quotaProbeProtocol === 'chat');
-    const message = `${limited!.displayName} has reached its free limit.`;
+    const chatOfferings = Object.entries(getProviderOfferings()).filter(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    );
+    const [limitedKey, limited] = chatOfferings[0]!;
+    const [alternativeKey, alternative] = chatOfferings[1]!;
+    const message = `${limited.displayName} has reached its free limit.`;
     vi.mocked(fetch).mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -243,9 +245,9 @@ describe('useChatStream', () => {
       reason: message,
       freeLimit: {
         modelId: limitedKey,
-        modelName: limited!.displayName,
+        modelName: limited.displayName,
         reason: 'allowance_used',
-        alternativeModel: { id: alternativeKey, name: alternative!.displayName },
+        alternativeModel: { id: alternativeKey, name: alternative.displayName },
       },
     });
     expect(fetch).toHaveBeenCalledTimes(1);

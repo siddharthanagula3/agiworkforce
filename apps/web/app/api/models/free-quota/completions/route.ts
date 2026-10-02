@@ -72,6 +72,7 @@ import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
 import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
+import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
 import {
   ChatAttachmentHydrationError,
   hydrateChatAttachments,
@@ -135,10 +136,6 @@ interface CopyContext {
   modelName: string;
   alternativeName: string | null;
   expiresOn: string | null;
-}
-
-function modelLabel(id: string): string | null {
-  return getProviderOffering(id)?.displayName ?? getModelMetadataById(id)?.name ?? null;
 }
 
 function refuse(failure: FreeQuotaFailure, context: CopyContext, freeLimit?: FreeLimit) {
@@ -498,7 +495,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
       (offering.quotaProbeProtocol === 'chat' && !hasAttachmentReferences
         ? FREE_TRIAL_MODEL
         : null);
-    const alternativeName = alternative ? modelLabel(alternative) : null;
+    const alternativeName = alternative ? freeModelLabel(alternative) : null;
     return refuse(
       failure,
       { ...copy, alternativeName },

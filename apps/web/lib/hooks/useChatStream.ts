@@ -4230,7 +4230,9 @@ export function useChatStream(
                 options.workMode === 'agiwork',
               ),
             };
-            const reason = freeLimitFallback ? null : freeLimitFallbackReason(fallbackTurn);
+            const reason: string | null = freeLimitFallback
+              ? null
+              : freeLimitFallbackReason(fallbackTurn);
             const fallbackModel = reason
               ? pickFreeLimitFallback(
                   await loadFreeQuotaCatalogue(abortController.signal).catch((catalogueError) => {
