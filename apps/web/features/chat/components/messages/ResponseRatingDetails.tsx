@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { Button, Label, Spinner, Textarea } from '@agiworkforce/ui';
 import { Check, X } from '@agiworkforce/icons';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
 import {
@@ -120,7 +121,7 @@ export function ResponseRatingDetails({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
-    if (event.key !== 'Escape') return;
+    if (event.key !== 'Escape' || isImeComposingKey(event.nativeEvent)) return;
     event.preventDefault();
     event.stopPropagation();
     onClose();

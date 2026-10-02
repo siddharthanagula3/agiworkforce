@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
@@ -495,6 +496,30 @@ describe('telling us why an answer was bad', () => {
     expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Bad response' })).toHaveFocus();
   });
+
+  it.each([
+    ['Chrome marks the key as composing', { isComposing: true }],
+    ['Safari sends the IME key code', { keyCode: IME_PROCESSING_KEY_CODE }],
+  ])(
+    'keeps the form and what was written when Escape only cancels an IME conversion (%s)',
+    async (_, composition) => {
+      render(<MessageBubble message={assistantMessage()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+      const form = screen.getByRole('form', { name: 'Tell us more' });
+      await userEvent.click(within(form).getByRole('button', { name: 'Incomplete response' }));
+      const details = within(form).getByRole('textbox', { name: 'Details (optional)' });
+      await userEvent.type(details, 'The total is wrong');
+
+      fireEvent.keyDown(details, { key: 'Escape', ...composition });
+
+      expect(screen.getByRole('form', { name: 'Tell us more' })).toBe(form);
+      expect(useResponseRatingDraftStore.getState().drafts.get('msg-1')).toEqual({
+        reason: 'incomplete',
+        comment: 'The total is wrong',
+      });
+    },
+  );
 
   it('hands focus back to the thumbs-down button after the details are sent', async () => {
     const focusFixup = applyFocusFixupRule();
