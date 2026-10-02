@@ -103,6 +103,10 @@ test('a directive that governs scripts, connections, frames, workers or objects 
     ['worker-src', 'http:'],
     ['object-src', 'wss:'],
     ['default-src', 'https:'],
+    ['script-src', 'https://*/assets/'],
+    ['connect-src', '*:443'],
+    ['frame-src', '*/embed'],
+    ['worker-src', 'wss://*:8443/socket'],
   ]) {
     withTree(
       {
@@ -144,7 +148,7 @@ test('img-src, named hosts and wildcard subdomains are outside the every-host ru
     {
       'apps/web/proxy.ts': PROXY.replace(
         "object-src 'none';",
-        "object-src 'none';\n    img-src 'self' data: https:;\n    connect-src 'self' https://*.clerk.com wss://signal.agiworkforce.com;\n    frame-src https://js.stripe.com;",
+        "object-src 'none';\n    img-src 'self' data: https:;\n    connect-src 'self' https://*.clerk.com *.clerk.accounts.dev wss://signal.agiworkforce.com;\n    frame-src https://js.stripe.com;",
       ),
     },
     (root) => {

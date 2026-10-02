@@ -29,7 +29,8 @@ const SCRIPT_SRC = /script-src([^;`'"]*(?:'[^']*'[^;`'"]*)*)/i;
 const SANDBOXED = /default-src\s+'none'/i;
 const HOST_BOUNDED_DIRECTIVE =
   /(?<![\w-])(default-src|script-src|connect-src|frame-src|child-src|worker-src|object-src)\b([^;`"]*)/gi;
-const EVERY_HOST_SOURCE = /^(?:\*|(?:https?|wss?):(?:\/\/\*(?::(?:\d+|\*))?\/?)?)$/i;
+const EVERY_HOST_SOURCE =
+  /^(?:(?:https?|wss?):|(?:(?:https?|wss?):\/\/)?\*(?::(?:\d+|\*))?(?:\/\S*)?)$/i;
 
 const CORS_ORIGIN = /['"]Access-Control-Allow-Origin['"]\s*:\s*(['"`])([^'"`]*)\1/g;
 const CORS_CREDENTIALS = /Access-Control-Allow-Credentials/;
