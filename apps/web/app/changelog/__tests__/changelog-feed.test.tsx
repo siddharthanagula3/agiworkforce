@@ -25,6 +25,9 @@ import {
 
 const ATOM = 'http://www.w3.org/2005/Atom';
 const RFC_3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const FORTHCOMING_TARGET = /\bTarget: (.+)\.$/;
+const CALENDAR_QUARTER = /^Q[1-4] \d{4}$/;
+const QUARTER_CLAIM = /[^.]*\bquarters?\b[^.]*/gi;
 
 const READER_TIME_ZONES = [
   'Pacific/Pago_Pago',
@@ -453,7 +456,19 @@ describe('/changelog lists policy changes', () => {
     expect(copy).not.toMatch(/backdate/i);
     expect(forthcoming).not.toHaveLength(0);
     expect(copy).not.toMatch(/pre-?announce/i);
-    expect(copy).toContain('Forthcoming items are listed separately, each with a target quarter');
+  });
+
+  it('speaks of a target quarter only when every forthcoming row shows one', () => {
+    render(<ChangelogPage />);
+    const rows = within(screen.getByRole('list', { name: 'Forthcoming' })).getAllByRole('listitem');
+    const targets = rows.flatMap(
+      (row) => FORTHCOMING_TARGET.exec(row.textContent ?? '')?.slice(1, 2) ?? [],
+    );
+
+    expect(targets).toHaveLength(rows.length);
+    if (!targets.every((target) => CALENDAR_QUARTER.test(target))) {
+      expect(document.body.textContent?.match(QUARTER_CLAIM) ?? []).toEqual([]);
+    }
   });
 
   it('says a policy date can precede publication, when the listed versions were first published, and when the objection window starts', () => {
