@@ -12,6 +12,7 @@ import {
   PolicySchema,
   attestationFromVerification,
   decideFreeQuotaOffering,
+  freeQuotaEndsOn,
   readFreeQuotaState,
   readLocalQuotaVerification,
   type FreeQuotaDecision,
@@ -198,7 +199,7 @@ export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuot
       limit: entry.limit,
       unit: entry.unit,
       consumedApproximate: entry.consumedApproximate,
-      expiresOn: entry.expiresOn,
+      expiresOn: freeQuotaEndsOn(entry, offering),
       status: decision.status,
       ...(offering.quotaProbeProtocol === 'image-sync'
         ? { outputSize: offering.quotaImageSize ?? policy.imageSize }

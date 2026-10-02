@@ -52,6 +52,7 @@ import {
 import {
   classifyFreeQuotaRefusal,
   claimFreeQuotaTurn,
+  freeQuotaEndsOn,
   recordFreeQuotaHold,
   recordFreeQuotaSuspension,
   reserveFreeQuotaAllowance,
@@ -460,10 +461,11 @@ async function handlePost(request: NextRequest): Promise<Response> {
       400,
     );
   }
+  const endsOn = freeQuotaEndsOn(entry, offering);
   const copy: CopyContext = {
     ...baseCopy,
     modelName: offering.displayName,
-    expiresOn: entry.expiresOn,
+    expiresOn: endsOn,
   };
   if (decision.status !== 'ready') {
     logger.info(
@@ -675,7 +677,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
       apiKey: context.apiKey,
       observedOn: inventory.observedOn,
       offeringKey: entry.offeringKey,
-      expiresOn: entry.expiresOn,
+      expiresOn: endsOn,
       units: turnUnits(entry.offeringKey, offering, policy, messages, replyTokens),
       usable: decision.usable,
       nowMs,

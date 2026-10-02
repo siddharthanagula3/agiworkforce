@@ -443,6 +443,14 @@ function buildCatalog(curation, synced, familyCatalog, defaultsCatalog) {
         `${key}: invalid quota probe protocol`,
       );
     }
+    if (offering.retiresAt !== undefined) {
+      assert.ok(
+        typeof offering.retiresAt === 'string' &&
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(offering.retiresAt) &&
+          new Date(offering.retiresAt).toISOString() === offering.retiresAt,
+        `${key}: retiresAt must be an ISO instant in UTC`,
+      );
+    }
     assert.ok(curation.providers[offering.provider], `${key}: unknown offering provider`);
     assert.ok(
       ['chat', 'image', 'video', 'audio', 'embedding'].includes(offering.category),

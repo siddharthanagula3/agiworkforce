@@ -299,6 +299,46 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     expect(media.some((entry) => local.get(entry.offeringKey)!.status === 'ready')).toBe(true);
   });
 
+  it('withdraws a model at its provider retirement while its allocation still runs', async () => {
+    const store = await attested(createMemoryKeyValueStore());
+    const ready = readyKeys(await statuses(context({ store })));
+    const retiring = ready.find((key) => getProviderOfferings()[key]!.retiresAt !== undefined)!;
+    const staying = ready.find((key) => getProviderOfferings()[key]!.retiresAt === undefined)!;
+    const retiresAtMs = Date.parse(getProviderOfferings()[retiring]!.retiresAt!);
+    const entry = inventory.entries.find((row) => row.offeringKey === retiring)!;
+    expect(entry.expiresOn! > new Date(retiresAtMs).toISOString().slice(0, 10)).toBe(true);
+
+    const before = await statuses(context({ store, nowMs: retiresAtMs - 1 }));
+    const after = await statuses(context({ store, nowMs: retiresAtMs }));
+
+    expect(before.get(retiring)!.status).toBe('ready');
+    expect(after.get(retiring)).toEqual({ status: 'expired' });
+    expect(after.get(staying)!.status).toBe('ready');
+  });
+
+  it('publishes the retirement date when it comes before the allocation ends', async () => {
+    const decisions = await resolveFreeQuotaDecisions(
+      context({ store: await attested(createMemoryKeyValueStore()) }),
+      { inventory: reviewedInventory },
+    );
+    const catalogue = buildFreeQuotaCatalogue(decisions!);
+    for (const model of catalogue.models) {
+      const retiresAt = getProviderOfferings()[model.key]!.retiresAt;
+      const entry = inventory.entries.find((row) => row.offeringKey === model.key)!;
+      if (!retiresAt || (entry.expiresOn !== null && entry.expiresOn <= retiresAt.slice(0, 10))) {
+        expect(model.expiresOn, model.key).toBe(entry.expiresOn);
+      } else {
+        expect(model.expiresOn, model.key).toBe(retiresAt.slice(0, 10));
+      }
+    }
+    expect(
+      catalogue.models.some((model) => {
+        const entry = inventory.entries.find((row) => row.offeringKey === model.key)!;
+        return model.expiresOn !== entry.expiresOn;
+      }),
+    ).toBe(true);
+  });
+
   it('expires snapshot allocations even when their captured status was active', async () => {
     const result = await statuses(
       context({

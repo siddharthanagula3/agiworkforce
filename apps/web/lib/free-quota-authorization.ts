@@ -302,12 +302,22 @@ function unavailable(reason: FreeQuotaUnavailableReason): FreeQuotaDecision {
   return { status: 'unavailable', reason };
 }
 
+export function freeQuotaEndsOn(
+  entry: FreeQuotaObservation,
+  offering: ProviderOffering | null,
+): string | null {
+  const retiresOn = offering?.retiresAt?.slice(0, 10) ?? null;
+  if (retiresOn === null) return entry.expiresOn;
+  return entry.expiresOn === null || retiresOn < entry.expiresOn ? retiresOn : entry.expiresOn;
+}
+
 export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuotaDecision {
   const { entry, offering, policy, nowMs, apiKey, state } = input;
   const today = new Date(nowMs).toISOString().slice(0, 10);
   if (
     entry.providerStatus === 'expired' ||
-    (entry.expiresOn !== null && entry.expiresOn <= today)
+    (entry.expiresOn !== null && entry.expiresOn <= today) ||
+    (offering?.retiresAt !== undefined && Date.parse(offering.retiresAt) <= nowMs)
   ) {
     return { status: 'expired' };
   }
