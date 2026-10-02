@@ -1,6 +1,10 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getModelMetadataById, listCanonicalModels } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getProviderOfferings,
+  listCanonicalModels,
+} from '@agiworkforce/types';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 import { toChatMessage } from '../pages/WebChatPage';
@@ -151,6 +155,24 @@ describe('provider-outage / credit-downgrade fallback reason reaches the streami
 
     fireEvent.click(screen.getByRole('button', { name: /dismiss model substitution notice/i }));
     expect(screen.queryByTestId('fallback-reason-notice')).toBeNull();
+  });
+
+  it('names the free model that answered when Free Auto reached its free limit', () => {
+    const [offeringKey, offering] = Object.entries(getProviderOfferings()).find(
+      ([, candidate]) => candidate.provider === 'qwen' && candidate.quotaProbeProtocol === 'chat',
+    )!;
+    render(
+      <MessageBubble
+        message={{
+          ...bubbleMessage('free_limit_reached'),
+          metadata: { model: offeringKey, fallbackReason: 'free_limit_reached' },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('fallback-reason-notice').textContent).toContain(
+      `Free Auto reached its free limit, so ${offering.displayName} answered instead.`,
+    );
   });
 
   it('shows no notice when the requested model served the turn', () => {

@@ -3,6 +3,12 @@
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
 import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
+import {
+  freeLimitFallbackReason,
+  loadFreeQuotaCatalogue,
+  pickFreeLimitFallback,
+  type FreeLimitFallbackTurn,
+} from '@/features/chat/lib/free-limit-fallback';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import {
   chatCompletionEndpoint,
@@ -1389,6 +1395,7 @@ interface ConsumeStreamContext {
    */
   assistantParentId?: string;
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
+  fallbackReason?: string;
 }
 
 /**
@@ -1714,7 +1721,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const runHandle = readManagedCloudAgentRunHandle(response);
   ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
-  const streamFallbackReason = response.headers.get(FALLBACK_REASON_HEADER)?.trim();
+  const streamFallbackReason =
+    response.headers.get(FALLBACK_REASON_HEADER)?.trim() || ctx.fallbackReason;
   // D-2026-09-05-06. Persisted rather than per-turn, unlike the substitution
   // code above: a continuity receipt the transcript forgets on reload would
   // leave the move unexplained the next time the conversation is opened.
@@ -3732,7 +3740,7 @@ export function useChatStream(
       // route, the managed ledger, or the conversation's cloud rows. The id
       // decides it, which is why a regenerate of a local answer stays local.
       const selectedLocalModel = readSelectedLocalModel();
-      const model = options.model || selectedLocalModel?.id || selectedModel;
+      let model = options.model || selectedLocalModel?.id || selectedModel;
       const localModel = resolveLocalModel(model, selectedLocalModel);
 
       if (localModel && options.attachments?.length) {
@@ -3960,6 +3968,7 @@ export function useChatStream(
       });
 
       let retriedEmptyTurn = false;
+      let freeLimitFallback: string | null = null;
       try {
         if (localModel) {
           connectingTicker.stop();
@@ -4198,7 +4207,50 @@ export function useChatStream(
           connectingTicker.stop();
 
           if (!response.ok) {
-            throw await chatApiErrorFromResponse(response, `Request failed: ${response.status}`);
+            const failure = await chatApiErrorFromResponse(
+              response,
+              `Request failed: ${response.status}`,
+            );
+            const fallbackTurn: FreeLimitFallbackTurn = {
+              requestedModel: model,
+              code: failure.code,
+              draft: content,
+              attachments: options.attachments ?? [],
+              needsWebAccess: Boolean(
+                options.webSearch ||
+                options.research ||
+                options.webFetch ||
+                options.searchRequested,
+              ),
+              needsCodeExecution: Boolean(options.codeExecution),
+              needsTools: Boolean(
+                options.officeCreation ||
+                options.skillName ||
+                options.mcpContext ||
+                options.workMode === 'agiwork',
+              ),
+            };
+            const reason = freeLimitFallback ? null : freeLimitFallbackReason(fallbackTurn);
+            const fallbackModel = reason
+              ? pickFreeLimitFallback(
+                  await loadFreeQuotaCatalogue(abortController.signal).catch((catalogueError) => {
+                    if (abortController.signal.aborted) throw catalogueError;
+                    return null;
+                  }),
+                  fallbackTurn,
+                )
+              : null;
+            if (reason && fallbackModel) {
+              freeLimitFallback = reason;
+              model = fallbackModel;
+              updateMessage(
+                assistantMessageId,
+                { model: fallbackModel, fallbackReason: reason },
+                conversationId,
+              );
+              continue;
+            }
+            throw failure;
           }
 
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
@@ -4224,6 +4276,7 @@ export function useChatStream(
             getAuthToken,
             ...(latencyTrace ? { latencyTrace } : {}),
             ...(assistantParentId ? { assistantParentId } : {}),
+            ...(freeLimitFallback ? { fallbackReason: freeLimitFallback } : {}),
             onRunHandle: (handle) => {
               if (handle) {
                 activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });

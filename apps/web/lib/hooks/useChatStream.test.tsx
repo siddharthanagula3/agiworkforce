@@ -12,6 +12,7 @@ import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import {
   listCanonicalModels,
   getProviderOfferings,
+  getRoutingSlotModel,
   AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/types';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
@@ -248,6 +249,106 @@ describe('useChatStream', () => {
       },
     });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a spent Free Auto turn with a ready free model and says so', async () => {
+    const freeRouter = getRoutingSlotModel('router_zero_cost');
+    const [fallbackKey, fallback] = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+    )!;
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'free_allowance_exhausted',
+              message: 'The free model has used up the allowance everyone on the Free plan shares.',
+            },
+          }),
+          { status: 429 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          issuer: 'Fixture Cloud',
+          observedOn: '2026-09-19',
+          evidenceUrl: 'https://provider.example/free-quota',
+          reportedEligible: 1,
+          reportedUnavailable: 0,
+          models: [
+            {
+              key: fallbackKey,
+              displayName: fallback.displayName,
+              providerModelId: fallback.providerModelId,
+              category: 'chat',
+              limit: 1_000_000,
+              unit: 'tokens',
+              consumedApproximate: 0,
+              expiresOn: '2099-01-01',
+              status: 'ready',
+            },
+          ],
+        }),
+      );
+    mockSseStream([
+      { choices: [{ delta: { content: 'Answered by a free model.' }, finish_reason: 'stop' }] },
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: freeRouter,
+      });
+    });
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(String(calls[0]?.[0])).toBe('/api/llm/v1/chat/completions');
+    expect(String(calls[1]?.[0])).toBe('/api/models/free-quota');
+    expect(String(calls[2]?.[0])).toBe('/api/models/free-quota/completions');
+    expect(JSON.parse(String(calls[2]?.[1]?.body)).model).toBe(fallbackKey);
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.content).toBe('Answered by a free model.');
+    expect(assistant?.model).toBe(fallbackKey);
+    expect(assistant?.requestedModel).toBe(freeRouter);
+    expect(assistant?.fallbackReason).toBe('free_limit_reached');
+    expect(assistant?.metadata?.paywall).toBeUndefined();
+  });
+
+  it('shows the free limit card when no other free model can answer', async () => {
+    const freeRouter = getRoutingSlotModel('router_zero_cost');
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'free_allowance_exhausted',
+              message: 'The free model has used up the allowance everyone on the Free plan shares.',
+            },
+          }),
+          { status: 429 },
+        ),
+      )
+      .mockResolvedValueOnce(Response.json(null));
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: freeRouter,
+      });
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.metadata?.paywall?.freeLimit).toMatchObject({
+      modelId: freeRouter,
+      reason: 'shared_pool_used',
+    });
   });
 
   it('carries the reset time a usage refusal names onto its card', async () => {

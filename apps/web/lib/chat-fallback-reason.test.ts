@@ -138,3 +138,18 @@ describe('fallbackStepLabel', () => {
     expect(fallbackStepLabel('   ', 'Anything')).toBeNull();
   });
 });
+
+describe('a free limit Auto answered around', () => {
+  it('says the free limit was reached and who answered instead', () => {
+    expect(describeFallbackReason('free_limit_reached', 'Fixture Free Model')).toBe(
+      'Free Auto reached its free limit, so Fixture Free Model answered instead.',
+    );
+    expect(describeFallbackReason('free_usage_limit_reached', 'Fixture Free Model')).toBe(
+      'You reached your free usage limit, so Fixture Free Model answered instead.',
+    );
+    expect(describeFallbackReason('free_limit_reached')).toMatch(/another free model/);
+    expect(fallbackStepLabel('free_limit_reached', 'Fixture Free Model')).toBe(
+      'Switched to Fixture Free Model',
+    );
+  });
+});
