@@ -7,9 +7,11 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, URL } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { parse } from 'yaml';
 import {
+  VERIFIED_STRUCTURAL_SEMGREP,
   qualifyInternalCoverage,
-  structuralSinkRules,
+  structuralRules,
   warningIdentity,
 } from './lib/semgrep-coverage.mjs';
 
@@ -22,6 +24,7 @@ const rule = () => ({
   id: RULE,
   mode: 'taint',
   languages: ['js', 'ts'],
+  'pattern-sources': [{ pattern: 'source(...)' }],
   'pattern-sinks': [
     { patterns: [{ pattern: 'document.$METHOD($VALUE)' }] },
     { patterns: [{ pattern: '$ELEMENT.$METHOD($VALUE)' }] },
@@ -82,7 +85,8 @@ async function fixture(change = () => {}, behavior = 'complete') {
         },
       ],
     };
-    change({ bundle, report, context, cwd });
+    const state = { bundle, report, context, cwd, matches: [] };
+    change(state);
     const bundlePath = path.join(directory, 'bundle.json');
     const reportPath = path.join(directory, 'report.json');
     const contextPath = path.join(directory, 'context.json');
@@ -100,7 +104,7 @@ async function fixture(change = () => {}, behavior = 'complete') {
       if (argv[0] === '--version')
         return { code: 0, stdout: behavior === 'wrong-version' ? 'other-engine' : VERSION };
       if (behavior === 'execution-error') throw new Error('synthetic-private-scanner-message');
-      if (argv.includes('--time')) {
+      if (!argv.includes('--disable-nosem')) {
         const original = JSON.parse(fs.readFileSync(argv[argv.indexOf('--config') + 1], 'utf8'));
         assert.equal(original.rules.length, 1);
         const replayed = original.rules[0];
@@ -174,41 +178,58 @@ async function fixture(change = () => {}, behavior = 'complete') {
         return { code: behavior === 'replay-nonzero-exit' ? 2 : 0, stdout: '' };
       }
       assert.ok(argv.includes('--disable-nosem'));
+      assert.ok(argv.includes('--time'));
       if (behavior === 'source-drift') fs.appendFileSync(path.join(cwd, SOURCE), '\n');
       const output = argv[argv.indexOf('--output') + 1];
       const targets = argv.slice(argv.indexOf('--output') + 2);
       const controls = targets.at(-1);
+      const configured = JSON.parse(
+        fs.readFileSync(argv[argv.indexOf('--config') + 1], 'utf8'),
+      ).rules.map((item) => item.id);
       const results = [2, 3, 4, 5, 6].map((line) => ({
         path: controls,
-        check_id: 'coverage-sink-0',
+        check_id: 'coverage-canary-0',
         start: { line },
       }));
-      results.push({ path: controls, check_id: 'coverage-sink-1', start: { line: 9 } });
+      results.push({ path: controls, check_id: 'coverage-canary-1', start: { line: 9 } });
+      const matches =
+        behavior === 'potential-sink' ? ['coverage-source-0', 'coverage-sink-0'] : state.matches;
+      for (const check_id of matches)
+        results.push({ path: targets[0], check_id, start: { line: 2 } });
       const structural = {
         version: VERSION,
         results,
         errors: [],
         skipped_rules: [],
         paths: { scanned: targets },
+        time: { rules: configured, fixpoint_timeouts: [] },
       };
-      if (behavior === 'potential-sink')
-        structural.results.push({
-          path: targets[0],
-          check_id: 'coverage-sink-0',
-          start: { line: 2 },
-        });
-      if (behavior === 'missing-control') structural.results.pop();
+      if (behavior === 'missing-control')
+        structural.results = results.filter((match) => match.check_id !== 'coverage-canary-1');
       if (behavior === 'negative-receiver')
         structural.results.push({
           path: controls,
-          check_id: 'coverage-sink-0',
+          check_id: 'coverage-canary-0',
           start: { line: 12 },
+        });
+      if (behavior === 'unknown-check')
+        structural.results.push({
+          path: targets[0],
+          check_id: 'coverage-other',
+          start: { line: 1 },
         });
       if (behavior === 'empty-targets') structural.paths.scanned = [];
       if (behavior === 'duplicate-target') structural.paths.scanned.push(targets[0]);
       if (behavior === 'parse-error') structural.errors.push({ type: 'Syntax error' });
       if (behavior === 'skipped-rule')
         structural.skipped_rules.push({ rule_id: 'coverage-sink-0' });
+      if (behavior === 'missing-rule-timing') structural.time.rules.pop();
+      if (behavior === 'structural-timeout')
+        structural.time.fixpoint_timeouts.push({
+          error_type: 'Fixpoint timeout',
+          message: '[rules: 1, first: coverage-sink-0]',
+          location: { path: targets[0], start: { line: 1 } },
+        });
       fs.writeFileSync(
         output,
         behavior === 'invalid-json' ? 'synthetic-private-invalid-json' : JSON.stringify(structural),
@@ -239,7 +260,7 @@ async function fixture(change = () => {}, behavior = 'complete') {
   }
 }
 
-test('a source-bound single-rule warning requires all whole sources and six calibrated sink matches', async () => {
+test('a source-bound single-rule warning requires all whole sources and six calibrated canary matches', async () => {
   assert.deepEqual(await fixture(), {
     nativeWarnings: 1,
     structurallyQualifiedPairs: 1,
@@ -277,12 +298,113 @@ test('a direct warning replays the complete original rule with options and label
   });
 });
 
-test('a remaining unsupported singleton warning names only its rule and source and fails closed', async () => {
+const structurallyQualified = {
+  nativeWarnings: 1,
+  structurallyQualifiedPairs: 1,
+  convergedReplayPairs: 0,
+};
+const unresolved = `Internal warning has a potential sink and remains unresolved. Rule ${JSON.stringify(RULE)}, source ${JSON.stringify(SOURCE)}.`;
+const withMatches =
+  (...matches) =>
+  (state) => {
+    complexSingleton(state);
+    state.matches.push(...matches);
+  };
+const cleanSource = (state) => {
+  state.bundle.rules[0]['pattern-sources'].push({ pattern: 'clean(...)', label: 'CLEAN' });
+};
+
+test('a non-convergent rule with options, labels and one sink qualifies when its file has no sink', async () => {
+  assert.deepEqual(await fixture(complexSingleton, 'replay-warning'), structurallyQualified);
+});
+
+test('a sink with no source in its file cannot produce a finding', async () => {
+  assert.deepEqual(
+    await fixture(withMatches('coverage-sink-0'), 'replay-warning'),
+    structurallyQualified,
+  );
+});
+
+test('a source with no sink in its file cannot produce a finding', async () => {
+  assert.deepEqual(
+    await fixture(withMatches('coverage-source-0'), 'replay-warning'),
+    structurallyQualified,
+  );
+});
+
+test('a sink whose required label no matched source supplies is unreachable', async () => {
+  assert.deepEqual(
+    await fixture((state) => {
+      withMatches('coverage-source-1', 'coverage-sink-0')(state);
+      cleanSource(state);
+    }, 'replay-warning'),
+    structurallyQualified,
+  );
+});
+
+test('a reachable source and sink in one file fail closed and name the rule and source', async () => {
   await assert.rejects(
-    fixture(complexSingleton, 'replay-warning'),
-    (error) =>
-      error.message ===
-      `Affected rule has unsupported sink semantics. Rule ${JSON.stringify(RULE)}, source ${JSON.stringify(SOURCE)}.`,
+    fixture(withMatches('coverage-source-0', 'coverage-sink-0'), 'replay-warning'),
+    (error) => error.message === unresolved,
+  );
+});
+
+test('a propagator label counts as taint the sink may require', async () => {
+  await assert.rejects(
+    fixture((state) => {
+      withMatches('coverage-source-1', 'coverage-sink-0')(state);
+      cleanSource(state);
+      state.bundle.rules[0]['pattern-propagators'] = [
+        { pattern: '$TO = wrap($FROM)', from: '$FROM', to: '$TO', label: 'SOURCE' },
+      ];
+    }, 'replay-warning'),
+    (error) => error.message === unresolved,
+  );
+});
+
+test('a sink without requires is reachable only from the default source label', async () => {
+  const both = (state) => state.matches.push('coverage-source-0', 'coverage-sink-0');
+  await assert.rejects(fixture(both), (error) => error.message === unresolved);
+  assert.deepEqual(
+    await fixture((state) => {
+      both(state);
+      state.bundle.rules[0]['pattern-sources'][0].label = 'OTHER';
+    }),
+    structurallyQualified,
+  );
+});
+
+test('per-metavariable label requirements are never assumed unreachable', async () => {
+  await assert.rejects(
+    fixture((state) => {
+      withMatches('coverage-source-1', 'coverage-sink-0')(state);
+      cleanSource(state);
+      state.bundle.rules[0]['pattern-sinks'][0].requires = [{ $VALUE: 'SOURCE' }];
+    }, 'replay-warning'),
+    (error) => error.message === unresolved,
+  );
+});
+
+test('per-metavariable label requirements fail closed in a file with no source', async () => {
+  await assert.rejects(
+    fixture((state) => {
+      withMatches('coverage-sink-0')(state);
+      state.bundle.rules[0]['pattern-sinks'][0].requires = [{ $VALUE: 'not CLEAN' }];
+      state.bundle.rules[0]['pattern-propagators'] = [
+        { pattern: 'Object.assign($TO, $FROM)', from: '$FROM', to: '$TO' },
+      ];
+    }, 'replay-warning'),
+    (error) => error.message === unresolved,
+  );
+});
+
+test('a malformed label requirement fails closed', async () => {
+  await assert.rejects(
+    fixture((state) => {
+      withMatches('coverage-source-0', 'coverage-sink-0')(state);
+      state.bundle.rules[0]['pattern-sinks'][0].requires = 'SOURCE and';
+    }, 'replay-warning'),
+    /Taint label requirement is malformed/,
   );
 });
 
@@ -309,7 +431,7 @@ test('an aggregate warning replays every original applicable taint object unchan
   });
 });
 
-test('a replay retains its exact native warning and requires the existing calibrated no-sink predicate', async () => {
+test('a replay retains its exact native warning and requires the calibrated structural predicate', async () => {
   assert.deepEqual(await fixture(aggregate, 'replay-warning'), {
     nativeWarnings: 1,
     structurallyQualifiedPairs: 1,
@@ -317,16 +439,57 @@ test('a replay retains its exact native warning and requires the existing calibr
   });
 });
 
-test('all aggregate replay commands share the existing 120-second deadline', async (t) => {
-  const clock = [0, 1, 2, 90_000, 90_001, 120_001];
-  t.mock.method(performance, 'now', () => clock.shift() ?? 120_001);
+test('replays that together outlast one scanner deadline still qualify within the coverage budget', async (t) => {
+  const clock = [0, 1, 2, 90_000, 90_001, 150_000];
+  t.mock.method(performance, 'now', () => clock.shift() ?? 150_001);
+  assert.deepEqual(await fixture(aggregate), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 0,
+    convergedReplayPairs: 2,
+  });
+});
+
+test('a replay that records several timeouts of its one rule still qualifies structurally', async () => {
+  assert.deepEqual(
+    await fixture(complexSingleton, 'replay-grouped-warning'),
+    structurallyQualified,
+  );
+  assert.deepEqual(await fixture(aggregate, 'replay-grouped-warning'), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 2,
+    convergedReplayPairs: 0,
+  });
+});
+
+test('an aggregate diagnostic may count more timeouts than there are applicable rules', async () => {
+  assert.deepEqual(
+    await fixture((state) => {
+      aggregate(state);
+      state.report.time.fixpoint_timeouts[0].message = '[rules: 5, first: fixture.other.taint]';
+    }),
+    { nativeWarnings: 1, structurallyQualifiedPairs: 0, convergedReplayPairs: 2 },
+  );
+});
+
+test('replays and structural scans that need twelve minutes finish within the coverage budget', async (t) => {
+  const clock = [0, 1, 2, 90_000, 90_001, 720_000];
+  t.mock.method(performance, 'now', () => clock.shift() ?? 720_001);
+  assert.deepEqual(await fixture(aggregate), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 0,
+    convergedReplayPairs: 2,
+  });
+});
+
+test('all coverage scanner commands share one fifteen-minute budget', async (t) => {
+  const clock = [0, 1, 2, 90_000, 90_001, 900_001];
+  t.mock.method(performance, 'now', () => clock.shift() ?? 900_001);
   await assert.rejects(fixture(aggregate), /Aggregate coverage deadline exceeded/);
 });
 
 for (const behavior of [
   'replay-unknown-warning',
   'replay-wrong-rule-warning',
-  'replay-grouped-warning',
   'replay-foreign-warning',
   'replay-finding',
   'replay-wrong-version',
@@ -431,6 +594,9 @@ for (const behavior of [
   'potential-sink',
   'missing-control',
   'negative-receiver',
+  'unknown-check',
+  'missing-rule-timing',
+  'structural-timeout',
   'empty-targets',
   'duplicate-target',
   'parse-error',
@@ -451,12 +617,6 @@ for (const [name, change] of [
     'unknown rule',
     ({ report }) => {
       report.time.fixpoint_timeouts[0].message = '[rules: 1, first: unknown.rule]';
-    },
-  ],
-  [
-    'aggregate warning',
-    ({ report }) => {
-      report.time.fixpoint_timeouts[0].message = `[rules: 2, first: ${RULE}]`;
     },
   ],
   [
@@ -508,27 +668,35 @@ for (const [name, change] of [
     },
   ],
   [
-    'unsupported sink exactness',
-    ({ bundle }) => {
-      bundle.rules[0]['pattern-sinks'][0].exact = true;
-    },
-  ],
-  [
     'unsupported sink side effects',
     ({ bundle }) => {
       bundle.rules[0]['pattern-sinks'][0]['by-side-effect'] = true;
     },
   ],
   [
-    'unsupported sink labels',
+    'two formulas in one sink',
     ({ bundle }) => {
-      bundle.rules[0]['pattern-sinks'][0].requires = 'LABEL';
+      bundle.rules[0]['pattern-sinks'][0]['pattern-regex'] = 'document';
     },
   ],
   [
-    'unsupported rule options',
+    'missing sources',
     ({ bundle }) => {
-      bundle.rules[0].options = { symbolic_propagation: true };
+      delete bundle.rules[0]['pattern-sources'];
+    },
+  ],
+  [
+    'non-string source label',
+    ({ bundle }) => {
+      bundle.rules[0]['pattern-sources'][0].label = ['SOURCE'];
+    },
+  ],
+  [
+    'non-string propagator label',
+    ({ bundle }) => {
+      bundle.rules[0]['pattern-propagators'] = [
+        { pattern: '$TO = $FROM', from: '$FROM', to: '$TO', label: 1 },
+      ];
     },
   ],
   [
@@ -606,11 +774,31 @@ test('a warning cannot select a path outside the original source set', () => {
   );
 });
 
-test('sink extraction preserves formula objects and rejects unsupported operators', () => {
+test('the workflow runs the semgrep engine the structural predicate was verified against', () => {
+  const workflow = parse(fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
+  assert.equal(
+    workflow.jobs.security.env.SEMGREP_VERSION,
+    VERIFIED_STRUCTURAL_SEMGREP,
+    'Raise VERIFIED_STRUCTURAL_SEMGREP only after confirming in the new Semgrep source that taint source and sink formulas still match through Match_search_mode.matches_of_formula with the rule options, that a sink without requires still needs the __SOURCE__ label, and that a finding under a string requires still needs a real source taint.',
+  );
+});
+
+test('structural extraction keeps each formula and the rule options and drops only taint keys', () => {
   const original = rule();
-  const derived = structuralSinkRules(original);
-  assert.strictEqual(derived[0].patterns, original['pattern-sinks'][0].patterns);
-  assert.strictEqual(derived[0].languages, original.languages);
-  original['pattern-sinks'][0].patterns.push({ 'pattern-not': 'document.write($VALUE)' });
-  assert.throws(() => structuralSinkRules(original));
+  original.options = { symbolic_propagation: true };
+  original['pattern-sources'][0].label = 'SOURCE';
+  original['pattern-sinks'][0].requires = 'SOURCE';
+  original['pattern-sinks'][0].patterns.push({ 'pattern-not': 'document.write("...")' });
+  const derived = structuralRules(original);
+  assert.deepEqual(
+    derived.map((item) => item.id),
+    ['coverage-source-0', 'coverage-sink-0', 'coverage-sink-1'],
+  );
+  assert.strictEqual(derived[1].patterns, original['pattern-sinks'][0].patterns);
+  assert.strictEqual(derived[1].languages, original.languages);
+  assert.strictEqual(derived[1].options, original.options);
+  assert.equal(derived[0].label, undefined);
+  assert.equal(derived[1].requires, undefined);
+  original['pattern-sinks'][0]['pattern-regex'] = 'document';
+  assert.throws(() => structuralRules(original), /unsupported sink semantics/);
 });
