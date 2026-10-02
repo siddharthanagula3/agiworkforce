@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   CONVERSATION_SHARES_PATH,
   ConversationShareAudienceResponseSchema,
   ConversationShareCreatedSchema,
   ConversationShareListQuerySchema,
   ConversationShareListResponseSchema,
+  ConversationSharesRevokedSchema,
   conversationSharePath,
   conversationSharesPath,
   type ConversationShareVisibility,
@@ -38,6 +39,10 @@ export interface ActiveConversationShare {
   workspace: { memberCount: number } | null;
 }
 
+export interface ConversationShare extends ActiveConversationShare {
+  linkCount: number;
+}
+
 interface InFlightShareRequest {
   controller: AbortController;
   timeout: ReturnType<typeof setTimeout>;
@@ -51,6 +56,7 @@ interface ConversationLiveShares {
 }
 
 const SHARE_LOOKUP_FAILED = 'Could not check whether this chat already has a shared link.';
+const NO_SHARES: ActiveConversationShare[] = [];
 
 function readCreatedShare(value: unknown): ActiveConversationShare {
   const parsed = ConversationShareCreatedSchema.safeParse(value);
@@ -115,10 +121,21 @@ export function useShareConversation(
     open &&
     storedConversationId !== null &&
     (lookupPending || liveShares?.conversationId !== storedConversationId);
-  const activeShare =
+  const shownShares =
     !checkingShare && liveShares && liveShares.conversationId === conversationId
-      ? (liveShares.shares[0] ?? null)
-      : null;
+      ? liveShares.shares
+      : NO_SHARES;
+  const activeShare = useMemo((): ConversationShare | null => {
+    const newest = shownShares[0];
+    if (!newest) return null;
+    return {
+      ...newest,
+      audience: shownShares.some((share) => share.audience === 'public')
+        ? 'public'
+        : 'organization',
+      linkCount: shownShares.length,
+    };
+  }, [shownShares]);
 
   useLayoutEffect(() => {
     if (open) setLookupPending(true);
@@ -203,8 +220,8 @@ export function useShareConversation(
     [],
   );
 
-  const share = useCallback(
-    async (expiresInDays: ShareExpiryDays): Promise<boolean> => {
+  const publish = useCallback(
+    async (expiresInDays?: ShareExpiryDays): Promise<boolean> => {
       if (!hasMessages || !conversationId) {
         setError('Add a message before creating a public link.');
         return false;
@@ -221,7 +238,7 @@ export function useShareConversation(
           conversation_id: conversationId,
           title: conversationTitle || 'Shared Session',
           model_id: modelId,
-          expires_in_days: expiresInDays,
+          ...(expiresInDays ? { expires_in_days: expiresInDays } : {}),
           messages: messages.map((m) => {
             const artifacts =
               m.role === 'assistant'
@@ -264,17 +281,27 @@ export function useShareConversation(
           const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
           throw new Error(msg);
         }
-        const created = readCreatedShare(await res.json());
-        setLiveShares((current) => ({
-          conversationId: sharedConversationId,
-          shares: [
-            created,
-            ...(current?.conversationId === sharedConversationId ? current.shares : []),
-          ],
-        }));
+        const published = readCreatedShare(await res.json());
+        setLiveShares((current) => {
+          const known = current?.conversationId === sharedConversationId ? current.shares : [];
+          return {
+            conversationId: sharedConversationId,
+            shares: known.some((share) => share.token === published.token)
+              ? known.map((share) =>
+                  share.token === published.token
+                    ? published
+                    : { ...share, messageCount: published.messageCount },
+                )
+              : [published, ...known],
+          };
+        });
         return true;
       } catch (err) {
-        showRequestError(request, err, 'Could not create the public link.');
+        showRequestError(
+          request,
+          err,
+          expiresInDays ? 'Could not create the public link.' : 'Could not update the link.',
+        );
         return false;
       } finally {
         finishRequest(request);
@@ -293,12 +320,20 @@ export function useShareConversation(
     ],
   );
 
+  const share = useCallback(
+    (expiresInDays: ShareExpiryDays): Promise<boolean> => publish(expiresInDays),
+    [publish],
+  );
+
+  const updateLink = useCallback((): Promise<boolean> => publish(), [publish]);
+
   const revoke = useCallback(async (): Promise<boolean> => {
-    if (!activeShare) return false;
+    if (!activeShare || !conversationId) return false;
+    const sharedConversationId = conversationId;
     const request = beginRequest();
     if (!request) return false;
     try {
-      const res = await fetch(conversationSharePath(activeShare.token), {
+      const res = await fetch(conversationSharesPath(sharedConversationId), {
         method: 'DELETE',
         headers: await addCsrfHeaders(),
         credentials: 'include',
@@ -307,13 +342,8 @@ export function useShareConversation(
       if (!res.ok) {
         throw new Error('Failed to revoke share link');
       }
-      setLiveShares(
-        (current) =>
-          current && {
-            ...current,
-            shares: current.shares.filter((share) => share.token !== activeShare.token),
-          },
-      );
+      ConversationSharesRevokedSchema.parse(await res.json());
+      setLiveShares({ conversationId: sharedConversationId, shares: [] });
       return true;
     } catch (err) {
       showRequestError(request, err, 'Could not revoke the public link.');
@@ -321,11 +351,11 @@ export function useShareConversation(
     } finally {
       finishRequest(request);
     }
-  }, [activeShare, beginRequest, finishRequest, showRequestError]);
+  }, [activeShare, conversationId, beginRequest, finishRequest, showRequestError]);
 
   /**
-   * Move the live share between audiences. The token and the expiry are
-   * untouched, so switching back restores the same URL on the same clock.
+   * Move every live link of the chat to one audience. Tokens and expiries are
+   * untouched, so switching back restores the same URLs on the same clocks.
    */
   const setAudience = useCallback(
     async (audience: ShareAudience): Promise<boolean> => {
@@ -333,30 +363,32 @@ export function useShareConversation(
       const request = beginRequest();
       if (!request) return false;
       try {
-        const res = await fetch(conversationSharePath(activeShare.token), {
-          method: 'PATCH',
-          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-          credentials: 'include',
-          body: JSON.stringify({ visibility: audience }),
-          signal: request.controller.signal,
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const msg =
-            (err as { error?: { message?: string } }).error?.message ??
-            'Could not change who can open this.';
-          throw new Error(msg);
+        for (const link of shownShares.filter((candidate) => candidate.audience !== audience)) {
+          const res = await fetch(conversationSharePath(link.token), {
+            method: 'PATCH',
+            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+            credentials: 'include',
+            body: JSON.stringify({ visibility: audience }),
+            signal: request.controller.signal,
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            const msg =
+              (err as { error?: { message?: string } }).error?.message ??
+              'Could not change who can open this.';
+            throw new Error(msg);
+          }
+          const body = ConversationShareAudienceResponseSchema.parse(await res.json());
+          setLiveShares(
+            (current) =>
+              current && {
+                ...current,
+                shares: current.shares.map((share) =>
+                  share.token === link.token ? { ...share, audience: body.visibility } : share,
+                ),
+              },
+          );
         }
-        const body = ConversationShareAudienceResponseSchema.parse(await res.json());
-        setLiveShares(
-          (current) =>
-            current && {
-              ...current,
-              shares: current.shares.map((share) =>
-                share.token === activeShare.token ? { ...share, audience: body.visibility } : share,
-              ),
-            },
-        );
         return true;
       } catch (err) {
         showRequestError(request, err, 'Could not change who can open this.');
@@ -365,11 +397,12 @@ export function useShareConversation(
         finishRequest(request);
       }
     },
-    [activeShare, beginRequest, finishRequest, showRequestError],
+    [activeShare, shownShares, beginRequest, finishRequest, showRequestError],
   );
 
   return {
     share,
+    updateLink,
     revoke,
     setAudience,
     isSharing,

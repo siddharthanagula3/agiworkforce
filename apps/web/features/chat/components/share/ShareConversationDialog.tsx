@@ -14,7 +14,7 @@ import {
   translateUiPlural,
   useConfirmAction,
 } from '@agiworkforce/ui';
-import { Building2, Check, Copy, Globe2, ShieldAlert, Trash2 } from 'lucide-react';
+import { Building2, Check, Copy, Globe2, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useShareConversation,
@@ -62,6 +62,7 @@ function ShareConversationDialogImpl({
   const [copied, setCopied] = useState(false);
   const {
     share,
+    updateLink,
     revoke,
     setAudience,
     isSharing,
@@ -118,6 +119,28 @@ function ShareConversationDialogImpl({
     );
   };
 
+  const handleUpdateLink = async () => {
+    if (await updateLink()) toast.success('Link updated');
+  };
+
+  const handleRevoke = () => {
+    if (!activeShare) return;
+    confirm({
+      title:
+        activeShare.linkCount > 1
+          ? `Revoke all ${activeShare.linkCount} links?`
+          : 'Revoke this share?',
+      description:
+        activeShare.linkCount > 1
+          ? `This chat has ${activeShare.linkCount} live links, and all of them stop working. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.`
+          : activeShare.audience === 'organization'
+            ? 'Everyone in your workspace loses access immediately, and the grant is withdrawn. A new share can be created, but it will be a different URL, the old one stays dead.'
+            : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
+      confirmLabel: activeShare.linkCount > 1 ? 'Revoke all links' : 'Revoke share',
+      onConfirm: () => revoke(),
+    });
+  };
+
   const handleCopy = async () => {
     if (!activeShare) return;
     try {
@@ -154,6 +177,9 @@ function ShareConversationDialogImpl({
                   ? `Everyone in your workspace can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}. Nobody else can, link or not.`
                   : `Anyone with this link can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}.`
                 : 'Create a read-only snapshot. New messages and future edits will not be added to it.'}
+              {activeShare
+                ? ' Update link replaces it with the chat as it is now, at the same address.'
+                : null}
             </DialogDescription>
           </DialogHeader>
 
@@ -197,6 +223,13 @@ function ShareConversationDialogImpl({
                     </option>
                   </select>
                 </div>
+              ) : null}
+
+              {activeShare.linkCount > 1 ? (
+                <p className="text-sm text-muted-foreground" data-testid="share-link-count">
+                  This chat has {activeShare.linkCount} live links. Update link and Revoke share act
+                  on all of them.
+                </p>
               ) : null}
 
               {activeShare.audience === 'organization' ? (
@@ -271,23 +304,17 @@ function ShareConversationDialogImpl({
           <DialogFooter className="gap-2 sm:gap-0">
             {activeShare ? (
               <>
+                <Button variant="destructive" onClick={handleRevoke} disabled={isSharing}>
+                  <Trash2 className="me-2 h-4 w-4" />
+                  Revoke share
+                </Button>
                 <Button
-                  variant="destructive"
-                  onClick={() =>
-                    confirm({
-                      title: 'Revoke this share?',
-                      description:
-                        activeShare.audience === 'organization'
-                          ? 'Everyone in your workspace loses access immediately, and the grant is withdrawn. A new share can be created, but it will be a different URL, the old one stays dead.'
-                          : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
-                      confirmLabel: 'Revoke share',
-                      onConfirm: () => revoke(),
-                    })
-                  }
+                  variant="outline"
+                  onClick={() => void handleUpdateLink()}
                   disabled={isSharing}
                 >
-                  <Trash2 className="me-2 h-4 w-4" />
-                  {isSharing ? 'Revoking…' : 'Revoke share'}
+                  <RefreshCw className="me-2 h-4 w-4" />
+                  Update link
                 </Button>
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   Done

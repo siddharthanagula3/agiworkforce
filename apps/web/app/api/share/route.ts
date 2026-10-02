@@ -5,6 +5,7 @@ import {
   ConversationShareListQuerySchema,
   type ConversationShareCreated,
   type ConversationShareListResponse,
+  type ConversationSharesRevoked,
 } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -36,6 +37,11 @@ export function OPTIONS(request: NextRequest) {
 }
 
 const DEFAULT_SHARE_EXPIRY_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function shareExpiresAt(days: number): string {
+  return new Date(Date.now() + days * DAY_MS).toISOString();
+}
 
 // A share body carried no bound of its own beyond the 4 MiB payload ceiling, so
 // the secret scanner's input was whatever the caller sent.
@@ -55,9 +61,7 @@ const CreateShareSchema = z.object({
       'messages exceed the size limit',
     )
     .default([]),
-  expires_in_days: z
-    .union([z.literal(1), z.literal(7), z.literal(30)])
-    .default(DEFAULT_SHARE_EXPIRY_DAYS),
+  expires_in_days: z.union([z.literal(1), z.literal(7), z.literal(30)]).optional(),
 });
 
 interface SanitizedMessages {
@@ -114,6 +118,7 @@ type SharedSessionRow = {
   expires_at: string;
   total_messages: number;
   visibility: string;
+  created_at: string;
 };
 
 /**
@@ -199,8 +204,6 @@ async function handleCreateShare(request: NextRequest) {
     throw createError.validation(outbound.message);
   }
 
-  const token = randomBytes(18).toString('base64url');
-
   let sanitized: SanitizedMessages;
   try {
     sanitized = sanitizeMessages(messages);
@@ -217,26 +220,57 @@ async function handleCreateShare(request: NextRequest) {
     throw error;
   }
   const { messages: sanitizedMessages, secretPatternNames, secretMatchCount } = sanitized;
-  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const [data] = await db.query<SharedSessionRow>(
-    `insert into shared_sessions
-       (token, owner_id, title, model_id, provider, messages, total_messages, conversation_id,
-        expires_at)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
-     returning id, token, expires_at, total_messages, visibility`,
-    [
-      token,
-      userId,
-      title,
-      model_id ?? null,
-      provider ?? null,
-      JSON.stringify(sanitizedMessages),
-      sanitizedMessages.length,
-      conversationId ?? null,
-      expiresAt,
-    ],
-  );
+  const refreshed = conversationId
+    ? await db.query<SharedSessionRow>(
+        `with refreshed as (
+           update shared_sessions
+              set title = $3,
+                  model_id = $4,
+                  provider = $5,
+                  messages = $6::jsonb,
+                  total_messages = $7,
+                  expires_at = coalesce($8::timestamptz, expires_at)
+            where owner_id = $1
+              and conversation_id = $2
+              and expires_at > now()
+            returning id, token, expires_at, total_messages, visibility, created_at
+         )
+         select * from refreshed order by created_at desc`,
+        [
+          userId,
+          conversationId,
+          title,
+          model_id ?? null,
+          provider ?? null,
+          JSON.stringify(sanitizedMessages),
+          sanitizedMessages.length,
+          expiresInDays === undefined ? null : shareExpiresAt(expiresInDays),
+        ],
+      )
+    : [];
+
+  const [data] =
+    refreshed.length > 0
+      ? refreshed
+      : await db.query<SharedSessionRow>(
+          `insert into shared_sessions
+             (token, owner_id, title, model_id, provider, messages, total_messages, conversation_id,
+              expires_at)
+           values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+           returning id, token, expires_at, total_messages, visibility, created_at`,
+          [
+            randomBytes(18).toString('base64url'),
+            userId,
+            title,
+            model_id ?? null,
+            provider ?? null,
+            JSON.stringify(sanitizedMessages),
+            sanitizedMessages.length,
+            conversationId ?? null,
+            shareExpiresAt(expiresInDays ?? DEFAULT_SHARE_EXPIRY_DAYS),
+          ],
+        );
 
   if (!data) {
     logger.error({ userId: userId }, 'Failed to create shared session');
@@ -265,21 +299,25 @@ async function handleCreateShare(request: NextRequest) {
     });
   }
 
-  await recordAuditEvent({
-    userId,
-    organizationId,
-    eventType: 'share_link_created',
-    request,
-    outcome: 'success',
-    severity: 'info',
-    detail: {
-      resourceType: 'share_link',
-      resourceId: data.id,
-      ...(conversationId ? { conversationId } : {}),
-    },
-  }).catch((error) => {
-    logger.error({ error, userId }, 'Failed to record share-link audit event');
-  });
+  await Promise.all(
+    (refreshed.length > 0 ? refreshed : [data]).map((share) =>
+      recordAuditEvent({
+        userId,
+        organizationId,
+        eventType: refreshed.length > 0 ? 'share_link_updated' : 'share_link_created',
+        request,
+        outcome: 'success',
+        severity: 'info',
+        detail: {
+          resourceType: 'share_link',
+          resourceId: share.id,
+          ...(conversationId ? { conversationId } : {}),
+        },
+      }).catch((error) => {
+        logger.error({ error, userId }, 'Failed to record share-link audit event');
+      }),
+    ),
+  );
 
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const shareUrl = `${appUrl}/share/${data.token}`;
@@ -292,7 +330,7 @@ async function handleCreateShare(request: NextRequest) {
     visibility: toSharedSessionVisibility(data.visibility),
     workspace: await describeWorkspaceAudience(db, organizationId),
   };
-  return NextResponse.json(created, { status: 201 });
+  return NextResponse.json(created, { status: refreshed.length > 0 ? 200 : 201 });
 }
 
 type SharedSessionListRow = {
@@ -371,5 +409,53 @@ async function handleListShares(request: NextRequest) {
   return NextResponse.json(listed);
 }
 
+async function handleRevokeConversationShares(request: NextRequest) {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse;
+
+  const { userId } = await getClerkAuthUser(request);
+  const query = ConversationShareListQuerySchema.required().safeParse({
+    conversation_id: request.nextUrl.searchParams.get('conversation_id') ?? undefined,
+  });
+  if (!query.success) {
+    throw createError.validation('Name the conversation whose links to revoke', query.error);
+  }
+  const conversationId = query.data.conversation_id;
+  const db = getNeonDb();
+
+  const revoked = await db.query<{ id: string }>(
+    `delete from shared_sessions
+      where owner_id = $1
+        and conversation_id = $2
+        and expires_at > now()
+      returning id`,
+    [userId, conversationId],
+  );
+
+  const organizationId =
+    revoked.length > 0
+      ? await resolveActiveOrganizationId(db, userId, request).catch(() => null)
+      : null;
+  await Promise.all(
+    revoked.map((share) =>
+      recordAuditEvent({
+        userId,
+        organizationId,
+        eventType: 'share_link_revoked',
+        request,
+        outcome: 'success',
+        severity: 'info',
+        detail: { resourceType: 'share_link', resourceId: share.id, conversationId },
+      }).catch((error) => {
+        logger.error({ error, userId }, 'Failed to record share-link audit event');
+      }),
+    ),
+  );
+
+  const answer: ConversationSharesRevoked = { success: true, revoked: revoked.length };
+  return NextResponse.json(answer);
+}
+
 export const POST = withErrorHandler(handleCreateShare);
 export const GET = withErrorHandler(handleListShares);
+export const DELETE = withErrorHandler(handleRevokeConversationShares);

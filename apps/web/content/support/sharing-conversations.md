@@ -4,7 +4,7 @@ title: Share a conversation or an artifact
 path: /chat
 category: chat
 tags: share, share link, public link, workspace only, revoke, shared links, unpublish, published artifacts, export chat, pdf, docx
-updated: 2026-09-17
+updated: 2026-10-02
 scope: public
 ---
 
@@ -23,10 +23,17 @@ dialog, or open the link to check what a reader sees.
 
 ## Change or revoke a link
 
+Choosing **Share** again on a chat that is already shared shows its link, with
+**Copy**, **Update link** and **Revoke share**, instead of offering a second
+link. **Update link** replaces the snapshot with the chat as it is now, and the
+address does not change.
+
 Switching the audience after the fact asks first, naming the change: "Make this
 readable by anyone with the link?" or "Limit this to your workspace?".
 **Revoke share** removes access, and the confirmation says that anyone using the
-link will immediately lose access.
+link will immediately lose access. A chat shared more than once revokes all of
+its live links together, and the confirmation says how many stop working. A
+revoked or expired link opens as a page that does not exist.
 
 ## Find every link you have created
 

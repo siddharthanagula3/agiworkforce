@@ -71,7 +71,7 @@ describe('ShareConversationDialog', () => {
     ).toBeInTheDocument();
   });
 
-  it('revokes the exact link from the result state', async () => {
+  it('revokes the chat’s link from the result state', async () => {
     const fetchMock = vi
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(
@@ -85,7 +85,9 @@ describe('ShareConversationDialog', () => {
           { status: 201 },
         ),
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, revoked: 1 }), { status: 200 }),
+      );
 
     render(
       <ShareConversationDialog
@@ -108,7 +110,7 @@ describe('ShareConversationDialog', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenLastCalledWith(
-      '/api/share/fixture-token',
+      '/api/share?conversation_id=conv-1',
       expect.objectContaining({ method: 'DELETE' }),
     );
     expect(await screen.findByRole('button', { name: /Create public link/ })).toBeInTheDocument();
@@ -454,27 +456,131 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
   });
 
-  it('shows the next live link to the chat once the one shown is revoked', async () => {
+  it('revokes every live link to the chat at once, saying how many stop working', async () => {
     const fetchMock = vi
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(listed([liveShare('newest-token'), liveShare('older-token')]))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, revoked: 2 }), { status: 200 }),
+      );
 
     renderSavedChat();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Revoke share' }));
-    expect(await screen.findByText('Revoke this share?')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('alertdialog').querySelector('button:last-of-type')!);
+    expect(await screen.findByTestId('share-link-count')).toHaveTextContent(
+      'This chat has 2 live links.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke share' }));
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('Revoke all 2 links?');
+    expect(confirmation).toHaveTextContent(
+      'This chat has 2 live links, and all of them stop working',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke all links' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
-        '/api/share/newest-token',
+        `/api/share?conversation_id=${SAVED_CONVERSATION_ID}`,
         expect.objectContaining({ method: 'DELETE' }),
       ),
     );
+    expect(await screen.findByRole('button', { name: /Create public link/ })).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('https://agiworkforce.com/share/older-token')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('updates the chat’s link in place, keeping its address and expiry', async () => {
+    useChatStore.setState({
+      messages: [
+        {
+          id: 'fixture-message',
+          role: 'user',
+          content: 'Private planning notes',
+          createdAt: '2026-08-11T00:00:00.000Z',
+        },
+        {
+          id: 'fixture-answer',
+          role: 'assistant',
+          content: 'A plan.',
+          createdAt: '2026-08-11T00:00:01.000Z',
+        },
+      ],
+    });
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed([liveShare('newest-token'), liveShare('older-token')]))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            shareUrl: 'https://agiworkforce.com/share/newest-token',
+            token: 'newest-token',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            messageCount: 2,
+            visibility: 'public',
+            workspace: null,
+          }),
+          { status: 200 },
+        ),
+      );
+
+    renderSavedChat();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Update link' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const [url, init] = fetchMock.mock.calls[1]!;
+    expect(url).toBe('/api/share');
+    expect(init).toEqual(expect.objectContaining({ method: 'POST' }));
+    const body = JSON.parse(init?.body as string);
+    expect(body.conversation_id).toBe(SAVED_CONVERSATION_ID);
+    expect(body.messages).toHaveLength(2);
+    expect('expires_in_days' in body).toBe(false);
+    expect(await screen.findByText(/this 2-message snapshot/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Conversation link' })).toHaveValue(
+      'https://agiworkforce.com/share/newest-token',
+    );
+    expect(screen.getByTestId('share-link-count')).toHaveTextContent('2 live links');
+  });
+
+  it('moves every live link to the chosen audience', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            shares: [liveShare('newest-token'), liveShare('older-token')],
+            workspace: { memberCount: 3 },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockImplementation(async (input) => {
+        const token = String(input).split('/').pop();
+        return new Response(
+          JSON.stringify({
+            token,
+            shareUrl: `https://agiworkforce.com/share/${token}`,
+            visibility: 'organization',
+            organizationId: '11111111-1111-4111-8111-111111111111',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+          }),
+          { status: 200 },
+        );
+      });
+
+    renderSavedChat();
+
+    fireEvent.change(await screen.findByLabelText('Who can open this'), {
+      target: { value: 'organization' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Share with workspace' }));
+
     expect(
-      await screen.findByDisplayValue('https://agiworkforce.com/share/older-token'),
+      await screen.findByRole('heading', { name: 'Shared with your workspace' }),
     ).toBeInTheDocument();
+    const patched = fetchMock.mock.calls
+      .filter(([, init]) => init?.method === 'PATCH')
+      .map(([input]) => String(input));
+    expect(patched).toEqual(['/api/share/newest-token', '/api/share/older-token']);
   });
 
   it('waits for the check made on reopening before offering a link again', async () => {
