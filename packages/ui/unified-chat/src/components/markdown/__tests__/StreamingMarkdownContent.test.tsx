@@ -12,6 +12,7 @@ vi.mock('mermaid', () => ({
   default: {
     initialize: () => undefined,
     render: (id: string, source: string) => hoisted.mermaidRender(id, source),
+    mermaidAPI: { getDiagramFromText: async () => ({ db: {} }) },
   },
 }));
 
