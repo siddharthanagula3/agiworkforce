@@ -39,6 +39,12 @@ const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foregrou
 const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
 const PROMOTIONAL_DATA_USE =
   'These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
+const CALENDAR_DAY: Intl.DateTimeFormatOptions = {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+};
 
 type PendingAvailability = 'loading' | 'error' | 'unlisted';
 
@@ -70,13 +76,20 @@ function joinIssuers(issuers: readonly string[]): string {
     : (issuers[0] ?? '');
 }
 
+function calendarDay(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? isoDate : date.toLocaleDateString(undefined, CALENDAR_DAY);
+}
+
 function readyGuidance(entry: FreeModelEntry, promotional: boolean): string {
   if (promotional) return 'Free promotion · text chat · provider quota applies';
   const { model, label } = entry;
   const use = getProviderOffering(model.key)?.quotaChatImageInput
     ? 'image chat'
     : FREE_QUOTA_CATEGORIES[model.category].toLowerCase();
-  const allocation = model.expiresOn ? `expires ${model.expiresOn}` : 'limited allocation';
+  const allocation = model.expiresOn
+    ? `expires ${calendarDay(model.expiresOn)}`
+    : 'limited allocation';
   return [label.version, 'Free quota', use, allocation].filter(Boolean).join(' · ');
 }
 
@@ -89,7 +102,7 @@ function unavailableReason(entry: FreeModelEntry): string {
   const reason = FREE_QUOTA_STATUS_LABELS[status];
   return withVersion(
     entry.label,
-    status === 'expired' && expiresOn ? `${reason} ${expiresOn}` : reason,
+    status === 'expired' && expiresOn ? `${reason} ${calendarDay(expiresOn)}` : reason,
   );
 }
 
@@ -126,7 +139,7 @@ function unavailableExplanation(entry: FreeModelEntry, fallbackModelName: string
     return `${issuer}'s free allowance for ${label.displayName} is used up. It is the provider's allowance, not a limit on your account. ${nextStep}`;
   }
   if (model.status === 'expired') {
-    return `${issuer}'s free offer for ${label.displayName} ended${model.expiresOn ? ` on ${model.expiresOn}` : ''}. ${nextStep}`;
+    return `${issuer}'s free offer for ${label.displayName} ended${model.expiresOn ? ` on ${calendarDay(model.expiresOn)}` : ''}. ${nextStep}`;
   }
   return `${label.displayName} from ${issuer} is not available right now. ${nextStep}`;
 }

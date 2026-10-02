@@ -56,6 +56,15 @@ function literal(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function calendarDay(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function model(key: string, status: FreeQuotaStatus = 'ready'): FreeQuotaModel {
   const offering = offerings[key]!;
   return {
@@ -199,7 +208,7 @@ describe('Free section in the composer', () => {
     expect(spent).not.toHaveAttribute('disabled');
     expect(spent).toHaveAccessibleDescription(/Free allowance used up$/);
     expect(screen.getByRole('button', { name: name(expired) })).toHaveAccessibleDescription(
-      /Free offer ended 2026-08-22$/,
+      new RegExp(`Free offer ended ${literal(calendarDay('2026-08-22'))}$`),
     );
 
     fireEvent.click(spent);
@@ -209,6 +218,28 @@ describe('Free section in the composer', () => {
         `${ISSUER}'s free allowance for .+ is used up\\..+Choose ${FALLBACK} or another free model\\.$`,
       ),
     );
+  });
+
+  it('writes allowance dates as calendar days, never as raw ISO dates', () => {
+    const ready = familyA[0]!;
+    const ended = familyB[0]!;
+    renderSection(
+      sources(
+        source(
+          'ready',
+          catalogue([{ ...model(ready), expiresOn: '2026-10-21' }, model(ended, 'expired')]),
+        ),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
+
+    expect(screen.getByRole('button', { name: name(ready) })).toHaveAccessibleDescription(
+      new RegExp(`expires ${literal(calendarDay('2026-10-21'))}$`),
+    );
+    const endedRow = screen.getByRole('button', { name: name(ended) });
+    fireEvent.click(endedRow);
+    expect(screen.getByRole('status')).toHaveTextContent(`ended on ${calendarDay('2026-08-22')}.`);
+    expect(document.body).not.toHaveTextContent(/\d{4}-\d{2}-\d{2}/);
   });
 
   it('announces why through a live region that is on the page before the row is pressed', () => {
