@@ -1,19 +1,27 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import { availableParallelism, totalmem } from 'node:os';
 
-const LOCAL_VITEST_WORKERS_ENV = 'AGI_VITEST_MAX_WORKERS';
-const DEFAULT_LOCAL_VITEST_WORKERS = 2;
+const VITEST_WORKERS_ENV = 'AGI_VITEST_MAX_WORKERS';
+const DEFAULT_VITEST_WORKERS = 2;
 
-function localVitestMaxWorkers(): number | undefined {
-  if (process.env['CI']) return undefined;
-  const configured = Number(process.env[LOCAL_VITEST_WORKERS_ENV]);
-  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_LOCAL_VITEST_WORKERS;
+function vitestMaxWorkers(): number {
+  const configured = Number(process.env[VITEST_WORKERS_ENV]);
+  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_VITEST_WORKERS;
+}
+
+const maxWorkers = vitestMaxWorkers();
+
+if (process.env['CI']) {
+  process.stdout.write(
+    `${JSON.stringify({ maxWorkers, availableParallelism: availableParallelism(), totalMemoryBytes: totalmem() })}\n`,
+  );
 }
 
 export default defineConfig({
   plugins: [],
   test: {
-    maxWorkers: localVitestMaxWorkers(),
+    maxWorkers,
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.ts'],
