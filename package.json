@@ -97,13 +97,17 @@
     },
     "auditConfig": {
       "ignoreGhsas": [
-        "GHSA-86w9-cpqp-85rv"
+        "GHSA-86w9-cpqp-85rv",
+        "GHSA-ch52-4w7c-c8xp",
+        "GHSA-vfj7-8cjw-p6xm"
       ]
     },
     "patchedDependencies": {
       "next-themes@0.4.6": "patches/next-themes@0.4.6.patch",
       "detox@20.51.4": "patches/detox@20.51.4.patch",
-      "bunyamin@1.6.3": "patches/bunyamin@1.6.3.patch"
+      "bunyamin@1.6.3": "patches/bunyamin@1.6.3.patch",
+      "braces@3.0.3": "patches/braces@3.0.3.patch",
+      "http-cache-semantics@4.2.0": "patches/http-cache-semantics@4.2.0.patch"
     }
   },
   "scripts": {
@@ -397,7 +401,7 @@
     "check:secrets:history": "node scripts/check-secrets.mjs --history",
     "check:vacuous-e2e": "node scripts/check-vacuous-e2e.mjs",
     "check:doc-registry": "node scripts/check-doc-registry.mjs",
-    "check:script-tests": "node --test --test-concurrency=1 scripts/check-clerk-bot-protection.test.mjs scripts/check-node-version.test.mjs scripts/prepare-linux-sandbox.test.mjs scripts/check-codeowners-contract.test.mjs scripts/check-env-drift.test.mjs scripts/check-executable-docs.test.mjs scripts/check-llm-failure-guardrails.test.mjs scripts/check-module-reachability-ratchet.test.mjs scripts/check-release-gates.test.mjs scripts/check-rust-egress-boundary.test.mjs scripts/check-scan-findings.test.mjs scripts/check-security-gates.test.mjs scripts/check-spec-artifacts.test.mjs scripts/check-theme-only-text-colours.test.mjs scripts/check-raw-error-to-user.test.mjs scripts/check-policy-gate-scope.test.mjs scripts/check-em-dash-in-copy.test.mjs scripts/clean-repo.test.mjs scripts/generate-sbom.test.mjs scripts/scan-skills-with-vetting.test.mjs scripts/verify-desktop-upgrade.test.mjs scripts/check-protocol-types.test.mjs scripts/release/rollback.test.mjs",
+    "check:script-tests": "node --test --test-concurrency=1 scripts/check-clerk-bot-protection.test.mjs scripts/check-node-version.test.mjs scripts/prepare-linux-sandbox.test.mjs scripts/check-codeowners-contract.test.mjs scripts/check-env-drift.test.mjs scripts/check-executable-docs.test.mjs scripts/check-llm-failure-guardrails.test.mjs scripts/check-module-reachability-ratchet.test.mjs scripts/check-release-gates.test.mjs scripts/check-rust-egress-boundary.test.mjs scripts/check-scan-findings.test.mjs scripts/check-security-gates.test.mjs scripts/braces-hardening.test.cjs scripts/http-cache-hardening.test.cjs scripts/check-spec-artifacts.test.mjs scripts/check-theme-only-text-colours.test.mjs scripts/check-raw-error-to-user.test.mjs scripts/check-policy-gate-scope.test.mjs scripts/check-em-dash-in-copy.test.mjs scripts/clean-repo.test.mjs scripts/generate-sbom.test.mjs scripts/scan-skills-with-vetting.test.mjs scripts/verify-desktop-upgrade.test.mjs scripts/check-protocol-types.test.mjs scripts/release/rollback.test.mjs",
     "check:doc-freshness": "node scripts/check-doc-freshness.mjs",
     "check:agent-docs": "node scripts/check-agent-docs.mjs",
     "generate:doc-matrices": "node scripts/generate-doc-matrices.mjs",

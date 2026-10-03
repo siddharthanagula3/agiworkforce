@@ -133,6 +133,51 @@
       "owner": "Platform lead",
       "tracking": "NODE-FORGE-PKCS1-DIGEST-ALGORITHM-01 (audit/registers/known-flaws.md), CVE-2026-85393",
       "expires": "2026-10-31"
+    },
+    {
+      "id": "http-cache-semantics-stale-policy-patch",
+      "kind": "pnpm-audit-advisory-ignore",
+      "advisories": ["GHSA-ch52-4w7c-c8xp"],
+      "package": "http-cache-semantics",
+      "dependents": {
+        "packages": ["cacheable-request"],
+        "importers": ["apps/desktop", "apps/web"]
+      },
+      "patch": {
+        "version": "4.2.0",
+        "path": "patches/http-cache-semantics@4.2.0.patch",
+        "sha256": "e967b1cf7e1a0a0dc6b797cd787fbce47872f18bfaf108c50b1c174203dbf77b"
+      },
+      "reason": "No fixed upstream version is published. The committed source patch prevents client max-stale and stale extensions from overriding cache security restrictions, preserves origin validation, and retains newly introduced 304 security headers. This same-version audit exception is accepted only when the guard verifies exact patch bytes, manifest/lock bindings and every affected dependency reference; installed-package regressions run in blocking CI.",
+      "owner": "Platform + security",
+      "tracking": "GHSA-ch52-4w7c-c8xp (docs/security/dependency-patches.md)",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "braces-recursive-depth-patch",
+      "kind": "pnpm-audit-advisory-ignore",
+      "advisories": ["GHSA-vfj7-8cjw-p6xm"],
+      "package": "braces",
+      "dependents": {
+        "packages": ["chokidar", "micromatch"],
+        "importers": [
+          "apps/desktop",
+          "apps/extension",
+          "apps/extension-vscode",
+          "apps/mobile",
+          "apps/web",
+          "packages/platform/local-llm"
+        ]
+      },
+      "patch": {
+        "version": "3.0.3",
+        "path": "patches/braces@3.0.3.patch",
+        "sha256": "f33bf759f15b8bb4b7cb6068b497e9ec88a0f997c35e5a32d7a6d7ec6eaf4f7d"
+      },
+      "reason": "No fixed upstream version is published. The committed source patch bounds parser nesting and recursive AST, array and parent-chain traversal at 128 levels, with a controlled SyntaxError instead of recursive stack exhaustion. This same-version audit exception is accepted only when the guard verifies exact patch bytes, manifest/lock bindings and every affected dependency reference; installed-package regressions run in blocking CI.",
+      "owner": "Platform + security",
+      "tracking": "GHSA-vfj7-8cjw-p6xm (docs/security/dependency-patches.md)",
+      "expires": "2026-10-31"
     }
   ]
 }
