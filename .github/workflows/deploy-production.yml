@@ -328,7 +328,7 @@ jobs:
         run: npm install --global vercel@58.4.0
 
       - name: Pull production project settings
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       # Captured BEFORE the promotion. The source is the project's production
       # TARGET (`/v9/projects/{id}` -> `targets.production.id`), which is the
@@ -385,7 +385,7 @@ jobs:
           NODE
 
       - name: Build the production artifact
-        run: vercel build --prod --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Require release readiness before artifact deployment
         env:
@@ -400,7 +400,7 @@ jobs:
         run: |
           set -euo pipefail
           deployment_url="$(
-            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
@@ -698,11 +698,11 @@ jobs:
 
       - name: Pull production project settings
         working-directory: ${{ runner.temp }}/sandbox-origin
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build the production artifact
         working-directory: ${{ runner.temp }}/sandbox-origin
-        run: vercel build --prod --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Require release readiness before sandbox deployment
         env:
@@ -717,7 +717,7 @@ jobs:
         run: |
           set -euo pipefail
           deployment_url="$(
-            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
