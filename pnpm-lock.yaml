@@ -1567,6 +1567,9 @@ importers:
       msw:
         specifier: ^2.15.0
         version: 2.15.0(@types/node@24.19.0)(typescript@5.9.3)
+      saxes:
+        specifier: 6.0.0
+        version: 6.0.0
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3

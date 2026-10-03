@@ -90,7 +90,7 @@ jobs:
 
       - name: Pull preview project settings
         id: pull
-        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
 
       - name: Verify the staging database binding
         id: database
@@ -111,7 +111,7 @@ jobs:
         env:
           AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
           DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
-        run: vercel build --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel build --token="$VERCEL_TOKEN"
 
       - name: Deploy the prebuilt artifact
         id: deploy
@@ -122,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           deployment_url="$(
-            vercel deploy --prebuilt --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" --env AGI_DATABASE_URL --env DATABASE_URL
+            vercel deploy --prebuilt --archive=tgz --token="$VERCEL_TOKEN" --env AGI_DATABASE_URL --env DATABASE_URL
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"

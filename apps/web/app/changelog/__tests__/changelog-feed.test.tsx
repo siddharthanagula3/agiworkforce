@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { render, screen, within } from '@testing-library/react';
+import { SaxesParser } from 'saxes';
 import { describe, expect, it, vi } from 'vitest';
 
 import manifest from '@/content/legal/policy-archive/manifest.json';
@@ -113,35 +114,98 @@ const FIRST_TO_PUBLISH =
 const SKIPPED_OBJECTION_WINDOW =
   /\bThe window to object to a subprocessor added in th(?:at version|ose versions) runs from the day this version is first published here\./;
 
-function parseXml(xml: string): Document {
-  const parsed = new DOMParser().parseFromString(xml, 'application/xml');
-  expect(parsed.getElementsByTagName('parsererror')).toHaveLength(0);
-  return parsed;
+interface XmlAttribute {
+  name: string;
+  namespace: string;
+  value: string;
 }
 
-async function servedFeed(): Promise<Element> {
-  return parseXml(await GET().text()).documentElement;
+interface XmlElement {
+  name: string;
+  namespace: string;
+  attributes: XmlAttribute[];
+  content: (XmlElement | string)[];
 }
 
-function atomChildren(parent: Element, name: string): Element[] {
-  return Array.from(parent.children).filter(
-    (node) => node.namespaceURI === ATOM && node.localName === name,
+function parseXml(xml: string): XmlElement {
+  const parser = new SaxesParser({ xmlns: true });
+  const ancestors: XmlElement[] = [];
+  let root: XmlElement | undefined;
+
+  parser.on('opentag', (tag) => {
+    const element: XmlElement = {
+      name: tag.local,
+      namespace: tag.uri,
+      attributes: Object.values(tag.attributes).map((attribute) => ({
+        name: attribute.local,
+        namespace: attribute.uri,
+        value: attribute.value,
+      })),
+      content: [],
+    };
+    const parent = ancestors.at(-1);
+    if (parent) parent.content.push(element);
+    else root = element;
+    ancestors.push(element);
+  });
+  const appendText = (value: string) => ancestors.at(-1)?.content.push(value);
+  parser.on('text', appendText);
+  parser.on('cdata', appendText);
+  parser.on('closetag', () => {
+    ancestors.pop();
+  });
+  parser.on('error', (error) => {
+    throw error;
+  });
+  parser.write(xml).close();
+
+  if (!root) throw new Error('The XML document has no root element');
+  return root;
+}
+
+function xmlChildren(parent: XmlElement): XmlElement[] {
+  return parent.content.filter((node) => typeof node !== 'string');
+}
+
+function xmlDescendants(parent: XmlElement, name: string): XmlElement[] {
+  return xmlChildren(parent).flatMap((node) => [
+    ...(node.name === name ? [node] : []),
+    ...xmlDescendants(node, name),
+  ]);
+}
+
+function xmlText(element: XmlElement): string {
+  return element.content.map((node) => (typeof node === 'string' ? node : xmlText(node))).join('');
+}
+
+function xmlAttribute(element: XmlElement, name: string): string | null {
+  return (
+    element.attributes.find((attribute) => attribute.namespace === '' && attribute.name === name)
+      ?.value ?? null
   );
 }
 
-function atomChild(parent: Element, name: string): Element {
+async function servedFeed(): Promise<XmlElement> {
+  return parseXml(await GET().text());
+}
+
+function atomChildren(parent: XmlElement, name: string): XmlElement[] {
+  return xmlChildren(parent).filter((node) => node.namespace === ATOM && node.name === name);
+}
+
+function atomChild(parent: XmlElement, name: string): XmlElement {
   const [found] = atomChildren(parent, name);
-  if (!found) throw new Error(`<${parent.localName}> has no <${name}>`);
+  if (!found) throw new Error(`<${parent.name}> has no <${name}>`);
   return found;
 }
 
-function text(parent: Element, name: string): string {
-  return atomChild(parent, name).textContent ?? '';
+function text(parent: XmlElement, name: string): string {
+  return xmlText(atomChild(parent, name));
 }
 
-function linkHref(parent: Element, rel: string): string {
-  const link = atomChildren(parent, 'link').find((node) => node.getAttribute('rel') === rel);
-  return link?.getAttribute('href') ?? '';
+function linkHref(parent: XmlElement, rel: string): string {
+  const link = atomChildren(parent, 'link').find((node) => xmlAttribute(node, 'rel') === rel);
+  return link ? (xmlAttribute(link, 'href') ?? '') : '';
 }
 
 function isAbsoluteHttpUrl(value: string): boolean {
@@ -152,15 +216,12 @@ function isAbsoluteHttpUrl(value: string): boolean {
   }
 }
 
-function contentParagraphsXml(entry: Element): Document {
+function contentParagraphsXml(entry: XmlElement): XmlElement {
   return parseXml(`<paragraphs>${text(entry, 'content')}</paragraphs>`);
 }
 
-function paragraphs(entry: Element): string[] {
-  return Array.from(
-    contentParagraphsXml(entry).querySelectorAll('p'),
-    (node) => node.textContent ?? '',
-  );
+function paragraphs(entry: XmlElement): string[] {
+  return xmlDescendants(contentParagraphsXml(entry), 'p').map(xmlText);
 }
 
 function calendarDate(instant: string, timeZone: string): string {
@@ -175,8 +236,8 @@ function calendarDate(instant: string, timeZone: string): string {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
-function categoryTerms(entry: Element): (string | null)[] {
-  return atomChildren(entry, 'category').map((node) => node.getAttribute('term'));
+function categoryTerms(entry: XmlElement): (string | null)[] {
+  return atomChildren(entry, 'category').map((node) => xmlAttribute(node, 'term'));
 }
 
 describe('/changelog/feed.xml', () => {
@@ -185,9 +246,9 @@ describe('/changelog/feed.xml', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('application/atom+xml; charset=utf-8');
 
-    const feed = parseXml(await response.text()).documentElement;
-    expect(feed.namespaceURI).toBe(ATOM);
-    expect(feed.localName).toBe('feed');
+    const feed = parseXml(await response.text());
+    expect(feed.namespace).toBe(ATOM);
+    expect(feed.name).toBe('feed');
   });
 
   it('carries every element RFC 4287 requires of a feed, with absolute links', async () => {
@@ -212,8 +273,8 @@ describe('/changelog/feed.xml', () => {
       expect(text(entry, 'updated'), id).toMatch(RFC_3339);
       expect(Number.isNaN(Date.parse(text(entry, 'updated'))), id).toBe(false);
       expect(isAbsoluteHttpUrl(linkHref(entry, 'alternate')), id).toBe(true);
-      expect(atomChild(entry, 'content').getAttribute('type'), id).toBe('html');
-      expect(contentParagraphsXml(entry).querySelectorAll('p').length, id).toBeGreaterThan(0);
+      expect(xmlAttribute(atomChild(entry, 'content'), 'type'), id).toBe('html');
+      expect(xmlDescendants(contentParagraphsXml(entry), 'p').length, id).toBeGreaterThan(0);
     }
   });
 
@@ -340,19 +401,19 @@ describe('/changelog/feed.xml', () => {
           categories: [{ term: 'a&b', label: '<label>' }],
         },
       ]),
-    ).documentElement;
+    );
     const entry = atomChild(feed, 'entry');
 
     expect(text(entry, 'title')).toBe(hostile);
     expect(text(entry, 'id')).toBe(address);
     expect(linkHref(entry, 'alternate')).toBe(address);
-    expect(atomChild(entry, 'category').getAttribute('term')).toBe('a&b');
-    expect(atomChild(entry, 'category').getAttribute('label')).toBe('<label>');
-    expect(feed.getElementsByTagName('script')).toHaveLength(0);
+    expect(xmlAttribute(atomChild(entry, 'category'), 'term')).toBe('a&b');
+    expect(xmlAttribute(atomChild(entry, 'category'), 'label')).toBe('<label>');
+    expect(xmlDescendants(feed, 'script')).toHaveLength(0);
 
     const paragraphXml = contentParagraphsXml(entry);
-    expect(paragraphXml.querySelector('script')).toBeNull();
-    expect(Array.from(paragraphXml.querySelectorAll('p'), (node) => node.textContent)).toEqual([
+    expect(xmlDescendants(paragraphXml, 'script')).toHaveLength(0);
+    expect(xmlDescendants(paragraphXml, 'p').map(xmlText)).toEqual([
       hostile,
       '<script>alert(1)</script>',
     ]);
