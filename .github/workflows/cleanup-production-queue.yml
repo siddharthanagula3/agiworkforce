@@ -168,7 +168,7 @@ jobs:
               const entries = Object.entries(definition.jobs);
               const jobNames = entries.map(([id, job]) => job.name ?? id);
               const surfaceNames = entries.filter(([, job]) => isDeployJob(job)).map(([id, job]) => job.name ?? id);
-              if (surfaceNames.length === 0 || jobNames.some(name => typeof name !== 'string' || name.includes('${{')) ||
+              if (surfaceNames.length === 0 || jobNames.some(name => typeof name !== 'string' || name.includes('$' + '{{')) ||
                   new Set(jobNames).size !== jobNames.length) throw new Error('Ambiguous production job names');
               const quietJobs = async run => {
                 const jobs = await completeList(github.rest.actions.listJobsForWorkflowRun, {
