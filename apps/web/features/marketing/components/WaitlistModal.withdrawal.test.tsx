@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { WaitlistModalProvider, WaitlistTrigger } from './WaitlistModal';
@@ -21,6 +21,11 @@ async function openModal() {
 }
 
 describe('waitlist surfaces point their off-the-list promise at a route that exists', () => {
+  beforeAll(async () => {
+    // Load the real lazy module before timing the withdrawal-link interactions.
+    await import('./WaitlistDialog');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
