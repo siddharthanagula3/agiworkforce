@@ -407,7 +407,7 @@
       "owner": "packages/contracts/types/src/cross-device.ts",
       "capabilities": ["canUseNativeIntegrations"],
       "concepts": [],
-      "tables": []
+      "tables": ["signaling_sessions"]
     },
     {
       "name": "voice",

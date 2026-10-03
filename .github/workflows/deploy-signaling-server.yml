@@ -139,6 +139,12 @@ jobs:
       - name: Lint check
         run: pnpm exec eslint src/ --max-warnings 0
 
+      - name: Test relay behavior
+        run: pnpm test
+
+      - name: Verify canonical relay persistence with PostgreSQL
+        run: pnpm exec tsx __tests__/fixtures/db-timeout-check.ts
+
   # ===========================================================================
   # Build and Push Docker Image
   # ===========================================================================

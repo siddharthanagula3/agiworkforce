@@ -399,6 +399,64 @@ test('a gate moved after the step it must precede fails', () => {
   assert.ok(errors.some((error) => /runs after "Promote the deployment/.test(error)));
 });
 
+test('production deployment uploads a production artifact without assigning its domains', () => {
+  const step = workflow.jobs['deploy-web'].steps.find((entry) => entry.id === 'deploy');
+  const root = mkdtempSync(path.join(tmpdir(), 'production-canary-'));
+  roots.push(root);
+  const argumentsFile = path.join(root, 'vercel-arguments');
+  const outputFile = path.join(root, 'outputs');
+  const result = spawnSync(
+    'bash',
+    [
+      '-c',
+      `vercel() {
+  printf '%s\\0' "$@" > "$VERCEL_ARGUMENTS"
+  printf '%s\\n' https://fixture-production.vercel.app
+}
+${step.run}`,
+    ],
+    {
+      cwd: root,
+      env: {
+        PATH: process.env.PATH,
+        VERCEL_TOKEN: 'fixture-token',
+        VERCEL_ARGUMENTS: argumentsFile,
+        GITHUB_OUTPUT: outputFile,
+      },
+      encoding: 'utf8',
+      timeout: 2000,
+    },
+  );
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0);
+  assert.equal(result.signal, null);
+  const args = readFileSync(argumentsFile, 'utf8').split('\0').slice(0, -1);
+  assert.equal(args[0], 'deploy');
+  for (const flag of ['--prebuilt', '--prod', '--skip-domain']) assert.ok(args.includes(flag));
+  assert.equal(readFileSync(outputFile, 'utf8'), 'url=https://fixture-production.vercel.app\n');
+});
+
+test('the canary guard rejects deployment commands that can assign production domains first', () => {
+  for (const command of [
+    'vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"',
+    'vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN" # --skip-domain',
+    'vercel deploy --prebuilt --prod --skip-domain=false --archive=tgz --token="$VERCEL_TOKEN"',
+  ]) {
+    const errors = errorsAfter((document) => {
+      const step = document.jobs['deploy-web'].steps.find((entry) => entry.id === 'deploy');
+      step.run = command;
+    });
+    assert.ok(errors.some((error) => /--skip-domain before the canary/.test(error)));
+  }
+  const errors = errorsAfter((document) => {
+    const steps = document.jobs['deploy-web'].steps;
+    const index = steps.findIndex((step) => step.id === 'deploy');
+    const [deployment] = steps.splice(index, 1);
+    steps.push(deployment);
+  });
+  assert.ok(errors.some((error) => /--skip-domain before the canary/.test(error)));
+});
+
 test('a gate whose command changed fails', () => {
   const errors = errorsAfter((document) => {
     const step = document.jobs['deploy-web'].steps.find(
