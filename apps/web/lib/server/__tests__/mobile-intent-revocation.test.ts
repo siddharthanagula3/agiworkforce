@@ -69,7 +69,7 @@ function calledNames(path: string): Set<string> {
   const cached = calledNamesCache.get(path);
   if (cached && contents.equals(cached.contents)) return cached.names;
   const text = contents.toString('utf8');
-  if (!text.includes('\\') && ![...INTERESTING_CALL_NAMES].some((name) => text.includes(name))) {
+  if (!text.includes('\\u') && ![...INTERESTING_CALL_NAMES].some((name) => text.includes(name))) {
     calledNamesCache.delete(path);
     return new Set();
   }
@@ -221,6 +221,7 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
   it.each([
     ['identifier', 'setPassword()'],
     ['Unicode identifier', String.raw`set\u0050assword()`],
+    ['Unicode code-point identifier', String.raw`set\u{50}assword()`],
     ['Unicode property', String.raw`accounts.listUser\u0053essions()`],
     ['dot comments', 'accounts. /* gap */ listUserSessions()'],
     ['optional chain', 'accounts?.listUserSessions?.()'],
@@ -245,6 +246,7 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
   it.each([
     ['identifier', 'revokeEveryOtherSession()'],
     ['Unicode identifier', String.raw`revokeEveryOther\u0053ession()`],
+    ['Unicode code-point identifier', String.raw`revokeEveryOther\u{53}ession()`],
     ['Unicode property', String.raw`sessions.revokeEveryOther\u0053ession()`],
     ['dot comments', 'sessions. /* gap */ revokeEveryOtherSession()'],
     ['optional chain', 'sessions?.revokeEveryOtherSession?.()'],
