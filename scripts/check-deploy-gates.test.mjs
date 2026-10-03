@@ -1139,6 +1139,7 @@ async function rejectsCleanup(state, pattern) {
 }
 
 test('production queue cleanup is isolated, least privileged, and checks out the verified CI source', () => {
+  assert.doesNotMatch(cleanupStep.with.script, /\$\{\{/);
   assert.deepEqual(queueWorkflow.on.workflow_run, { workflows: ['CI'], types: ['completed'] });
   assert.deepEqual(queueWorkflow.permissions, { contents: 'read' });
   assert.deepEqual(queueWorkflow.jobs.cleanup.permissions, { contents: 'read', actions: 'write' });
