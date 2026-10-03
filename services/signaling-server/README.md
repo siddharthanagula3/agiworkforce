@@ -79,6 +79,16 @@ on September 30, 2026.
 
 ## Probes
 
+The pairing store is `public.signaling_sessions`, declared by the canonical
+`apps/web/db/neon/0354_signaling_sessions.sql` migration. Its creation and expiry
+times are Unix milliseconds, and its metadata holds rotated peer credentials.
+The relay connects as the privileged Neon owner with table access and `BYPASSRLS`;
+the migration revokes access from `app_rls` and `PUBLIC` and forces row security
+with no application policy. A user-scoped database role cannot serve the relay.
+Inspect the migration ledger with `pnpm db:migrate -- status` against the intended
+database before applying changes. An existing relation with incompatible columns,
+constraints, or row policies is rejected without rewriting its data.
+
 | Path      | Answers                                                                                                      |
 | --------- | ------------------------------------------------------------------------------------------------------------ |
 | `/live`   | `200` while the process runs. It never consults the pairing store.                                           |

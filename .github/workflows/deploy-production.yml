@@ -400,7 +400,7 @@ jobs:
         run: |
           set -euo pipefail
           deployment_url="$(
-            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
+            vercel deploy --prebuilt --prod --skip-domain --archive=tgz --token="$VERCEL_TOKEN"
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
@@ -441,11 +441,8 @@ jobs:
           fi
           echo "Canary passed on the unpromoted build at $DEPLOYMENT_URL"
 
-      # With autoAssignCustomDomains off, `vercel deploy --prod` leaves a READY
-      # deployment that never takes agiworkforce.com (production served the
-      # 23 August build until 2026-09-06 that way); with it on, the deploy
-      # aliases the domains itself and promote answers 409. Both end with the
-      # new build serving the apex, so the 409 is success here.
+      # --skip-domain keeps the previous deployment serving until the canary
+      # passes, even when the project automatically assigns production domains.
       - name: Require release readiness before domain promotion
         env:
           GITHUB_TOKEN: ${{ github.token }}

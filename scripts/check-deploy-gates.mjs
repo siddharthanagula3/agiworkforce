@@ -206,6 +206,39 @@ function checkRequiredSteps({ document, contract, workflow, errors }) {
   }
 }
 
+function checkCanaryDeployment({ document, contract, workflow, errors }) {
+  const gate = contract.gates.find((entry) => entry.id === 'canary');
+  const job = document.jobs?.[gate?.job];
+  const declared = steps(job);
+  const deployment = declared.find((step) => step.id === 'deploy');
+  const canary = stepByName(job, gate?.step);
+  const commands = (deployment?.run ?? '')
+    .split(/\r?\n/u)
+    .filter((line) => /^\s*vercel\s+deploy\b/u.test(line))
+    .map((line) => line.trim());
+  const expectedCommand = [
+    'vercel',
+    'deploy',
+    '--prebuilt',
+    '--prod',
+    '--skip-domain',
+    '--archive=tgz',
+    '--token="$VERCEL_TOKEN"',
+  ].join(' ');
+  if (
+    !deployment ||
+    commands.length !== 1 ||
+    commands[0] !== expectedCommand ||
+    !canary ||
+    declared.indexOf(deployment) >= declared.indexOf(canary)
+  ) {
+    errors.push(
+      `${workflow}:${gate?.job ?? 'deploy-web'} must deploy the production artifact with ` +
+        '--skip-domain before the canary so production domains remain on the previous deployment.',
+    );
+  }
+}
+
 function checkRelayGates({ repoRoot, contract, errors }) {
   const relay = contract.releaseReadiness?.relay;
   if (!relay) {
@@ -433,6 +466,7 @@ export function checkDeployGates(repoRoot = REPO_ROOT) {
 
   const deployingJobs = checkDeployingJobs({ document, contract, workflow, errors });
   checkRequiredSteps({ document, contract, workflow, errors });
+  checkCanaryDeployment({ document, contract, workflow, errors });
   checkRelayGates({ repoRoot, contract, errors });
   checkRollback({ document, contract, workflow, errors });
   checkStagingGates({ repoRoot, errors });
