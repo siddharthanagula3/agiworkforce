@@ -416,15 +416,14 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await settleParentConnectorState();
     openConnectorsSection();
 
-    expect(
-      await screen.findByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
-      ),
-    ).toBeTruthy();
+    const failure = await within(settingsPane()).findByText(
+      'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
+    );
+    expect(failure).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    fireEvent.click(within(failure.parentElement!).getByRole('button', { name: 'Try again' }));
 
-    expect(await screen.findByRole('button', { name: 'Notion' })).toBeTruthy();
+    expect(await within(settingsPane()).findByRole('button', { name: 'Notion' })).toBeTruthy();
     expect(
       screen.queryByText(
         'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
