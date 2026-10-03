@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -77,6 +77,11 @@ jobs:
                 source.conclusion !== 'success' || !trustedRepository(source) ||
                 !shaPattern.test(source.head_sha) || !Number.isSafeInteger(source.id)) {
               throw new Error('Cleanup requires successful same-repository main-push CI');
+            }
+            if (!shaPattern.test(context.sha)) throw new Error('Missing trusted workflow snapshot');
+            if (context.sha !== source.head_sha) {
+              core.info('Trusted workflow snapshot differs from CI; no queue changes');
+              return;
             }
             const freshSource = async () => {
               const { data: run } = await github.rest.actions.getWorkflowRun({ ...options, run_id: source.id });

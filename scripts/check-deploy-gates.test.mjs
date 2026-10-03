@@ -1108,7 +1108,7 @@ function queueFixture() {
   state.context = {
     repo: { owner: 'fixture', repo: 'repository' },
     eventName: 'workflow_run',
-    sha: 'd'.repeat(40),
+    sha: head,
     payload: { workflow_run: clone(source) },
   };
   state.run = async () => {
@@ -1138,7 +1138,7 @@ async function rejectsCleanup(state, pattern) {
   assert.deepEqual(state.cancelled, []);
 }
 
-test('production queue cleanup is isolated, least privileged, and checks out the verified CI source', () => {
+test('production queue cleanup is isolated, least privileged, and checks out the trusted main snapshot', () => {
   assert.doesNotMatch(cleanupStep.with.script, /\$\{\{/);
   assert.deepEqual(queueWorkflow.on.workflow_run, { workflows: ['CI'], types: ['completed'] });
   assert.deepEqual(queueWorkflow.permissions, { contents: 'read' });
@@ -1149,7 +1149,7 @@ test('production queue cleanup is isolated, least privileged, and checks out the
   const checkout = queueWorkflow.jobs.cleanup.steps.find((step) =>
     step.uses?.startsWith('actions/checkout@'),
   );
-  assert.equal(checkout.with.ref, '${{ github.event.workflow_run.head_sha }}');
+  assert.equal(checkout.with.ref, '${{ github.sha }}');
   assert.equal(checkout.with['persist-credentials'], false);
   const hardening = JSON.parse(
     readFileSync(path.join(REPO_ROOT, 'scripts/config/workflow-hardening.json')),
@@ -1161,6 +1161,25 @@ test('production queue cleanup is isolated, least privileged, and checks out the
     1,
   );
   assert.match(cleanupStep.uses, /@[0-9a-f]{40}$/);
+});
+
+test('cleanup preserves the queue when the trusted workflow snapshot differs from verified CI', async () => {
+  const state = queueFixture();
+  state.context.sha = 'd'.repeat(40);
+  const { error } = await state.run();
+  assert.equal(error, null);
+  assert.deepEqual(state.cancelled, []);
+  assert.deepEqual(state.calls, []);
+  assert.match(state.logs.join('\n'), /Trusted workflow snapshot differs from CI/);
+});
+
+test('cleanup refuses missing or invalid trusted workflow snapshots before contacting GitHub', async () => {
+  for (const sha of [undefined, 'main', 'a'.repeat(39)]) {
+    const state = queueFixture();
+    state.context.sha = sha;
+    await rejectsCleanup(state, /Missing trusted workflow snapshot/);
+    assert.deepEqual(state.calls, []);
+  }
 });
 
 test('cleanup cancels empty pending runs before waiting reviews and records asynchronous acceptance', async () => {
