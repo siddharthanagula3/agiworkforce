@@ -11,6 +11,10 @@
   ],
   "allowedWriteScopes": [
     {
+      "id": "cleanup-production-queue.yml:cleanup:actions",
+      "reason": "After successful trusted main CI, it cancels only superseded production runs with no started deployment surface; current releases, active jobs, reruns and approvals remain untouched."
+    },
+    {
       "id": "agiworkforce-bot.yml:process:issues",
       "reason": "the bot answers an issue comment, which is an issue write"
     },

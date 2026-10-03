@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import test from 'node:test';
@@ -9,7 +10,7 @@ import { runInNewContext } from 'node:vm';
 
 import { stringify } from 'yaml';
 
-import { WORKFLOW_DIR } from './check-workflow-hardening.mjs';
+import { WORKFLOW_DIR, isDeployJob } from './check-workflow-hardening.mjs';
 import {
   CONTRACT_PATH,
   REPO_ROOT,
@@ -25,6 +26,7 @@ const roots = [];
 const contract = loadContract(REPO_ROOT);
 const workflow = readWorkflow(REPO_ROOT, contract.workflow);
 const stagingWorkflow = readWorkflow(REPO_ROOT, 'deploy-staging.yml');
+const queueWorkflow = readWorkflow(REPO_ROOT, 'cleanup-production-queue.yml');
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -913,5 +915,818 @@ test('staging preview verification cannot substitute a persistent origin, candid
     assert.ok(
       checkDeployGates(root).errors.some((error) => /protected preview verifier/.test(error)),
     );
+  }
+});
+
+const cleanupStep = queueWorkflow.jobs.cleanup.steps.find((step) =>
+  step.uses?.startsWith('actions/github-script@'),
+);
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+const executeCleanup = new AsyncFunction(
+  'github',
+  'context',
+  'core',
+  'require',
+  'process',
+  'setTimeout',
+  cleanupStep.with.script,
+);
+
+function queueFixture() {
+  const repository = 'fixture/repository';
+  const head = 'a'.repeat(40);
+  const old = 'b'.repeat(40);
+  const identity = {
+    repository: { full_name: repository },
+    head_repository: { full_name: repository },
+  };
+  const source = {
+    ...identity,
+    id: 100,
+    name: 'CI',
+    path: '.github/workflows/ci.yml',
+    head_sha: head,
+    event: 'push',
+    head_branch: 'main',
+    status: 'completed',
+    conclusion: 'success',
+    run_attempt: 1,
+    created_at: '2026-01-03T00:00:00Z',
+  };
+  const oldRun = (id, status, day) => ({
+    ...clone(identity),
+    id,
+    workflow_id: 200,
+    name: workflow.name,
+    path: `.github/workflows/${contract.workflow}`,
+    head_sha: old,
+    event: 'workflow_run',
+    head_branch: 'main',
+    status,
+    conclusion: null,
+    run_attempt: 1,
+    created_at: `2026-01-0${day}T00:00:00Z`,
+  });
+  const job = (id, name, status, steps = []) => ({
+    id: id + 1000,
+    run_id: 1,
+    run_attempt: 1,
+    name,
+    status,
+    steps,
+    runner_id: 0,
+    conclusion: status === 'completed' ? 'success' : null,
+  });
+  const state = {
+    source,
+    mainSha: head,
+    runs: [oldRun(1, 'waiting', 1), oldRun(2, 'pending', 2)],
+    jobs: {
+      1: [
+        job(1, workflow.jobs.scope.name, 'completed', [{ status: 'completed' }]),
+        job(2, workflow.jobs['deploy-sandbox'].name, 'waiting'),
+      ],
+      2: [],
+    },
+    definition: stringify(workflow),
+    cancelled: [],
+    calls: [],
+    logs: [],
+    counts: {},
+    listPages: {},
+    jobPages: {},
+    hooks: {},
+    summary: '',
+    summaryWritten: false,
+  };
+  const invoke = async (name, parameters, produce) => {
+    assert.equal(
+      parameters.request.timeout,
+      contract.releaseReadiness.requestTimeoutSeconds * 1000,
+    );
+    assert.equal(parameters.owner, 'fixture');
+    assert.equal(parameters.repo, 'repository');
+    state.calls.push({ name, parameters: clone(parameters) });
+    const key = `${name}:${parameters.run_id ?? parameters.status ?? ''}`;
+    state.counts[key] = (state.counts[key] ?? 0) + 1;
+    const override = state.hooks[name]?.(parameters, state.counts[key], state);
+    if (override !== undefined) return override;
+    return { data: clone(produce()), status: 200 };
+  };
+  const github = {
+    rest: {
+      git: {
+        getRef: (parameters) =>
+          invoke('getRef', parameters, () => ({
+            ref: 'refs/heads/main',
+            object: { type: 'commit', sha: state.mainSha },
+          })),
+      },
+      repos: {
+        compareCommitsWithBasehead: (parameters) =>
+          invoke('compare', parameters, () => ({
+            status: 'ahead',
+            ahead_by: 1,
+            behind_by: 0,
+            base_commit: { sha: parameters.basehead.split('...')[0] },
+            merge_base_commit: { sha: parameters.basehead.split('...')[0] },
+          })),
+        getContent: (parameters) =>
+          invoke('getContent', parameters, () => ({
+            type: 'file',
+            path: parameters.path,
+            encoding: 'base64',
+            sha: 'e'.repeat(40),
+            content: Buffer.from(state.definition).toString('base64'),
+          })),
+      },
+      actions: {
+        getWorkflowRun: (parameters) =>
+          invoke('getRun', parameters, () =>
+            parameters.run_id === source.id
+              ? state.source
+              : state.runs.find((run) => run.id === parameters.run_id),
+          ),
+        getWorkflow: (parameters) =>
+          invoke('getWorkflow', parameters, () => ({
+            id: 200,
+            name: workflow.name,
+            path: `.github/workflows/${contract.workflow}`,
+          })),
+        listWorkflowRuns: (parameters) =>
+          invoke(
+            'listRuns',
+            parameters,
+            () =>
+              state.listPages[parameters.status]?.[parameters.page - 1] ?? {
+                total_count: state.runs.filter((run) => run.status === parameters.status).length,
+                workflow_runs: state.runs.filter((run) => run.status === parameters.status),
+              },
+          ),
+        listJobsForWorkflowRun: (parameters) =>
+          invoke(
+            'listJobs',
+            parameters,
+            () =>
+              state.jobPages[parameters.run_id]?.[parameters.page - 1] ?? {
+                total_count: state.jobs[parameters.run_id].length,
+                jobs: state.jobs[parameters.run_id],
+              },
+          ),
+        cancelWorkflowRun: (parameters) =>
+          invoke('cancel', parameters, () => {
+            state.cancelled.push(parameters.run_id);
+            const run = state.runs.find((entry) => entry.id === parameters.run_id);
+            run.status = 'completed';
+            run.conclusion = 'cancelled';
+            return null;
+          }).then((response) => ({
+            ...response,
+            status: response.status === 200 ? 202 : response.status,
+          })),
+      },
+    },
+  };
+  const summary = {
+    addHeading(value) {
+      state.summary += value;
+      return this;
+    },
+    addRaw(value) {
+      state.summary += value;
+      return this;
+    },
+    async write() {
+      state.summaryWritten = true;
+    },
+  };
+  const core = {
+    summary,
+    info: (value) => state.logs.push(value),
+    notice: (value) => state.logs.push(value),
+  };
+  state.context = {
+    repo: { owner: 'fixture', repo: 'repository' },
+    eventName: 'workflow_run',
+    sha: 'd'.repeat(40),
+    payload: { workflow_run: clone(source) },
+  };
+  state.run = async () => {
+    try {
+      await executeCleanup(
+        github,
+        state.context,
+        core,
+        createRequire(import.meta.url),
+        {
+          env: { GITHUB_WORKSPACE: REPO_ROOT },
+        },
+        (callback) => callback(),
+      );
+      return { error: null, state };
+    } catch (error) {
+      return { error, state };
+    }
+  };
+  return state;
+}
+
+async function rejectsCleanup(state, pattern) {
+  const result = await state.run();
+  assert.ok(result.error, 'unsafe or incomplete evidence must fail closed');
+  if (pattern) assert.match(result.error.message, pattern);
+  assert.deepEqual(state.cancelled, []);
+}
+
+test('production queue cleanup is isolated, least privileged, and checks out the verified CI source', () => {
+  assert.deepEqual(queueWorkflow.on.workflow_run, { workflows: ['CI'], types: ['completed'] });
+  assert.deepEqual(queueWorkflow.permissions, { contents: 'read' });
+  assert.deepEqual(queueWorkflow.jobs.cleanup.permissions, { contents: 'read', actions: 'write' });
+  assert.ok(queueWorkflow.jobs.cleanup['timeout-minutes'] > 0);
+  assert.equal(queueWorkflow.jobs.cleanup.environment, undefined);
+  assert.equal(queueWorkflow.concurrency['cancel-in-progress'], false);
+  const checkout = queueWorkflow.jobs.cleanup.steps.find((step) =>
+    step.uses?.startsWith('actions/checkout@'),
+  );
+  assert.equal(checkout.with.ref, '${{ github.event.workflow_run.head_sha }}');
+  assert.equal(checkout.with['persist-credentials'], false);
+  const hardening = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, 'scripts/config/workflow-hardening.json')),
+  );
+  assert.equal(
+    hardening.allowedWriteScopes.filter(
+      (entry) => entry.id === 'cleanup-production-queue.yml:cleanup:actions',
+    ).length,
+    1,
+  );
+  assert.match(cleanupStep.uses, /@[0-9a-f]{40}$/);
+});
+
+test('cleanup cancels empty pending runs before waiting reviews and records asynchronous acceptance', async () => {
+  const state = queueFixture();
+  const { error } = await state.run();
+  assert.equal(error, null);
+  assert.deepEqual(state.cancelled, [2, 1]);
+  assert.ok(state.summaryWritten);
+  assert.match(state.summary, /Acceptance is asynchronous/);
+  assert.ok(
+    state.calls
+      .filter((call) => call.name === 'compare')
+      .every((call) => call.parameters.basehead.endsWith(state.source.head_sha)),
+  );
+  assert.ok(
+    state.calls
+      .filter((call) => call.name === 'listJobs')
+      .every((call) => call.parameters.filter === 'latest'),
+  );
+  assert.ok(
+    state.calls
+      .filter((call) => call.name === 'cancel')
+      .every((call, index) => state.calls[state.calls.indexOf(call) - 1].name === 'getRef'),
+  );
+});
+
+test('cleanup rejects untrusted or unsuccessful source events and fresh source drift', async () => {
+  for (const mutate of [
+    (s) => {
+      s.context.eventName = 'push';
+    },
+    (s) => {
+      s.context.payload.workflow_run.event = 'pull_request';
+    },
+    (s) => {
+      s.context.payload.workflow_run.head_branch = 'feature';
+    },
+    (s) => {
+      s.context.payload.workflow_run.conclusion = 'failure';
+    },
+    (s) => {
+      s.context.payload.workflow_run.head_repository.full_name = 'foreign/repository';
+    },
+    (s) => {
+      s.context.payload.workflow_run.head_sha = 'short';
+    },
+    (s) => {
+      s.source.status = 'in_progress';
+      s.source.conclusion = null;
+    },
+    (s) => {
+      s.source.run_attempt = 2;
+    },
+    (s) => {
+      s.source.path = '.github/workflows/other.yml';
+    },
+  ]) {
+    const state = queueFixture();
+    mutate(state);
+    await rejectsCleanup(state, /successful|trusted|Source CI/);
+  }
+});
+
+test('cleanup preserves the queue when current main differs from verified CI', async () => {
+  const state = queueFixture();
+  state.mainSha = 'c'.repeat(40);
+  assert.equal((await state.run()).error, null);
+  assert.deepEqual(state.cancelled, []);
+});
+
+test('cleanup preserves current, newer, non-main, manual, scheduled, foreign and rerun candidates', async () => {
+  for (const mutate of [
+    (r, s) => {
+      r.head_sha = s.source.head_sha;
+    },
+    (r) => {
+      r.created_at = '2026-01-04T00:00:00Z';
+    },
+    (r) => {
+      r.head_branch = 'feature';
+    },
+    (r) => {
+      r.event = 'workflow_dispatch';
+    },
+    (r) => {
+      r.event = 'schedule';
+    },
+    (r) => {
+      r.repository.full_name = 'foreign/repository';
+    },
+    (r) => {
+      r.head_repository.full_name = 'foreign/repository';
+    },
+    (r) => {
+      r.run_attempt = 2;
+    },
+    (r) => {
+      r.path = '.github/workflows/other.yml';
+    },
+    (r) => {
+      r.workflow_id = 201;
+    },
+    (r) => {
+      r.head_sha = 'short';
+    },
+  ]) {
+    const state = queueFixture();
+    state.runs = [state.runs[0]];
+    mutate(state.runs[0], state);
+    assert.equal((await state.run()).error, null);
+    assert.deepEqual(state.cancelled, []);
+  }
+});
+
+test('cleanup requires strict verified ancestry rather than an older timestamp alone', async () => {
+  for (const comparison of [
+    { status: 'behind', ahead_by: 0 },
+    { status: 'diverged', ahead_by: 1 },
+    { status: 'ahead', ahead_by: 0 },
+    { status: 'ahead' },
+    { status: 'ahead', ahead_by: 1, merge_base_commit: { sha: 'c'.repeat(40) } },
+  ]) {
+    const state = queueFixture();
+    state.hooks.compare = (parameters) => ({
+      data: {
+        behind_by: 0,
+        base_commit: { sha: parameters.basehead.split('...')[0] },
+        merge_base_commit: { sha: parameters.basehead.split('...')[0] },
+        ...comparison,
+      },
+    });
+    assert.equal((await state.run()).error, null);
+    assert.deepEqual(state.cancelled, []);
+  }
+});
+
+test('cleanup preserves active jobs and every started production surface', async () => {
+  for (const mutate of [
+    (s) => {
+      s.jobs[1][0].status = 'in_progress';
+    },
+    (s) => {
+      s.jobs[1][0].status = 'queued';
+    },
+    (s) => {
+      s.jobs[1][1].steps = [{ status: 'completed' }];
+    },
+    (s) => {
+      s.jobs[1][1].runner_id = 123;
+    },
+    (s) => {
+      delete s.jobs[1][1].runner_id;
+    },
+    (s) => {
+      s.jobs[1][1].runner_id = 'not-a-runner';
+    },
+    (s) => {
+      s.jobs[1][1].status = 'completed';
+      s.jobs[1][1].conclusion = 'success';
+    },
+    (s) => {
+      s.jobs[1][1].status = 'completed';
+      s.jobs[1][1].conclusion = 'failure';
+    },
+    (s) => {
+      s.jobs[1].push({
+        ...s.jobs[1][1],
+        id: 1010,
+        name: workflow.jobs['deploy-web'].name,
+        steps: [{ status: 'in_progress' }],
+      });
+    },
+  ]) {
+    const state = queueFixture();
+    state.runs = [state.runs[0]];
+    mutate(state);
+    assert.equal((await state.run()).error, null);
+    assert.deepEqual(state.cancelled, []);
+  }
+});
+
+test('cleanup derives even renamed or newly added surface names from the immutable run definition', async () => {
+  for (const modify of [
+    (d) => {
+      d.jobs['deploy-sandbox'].name = 'Renamed artifact surface';
+    },
+    (d) => {
+      d.jobs.extra = {
+        name: 'Additional production surface',
+        steps: [{ run: 'vercel deploy --prod' }],
+      };
+    },
+  ]) {
+    const state = queueFixture();
+    state.runs = [state.runs[0]];
+    const definition = clone(workflow);
+    modify(definition);
+    state.definition = stringify(definition);
+    const name = definition.jobs.extra?.name ?? definition.jobs['deploy-sandbox'].name;
+    if (!definition.jobs.extra) state.jobs[1][1].name = name;
+    state.jobs[1].push({ ...state.jobs[1][1], id: 1020, name, steps: [{ status: 'completed' }] });
+    assert.equal((await state.run()).error, null);
+    assert.deepEqual(state.cancelled, []);
+  }
+  assert.equal(Object.values(workflow.jobs).filter(isDeployJob).length, 2);
+});
+
+test('cleanup refuses pending runs with jobs and waiting runs without a blocked review', async () => {
+  const pending = queueFixture();
+  pending.runs = [pending.runs[1]];
+  pending.jobs[2] = [{ ...pending.jobs[1][0], run_id: 2 }];
+  assert.match((await pending.run()).error.message, /pending run is not confirmed quiet/);
+  assert.deepEqual(pending.cancelled, []);
+  const waiting = queueFixture();
+  waiting.runs = [waiting.runs[0]];
+  waiting.jobs[1] = [waiting.jobs[1][0]];
+  assert.equal((await waiting.run()).error, null);
+  assert.deepEqual(waiting.cancelled, []);
+});
+
+test('cleanup refuses incomplete, duplicate or changing run pagination before any cancellation', async () => {
+  for (const mode of ['incomplete', 'duplicate', 'changing']) {
+    const state = queueFixture();
+    state.listPages.pending = [
+      { total_count: 2, workflow_runs: [state.runs[1]] },
+      mode === 'duplicate'
+        ? { total_count: 2, workflow_runs: [state.runs[1]] }
+        : { total_count: mode === 'changing' ? 1 : 2, workflow_runs: [] },
+    ];
+    await rejectsCleanup(state, /pagination|listing|duplicate/);
+  }
+});
+
+test('cleanup refuses incomplete or prior-attempt job evidence', async () => {
+  for (const mutate of [
+    (s) => {
+      delete s.jobs[1][1].steps;
+    },
+    (s) => {
+      s.jobs[1][1].run_attempt = 2;
+    },
+    (s) => {
+      s.jobs[1][1].run_id = 5;
+    },
+    (s) => {
+      s.jobPages[1] = [
+        { total_count: 3, jobs: s.jobs[1] },
+        { total_count: 3, jobs: [] },
+      ];
+    },
+  ]) {
+    const state = queueFixture();
+    state.runs = [state.runs[0]];
+    mutate(state);
+    await rejectsCleanup(state, /Incomplete/);
+  }
+});
+
+test('cleanup inspects every job page and preserves a surface started on a later page', async () => {
+  const state = queueFixture();
+  state.runs = [state.runs[0]];
+  state.jobPages[1] = [
+    { total_count: 2, jobs: [state.jobs[1][0]] },
+    { total_count: 2, jobs: [{ ...state.jobs[1][1], steps: [{ status: 'in_progress' }] }] },
+  ];
+  assert.equal((await state.run()).error, null);
+  assert.deepEqual(state.cancelled, []);
+  assert.ok(state.calls.some((call) => call.name === 'listJobs' && call.parameters.page === 2));
+});
+
+test('cleanup preserves candidates whose status, attempt or identity changes before cancellation', async () => {
+  for (const mutate of [
+    (r) => {
+      r.status = 'in_progress';
+    },
+    (r) => {
+      r.status = 'waiting';
+    },
+    (r) => {
+      r.status = 'completed';
+      r.conclusion = 'success';
+    },
+    (r) => {
+      r.run_attempt = 2;
+    },
+    (r) => {
+      r.head_sha = 'c'.repeat(40);
+    },
+  ]) {
+    const state = queueFixture();
+    state.runs = [state.runs[1]];
+    state.hooks.getRun = (parameters, count) => {
+      if (parameters.run_id === 2 && count === 2) mutate(state.runs[0]);
+    };
+    const result = await state.run();
+    if (state.runs[0].status === 'completed') assert.equal(result.error, null);
+    else assert.match(result.error.message, /pending run changed/);
+    assert.deepEqual(state.cancelled, []);
+  }
+});
+
+test('cleanup rechecks job evidence and main at the final opportunity', async () => {
+  const active = queueFixture();
+  active.runs = [active.runs[1]];
+  active.hooks.listJobs = (parameters, count) => {
+    if (parameters.run_id === 2 && count === 2)
+      active.jobs[2] = [{ ...active.jobs[1][1], run_id: 2, status: 'in_progress' }];
+  };
+  assert.match((await active.run()).error.message, /pending run changed/);
+  assert.deepEqual(active.cancelled, []);
+  const advanced = queueFixture();
+  advanced.runs = [advanced.runs[1]];
+  advanced.hooks.getRef = (parameters, count) => {
+    if (count === 3) advanced.mainSha = 'c'.repeat(40);
+  };
+  assert.equal((await advanced.run()).error, null);
+  assert.deepEqual(advanced.cancelled, []);
+});
+
+test('cleanup fails closed on missing workflow definitions, authorization or transport errors', async () => {
+  for (const method of ['getRef', 'getWorkflow', 'listRuns', 'compare', 'getContent', 'listJobs']) {
+    const state = queueFixture();
+    state.hooks[method] = () => {
+      throw new Error(`${method} unavailable`);
+    };
+    await rejectsCleanup(state, /unavailable/);
+  }
+  const invalid = queueFixture();
+  invalid.hooks.getContent = () => ({ data: { type: 'dir' } });
+  await rejectsCleanup(invalid, /Missing immutable/);
+});
+
+test('cleanup treats cancellation conflicts as terminal only after rereading the same target', async () => {
+  const completed = queueFixture();
+  completed.runs = [completed.runs[1]];
+  completed.hooks.cancel = (parameters) => {
+    completed.runs[0].status = 'completed';
+    completed.runs[0].conclusion = 'success';
+    throw Object.assign(new Error('Conflict'), { status: 409 });
+  };
+  assert.equal((await completed.run()).error, null);
+  assert.deepEqual(completed.cancelled, []);
+  assert.match(completed.logs.join('\n'), /completed before cancellation/);
+  const waiting = queueFixture();
+  waiting.hooks.cancel = () => {
+    throw Object.assign(new Error('Conflict'), { status: 409 });
+  };
+  await rejectsCleanup(waiting, /Conflict/);
+});
+
+test('cleanup does not free a waiting blocker while a pending cancellation is asynchronous', async () => {
+  const state = queueFixture();
+  state.hooks.cancel = (parameters) => {
+    state.cancelled.push(parameters.run_id);
+    return { status: 202, data: null };
+  };
+  const { error } = await state.run();
+  assert.match(error.message, /Pending cancellation did not finish/);
+  assert.deepEqual(state.cancelled, [2]);
+  assert.equal(state.runs.find((run) => run.id === 1).status, 'waiting');
+  assert.equal(
+    state.calls.filter((call) => call.name === 'getRun' && call.parameters.run_id === 2).length,
+    contract.releaseReadiness.maxPages + 2,
+  );
+});
+
+test('cleanup confirms delayed pending cancellation before inspecting a waiting blocker', async () => {
+  const state = queueFixture();
+  state.hooks.cancel = (parameters) => {
+    if (parameters.run_id === 2) {
+      state.cancelled.push(2);
+      return { status: 202, data: null };
+    }
+  };
+  state.hooks.getRun = (parameters, count) => {
+    if (parameters.run_id === 2 && count === 5) {
+      state.runs[1].status = 'completed';
+      state.runs[1].conclusion = 'cancelled';
+    }
+  };
+  assert.equal((await state.run()).error, null);
+  assert.deepEqual(state.cancelled, [2, 1]);
+  assert.match(state.logs.join('\n'), /Confirmed pending run 2 cancelled/);
+});
+
+test('cleanup stops before waiting blockers when an accepted pending cancellation starts or changes identity', async () => {
+  for (const mutate of [
+    (r) => {
+      r.status = 'in_progress';
+    },
+    (r) => {
+      r.status = 'waiting';
+    },
+    (r) => {
+      r.status = 'completed';
+      r.conclusion = 'success';
+    },
+    (r) => {
+      r.run_attempt = 2;
+    },
+    (r) => {
+      r.head_sha = 'c'.repeat(40);
+    },
+  ]) {
+    const state = queueFixture();
+    state.hooks.cancel = (parameters) => {
+      state.cancelled.push(parameters.run_id);
+      mutate(state.runs.find((run) => run.id === parameters.run_id));
+      return { status: 202, data: null };
+    };
+    assert.ok((await state.run()).error);
+    assert.deepEqual(state.cancelled, [2]);
+  }
+});
+
+test('cleanup rereads all surface jobs even when run status remains waiting', async () => {
+  const state = queueFixture();
+  state.runs = [state.runs[0]];
+  state.hooks.listJobs = (parameters, count) => {
+    if (count === 2)
+      state.jobs[1].push({
+        ...state.jobs[1][1],
+        id: 1030,
+        name: workflow.jobs['deploy-web'].name,
+        status: 'in_progress',
+        steps: [{ status: 'in_progress' }],
+      });
+  };
+  assert.equal((await state.run()).error, null);
+  assert.equal(state.runs[0].status, 'waiting');
+  assert.deepEqual(state.cancelled, []);
+});
+
+test('cleanup refuses unknown or ambiguous surface job evidence', async () => {
+  const unknown = queueFixture();
+  unknown.runs = [unknown.runs[0]];
+  unknown.jobs[1].push({
+    ...unknown.jobs[1][0],
+    id: 1040,
+    name: 'Unmodelled surface',
+    steps: [{ status: 'completed' }],
+  });
+  await rejectsCleanup(unknown, /Unknown production job/);
+  const ambiguous = queueFixture();
+  const definition = clone(workflow);
+  definition.jobs['deploy-web'].name = '${{ matrix.surface }}';
+  ambiguous.definition = stringify(definition);
+  await rejectsCleanup(ambiguous, /Ambiguous production job/);
+});
+
+test('cleanup fails closed if bounded pagination or a second status listing cannot complete', async () => {
+  const bound = queueFixture();
+  bound.listPages.pending = Array.from(
+    { length: contract.releaseReadiness.maxPages },
+    (_, index) => ({
+      total_count: contract.releaseReadiness.maxPages + 1,
+      workflow_runs: [{ ...bound.runs[1], id: index + 2000 }],
+    }),
+  );
+  await rejectsCleanup(bound, /canonical bound/);
+  const denied = queueFixture();
+  denied.hooks.listRuns = (parameters) => {
+    if (parameters.status === 'waiting')
+      throw Object.assign(new Error('Forbidden'), { status: 403 });
+  };
+  await rejectsCleanup(denied, /Forbidden/);
+});
+
+test('cleanup accepts the raw null runner evidence of an unstarted protected review', async () => {
+  const state = queueFixture();
+  state.runs = [state.runs[0]];
+  state.jobs[1][1].runner_id = null;
+  assert.equal((await state.run()).error, null);
+  assert.deepEqual(state.cancelled, [1]);
+});
+
+test('cleanup does not accept a conflict response from another attempt or branch snapshot', async () => {
+  for (const mutate of [
+    (r) => {
+      r.run_attempt = 2;
+    },
+    (r) => {
+      r.head_sha = 'c'.repeat(40);
+    },
+    (r) => {
+      r.path = '.github/workflows/other.yml';
+    },
+    (r) => {
+      r.repository.full_name = 'foreign/repository';
+    },
+  ]) {
+    const state = queueFixture();
+    state.runs = [state.runs[1]];
+    state.hooks.cancel = () => {
+      state.runs[0].status = 'completed';
+      state.runs[0].conclusion = 'cancelled';
+      mutate(state.runs[0]);
+      throw Object.assign(new Error('Conflict'), { status: 409 });
+    };
+    await rejectsCleanup(state, /Conflict/);
+  }
+});
+
+test('cleanup trigger refuses failed, pull-request, non-main and foreign CI before any privileged step', () => {
+  const state = queueFixture();
+  const matches = (source) =>
+    runInNewContext(queueWorkflow.jobs.cleanup.if, {
+      github: { event: { workflow_run: source }, repository: 'fixture/repository' },
+    });
+  assert.equal(matches(state.source), true);
+  for (const change of [
+    { conclusion: 'failure' },
+    { event: 'pull_request' },
+    { head_branch: 'feature' },
+    { head_repository: { full_name: 'foreign/repository' } },
+  ])
+    assert.equal(matches({ ...state.source, ...change }), false);
+  assert.deepEqual(Object.keys(queueWorkflow.on), ['workflow_run']);
+});
+
+test('cleanup advances past unchanged pending runs GitHub auto-cancels during fresh or immediate reads', async () => {
+  for (const read of [1, 2]) {
+    const state = queueFixture();
+    state.hooks.getRun = (parameters, count) => {
+      if (parameters.run_id === 2 && count === read) {
+        state.runs[1].status = 'completed';
+        state.runs[1].conclusion = 'cancelled';
+      }
+    };
+    assert.equal((await state.run()).error, null);
+    assert.deepEqual(state.cancelled, [1]);
+    assert.ok(state.logs.some((line) => /run 2 .*completed/.test(line)));
+  }
+});
+
+test('cleanup refuses auto-completed candidates with changed immutable identity', async () => {
+  for (const read of [1, 2]) {
+    for (const mutate of [
+      (r) => {
+        r.head_sha = 'c'.repeat(40);
+      },
+      (r) => {
+        r.run_attempt = 2;
+      },
+      (r) => {
+        r.path = '.github/workflows/other.yml';
+      },
+      (r) => {
+        r.workflow_id = 201;
+      },
+      (r) => {
+        r.repository.full_name = 'foreign/repository';
+      },
+      (r) => {
+        r.head_repository.full_name = 'foreign/repository';
+      },
+    ]) {
+      const state = queueFixture();
+      state.hooks.getRun = (parameters, count) => {
+        if (parameters.run_id === 2 && count === read) {
+          const run = state.runs[1];
+          run.status = 'completed';
+          run.conclusion = 'cancelled';
+          mutate(run);
+        }
+      };
+      await rejectsCleanup(state, /pending run/);
+    }
   }
 });
