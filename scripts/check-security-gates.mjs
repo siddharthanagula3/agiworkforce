@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import process from 'node:process';
 import { parse } from 'yaml';
@@ -12,6 +13,30 @@ const MANIFEST_PATH = 'package.json';
 const LOCKFILE_PATH = 'pnpm-lock.yaml';
 const IMPORTER_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies'];
 const RUNTIME_FIELDS = ['dependencies', 'optionalDependencies'];
+const PATCHED_ADVISORIES = {
+  'GHSA-ch52-4w7c-c8xp': { package: 'http-cache-semantics', version: '4.2.0' },
+  'GHSA-vfj7-8cjw-p6xm': { package: 'braces', version: '3.0.3' },
+};
+
+export function pnpmPatchHash(contents) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz234567';
+  // MD5 reproduces pnpm 9's content identifier, never a security integrity check.
+  // The registered SHA256 separately verifies the reviewed patch bytes.
+  const digest = createHash('md5').update(contents).digest();
+  let bits = 0;
+  let value = 0;
+  let result = '';
+  for (const byte of digest) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      result += alphabet[(value >>> bits) & 31];
+    }
+  }
+  if (bits > 0) result += alphabet[(value << (5 - bits)) & 31];
+  return result;
+}
 
 export function collectContinueOnErrorSteps(workflow) {
   const steps = [];
@@ -46,12 +71,70 @@ function isRecord(value) {
 }
 
 function lockfilePackageName(key) {
-  return key.slice(0, key.indexOf('@', 1));
+  const reference = key.startsWith('npm:') ? key.slice('npm:'.length) : key;
+  return reference.slice(0, reference.indexOf('@', 1));
 }
 
 function lockfileDependencyKey(name, version) {
-  const reference = String(version);
+  const rawReference = String(version);
+  const reference = rawReference.startsWith('npm:')
+    ? rawReference.slice('npm:'.length)
+    : rawReference;
   return reference.split('(')[0].lastIndexOf('@') > 0 ? reference : `${name}@${reference}`;
+}
+
+function pnpmReferenceNodes(reference) {
+  const nodes = [];
+  let index = 0;
+  const readNode = () => {
+    const start = index;
+    while (index < reference.length && reference[index] !== '(' && reference[index] !== ')') {
+      index++;
+    }
+    const atom = reference.slice(start, index);
+    if (atom.startsWith('patch_hash=')) {
+      const hash = atom.slice('patch_hash='.length);
+      return /^[a-z2-7]{26}$/u.test(hash) ? { kind: 'hash', hash } : null;
+    }
+    const separator = atom.indexOf('@', 1);
+    const name = atom.slice(0, separator);
+    const version = atom.slice(separator + 1);
+    if (
+      separator < 1 ||
+      !/^(?:@[a-z\d~._-]+\/)?[a-z\d~._-]+$/iu.test(name) ||
+      version.length === 0 ||
+      /\s/u.test(version)
+    ) {
+      return null;
+    }
+    const node = { kind: 'package', name, version, patchHash: undefined, hasChildren: false };
+    nodes.push(node);
+    return node;
+  };
+  const root = readNode();
+  if (root?.kind !== 'package') return null;
+  const stack = [root];
+  while (index < reference.length) {
+    const parent = stack.at(-1);
+    const character = reference[index++];
+    if (character === '(') {
+      if (parent.kind !== 'package') return null;
+      const child = readNode();
+      if (!child) return null;
+      if (child.kind === 'hash') {
+        if (parent.hasChildren) return null;
+        parent.patchHash = child.hash;
+      }
+      parent.hasChildren = true;
+      stack.push(child);
+    } else if (character === ')') {
+      if (stack.length === 1) return null;
+      stack.pop();
+    } else {
+      return null;
+    }
+  }
+  return stack.length === 1 ? nodes : null;
 }
 
 function snapshotDependencies(snapshot) {
@@ -185,6 +268,168 @@ function auditWaiverScopeFailures(entry, lockfile) {
   return failures;
 }
 
+function patchedAuditWaiverFailures(entry, binding, manifest, lockfile, patchContents) {
+  const failures = [];
+  const label = `exclusion ${entry.id}`;
+  const advisory = Object.keys(PATCHED_ADVISORIES).find((id) => PATCHED_ADVISORIES[id] === binding);
+  if (
+    entry.package !== binding.package ||
+    !Array.isArray(entry.advisories) ||
+    entry.advisories.length !== 1 ||
+    entry.advisories[0] !== advisory
+  ) {
+    failures.push(`${label} must bind ${advisory} only to ${binding.package}@${binding.version}`);
+  }
+  const key = `${binding.package}@${binding.version}`;
+  const patchPath = `patches/${key}.patch`;
+  if (
+    !isRecord(entry.patch) ||
+    entry.patch.version !== binding.version ||
+    entry.patch.path !== patchPath ||
+    typeof entry.patch.sha256 !== 'string' ||
+    !/^[a-f0-9]{64}$/u.test(entry.patch.sha256)
+  ) {
+    failures.push(
+      `${label} must pin patch version ${binding.version}, path ${patchPath}, and its SHA256`,
+    );
+    return failures;
+  }
+  const contents =
+    isRecord(patchContents) && Object.hasOwn(patchContents, patchPath)
+      ? patchContents[patchPath]
+      : undefined;
+  if (!(typeof contents === 'string' || Buffer.isBuffer(contents))) {
+    failures.push(`${label} cannot verify missing patch contents for ${patchPath}`);
+    return failures;
+  }
+  if (createHash('sha256').update(contents).digest('hex') !== entry.patch.sha256) {
+    failures.push(`${label} patch ${patchPath} does not match its registered SHA256`);
+  }
+  const hash = pnpmPatchHash(contents);
+  if (manifest?.pnpm?.patchedDependencies?.[key] !== patchPath) {
+    failures.push(
+      `${label} requires ${MANIFEST_PATH} pnpm.patchedDependencies[${key}] = ${patchPath}`,
+    );
+  }
+  const lockedPatch = lockfile?.patchedDependencies?.[key];
+  if (lockedPatch?.path !== patchPath || lockedPatch?.hash !== hash) {
+    failures.push(
+      `${label} requires ${LOCKFILE_PATH} patchedDependencies[${key}] with path ${patchPath} and hash ${hash}`,
+    );
+  }
+  for (const [source, patches] of [
+    [MANIFEST_PATH, manifest?.pnpm?.patchedDependencies],
+    [LOCKFILE_PATH, lockfile?.patchedDependencies],
+  ]) {
+    for (const selector of Object.keys(patches ?? {})) {
+      if (
+        (selector === binding.package || lockfilePackageName(selector) === binding.package) &&
+        selector !== key
+      ) {
+        failures.push(
+          `${label} cannot use a broader or different ${source} patch selector ${selector}`,
+        );
+      }
+    }
+  }
+  if (
+    !isRecord(lockfile?.packages) ||
+    !isRecord(lockfile?.snapshots) ||
+    !isRecord(lockfile?.importers)
+  ) {
+    failures.push(
+      `${label} cannot verify the patched package without packages, snapshots, and importers in ${LOCKFILE_PATH}`,
+    );
+    return failures;
+  }
+  const packageKeys = Object.keys(lockfile.packages).filter(
+    (candidate) => lockfilePackageName(candidate) === binding.package,
+  );
+  if (packageKeys.length !== 1 || packageKeys[0] !== key) {
+    failures.push(`${label} requires exactly ${key} in ${LOCKFILE_PATH} packages`);
+  }
+  if (!isRecord(lockfile.packages[key])) {
+    failures.push(`${label} requires package metadata for ${key} in ${LOCKFILE_PATH}`);
+  }
+  const validateReference = (reference, source) => {
+    if (!reference.includes(`${binding.package}@`)) return;
+    const nodes = pnpmReferenceNodes(reference);
+    if (!nodes) {
+      failures.push(
+        `${label} ${source} references ${binding.package} without version ${binding.version} and patch_hash=${hash}: malformed pnpm reference ${reference}`,
+      );
+      return;
+    }
+    for (const node of nodes) {
+      if (
+        node.name === binding.package &&
+        (node.version !== binding.version || node.patchHash !== hash)
+      ) {
+        failures.push(
+          `${label} ${source} references ${binding.package} without version ${binding.version} and patch_hash=${hash}: ${reference}`,
+        );
+      }
+    }
+  };
+  const patchedSnapshots = Object.keys(lockfile.snapshots).filter(
+    (candidate) => lockfilePackageName(candidate) === binding.package,
+  );
+  if (patchedSnapshots.length === 0) {
+    failures.push(`${label} has no patched ${key} snapshot in ${LOCKFILE_PATH}`);
+  }
+  for (const [snapshotKey, snapshot] of Object.entries(lockfile.snapshots)) {
+    validateReference(snapshotKey, `snapshot ${snapshotKey}`);
+    if (lockfilePackageName(snapshotKey) === binding.package && !isRecord(snapshot)) {
+      failures.push(`${label} requires snapshot metadata for ${snapshotKey} in ${LOCKFILE_PATH}`);
+    }
+    for (const field of IMPORTER_FIELDS) {
+      for (const [name, version] of Object.entries(snapshot?.[field] ?? {})) {
+        const reference = lockfileDependencyKey(name, version);
+        validateReference(reference, `${snapshotKey} ${field}.${name}`);
+        if (
+          lockfilePackageName(reference) === binding.package &&
+          !Object.hasOwn(lockfile.snapshots, reference)
+        ) {
+          failures.push(`${label} ${snapshotKey} reaches missing patched snapshot ${reference}`);
+        }
+      }
+    }
+  }
+  for (const [importer, definition] of Object.entries(lockfile.importers)) {
+    for (const field of IMPORTER_FIELDS) {
+      for (const [name, dependency] of Object.entries(definition?.[field] ?? {})) {
+        const reference = lockfileDependencyKey(name, dependency?.version ?? '');
+        validateReference(reference, `importer ${importer} ${field}.${name}`);
+        if (
+          lockfilePackageName(reference) === binding.package &&
+          !Object.hasOwn(lockfile.snapshots, reference)
+        ) {
+          failures.push(
+            `${label} importer ${importer} reaches missing patched snapshot ${reference}`,
+          );
+        }
+      }
+    }
+  }
+  if (Array.isArray(entry.dependents?.packages) && Array.isArray(entry.dependents?.importers)) {
+    const dependents = lockfileDependents(lockfile, binding.package);
+    const { reaching } = walkImporters(lockfile, binding.package);
+    for (const [field, actual] of [
+      ['packages', dependents],
+      ['importers', reaching],
+    ]) {
+      for (const permitted of entry.dependents[field]) {
+        if (!actual.includes(permitted)) {
+          failures.push(
+            `${label} has a broader dependent ${field} scope than ${LOCKFILE_PATH}: ${permitted}`,
+          );
+        }
+      }
+    }
+  }
+  return failures;
+}
+
 export function parsePnpmAuditIgnores(manifest) {
   const auditConfig = manifest?.pnpm?.auditConfig ?? {};
   return [...(auditConfig.ignoreGhsas ?? []), ...(auditConfig.ignoreCves ?? [])];
@@ -197,6 +442,7 @@ export function checkSecurityGates({
   workflows = {},
   manifest,
   lockfile,
+  patchContents = {},
   today = new Date().toISOString().slice(0, 10),
 }) {
   const failures = [];
@@ -272,6 +518,24 @@ export function checkSecurityGates({
   const auditWaivers = (policy.exclusions ?? []).filter(
     (entry) => entry.kind === 'pnpm-audit-advisory-ignore',
   );
+  for (const entry of policy.exclusions ?? []) {
+    const bindings = new Set([
+      ...(Array.isArray(entry.advisories) ? entry.advisories : [])
+        .map((advisory) => PATCHED_ADVISORIES[advisory])
+        .filter(Boolean),
+      ...Object.values(PATCHED_ADVISORIES).filter((binding) => binding.package === entry.package),
+    ]);
+    for (const binding of bindings) {
+      if (entry.kind !== 'pnpm-audit-advisory-ignore') {
+        failures.push(
+          `exclusion ${entry.id} for ${binding.package} must remain a patched pnpm-audit-advisory-ignore`,
+        );
+      }
+      failures.push(
+        ...patchedAuditWaiverFailures(entry, binding, manifest, lockfile, patchContents),
+      );
+    }
+  }
   const waivedAdvisories = new Set(auditWaivers.flatMap((entry) => entry.advisories ?? []));
   const ignoredAdvisories = parsePnpmAuditIgnores(manifest);
   for (const advisory of ignoredAdvisories) {
@@ -316,6 +580,47 @@ function main() {
   const denyToml = fs.readFileSync(path.join(root, DENY_PATH), 'utf8');
   const manifest = JSON.parse(fs.readFileSync(path.join(root, MANIFEST_PATH), 'utf8'));
   const lockfile = parse(fs.readFileSync(path.join(root, LOCKFILE_PATH), 'utf8'));
+  const patchContents = {};
+  const patchFileFailures = [];
+  const realRoot = fs.realpathSync(root);
+  for (const entry of policy.exclusions ?? []) {
+    if (!isRecord(entry.patch)) continue;
+    const relativePath = entry.patch.path;
+    if (
+      typeof relativePath !== 'string' ||
+      path.isAbsolute(relativePath) ||
+      relativePath.includes('\\') ||
+      relativePath.split('/').includes('..') ||
+      path.posix.normalize(relativePath) !== relativePath
+    ) {
+      patchFileFailures.push(`exclusion ${entry.id} must use a normalized in-root patch path`);
+      continue;
+    }
+    const absolute = path.resolve(root, relativePath);
+    try {
+      const realPath = fs.realpathSync(absolute);
+      const withinRoot = path.relative(realRoot, realPath);
+      if (
+        withinRoot === '..' ||
+        withinRoot.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(withinRoot)
+      ) {
+        patchFileFailures.push(
+          `exclusion ${entry.id} patch ${relativePath} resolves outside the repository root`,
+        );
+      } else if (!fs.lstatSync(absolute).isFile() || !fs.statSync(realPath).isFile()) {
+        patchFileFailures.push(
+          `exclusion ${entry.id} patch ${relativePath} must be a regular file`,
+        );
+      } else {
+        patchContents[relativePath] = fs.readFileSync(realPath);
+      }
+    } catch {
+      patchFileFailures.push(
+        `exclusion ${entry.id} patch ${relativePath} is missing or unreadable`,
+      );
+    }
+  }
 
   const workflows = {};
   for (const relativePath of new Set(
@@ -333,7 +638,9 @@ function main() {
     workflows,
     manifest,
     lockfile,
+    patchContents,
   });
+  failures.push(...patchFileFailures);
   for (const entry of policy.exclusions ?? []) {
     if (entry.kind === 'allowlist-file' && !fs.existsSync(path.join(root, entry.path))) {
       failures.push(`exclusion ${entry.id} points at a missing allowlist: ${entry.path}`);

@@ -1,0 +1,163 @@
+diff --git a/index.js b/index.js
+index f01e9a16b4781dc24c8f43dc7a4c8e6d1e4ae5eb..e5e82c28dabd1c0e17958a9c3e65e5a3f8fbd00f 100644
+--- a/index.js
++++ b/index.js
+@@ -308,6 +308,29 @@ module.exports = class CachePolicy {
+         );
+     }
+ 
++    /**
++     * Determines whether the stored response may be reused. Client stale
++     * allowances must not override storage restrictions or required validation.
++     * Recompute this from policy state so deserialized entries use the same rules.
++     * Successful origin validation may satisfy no-cache/proxy-revalidate, but
++     * cannot lift storage, shared-cookie, or Vary restrictions.
++     * @param {boolean} [validated=false] - Whether the origin successfully validated the response.
++     * @returns {boolean} Whether reuse is permitted by the response's cache restrictions.
++     */
++    _canReuseResponse(validated = false) {
++        return !!(
++            this.storable() &&
++            (validated || !this._rescc['no-cache']) &&
++            // Shared responses with cookies require explicit public/immutable opt-in.
++            (!this._isShared ||
++                !this._resHeaders['set-cookie'] ||
++                this._rescc.public ||
++                this._rescc.immutable) &&
++            this._resHeaders.vary !== '*' &&
++            (!this._isShared || validated || !this._rescc['proxy-revalidate'])
++        );
++    }
++
+     /**
+      * @param {HttpRequest} req - a request
+      * @throws {Error} if the headers are missing.
+@@ -394,6 +417,10 @@ module.exports = class CachePolicy {
+     evaluateRequest(req) {
+         this._assertRequestHasHeaders(req);
+ 
++        if (!this._canReuseResponse()) {
++            return this._evaluateRequestMissResult(req);
++        }
++
+         // In all circumstances, a cache MUST NOT ignore the must-revalidate directive
+         if (this._rescc['must-revalidate']) {
+             return this._evaluateRequestMissResult(req);
+@@ -597,29 +624,11 @@ module.exports = class CachePolicy {
+      * @returns {number} The max-age value in seconds.
+      */
+     maxAge() {
+-        if (!this.storable() || this._rescc['no-cache']) {
+-            return 0;
+-        }
+-
+-        // Shared responses with cookies are cacheable according to the RFC, but IMHO it'd be unwise to do so by default
+-        // so this implementation requires explicit opt-in via public header
+-        if (
+-            this._isShared &&
+-            (this._resHeaders['set-cookie'] &&
+-                !this._rescc.public &&
+-                !this._rescc.immutable)
+-        ) {
+-            return 0;
+-        }
+-
+-        if (this._resHeaders.vary === '*') {
++        if (!this._canReuseResponse()) {
+             return 0;
+         }
+ 
+         if (this._isShared) {
+-            if (this._rescc['proxy-revalidate']) {
+-                return 0;
+-            }
+             // if a response includes the s-maxage directive, a shared cache recipient MUST ignore the Expires field.
+             if (this._rescc['s-maxage']) {
+                 return toNumberOrZero(this._rescc['s-maxage']);
+@@ -664,6 +673,9 @@ module.exports = class CachePolicy {
+      * @returns {number} Time-to-live in milliseconds.
+      */
+     timeToLive() {
++        if (!this._canReuseResponse()) {
++            return 0;
++        }
+         const age = this.maxAge() - this.age();
+         const staleIfErrorAge = age + toNumberOrZero(this._rescc['stale-if-error']);
+         const staleWhileRevalidateAge = age + toNumberOrZero(this._rescc['stale-while-revalidate']);
+@@ -683,7 +695,8 @@ module.exports = class CachePolicy {
+      * @returns {boolean} `true` if `stale-if-error` condition allows use of a stale response.
+      */
+     _useStaleIfError() {
+-        return this.maxAge() + toNumberOrZero(this._rescc['stale-if-error']) > this.age();
++        return this._canReuseResponse() &&
++            this.maxAge() + toNumberOrZero(this._rescc['stale-if-error']) > this.age();
+     }
+ 
+     /** See `evaluateRequest()` for a more complete solution
+@@ -691,7 +704,7 @@ module.exports = class CachePolicy {
+      */
+     useStaleWhileRevalidate() {
+         const swr = toNumberOrZero(this._rescc['stale-while-revalidate']);
+-        return swr > 0 && this.maxAge() + swr > this.age();
++        return this._canReuseResponse() && swr > 0 && this.maxAge() + swr > this.age();
+     }
+ 
+     /**
+@@ -768,9 +781,9 @@ module.exports = class CachePolicy {
+         // This implementation does not understand range requests
+         delete headers['if-range'];
+ 
+-        if (!this._requestMatches(incomingReq, true) || !this.storable()) {
++        if (!this._requestMatches(incomingReq, true) || !this._canReuseResponse(true)) {
+             // revalidation allowed via HEAD
+-            // not for the same resource, or wasn't allowed to be cached anyway
++            // not for the same resource, or the stored response cannot be reused
+             delete headers['if-none-match'];
+             delete headers['if-modified-since'];
+             return headers;
+@@ -844,6 +857,21 @@ module.exports = class CachePolicy {
+             throw Error('Response headers missing');
+         }
+ 
++        // An entry forbidden from reuse cannot be revived by a 304, even when
++        // validators happen to match. A full origin response is required.
++        if (!this._canReuseResponse(true)) {
++            return {
++                policy: new this.constructor(request, response, {
++                    shared: this._isShared,
++                    cacheHeuristic: this._cacheHeuristic,
++                    immutableMinTimeToLive: this._immutableMinTtl,
++                    ignoreCargoCult: this._ignoreCargoCult,
++                }),
++                modified: true,
++                matches: false,
++            };
++        }
++
+         // These aren't going to be supported exactly, since one CachePolicy object
+         // doesn't know about all the other cached objects.
+         let matches = false;
+@@ -914,6 +942,23 @@ module.exports = class CachePolicy {
+                     : this._resHeaders[k];
+         }
+ 
++        // A 304 can introduce cache restrictions absent from the stored response.
++        // Retain eligible new end-to-end headers so the new policy enforces them.
++        const newHeaders = this._copyWithoutHopByHopHeaders(response.headers);
++        const connectionTokens = response.headers.connection
++            ? response.headers.connection.trim().toLowerCase().split(/\s*,\s*/)
++            : [];
++        // Date is filtered from served headers for regeneration, not hop-by-hop.
++        if ('date' in response.headers && !connectionTokens.includes('date')) {
++            newHeaders.date = response.headers.date;
++        }
++        for (const k in newHeaders) {
++            if (!(k in headers) && !excludedFromRevalidationUpdate[k] &&
++                !connectionTokens.includes(k)) {
++                headers[k] = newHeaders[k];
++            }
++        }
++
+         const newResponse = Object.assign({}, response, {
+             status: this._status,
+             method: this._method,
