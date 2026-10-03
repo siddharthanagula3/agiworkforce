@@ -1,0 +1,262 @@
+name: Cleanup superseded production queue
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+
+concurrency:
+  group: production-queue-cleanup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install canonical workflow parser without lifecycle scripts
+        run: pnpm install --filter . --frozen-lockfile --ignore-scripts
+
+      - name: Cancel only superseded production runs that have not deployed
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 0
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { pathToFileURL } = require('node:url');
+            const workspace = process.env.GITHUB_WORKSPACE;
+            const rootRequire = require('node:module').createRequire(path.join(workspace, 'package.json'));
+            const { parse } = rootRequire('yaml');
+            const { isDeployJob } = await import(pathToFileURL(path.join(workspace, 'scripts/check-workflow-hardening.mjs')).href);
+            const contract = JSON.parse(fs.readFileSync(path.join(workspace, 'scripts/config/deploy-gates.json'), 'utf8'));
+            const ci = parse(fs.readFileSync(path.join(workspace, '.github/workflows/ci.yml'), 'utf8'));
+            const targetPath = `.github/workflows/${contract.workflow}`;
+            const source = context.payload.workflow_run;
+            const repository = `${context.repo.owner}/${context.repo.repo}`;
+            const shaPattern = /^[0-9a-f]{40}$/;
+            const bounds = contract.releaseReadiness;
+            if (!Number.isSafeInteger(bounds.maxPages) || bounds.maxPages < 1 ||
+                !Number.isFinite(bounds.requestTimeoutSeconds) || bounds.requestTimeoutSeconds <= 0 ||
+                !Number.isFinite(bounds.pollSeconds) || bounds.pollSeconds <= 0) {
+              throw new Error('Missing canonical API bounds');
+            }
+            const options = {
+              ...context.repo,
+              request: { timeout: bounds.requestTimeoutSeconds * 1000 },
+            };
+            const trustedRepository = run => run.repository?.full_name === repository &&
+              run.head_repository?.full_name === repository;
+            if (context.eventName !== 'workflow_run' || !source ||
+                source.event !== 'push' || source.head_branch !== 'main' ||
+                source.conclusion !== 'success' || !trustedRepository(source) ||
+                !shaPattern.test(source.head_sha) || !Number.isSafeInteger(source.id)) {
+              throw new Error('Cleanup requires successful same-repository main-push CI');
+            }
+            const freshSource = async () => {
+              const { data: run } = await github.rest.actions.getWorkflowRun({ ...options, run_id: source.id });
+              if (run.id !== source.id || run.head_sha !== source.head_sha ||
+                  run.path !== '.github/workflows/ci.yml' || run.name !== ci.name ||
+                  run.event !== 'push' || run.head_branch !== 'main' ||
+                  run.status !== 'completed' || run.conclusion !== 'success' ||
+                  run.run_attempt !== source.run_attempt || !trustedRepository(run)) {
+                throw new Error('Source CI no longer matches the successful trusted event');
+              }
+              return run;
+            };
+            const currentMain = async () => {
+              const { data } = await github.rest.git.getRef({ ...options, ref: 'heads/main' });
+              if (data.ref !== 'refs/heads/main' || data.object?.type !== 'commit' ||
+                  !shaPattern.test(data.object.sha)) throw new Error('Incomplete main reference');
+              return data.object.sha === source.head_sha;
+            };
+            const sourceRun = await freshSource();
+            const sourceTime = Date.parse(sourceRun.created_at);
+            if (!Number.isFinite(sourceTime)) throw new Error('Missing source CI creation time');
+            if (!await currentMain()) {
+              core.info('A newer main commit exists; no queue changes');
+              return;
+            }
+            const { data: targetWorkflow } = await github.rest.actions.getWorkflow({
+              ...options, workflow_id: contract.workflow,
+            });
+            if (targetWorkflow.path !== targetPath || !Number.isSafeInteger(targetWorkflow.id)) {
+              throw new Error('Production workflow identity does not match its canonical owner');
+            }
+            const completeList = async (method, parameters, key) => {
+              const rows = [];
+              const seen = new Set();
+              let total;
+              for (let page = 1; page <= bounds.maxPages; page++) {
+                const { data } = await method({ ...options, ...parameters, per_page: 100, page });
+                if (!Number.isSafeInteger(data.total_count) || data.total_count < 0 || !Array.isArray(data[key]) ||
+                    (total !== undefined && total !== data.total_count)) {
+                  throw new Error(`Incomplete or changing ${key} pagination`);
+                }
+                total = data.total_count;
+                for (const row of data[key]) {
+                  if (!Number.isSafeInteger(row.id) || row.id < 1 || seen.has(row.id)) throw new Error(`Invalid or duplicate ${key} identity`);
+                  seen.add(row.id);
+                  rows.push(row);
+                }
+                if (rows.length === total) return rows;
+                if (rows.length > total || data[key].length === 0) throw new Error(`Incomplete ${key} listing`);
+              }
+              throw new Error(`${key} pagination exceeded its canonical bound`);
+            };
+            const eligibleIdentity = run => trustedRepository(run) && run.workflow_id === targetWorkflow.id &&
+              run.path === targetPath && run.name === targetWorkflow.name && run.event === 'workflow_run' &&
+              run.head_branch === 'main' && shaPattern.test(run.head_sha) && run.head_sha !== source.head_sha &&
+              Number.isFinite(Date.parse(run.created_at)) && Date.parse(run.created_at) < sourceTime &&
+              ['pending', 'waiting'].includes(run.status) && run.conclusion === null && run.run_attempt === 1;
+            const candidates = [];
+            for (const status of ['pending', 'waiting']) {
+              candidates.push(...await completeList(github.rest.actions.listWorkflowRuns, {
+                workflow_id: targetWorkflow.id, branch: 'main', event: 'workflow_run', status,
+              }, 'workflow_runs'));
+            }
+            if (new Set(candidates.map(run => run.id)).size !== candidates.length) {
+              throw new Error('Production queue changed between status listings');
+            }
+            candidates.sort((a, b) =>
+              Number(a.status === 'waiting') - Number(b.status === 'waiting') ||
+              Date.parse(b.created_at) - Date.parse(a.created_at));
+            const accepted = [];
+            for (const candidate of candidates) {
+              if (!eligibleIdentity(candidate)) continue;
+              // workflow_run head_sha is a branch snapshot, not the artifact SHA.
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                ...options, basehead: `${candidate.head_sha}...${source.head_sha}`,
+              });
+              if (comparison.status !== 'ahead' || comparison.base_commit?.sha !== candidate.head_sha ||
+                  comparison.merge_base_commit?.sha !== candidate.head_sha ||
+                  !Number.isSafeInteger(comparison.ahead_by) || comparison.ahead_by < 1 || comparison.behind_by !== 0) continue;
+              const { data: file } = await github.rest.repos.getContent({
+                ...options, path: targetPath, ref: candidate.head_sha,
+              });
+              if (file.type !== 'file' || file.path !== targetPath || file.encoding !== 'base64' ||
+                  typeof file.content !== 'string' || !shaPattern.test(file.sha)) {
+                throw new Error('Missing immutable production workflow definition');
+              }
+              const definition = parse(Buffer.from(file.content, 'base64').toString('utf8'));
+              if (definition.name !== candidate.name || !definition.jobs) throw new Error('Invalid production workflow definition');
+              const entries = Object.entries(definition.jobs);
+              const jobNames = entries.map(([id, job]) => job.name ?? id);
+              const surfaceNames = entries.filter(([, job]) => isDeployJob(job)).map(([id, job]) => job.name ?? id);
+              if (surfaceNames.length === 0 || jobNames.some(name => typeof name !== 'string' || name.includes('${{')) ||
+                  new Set(jobNames).size !== jobNames.length) throw new Error('Ambiguous production job names');
+              const quietJobs = async run => {
+                const jobs = await completeList(github.rest.actions.listJobsForWorkflowRun, {
+                  run_id: run.id, filter: 'latest',
+                }, 'jobs');
+                for (const job of jobs) {
+                  if (job.run_id !== run.id || job.run_attempt !== 1 || typeof job.name !== 'string' ||
+                      !Array.isArray(job.steps)) throw new Error('Incomplete latest-attempt job evidence');
+                  if (!jobNames.includes(job.name)) throw new Error('Unknown production job evidence');
+                  if (!['completed', 'waiting'].includes(job.status)) return false;
+                  if (surfaceNames.includes(job.name) &&
+                      (job.steps.length > 0 || (job.runner_id !== null && job.runner_id !== 0) ||
+                       (job.status === 'completed' && job.conclusion !== 'skipped'))) return false;
+                }
+                return run.status === 'pending' ? jobs.length === 0 : jobs.some(job => job.status === 'waiting');
+              };
+              const sameCandidate = run => run.id === candidate.id && run.head_sha === candidate.head_sha &&
+                run.run_attempt === candidate.run_attempt && run.created_at === candidate.created_at &&
+                run.path === targetPath && run.workflow_id === targetWorkflow.id && run.name === candidate.name &&
+                run.event === candidate.event && run.head_branch === candidate.head_branch && trustedRepository(run);
+              const { data: fresh } = await github.rest.actions.getWorkflowRun({ ...options, run_id: candidate.id });
+              if (sameCandidate(fresh) && fresh.status === 'completed') {
+                core.info(`Superseded run ${candidate.id} already completed; no cancellation needed`);
+                continue;
+              }
+              if (!eligibleIdentity(fresh) || fresh.id !== candidate.id || fresh.head_sha !== candidate.head_sha ||
+                  fresh.created_at !== candidate.created_at || fresh.run_attempt !== candidate.run_attempt ||
+                  !await quietJobs(fresh)) {
+                if (candidate.status === 'pending') throw new Error('Superseded pending run is not confirmed quiet; preserving waiting blockers');
+                continue;
+              }
+              await freshSource();
+              if (!await currentMain()) {
+                core.info('Main changed during cleanup; preserving the remaining queue');
+                break;
+              }
+              const { data: immediate } = await github.rest.actions.getWorkflowRun({ ...options, run_id: candidate.id });
+              if (sameCandidate(immediate) && immediate.status === 'completed') {
+                core.info(`Superseded run ${candidate.id} completed during recheck; no cancellation needed`);
+                continue;
+              }
+              if (!eligibleIdentity(immediate) || immediate.id !== fresh.id || immediate.head_sha !== fresh.head_sha ||
+                  immediate.run_attempt !== fresh.run_attempt || immediate.status !== fresh.status ||
+                  immediate.created_at !== fresh.created_at || !await quietJobs(immediate)) {
+                if (candidate.status === 'pending') throw new Error('Superseded pending run changed before cancellation; preserving waiting blockers');
+                continue;
+              }
+              if (!await currentMain()) {
+                core.info('Main changed immediately before cancellation; preserving the remaining queue');
+                break;
+              }
+              // Cancellation has no atomic status precondition; never approve a review here.
+              try {
+                const response = await github.rest.actions.cancelWorkflowRun({ ...options, run_id: immediate.id });
+                if (response.status !== 202) throw new Error('Cancellation was not accepted');
+                accepted.push({ runId: immediate.id, branchSnapshot: immediate.head_sha, previousStatus: immediate.status });
+                core.notice(`Accepted standard cancellation for superseded run ${immediate.id}`);
+                if (immediate.status === 'pending') {
+                  let finished = false;
+                  for (let poll = 0; poll < bounds.maxPages; poll++) {
+                    const { data: cancelled } = await github.rest.actions.getWorkflowRun({ ...options, run_id: immediate.id });
+                    if (cancelled.id !== immediate.id || cancelled.head_sha !== immediate.head_sha ||
+                        cancelled.run_attempt !== immediate.run_attempt || cancelled.path !== targetPath ||
+                        cancelled.workflow_id !== targetWorkflow.id || !trustedRepository(cancelled)) {
+                      throw new Error('Pending cancellation identity changed');
+                    }
+                    if (cancelled.status === 'completed') {
+                      if (cancelled.conclusion !== 'cancelled') throw new Error('Pending run completed without confirmed cancellation');
+                      finished = true;
+                      core.info(`Confirmed pending run ${immediate.id} cancelled before freeing a waiting blocker`);
+                      break;
+                    }
+                    if (cancelled.status !== 'pending') throw new Error('Pending cancellation became active; preserving waiting blockers');
+                    if (poll + 1 < bounds.maxPages) await new Promise(resolve => setTimeout(resolve, bounds.pollSeconds * 1000));
+                  }
+                  if (!finished) throw new Error('Pending cancellation did not finish within its bound; preserving waiting blockers');
+                }
+              } catch (error) {
+                if (error.status !== 409) throw error;
+                const { data: terminal } = await github.rest.actions.getWorkflowRun({ ...options, run_id: immediate.id });
+                if (terminal.id !== immediate.id || terminal.status !== 'completed' ||
+                    terminal.head_sha !== immediate.head_sha || terminal.run_attempt !== immediate.run_attempt ||
+                    terminal.path !== targetPath || terminal.workflow_id !== targetWorkflow.id || !trustedRepository(terminal)) throw error;
+                core.info(`Run ${immediate.id} completed before cancellation; no replacement target`);
+              }
+            }
+            await core.summary.addHeading('Superseded production queue cleanup')
+              .addRaw(`Verified successful CI source: ${sourceRun.id} / ${source.head_sha}\n\n`)
+              .addRaw(`Accepted cancellation requests: ${JSON.stringify(accepted)}\n\n`)
+              .addRaw('Acceptance is asynchronous. Current releases, started surfaces, reruns, and manual operations are preserved. No reviews or release gates were changed.\n')
+              .write();
