@@ -152,12 +152,15 @@ function isAbsoluteHttpUrl(value: string): boolean {
   }
 }
 
-function contentHtml(entry: Element): Document {
-  return new DOMParser().parseFromString(text(entry, 'content'), 'text/html');
+function contentParagraphsXml(entry: Element): Document {
+  return parseXml(`<paragraphs>${text(entry, 'content')}</paragraphs>`);
 }
 
 function paragraphs(entry: Element): string[] {
-  return Array.from(contentHtml(entry).querySelectorAll('p'), (node) => node.textContent ?? '');
+  return Array.from(
+    contentParagraphsXml(entry).querySelectorAll('p'),
+    (node) => node.textContent ?? '',
+  );
 }
 
 function calendarDate(instant: string, timeZone: string): string {
@@ -210,7 +213,7 @@ describe('/changelog/feed.xml', () => {
       expect(Number.isNaN(Date.parse(text(entry, 'updated'))), id).toBe(false);
       expect(isAbsoluteHttpUrl(linkHref(entry, 'alternate')), id).toBe(true);
       expect(atomChild(entry, 'content').getAttribute('type'), id).toBe('html');
-      expect(contentHtml(entry).querySelectorAll('p').length, id).toBeGreaterThan(0);
+      expect(contentParagraphsXml(entry).querySelectorAll('p').length, id).toBeGreaterThan(0);
     }
   });
 
@@ -347,9 +350,9 @@ describe('/changelog/feed.xml', () => {
     expect(atomChild(entry, 'category').getAttribute('label')).toBe('<label>');
     expect(feed.getElementsByTagName('script')).toHaveLength(0);
 
-    const html = contentHtml(entry);
-    expect(html.querySelector('script')).toBeNull();
-    expect(Array.from(html.querySelectorAll('p'), (node) => node.textContent)).toEqual([
+    const paragraphXml = contentParagraphsXml(entry);
+    expect(paragraphXml.querySelector('script')).toBeNull();
+    expect(Array.from(paragraphXml.querySelectorAll('p'), (node) => node.textContent)).toEqual([
       hostile,
       '<script>alert(1)</script>',
     ]);
