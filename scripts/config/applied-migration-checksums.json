@@ -348,5 +348,9 @@
   "0347_managed_usage_headroom_under_lock.sql": "6333f7919bf946233c6560d84349ef51f726e59b59169365a977dc4d68791036",
   "0348_workspace_product_analytics_switch.sql": "e7aa986de3facb9205ec4bbcf3b383cc01455236c277d0a53c18532fd6f60979",
   "0349_mobile_intent_tokens.sql": "c59172b5c336b9f134d1888085bfa337fbc63d383159765e891e9e22cf54c915",
-  "0350_bank_account_items.sql": "cd030a8f85bffb3835bbf70cc870d82fe0a7eaae0b8ddd1912d99695c9bb5034"
+  "0350_bank_account_items.sql": "cd030a8f85bffb3835bbf70cc870d82fe0a7eaae0b8ddd1912d99695c9bb5034",
+  "0351_auth_flow_update_times.sql": "b14e63937458af8dd1805b32e2830603c27e2887f5c404b32f3df1d57de07790",
+  "0352_feedback_response_rating_index.sql": "4f261b2db1de0a4475dfe3fb00af05748a7e2a009d2b421f6227fd05f8bdc5d4",
+  "0353_feedback_ratings_drop_answer_text.sql": "e582dadf245a9d8a4537de0fce6ffddfed831db01ae2d3333c8abab0065d9e1e",
+  "0354_signaling_sessions.sql": "7b6356658020f4dac9ee68946f69eb9f0a8ad109955260102d5b2167db9a3460"
 }
