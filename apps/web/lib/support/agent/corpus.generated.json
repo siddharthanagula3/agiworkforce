@@ -1257,7 +1257,7 @@
         "macos",
         "windows"
       ],
-      "updated": "2026-09-27",
+      "updated": "2026-10-03",
       "source": "content/support/install-the-cli.md",
       "chunks": [
         {
@@ -1272,7 +1272,7 @@
           "ordinal": 1,
           "heading": "First run",
           "headingPath": "Install and set up the CLI › First run",
-          "text": "```\nagi login          # OAuth, or paste a provider API key\nagi auth-status    # every configured provider, and how it authenticates\nagi --list-models  # what you can actually route to right now\nagi exec \"what files are in this directory?\"\nagi                # the interactive terminal UI\n```\n\n`agi init` creates `~/.agiworkforce/`, and `agi onboarding` walks the first-time\nsetup."
+          "text": "```\nagi login                # sign in to your AGI account (device code in the browser)\nagi login anthropic      # or use your own provider key (BYOK), pasted when prompted\nagi auth-status    # every configured provider, and how it authenticates\nagi --list-models  # what you can actually route to right now\nagi exec \"what files are in this directory?\"\nagi                # the interactive terminal UI\n```\n\n`agi init` creates `~/.agiworkforce/`, and `agi onboarding` walks the first-time\nsetup.\n\nA bare `agi login` never asks for a provider key; [Bring your own provider keys](/help/byok-provider-keys) covers `agi login <provider>`."
         },
         {
           "id": "install-the-cli#2",

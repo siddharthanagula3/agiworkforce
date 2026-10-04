@@ -62,11 +62,12 @@ To build from source instead:
 cargo install --path apps/cli --bin agi
 ```
 
-Then sign in with your provider:
+Then sign in to your AGI account, or add your own provider key:
 
 ```bash
-agi login        # device-code OAuth or API key
-agi auth-status  # confirm
+agi login            # AGI account (device code in the browser)
+agi login anthropic  # your own provider key (BYOK)
+agi auth-status      # confirm
 ```
 
 `agi` is the primary command. `agiworkforce` remains available as a backward-compatible alias.

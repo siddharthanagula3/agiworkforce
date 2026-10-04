@@ -5,7 +5,7 @@ path: /cli
 category: surfaces
 tags: cli, install cli, install.sh, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, update, checksum, signature
 platforms: cli, macos, windows, linux
-updated: 2026-09-27
+updated: 2026-10-03
 scope: public
 ---
 
@@ -33,7 +33,8 @@ backward-compatible alias.
 ## First run
 
 ```
-agi login          # OAuth, or paste a provider API key
+agi login                # sign in to your AGI account (device code in the browser)
+agi login anthropic      # or use your own provider key (BYOK), pasted when prompted
 agi auth-status    # every configured provider, and how it authenticates
 agi --list-models  # what you can actually route to right now
 agi exec "what files are in this directory?"
@@ -42,6 +43,8 @@ agi                # the interactive terminal UI
 
 `agi init` creates `~/.agiworkforce/`, and `agi onboarding` walks the first-time
 setup.
+
+A bare `agi login` never asks for a provider key; [Bring your own provider keys](/help/byok-provider-keys) covers `agi login <provider>`.
 
 ## Sessions
 

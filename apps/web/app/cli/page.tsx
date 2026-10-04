@@ -170,7 +170,7 @@ export default function CliPage() {
               mode: 'BYOK',
               glyph: '◇',
               title: 'Your keys, your billing.',
-              body: 'Sign in with agi login. Device-code OAuth or an API key.',
+              body: 'Run agi login <provider>, such as agi login anthropic, and paste your key. A bare agi login signs in to your AGI account instead.',
               points: [
                 `${MARKETING.providers.display} providers plus custom OpenAI-compatible endpoints`,
                 'Traffic goes directly to your provider',
