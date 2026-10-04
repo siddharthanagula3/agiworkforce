@@ -2,7 +2,7 @@ import { createHighlighterCore, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import type { CSSProperties } from 'react';
 
-const LANGUAGE_LOADERS = {
+export const LANGUAGE_LOADERS = {
   bash: () => import('@shikijs/langs/bash'),
   c: () => import('@shikijs/langs/c'),
   cpp: () => import('@shikijs/langs/cpp'),
@@ -114,9 +114,9 @@ const LANGUAGE_ALIASES: Readonly<Record<string, LanguageId>> = {
   zsh: 'bash',
 } as const;
 
-const THEME_LOADERS = {
-  light: () => import('@shikijs/themes/github-light'),
-  dark: () => import('@shikijs/themes/github-dark'),
+export const THEME_LOADERS = {
+  light: () => import('@shikijs/themes/github-light-high-contrast'),
+  dark: () => import('@shikijs/themes/github-dark-default'),
 } as const;
 
 type ThemeName = keyof typeof THEME_LOADERS;

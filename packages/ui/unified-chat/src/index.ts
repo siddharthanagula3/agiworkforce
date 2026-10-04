@@ -162,6 +162,7 @@ export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
 export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
+export { HighlightedCode, type HighlightedCodeProps } from './components/markdown/HighlightedCode';
 export {
   CodeBlockEditorContext,
   type OpenCodeBlockInEditor,

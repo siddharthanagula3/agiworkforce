@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRoot } from 'react-dom/client';
 import { act, type ReactElement } from 'react';
@@ -194,5 +197,22 @@ describe('HighlightedCode, one tokenise per distinct block', () => {
     expect(view.container.querySelectorAll('code span')).toHaveLength(TOKENS[0]!.length);
 
     view.unmount();
+  });
+});
+
+describe('HighlightedCode, token colours ship with the component', () => {
+  const markdownDir = dirname(dirname(fileURLToPath(import.meta.url)));
+  const readSibling = (fileName: string): string =>
+    readFileSync(join(markdownDir, fileName), 'utf8');
+
+  it('imports the stylesheet that resolves the theme variables every token span carries', () => {
+    const component = readSibling('HighlightedCode.tsx');
+    const stylesheet = readSibling('codeBlock.css');
+
+    expect(component).toMatch(/^import '\.\/codeBlock\.css';$/m);
+    expect(stylesheet).toMatch(/:where\(\.shiki-token\)\s*\{[^}]*color:\s*var\(--shiki-light\)/);
+    expect(stylesheet).toMatch(
+      /:where\(\.dark\)\s*:where\(\.shiki-token\)\s*\{[^}]*color:\s*var\(--shiki-dark\)/,
+    );
   });
 });
