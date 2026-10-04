@@ -22,7 +22,7 @@ import {
 } from '../routing-decision-trace-service';
 
 const TRACE = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   policyVersion: 17,
   requestId: 'request-1',
   selection: 'auto',
@@ -54,6 +54,7 @@ const TRACE = {
     budgetConstrained: false,
     workspaceModelPolicy: false,
     zeroDataRetentionOnly: false,
+    noTrainingOnly: false,
     usOnly: false,
     excludedProviderCount: 0,
     excludedRouteHostCount: 0,

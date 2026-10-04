@@ -64,6 +64,10 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   // Same generator, TypeScript-only half: canary selection hashes a live request
   // id the Rust resolver has no counterpart for.
   'packages/ai/routing/src/__tests__/fixtures/auto-route-canary.json',
+  // Same generator, TypeScript-only half: pinned decisions for the no-training
+  // admission rule, which answers an account setting the Rust resolver has no
+  // reader of, so the crate does not replay it.
+  'packages/ai/routing/src/__tests__/fixtures/auto-route-no-training.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.json',
   'crates/agiworkforce-model-registry/src/generated/model_registry.rs',
   'crates/agiworkforce-protocol/src/generated/model_registry.json',
