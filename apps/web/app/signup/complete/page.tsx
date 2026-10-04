@@ -12,7 +12,10 @@ export default async function SignupCompletePage({
   const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/welcome');
 
   return (
-    <main className="mx-auto flex min-h-[60vh] w-full max-w-md items-center justify-center p-6">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-[60vh] w-full max-w-md items-center justify-center p-6"
+    >
       <div className="w-full">
         <RecordTermsAcceptance redirectTo={redirectTo} />
       </div>

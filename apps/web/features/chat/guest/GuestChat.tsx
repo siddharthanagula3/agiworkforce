@@ -263,7 +263,10 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
       </header>
 
       {empty ? (
-        <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-gutter-compact pb-12">
+        <main
+          id="main-content"
+          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-gutter-compact pb-12"
+        >
           <BrandedGreeting />
           <div className="w-full max-w-3xl">
             {noticeRow}
@@ -272,7 +275,7 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
           </div>
         </main>
       ) : (
-        <main className="flex min-h-0 flex-1 flex-col">
+        <main id="main-content" className="flex min-h-0 flex-1 flex-col">
           <div
             ref={logRef}
             role="log"

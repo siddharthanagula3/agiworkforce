@@ -11,7 +11,7 @@ export default async function UpgradePage() {
   // short - a plan summary and one action - and top-aligning them left most of
   // a tall viewport as empty black below the last card.
   return (
-    <main className="flex min-h-screen flex-col justify-center py-10">
+    <main id="main-content" className="flex min-h-screen flex-col justify-center py-10">
       <UpgradeChooser />
     </main>
   );

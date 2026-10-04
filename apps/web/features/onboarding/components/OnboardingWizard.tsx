@@ -105,7 +105,10 @@ export function OnboardingWizard() {
   }, [router]);
 
   return (
-    <main className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col justify-center gap-4 p-6">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col justify-center gap-4 p-6"
+    >
       <Card className="w-full">
         <CardHeader>
           <p className="text-xs font-medium text-muted-foreground">
