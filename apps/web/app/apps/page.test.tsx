@@ -45,7 +45,7 @@ describe('/apps navigation', () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it('never sends a signed-out visitor back to the page whose CTA sent them here', () => {
+  it('never sends a signed-out visitor back to /integrations, whose hero now opens the public directory', () => {
     useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
 
     const { container } = render(<AppsPage />);
@@ -54,7 +54,8 @@ describe('/apps navigation', () => {
       join(__dirname, '..', 'integrations', 'page.tsx'),
       'utf8',
     );
-    expect(integrationsSource).toContain("href: '/apps'");
+    expect(integrationsSource).toContain("href: '/connectors/mcp-directory'");
+    expect(integrationsSource).not.toContain("href: '/apps'");
 
     for (const call of replace.mock.calls) {
       expect(String(call[0]).startsWith('/integrations')).toBe(false);

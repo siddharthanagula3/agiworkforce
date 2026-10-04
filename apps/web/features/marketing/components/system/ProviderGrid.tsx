@@ -3,7 +3,7 @@ export interface ProviderTile {
   label: string;
   defaultModel: string;
   modelCount: number;
-  price: string;
+  billing: string;
   kind: 'cloud' | 'gateway' | 'local';
 }
 
@@ -34,7 +34,7 @@ export function ProviderGrid({ tiles, label }: { tiles: readonly ProviderTile[];
           ) : null}
           <span className="agi-ds-provider-foot">
             <span>{KIND_LABEL[tile.kind]}</span>
-            <span>{tile.price}</span>
+            <span>{tile.billing}</span>
           </span>
         </li>
       ))}
