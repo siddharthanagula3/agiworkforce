@@ -255,6 +255,17 @@ describe('resolveSiteIconForRecord', () => {
     expect(resolved.iconSource).toBe('monogram');
   });
 
+  it('skips a candidate that serves an empty body and falls to the monogram', async () => {
+    mocks.getIconForUrl.mockResolvedValue(null);
+    mocks.fetchPageHead.mockResolvedValue(null);
+
+    const resolved = await resolveSiteIconForRecord(pendingRecord());
+
+    expect(iconRequests().length).toBeGreaterThan(0);
+    expect(resolved.iconUrl).toBeNull();
+    expect(resolved.iconSource).toBe('monogram');
+  });
+
   it('downgrades to monogram immediately when there is no site url at all', async () => {
     const resolved = await resolveSiteIconForRecord(
       pendingRecord({ websiteUrl: null, documentationUrl: null }),

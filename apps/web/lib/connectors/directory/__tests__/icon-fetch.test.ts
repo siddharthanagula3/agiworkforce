@@ -170,6 +170,36 @@ describe('getIconForUrl', () => {
     expect(mocks.pinnedPublicFetch).not.toHaveBeenCalled();
   });
 
+  it('returns null and writes nothing for a 200 icon with an empty body', async () => {
+    mocks.pinnedPublicFetch.mockResolvedValueOnce(
+      streamResponse(new Uint8Array(0), { 'content-type': 'image/x-icon' }),
+    );
+
+    await expect(getIconForUrl('https://cdn.example.com/empty.ico')).resolves.toBeNull();
+    expect(mocks.query.mock.calls.filter(([sql]) => String(sql).includes('insert'))).toHaveLength(
+      0,
+    );
+  });
+
+  it('refetches when the cached entry has an empty body', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        value: JSON.stringify({ contentType: 'image/x-icon', base64: '' }),
+        stamp: '1',
+        expires_at_ms: String(Date.now() + 60_000),
+        scope: 'public',
+      },
+    ]);
+    mocks.pinnedPublicFetch.mockResolvedValueOnce(
+      streamResponse(PNG_BYTES, { 'content-type': 'image/png' }),
+    );
+
+    const icon = await getIconForUrl('https://cdn.example.com/poisoned.ico');
+
+    expect(mocks.pinnedPublicFetch).toHaveBeenCalledTimes(1);
+    expect(Buffer.from(icon?.base64 ?? '', 'base64')).toEqual(Buffer.from(PNG_BYTES));
+  });
+
   it('follows the recorded apex-to-www redirect, vetting and fetching each hop', async () => {
     const hops = recordedChain('appfolio apex to www');
     serveHops(hops);
