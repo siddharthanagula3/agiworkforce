@@ -40,6 +40,7 @@ export interface ProjectGalleryProps {
   title?: string | null;
   description?: string;
   limit?: number;
+  moreAvailable?: boolean;
   layout?: 'grid' | 'list';
   className?: string;
 }
@@ -74,6 +75,7 @@ export function ProjectGallery({
   title = 'Projects',
   description = 'Group conversations, attach files, and define shared instructions per project.',
   limit,
+  moreAvailable = false,
   layout = 'grid',
   className,
 }: ProjectGalleryProps) {
@@ -94,6 +96,7 @@ export function ProjectGallery({
   const [createError, setCreateError] = useState<string | null>(null);
 
   const iconPickerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const iconTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closeIconPicker = useCallback(() => setIconPickerOpen(false), []);
   useMenuKeyboard({
@@ -128,6 +131,15 @@ export function ProjectGallery({
     });
     return typeof limit === 'number' ? sorted.slice(0, limit) : sorted;
   }, [projects, query, limit]);
+
+  const hasQuery = query.trim().length > 0;
+  const hasActiveProjects = projects.some((p) => !p.isArchived);
+  const filteredEmpty = hasQuery && hasActiveProjects;
+
+  const clearSearch = useCallback(() => {
+    setQuery('');
+    searchInputRef.current?.focus();
+  }, []);
 
   const handleSelect = useCallback(
     (project: Project) => {
@@ -221,6 +233,7 @@ export function ProjectGallery({
             aria-hidden="true"
           />
           <input
+            ref={searchInputRef}
             type="search"
             aria-label="Search projects"
             value={query}
@@ -404,12 +417,32 @@ export function ProjectGallery({
             className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-12 text-center"
             style={{ borderColor: 'var(--chat-border)' }}
           >
-            <p className="text-sm text-[var(--chat-text-secondary)]">
-              {query.trim() ? `No projects match "${query.trim()}".` : 'No projects yet.'}
+            <p className="max-w-full break-words text-sm text-[var(--chat-text-secondary)]">
+              {filteredEmpty
+                ? moreAvailable
+                  ? 'No match in the projects loaded so far.'
+                  : `No projects match "${query.trim()}".`
+                : 'No projects yet.'}
             </p>
-            <p className="text-xs text-[var(--chat-text-muted)]">
-              Create one to group conversations, attach files, and share instructions.
-            </p>
+            {filteredEmpty ? (
+              <>
+                <p className="text-xs text-[var(--chat-text-muted)]">
+                  Try another name or description, or clear the search.
+                </p>
+                <button
+                  type="button"
+                  data-testid="projects-clear-search"
+                  onClick={clearSearch}
+                  className="min-h-8 rounded-compact px-3 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                >
+                  Clear search
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-[var(--chat-text-muted)]">
+                Create one to group conversations, attach files, and share instructions.
+              </p>
+            )}
           </div>
         ) : (
           <div

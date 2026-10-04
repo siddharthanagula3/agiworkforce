@@ -166,3 +166,73 @@ describe('ProjectGallery, safe error recovery', () => {
     );
   });
 });
+
+describe('ProjectGallery, empty states', () => {
+  const seed = (extra: Array<Record<string, unknown>> = []) =>
+    useProjectStore.setState({
+      projects: [
+        { id: 'a', name: 'Alpha', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+        { id: 'b', name: 'Beta', createdAt: '2026-01-02', updatedAt: '2026-01-02' },
+        ...extra,
+      ] as never,
+    });
+
+  it('offers search recovery, not creation, when a query matches nothing', async () => {
+    seed();
+    render(<ProjectGallery />);
+    expect(screen.getByText('Alpha')).toBeDefined();
+    expect(screen.getByText('Beta')).toBeDefined();
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search projects' }), 'zzz');
+    expect(screen.getByText('No projects match "zzz".')).toBeDefined();
+    expect(screen.getByTestId('projects-clear-search')).toBeDefined();
+    expect(screen.queryByText(/Create one to group/)).toBeNull();
+    expect(screen.getByRole('button', { name: /new/i })).toBeDefined();
+  });
+
+  it('says only loaded projects were searched when more are available', async () => {
+    seed();
+    render(<ProjectGallery moreAvailable />);
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search projects' }), 'zzz');
+    expect(screen.getByText('No match in the projects loaded so far.')).toBeDefined();
+    expect(screen.queryByText(/No projects match/)).toBeNull();
+  });
+
+  it('clears the query, restores every project and refocuses the search box', async () => {
+    seed();
+    render(<ProjectGallery />);
+    const input = screen.getByRole('searchbox', { name: 'Search projects' }) as HTMLInputElement;
+    await userEvent.type(input, 'zzz');
+    await userEvent.click(screen.getByTestId('projects-clear-search'));
+    expect(input.value).toBe('');
+    expect(screen.getByText('Alpha')).toBeDefined();
+    expect(screen.getByText('Beta')).toBeDefined();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('keeps the creation state for an empty collection', () => {
+    render(<ProjectGallery />);
+    expect(screen.getByText('No projects yet.')).toBeDefined();
+    expect(screen.getByText(/Create one to group/)).toBeDefined();
+    expect(screen.queryByTestId('projects-clear-search')).toBeNull();
+    expect(screen.getByRole('button', { name: /new/i })).toBeDefined();
+  });
+
+  it('treats an archived-only collection as empty even with a query', async () => {
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'x',
+          name: 'Old',
+          isArchived: true,
+          createdAt: '2026-01-01',
+          updatedAt: '2026-01-01',
+        },
+      ] as never,
+    });
+    render(<ProjectGallery />);
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search projects' }), 'old');
+    expect(screen.getByText('No projects yet.')).toBeDefined();
+    expect(screen.queryByText(/No projects match/)).toBeNull();
+    expect(screen.queryByTestId('projects-clear-search')).toBeNull();
+  });
+});
