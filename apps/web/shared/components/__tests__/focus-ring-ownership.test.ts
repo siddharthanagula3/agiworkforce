@@ -57,4 +57,14 @@ describe('focus ring ownership', () => {
 
     expect(violations).toEqual([]);
   });
+
+  it('suppresses the focus ring only on the programmatic main skip target', () => {
+    expect(
+      globalsCss.match(/main#main-content:focus-visible\s*\{\s*outline:\s*none;\s*\}/g),
+    ).toHaveLength(1);
+    expect(globalsCss.match(/\*:focus-visible\s*\{[^}]*outline:\s*none/g)).toBeNull();
+    expect(globalsCss).toMatch(
+      /\*:focus-visible\s*\{\s*outline:\s*2px solid var\(--focus-ring\);\s*outline-offset:\s*2px;/,
+    );
+  });
 });

@@ -1259,6 +1259,9 @@
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
     border-radius: var(--corner-compact);
+  }
+  main#main-content:focus-visible {
+    outline: none;
   } /* Chromium marks a text field :focus-visible on a plain pointer click, not
    only on keyboard entry, because a caret makes the focus obvious either way.
    The generic rule above is tuned for controls where only :focus-visible
