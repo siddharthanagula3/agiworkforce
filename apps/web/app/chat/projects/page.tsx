@@ -388,6 +388,7 @@ export default function ProjectsPage() {
                 title={null}
                 description=""
                 layout="grid"
+                moreAvailable={hasMoreProjects}
                 onCreate={handleCreateProject}
                 projectHref={projectPath}
                 onSelect={(project) => {
