@@ -52,6 +52,37 @@ export const PLATFORM_AVAILABILITY_CONSENT_PURPOSES: readonly ConsentPurpose[] =
     (PLATFORM_AVAILABILITY_CONSENT_PURPOSE_IDS as readonly string[]).includes(purpose.id),
   );
 
+const ENTERPRISE_WAITLIST_SOURCES = ['website', 'byok', 'sync', 'billing'] as const;
+
+const PLATFORM_AVAILABILITY_WAITLIST_SOURCES = ['mobile', 'other'] as const;
+
+export const WAITLIST_SOURCES = [
+  ...ENTERPRISE_WAITLIST_SOURCES,
+  ...PLATFORM_AVAILABILITY_WAITLIST_SOURCES,
+] as const;
+
+export type EnterpriseWaitlistSource = (typeof ENTERPRISE_WAITLIST_SOURCES)[number];
+
+export type WaitlistSource = (typeof WAITLIST_SOURCES)[number];
+
+export function isWaitlistSource(value: unknown): value is WaitlistSource {
+  return typeof value === 'string' && (WAITLIST_SOURCES as readonly string[]).includes(value);
+}
+
+export function isEnterpriseWaitlistSource(
+  source: WaitlistSource,
+): source is EnterpriseWaitlistSource {
+  return (ENTERPRISE_WAITLIST_SOURCES as readonly string[]).includes(source);
+}
+
+export function consentPurposesForWaitlistSource(
+  source: WaitlistSource,
+): readonly ConsentPurpose[] {
+  return isEnterpriseWaitlistSource(source)
+    ? WAITLIST_CONSENT_PURPOSES
+    : PLATFORM_AVAILABILITY_CONSENT_PURPOSES;
+}
+
 const PURPOSE_IDS: ReadonlySet<string> = new Set(CONSENT_PURPOSES.map((purpose) => purpose.id));
 
 export function isConsentPurpose(value: unknown): value is string {

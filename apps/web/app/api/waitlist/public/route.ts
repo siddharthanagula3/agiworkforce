@@ -9,34 +9,17 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import {
-  WAITLIST_CONSENT_PURPOSES,
-  PLATFORM_AVAILABILITY_CONSENT_PURPOSES,
   isConsentPurpose,
   recordConsentBatch,
   type ConsentDecision,
   type ConsentSurface,
-  type ConsentPurpose,
 } from '@/lib/server/consent-records';
+import {
+  consentPurposesForWaitlistSource,
+  isWaitlistSource,
+  type WaitlistSource,
+} from '@/lib/consent-purposes';
 import { getOptionalAuthUser } from '@/lib/api-auth';
-
-type PublicWaitlistSource = 'website' | 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
-
-function requiredConsentPurposesForSource(source: PublicWaitlistSource): readonly ConsentPurpose[] {
-  return source === 'other' ? PLATFORM_AVAILABILITY_CONSENT_PURPOSES : WAITLIST_CONSENT_PURPOSES;
-}
-
-const VALID_SOURCES = new Set<PublicWaitlistSource>([
-  'website',
-  'byok',
-  'sync',
-  'billing',
-  'mobile',
-  'other',
-]);
-
-function isValidSource(value: unknown): value is PublicWaitlistSource {
-  return typeof value === 'string' && VALID_SOURCES.has(value as PublicWaitlistSource);
-}
 
 function isValidEmail(value: unknown): value is string {
   return (
@@ -104,14 +87,14 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('A valid email address is required');
   }
 
-  const source: PublicWaitlistSource = isValidSource(payload.source) ? payload.source : 'website';
+  const source: WaitlistSource = isWaitlistSource(payload.source) ? payload.source : 'website';
   const email = normalizeWaitlistEmail(payload.email as string);
 
   const consentSurface: ConsentSurface = isWaitlistConsentSurface(payload.consentSurface)
     ? payload.consentSurface
     : 'web-waitlist-inline';
   const decisions = parseConsentDecisions(payload.consent);
-  const requiredPurposes = requiredConsentPurposesForSource(source);
+  const requiredPurposes = consentPurposesForWaitlistSource(source);
 
   const decided = new Set(decisions.map((decision) => decision.purpose));
   const undecided = requiredPurposes.filter((purpose) => !decided.has(purpose.id));
