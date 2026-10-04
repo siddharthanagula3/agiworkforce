@@ -26,8 +26,12 @@ import type { Artifact } from '@/features/chat/stores/artifacts-store';
 import { useArtifactIndex } from '@/features/chat/hooks/use-artifact-index';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
 import type { ArtifactData } from '@/features/chat/components/artifacts/ArtifactPreview';
+import { TypeIcon } from '@/features/chat/components/artifacts/InlineArtifactCards';
 import { Eyebrow, Prose } from '@/features/marketing/components/system';
 import { useDialogKeyboard } from '@agiworkforce/ui';
+import { MermaidDiagram } from '@agiworkforce/unified-chat';
+import { useMounted } from '@shared/hooks/useMounted';
+import { escapeHTML } from '@shared/utils/html-sanitizer';
 import { INSPIRATION, inspirationPath, type InspirationCard } from './inspiration';
 
 // ---------------------------------------------------------------------------
@@ -277,25 +281,127 @@ function SkeletonCard() {
 // Card (Fix 34: iframe thumbnail for renderable types)
 // ---------------------------------------------------------------------------
 
+type ThumbnailKind = 'frame' | 'excerpt' | 'diagram' | 'icon';
+
+const FRAMED_THUMBNAIL_TYPES: ReadonlyArray<ArtifactData['type']> = ['html', 'react', 'svg'];
+const VIEWER_RENDERED_DOCUMENT_LANGUAGES = new Set(['md', 'mdx', 'markdown', 'pdf', 'docx', 'doc']);
+const THUMBNAIL_SOURCE_LIMIT = 1200;
+const EXCERPT_STYLE =
+  'margin:0;overflow:hidden;font-family:ui-monospace,monospace;font-size:12px;line-height:1.5';
+
+const SCALED_FRAME_STYLE: React.CSSProperties = {
+  pointerEvents: 'none',
+  width: '300%',
+  height: '300%',
+  transform: 'scale(0.333)',
+  transformOrigin: 'top left',
+  border: 'none',
+};
+
+const EXCERPT_FRAME_STYLE: React.CSSProperties = {
+  pointerEvents: 'none',
+  display: 'block',
+  width: '100%',
+  height: '100%',
+  border: 'none',
+};
+
+function showsSourceInViewer(type: ArtifactData['type'], label: string): boolean {
+  if (type === 'code') return true;
+  if (type !== 'document') return false;
+  const language = label.toLowerCase();
+  const labelledByTypeAlone = language === type;
+  return !labelledByTypeAlone && !VIEWER_RENDERED_DOCUMENT_LANGUAGES.has(language);
+}
+
+function thumbnailKind(
+  type: ArtifactData['type'],
+  label: string,
+  content: string | undefined,
+): ThumbnailKind {
+  if (!content) return 'icon';
+  if (FRAMED_THUMBNAIL_TYPES.includes(type)) return 'frame';
+  if (type === 'mermaid') return 'diagram';
+  return showsSourceInViewer(type, label) ? 'excerpt' : 'icon';
+}
+
+function thumbnailDocument(body: string): string {
+  return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#f8f5ee;color:#39362e}*{max-width:100%}</style></head><body>${body}</body></html>`;
+}
+
+function excerptMarkup(source: string): string {
+  return `<pre style="${EXCERPT_STYLE}">${escapeHTML(source)}</pre>`;
+}
+
+function ThumbnailIcon({ type }: { type: ArtifactData['type'] }) {
+  return (
+    <div
+      data-testid="artifact-card-thumbnail-icon"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--agi-ink-quiet)',
+      }}
+    >
+      <TypeIcon type={type} className="h-6 w-6" />
+    </div>
+  );
+}
+
+function DiagramThumbnail({ source }: { source: string }) {
+  const mounted = useMounted();
+  const [drawn, setDrawn] = useState(false);
+
+  return (
+    <>
+      {drawn ? null : <ThumbnailIcon type="mermaid" />}
+      {mounted ? (
+        <div
+          className="agi-gallery-diagram"
+          data-testid="artifact-card-thumbnail-diagram"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            padding: 'var(--space-3) var(--space-4) 0',
+            background: 'var(--chat-bg)',
+            visibility: drawn ? 'visible' : 'hidden',
+          }}
+        >
+          <MermaidDiagram
+            source={source}
+            interactive={false}
+            className="mermaid-block"
+            onRenderResult={(result) => setDrawn(result !== null && 'svg' in result)}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 interface ArtifactCardProps {
   title: string;
   language: string;
   subtitle: string;
-  type?: ArtifactData['type'];
+  type: ArtifactData['type'];
   content?: string;
   onClick: () => void;
 }
 
 function ArtifactCard({ title, language, subtitle, type, content, onClick }: ArtifactCardProps) {
-  const canRender = type && content && ['html', 'react', 'svg', 'mermaid'].includes(type);
+  const kind = thumbnailKind(type, language, content);
+  const source = (content ?? '').slice(0, THUMBNAIL_SOURCE_LIMIT);
 
   return (
     <button
       type="button"
       onClick={onClick}
+      className="agi-gallery-card"
       style={{
         background: 'var(--agi-card)',
-        border: '1px solid var(--agi-rule)',
         borderRadius: 'var(--corner-panel)',
         padding: '0',
         textAlign: 'start',
@@ -303,49 +409,40 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
         display: 'flex',
         flexDirection: 'column',
         gap: 0,
-        transition: 'border-color 200ms ease',
         width: '100%',
         overflow: 'hidden',
       }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule-strong)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule)';
-      }}
     >
-      {/* Rendered thumbnail (Fix 34) */}
-      {canRender && (
-        <div
-          style={{
-            width: '100%',
-            height: 120,
-            overflow: 'hidden',
-            background: 'var(--agi-card)',
-            position: 'relative',
-          }}
-        >
+      <div
+        aria-hidden="true"
+        data-testid="artifact-card-thumbnail"
+        style={{
+          width: '100%',
+          height: 120,
+          flexShrink: 0,
+          overflow: 'hidden',
+          background: 'var(--agi-bg-2)',
+          position: 'relative',
+          pointerEvents: 'none',
+        }}
+      >
+        {kind === 'frame' || kind === 'excerpt' ? (
           <iframe
             title={`${title} preview`}
-            // A 33%-scaled, aria-hidden, pointer-events-none thumbnail of the
-            // first 1200 characters. It has no reason to execute anything, and
-            // allowing scripts meant every HTML artifact logged a CSP violation
-            // from about:srcdoc, the srcdoc document inherits the page's
-            // script-src, which is 'self' plus a nonce this frame cannot carry.
+            // An aria-hidden, pointer-events-none thumbnail of the first 1200
+            // characters. It has no reason to execute anything, and allowing
+            // scripts meant every HTML artifact logged a CSP violation from
+            // about:srcdoc, the srcdoc document inherits the script-src of the
+            // page, which is 'self' plus a nonce this frame cannot carry.
             sandbox=""
-            srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#f8f5ee;color:#39362e}*{max-width:100%}</style></head><body>${(content ?? '').slice(0, 1200)}</body></html>`}
-            style={{
-              pointerEvents: 'none',
-              width: '300%',
-              height: '300%',
-              transform: 'scale(0.333)',
-              transformOrigin: 'top left',
-              border: 'none',
-            }}
+            srcDoc={thumbnailDocument(kind === 'frame' ? source : excerptMarkup(source))}
+            style={kind === 'frame' ? SCALED_FRAME_STYLE : EXCERPT_FRAME_STYLE}
             aria-hidden="true"
           />
-        </div>
-      )}
+        ) : null}
+        {kind === 'diagram' ? <DiagramThumbnail source={content ?? ''} /> : null}
+        {kind === 'icon' ? <ThumbnailIcon type={type} /> : null}
+      </div>
 
       {/* Text area */}
       <div
@@ -1145,6 +1242,20 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
         @keyframes agi-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
+        }
+        .agi-gallery-card {
+          border: 1px solid var(--agi-rule);
+          transition: border-color var(--agi-dur-hover) var(--curve-standard);
+        }
+        .agi-gallery-card:hover,
+        .agi-gallery-card:focus-visible {
+          border-color: var(--agi-rule-strong);
+        }
+        .agi-gallery-diagram .mermaid-block {
+          margin: 0;
+        }
+        .agi-gallery-diagram .mermaid-diagram svg {
+          margin-inline: auto;
         }
       `}</style>
 

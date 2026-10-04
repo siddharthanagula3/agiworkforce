@@ -10,8 +10,10 @@ const VIEWPORTS = [
 const MIN_COLUMN_SHARE = 0.9;
 const EDGE_TOLERANCE_PX = 1;
 const HYDRATION_RETRY_MS = 2_000;
+const DIAGRAM_DRAW_MS = 15_000;
 const FRAMED_TYPES: ReadonlyArray<InspirationCard['type']> = ['html', 'react', 'svg'];
 const SOURCE_ONLY = INSPIRATION.filter((template) => template.type === 'code');
+const DIAGRAMS = INSPIRATION.filter((template) => template.type === 'mermaid');
 
 interface Box {
   x: number;
@@ -59,6 +61,27 @@ async function selectTab(card: Locator, name: 'Preview' | 'Code') {
   }).toPass();
 }
 
+function exampleCard(page: Page, template: InspirationCard): Locator {
+  return page.getByRole('button', { name: template.title });
+}
+
+function thumbnail(card: Locator): Locator {
+  return card.getByTestId('artifact-card-thumbnail');
+}
+
+function firstLine(source: string): string {
+  const [line = ''] = source.split('\n');
+  return line;
+}
+
+async function showExamples(page: Page, card: Locator) {
+  const examples = page.getByRole('button', { name: 'Inspiration', exact: true });
+  await expect(async () => {
+    if (!(await card.isVisible())) await examples.click({ timeout: HYDRATION_RETRY_MS });
+    await expect(card).toBeVisible({ timeout: HYDRATION_RETRY_MS });
+  }).toPass();
+}
+
 function expectInside(inner: Box, outer: Box, what: string) {
   expect(inner.width, what).toBeGreaterThan(0);
   expect(inner.height, what).toBeGreaterThan(0);
@@ -72,9 +95,10 @@ function expectInside(inner: Box, outer: Box, what: string) {
   );
 }
 
-test('the registry holds source-only and previewable examples', () => {
+test('the registry holds source-only, diagram and previewable examples', () => {
   expect(SOURCE_ONLY.length).toBeGreaterThan(0);
-  expect(INSPIRATION.length).toBeGreaterThan(SOURCE_ONLY.length);
+  expect(DIAGRAMS.length).toBeGreaterThan(0);
+  expect(INSPIRATION.length).toBeGreaterThan(SOURCE_ONLY.length + DIAGRAMS.length);
 });
 
 for (const viewport of VIEWPORTS) {
@@ -153,13 +177,9 @@ test.describe('gallery listing drawer', () => {
       const response = await page.goto('/gallery');
       expect(response?.status()).toBe(200);
 
-      const examples = page.getByRole('button', { name: 'Inspiration', exact: true });
-      const card = page.getByRole('button', { name: template.title });
+      const card = exampleCard(page, template);
       const drawer = page.getByRole('dialog', { name: template.title });
-      await expect(async () => {
-        if (!(await card.isVisible())) await examples.click({ timeout: HYDRATION_RETRY_MS });
-        await expect(card).toBeVisible({ timeout: HYDRATION_RETRY_MS });
-      }).toPass();
+      await showExamples(page, card);
       await expect(async () => {
         if (!(await drawer.isVisible())) await card.click({ timeout: HYDRATION_RETRY_MS });
         await expect(drawer).toBeVisible({ timeout: HYDRATION_RETRY_MS });
@@ -170,3 +190,73 @@ test.describe('gallery listing drawer', () => {
     });
   }
 });
+
+for (const viewport of VIEWPORTS) {
+  test.describe(`gallery listing thumbnails at ${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test.beforeEach(async ({ page }) => {
+      const response = await page.goto('/gallery');
+      expect(response?.status()).toBe(200);
+      await showExamples(page, exampleCard(page, INSPIRATION[0]!));
+    });
+
+    test('every example card carries a thumbnail box of one height', async ({ page }) => {
+      await expect(page.getByTestId('artifact-card-thumbnail')).toHaveCount(INSPIRATION.length);
+
+      const heights: number[] = [];
+      for (const template of INSPIRATION) {
+        const card = exampleCard(page, template);
+        const cardBox = await boxOf(card, `${template.id} card`);
+        const box = await boxOf(thumbnail(card), `${template.id} thumbnail`);
+        expectInside(box, cardBox, `${template.id} thumbnail`);
+        heights.push(box.height);
+      }
+      for (const height of heights) expect(height).toBeCloseTo(heights[0]!, 0);
+    });
+
+    for (const template of DIAGRAMS) {
+      test(`${template.id} draws its diagram in the thumbnail`, async ({ page }) => {
+        const box = thumbnail(exampleCard(page, template));
+        const diagram = box.locator('.mermaid-diagram svg');
+
+        await expect(diagram).toBeVisible({ timeout: DIAGRAM_DRAW_MS });
+        const thumbnailBox = await boxOf(box, 'diagram thumbnail');
+        const diagramBox = await boxOf(diagram, 'drawn diagram');
+        expect(diagramBox.width).toBeGreaterThan(0);
+        expect(diagramBox.height).toBeGreaterThan(0);
+        expect(diagramBox.y).toBeGreaterThanOrEqual(thumbnailBox.y - EDGE_TOLERANCE_PX);
+        expect(diagramBox.y).toBeLessThan(thumbnailBox.y + thumbnailBox.height);
+        expect(diagramBox.x).toBeGreaterThanOrEqual(thumbnailBox.x - EDGE_TOLERANCE_PX);
+        expect(diagramBox.x + diagramBox.width).toBeLessThanOrEqual(
+          thumbnailBox.x + thumbnailBox.width + EDGE_TOLERANCE_PX,
+        );
+
+        await expect(box.getByTestId('artifact-card-thumbnail-icon')).toHaveCount(0);
+        await expect(box.locator('iframe')).toHaveCount(0);
+        await expect(box).not.toContainText(firstLine(template.content));
+      });
+    }
+
+    for (const template of SOURCE_ONLY) {
+      test(`${template.id} shows a source excerpt in the thumbnail`, async ({ page }) => {
+        const box = thumbnail(exampleCard(page, template));
+
+        await expect(box.locator('iframe')).toHaveCount(1);
+        await expect(box.frameLocator('iframe').locator('pre')).toContainText(
+          firstLine(template.content),
+        );
+      });
+    }
+
+    test('no thumbnail frame can run scripts', async ({ page }) => {
+      const sandboxes = await page
+        .getByTestId('artifact-card-thumbnail')
+        .locator('iframe')
+        .evaluateAll((frames) => frames.map((frame) => frame.getAttribute('sandbox')));
+
+      expect(sandboxes.length).toBeGreaterThan(0);
+      for (const sandbox of sandboxes) expect(sandbox).toBe('');
+    });
+  });
+}
