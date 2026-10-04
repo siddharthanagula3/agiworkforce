@@ -3,13 +3,12 @@
   "sources": ["lucide-react", "@agiworkforce/icons"],
   "entries": [
     {
-      "key": "apps/web/app/providers/page.tsx:100:✓",
-      "reason": "inside a terminal transcript shown as a code sample, not a control: the glyph is the literal output being quoted"
+      "key": "apps/web/app/providers/page.tsx:103:✓",
+      "reason": ""
     },
     {
-      "key": "apps/web/app/providers/page.tsx:105:✗",
-      "reason": "inside a terminal transcript shown as a code sample, not a control: the glyph is the literal output being quoted"
+      "key": "apps/web/app/providers/page.tsx:108:✗",
+      "reason": ""
     }
-  ],
-  "note": "Emoji drawn where an icon belongs, and any icon vocabulary outside the two sources above. Both remaining entries are quoted output in a code sample."
+  ]
 }
