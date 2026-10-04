@@ -1,5 +1,8 @@
 export const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Not by AGI. Free model providers may.';
 
+export const FREE_PLAN_TRAINING_SIGNUP_STATEMENT =
+  'AGI does not train AGI-owned models on your content. The Free plan is served by providers’ free models, and those providers’ terms may allow training on what you send. To keep your chats out of training, turn on Only use models that do not train on your chats in Settings > Privacy.';
+
 export const FREE_PLAN_TRAINING_NOTICE_TITLE = 'Free models and your prompts';
 
 export const FREE_PLAN_TRAINING_NOTICE_LEAD =
