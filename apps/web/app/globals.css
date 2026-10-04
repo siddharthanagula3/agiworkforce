@@ -1790,9 +1790,12 @@ html[data-contrast='more'] *:focus-visible {
  * ────────────────────────────────────────────────────────────────────── */
 
 [data-design='agi'].agi-ds-waitlist-modal {
+  display: flex;
+  flex-direction: column;
   width: min(94vw, 30rem);
   gap: 0;
-  padding: 32px 32px 26px;
+  padding: 0;
+  overflow: hidden;
   border: 1px solid var(--agi-rule-strong);
   border-radius: var(--corner-panel);
   background: var(--agi-ground-2);
@@ -1800,27 +1803,53 @@ html[data-contrast='more'] *:focus-visible {
   box-shadow: 0 40px 120px var(--agi-shadow);
 }
 
-[data-design='agi'].agi-ds-waitlist-modal .agi-ds-form-row {
-  margin-top: 22px;
-  flex-wrap: nowrap;
+[data-design='agi'].agi-ds-waitlist-modal .agi-ds-waitlist-head {
+  flex: none;
+  padding-block: var(--agi-space-4) var(--agi-space-2);
+  padding-inline: var(--agi-space-4) calc(var(--agi-space-4) + var(--agi-space-3));
 }
+
+[data-design='agi'].agi-ds-waitlist-modal .agi-ds-waitlist-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--agi-space-4) var(--agi-space-3);
+}
+
 @media (max-width: 480px) {
-  [data-design='agi'].agi-ds-waitlist-modal .agi-ds-form-row {
-    flex-wrap: wrap;
+  [data-design='agi'].agi-ds-waitlist-modal .agi-ds-waitlist-head {
+    padding-inline-start: var(--agi-space-3);
+  }
+
+  [data-design='agi'].agi-ds-waitlist-modal .agi-ds-waitlist-body {
+    padding-inline: var(--agi-space-3);
   }
 }
 
-[data-design='agi'].agi-ds-waitlist-modal .agi-ds-input {
-  flex: 1 1 auto;
-  min-width: 0;
+[data-design='agi'].agi-ds-waitlist-modal .agi-ds-form {
+  margin-top: var(--agi-space-3);
+  gap: var(--agi-space-3);
+}
+
+[data-design='agi'].agi-ds-waitlist-modal .agi-ds-fieldset {
+  flex: 0 0 auto;
+}
+
+[data-design='agi'].agi-ds-waitlist-modal .agi-ds-form > .agi-ds-btn {
+  align-self: flex-start;
 }
 
 [data-design='agi'].agi-ds-waitlist-modal .agi-ds-waitlist-success {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+[data-design='agi'].agi-ds-waitlist-modal .agi-ds-waitlist-success .agi-ds-waitlist-head {
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  padding: 6px 0 2px;
+  gap: var(--agi-space-1);
 }
 
 [data-design='agi'].agi-ds-waitlist-modal .agi-ds-waitlist-success-mark {
