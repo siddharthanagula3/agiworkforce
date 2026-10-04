@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-21
+Last updated: 2026-10-03
 
 Who administers what in an enterprise workspace, how a customer is run from
 go-live to offboarding, and what this product does not do for them yet. The
@@ -229,8 +229,12 @@ product checks rather than what a person promises:
    first change; export and SIEM streaming are in the console's Audit page.
 
 Apart from the invitation itself, nothing in this sequence sends an automated
-welcome, reminder or lifecycle email. Every other message the customer receives
-about onboarding comes from a person.
+welcome, reminder or onboarding email. The product does mail one account at a
+time, for example security alerts, billing and trial notices, spend alerts and
+data-export-ready mail (the Resend row of `apps/web/app/subprocessors/page.tsx`
+is the canonical list), but there is no broadcast tool: every message to a
+customer about onboarding, and any notice to a set of customers, comes from a
+person.
 
 ## 7. Policy reference
 

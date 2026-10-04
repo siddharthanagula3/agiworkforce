@@ -947,6 +947,12 @@ their open-item statements, and `data-legal-review` stays `pending-counsel`.
    (L06-D4); `/mobile/legal` deferring to `/terms` with no mobile-specific
    exception (L10-D7); and a neutral pointer on `/mobile` in place of an
    in-progress compliance status line (L12-D6).
+6. Breach notice wording (audit row TC07): the `/status` Notification row and
+   `/privacy` now say a notice would arrive in the product and at a dated
+   public address, not by email, and the DPA separates the notice to the
+   Customer contact from the notice to each affected person. Is that wording
+   acceptable under the DPDP Act and the GDPR while no operator mailing path
+   exists (`audit/blockers/37-personal-data-breach-open-gaps.md`)?
 
 **Where** `apps/web/app/legal/eu-representative/page.tsx`, `apps/web/app/privacy/india/page.tsx`, `apps/web/app/dpa/page.tsx`, `docs/runbooks/personal-data-breach.md`.
 **Needed input** One counsel pass.

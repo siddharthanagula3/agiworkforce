@@ -3,7 +3,7 @@
 Status: Draft, **not reviewed by counsel**
 Legal review: pending-counsel
 Owner: Founder (no incident commander is designated; see [Open gaps](#open-gaps))
-Last updated: 2026-09-21
+Last updated: 2026-10-03
 Applies to: AGI Automation LLC, all surfaces (web, desktop, mobile, extensions, CLI, signaling server)
 
 This runbook exists because India's Digital Personal Data Protection Act, 2023
@@ -120,16 +120,16 @@ You cannot notify accurately without answers to these. Get approximate answers
 fast rather than exact answers slowly; both notifications say what is known so
 far and are updated.
 
-| Question                                | Where to look in this repository                                                                                                                                                                                                                       |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| What categories of personal data?       | The processing table in `apps/web/app/privacy/india/page.tsx` §02, and the schema under `apps/web/db/neon/`                                                                                                                                            |
-| Whose? Identify the affected principals | Query the affected tables by `user_id`; for anonymous rows, by `email` in `cloud_managed_waitlist` or `subject_email_sha256` in `consent_records`                                                                                                      |
-| How many?                               | `select count(distinct user_id) …` over the affected scope. Report a range if that is all you have                                                                                                                                                     |
-| Which surface / trust boundary?         | Local, BYOK and Managed Cloud are separate. **Local-mode data never reaches us**, so a server-side breach cannot expose it, say so explicitly, because it materially narrows scope                                                                     |
-| Was it encrypted or pseudonymised?      | Object storage split: generated videos are in a private bucket, other files in a public one (`lib/server/object-storage.ts`). BYOK keys are encrypted on-device. `waitlist.email` is a SHA-256 digest; `cloud_managed_waitlist.email` is **plaintext** |
-| Third parties involved?                 | `apps/web/app/subprocessors/page.tsx`, **but that page is currently incomplete**, see [Open gaps](#open-gaps). Cross-check `resend-client.ts`, the video and geocoding providers, and the model providers in `lib/server/provider-endpoints.ts`        |
-| Did any of it leave India?              | All hosting is in the United States. For an Indian data principal, that is already a cross-border transfer under the Act and should be stated in the notice                                                                                            |
-| Root cause and remediation              | The incident record from §2                                                                                                                                                                                                                            |
+| Question                                | Where to look in this repository                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| What categories of personal data?       | The processing table in `apps/web/app/privacy/india/page.tsx` §02, and the schema under `apps/web/db/neon/`                                                                                                                                                                                                                                                                                                        |
+| Whose? Identify the affected principals | Query the affected tables by `user_id`; for anonymous rows, by `email` in `cloud_managed_waitlist` or `subject_email_sha256` in `consent_records`                                                                                                                                                                                                                                                                  |
+| How many?                               | `select count(distinct user_id) …` over the affected scope. Report a range if that is all you have                                                                                                                                                                                                                                                                                                                 |
+| Which surface / trust boundary?         | Local, BYOK and Managed Cloud are separate. **Local-mode data never reaches us**, so a server-side breach cannot expose it, say so explicitly, because it materially narrows scope                                                                                                                                                                                                                                 |
+| Was it encrypted or pseudonymised?      | Object storage split: new uploads (generated media, chat attachments, knowledge files) are in the private bucket; the public bucket holds profile pictures and objects stored before uploads moved to the private bucket (`lib/server/object-storage.ts`, `lib/server/media-storage.ts`). BYOK keys are encrypted on-device. `waitlist.email` is a SHA-256 digest; `cloud_managed_waitlist.email` is **plaintext** |
+| Third parties involved?                 | `apps/web/app/subprocessors/page.tsx`, **but that page is currently incomplete**, see [Open gaps](#open-gaps). Cross-check `resend-client.ts`, the video and geocoding providers, and the model providers in `lib/server/provider-endpoints.ts`                                                                                                                                                                    |
+| Did any of it leave India?              | All hosting is in the United States. For an Indian data principal, that is already a cross-border transfer under the Act and should be stated in the notice                                                                                                                                                                                                                                                        |
+| Root cause and remediation              | The incident record from §2                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -214,20 +214,46 @@ Send to **every** affected principal. The Act does not provide a
 "low-risk" exception, and it does not permit substituting a public notice for
 individual intimation where individuals are identifiable.
 
-**Delivery, honestly:** there is no account-lifecycle email path in this product
-today. An email provider is wired (`apps/web/lib/support/handoff/resend-client.ts`)
-but only support escalation and scheduled-task notifications use it, and nothing
-can currently mail an arbitrary list of affected users. In practice that means:
+**Delivery, honestly:** mail to one account at a time exists, and mail to a set
+of affected people has no operator entry point.
 
-1. An in-product notice on next sign-in, and
-2. A dated public notice at a stable URL, and
-3. Direct email **only** where an address is held and someone sends it manually.
+- Account-level mail that exists, including: identity security alerts to the
+  profile address (`apps/web/lib/services/account-activity-notifications.ts`),
+  account security codes, data-export-ready mail, billing and trial notices,
+  spend alerts, team invitations, scheduled-task completion mail
+  (`sendScheduleCompletionEmail`) and support ticket mail to the customer
+  (`sendCustomerTicketEmail`, `apps/web/lib/support/handoff/escalation-email.ts`),
+  sent through the Resend wrappers in
+  `apps/web/lib/services/notification-email-service.ts` and
+  `apps/web/lib/support/handoff/resend-client.ts`. These are examples, not the
+  inventory: the Resend row of `apps/web/app/subprocessors/page.tsx` is the
+  canonical list, and a new sender is added there. Deleting an account sends no
+  confirmation.
+- `sendBulkTransactionalEmail` (`apps/web/lib/support/handoff/resend-client.ts`)
+  mails an arbitrary recipient list, throttled, with per-recipient idempotency
+  keys derived from a campaign id and a per-recipient outcome report. It is a
+  tested primitive (`apps/web/lib/support/handoff/__tests__/resend-bulk.test.ts`)
+  with no production caller: no admin route or script takes a list of affected
+  users, it has never been used in an incident, and it has not been drilled.
+- Nothing writes an in-product notice to a set of users, and no route serves a
+  dated public notice. Both would be built during the incident.
+
+In practice that means:
+
+1. An in-product notice, built on the day because nothing writes one to a set
+   of users today, and
+2. A dated public notice at a stable URL, built by hand on the day, and
+3. Direct email through a one-off script an engineer writes around
+   `sendBulkTransactionalEmail`, or by hand where only a few addresses are
+   affected.
 
 That is a real limitation. It is disclosed to every reader, not only to Indian
 principals: the "Security incidents" section of `apps/web/app/privacy/page.tsx`
-and §10 of `apps/web/app/privacy/india/page.tsx` both say a notice would arrive
-in the product and at a dated public address rather than by email. Closing it is
-an open item; until it is closed, do not promise an affected person an email.
+and §10 of `apps/web/app/privacy/india/page.tsx` describe how a notice would
+reach a person. Keep this runbook and those sections saying the same thing.
+Closing the gap is an open item; until it is closed, do not promise an affected
+person an email. [Breach-notice drill](#7-breach-notice-drill) is how the manual
+route gets exercised before it is needed.
 
 > **Subject:** Important: a security incident affected your AGI account
 >
@@ -289,6 +315,61 @@ an open item; until it is closed, do not promise an affected person an email.
 - **Update this runbook** with what it failed to tell you at 2am.
 - **Retain the incident record.** The Board may ask later, and an incident you
   cannot evidence is indistinguishable from one you concealed.
+
+---
+
+## 7. Breach-notice drill
+
+A notice path that has never been exercised is a guess. Run this drill before
+relying on the manual route in §5, after any change to the mail code, and at
+least once a year. It tests delivery and the team's ability to execute; it does
+not test the legal wording.
+
+**Two obligations, drilled separately.**
+
+- **Customer notice under the DPA.** A processor-side commitment to tell the
+  customer's account contact without undue delay and within 72 hours
+  (section 10 of `apps/web/app/dpa/page.tsx`). The recipients are the account contacts on
+  file for customers, and the notice goes to a handful of people.
+- **Individual notice under the Act.** A fiduciary-side duty to tell every
+  affected Data Principal. The recipients are an arbitrary list of
+  end-user addresses.
+
+Each has its own recipient list, message and evidence. A drill that proves one
+says nothing about the other.
+
+**Recipients.** Team-owned mailboxes and synthetic accounts only. Never a real
+customer or user. Include at least one address on each major mailbox provider
+the user base uses, and one address that is known to bounce, so the failure path
+is exercised too.
+
+**Steps.**
+
+1. **Verify recipients.** Confirm each test address is reachable and note who
+   reads it. Record the list and the sending domain's verification state.
+2. **Use an approved message.** The individual-notice drill uses the §5
+   template with `[DRILL]` at the start of the subject and a first line saying
+   it is a drill. This runbook has no template for the DPA customer notice, so
+   that drill drafts one from the contents the DPA promises in section 10,
+   "Personal data breach", of `apps/web/app/dpa/page.tsx`, and records that no
+   approved customer-notice template exists. While `Legal review:` reads
+   `pending-counsel`, say so in the drill record.
+3. **Send.** Through `sendBulkTransactionalEmail` with a campaign id that names
+   the drill. Do not touch production recipients or production rows.
+4. **Collect delivery evidence.** The `SendBulkEmailResult` outcomes
+   (attempted, delivered, failed and each failure's reason), the Resend delivery
+   events for each delivered outcome, looked up by its `providerMessageId`, and
+   a screenshot or header dump from a received copy. Resend does not know the
+   campaign: the campaign id only seeds the per-recipient idempotency keys.
+5. **Exercise escalation.** Decide who is called when the bounce comes back or
+   the provider is down, using the paths in
+   `docs/runbooks/incident-communication.md`, and say how long that took.
+6. **Record the result** in the log below, with what failed and what changed.
+
+| Date | Obligation | Recipients | Delivered / attempted | Evidence | Operator | What changed |
+| ---- | ---------- | ---------- | --------------------- | -------- | -------- | ------------ |
+
+No drill has been run. The first row is written when one is.
 
 ---
 

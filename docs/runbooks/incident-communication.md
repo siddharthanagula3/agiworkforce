@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-18
+Last updated: 2026-10-03
 
 How an incident reaches responders and customers when the thing that is down is
 this application. The response procedure itself is
@@ -51,6 +51,16 @@ is the address to publish in support replies and release notes.
 With neither set, the status page says so rather than implying a mirror exists.
 That is the accepted-risk position, and it is only acceptable while no customer
 contract promises status during an outage.
+
+## Telling affected customers and people
+
+The four paths above reach responders. Telling customers and affected people
+that their data was involved is a different job with a different recipient list:
+the DPA customer notice goes to account contacts within 72 hours, and individual
+notice goes to every affected person. The mail primitive for that exists but no
+operator entry point or public notice route does, and neither has been
+exercised. `docs/runbooks/personal-data-breach.md` §5 states what is available
+and §7 is the drill that exercises it, with a dated log.
 
 ## Audit continuity
 

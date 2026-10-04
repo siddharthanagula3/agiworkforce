@@ -58,7 +58,10 @@ vi.mock('@/lib/server/object-storage-runtime', async (importOriginal) => {
   };
 });
 
-import { PRESIGNED_URL_MAX_TTL_SECONDS } from '@agiworkforce/object-storage';
+import {
+  OBJECT_STORAGE_BUCKET_ENV,
+  PRESIGNED_URL_MAX_TTL_SECONDS,
+} from '@agiworkforce/object-storage';
 import { POST as presign } from '@/app/api/uploads/presign/route';
 import {
   createProjectKnowledgeUploadAuthorization,
@@ -83,6 +86,39 @@ const SIGNER = /\bgetSignedUrl\s*\(|s3-request-presigner/;
 const OBJECT_STORE_SOURCE = 'packages/platform/object-storage/src';
 const WEB_STORAGE_MODULE = 'apps/web/lib/server/object-storage.ts';
 const PRESIGN_ROUTE = 'apps/web/app/api/uploads/presign/route.ts';
+const PUBLIC_BUCKET_USES: Readonly<Record<string, { writes: boolean; reason: string }>> = {
+  'apps/web/app/api/cron/purge-deleted-media/route.ts': {
+    writes: false,
+    reason:
+      'names both buckets so the orphaned multipart sweep can abort unfinished uploads in each',
+  },
+  'apps/web/lib/server/object-backup.ts': {
+    writes: true,
+    reason:
+      'resolves a separate environment whose bucket variable carries the backup bucket, so the name it reads back and writes is the backup target',
+  },
+  'apps/web/lib/validate-env.ts': {
+    writes: false,
+    reason: 'compares the two bucket names at boot and warns when they match',
+  },
+  'apps/web/scripts/verify-object-storage.ts': {
+    writes: true,
+    reason:
+      'operator probe that puts one synthetic text object under its own prefix, fetches it and deletes it',
+  },
+};
+const STORE_WRITE_CALL =
+  /\.(?:put|presignPut|createMultipartUpload|uploadPart|completeMultipartUpload)\s*\(/;
+const PUBLIC_BUCKET_REFERENCE = new RegExp(
+  [
+    'publicBucket',
+    'OBJECT_STORAGE_BUCKET_ENV',
+    OBJECT_STORAGE_BUCKET_ENV,
+    'CLOUDFLARE_R2_BUCKET_NAME',
+  ]
+    .map((name) => `\\b${name}\\b`)
+    .join('|'),
+);
 const MILLISECONDS_PER_SECOND = 1_000;
 
 function productionFiles(root: string): string[] {
@@ -150,6 +186,29 @@ function exportedFunctionBodies(source: string): Map<string, string> {
     bodies.set(match[1]!, methodBody(source, match.index));
   }
   return bodies;
+}
+
+function publicBucketResolvers(sources: Map<string, string>): string[] {
+  return [...sources]
+    .filter(([, source]) => PUBLIC_BUCKET_REFERENCE.test(source))
+    .map(([file]) => file)
+    .sort();
+}
+
+function directPublicBucketWriters(sources: Map<string, string>): string[] {
+  return publicBucketResolvers(sources).filter((file) =>
+    STORE_WRITE_CALL.test(sources.get(file) ?? ''),
+  );
+}
+
+function webSourcesOutsideStorageModule(): Map<string, string> {
+  const sources = new Map<string, string>();
+  for (const file of productionFiles('apps/web')) {
+    const relative = rel(file);
+    if (relative === WEB_STORAGE_MODULE) continue;
+    sources.set(relative, withoutComments(fs.readFileSync(file, 'utf8')));
+  }
+  return sources;
 }
 
 function presignRequest(body: Record<string, unknown>): NextRequest {
@@ -268,6 +327,80 @@ describe('the public bucket holds avatars and nothing else', () => {
       if (called.length > 0) callers[relative] = called;
     }
     expect(callers).toEqual({ [PRESIGN_ROUTE]: ['getPresignedUploadUrl'] });
+  });
+
+  it('is resolved outside the storage module only by files recorded with a reason', () => {
+    const sources = webSourcesOutsideStorageModule();
+    expect(sources.size).toBeGreaterThan(0);
+
+    expect(publicBucketResolvers(sources)).toEqual(Object.keys(PUBLIC_BUCKET_USES).sort());
+    for (const [file, use] of Object.entries(PUBLIC_BUCKET_USES)) {
+      expect(use.reason.trim(), `${file} is recorded without a reason`).not.toBe('');
+    }
+  });
+
+  it('is not written by a direct object-store call outside the recorded writers', () => {
+    const recordedWriters = Object.entries(PUBLIC_BUCKET_USES)
+      .filter(([, use]) => use.writes)
+      .map(([file]) => file)
+      .sort();
+
+    expect(directPublicBucketWriters(webSourcesOutsideStorageModule())).toEqual(recordedWriters);
+  });
+
+  it('recognises a direct write to the public bucket', () => {
+    const direct = new Map([
+      [
+        'apps/web/app/api/example/route.ts',
+        `const { publicBucket } = objectStorageConfig();
+         await getObjectStore().put({ bucket: publicBucket, key, body, contentType });`,
+      ],
+      [
+        'apps/web/app/api/example/env.ts',
+        `await getObjectStore().put({ bucket: process.env.${OBJECT_STORAGE_BUCKET_ENV}, key, body, contentType });`,
+      ],
+      [
+        'apps/web/app/api/example/private.ts',
+        `await getObjectStore().put({ bucket: objectStorageConfig().privateBucket, key, body, contentType });`,
+      ],
+      [
+        'apps/web/app/api/example/read.ts',
+        `await getObjectStore().get(objectStorageConfig().publicBucket, key);`,
+      ],
+    ]);
+    expect(directPublicBucketWriters(direct)).toEqual([
+      'apps/web/app/api/example/env.ts',
+      'apps/web/app/api/example/route.ts',
+    ]);
+    expect(publicBucketResolvers(direct)).toEqual([
+      'apps/web/app/api/example/env.ts',
+      'apps/web/app/api/example/read.ts',
+      'apps/web/app/api/example/route.ts',
+    ]);
+  });
+
+  it('recognises a public bucket chosen in one file and written from another', () => {
+    const split = new Map([
+      [
+        'apps/web/app/api/example/target.ts',
+        `export function uploadTarget() {
+           return { store: getObjectStore(), bucket: objectStorageConfig().publicBucket };
+         }`,
+      ],
+      [
+        'apps/web/app/api/example/route.ts',
+        `const target = uploadTarget();
+         await target.store.put({ bucket: target.bucket, key, body, contentType });`,
+      ],
+      [
+        'apps/web/app/api/example/private-target.ts',
+        `export function privateTarget() {
+           return { store: getObjectStore(), bucket: objectStorageConfig().privateBucket };
+         }`,
+      ],
+    ]);
+    expect(directPublicBucketWriters(split)).toEqual([]);
+    expect(publicBucketResolvers(split)).toEqual(['apps/web/app/api/example/target.ts']);
   });
 
   it('sends every upload kind but the avatar to the private bucket', async () => {

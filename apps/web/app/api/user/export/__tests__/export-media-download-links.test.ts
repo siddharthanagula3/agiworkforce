@@ -133,6 +133,8 @@ describe('the export hands back reachable media, not private storage keys', () =
     expect(documentation.expiry).toMatch(/do not expire/i);
     expect(documentation.authorization).toMatch(/signed in as this account/i);
     expect(documentation.storage_url).toMatch(/not a download link/i);
+    expect(documentation.storage_url).toMatch(/may hold a public address/i);
+    expect(documentation.storage_url).not.toMatch(/resolves for nobody/i);
   });
 
   it('builds the link on the configured app origin when there is one', async () => {
