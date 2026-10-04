@@ -982,9 +982,8 @@ export default function PricingPage() {
 
   return (
     <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell">
         <section
           className="agi-page-hero"
           aria-labelledby="pricing-hero-title"
@@ -1662,9 +1661,8 @@ export default function PricingPage() {
             .
           </p>
         </section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
       <UpgradeConfirmDialog
         request={upgradeConfirm}
         onCancel={() => setUpgradeConfirm(null)}

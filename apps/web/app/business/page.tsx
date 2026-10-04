@@ -19,9 +19,8 @@ export const metadata = buildMetadata({
 export default function BusinessPage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell agi-surface">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <FlagshipHero
           eyebrow="AGI for business"
           titleLines={['AI work your team can govern.']}
@@ -145,9 +144,8 @@ export default function BusinessPage() {
             { href: '/pricing', label: 'See Plans' },
           ]}
         />
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

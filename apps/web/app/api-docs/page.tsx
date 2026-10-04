@@ -165,7 +165,7 @@ export default function ApiDocsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <PageHero
           id="agi-api-docs-title"
           eyebrow="API docs"

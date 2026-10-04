@@ -187,9 +187,8 @@ export default function TeamsPage() {
             </ButtonRow>
           </Stack>
         </Section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

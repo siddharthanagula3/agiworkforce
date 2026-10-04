@@ -369,9 +369,8 @@ export function MarketingLanding() {
             },
           ]}
         />
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

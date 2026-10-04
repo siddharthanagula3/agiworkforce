@@ -418,6 +418,7 @@ function DeviceAuthContent() {
   if (isDesktopSurface) {
     return (
       <main
+        id="main-content"
         style={{
           minHeight: '100vh',
           display: 'grid',
@@ -433,19 +434,21 @@ function DeviceAuthContent() {
   }
 
   return (
-    <main id="main-content">
+    <>
       <Header minimal />
-      <div
-        style={{
-          display: 'grid',
-          placeItems: 'center',
-          padding: 'var(--agi-section-y-md) var(--agi-gutter)',
-        }}
-      >
-        <DeviceForm />
-      </div>
+      <main id="main-content">
+        <div
+          style={{
+            display: 'grid',
+            placeItems: 'center',
+            padding: 'var(--agi-section-y-md) var(--agi-gutter)',
+          }}
+        >
+          <DeviceForm />
+        </div>
+      </main>
       <MarketingFooter />
-    </main>
+    </>
   );
 }
 

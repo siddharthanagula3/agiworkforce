@@ -21,9 +21,8 @@ export const metadata = buildMetadata({
 export default function AgiCodePage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell agi-surface">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <FlagshipHero
           eyebrow="AGI Code · for developers"
           titleLines={['Your terminal.', 'Your editor.', 'One agent.']}
@@ -161,9 +160,8 @@ export default function AgiCodePage() {
             { href: '/get-started', label: 'Get Started' },
           ]}
         />
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
