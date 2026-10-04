@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { ChatRequest } from '@agiworkforce/types';
 
-import { createOpenRouterAdapter, OPENROUTER_MODEL_CATALOG } from '../index';
+import {
+  createOpenRouterAdapter,
+  OPENROUTER_MODEL_CATALOG,
+  type OpenRouterAdapterConfig,
+} from '../index';
 
 describe('createOpenRouterAdapter', () => {
   it('returns adapter with id="open_router" and label="OpenRouter"', () => {
@@ -159,5 +164,82 @@ describe('createOpenRouterAdapter', () => {
       void _c;
     }
     expect(seenBody?.provider).toEqual({ order: ['together'], data_collection: 'deny' });
+  });
+
+  describe('required provider routing', () => {
+    async function wireProviderField(
+      config: OpenRouterAdapterConfig,
+      request: Partial<ChatRequest> = {},
+    ): Promise<unknown> {
+      let seenBody: Record<string, unknown> | undefined;
+      const adapter = createOpenRouterAdapter({
+        apiKey: 'test-key',
+        ...config,
+        fetch: async (_input, init) => {
+          seenBody = JSON.parse(String(init?.body));
+          return new Response('data: [DONE]\n\n', {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream' },
+          });
+        },
+      });
+      for await (const _c of adapter.stream(
+        {
+          model: 'anthropic/example-model',
+          messages: [{ role: 'user', content: 'hi' }],
+          ...request,
+        },
+        new AbortController().signal,
+      )) {
+        void _c;
+      }
+      return seenBody?.provider;
+    }
+
+    const REQUIRED_DENY: OpenRouterAdapterConfig = {
+      providerRouting: { sort: 'price' },
+      requiredProviderRouting: { dataCollection: 'deny' },
+    };
+
+    it('sends the required preference on a request that carries no routing of its own', async () => {
+      expect(await wireProviderField(REQUIRED_DENY)).toEqual({
+        sort: 'price',
+        data_collection: 'deny',
+      });
+    });
+
+    it('does not let request metadata relax the required preference', async () => {
+      expect(
+        await wireProviderField(REQUIRED_DENY, {
+          metadata: {
+            openRouterProviderRouting: {
+              dataCollection: 'allow',
+              maxPrice: { prompt: 2, completion: 12 },
+            },
+          },
+        }),
+      ).toEqual({
+        sort: 'price',
+        data_collection: 'deny',
+        max_price: { prompt: 2, completion: 12 },
+      });
+    });
+
+    it('keeps the required preference beside the zero-retention requirement', async () => {
+      expect(await wireProviderField(REQUIRED_DENY, { zeroDataRetentionOnly: true })).toEqual({
+        sort: 'price',
+        data_collection: 'deny',
+        zdr: true,
+      });
+    });
+
+    it('lets request metadata allow collection when the adapter requires nothing', async () => {
+      expect(
+        await wireProviderField(
+          { providerRouting: { sort: 'price', dataCollection: 'deny' } },
+          { metadata: { openRouterProviderRouting: { dataCollection: 'allow' } } },
+        ),
+      ).toEqual({ sort: 'price', data_collection: 'allow' });
+    });
   });
 });

@@ -80,11 +80,13 @@ export function applyOpenRouterProviderRouting(
   configDefault: OpenRouterProviderRoutingPreferences | undefined,
   requestMetadata: ChatRequest['metadata'],
   zeroDataRetentionOnly?: boolean,
+  required?: OpenRouterProviderRoutingPreferences,
 ): void {
   const requestOverride = readMetadataRoutingPreferences(requestMetadata);
   const merged: OpenRouterProviderRoutingPreferences = {
     ...configDefault,
     ...requestOverride,
+    ...required,
     ...(zeroDataRetentionOnly ? { dataCollection: ZERO_DATA_RETENTION_POLICY } : {}),
   };
   if (
