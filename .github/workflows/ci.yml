@@ -1197,6 +1197,7 @@ jobs:
             quick-ask-entry.spec.ts \
             release-notes.spec.ts \
             shared-link-pages.spec.ts \
+            status-first-screen.spec.ts \
             trial-cancel.spec.ts \
             trust-surface-layout.spec.ts \
             --project=chromium --workers=2 --retries=1 --global-timeout=1500000

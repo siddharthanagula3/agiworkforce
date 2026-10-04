@@ -6,16 +6,13 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Button,
   ButtonRow,
+  Eyebrow,
   Ledger,
   Prose,
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import {
-  FactGrid,
-  FactLine,
-  PageHero,
-} from '@/features/marketing/components/pages/surfaces/shared';
+import { FactGrid } from '@/features/marketing/components/pages/surfaces/shared';
 import { getCachedHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
 import { getCachedSloAttainment, type SloAttainment } from '@/lib/server/slo/attainment';
 import { declaredOnlySlos, formatObjective } from '@/lib/server/slo/catalogue';
@@ -23,30 +20,41 @@ import { CAPABILITY_DEGRADATION } from '@/lib/server/slo/degradation';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { statusMirrorUrl } from '@/lib/server/incident/out-of-band';
+import {
+  formatAge,
+  STALE_AFTER_SECONDS,
+  viewSignal,
+  type CheckKey,
+  type HealthSignal,
+  type SignalState,
+  type SignalView,
+} from './signal-view';
 
 export const metadata = buildMetadata({
   title: 'Status: hosted dependency and route checks',
-  description:
-    "Dependency and route-readiness checks for AGI's hosted services, re-checked every minute. A passing check does not verify a model response.",
+  description: `Dependency and route-readiness checks for AGI's hosted services. A result is reused for up to ${RENDER_CACHE_SECONDS.liveSignal} seconds, shown with its age, and marked stale past ${STALE_AFTER_SECONDS} seconds. A passing check does not verify a model response.`,
   path: '/status',
 });
 
-type HealthState = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+export const dynamic = 'force-dynamic';
 
-const HEALTH_LABEL: Record<HealthState, string> = {
+const HEALTH_LABEL: Record<SignalState, string> = {
   healthy: 'Checks passing',
   degraded: 'Some checks failing',
   unhealthy: 'Core check failing',
+  stale: 'Stale result',
   unknown: 'Checks unavailable',
 };
 
-const HEALTH_NOTE: Record<HealthState, string> = {
+const HEALTH_NOTE: Record<SignalState, string> = {
   healthy:
     'Every listed check passed on the most recent run. Model inference and a user chat turn were not tested.',
   degraded:
-    'Core checks passed, but at least one capability or dependency below did not. Read the rows: they name which one.',
+    'Core checks passed, but at least one capability or dependency did not. The summary and the rows above name which one.',
   unhealthy:
     'A core check failed on the most recent run. Hosted service availability may be affected.',
+  stale:
+    'The result above comes from an earlier run, so it may not describe the service now. Reading this page asks for a new run in the background: reload after a few seconds to read its result. If the time of the last check has not moved after a reload, the new run has not completed.',
   unknown:
     'We could not complete the most recent health check. If you are seeing errors, email us.',
 };
@@ -56,24 +64,25 @@ const COMPONENT_LABEL: Record<'healthy' | 'unhealthy', string> = {
   unhealthy: 'Failing',
 };
 
-interface HealthSignal {
-  state: HealthState;
-  checkedAt: string | null;
-  checks: HealthCheckResult['checks'] | null;
-}
+const HEALTH_READ_TIMEOUT_MS = 4_000;
+
+const NO_SIGNAL: HealthSignal = { state: 'unknown', checkedAt: null, checks: null };
 
 async function fetchHealth(): Promise<HealthSignal> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), 4000);
+      timer = setTimeout(() => resolve(null), HEALTH_READ_TIMEOUT_MS);
     });
     const result = await Promise.race([getCachedHealthChecks(), timeout]);
     if (!result) {
-      return { state: 'unknown', checkedAt: null, checks: null };
+      return NO_SIGNAL;
     }
     return { state: result.status, checkedAt: result.timestamp, checks: result.checks };
   } catch {
-    return { state: 'unknown', checkedAt: null, checks: null };
+    return NO_SIGNAL;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 
@@ -104,17 +113,18 @@ function attainmentValue(measured: SloAttainment): string {
   return `${attained}% of ${measured.samples.toLocaleString('en-GB')} events over ${measured.windowDays} days · ${objective} · ${budget}${latency}`;
 }
 
-type CoveredKey = keyof HealthCheckResult['checks'];
-
-function componentValue(
-  check: HealthCheckResult['checks'][CoveredKey],
-  checkedLabel: string,
-): string {
-  const reason = 'message' in check && check.message ? ` (${check.message})` : '';
-  return `${COMPONENT_LABEL[check.status]}${reason} · checked ${checkedLabel}`;
+interface CoveredCheck {
+  key: CheckKey;
+  label: string;
+  what: string;
 }
 
-const COVERED: { key: CoveredKey; label: string; what: string }[] = [
+function componentState(check: HealthCheckResult['checks'][CheckKey]): string {
+  const reason = 'message' in check && check.message ? ` (${check.message})` : '';
+  return `${COMPONENT_LABEL[check.status]}${reason}`;
+}
+
+const COVERED: CoveredCheck[] = [
   {
     key: 'environment',
     label: 'Configuration',
@@ -123,12 +133,17 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'database',
     label: 'Postgres',
-    what: 'A query is executed against the primary database and returns. The answer is reused for up to a minute before another query runs, so this row can be that far behind the database itself.',
+    what: 'A query is executed against the primary database and returns. The answer is reused for up to a minute. The first read after that starts another query and is itself answered with the older one, so this row is as old as the last successful check stated at the top of this page.',
+  },
+  {
+    key: 'cache',
+    label: 'Cache store',
+    what: 'One read of a fixed key against the key-value store returns within a second. Rate limiting and cached reads fail closed without that store, so this counts as a core check. It does not exercise the rate limiter, and where no store is configured there is nothing to read, so the row passes and says not configured.',
   },
   {
     key: 'stripe',
     label: 'Payments',
-    what: 'A read call to the payments API returns. A failure here degrades billing only: chat is unaffected, so it does not report a platform outage.',
+    what: 'A read call to the payments API returns and every plan price on sale is active. A failure here means some or all purchases may fail; existing plans keep working and chat is unaffected.',
   },
   {
     key: 'chat',
@@ -148,15 +163,40 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'search',
     label: 'Search',
-    what: 'The retrieval index the search over your own content reads is present in the database. It runs beside the Postgres probe and is reused for the same minute, and it never runs a query on your behalf.',
+    what: 'The retrieval index the search over your own content reads is present in the database. It runs after the Postgres probe in the same run, so it is exactly as old as that row, and it never runs a query on your behalf.',
+  },
+  {
+    key: 'vector',
+    label: 'Semantic search',
+    what: 'The vector extension and the embedding index that semantic search over your own content reads are present in the database. The same catalogue query as the Search row answers it, and it never runs a query on your behalf.',
   },
 ];
 
-const HERO_FACT_LABEL = {
-  platform: 'Hosted checks',
-  checked: 'Checked',
-  scope: 'Checks in scope',
-} as const;
+function checkedLine(view: SignalView<CoveredCheck>): string {
+  if (view.checkedAtMs === null || view.ageSeconds === null) {
+    return 'Last successful check: Not completed';
+  }
+  return `Last successful check: ${new Date(view.checkedAtMs).toUTCString()} (${formatAge(view.ageSeconds)})`;
+}
+
+function failingLine(view: SignalView<CoveredCheck>): string {
+  if (view.state === 'unknown') {
+    return 'No result to show.';
+  }
+  const names = view.failing.length > 0 ? view.failing.join(', ') : 'none';
+  return view.state === 'stale' ? `Failing in that run: ${names}.` : `Failing: ${names}.`;
+}
+
+const CHECK_NAMES = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(
+  COVERED.map((row) => row.label),
+);
+
+function scopeLine(view: SignalView<CoveredCheck>): string {
+  if (view.rows.length > 0) {
+    return 'Each row in the list at the top of this page states what it actually proves, which is narrower than its name.';
+  }
+  return `They are ${CHECK_NAMES}. No result is available on this load, so the list that states what each one proves is not shown. Each proves less than its name suggests.`;
+}
 
 const NOT_COVERED = [
   'A completed model response or answer quality',
@@ -172,66 +212,93 @@ export default async function StatusPage() {
   const mirrorUrl = statusMirrorUrl();
   const health = await fetchHealth();
   const attainment = await fetchAttainment();
-  const checks = health.checks;
-  const checkedLabel = health.checkedAt
-    ? new Date(health.checkedAt).toUTCString()
-    : 'Not completed';
+  const view = viewSignal(health, Date.now(), COVERED);
 
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
-        <PageHero
-          id="agi-status-title"
-          eyebrow="Status"
-          title="What our hosted checks can tell you."
-          lede="Dependency and route checks run at most once a minute, with the time they ran and what they cover. A passing result does not verify that a model returns a usable answer. Local and BYOK work runs on your device and never depends on our servers."
-          ctas={[]}
-        />
-
-        <FactLine
-          facts={[
-            `${HERO_FACT_LABEL.platform}: ${HEALTH_LABEL[health.state]}`,
-            `${HERO_FACT_LABEL.checked}: ${checkedLabel}`,
-            `${HERO_FACT_LABEL.scope}: ${COVERED.length}`,
-          ]}
-        />
-
-        <Section id="signal" labelledBy="agi-status-signal-title" rule>
+        <Section id="signal" labelledBy="agi-status-title" size="xs">
           <Stack gap="loose">
-            <div>
-              <h2 className="agi-ds-h2" id="agi-status-signal-title">
-                Re-checked every {RENDER_CACHE_SECONDS.liveSignal} seconds.
-              </h2>
-              <Prose>
-                The result below comes from a real run of the checks, shared by everyone who loads
-                this page inside the same window: the checked time is the moment it actually ran,
-                not the moment you asked. It calls the health checks directly, in-process, rather
-                than making an HTTP request to our own health endpoint. Building a request URL out
-                of inbound headers is a server-side request forgery vector, so a status page that
-                self-fetches is a status page with a security bug. Running them once per window
-                rather than once per visitor also keeps a traffic spike on this page from becoming
-                load on the very dependencies it is reporting on. Same checks the monitored endpoint
-                runs. Not a hand-edited badge.
+            <Stack gap="tight">
+              <div>
+                <Eyebrow>Status</Eyebrow>
+                <h1 className="agi-ds-h2" id="agi-status-title">
+                  Service status
+                </h1>
+              </div>
+              <Prose size="sm">
+                Hosted checks only. Local and BYOK work runs on your device and does not depend on
+                our servers.
               </Prose>
-            </div>
-            <Ledger
-              caption="Live signal"
-              rows={[
-                {
-                  label: 'Hosted checks',
-                  value: `${HEALTH_LABEL[health.state]} · checked ${checkedLabel}`,
-                },
-                ...(checks
-                  ? COVERED.map((component) => ({
-                      label: component.label,
-                      value: componentValue(checks[component.key], checkedLabel),
-                    }))
-                  : []),
-              ]}
-            />
-            <Prose size="sm">{HEALTH_NOTE[health.state]}</Prose>
+            </Stack>
+            <section aria-label="Current status" className="agi-ds-full">
+              <Stack gap="tight">
+                <h2 className="agi-ds-h3">{HEALTH_LABEL[view.state]}</h2>
+                <div>
+                  {view.state === 'stale' && view.reported ? (
+                    <Prose tone="ink">
+                      This result is more than {STALE_AFTER_SECONDS} seconds old. That run reported:{' '}
+                      {HEALTH_LABEL[view.reported]}.
+                    </Prose>
+                  ) : null}
+                  <Prose tone="ink">{checkedLine(view)}</Prose>
+                  <Prose>
+                    {COVERED.length} hosted checks. {failingLine(view)}
+                  </Prose>
+                  <Prose size="sm">
+                    Seeing a fault this page does not show?{' '}
+                    <Link href={contactMailto()} className="agi-ds-link">
+                      Report a problem
+                    </Link>
+                    .
+                  </Prose>
+                </div>
+              </Stack>
+            </section>
+            {view.rows.length > 0 ? (
+              <Ledger
+                caption="Live signal"
+                rows={view.rows.map(({ row, check }) => ({
+                  label: row.label,
+                  value: (
+                    <>
+                      <strong>{componentState(check)}</strong>
+                      <br />
+                      {row.what}
+                    </>
+                  ),
+                }))}
+              />
+            ) : null}
           </Stack>
+        </Section>
+
+        <Section id="method" labelledBy="agi-status-method-title" rule>
+          <h2 className="agi-ds-h2" id="agi-status-method-title">
+            How these checks work.
+          </h2>
+          <Prose>{HEALTH_NOTE[view.state]}</Prose>
+          <Prose>
+            A result is reused for up to {RENDER_CACHE_SECONDS.liveSignal} seconds and shared by
+            everyone who loads this page inside that window. The next read after the window starts a
+            new run in the background and is itself answered with the older result, so the first
+            visit after a quiet period shows an earlier run. Every result is shown with its age, and
+            it is marked stale once it is more than {STALE_AFTER_SECONDS} seconds old.
+          </Prose>
+          <Prose>
+            The checked time is the moment the run actually happened, not the moment you asked. The
+            page calls the health checks directly, in-process, rather than making an HTTP request to
+            our own health endpoint. Building a request URL out of inbound headers is a server-side
+            request forgery vector, so a status page that self-fetches is a status page with a
+            security bug.
+          </Prose>
+          <Prose>
+            Sharing one run across visitors also keeps a traffic spike on this page from becoming
+            load on the very dependencies it is reporting on. Same checks the monitored endpoint
+            runs. Not a hand-edited badge. A passing result does not verify that a model returns a
+            usable answer.
+          </Prose>
         </Section>
 
         <Section id="independent" labelledBy="agi-status-independent-title" rule ground="2">
@@ -283,23 +350,21 @@ export default async function StatusPage() {
                 What this signal proves, and what it does not.
               </h2>
               <Prose>
-                A green row here is worth exactly {COVERED.length} checks, so here they are. Each
-                one states what it actually proves, which is narrower than the name above it.
-                Reading them as whole-platform coverage would be reading them wrong.
+                A passing result is worth exactly {COVERED.length} checks. {scopeLine(view)} Reading
+                them as whole-platform coverage would be reading them wrong.
               </Prose>
             </div>
             <Ledger
               caption="Scope of the check"
               rows={[
-                ...COVERED.map((component) => ({ label: component.label, value: component.what })),
                 {
                   label: 'Model routes',
                   value:
-                    'The router tracks each model route separately and fails away from one that starts erroring, and operators read that per route behind their own sign-in. It is not published here, because the reading names which provider is failing and that is a third party outage to report, not ours. The Chat row above is the public half of it: it goes amber only once every provider behind the default route is degraded.',
+                    'The router tracks each model route separately and fails away from one that starts erroring, and operators read that per route behind their own sign-in. It is not published here, because the reading names which provider is failing and that is a third party outage to report, not ours. The Chat routing check is the public half of it: a provider fault fails that check only once every configured provider behind the default route is degraded.',
                 },
                 {
                   label: 'Not covered',
-                  value: `${NOT_COVERED.join(' · ')}. A green signal above says nothing about any of these. If one of them is failing for you, the report channel below is the fastest path.`,
+                  value: `${NOT_COVERED.join(' · ')}. A passing result says nothing about any of these. If one of them is failing for you, the report channel below is the fastest path.`,
                 },
               ]}
             />
@@ -360,8 +425,9 @@ export default async function StatusPage() {
               </h2>
               <Prose>
                 Degrading is a decision made in advance, not whatever the last error path happens to
-                produce. Work that has been accepted is held; work that cannot be held is refused at
-                the door rather than queued against a page or a device that has moved on.
+                produce. Work that has been accepted is held. A live action that cannot be held is
+                refused at the door rather than queued against a page that has moved on, and a
+                durable run that needs a device that is not online waits for it instead of failing.
               </Prose>
             </div>
             <Ledger
