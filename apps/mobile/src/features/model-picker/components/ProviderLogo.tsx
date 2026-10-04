@@ -1,7 +1,6 @@
-
 import React from 'react';
 import Svg, { Path, Circle, Rect, G } from 'react-native-svg';
-import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+import { PROVIDER_DISPLAY, resolveProviderDisplayId, type ProviderId } from '@agiworkforce/types';
 import { useThemeColors } from '@/src/ui/theme';
 
 const ICON_PATHS: Partial<Record<ProviderId | string, string>> = {
@@ -38,8 +37,13 @@ interface ProviderLogoProps {
   size?: number;
 }
 
-export function ProviderLogo({ providerId, size = 24 }: ProviderLogoProps) {
+export function resolveLogoProviderId(providerId: string): string {
+  return resolveProviderDisplayId(providerId) ?? providerId;
+}
+
+export function ProviderLogo({ providerId: rawProviderId, size = 24 }: ProviderLogoProps) {
   const colors = useThemeColors();
+  const providerId = resolveLogoProviderId(rawProviderId);
   const display = PROVIDER_DISPLAY[providerId as ProviderId];
   const brandColor = display?.brandColor ?? colors.textMuted;
   const logoColor = MONOCHROME_LOGOS.has(providerId) ? colors.textPrimary : brandColor;
@@ -78,10 +82,11 @@ export function ProviderLogo({ providerId, size = 24 }: ProviderLogoProps) {
   );
 }
 
-export function hasProviderLogoPath(providerId: string): boolean {
+export function hasProviderLogoPath(rawProviderId: string): boolean {
+  const providerId = resolveLogoProviderId(rawProviderId);
   return Boolean(ICON_PATHS[providerId]) && !CIRCLE_FALLBACK.has(providerId as ProviderId);
 }
 
 export function usesProviderAppTile(providerId: string): boolean {
-  return APP_TILE_LOGOS.has(providerId);
+  return APP_TILE_LOGOS.has(resolveLogoProviderId(providerId));
 }

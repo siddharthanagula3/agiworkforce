@@ -1,21 +1,14 @@
 'use client';
 
-import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+import { PROVIDER_DISPLAY, resolveProviderDisplayId, type ProviderId } from '@agiworkforce/types';
 import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 
 const MANAGED_CLOUD_PROVIDER_KEY = 'managed_cloud';
 const UNKNOWN_PROVIDER_BRAND_COLOR = 'var(--chat-text-muted)';
 
-/**
- * Map a model-store providerKey (from models.json) to a ProviderId
- * as defined in PROVIDER_DISPLAY. Most keys are 1:1; managed_cloud
- * maps to agi-cloud.
- */
 export function toProviderId(providerKey: string): ProviderId | null {
-  if (providerKey === MANAGED_CLOUD_PROVIDER_KEY) return 'agi-cloud';
-  if (providerKey in PROVIDER_DISPLAY) return providerKey as ProviderId;
-  return null;
+  return resolveProviderDisplayId(providerKey);
 }
 
 /** Returns the /providers/<id>.svg URL or null when provider is unknown. */
@@ -71,7 +64,6 @@ export function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string;
         style={{ width: size, height: size }}
         className="shrink-0 rounded-sm object-contain"
         onError={(e) => {
-          // Fallback: hide image; parent still has brand-color dot as sibling
           (e.target as HTMLImageElement).style.display = 'none';
         }}
       />
