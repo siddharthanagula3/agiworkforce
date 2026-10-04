@@ -57,7 +57,7 @@ describe('provider catalog claims', () => {
 
   it('integrations hero primary action opens the public connector directory', () => {
     const source = read('integrations/page.tsx');
-    const primary = source.match(/\{ href: '([^']+)'[^}]*variant: 'primary'/);
+    const primary = source.match(/\{\s*href: '([^']+)'[^}]*variant: 'primary'/);
     expect(primary?.[1]).toBe('/connectors/mcp-directory');
   });
 });
