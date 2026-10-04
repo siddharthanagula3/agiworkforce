@@ -1,5 +1,6 @@
 import { getSupportCorpus } from '@/lib/support/agent/corpus';
 import { docMetadataFor, type DocMetadata } from '@/lib/support/doc-metadata';
+import { helpArticlePath } from '@/lib/support/help-paths';
 
 export interface DocIndexEntry {
   docId: string;
@@ -39,7 +40,7 @@ export function documentationIndex(): DocumentationIndex {
     entries.set(chunk.docId, {
       docId: chunk.docId,
       title: chunk.docTitle,
-      href: chunk.path,
+      href: helpArticlePath(chunk.docId),
       updated: chunk.updated,
       metadata: docMetadataFor(chunk.docId),
     });
