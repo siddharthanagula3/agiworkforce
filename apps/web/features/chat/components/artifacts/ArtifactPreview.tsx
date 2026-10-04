@@ -1272,6 +1272,8 @@ if (__AgiApp) {
   // ever printed the escaped JSON.
   const isChart = artifact.type === 'chart';
   const isSharedRendered = isTabular || isPresentation || isEmail || isChart;
+  const hasPreviewSurface =
+    canPreview || isMermaid || isPdf || isDocx || isSharedRendered || isImage || isMarkdownDoc;
 
   // The unified-chat Artifact view of this artifact (content follows the
   // version navigation, exactly like the sandbox preview does).
@@ -1458,10 +1460,7 @@ if (__AgiApp) {
 
   if (variant === 'panel') {
     // Whether to show the preview content (vs source code)
-    const showPreview =
-      !showChanges &&
-      activeTab === 'preview' &&
-      (canPreview || isMermaid || isPdf || isDocx || isSharedRendered || isImage || isMarkdownDoc);
+    const showPreview = !showChanges && activeTab === 'preview' && hasPreviewSurface;
     // Human-readable type label for the toolbar, e.g. "· HTML", "· MD".
     // For code/document artifacts the type alone is generic ("CODE"/"DOCUMENT");
     // prefer the language field which carries the actual format (ts, md, pdf...).
@@ -2264,8 +2263,9 @@ if (__AgiApp) {
   return (
     <div
       ref={containerRef}
+      data-testid="artifact-preview-card"
       className={cn(
-        'mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-e3',
+        'mt-3 w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-e3',
         // AUDIT-FIX ART-13: `z-modal` compiled to nothing (no such Tailwind v4
         // utility here), leaving the fullscreen card at z-index:auto under the
         // chrome. Matches ui/src/primitives/Dialog.tsx.
@@ -2489,7 +2489,7 @@ if (__AgiApp) {
 
       {/* Preview/Code Tabs */}
       <Tabs
-        value={activeTab}
+        value={hasPreviewSurface ? activeTab : 'code'}
         onValueChange={(v) => setActiveTab(v as 'preview' | 'code')}
         className="w-full"
       >
@@ -2611,6 +2611,9 @@ if (__AgiApp) {
         {/* Code Tab */}
         <TabsContent value="code" className="m-0 p-0">
           <ScrollArea
+            tabIndex={0}
+            role="region"
+            aria-label="Artifact source"
             className={cn('bg-gray-900', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
           >
             <pre className="p-4">

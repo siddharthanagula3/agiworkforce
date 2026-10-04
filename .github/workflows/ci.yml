@@ -1183,6 +1183,7 @@ jobs:
             changelog-touch-targets.spec.ts \
             checkout.spec.ts \
             enterprise-surface.spec.ts \
+            gallery-public.spec.ts \
             landing-keyboard.spec.ts \
             marketing-mobile-nav.spec.ts \
             marketing-mount-scroll.spec.ts \
