@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import postcss from 'postcss';
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -117,6 +118,10 @@ const WCAG_AA_LARGE = 3.0;
 
 const repoRoot = resolve(import.meta.dirname, '../../../../..');
 const globalsCss = readFileSync(resolve(repoRoot, 'apps/web/app/globals.css'), 'utf8');
+const legacyPagesCss = readFileSync(
+  resolve(repoRoot, 'apps/web/features/marketing/components/legacy-pages.css'),
+  'utf8',
+);
 const chatCss = readFileSync(resolve(repoRoot, 'packages/ui/design-tokens/src/chat.css'), 'utf8');
 const tailwindCss = readFileSync(
   resolve(repoRoot, 'packages/ui/design-tokens/src/tailwind.css'),
@@ -688,6 +693,39 @@ describe('the marketing design-system palette clears AA in both themes', () => {
     expect(token(BASE, '--agi-button-ink')).toBe('var(--agi-ground)');
     expect(THEMES.light).not.toMatch(/--agi-button-(bg|ink)/);
   });
+
+  it('draws the selected billing toggle savings label in the button ink, not the accent', () => {
+    const decls = new Map<string, string>();
+    postcss.parse(legacyPagesCss).walkRules((rule) => {
+      if (
+        !rule.selectors.includes(
+          "[data-design='agi'] .agi-tier-toggle-btn--active .agi-tier-toggle-save",
+        )
+      ) {
+        return;
+      }
+      rule.walkDecls((decl) => {
+        decls.set(decl.prop, decl.value);
+      });
+    });
+
+    expect(decls.get('color')).toBe('var(--agi-button-ink)');
+    expect(decls.get('font-size')).toBeUndefined();
+  });
+
+  for (const [theme, block] of Object.entries(THEMES)) {
+    it(`${theme}: --agi-button-ink resolves to --agi-ground and clears AA on the --agi-ink fill`, () => {
+      expect(
+        contrastRatio(colorToken(block, '--agi-ground'), colorToken(block, '--agi-ink')),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${theme}: --agi-amber on the --agi-ink fill stays below AA, so the accent cannot label the selected toggle`, () => {
+      expect(
+        contrastRatio(colorToken(block, '--agi-amber'), colorToken(block, '--agi-ink')),
+      ).toBeLessThan(WCAG_AA_NORMAL);
+    });
+  }
 });
 
 describe('contrastRatio utility', () => {

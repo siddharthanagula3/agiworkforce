@@ -1189,6 +1189,7 @@ jobs:
             marketing-mount-scroll.spec.ts \
             marketing-stage-contrast.spec.ts \
             policy-version-history.spec.ts \
+            pricing-public.spec.ts \
             public-account-pages.spec.ts \
             public-auth-clean.spec.ts \
             public-entry-points.spec.ts \

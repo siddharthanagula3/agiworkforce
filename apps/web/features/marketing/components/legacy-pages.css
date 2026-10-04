@@ -1221,6 +1221,10 @@
   color: var(--agi-amber);
   margin-left: 4px;
 }
+[data-design='agi'] .agi-tier-toggle-btn--active .agi-tier-toggle-save {
+  color: var(--agi-button-ink);
+  font-weight: 600;
+}
 [data-design='agi'] .agi-tier-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
