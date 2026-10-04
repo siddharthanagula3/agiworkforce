@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { Checklist } from './Checklist';
+import { Prose } from './Prose';
 
 export interface ScrollFeature {
   id: string;
@@ -9,6 +11,8 @@ export interface ScrollFeature {
   title: string;
   body: string;
   points?: readonly string[];
+  href: string;
+  linkLabel: string;
   visual: ReactNode;
 }
 
@@ -57,6 +61,11 @@ export function ScrollFeatures({
             <h3 className="agi-ds-scrollfeature-title">{feature.title}</h3>
             <p className="agi-ds-scrollfeature-body">{feature.body}</p>
             {feature.points ? <Checklist items={feature.points} /> : null}
+            <Prose size="sm">
+              <Link href={feature.href} className="agi-ds-link">
+                {feature.linkLabel}
+              </Link>
+            </Prose>
             <div className="agi-ds-scrollfeature-visual agi-ds-scrollfeature-visual--inline">
               {feature.visual}
             </div>

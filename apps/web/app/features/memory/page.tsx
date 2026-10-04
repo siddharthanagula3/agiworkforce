@@ -163,7 +163,8 @@ export default function MemoryFeaturePage() {
               rows={[
                 {
                   label: 'Stored',
-                  value: 'On the device that created it, synced across the devices you sign into.',
+                  value:
+                    'Kept in your AGI account for chats on AGI managed cloud. Planned Mobile Local mode is designed to keep it on the phone.',
                 },
                 {
                   label: 'Recalled',
