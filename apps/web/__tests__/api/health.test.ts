@@ -4,12 +4,18 @@ import { resolve } from 'node:path';
 import { NextRequest } from 'next/server';
 
 import { PRODUCTION_DEPENDENCIES } from '@/lib/config/dependency-readiness';
+import { logger } from '@/lib/logger';
 import { recordConfigurationState } from '@/lib/observability/metrics';
 type ScanModule0 = typeof import('@agiworkforce/types');
 type ScanModule1 = typeof import('@/lib/server/key-value');
 
 const stripeMocks = vi.hoisted(() => ({
+  listProducts: vi.fn(),
   retrievePrice: vi.fn(),
+}));
+
+const priceMocks = vi.hoisted(() => ({
+  isGrandfathered: vi.fn((_priceId?: string) => false),
 }));
 
 const originalEnv = { ...process.env };
@@ -29,12 +35,13 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/price-tier-mapping', () => ({
   getConfiguredStripePriceIds: vi.fn(() => ['price_configured']),
+  isGrandfatheredPriceId: priceMocks.isGrandfathered,
 }));
 
 vi.mock('stripe', () => ({
   default: class MockStripe {
     products = {
-      list: vi.fn().mockResolvedValue({ data: [] }),
+      list: stripeMocks.listProducts,
     };
     prices = {
       retrieve: stripeMocks.retrievePrice,
@@ -92,6 +99,8 @@ describe('Health Check API', () => {
     process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_health';
     process.env['CLERK_SECRET_KEY'] = 'sk_test_health';
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_123';
+    priceMocks.isGrandfathered.mockReturnValue(false);
+    stripeMocks.listProducts.mockResolvedValue({ data: [] });
     stripeMocks.retrievePrice.mockResolvedValue({
       active: true,
       type: 'recurring',
@@ -161,6 +170,24 @@ describe('Health Check API', () => {
       const data = await response.json();
       expect(data.checks.stripe.status).toBe('unhealthy');
       expect(data.checks.stripe.message).toBe('unavailable');
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'client' }),
+        'Stripe health check failed',
+      );
+    });
+
+    it('logs the products.list step when listing products is rejected', async () => {
+      stripeMocks.listProducts.mockRejectedValueOnce(new Error('boom'));
+
+      const data = await (
+        await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }))
+      ).json();
+
+      expect(data.checks.stripe).toEqual({ status: 'unhealthy', message: 'unavailable' });
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'products.list' }),
+        'Stripe health check failed',
+      );
     });
 
     it('reports Stripe degraded when a configured Price is unreachable under the key', async () => {
@@ -177,6 +204,70 @@ describe('Health Check API', () => {
       expect(response.status).toBe(200);
       expect(data.status).toBe('degraded');
       expect(data.checks.stripe).toEqual({ status: 'unhealthy', message: 'unavailable' });
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'prices.retrieve' }),
+        'Stripe health check failed',
+      );
+    });
+
+    it('treats an inactive Price for a withdrawn interval as healthy', async () => {
+      priceMocks.isGrandfathered.mockReturnValue(true);
+      stripeMocks.retrievePrice.mockResolvedValue({
+        active: false,
+        type: 'recurring',
+        recurring: { interval: 'year' },
+      });
+
+      const data = await (
+        await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }))
+      ).json();
+
+      expect(data.checks.stripe).toEqual({ status: 'healthy' });
+    });
+
+    it('reports unhealthy when an inactive Price is still on sale', async () => {
+      stripeMocks.retrievePrice.mockResolvedValue({
+        active: false,
+        type: 'recurring',
+        recurring: { interval: 'month' },
+      });
+
+      const response = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+      const data = await response.json();
+
+      expect(data.checks.stripe).toEqual({ status: 'unhealthy', message: 'unavailable' });
+      expect(JSON.stringify(data)).not.toMatch(/sk_|price_|not usable/);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'price.usable' }),
+        'Stripe health check failed',
+      );
+    });
+
+    it('reports unhealthy when a withdrawn-interval Price is not recurring', async () => {
+      priceMocks.isGrandfathered.mockReturnValue(true);
+      stripeMocks.retrievePrice.mockResolvedValue({
+        active: false,
+        type: 'one_time',
+        recurring: null,
+      });
+
+      const data = await (
+        await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }))
+      ).json();
+
+      expect(data.checks.stripe).toEqual({ status: 'unhealthy', message: 'unavailable' });
+    });
+
+    it('reports unhealthy when a withdrawn-interval Price cannot be retrieved', async () => {
+      priceMocks.isGrandfathered.mockReturnValue(true);
+      stripeMocks.retrievePrice.mockRejectedValueOnce(new Error('No such price: price_secret_x'));
+
+      const response = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+      const body = JSON.stringify(await response.json());
+
+      expect(body).toContain('unavailable');
+      expect(body).not.toContain('No such price');
+      expect(body).not.toContain('price_secret_x');
     });
 
     it('should return unhealthy status when environment variables are missing', async () => {

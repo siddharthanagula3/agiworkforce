@@ -22,7 +22,10 @@ vi.mock('stripe', () => ({
     prices = { retrieve: vi.fn() };
   },
 }));
-vi.mock('@/lib/price-tier-mapping', () => ({ getConfiguredStripePriceIds: vi.fn(() => []) }));
+vi.mock('@/lib/price-tier-mapping', () => ({
+  getConfiguredStripePriceIds: vi.fn(() => []),
+  isGrandfatheredPriceId: vi.fn(() => false),
+}));
 
 import {
   createUpstashKeyValueStore,

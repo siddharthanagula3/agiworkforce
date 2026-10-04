@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-02
+Last updated: 2026-10-03
 
 Until 2026-08-09 nothing in this repository could reach a human when production
 broke. `/api/health` was correct and public, and no scheduled job, uptime
@@ -225,8 +225,13 @@ never names, do not expect the alert to tell you which variable is missing.
 ### `stripe: unhealthy`
 
 `STRIPE_SECRET_KEY` is unset, `stripe.products.list` failed, or one of the
-canonical `STRIPE_PRICE_*` objects is unreachable/inactive/non-recurring under
-that key. Chat, sign-in and every non-billing surface keep working. Check
+canonical `STRIPE_PRICE_*` objects is unreachable, non-recurring, or inactive
+while still on sale under that key. A Price for a withdrawn interval
+(`WITHDRAWN_BILLING_INTERVALS`, for example Pro yearly, withdrawn 2026-09-27) is
+expected to be archived and does not fail the check. The public payload stays
+`unavailable`; the `Stripe health check failed` log line carries a `step` field
+(`client`, `products.list`, `prices.retrieve` or `price.usable`) naming where it
+failed. Chat, sign-in and every non-billing surface keep working. Check
 status.stripe.com first; if Stripe is up, confirm the secret, webhook endpoint,
 publishable key, and every configured Price belong to the same Stripe account
 and test/live mode. Price IDs do not encode their mode, so verify them in the

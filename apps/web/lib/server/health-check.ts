@@ -25,7 +25,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { logger } from '@/lib/logger';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
-import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
+import { getConfiguredStripePriceIds, isGrandfatheredPriceId } from '@/lib/price-tier-mapping';
 import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
 import { getProviderAvailabilityMap } from '@/lib/services/provider-availability-service';
 import { readJobQueueStats } from '@/lib/jobs/job-service';
@@ -351,33 +351,44 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
   checks.vector = retrieval.vector;
   checks.cache = await checkCache();
 
+  let stripeStep = 'client';
   try {
     const stripe = getStripeClientOrNull();
 
     if (stripe) {
+      stripeStep = 'products.list';
       await stripe.products.list({ limit: 1 });
 
+      stripeStep = 'prices.retrieve';
       const configuredPriceIds = getConfiguredStripePriceIds();
       const configuredPrices = await Promise.all(
-        configuredPriceIds.map((priceId) => stripe.prices.retrieve(priceId)),
+        configuredPriceIds.map(async (priceId) => ({
+          priceId,
+          price: await stripe.prices.retrieve(priceId),
+        })),
       );
+      stripeStep = 'price.usable';
       const unusablePriceCount = configuredPrices.filter(
-        (price) => !price.active || price.type !== 'recurring' || !price.recurring,
+        ({ priceId, price }) =>
+          price.type !== 'recurring' ||
+          !price.recurring ||
+          (!price.active && !isGrandfatheredPriceId(priceId)),
       ).length;
       if (unusablePriceCount > 0) {
         throw new Error(
-          `${unusablePriceCount} configured Stripe Price(s) are not active recurring Prices`,
+          `${unusablePriceCount} configured Stripe Price(s) are not usable recurring Prices`,
         );
       }
 
       checks.stripe.status = 'healthy';
     } else {
       checks.stripe.message = 'unavailable';
+      logger.error({ step: stripeStep }, 'Stripe health check failed');
     }
   } catch (error) {
     checks.stripe.status = 'unhealthy';
     checks.stripe.message = 'unavailable';
-    logger.error({ error }, 'Stripe health check failed');
+    logger.error({ error, step: stripeStep }, 'Stripe health check failed');
   }
 
   const [chat, work, voice] = await Promise.all([
