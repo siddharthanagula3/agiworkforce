@@ -24,9 +24,8 @@ export const metadata = buildMetadata({
 export default function DesktopPage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell agi-surface">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <section className="agi-fl-hero" aria-labelledby="agi-fl-desktop-hero-title">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
@@ -200,9 +199,8 @@ export default function DesktopPage() {
           ]}
           stamp="macOS · verification required before download"
         />
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

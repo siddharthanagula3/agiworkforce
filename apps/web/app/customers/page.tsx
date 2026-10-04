@@ -255,9 +255,8 @@ export default function CustomersPage() {
             </ButtonRow>
           </Stack>
         </Section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

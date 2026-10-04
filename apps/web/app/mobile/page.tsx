@@ -81,9 +81,8 @@ const LOCAL_STORIES = [
 export default function MobilePage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell agi-surface">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <section className="agi-fl-hero" aria-labelledby="agi-mobile-hero-title">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
@@ -277,9 +276,8 @@ export default function MobilePage() {
           ]}
           stamp={`iPhone & Android · ${LAUNCH.shortLabel}`}
         />
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

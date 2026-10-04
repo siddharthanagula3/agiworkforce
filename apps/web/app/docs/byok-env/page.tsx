@@ -14,9 +14,8 @@ export const metadata = buildMetadata({
 export default function ByokEnvDocsPage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell agi-surface">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <section className="agi-page-hero">
           <nav aria-label="Breadcrumb" style={{ marginBottom: 'var(--space-4)' }}>
             <Link
@@ -135,9 +134,8 @@ GOOGLE_API_KEY=AIza...
             Compare supported BYOK surfaces &rarr;
           </Link>
         </section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

@@ -136,9 +136,8 @@ export default function PartnersPage() {
             </ButtonRow>
           </Stack>
         </Section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

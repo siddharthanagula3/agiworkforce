@@ -39,9 +39,8 @@ const IDS = {
 export default function WebSurfacePage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell agi-surface">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <section className="agi-fl-hero" aria-labelledby={IDS.hero}>
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">

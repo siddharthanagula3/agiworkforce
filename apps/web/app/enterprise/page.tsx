@@ -308,9 +308,8 @@ export default function EnterprisePage() {
             />
           </Stack>
         </Section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

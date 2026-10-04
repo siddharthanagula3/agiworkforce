@@ -26,9 +26,8 @@ const SLASH: { cmd: string; desc: string }[] = [
 export default function VscodeExtensionPage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell agi-surface">
-        <Header />
-
+      <Header />
+      <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <section className="agi-fl-hero" aria-labelledby="agi-vscode-hero-title">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
@@ -159,9 +158,8 @@ export default function VscodeExtensionPage() {
           ]}
           stamp="Coming soon · VSIX distribution"
         />
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }

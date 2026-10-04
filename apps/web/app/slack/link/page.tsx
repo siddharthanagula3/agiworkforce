@@ -267,8 +267,8 @@ function SlackLinkForm() {
 export default function SlackLinkPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
+      <Header minimal />
       <main id="main-content">
-        <Header minimal />
         <div
           style={{
             display: 'grid',
@@ -280,8 +280,8 @@ export default function SlackLinkPage() {
             <SlackLinkForm />
           </Suspense>
         </div>
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
