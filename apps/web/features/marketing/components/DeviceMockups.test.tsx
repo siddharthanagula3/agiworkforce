@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import {
   ChromeWindow,
   DesktopWindow,
@@ -14,6 +18,8 @@ import {
 import { ProductFrame, type ProductFrameVariant } from './ProductFrame';
 import { HeroAppWindow } from './HeroAppWindow';
 import { ChromeMockup, MobileMockup, VSCodeMockup } from './SurfaceMockups';
+
+const LOCAL_RUNTIME_LABEL = `${(CLI_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
 
 function deviceRoot(container: HTMLElement): HTMLElement {
   const root = container.querySelector<HTMLElement>('.agi-dev');
@@ -99,20 +105,83 @@ describe('ProductFrame façade', () => {
     expect(container.querySelector('.agi-dev-title')?.textContent).toBe('agi · zsh');
   });
 
-  it('keeps trust-route copy consistent with BYOK frame badges', () => {
-    const desktop = render(
-      <ProductFrame variant="desktop" title="AGI Desktop" badge="BYOK" routeMode="byok" />,
-    );
-    expect(desktop.container.textContent).toContain('Served by BYOK · your provider');
-    expect(desktop.container.textContent).toContain('billed to your key');
-    expect(desktop.container.textContent).not.toContain('Served by Local');
-
+  it('keeps trust-route copy consistent with BYOK terminal badges', () => {
     const terminal = render(
       <ProductFrame variant="terminal" title="agi · zsh" badge="BYOK" routeMode="byok" />,
     );
     expect(terminal.container.textContent).toContain('BYOK · direct to your provider');
     expect(terminal.container.textContent).toContain('provider billed');
     expect(terminal.container.textContent).not.toContain('local · on-device');
+  });
+});
+
+describe('cloud-only surfaces never render a Local or BYOK route', () => {
+  const forbidden = [
+    'Served by Local',
+    'Served by BYOK',
+    LOCAL_RUNTIME_LABEL,
+    'Local ∨',
+    '◆ Local',
+    'Auto · Local',
+  ];
+  const cloudSurfaces: Array<[string, () => React.ReactElement]> = [
+    ['DesktopWindow', () => <DesktopWindow />],
+    ['ProductFrame desktop', () => <ProductFrame variant="desktop" title="AGI Desktop" />],
+    ['WebWindow', () => <WebWindow />],
+    ['ChromeWindow', () => <ChromeWindow />],
+    ['SidePanelCard', () => <SidePanelCard />],
+  ];
+
+  it.each(cloudSurfaces)('%s contains no Local or BYOK route text', (_name, make) => {
+    const text = render(make()).container.textContent ?? '';
+    for (const literal of forbidden) expect(text).not.toContain(literal);
+  });
+
+  it('desktop receipt and composer chip name the managed route', () => {
+    const text = render(<DesktopWindow />).container.textContent ?? '';
+    expect(text).toContain('Served by AGI Cloud · Auto route');
+    expect(text).toContain('Auto · AGI Cloud');
+    expect(render(<DesktopWindow />).container.querySelector('.agi-dev-badge')?.textContent).toBe(
+      'Cloud',
+    );
+  });
+
+  it('chrome panel pill and composer foot carry the managed label', () => {
+    const chrome = render(<ChromeWindow />).container;
+    expect(chrome.querySelector('.agi-cr-panel-mode')?.textContent).toBe(
+      `◆ ${PRIVACY_MODE_DISPLAY.managed.label}`,
+    );
+    expect(chrome.querySelector('.agi-dev-panelcomposer-foot')?.textContent).toContain(
+      PRIVACY_MODE_DISPLAY.managed.label,
+    );
+  });
+
+  it('terminal and phone still show Local', () => {
+    expect(render(<TerminalWindow />).container.textContent).toContain('local');
+    expect(render(<PhoneDevice />).container.textContent).toContain('Local');
+  });
+
+  it('rejects routeMode on non-terminal frames at the type level', () => {
+    // @ts-expect-error routeMode is only valid for the terminal variant
+    const frame = <ProductFrame variant="desktop" title="T" routeMode="local" />;
+    expect(frame).toBeTruthy();
+  });
+});
+
+describe('enforcement anchors for the cloud-only claim', () => {
+  const root = resolve(__dirname, '../../../../..');
+  const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
+
+  it.each([
+    ['apps/desktop/electron/config.ts', 'This shell has no Local mode'],
+    ['apps/desktop/electron/runtime/dispatcher.ts', 'localModels: false'],
+    [
+      'apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts',
+      'MANAGED_WEB_CLOUD_TRUST_MODE',
+    ],
+    ['apps/extension/src/background.ts', 'executeChromeManagedChat'],
+  ])('%s still contains %s', (path, needle) => {
+    expect(read(path)).toContain(needle);
   });
 });
 

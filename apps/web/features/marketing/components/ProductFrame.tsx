@@ -5,6 +5,7 @@ import {
   PhoneDevice,
   SidePanelCard,
   TerminalWindow,
+  type RouteMode,
   WebWindow,
   type DeviceImage,
 } from './DeviceMockups';
@@ -13,36 +14,38 @@ export type ProductFrameVariant = 'desktop' | 'terminal' | 'phone' | 'browser' |
 
 export type ProductFrameImage = DeviceImage;
 
-export interface ProductFrameProps {
-  variant: ProductFrameVariant;
+interface ProductFrameBaseProps {
   title: string;
   badge?: string;
   image?: ProductFrameImage;
   className?: string;
-  routeMode?: 'local' | 'byok' | 'managed';
 }
 
-export function ProductFrame({
-  variant,
-  title,
-  badge,
-  image,
-  className,
-  routeMode,
-}: ProductFrameProps) {
+export type ProductFrameProps =
+  | (ProductFrameBaseProps & { variant: 'terminal'; routeMode?: RouteMode })
+  | (ProductFrameBaseProps & {
+      variant: Exclude<ProductFrameVariant, 'terminal'>;
+      routeMode?: never;
+    });
+
+export function ProductFrame(props: ProductFrameProps) {
+  const { title, badge, image, className } = props;
   if (image) {
     return <ImageWindow title={title} badge={badge} image={image} className={className} />;
   }
-  switch (variant) {
+  switch (props.variant) {
     case 'desktop':
-      return (
-        <DesktopWindow title={title} badge={badge} className={className} routeMode={routeMode} />
-      );
+      return <DesktopWindow title={title} badge={badge} className={className} />;
     case 'web':
       return <WebWindow title={title} badge={badge} className={className} />;
     case 'terminal':
       return (
-        <TerminalWindow title={title} badge={badge} className={className} routeMode={routeMode} />
+        <TerminalWindow
+          title={title}
+          badge={badge}
+          className={className}
+          routeMode={props.routeMode}
+        />
       );
     case 'browser':
       return <SidePanelCard title={title} badge={badge} className={className} />;
