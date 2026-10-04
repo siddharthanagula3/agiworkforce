@@ -3450,6 +3450,21 @@
       ]
     },
     {
+      "id": "cli-bare-login-signs-into-agi-account",
+      "doc": "install-the-cli",
+      "section": "First run",
+      "kind": "prose",
+      "sentence": "A bare `agi login` never asks for a provider key; [Bring your own provider keys](/help/byok-provider-keys) covers `agi login <provider>`.",
+      "implementation": ["apps/cli/src/auth.rs#is_agiworkforce_login_provider"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "reads the default login provider out of the binary"
+        }
+      ]
+    },
+    {
       "id": "cli-bundled-in-desktop-and-offered-by-vscode",
       "doc": "install-the-cli",
       "section": "Getting the binary",
