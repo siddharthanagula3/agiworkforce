@@ -1490,3 +1490,22 @@ describe('the mobile palette clears AA in every theme', () => {
     });
   }
 });
+
+describe('plain source text clears AA on the code surface it is drawn on', () => {
+  const coolLight = braceBody(chatCss, "html:not(.dark)[data-chat-theme='cool'] {");
+
+  for (const [theme, text, grounds] of [
+    ['light', chat.light, [chat.light, webBase.light]],
+    ['cool light', coolLight, [coolLight]],
+    ['dark', chat.dark, [chat.dark, webBase.dark]],
+  ] as const) {
+    it(`${theme}: --chat-code-text >= 4.5:1 on --chat-code-bg`, () => {
+      const colour = colorToken(text, '--chat-code-text');
+      for (const ground of grounds) {
+        expect(contrastRatio(colour, colorToken(ground, '--chat-code-bg'))).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      }
+    });
+  }
+});

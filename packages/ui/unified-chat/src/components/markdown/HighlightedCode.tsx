@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 import { reportClientFailure } from '../../lib/client-failures';
 import { highlightToLines, readHighlightCache, type HighlightedLine } from './shikiHighlighter';
+import './codeBlock.css';
 
 const LINE_BREAK = '\n';
 

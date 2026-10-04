@@ -53,6 +53,7 @@ import {
 import {
   ChartArtifact,
   GeneratedFileCard,
+  HighlightedCode,
   MarkdownContent,
   toggleMarkdownTask,
   MermaidDiagram,
@@ -64,7 +65,9 @@ import {
 import { TypeIcon } from './InlineArtifactCards';
 import { ArtifactVersionHistory } from './ArtifactVersionHistory';
 import { ArtifactChangesView } from './ArtifactChangesView';
+import { classifyArtifactDocument } from './artifact-document-classification';
 import { cn } from '@shared/lib/utils';
+import { useMounted } from '@shared/hooks/useMounted';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -144,6 +147,11 @@ export interface ArtifactData {
    */
   interrupted?: boolean;
 }
+
+const MARKDOWN_SOURCE_LANGUAGE = 'markdown';
+const SOURCE_LANGUAGE_FOR_TYPE: Partial<Record<ArtifactData['type'], string>> = {
+  react: 'tsx',
+};
 
 const INTERRUPTED_ARTIFACT_NOTICE =
   'This artifact stopped before it finished. What arrived is kept below; regenerate for the whole document.';
@@ -278,6 +286,14 @@ function EditorLoading() {
   return (
     <div className="flex h-full w-full items-center justify-center">
       <Spinner size="sm" aria-label="Opening the editor" />
+    </div>
+  );
+}
+
+function PreviewFrameLoading() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-background text-muted-foreground">
+      <Spinner size="sm" aria-label="Loading the preview" />
     </div>
   );
 }
@@ -425,10 +441,7 @@ export function ArtifactPreview({
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
 
   // PDF / DOCX viewer state (Fix 39 / Fix 40)
-  const isPdf = artifact.type === 'document' && artifact.language?.toLowerCase() === 'pdf';
-  const isDocx =
-    artifact.type === 'document' &&
-    (artifact.language?.toLowerCase() === 'docx' || artifact.language?.toLowerCase() === 'doc');
+  const { isPdf, isDocx, isMarkdownDoc } = classifyArtifactDocument(artifact);
   const [docxHtml, setDocxHtml] = useState<string | null>(null);
   const [docxError, setDocxError] = useState<string | null>(null);
   const isImage = artifact.type === 'image';
@@ -476,6 +489,7 @@ export function ArtifactPreview({
   }, [isDocx, artifact.id, artifact.content]);
   // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
   const [refreshKey, setRefreshKey] = useState(0);
+  const mounted = useMounted();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Keep the in-page expanded layout in sync when the user leaves NATIVE fullscreen via
@@ -885,7 +899,13 @@ if (__AgiApp) {
   // document. The null-origin sandbox (allow-scripts without allow-same-origin)
   // is the security boundary: scripts inside it cannot access the parent's
   // cookies, localStorage, or DOM.
-  const sandboxPayload = useMemo<ArtifactRenderPayload>(() => {
+  //
+  // DOMPurify has no sanitize() without a DOM, so the payload and its srcDoc
+  // fallback are built only after mount. The server and the first client
+  // render both show the loading state, which keeps hydration identical and
+  // never hands the frame markup the sanitiser has not seen.
+  const sandboxPayload = useMemo<ArtifactRenderPayload | null>(() => {
+    if (!mounted) return null;
     const content = activeContent;
     const renderType = artifact.type === 'document' ? 'code' : artifact.type;
     const kind: ArtifactKind = renderType === 'code' ? 'code' : (renderType as ArtifactKind);
@@ -909,7 +929,7 @@ if (__AgiApp) {
       default:
         return { type: 'render', kind, text: content };
     }
-  }, [activeContent, artifact.type]);
+  }, [mounted, activeContent, artifact.type]);
 
   // AUDIT-FIX ART-24: `navigator.clipboard` is undefined in insecure contexts
   // and `writeText` rejects when the permission is denied or the document is
@@ -1258,13 +1278,6 @@ if (__AgiApp) {
   const canPreview = ['html', 'react', 'svg'].includes(artifact.type);
   const isMermaid = artifact.type === 'mermaid';
 
-  const isMarkdownDoc =
-    !isPdf &&
-    !isDocx &&
-    (artifact.type === 'document'
-      ? ['md', 'mdx', 'markdown', undefined].includes(artifact.language?.toLowerCase())
-      : false);
-
   const isTabular = ['spreadsheet', 'table', 'csv'].includes(artifact.type);
   const isPresentation = artifact.type === 'presentation';
   const isEmail = artifact.type === 'email';
@@ -1274,6 +1287,9 @@ if (__AgiApp) {
   const isSharedRendered = isTabular || isPresentation || isEmail || isChart;
   const hasPreviewSurface =
     canPreview || isMermaid || isPdf || isDocx || isSharedRendered || isImage || isMarkdownDoc;
+  const sourceLanguage = isMarkdownDoc
+    ? MARKDOWN_SOURCE_LANGUAGE
+    : (artifact.language ?? SOURCE_LANGUAGE_FOR_TYPE[artifact.type] ?? artifact.type);
 
   // The unified-chat Artifact view of this artifact (content follows the
   // version navigation, exactly like the sandbox preview does).
@@ -2166,6 +2182,8 @@ if (__AgiApp) {
                   </Button>
                 </div>
               </div>
+            ) : sandboxPayload === null ? (
+              <PreviewFrameLoading />
             ) : (
               <div className="h-full w-full bg-white">
                 <SandboxedIframe
@@ -2248,9 +2266,9 @@ if (__AgiApp) {
                 ariaLabel="Artifact source"
               />
             ) : (
-              <ScrollArea className="h-full w-full bg-gray-900">
-                <pre className="p-4">
-                  <code className="text-sm text-gray-100">{activeContent}</code>
+              <ScrollArea className="code-block-body h-full w-full">
+                <pre className="overflow-x-visible!">
+                  <HighlightedCode code={activeContent} language={sourceLanguage} enabled />
                 </pre>
               </ScrollArea>
             ))}
@@ -2288,7 +2306,10 @@ if (__AgiApp) {
             </span>
           </div>
           {artifact.type && (
-            <span className="shrink-0 rounded-compact bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            <span
+              data-testid="artifact-type-badge"
+              className="shrink-0 rounded-compact bg-primary/10 px-2 py-0.5 text-xs font-medium text-foreground"
+            >
               {artifact.type}
             </span>
           )}
@@ -2533,6 +2554,8 @@ if (__AgiApp) {
                     </Button>
                   </div>
                 </div>
+              ) : sandboxPayload === null ? (
+                <PreviewFrameLoading />
               ) : (
                 <SandboxedIframe
                   payload={sandboxPayload}
@@ -2614,10 +2637,17 @@ if (__AgiApp) {
             tabIndex={0}
             role="region"
             aria-label="Artifact source"
-            className={cn('bg-gray-900', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
+            className={cn(
+              'code-block-body',
+              isFullscreen
+                ? 'h-[calc(100vh-100px)]'
+                : hasPreviewSurface
+                  ? 'h-[500px]'
+                  : 'max-h-[500px]',
+            )}
           >
-            <pre className="p-4">
-              <code className="text-sm text-gray-100">{activeContent}</code>
+            <pre className="overflow-x-visible!">
+              <HighlightedCode code={activeContent} language={sourceLanguage} enabled />
             </pre>
           </ScrollArea>
         </TabsContent>
