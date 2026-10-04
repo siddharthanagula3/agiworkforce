@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import { getPlanTrialDays } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
+import { isBillingNoticeEmailConfigured } from '@/lib/services/billing-notice-service';
 
 export interface TrialEligibilityInput {
   trialDays: number | null;
@@ -64,7 +65,7 @@ export async function resolveTrialDaysForCheckout(input: {
   const trialDays = getPlanTrialDays(input.plan) ?? input.referralTrialDays;
   if (trialDays === null) return null;
   const existing = input.existingSubscription;
-  return resolveCheckoutTrialDays({
+  const eligibleDays = resolveCheckoutTrialDays({
     trialDays,
     priorStoreOrStripeSubscription: Boolean(
       existing?.stripe_subscription_id ||
@@ -75,4 +76,12 @@ export async function resolveTrialDaysForCheckout(input: {
       ? await customerHasSubscriptionHistory(input.stripe, input.stripeCustomerId, input.userId)
       : false,
   });
+  if (eligibleDays !== null && !isBillingNoticeEmailConfigured()) {
+    logger.error(
+      { userId: input.userId, plan: input.plan },
+      'Billing notice email is not configured, so a trial could not be reminded; checkout continues without a trial',
+    );
+    return null;
+  }
+  return eligibleDays;
 }
