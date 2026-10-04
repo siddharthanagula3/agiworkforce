@@ -617,7 +617,7 @@ unservable.
 **Why founder assistance is required**
 Whether a paying customer's prompt may reach an upstream that trains on it is a
 data-handling decision, not an engineering one.
-**Exact action** Decided 2026-09-15 (D-2026-09-15-06): the privacy-safe default stays on every plan. What stays with the founder: set the company OpenRouter privacy settings in its dashboard to match (no training-enabled upstreams, data collection denied).
+**Exact action** Decided 2026-09-15 (D-2026-09-15-06): the privacy-safe default stays on every plan. What stays with the founder: set the company OpenRouter privacy settings in its dashboard to match (no training-enabled upstreams, data collection denied). At `74bece5d10`, the commit production served on 2026-10-03, background calls and AGI Code do not carry the request-level deny flag, so the dashboard setting this asks for is the only protection for those calls until `L19.0` is deployed. `L19.0` does not close this entry: the dashboard setting stays with the founder, and it is the only control for video generation, whose API has no data-policy field.
 **Where** `packages/ai/model-registry/catalog/routing-policies.json`,
 `packages/ai/providers/openrouter/src/provider-routing.ts`,
 `docs/research/free-inference-tos-workbook-2026-09-01.md`, the OpenRouter dashboard.
@@ -960,3 +960,20 @@ their open-item statements, and `data-legal-review` stays `pending-counsel`.
 **What remains after founder action** Wording edits to the policy pages in a dated version (audit rows TC06 and TC07 in `audit/prior-audits/public-website-audit-2026-10-03.md`).
 **Impact** EXTERNAL-APPROVAL
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Release] Preview deployment for the signed-in checks
+
+**Why founder assistance is required**
+Signed-in screens cannot be driven locally or in CI: the signed-in e2e harness
+needs a Clerk secret and a database, and
+`apps/web/__tests__/web-e2e-ci-coverage.test.ts` forbids such specs in CI. The
+fixes for the signed-in web audit and the provider-training setting are proved by
+component tests, and the browser pass needs a Preview deployment. Nothing has
+been pushed.
+**Exact action** Approve one of two ways to get a Preview deployment of `fix/public-site-audit-2026-10-03`: (a) a push of the branch, which the pre-push guard allows only after the policy release train has registered the three policy pages the branch changes (`/privacy`, `/referral-terms`, `/agent-permissions`); or (b) a Preview deployment made from the worktree with the Vercel CLI, which needs no push and can happen now.
+**Where** The Vercel project for `apps/web`; the branch `fix/public-site-audit-2026-10-03`.
+**Needed input** One approval, naming (a) or (b).
+**How to verify completion** A Preview deployment of the branch is reachable and a signed-in session opens on it.
+**What remains after founder action** The Preview browser pass for the rows registered in `audit/prior-audits/signed-in-web-audit-2026-10-03.md` and `audit/prior-audits/public-comparison-2026-10-04.md`, and the signed-in Preview session of Study that gates `L18-D3`.
+**Impact** EXTERNAL-APPROVAL
+**Status** FOUNDER ACTION REQUIRED
