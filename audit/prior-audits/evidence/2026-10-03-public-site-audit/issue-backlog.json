@@ -1,0 +1,2330 @@
+{
+  "date": "3 October 2026",
+  "issues": [
+    {
+      "id": "PV03",
+      "priority": "P1",
+      "category": "Conversion usability / dialog layout",
+      "title": "Enterprise dialog lays controls out as tall narrow columns",
+      "urls": ["https://agiworkforce.com/desktop", "https://agiworkforce.com/vscode-extension"],
+      "evidence": [
+        "The Enterprise enquiry dialog arranges the email field, consent and submit control in extremely tall, narrow columns. Autofocus opens partway down the content, leaving its heading and close control outside the visible area. Computed geometry: modal 480 × 725 CSS px; scrollHeight 2268; scrollTop 851; flex-direction row. The email control measured 117.69 × 1839.5 px, the fieldset 151.30 × 1831.5 px and the submit control 98.02 × 1839.5 px.",
+        "500 × 757 CSS-pixel ordinary desktop-window retest: Hero H1 is 41.6 px/42.432 px and CTAs remain visible without horizontal overflow. The settled 470×725 px Enterprise dialog opens at scrollTop842 of 2259 px; its email field and submit button are 1839.5 px tall, reproducing the desktop layout defect."
+      ],
+      "impact": "The Enterprise enquiry entry is difficult to understand and use before any data is entered. No submission tested.",
+      "reproduction": "At 1180 × 757 CSS px, open /desktop and activate Discuss Enterprise access. Wait for the dialog to settle without typing. Observe the narrow vertical email, consent and submit columns, the initial scroll offset, and whether the title and close control are visible. The same layout was also reproduced on /vscode.",
+      "fix": "Make a one-column dialog form with normal-height field/button, readable consent measure and persistent title/close. Keep consent explicit. Review visible form state at each breakpoint.",
+      "acceptance": "Opening displays title, email label and close; email/button normal height; all consent can be read in a wide column; keyboard and Escape behavior checked; no horizontal clipping at supported widths.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High; twice reproduced",
+      "screenshots": [
+        "screenshots-product-depth/desktop-13-enterprise.png",
+        "screenshots-product-depth/desktop-14-enterprise-repeat.png",
+        "screenshots-product-depth/vscode-10-enterprise.png",
+        "screenshots-journey-depth/narrow-desktop-hero.jpg",
+        "screenshots-journey-depth/narrow-desktop-enterprise-dialog-settled.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Discuss Enterprise access dialog",
+      "state": "Newly opened, email autofocus, no entered data",
+      "viewport": [1180, 757],
+      "brief": "The Enterprise enquiry dialog arranges the email field, consent and submit control in extremely tall, narrow columns. Autofocus opens partway down the content, leaving its heading and close control outside the visible area. Computed geometry: modal 480 × 725 CSS px; scrollHeight 2268; scrollTop 851; flex-direction row. The email control measured 117.69 × 1839.5 px, the fieldset 151.30 × 1831.5 px and the submit control 98.02 × 1839.5 px."
+    },
+    {
+      "id": "MA01",
+      "severity": "P1",
+      "category": "Observed content and conversion defect",
+      "title": "Release availability contradicts acquisition and trust copy across the site",
+      "confidence": "High",
+      "urls": [
+        "https://agiworkforce.com/",
+        "https://agiworkforce.com/download",
+        "https://agiworkforce.com/cli",
+        "https://agiworkforce.com/byok",
+        "https://agiworkforce.com/local",
+        "https://agiworkforce.com/providers",
+        "https://agiworkforce.com/desktop",
+        "https://agiworkforce.com/web",
+        "https://agiworkforce.com/pricing",
+        "https://agiworkforce.com/about",
+        "https://agiworkforce.com/press",
+        "https://agiworkforce.com/enterprise",
+        "https://agiworkforce.com/changelog",
+        "https://agiworkforce.com/security",
+        "https://agiworkforce.com/get-started",
+        "https://agiworkforce.com/faq",
+        "https://agiworkforce.com/business",
+        "https://agiworkforce.com/features",
+        "https://agiworkforce.com/integrations",
+        "https://agiworkforce.com/use-cases/startups",
+        "https://agiworkforce.com/agi-code",
+        "https://agiworkforce.com/features/plugins",
+        "https://agiworkforce.com/help",
+        "https://agiworkforce.com/help/install-desktop-and-mobile",
+        "https://agiworkforce.com/help/getting-started",
+        "https://agiworkforce.com/help/local-mode",
+        "https://agiworkforce.com/signup",
+        "https://agiworkforce.com/docs",
+        "https://agiworkforce.com/privacy",
+        "https://agiworkforce.com/trust",
+        "https://agiworkforce.com/skills",
+        "https://agiworkforce.com/gallery",
+        "https://agiworkforce.com/gallery/sql-user-accounts-schema",
+        "https://agiworkforce.com/cookies",
+        "https://agiworkforce.com/status",
+        "https://agiworkforce.com/contact-sales",
+        "https://agiworkforce.com/support",
+        "https://agiworkforce.com/api-docs"
+      ],
+      "evidence": [
+        "Homepage calls CLI released in Local/BYOK and Get Started sections while the CLI card/footer says Coming soon.",
+        "BYOK hero says the CLI has a published release. Local says Use the released CLI for Local mode. Providers intro calls CLI released but source-file and closing sections say coming soon.",
+        "Download page settled at 18:48 UTC to No published CLI archive is available right now and No signed AGI Desktop installer is available right now. This reports the page state, not independent release infrastructure verification.",
+        "Web metrics say 3 surfaces released: Web, Desktop, CLI. Homepage Get AGI Desktop leads to an unavailable installer.",
+        "About says \"Web and CLI: Available now\" and \"released CLI\" but its colophon/footer say \"CLI · Coming soon.\" Press boilerplate says web, desktop and CLI \"have shipped\"; its adjacent fact sheet lists Desktop as not released and puts \"AGI CLI, coming soon\" inside \"Available now.\" Security itself says CLI coming soon and later released CLI.",
+        "/get-started says Local and BYOK run on CLI today, then its Install card says no signed release has been published. /faq says CLI and VS Code are coming soon but another answer says released CLI. Many pages call the CLI released while the shared footer says Coming soon.",
+        "Help index: \"The CLI has a published release\".",
+        "Installing desktop and mobile: \"The web app and the CLI are available now.\"",
+        "The help index footer simultaneously labels its CLI link \"CLI · Coming soon\".",
+        "Additional observed evidence (EX01): Every inspected route includes a SoftwareApplication JSON-LD record with operatingSystem Web, macOS, Windows, Linux, iOS, Android and a description of managed cloud on Web and Desktop plus Local/BYOK CLI workflows. The metadata contains no release qualification, while visible download/footer copy labels unpublished surfaces Coming soon.",
+        "Additional observed evidence (EX01): main-report.md: MA01",
+        "At the later public Security review, its BYOK card said the CLI and VS Code were coming soon while the same page described the released CLI in the at-rest section. These are current-page statements; dated historical releases should retain their historical meaning.",
+        "The fresh AGI Code hero says Get the VS Code Extension while its surface rows and closing section say Coming soon. The action leads to a public product page; no installation was attempted.",
+        "500 × 757 CSS-pixel ordinary desktop-window retest: At500×757, the phone/store illustration is omitted, the two primary CTAs remain visible, metrics reflow to two columns, and document scrollWidth490 equals clientWidth490. The visible brand wordmark remains prominent; the semantic H1 is a visually hidden1×1 px AGI label, not the visible wordmark size. The routing illustration reduces to mostly unlabeled lines and dots."
+      ],
+      "impact": "Visitors cannot tell what they can actually use, and prominent CTAs lead into an unavailable route. This undermines confidence in security, pricing, and release claims.",
+      "reproduction": "Compare homepage/Byok/Web release wording with the settled Download availability states and CLI hero/footer.",
+      "fix": "Create one release-status source of truth for every surface and channel. Generate nav, card, CTA, facts, pricing availability and editorial boilerplate from it. Until assets are live, label preview and use Check availability or Notify me rather than Get/Run today.",
+      "acceptance": "All current-state availability claims agree by surface and channel. Every Get or Install action resolves to an available artifact or clearly qualified availability flow. Historical release notes preserve their dated claims and link to current status; no unsupported present-tense shipping claim remains.",
+      "screenshots": [
+        "screenshots-main/download-resolved-1180x757.jpg",
+        "screenshots-main/byok-1180x757.jpg",
+        "screenshots-main/homepage-suite-cards.jpg",
+        "screenshots-trust/press-shipped-boilerplate.jpg",
+        "screenshots-trust/press-not-released.jpg",
+        "screenshots-trust/about-top.jpg",
+        "screenshots-features/get-started-cli-pending.jpg",
+        "screenshots-help/help-index.jpg",
+        "screenshots-help/byok-provider-keys.jpg",
+        "screenshots-journey-depth/security-depth-2.jpg",
+        "screenshots-journey-depth/security-depth-7.jpg",
+        "screenshots-final-public-entries/agi-code-00.jpg",
+        "screenshots-final-public-entries/agi-code-01.jpg",
+        "screenshots-final-public-entries/agi-code-02.jpg",
+        "screenshots-final-public-entries/agi-code-03.jpg",
+        "screenshots-final-public-entries/agi-code-04.jpg",
+        "screenshots-final-public-entries/agi-code-05.jpg",
+        "screenshots-final-public-entries/agi-code-06.jpg",
+        "screenshots-final-public-entries/agi-code-07.jpg",
+        "screenshots-final-public-entries/agi-code-08.jpg",
+        "screenshots-final-public-entries/homepage-narrow-500.jpg",
+        "screenshots-final-public-entries/homepage-narrow-next-500.jpg"
+      ],
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": ["TC01", "FR01", "HA02", "EX01"],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Availability claims disagree across acquisition, help, company and press pages. The observed Download state reported no public CLI archive and no signed Desktop installer, while other pages called those surfaces released. Consolidate these repetitions as one issue."
+    },
+    {
+      "id": "MA02",
+      "severity": "P1",
+      "category": "Observed form-purpose mismatch",
+      "title": "Mobile launch notification requires unrelated Enterprise-sales consent",
+      "confidence": "High",
+      "urls": ["https://agiworkforce.com/", "https://agiworkforce.com/download"],
+      "evidence": [
+        "Homepage mobile block promises Leave your email to be told when it lands and labels the button Notify Me.",
+        "Required checkbox instead authorizes storing the address to discuss contract-scoped Enterprise access, and its explanation says it is used for that Enterprise conversation and nothing else.",
+        "Download page uses a different, matching platform-availability consent and explicitly says it is unrelated to the Enterprise contact list.",
+        "Additional observed evidence (EX05): The homepage mobile notification form includes checkbox name consent-enterprise_waitlist, whereas Download uses consent-platform_availability_waitlist. This aligns with the conflicting required-consent text already captured in MA02. Only names and presence/absence of values were recorded; no email or consent was entered.",
+        "Additional observed evidence (EX05): main-report.md: MA02"
+      ],
+      "impact": "The visitor cannot give purpose-matched consent for the thing the form promises. Submission behavior was not tested, so this is a verified UI/data-purpose mismatch rather than a claim about actual storage.",
+      "reproduction": "Scroll homepage to AGI Mobile, inspect the heading, description and required checkbox together; compare Download notification form.",
+      "fix": "Use the platform-availability consent component/purpose on the homepage mobile form, explicitly scope it to Mobile, and verify backend purpose/list matches. Keep optional product updates separate.",
+      "acceptance": "Form heading, required consent, submit label, API purpose and confirmation email all refer to Mobile launch notification; no Enterprise consent is required for this flow.",
+      "screenshots": ["screenshots-main/homepage-mobile-consent.jpg"],
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": ["EX05"],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The homepage asks for an email for Mobile launch notification, but its required checkbox authorizes an Enterprise-access conversation. Download uses a purpose-matched platform notification consent. This verifies inconsistent UI purpose, not actual backend storage."
+    },
+    {
+      "id": "MA03",
+      "severity": "P1",
+      "category": "Observed illustrative UI/copy contradiction",
+      "title": "Product mockups show Local inference where the same page says cloud-only",
+      "confidence": "High",
+      "urls": [
+        "https://agiworkforce.com/desktop",
+        "https://agiworkforce.com/chrome-extension",
+        "https://agiworkforce.com/web",
+        "https://agiworkforce.com/",
+        "https://agiworkforce.com/agi-work",
+        "https://agiworkforce.com/solutions",
+        "https://agiworkforce.com/features"
+      ],
+      "evidence": [
+        "Desktop hero says no provider keys or local-model connections, while its illustrative interface labels a response Served by Local · ollama(local) and picker Auto · Local.",
+        "Chrome text says Managed Cloud is the only answer route, but its illustrative panel includes a Local picker; homepage Chrome illustration combines Local labels with an AGI Managed Cloud receipt.",
+        "Web says one route, AGI Managed Cloud, but its Agents and Memory illustrations display Local and on-device states.",
+        "/agi-work hero mockup says LOCAL and Served by Local · ollama(local) · $0.00. Same page closing copy says AGI Work runs on AGI Managed Cloud. /features additionally says every feature runs in Local, BYOK, or AGI Cloud, without a surface/capability matrix.",
+        "The 22:05:32 UTC public recheck shows a LOCAL/Ollama receipt in the AGI Work hero while closing copy says AGI Work runs on Managed Cloud. This is a public illustration/copy mismatch, not a runtime result."
+      ],
+      "impact": "Illustrations teach a different privacy boundary from the accompanying text. Buyers may infer that work stays on-device. These are marketing mockups; no claim is made about the actual runtime.",
+      "reproduction": "Read Desktop hero next to its fully animated/settled mockup, and compare Chrome/Web route text with illustrated route labels.",
+      "fix": "Create surface-specific demo fixtures generated from the same route/capability facts as copy. Replace Local receipts/selectors on cloud-only surfaces, and label cross-surface illustrations clearly when intentional.",
+      "acceptance": "Every product screenshot, alt label, badge, receipt and picker matches the advertised surface capabilities and availability.",
+      "screenshots": [
+        "screenshots-main/desktop-hero-settled.jpg",
+        "screenshots-main/chrome-extension-1180x757.jpg",
+        "screenshots-main/web-1180x757.jpg",
+        "screenshots-features/agi-work-local-demo.jpg",
+        "screenshots-features/agi-work-cloud-only.jpg",
+        "screenshots-final-public-entries/agi-work-00.jpg",
+        "screenshots-final-public-entries/agi-work-01.jpg",
+        "screenshots-final-public-entries/agi-work-02.jpg",
+        "screenshots-final-public-entries/agi-work-03.jpg",
+        "screenshots-final-public-entries/agi-work-04.jpg",
+        "screenshots-final-public-entries/agi-work-05.jpg",
+        "screenshots-final-public-entries/agi-work-06.jpg"
+      ],
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": ["FR04"],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Desktop, Chrome, Web and AGI Work illustrations show Local or on-device states beside text describing managed-cloud-only behavior. These are marketing mockups, so the defect is inconsistent communication of the processing boundary."
+    },
+    {
+      "id": "FR02",
+      "severity": "P1",
+      "category": "Broken documentation journey",
+      "title": "Documentation index links article titles to the wrong destinations",
+      "urls": ["https://agiworkforce.com/docs", "https://agiworkforce.com/help"],
+      "evidence": [
+        "The Documentation index advertises 43 pages. Clicking Glossary of AGI terms stays on /docs. Clicking Keyboard shortcuts navigates to /login?redirectTo=%2Fchat. Other article titles point at broad /privacy, /pricing, /cli or gated application paths even though /help has actual corresponding article URLs.",
+        "Additional observed evidence (FV03): Glossary of AGI terms and AGI managed cloud target /docs itself with no section anchor. Keyboard shortcuts and several other article-titled entries target /chat. Other titles target generic marketing or support pages.",
+        "Additional observed evidence (FV03): Public browser accessibility snapshot on/docs,2026-10-03T20:58:20Z"
+      ],
+      "impact": "Prospects and existing users cannot reach the promised reference material through Docs; maturity/review dates imply evidence the link does not provide.",
+      "fix": "Point the 43 index rows to their matching /help/{slug} articles, or to actual documentation pages; do not use product CTAs as article destinations.",
+      "acceptance": "Click every article row anonymously: matching article title and body load, without self-loop or sign-in redirect unless clearly labelled protected.",
+      "screenshots": [
+        "screenshots-features/docs-index-mislinks.jpg",
+        "screenshots-features/docs-keyboard-shortcuts-gated.jpg",
+        "screenshots-feature-resource-depth/docs-glossary-destination.png"
+      ],
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": ["FV03"],
+      "suggested_owner": "Frontend engineering",
+      "status": "Open for remediation",
+      "brief": "The Docs index advertises 43 article titles, but tested Glossary and Keyboard shortcuts links went to the Docs page itself and a login route. Corresponding public help articles exist."
+    },
+    {
+      "id": "FR03",
+      "severity": "P1",
+      "category": "UI rendering",
+      "title": "Artifact examples have missing content and unusably narrow viewers",
+      "urls": [
+        "https://agiworkforce.com/gallery/sql-user-accounts-schema",
+        "https://agiworkforce.com/gallery/python-data-pipeline"
+      ],
+      "evidence": [
+        "After rendering settles both example detail pages show only a tiny rounded code icon at the left around y=450; the code body and usable toolbar are absent and the footer begins near y=584. Main text contains title/description and the artifact title plus code, but no sample source. SQL reproduced across separate observations; Python matches. Mermaid example rendered successfully after its loading state.",
+        "Additional observed evidence (EX03): Inline rendered-page serialization contains the CREATE TABLE accounts example. The live main text contains only heading, description, CTA and artifact label. There are zero pre and code elements. Copy and Download controls exist in the DOM but the source is not visibly presented; screenshot confirms collapsed artifact presentation. No site-origin console error accompanied this inspection.",
+        "SQL panel measured 34×47 CSS px within 1122 px content. SVG preview measured 302×587 in the same content width. HTML previews similarly occupy a narrow left column, while SVG/card-grid Code tabs expand substantially. Mermaid detail renders but its public thumbnail remains a tiny text line. Python/SQL source bodies remain absent."
+      ],
+      "impact": "The public showcase fails to demonstrate the core artifact capability and presents empty deliverables.",
+      "fix": "Fix code artifact container sizing/rendering and supply a visible pre/code fallback when the interactive renderer cannot mount. Use explicit responsive panel sizing with min-width/min-height and overflow-safe toolbars; preserve panel width across Preview/Code and provide readable code/thumbnail fallbacks.",
+      "acceptance": "Both routes show complete readable syntax-highlighted source, usable copy/download controls, and no clipping at desktop and mobile widths; test all six gallery types. At desktop and mobile sizes, all six examples display complete usable content/controls. A mode switch does not collapse or radically resize the viewer. Mermaid thumbnails show the diagram.",
+      "screenshots": [
+        "screenshots-features/gallery-code-sample.jpg",
+        "screenshots-features/gallery-python-blank.jpg",
+        "screenshots-exposure/sql-code-render.jpg",
+        "screenshots-ecosystem-depth/gallery-sql-user-accounts-schema-00.png",
+        "screenshots-ecosystem-depth/gallery-svg-logo-placeholder-00.png",
+        "screenshots-ecosystem-depth/gallery-card-grid-code.png",
+        "screenshots-ecosystem-depth/gallery-card-grid-preview-after-code.png",
+        "screenshots-ecosystem-depth/gallery-00.png"
+      ],
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": ["EX03"],
+      "suggested_owner": "Frontend engineering",
+      "status": "Open for remediation",
+      "brief": "Two settled code gallery details, SQL schema and Python pipeline, show a small code icon without readable source or a usable toolbar. Other gallery types were also inspected; this is not a claim that all examples fail."
+    },
+    {
+      "id": "MA04",
+      "severity": "P1",
+      "category": "Observed accessibility defect",
+      "title": "Skip-to-content links point to missing targets on legacy templates",
+      "confidence": "High",
+      "urls": [
+        "https://agiworkforce.com/desktop",
+        "https://agiworkforce.com/mobile",
+        "https://agiworkforce.com/web",
+        "https://agiworkforce.com/cli",
+        "https://agiworkforce.com/chrome-extension",
+        "https://agiworkforce.com/vscode-extension",
+        "https://agiworkforce.com/pricing",
+        "https://agiworkforce.com/business",
+        "https://agiworkforce.com/agi-code",
+        "https://agiworkforce.com/docs/byok-env",
+        "https://agiworkforce.com/api-docs"
+      ],
+      "evidence": [
+        "Global skip link href is #main-content, but no element with that ID exists on the listed legacy templates.",
+        "Keyboard activation on Desktop changed URL to /desktop#main-content; focus remained on the skip link and scrollY stayed 0.",
+        "These templates place header/navigation and often footer inside main, unlike newer templates with a valid main-content target.",
+        "After content was fully rendered, DOM checks found one main and one H1 but no element id main-content, while the global Skip to main content link points to #main-content. Business and AGI Code wrap header/footer inside main.",
+        "Fresh public DOM at 22:03:39 UTC contained one main element but no main-content target. This corroborates the missing skip-target finding; actual keyboard activation was not repeated in this recheck."
+      ],
+      "impact": "Keyboard users cannot use the advertised bypass mechanism. Header/footer inside main also weakens landmark navigation.",
+      "reproduction": "Load /desktop, activate Skip to main content from keyboard, then inspect focus and target. Repeat the DOM ID check on listed routes.",
+      "fix": "Use one shared shell: header/nav outside main, main id=main-content with an appropriate focus target, footer outside main. Verify keyboard focus moves to actual page content.",
+      "acceptance": "Each public route has one meaningful main landmark and a working skip link that bypasses navigation; regression tests cover every template.",
+      "standards": ["https://www.w3.org/TR/WCAG22/#bypass-blocks"],
+      "screenshots": [
+        "screenshots-main/desktop-broken-skiplink.jpg",
+        "screenshots-final-public-entries/agi-code-00.jpg",
+        "screenshots-final-public-entries/agi-code-01.jpg",
+        "screenshots-final-public-entries/agi-code-02.jpg",
+        "screenshots-final-public-entries/agi-code-03.jpg",
+        "screenshots-final-public-entries/agi-code-04.jpg",
+        "screenshots-final-public-entries/agi-code-05.jpg",
+        "screenshots-final-public-entries/agi-code-06.jpg",
+        "screenshots-final-public-entries/agi-code-07.jpg",
+        "screenshots-final-public-entries/agi-code-08.jpg"
+      ],
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": ["FR07"],
+      "suggested_owner": "Frontend engineering",
+      "status": "Open for remediation",
+      "brief": "Eleven legacy routes expose a skip link to #main-content without that ID. On Desktop, keyboard activation left focus on the link and scroll at zero. The advertised bypass mechanism fails; this is not a complete conformance verdict."
+    },
+    {
+      "id": "MA05",
+      "severity": "P1",
+      "category": "Measured accessibility defect",
+      "title": "Selected annual billing savings label has insufficient text contrast",
+      "confidence": "High",
+      "urls": ["https://agiworkforce.com/pricing"],
+      "evidence": [
+        "In Team & Enterprise with Annual selected, save 20% annually is 11 px, weight 500, rgb(133, 69, 0) over solid rgb(28, 21, 11), opacity 1.",
+        "WCAG relative-luminance calculation gives 2.4525:1, below 4.5:1 for normal-sized text."
+      ],
+      "impact": "The savings label is hard to read precisely where it qualifies billing choice.",
+      "reproduction": "Pricing → Team & Enterprise → Annual; inspect the small savings text on the dark selected toggle.",
+      "fix": "Use the selected control foreground token for this child text or another measured color with at least 4.5:1 contrast. Add contrast checks for all nested text in selected/hover/focus states.",
+      "acceptance": "Savings label meets 4.5:1 at its actual 11 px size in both themes and every selected state.",
+      "standards": ["https://www.w3.org/TR/WCAG22/#contrast-minimum"],
+      "screenshots": ["screenshots-main/pricing-team-annual.jpg"],
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": [],
+      "suggested_owner": "Frontend engineering",
+      "status": "Open for remediation",
+      "brief": "The Annual savings label is 11 px at weight 500, with rgb(133, 69, 0) text on rgb(28, 21, 11). Its measured contrast is 2.4525:1, below the 4.5:1 normal-text requirement."
+    },
+    {
+      "id": "TC02",
+      "severity": "High",
+      "category": "Security claim contradiction",
+      "title": "Trust ledger says no artifact network egress; security page says outbound requests remain possible",
+      "urls": [
+        "https://agiworkforce.com/trust#posture",
+        "https://agiworkforce.com/security#isolation"
+      ],
+      "evidence": [
+        "Trust: \"no network egress (connect-src none).\" Security: \"It is not fully network-isolated\" and permits HTTPS image/font GETs and scripts from pinned CDNs."
+      ],
+      "impact": "A security reviewer could infer a stronger containment guarantee than the detailed policy actually claims.",
+      "fix": "Use the qualified network statement on both pages and describe allowed resource requests separately from fetch/XHR/WebSocket restrictions.",
+      "acceptance": "No absolute no-egress claim remains unless a deployment test verifies every outbound resource type is blocked.",
+      "screenshots": [
+        "screenshots-trust/trust-no-network-egress.jpg",
+        "screenshots-trust/security-network-egress-exact.jpg",
+        "screenshots-journey-depth/trust-depth-8.jpg",
+        "screenshots-journey-depth/security-depth-12.jpg"
+      ],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "screenshotReverifiedAt": "2026-10-03T19:07:28Z-2026-10-03T19:09:10Z",
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Security and platform engineering",
+      "status": "Open for remediation",
+      "brief": "Trust states \"no network egress\" while Security says artifacts are not fully network-isolated and permits some HTTPS resource requests. The broader summary overstates the detailed policy."
+    },
+    {
+      "id": "TC04",
+      "severity": "High",
+      "category": "Cross-policy contradiction",
+      "title": "Connector policy denies OAuth flows that the privacy policy describes in detail",
+      "urls": [
+        "https://agiworkforce.com/agent-permissions#connectors",
+        "https://agiworkforce.com/privacy#s-google"
+      ],
+      "evidence": [
+        "Approvals says every branded connector except GitHub is not connectable on web, and no Gmail/Drive/Slack/Notion OAuth token exists in an AGI account. Privacy describes Google account connections, encrypted tokens, revocation, Gmail-trigger snippets, and Google Calendar job retention. Approvals also says Desktop is the only OAuth surface, then says Desktop uses the same managed connector flow as Web."
+      ],
+      "impact": "Customers cannot make an informed decision about actual permissions, data recipients or revocation.",
+      "fix": "Publish a shared per-surface connector-availability and data-flow inventory; make every policy derive current status from it.",
+      "acceptance": "Google connection availability, scopes, token custody and revocation are identical across connector UI, Approvals and Privacy; future behavior is marked planned.",
+      "screenshots": [
+        "screenshots-trust/permissions-no-oauth.jpg",
+        "screenshots-trust/privacy-google-oauth.jpg"
+      ],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Security and platform engineering",
+      "status": "Open for remediation",
+      "brief": "Approvals denies several branded web OAuth connections that Privacy describes, including Google token handling and related retention. Public availability and data-flow statements need reconciliation."
+    },
+    {
+      "id": "HA01",
+      "severity": "P1",
+      "title": "Conflicting approval defaults undermine a safety promise",
+      "urls": [
+        "https://agiworkforce.com/help/connectors-and-mcp",
+        "https://agiworkforce.com/agent-permissions",
+        "https://agiworkforce.com/help/tool-approvals"
+      ],
+      "evidence": [
+        "Connectors and MCP: \"When a connector's tool runs for the first time, AGI asks for approval.\"",
+        "Agent permissions: \"The three GitHub tools are classified: reading a pull-request diff can run without asking, posting a comment or a review cannot.\"",
+        "Tool approvals describes Skip approvals as the website default for an unconfigured account. Chrome has a separately documented default-on Ask before acting gate and is not evidence of a cross-surface contradiction."
+      ],
+      "impact": "The unconditional first-connector-call promise does not explain the separately documented classified GitHub read-diff exemption. Users cannot reliably infer when the first read requires approval. This is a documentation mismatch; actual authenticated behavior was not tested.",
+      "fix": "Publish one versioned approval matrix by surface and action class. Qualify the first-call statement for classified read tools and distinguish tool-specific, account, and Chrome session gates.",
+      "acceptance": "For an unconfigured account, all help pages state the same effective behavior for first reads, reversible writes, destructive actions and unknown tools, with explicit surface exceptions.",
+      "screenshots": [
+        "screenshots-help/tool-approvals.jpg",
+        "screenshots-help/connectors-and-mcp.jpg"
+      ],
+      "verification": "Content contradiction confirmed; actual authenticated tool behavior not tested.",
+      "priority": "P1",
+      "category": "Observed documentation issue",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Connector help promises an approval prompt for the first use of every connector tool, while Approvals explicitly exempts classified GitHub read diffs. Chrome has a separately documented default-on action gate and is not treated as contrary evidence."
+    },
+    {
+      "id": "TC05",
+      "severity": "High",
+      "category": "Stale privacy disclosures",
+      "title": "India notice retains corrected recipient and retention errors",
+      "urls": [
+        "https://agiworkforce.com/privacy/india#s-04",
+        "https://agiworkforce.com/privacy/india",
+        "https://agiworkforce.com/privacy",
+        "https://agiworkforce.com/subprocessors"
+      ],
+      "evidence": [
+        "India section 04 says the subprocessor list is currently incomplete (email, video, geocoding and store recipients missing), while current Subprocessors lists the relevant vendors and documents those corrections. India says security-audit purging is manual; Privacy describes a scheduled nightly audit purge. Ordinary personal conversations having no automatic expiry is consistent across the policies, while India omits the optional workspace-retention exception described in Privacy. Separately, current Privacy names MiniMax as a Managed Cloud recipient while Subprocessors says it receives no Managed Cloud traffic."
+      ],
+      "impact": "Region-specific notices and the main policy give incompatible descriptions of data handling.",
+      "fix": "Reconcile current data flows and retention with the policy owners; use shared facts for recipient, region, retention and enforcement statements. Keep historical mistakes in the archive, not current-state paragraphs.",
+      "acceptance": "All current notices agree on recipients and retention; India-specific differences are intentional and reviewed, not stale copies.",
+      "screenshots": [
+        "screenshots-trust/india-stale-processors-exact.jpg",
+        "screenshots-trust/privacy-public-files.jpg",
+        "screenshots-trust/subprocessors.jpg"
+      ],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "screenshotReverifiedAt": "2026-10-03T19:07:28Z-2026-10-03T19:09:10Z",
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Policy owner and counsel",
+      "status": "Open for remediation",
+      "brief": "India retains stale recipient and manual audit-purge statements, while current policies list the recipients and describe scheduled nightly purging. Personal conversations having no automatic expiry is consistent; optional workspace retention is an omitted exception, not an opposing rule."
+    },
+    {
+      "id": "TC08",
+      "severity": "High",
+      "category": "Commercial terms contradiction",
+      "title": "Referral trial terms conflict with billing cadence and email disclosures",
+      "urls": [
+        "https://agiworkforce.com/referral-terms#trial",
+        "https://agiworkforce.com/release-notes/2026-09-27",
+        "https://agiworkforce.com/privacy",
+        "https://agiworkforce.com/subprocessors"
+      ],
+      "evidence": [
+        "Referral terms say Pro trial converts monthly or yearly \"as you chose at checkout\" and promise a reminder email two days before conversion. The 27 September release says new individual plans are monthly-only. Privacy/Subprocessors say email exists in only support-escalation, task-notification and operator-alert paths, with no account-lifecycle email."
+      ],
+      "impact": "Confusion affects financial commitments and whether users can rely on a promised pre-charge reminder.",
+      "fix": "Confirm actual checkout and trial-mail behavior, update all commercial and data-processing disclosures together, and generate cadence copy from the billing catalog.",
+      "acceptance": "New-trial cadence matches checkout; an end-to-end controlled test verifies promised reminder timing/cancel link; vendor disclosures include that mail path.",
+      "screenshots": [
+        "screenshots-trust/referral-yearly-reminder.jpg",
+        "screenshots-trust/release-notes-2026-09-27.jpg"
+      ],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P1",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Referral terms mention yearly conversion and a pre-charge email, while the latest individual-plan release says monthly-only and mail-path disclosures omit lifecycle mail. Actual checkout and email behavior were not tested."
+    },
+    {
+      "id": "TC03",
+      "severity": "High",
+      "category": "First-party disclosure requiring controlled validation",
+      "title": "Public policies disclose unauthenticated access to raw non video file URLs",
+      "urls": [
+        "https://agiworkforce.com/privacy#s-01",
+        "https://agiworkforce.com/security",
+        "https://agiworkforce.com/dpa",
+        "https://agiworkforce.com/subprocessors"
+      ],
+      "evidence": [
+        "Privacy explicitly says images and other non-video files remain in a public R2 bucket and anyone obtaining an underlying storage URL can access the object without signing in. DPA repeats this and advises affected customers not to upload files if unacceptable."
+      ],
+      "impact": "The published disclosure describes a confidentiality concern that merits engineering and procurement review. Current deployment behavior remains unverified.",
+      "fix": "Validate current access rules with authorized synthetic objects only. If the disclosure matches deployment, use private storage and authenticated or short-lived scoped delivery, preserve explicit sharing, and retire exposed origins. Update policy wording to the verified state.",
+      "acceptance": "Using only controlled synthetic files, unauthenticated access is denied where privacy is promised; authorized sharing, revocation and deletion behave as documented across file classes.",
+      "screenshots": ["screenshots-trust/privacy-public-files-exact.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "screenshotReverifiedAt": "2026-10-03T19:07:28Z-2026-10-03T19:09:10Z",
+      "priority": "P1",
+      "verification": "The disclosure was observed. Storage permissions and customer-object access were not tested.",
+      "confidence": "High for the public disclosure; current storage behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Security and platform engineering",
+      "status": "Needs validation and owner review",
+      "brief": "Privacy explicitly says images and other non-video files remain in a public R2 bucket and anyone obtaining an underlying storage URL can access the object without signing in. DPA repeats this and advises affected customers not to upload files if unacceptable."
+    },
+    {
+      "id": "TC06",
+      "severity": "High",
+      "category": "Published governance status requiring specialist review",
+      "title": "Published regional governance statements need owner and counsel review",
+      "urls": [
+        "https://agiworkforce.com/legal/eu-representative",
+        "https://agiworkforce.com/trust",
+        "https://agiworkforce.com/privacy/india"
+      ],
+      "evidence": [
+        "EU-representative page says no representative is appointed and calls the obligation \"live and unmet.\" Trust/India pages additionally state no verifiable parental consent, no notice translations, and no named grievance officer. No outside legal determination was performed."
+      ],
+      "impact": "Published governance statements warrant owner and qualified counsel assessment. Their applicability, effective dates and exemptions were not independently assessed.",
+      "fix": "Ask the responsible owner and qualified counsel to validate the statements and applicable obligations. Give each confirmed open item an accountable owner and review date; publish accurate status without concealing limitations.",
+      "acceptance": "Current statements are reviewed by the appropriate owners and counsel. Claims of completed controls have supporting evidence, and any remaining open items have an approved handling plan.",
+      "screenshots": [
+        "screenshots-trust/eu-representative-unmet.jpg",
+        "screenshots-trust/trust.jpg",
+        "screenshots-trust/privacy-india.jpg"
+      ],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P1",
+      "verification": "No independent assessment of legal applicability, effective dates, exemptions or compliance was performed.",
+      "confidence": "High for the published wording; legal conclusions not assessed",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Policy owner and counsel",
+      "status": "Needs validation and owner review",
+      "brief": "The EU-representative and regional notices acknowledge open governance items. This audit observes those statements and recommends owner/counsel assessment; it does not determine legal applicability or compliance."
+    },
+    {
+      "id": "TC07",
+      "severity": "High",
+      "category": "Published operational readiness gap",
+      "title": "Public incident notice paths are described as unbuilt",
+      "urls": [
+        "https://agiworkforce.com/privacy#s-incidents",
+        "https://agiworkforce.com/dpa",
+        "https://agiworkforce.com/security"
+      ],
+      "evidence": [
+        "Privacy describes in-product and public incident-notice paths that are not yet built. It also permits manual email. The DPA distinguishes customer account-contact notification from individual notification; the unbuilt paths do not establish inability to meet the DPA deadline."
+      ],
+      "impact": "Relying on paths built during an incident adds execution uncertainty. The public text alone does not establish a breach of the 72-hour customer-notification commitment.",
+      "fix": "Define and exercise the notification plan, including the existing manual email route, pre-provisioned public notices where needed, recipient reachability and escalation. Align the public description with the practiced process.",
+      "acceptance": "An authorized drill records the selected channels, recipient verification, approved message, delivery evidence and escalation. Customer and individual notification obligations are documented separately.",
+      "screenshots": ["screenshots-trust/privacy-incident-gap.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P1",
+      "verification": "Published process limitations reviewed; no incident response drill or delivery test performed.",
+      "confidence": "High for the stated limitation; operational ability untested",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Security and platform engineering",
+      "status": "Needs validation and owner review",
+      "brief": "Privacy describes in-product and public incident-notice paths that are not yet built. It also permits manual email. The DPA distinguishes customer account-contact notification from individual notification; the unbuilt paths do not establish inability to meet the DPA deadline."
+    },
+    {
+      "id": "FR09",
+      "severity": "P1 verification required",
+      "category": "Time-bound diagnostic requiring verification",
+      "title": "Public status reports payment dependency unavailable",
+      "urls": ["https://agiworkforce.com/status"],
+      "evidence": [
+        "At Sat, 03 Oct 2026 18:51:24 GMT the page says Hosted checks: Some checks failing and Payments Failing (unavailable), with six other checks passing. Its definition says this is a read call to the payments API and billing-only degradation."
+      ],
+      "impact": "Potential billing/upgrade impairment warrants immediate operator investigation. No checkout was attempted, so a universal purchase failure is not established.",
+      "fix": "Investigate payment provider credentials/connectivity and publish a scoped incident explanation if customers are affected.",
+      "acceptance": "The dependency check recovers and an authorized end-to-end billing test confirms the customer path, or a clear incident notice documents impact/workaround.",
+      "screenshots": [
+        "screenshots-features/status-checks.jpg",
+        "screenshots-features/status-payments-failing.jpg"
+      ],
+      "priority": "P1",
+      "verification": "The public dependency diagnostic was observed failing on 3 October 2026. No checkout or billing transaction was tested.",
+      "confidence": "High for the observed status page; customer billing impact unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Operations and billing engineering",
+      "status": "Needs validation and owner review",
+      "brief": "At 18:51:24 UTC on 3 October, public status showed the payment dependency as failing/unavailable while six other checks passed. The check describes a read call; checkout impact was not tested."
+    },
+    {
+      "id": "MA06",
+      "severity": "P2",
+      "category": "Observed pricing clarity gap",
+      "title": "Cloud allowance is sold through multipliers without a numeric baseline",
+      "confidence": "High",
+      "urls": ["https://agiworkforce.com/pricing"],
+      "evidence": [
+        "Free is a small free monthly allowance; Basic is 5x Free per session; Pro 5x Basic; Max 5x Pro. No numeric baseline credits are shown in the reviewed pricing text.",
+        "The page separately describes rolling 5-hour, week and month limits and a 30% weekly flagship-model credit restriction. Max 20x also has 20x session but 10x weekly usage."
+      ],
+      "impact": "A buyer cannot estimate usable capacity or meaningfully compare cost from the public pricing page, despite well-presented dollar prices.",
+      "reproduction": "Read Free through Max cards, usage footnote and Managed usage comparison column.",
+      "fix": "Publish the actual included credits or explicitly bounded workload examples and explain each rolling window, model-cost multiplier, weekly cap and what happens at exhaustion. Preserve the truthful no-fixed-message-count caveat.",
+      "acceptance": "A new buyer can answer what is included, when each limit resets, which limit blocks first, and how additional usage is handled before selecting a paid plan.",
+      "screenshots": [
+        "screenshots-main/pricing-1180x757.jpg",
+        "screenshots-main/pricing-allowance.jpg"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Pricing gives Free a small allowance and larger plans multipliers, but no numeric baseline. Multiple session, weekly and monthly limits complicate capacity estimates."
+    },
+    {
+      "id": "MA07",
+      "severity": "P2",
+      "category": "Observed copy defect",
+      "title": "Sign-up shows an orphaned training/privacy disclosure",
+      "confidence": "High",
+      "urls": ["https://agiworkforce.com/signup"],
+      "evidence": [
+        "Below the signup legal acceptance copy, a standalone sentence reads Not by AGI. Free model providers may.",
+        "The sentence does not state what providers may do; the equivalent pricing table supplies a Trains on your content header, absent here.",
+        "The signed-out public recheck at 21:59:26 UTC still shows the standalone training/privacy fragment below the acceptance text; age eligibility and account creation were not submitted."
+      ],
+      "impact": "A material disclosure is ambiguous at account creation. Visitors may not understand that the fragment refers to training.",
+      "reproduction": "Open Sign up from Login and scroll to the lower policy text without submitting.",
+      "fix": "Replace the fragment with a complete statement about training and scope, with a nearby explanation of provider terms and plan distinctions reviewed by the policy owner.",
+      "acceptance": "The disclosure is understandable without external table headers or prior context and matches Data Use and Privacy.",
+      "screenshots": [
+        "screenshots-main/signup-disclosure.jpg",
+        "screenshots-final-public-entries/signup-00.jpg",
+        "screenshots-final-public-entries/signup-01.jpg"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Signup shows the fragment \"Not by AGI. Free model providers may.\" without naming training or explaining what providers may do."
+    },
+    {
+      "id": "MA08",
+      "severity": "P2",
+      "category": "Observed layout with UX recommendation",
+      "title": "Oversized Mobile product mockup pushes the value proposition and CTA below the fold",
+      "confidence": "High for measurements; design judgment for priority",
+      "urls": ["https://agiworkforce.com/mobile"],
+      "evidence": [
+        "At the real desktop viewport 1180 x 757, after animations settled and scrollY0, hero height is 1365.84375 px from y=65.",
+        "H1 begins y=543.3125 and primary Get notified link y=884.03125; a large empty upper-left area contrasts with a phone mockup taller than the viewport."
+      ],
+      "impact": "The first viewport emphasizes oversized illustration while delaying explanation and action. This is a desktop layout issue on the Mobile product page, not a mobile-device test.",
+      "reproduction": "Load /mobile at 1180 x 757, let initial animation settle, inspect first viewport and DOM rectangles.",
+      "fix": "Top-align hero copy, cap the mockup height relative to available viewport, and reduce the visual-to-copy scale ratio. Keep headline, status, explanation and primary CTA visible together on common laptop heights.",
+      "acceptance": "At 1180 x 757 and other supported desktop widths/heights, headline/body/CTA are readable without excessive initial scrolling; separately verify genuine 320-430 CSS px layouts.",
+      "screenshots": ["screenshots-main/mobile-hero-settled.jpg"],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": [],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Open for remediation",
+      "brief": "At 1180 x 757 after animation settled, the Mobile hero was 1365.8 px tall. The headline began near y=543 and the primary action near y=884. This is a desktop observation of the Mobile product page."
+    },
+    {
+      "id": "MA09",
+      "severity": "P2",
+      "category": "Observed layout with UX recommendation",
+      "title": "Pricing comparison requires long two-axis scanning with no persistent labels",
+      "confidence": "High",
+      "urls": ["https://agiworkforce.com/pricing"],
+      "evidence": [
+        "Plan table is 2727.046875 px wide inside a 1112 px horizontal scroll region at 1180 x 757.",
+        "It contains 18 columns and 9 plans; column headers and first plan cells have position:static. When vertically inside rows, headers are offscreen; horizontally scrolling loses plan names.",
+        "Scroll region is named and keyboard-focusable, so horizontal scrolling itself is not asserted as a reflow failure.",
+        "500 × 757 CSS-pixel ordinary desktop-window retest: H1 is 41.6 px/42.432 px; plans stack in one column. Page width remains contained. The 2727.05 px capability table scrolls inside a 456 px focusable region, but plan names disappear when it is moved right."
+      ],
+      "impact": "Comparing entitlements requires remembering offscreen labels and repeatedly scrolling. Major decision fields such as training and admin controls start far to the right.",
+      "reproduction": "Scroll to full capability table, move vertically into rows, then horizontally across capabilities.",
+      "fix": "Prefer plans as a small set of selectable columns and capabilities as rows, or add sticky plan/column labels and clear scroll affordances. Use row-header semantics where appropriate.",
+      "acceptance": "Users can compare any capability across chosen plans while plan names and capability labels remain visible; keyboard scrolling and table semantics remain usable.",
+      "screenshots": [
+        "screenshots-main/pricing-comparison-table.jpg",
+        "screenshots-journey-depth/narrow-pricing-hero.jpg",
+        "screenshots-journey-depth/narrow-pricing-plans.jpg",
+        "screenshots-journey-depth/narrow-pricing-comparison-left.jpg",
+        "screenshots-journey-depth/narrow-pricing-comparison-horizontal.jpg"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": [],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Open for remediation",
+      "brief": "The comparison table is 2727 px wide within a 1112 px scroll region, with 18 columns and 9 plans. Plan cells and headings are static, so users lose both kinds of label while scanning. Horizontal scrolling itself is not classified as a reflow failure."
+    },
+    {
+      "id": "MA10",
+      "severity": "P2",
+      "category": "UX and content recommendation",
+      "title": "Homepage hero does not quickly explain the available product or distinguish preview surfaces",
+      "confidence": "High for observed structure; medium for conversion impact",
+      "urls": ["https://agiworkforce.com/"],
+      "evidence": [
+        "H1 is only AGI; the dominant first-screen proposition is The AI Application Suite and a model count, beside an unreleased phone mockup.",
+        "Primary actions are Try AGI Web and Get AGI Desktop, but the latter leads to no available installer. The decorative store badges are cropped at the right edge at 1180 px; they are not actual app-store links.",
+        "The primary Try AGI Web destination is a Welcome back login screen; new users must find a secondary Sign up link.",
+        "500 × 757 CSS-pixel ordinary desktop-window retest: At500×757, the phone/store illustration is omitted, the two primary CTAs remain visible, metrics reflow to two columns, and document scrollWidth490 equals clientWidth490. The visible brand wordmark remains prominent; the semantic H1 is a visually hidden1×1 px AGI label, not the visible wordmark size. The routing illustration reduces to mostly unlabeled lines and dots."
+      ],
+      "impact": "New visitors must scroll to learn concrete value and what they can use now. Cropped decorative store badges can visually compete with the real web action.",
+      "reproduction": "Inspect fresh homepage first viewport and follow the advertised Web entry destination without signing in.",
+      "fix": "Use a benefit-led H1 and short explanation focused on the available Web product; label preview surfaces adjacent to their CTAs; use bounded product visuals with readable badges. Consider an explicit Start free account-creation entry.",
+      "acceptance": "A new visitor can identify what AGI does, who it is for, what is available today and the appropriate first action from the first screen.",
+      "screenshots": [
+        "screenshots-main/homepage-initial-1180x757.jpg",
+        "screenshots-main/homepage-product-menu.jpg",
+        "screenshots-final-public-entries/homepage-narrow-500.jpg",
+        "screenshots-final-public-entries/homepage-narrow-next-500.jpg"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": [],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Open for remediation",
+      "brief": "The first screen uses \"AGI\" as its H1 and a broad suite description beside preview-product imagery. New visitors must infer the available product and concrete use. This is a design recommendation rather than measured conversion loss."
+    },
+    {
+      "id": "MA11",
+      "severity": "P2",
+      "category": "Observed taxonomy clarity gap",
+      "title": "Provider/model counts use incompatible scopes without explaining the distinction",
+      "confidence": "Medium-high",
+      "urls": [
+        "https://agiworkforce.com/",
+        "https://agiworkforce.com/web",
+        "https://agiworkforce.com/providers",
+        "https://agiworkforce.com/cli",
+        "https://agiworkforce.com/pricing"
+      ],
+      "evidence": [
+        "Homepage advertises 400+ models and 10+ BYOK providers; Providers lists 400 catalogued models and 14 BYOK providers plus 2 local runtimes.",
+        "Web claims 20+ providers in the catalog, while CLI says 20+ providers plus custom endpoints. Pricing lists a smaller managed selection and explains admitted plan models.",
+        "Some differences can be valid (gateway catalog versus unique models, BYOK versus managed admission), but the public figures do not consistently label those scopes."
+      ],
+      "impact": "Visitors may read 400+ as 400 distinct managed models available on their chosen plan, or compare inconsistent provider totals.",
+      "reproduction": "Compare metric labels and catalog explanations on the listed pages.",
+      "fix": "Define catalog entries, unique model families, BYOK providers, gateway aggregators, local runtimes and managed-admitted models. Generate metric numbers and qualifying labels from one dated source.",
+      "acceptance": "All displayed counts reconcile under explicitly stated definitions; plan availability is clearly separate from catalog reach.",
+      "screenshots": [
+        "screenshots-main/providers-1180x757.jpg",
+        "screenshots-main/web-1180x757.jpg"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Model and provider counts vary without consistent scope labels. Catalog entries, distinct models, BYOK providers, local runtimes and managed-plan availability may legitimately differ; the public numbers need definitions."
+    },
+    {
+      "id": "HA03",
+      "severity": "P2",
+      "title": "Keyboard shortcut table is unrendered Markdown",
+      "urls": ["https://agiworkforce.com/help/keyboard-shortcuts", "https://agiworkforce.com/help"],
+      "evidence": [
+        "The list is a paragraph containing literal \"| Shortcut | What it does | | ------------ | ...\".",
+        "DOM contains zero main table elements. Search result excerpt reproduces the raw pipes.",
+        "500 × 757 CSS-pixel ordinary desktop-window retest: H1 adapts to 44 px, H2 to 32 px, and body text is 18 px/27.9 px in a 442 px column. The shortcut list remains a literal Markdown-pipe paragraph rather than a table; title and body still begin at different x positions."
+      ],
+      "impact": "Shortcuts cannot be scanned by row/column and screen readers do not receive table semantics; the defect propagates into support search.",
+      "fix": "Render GFM tables or author semantic table markup with scoped column headers and keyboard-key styling. Sanitize search excerpts from rendered text.",
+      "acceptance": "Eight shortcuts appear as eight clear rows under Shortcut/What it does headers; accessible table semantics exist; search excerpt contains no Markdown delimiters.",
+      "screenshots": [
+        "screenshots-help/keyboard-shortcuts-raw-markdown.jpg",
+        "screenshots-help/help-search-keyboard.jpg",
+        "screenshots-journey-depth/narrow-help-shortcuts-hero.jpg",
+        "screenshots-journey-depth/narrow-help-shortcuts-body.jpg"
+      ],
+      "verification": "Visually verified and DOM confirmed.",
+      "priority": "P2",
+      "category": "Observed documentation issue",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Frontend engineering",
+      "status": "Open for remediation",
+      "brief": "Keyboard shortcuts render as a paragraph with literal pipe-table syntax. No semantic main table was found, and the raw delimiters also appear in help-search excerpts."
+    },
+    {
+      "id": "HA04",
+      "severity": "P2",
+      "title": "CLI first-run command disagrees with BYOK instructions",
+      "urls": [
+        "https://agiworkforce.com/help/install-the-cli",
+        "https://agiworkforce.com/help/byok-provider-keys",
+        "https://agiworkforce.com/help/troubleshooting"
+      ],
+      "evidence": [
+        "Install guide code block: \"agi login # OAuth, or paste a provider API key\".",
+        "BYOK guide: \"A bare agi login signs in to AGI managed cloud. It does not prompt for a provider API key.\"",
+        "Troubleshooting independently says agi login with no provider signs into the AGI account through a browser code."
+      ],
+      "impact": "A developer following the first-run snippet for BYOK enters the wrong authentication flow and may conclude setup is broken.",
+      "fix": "Split first run into \"agi login\" for managed account login and \"agi login <provider>\" for BYOK, with explicit examples.",
+      "acceptance": "Install, BYOK and troubleshooting pages show the same command-to-authentication mapping; copy/paste instructions are verified against the released CLI.",
+      "screenshots": [
+        "screenshots-help/install-the-cli.jpg",
+        "screenshots-help/byok-provider-keys.jpg"
+      ],
+      "verification": "Documentation mismatch confirmed; CLI was not executed.",
+      "priority": "P2",
+      "category": "Observed documentation issue",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The install guide says agi login can use OAuth or a provider key. BYOK and troubleshooting say bare agi login signs into AGI managed cloud instead."
+    },
+    {
+      "id": "HA05",
+      "severity": "P2",
+      "title": "Article references and search results do not take readers to the promised detail",
+      "urls": [
+        "https://agiworkforce.com/help/account-security",
+        "https://agiworkforce.com/help/export-your-data",
+        "https://agiworkforce.com/help/keyboard-shortcuts",
+        "https://agiworkforce.com/help"
+      ],
+      "evidence": [
+        "41 of 43 article main areas have exactly two links: All help articles and Open related page; almost every in-body cross-reference is plain text.",
+        "Account security prints /recover and /developers as text without links. Export guide says \"See the account deletion article\" without linking it.",
+        "Help search labels a result \"Keyboard shortcuts, The list\" but href is the article without #the-list, even though the heading ID exists; verified click lands at scrollY 0.",
+        "Account security is 5,647 px high with 11 H2 headings and no in-page links."
+      ],
+      "impact": "Readers must return to the index, manually locate named articles, or scroll long security instructions. The generic related-page label obscures where they are going.",
+      "fix": "Link named destinations directly, use descriptive CTA labels, include a compact section navigation on long guides, and deep-link search results to heading anchors.",
+      "acceptance": "Every \"see/read/open\" reference with a known destination is clickable; section-search results land on the matching heading below the sticky header; long security guide has keyboard-accessible contents.",
+      "screenshots": [
+        "screenshots-help/account-security.jpg",
+        "screenshots-help/article-template-hero.jpg",
+        "screenshots-help/help-search-keyboard.jpg"
+      ],
+      "verification": "Link inventories captured for all 43 guides; search navigation explicitly exercised.",
+      "priority": "P2",
+      "category": "Observed documentation issue",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Forty-one of 43 help articles have only the two generic main-area links. Many named cross-references are plain text. A tested section-labelled search result opens the article at the top instead of its existing heading anchor."
+    },
+    {
+      "id": "HA06",
+      "severity": "P2",
+      "title": "Reference templates use oversized title areas and inconsistent reading grids",
+      "urls": [
+        "https://agiworkforce.com/help",
+        "https://agiworkforce.com/help/keyboard-shortcuts",
+        "https://agiworkforce.com/help/workspace-policy",
+        "https://agiworkforce.com/help/account-security",
+        "https://agiworkforce.com/help/workspace-administration",
+        "https://agiworkforce.com/help/enterprise-security",
+        "https://agiworkforce.com/help/billing-and-plans",
+        "https://agiworkforce.com/help/memory",
+        "https://agiworkforce.com/help/tool-approvals",
+        "https://agiworkforce.com/help/mcp-connections",
+        "https://agiworkforce.com/help/files-and-attachments",
+        "https://agiworkforce.com/help/library",
+        "https://agiworkforce.com/help/signing-up",
+        "https://agiworkforce.com/help/getting-started",
+        "https://agiworkforce.com/help/local-mode",
+        "https://agiworkforce.com/help/models-and-reasoning",
+        "https://agiworkforce.com/help/projects",
+        "https://agiworkforce.com/help/byok-provider-keys",
+        "https://agiworkforce.com/help/configuration",
+        "https://agiworkforce.com/help/workspace-roles-and-groups",
+        "https://agiworkforce.com/help/agi-work",
+        "https://agiworkforce.com/help/schedules-and-triggers",
+        "https://agiworkforce.com/help/voice",
+        "https://agiworkforce.com/help/desktop-and-cli",
+        "https://agiworkforce.com/help/troubleshooting",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-27",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-22",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-09-22",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-22",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-22",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-21",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-21",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-09-21",
+        "https://agiworkforce.com/legal/archive/terms/2026-08-11",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-08-05",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-02",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-12",
+        "https://agiworkforce.com/legal/archive/cookies/2026-09-12",
+        "https://agiworkforce.com/legal/archive/copyright/2026-08-06",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-12",
+        "https://agiworkforce.com/legal/archive/refund-policy/2026-08-13",
+        "https://agiworkforce.com/legal/archive/accessibility/2026-08-05",
+        "https://agiworkforce.com/legal/archive/trust/2026-09-12",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-08-13"
+      ],
+      "evidence": [
+        "At 1180 x 757 the help search input begins at y=819, entirely below the first viewport.",
+        "Keyboard-shortcuts first content heading begins at y=673.8; hero H1 starts at x=325.5 while article body starts at x=24 with width 576.",
+        "The reading column occupies the far-left half while the right half remains unused; the hero and body do not share a left edge.",
+        "Additional observed evidence (HC01): Article prose measures 18 px/27.9 px; ordered and unordered list containers measure 14 px/21 px. Section headings measure 47.52 px/52.272 px. This puts the step-by-step signup sequence, permissions lists and error remedies in materially smaller text than the surrounding explanation.",
+        "Additional observed evidence (PA01): All 19 archives use a centred hero but reset the body to a 24 px left gutter. Computed hero padding is 140 px top / 112 px bottom, with another 112 px at the start of the body. H1 is 60 px, H2 47.52 px, H3 31 px; body prose is 18 px / 27.9 px and 576 px wide. The combined 224 px whitespace around the hero/body boundary and repeated large headings dominate simple legal reading tasks.",
+        "500 × 757 CSS-pixel ordinary desktop-window retest: H1 adapts to 44 px, H2 to 32 px, and body text is 18 px/27.9 px in a 442 px column. The shortcut list remains a literal Markdown-pipe paragraph rather than a table; title and body still begin at different x positions."
+      ],
+      "impact": "A utility help center requires a scroll before search, and an article requires a scroll before its useful material. Large displacement between title and body weakens hierarchy and scan speed.",
+      "fix": "Use a compact support header with search immediately visible; align title, metadata, actions and reading column to one grid, reserving a right column only for actual navigation. Use the same comfortable text scale for paragraphs and actionable list items, with modest tightening only for dense reference tables. Reduce utility-page H2 scale and add compact navigation instead of using oversized headings as the only wayfinding. Preserve the warm editorial palette, Newsreader/Geist pairing and rules. Use one reading grid for title and body. Proposed archive values: H1 44–48 px; H2 28–32 px; H3 22–24 px; 18 px / 28 px prose; 56–72 px hero padding and 40–56 px major-section separation. These are recommended values, not current measurements.",
+      "acceptance": "At 1180 x 757 and common laptop sizes, help search is visible without scroll and an article's first useful paragraph is readable; title/body grid alignment is intentional and consistent. At the audited laptop viewport, steps and error remedies remain at the chosen body scale; heading/list/prose transitions are coherent. Review a long security guide, numbered signup flow, and code-heavy configuration guide in both themes and real narrow viewports. At 1180×757 CSS px, title and prose share a deliberate grid; the first substantive body content appears earlier; heading levels remain distinct. Recheck narrow widths and zoom separately.",
+      "screenshots": [
+        "screenshots-help/help-index.jpg",
+        "screenshots-help/article-template-hero.jpg",
+        "screenshots-help/keyboard-shortcuts-raw-markdown.jpg",
+        "screenshots-help/workspace-policy.jpg",
+        "screenshots-help-components/signing-up-part1.jpg",
+        "screenshots-help-components/workspace-administration-part1.jpg",
+        "screenshots-help-components/configuration-part1.jpg",
+        "screenshots-policy-archives/00-00.jpg",
+        "screenshots-policy-archives/00-01.jpg",
+        "screenshots-policy-archives/15-00.jpg",
+        "screenshots-journey-depth/narrow-help-shortcuts-hero.jpg",
+        "screenshots-journey-depth/narrow-help-shortcuts-body.jpg"
+      ],
+      "verification": "Measured DOM rectangles and visual screenshots. This is a usability/layout finding, not a claimed WCAG failure.",
+      "priority": "P2",
+      "category": "Observed documentation issue",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": ["HC01", "PA01"],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Open for remediation",
+      "brief": "At 1180 x 757, Help search starts at y=819. In the shortcut article, the title starts at x=325.5 and the body at x=24; the first content heading is near y=674. Utility content is delayed and the reading grid changes abruptly. The expanded help review measured list containers at 14 px/21 px versus body paragraphs at 18 px/27.9 px, making many instructions visually subordinate."
+    },
+    {
+      "id": "HA07",
+      "severity": "P2",
+      "title": "Workspace exception explanation is internally ambiguous about widening access",
+      "urls": ["https://agiworkforce.com/help/workspace-policy"],
+      "evidence": [
+        "Same paragraph says policy can be overridden so \"one team can keep a capability the rest of the workspace does not have\", then says \"an exception cannot be used to widen access past what the workspace itself allows\"."
+      ],
+      "impact": "An administrator cannot tell whether a workspace-wide disabled feature can be enabled for one group, or whether exceptions only narrow access. This matters when planning role policy.",
+      "fix": "Describe the precedence model with a small allow/deny example, separating workspace ceilings from group restrictions and stating whether exceptions can grant access.",
+      "acceptance": "An admin can answer the concrete case \"Workspace Work=off, Team A Work=on: can Team A run Work?\" from the guide without inference.",
+      "screenshots": ["screenshots-help/workspace-policy.jpg"],
+      "verification": "Ambiguous public wording confirmed; enforcement not tested, so do not report this as a security bypass.",
+      "priority": "P2",
+      "category": "Observed documentation issue",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "Workspace-policy text says a team can keep a capability unavailable to the rest of the workspace, then says exceptions cannot widen access beyond workspace permission. The precedence model is ambiguous; no enforcement bypass was tested."
+    },
+    {
+      "id": "FR05",
+      "severity": "P2",
+      "category": "Behavioral promise",
+      "title": "Plan-first guarantee has a buried fail-open exception",
+      "urls": ["https://agiworkforce.com/agi-work"],
+      "evidence": [
+        "Hero: AGI Work writes a plan first, then asks before it acts. Plan card: a planning turn that comes back unreadable leaves the run with no plan rather than stopping it.",
+        "The fresh hero promises a plan before action, while the plan card retains the unreadable-planning-turn exception. This is a contradiction in public wording, not a reproduced runtime failure."
+      ],
+      "impact": "The advertised review/visibility guarantee is not unconditional, affecting user expectations around autonomous work.",
+      "fix": "Either pause on failed planning until a readable plan exists, or qualify the promise clearly before the user starts a run.",
+      "acceptance": "A malformed planning response has tested, documented behavior consistent with the hero promise and does not silently bypass the promised plan.",
+      "screenshots": [
+        "screenshots-features/agi-work-plan-exception.jpg",
+        "screenshots-final-public-entries/agi-work-00.jpg",
+        "screenshots-final-public-entries/agi-work-01.jpg",
+        "screenshots-final-public-entries/agi-work-02.jpg",
+        "screenshots-final-public-entries/agi-work-03.jpg",
+        "screenshots-final-public-entries/agi-work-04.jpg",
+        "screenshots-final-public-entries/agi-work-05.jpg",
+        "screenshots-final-public-entries/agi-work-06.jpg"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "AGI Work promises a plan before action, while a detail card describes an unreadable planning turn leaving a run without a plan rather than stopping. Runtime behavior was not tested."
+    },
+    {
+      "id": "FR06",
+      "severity": "P2",
+      "category": "Ambiguous plan and feature naming",
+      "title": "Free start copy does not distinguish research from paid Deep Research",
+      "urls": [
+        "https://agiworkforce.com/features",
+        "https://agiworkforce.com/features/deep-research"
+      ],
+      "evidence": [
+        "The free-start summary says research from the first day. The Deep Research detail page calls that branded feature paid-only. Generic research may mean ordinary research, so the wording does not establish a proven excluded entitlement."
+      ],
+      "impact": "A visitor could confuse ordinary research with the paid Deep Research feature.",
+      "fix": "Name the paid feature consistently, label its tier, and distinguish ordinary research in free-start summaries.",
+      "acceptance": "A visitor can distinguish ordinary research from paid Deep Research before selecting a plan.",
+      "screenshots": ["screenshots-features/features-free-research.jpg"],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "Medium; ambiguous public wording, not an established entitlement contradiction",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The free-start summary says research from the first day, while branded Deep Research is described as paid-only. Generic research may mean ordinary research, so this is ambiguous naming and tier communication rather than a proven excluded entitlement."
+    },
+    {
+      "id": "FR08",
+      "severity": "P2",
+      "category": "Directory UX / copy",
+      "title": "Skills directory exposes raw trigger instructions instead of scannable product descriptions",
+      "urls": ["https://agiworkforce.com/skills"],
+      "evidence": [
+        "Public list contains long When the user wants... / Also use when... trigger lists, raw kebab-case names and internal references such as .agents/product-marketing.md. A settled DOM check found no search input; the screenshot shows multi-paragraph rows with long line lengths and no categories.",
+        "Additional observed evidence (EX02): The DOM-delivered skill descriptions include When the user wants trigger language and a reference to .agents/product-marketing.md. The directory describes itself as reusable instruction sets, so public technical detail can be intentional.",
+        "Additional observed evidence (EX02): features-resources-report.md: FR08",
+        "The 22:01:18 UTC signed-out pass reviewed all 66 built-in rows in 17 overlapping captures. The page measured 10657 CSS px, with a 9190.06 px directory section. Long raw trigger descriptions remain; no visible search or category control was present in the complete review."
+      ],
+      "impact": "People cannot quickly find a relevant skill or understand its outcome; the catalog feels like an unedited implementation dump.",
+      "fix": "Show human-readable skill names, one-sentence outcome summaries, examples, categories, search and expandable technical details. Add task/name search and useful categories to the 66-row catalog while retaining intentionally public full specifications as detail.",
+      "acceptance": "A visitor can locate a skill by task/name, scan its outcome in one short paragraph, and inspect raw specification only on demand.",
+      "screenshots": [
+        "screenshots-features/skills-raw-copy-scrolled.jpg",
+        "screenshots-final-public-entries/skills-00.jpg",
+        "screenshots-final-public-entries/skills-01.jpg",
+        "screenshots-final-public-entries/skills-02.jpg",
+        "screenshots-final-public-entries/skills-03.jpg",
+        "screenshots-final-public-entries/skills-04.jpg",
+        "screenshots-final-public-entries/skills-05.jpg",
+        "screenshots-final-public-entries/skills-06.jpg",
+        "screenshots-final-public-entries/skills-07.jpg",
+        "screenshots-final-public-entries/skills-08.jpg",
+        "screenshots-final-public-entries/skills-09.jpg",
+        "screenshots-final-public-entries/skills-10.jpg",
+        "screenshots-final-public-entries/skills-11.jpg",
+        "screenshots-final-public-entries/skills-12.jpg",
+        "screenshots-final-public-entries/skills-13.jpg",
+        "screenshots-final-public-entries/skills-14.jpg",
+        "screenshots-final-public-entries/skills-15.jpg",
+        "screenshots-final-public-entries/skills-16.jpg"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": ["EX02"],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Open for remediation",
+      "brief": "The Skills list exposes lengthy trigger instructions, kebab-case names and raw technical references. No search input was found in the settled DOM, making task-based discovery and scanning difficult."
+    },
+    {
+      "id": "FR10",
+      "severity": "P2",
+      "category": "Enterprise readiness / incident UX",
+      "title": "Status page gives its explanation more prominence than health and freshness",
+      "urls": ["https://agiworkforce.com/status"],
+      "evidence": [
+        "Page explicitly says Status mirror Not configured. This page is the only place status is published. It also says same-deployment outage removes this page, no incident archive/postmortems, no written incident posts, and no 24/7 rotation. At the observed desktop viewport the first screen is a large generic hero with only a thin failure strip at the bottom; detailed failing component appears below a long implementation/SSRF explanation.",
+        "Additional observed evidence (EX04): At 19:32:06 UTC the displayed checked time was 18:51:24 GMT, about 40m42s old, beneath Re-checked every 60 seconds. A later normal navigation and 19:33:42 reload showed checked 19:32:06 GMT. This is evidence of a stale initial display followed by refresh, not a permanently frozen page. Payments remained Failing (unavailable) in the reported check."
+      ],
+      "impact": "During a major outage users may lose the status source; even a present failure is slower to understand. This is a readiness gap rather than an undisclosed claim.",
+      "fix": "Serve status independently, lead with incident/component impact and checked time, and move architecture caveats to a secondary explanatory section. Publish incident timelines appropriate to the service commitment. Display signal age and an explicit stale/refreshing state when it exceeds the promised freshness budget; verify cold-visit and return-visit refresh behavior. Keep payment-incident investigation separate from a claim that checkout is universally broken. Replace the utility-page marketing hero with a compact status-first layout: short title, aggregate result, affected checks, readable freshness, then check rows; place methodology below. The detailed frontend teardown specifies proposed spacing and type.",
+      "acceptance": "An independent status URL remains available during app outage; active incidents and affected capabilities appear above the fold with updates and timestamps. After a quiet interval, first and subsequent anonymous visits display a current check or a clear stale label and last-success time. Failure to refresh is visible. Verify response/cache behavior internally without relying only on UI labels. At 1180 x 757, the title, aggregate state, last successful check and beginning of the check list are visible without scrolling. Healthy, failing, stale and unavailable states remain distinct.",
+      "screenshots": [
+        "screenshots-features/status-payments-failing.jpg",
+        "screenshots-features/status-checks.jpg",
+        "screenshots-exposure/status-rechecked-details.jpg",
+        "screenshots-exposure/status-refresh-hero.jpg",
+        "screenshots-user-reference/status-opening.png"
+      ],
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": ["EX04"],
+      "suggested_owner": "Operations and billing engineering",
+      "status": "Open for remediation",
+      "brief": "The large two-line heading, long introduction and surrounding gaps push the actual health result into a small strip. The status hierarchy should lead with the current result, affected checks and last successful check time. Status states that it has no independent mirror, incident archive or 24/7 rotation. The active failure details appear below a large hero and lengthy implementation explanation. Its own deployment could also remove the status page during an outage. An initial 19:32 visit displayed the 18:51:24 check; later normal navigation refreshed it. This is a stale-initial-display observation, not a permanently frozen page or independently verified checkout outage."
+    },
+    {
+      "id": "TC09",
+      "severity": "Medium",
+      "category": "Content completeness",
+      "title": "Model licence directory omits usable licence evidence for many entries",
+      "urls": ["https://agiworkforce.com/model-licenses"],
+      "evidence": [
+        "Rendered page contains 186 occurrences of \"Not recorded in the registry.\" Its six main-content links lead only to AGI policy pages; no per-model/provider licence URL is supplied, although users are told to check provider terms before commercial use."
+      ],
+      "impact": "A legal/procurement user cannot complete the stated licence-checking task from the directory.",
+      "fix": "Store licence identifier, authoritative licence/terms URL, route/provider, last verified date and commercial-use caveats per model. Mark unresolved entries clearly and prioritize completion.",
+      "acceptance": "Every available model has an authoritative source link or a specifically assigned unresolved state; no generic \"provider terms\" row lacks a route to those terms.",
+      "screenshots": ["screenshots-trust/model-licenses-missing.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The model-license directory contains 186 occurrences of \"Not recorded in the registry\" and no usable per-model/provider license links in the captured main-area link inventory."
+    },
+    {
+      "id": "TC10",
+      "severity": "Medium",
+      "category": "Information architecture",
+      "title": "Model licence page is a 32,502-pixel directory without search or provider navigation",
+      "urls": ["https://agiworkforce.com/model-licenses"],
+      "evidence": [
+        "At 1180 x 757 the DOM scroll height is 32,502 px. No main-content search field or provider-anchor links were present. Provider sections have large vertical spacing and users must scroll or use browser Find."
+      ],
+      "impact": "Finding a particular model or licence is cumbersome, especially for comparison and procurement.",
+      "fix": "Add a searchable, filterable licence table, provider navigation, stable row links and compact spacing, while preserving a readable no-script fallback.",
+      "acceptance": "A visitor can find a model by name/provider and open its licence source without scrolling through unrelated providers; keyboard operation works.",
+      "screenshots": [
+        "screenshots-trust/model-licenses-missing.jpg",
+        "screenshots-trust/model-licenses.jpg"
+      ],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The model-license page is 32,502 px high at the observed desktop viewport and lacks a main search field or provider-anchor navigation. Finding a specific model requires extended scrolling or browser Find."
+    },
+    {
+      "id": "TC11",
+      "severity": "Medium",
+      "category": "Observed workflow friction and clarity recommendation",
+      "title": "Anonymous subscribers need a manual consent-withdrawal workflow",
+      "urls": [
+        "https://agiworkforce.com/privacy/requests",
+        "https://agiworkforce.com/privacy/india",
+        "https://agiworkforce.com/data-use"
+      ],
+      "evidence": [
+        "The one-click claim sits under a heading explicitly scoped to consent recorded against an account. The settled signed-out panel says email-address consent, such as an early-access signup without an account, cannot be shown here and sends the visitor to the manual request form. This is not a proven internal contradiction on /privacy/requests."
+      ],
+      "impact": "Anonymous subscribers must use a human-handled request instead of the faster account control. Showing the two paths upfront would reduce confusion and effort; no legal-compliance conclusion is made.",
+      "fix": "Present separate upfront paths for account consent and email-only subscriptions. Consider a verified email withdrawal link or flow, and show the expected processing time for requests needing a human.",
+      "acceptance": "Every intake has a withdrawal route matching its promise; anonymous users receive clear identity verification and confirmation rather than a blanket one-click claim.",
+      "screenshots": ["screenshots-trust/privacy-requests-settled-exact.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "screenshotReverifiedAt": "2026-10-03T19:07:28Z-2026-10-03T19:09:10Z",
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The rights page explicitly scopes one-click controls to account-recorded consent. Signed-out email subscribers are routed to a manual request. This is a friction and routing-clarity recommendation, not a demonstrated contradiction of the account-scoped promise."
+    },
+    {
+      "id": "TC12",
+      "severity": "Medium",
+      "category": "UI layout and spacing",
+      "title": "Beta application hero and form use visibly different alignment grids",
+      "urls": ["https://agiworkforce.com/beta"],
+      "evidence": [
+        "At 1180 x 757, measured h1 x=297 while form x=24, width=640, top=642.8. The first input only just appears at the bottom of the initial screen; the form remains stranded on the left with a large empty right half."
+      ],
+      "impact": "The transition looks unintentional and makes the application feel separate from its introduction.",
+      "fix": "Put hero and form in the same centered max-width container, reduce the hero-to-form gap, and use a consistent field rhythm. Add concise adjacent privacy/use-of-data guidance (main content currently has no policy link).",
+      "acceptance": "Hero and form share a left edge on desktop; first meaningful field is comfortably visible at 1180 x 757; mobile is independently tested rather than inferred.",
+      "screenshots": ["screenshots-trust/beta.jpg", "screenshots-trust/beta-form-layout.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Open for remediation",
+      "brief": "The Beta headline begins at x=297, while the 640 px form begins at x=24 and y=642.8. The form and hero lack a common reading edge; the first field only just enters the initial screen."
+    },
+    {
+      "id": "TC13",
+      "severity": "Medium",
+      "category": "Conversion UX",
+      "title": "Contact-sales first screen has no actionable sales contact",
+      "urls": ["https://agiworkforce.com/contact-sales"],
+      "evidence": [
+        "The hero displays contact@agiworkforce.com as plain text and a routing table. The actual mailto CTA is in the later Reach us section, below the first 757-pixel screen."
+      ],
+      "impact": "A high-intent visitor lands on Contact sales but must hunt or manually copy the address to act.",
+      "fix": "Make the hero email a mailto link and add the same clear contact CTA above the fold; retain the useful preparation questions below.",
+      "acceptance": "A keyboard and pointer user can initiate the intended contact from the hero without scrolling; do not auto-open email.",
+      "screenshots": ["screenshots-trust/contact-sales.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Open for remediation",
+      "brief": "Contact sales presents its email as plain text in the hero. The actionable mailto control appears later, below the observed first screen."
+    },
+    {
+      "id": "TC14",
+      "severity": "Medium",
+      "category": "Data-sharing notice clarity",
+      "title": "Copyright form and policy disagree about when a publisher sees a notice",
+      "urls": ["https://agiworkforce.com/copyright", "https://agiworkforce.com/copyright/report"],
+      "evidence": [
+        "Policy says the publishing account is notified with a copy of the notice. The form says the publisher sees the notice \"if the publisher counter-notifies.\" The form collects name, address, phone and email."
+      ],
+      "impact": "A complainant cannot clearly understand when personal contact information is disclosed to the reported publisher.",
+      "fix": "Have the notice-process owner confirm the actual disclosure sequence and use identical plain-language explanations beside the fields and in the policy.",
+      "acceptance": "The form identifies recipients, data and timing consistently before submission; required fields adjust correctly for the chosen report type.",
+      "screenshots": ["screenshots-trust/copyright-report.jpg", "screenshots-trust/copyright.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Policy owner and counsel",
+      "status": "Open for remediation",
+      "brief": "Copyright policy says the publisher receives a copy of the notice, while the form ties disclosure to a counter-notice. Because the form requests personal contact details, the timing and recipient should be consistent before submission."
+    },
+    {
+      "id": "TC16",
+      "severity": "Medium",
+      "category": "Legal text consistency; owner review",
+      "title": "Mobile content licence and dispute wording diverge from platform terms",
+      "urls": [
+        "https://agiworkforce.com/mobile/legal",
+        "https://agiworkforce.com/terms",
+        "https://agiworkforce.com/legal"
+      ],
+      "evidence": [
+        "Mobile legal says \"You grant AGI Automation LLC no license to your content,\" while platform terms grant a licence to host, store, transmit and process content. Mobile disputes point to Texas courts; platform terms require individual arbitration. The legal index says platform documents govern overlap, but the mobile page does not clearly resolve these specific differences."
+      ],
+      "impact": "Readers of the surface-specific agreement may misunderstand the service's processing rights and dispute process.",
+      "fix": "Ask counsel to make precedence and intended mobile exceptions explicit, and remove accidental contradictions. This is a textual comparison, not a legal validity conclusion.",
+      "acceptance": "Platform and mobile terms have a clear, reviewed precedence rule and compatible content-processing language.",
+      "screenshots": ["screenshots-trust/mobile-legal.jpg", "screenshots-trust/terms.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P2",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Policy owner and counsel",
+      "status": "Open for remediation",
+      "brief": "Mobile terms deny a content license and name Texas courts; platform terms describe a processing license and individual arbitration. The legal index gives a precedence rule, but the mobile text does not resolve these specific differences clearly."
+    },
+    {
+      "id": "PV01",
+      "priority": "P2",
+      "category": "Accessibility semantics",
+      "title": "Feature cards override their native link semantics",
+      "urls": ["https://agiworkforce.com/web"],
+      "evidence": [
+        "Each of five clickable feature cards uses an explicit listitem role on its anchor, replacing native link semantics in the inspected accessibility output. The recorded DOM was an anchor with href and role=listitem. The Artifacts card was activated and navigation worked; this is a semantic defect, not proof of broken navigation."
+      ],
+      "impact": "Assistive navigation by links may omit these otherwise important discovery links. Actual screen-reader operation and keyboard navigation were not tested; no claim of blanket WCAG compliance/failure.",
+      "reproduction": "Open a listed product page, locate the five-card feature group, and inspect each clickable card in the rendered DOM and accessibility tree. Compare the anchor href with its explicit listitem role. Activate the Artifacts link separately to distinguish semantic exposure from navigation behavior.",
+      "fix": "Keep list semantics on a wrapper and preserve the native anchor role with concise accessible name. Retain decorative mockup aria-hidden treatment.",
+      "acceptance": "Each of five cards appears as a named link in accessibility inspection and keyboard focus; Enter opens its matching feature page.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High",
+      "screenshots": ["screenshots-product-depth/web-04-status.png"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Five Inside feature-card anchors",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "Each of five clickable feature cards uses an explicit listitem role on its anchor, replacing native link semantics in the inspected accessibility output. The recorded DOM was an anchor with href and role=listitem. The Artifacts card was activated and navigation worked; this is a semantic defect, not proof of broken navigation."
+    },
+    {
+      "id": "PV02",
+      "priority": "P2",
+      "category": "Product storytelling / visual legibility",
+      "title": "Product evidence is rendered too small to inspect",
+      "urls": [
+        "https://agiworkforce.com/web",
+        "https://agiworkforce.com/desktop",
+        "https://agiworkforce.com/vscode-extension"
+      ],
+      "evidence": [
+        "Fine-grained product text and route receipts are reduced to miniature scale while the surrounding copy asks visitors to value those details. Computed Web hero body text measured 8.79–9.59 CSS px; the receipt text measured 7.19 px."
+      ],
+      "impact": "Overall product shape is intelligible, but visitors cannot readily inspect the evidence for attribution/permissions. This is a marketing illustration problem, not a claim that the authenticated product has tiny text.",
+      "reproduction": "Open /web at 1180 × 757 CSS px. Read the illustrative hero answer and route receipt without zoom. Inspect the computed text sizes to confirm the measured miniature scale; the image remains a marketing illustration rather than a live app session.",
+      "fix": "Use focused truthful excerpts with readable source/receipt/approval callouts; reduce peripheral chrome; label illustrative previews. Preserve the established warm visual system.",
+      "acceptance": "At 1180 px width a reviewer can read the illustrative answer, route and decision without browser zoom; preview is clearly distinguished from live product.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High observation; design judgment",
+      "screenshots": [
+        "screenshots-product-depth/web-01-hero.png",
+        "screenshots-product-depth/web-05-research-agents.png"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Hero and feature illustrations",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "Fine-grained product text and route receipts are reduced to miniature scale while the surrounding copy asks visitors to value those details. Computed Web hero body text measured 8.79–9.59 CSS px; the receipt text measured 7.19 px."
+    },
+    {
+      "id": "PV05",
+      "priority": "P2",
+      "category": "Product storytelling / content repetition",
+      "title": "Mobile feature stories reuse the same phone conversation",
+      "urls": ["https://agiworkforce.com/mobile"],
+      "evidence": [
+        "The hero and three Mobile feature rows reuse the same memory conversation. Rows discussing data boundaries and the model picker, projects or settings do not show a relevant different state. The page is 7023 CSS px long at the tested width. The hero mockup measured 575.47 × 1246.84 px; each of the three lower mockups measured 270 × 585 px."
+      ],
+      "impact": "The repeating phone scene adds substantial scroll without giving evidence for each distinct planned capability.",
+      "reproduction": "Open /mobile at the recorded desktop width. Compare the hero phone conversation with the phones in the three feature rows as you scroll. Each uses the same memory conversation despite different adjacent claims.",
+      "fix": "Keep one readable planned chat preview. Replace other rows with an explicitly labeled planned data-boundary diagram and a relevant approved prototype, or merge them into the compact six-feature grid. Do not fabricate functioning product screenshots.",
+      "acceptance": "Every retained illustration demonstrates its adjacent claim; unavailable assets are clearly labeled planned/illustrative; no identical image repeated merely to fill alternating rows.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High",
+      "screenshots": [
+        "screenshots-product-depth/mobile-04-localchat.png",
+        "screenshots-product-depth/mobile-06-data-detail.png",
+        "screenshots-product-depth/mobile-07-workspace.png"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Three Local-first feature rows and hero preview",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "The hero and three Mobile feature rows reuse the same memory conversation. Rows discussing data boundaries and the model picker, projects or settings do not show a relevant different state. The page is 7023 CSS px long at the tested width. The hero mockup measured 575.47 × 1246.84 px; each of the three lower mockups measured 270 × 585 px."
+    },
+    {
+      "id": "PV07",
+      "priority": "P2",
+      "category": "Acquisition information architecture",
+      "title": "VS Code preview entry does not clarify access eligibility",
+      "urls": ["https://agiworkforce.com/vscode-extension"],
+      "evidence": [
+        "The developer-extension preview is repeatedly led by Discuss Enterprise access. Get notified appears only near the bottom, while other copy invites visitors to request access. The public page does not make eligibility clear."
+      ],
+      "impact": "Individuals cannot tell whether preview access is available to them or requires an Enterprise sales conversation. This is inferred hesitation,not measured conversion loss.",
+      "reproduction": "Open /vscode and read the hero access language and primary action. Scroll through the page to the notification action. Compare the implied audience and action purpose; do not submit an access request.",
+      "fix": "Confirm the audience and release-access policy. Use a truthful primary preview-status or notification action; separate Enterprise sales unless access is actually restricted to Enterprise.",
+      "acceptance": "The first viewport explains whether access is public or contract-restricted and provides the appropriate next step. The primary action fulfills that stated purpose.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High observation; requires product decision",
+      "screenshots": [
+        "screenshots-product-depth/vscode-01-hero.png",
+        "screenshots-product-depth/vscode-03-preview-cards.png",
+        "screenshots-product-depth/vscode-07-cta.png"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Hero,preview card and final primary CTA",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "The developer-extension preview is repeatedly led by Discuss Enterprise access. Get notified appears only near the bottom, while other copy invites visitors to request access. The public page does not make eligibility clear."
+    },
+    {
+      "id": "TC17",
+      "priority": "P2",
+      "category": "Navigation / accessibility",
+      "title": "Terms sticky contents extends below the viewport and hides late sections",
+      "urls": ["https://agiworkforce.com/terms"],
+      "evidence": [
+        "At 1180×757 CSS px, contents parent height is 801.140625 px and sticky top is 88 px, with no max-height or internal overflow scrolling.",
+        "At a mid-document anchor, section 17 begins at y757.14; sections 18–20 are farther below the viewport. The rail stays in this position through most of the long document.",
+        "Clicking Payment works and places its heading at y88.375, so the issue is rail reachability rather than broken anchor scrolling."
+      ],
+      "impact": "Readers cannot readily use the persistent navigation for arbitration and other late sections while reading the middle of the document.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Cap contents height at viewport minus fixed header and gutters; allow independent scrolling and visible focus. Retain correct anchor offset.",
+      "acceptance": "At 1180×757, every contents link can be reached and focused without scrolling the article to its end; targets stay below the fixed header.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for observed content/layout; no backend or legal determination",
+      "screenshots": [
+        "screenshots-trust-expanded/15-payment-anchor.jpg",
+        "screenshots-trust-expanded/15-14.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "At 1180×757 CSS px, contents parent height is 801.140625 px and sticky top is 88 px, with no max-height or internal overflow scrolling. At a mid-document anchor, section 17 begins at y757.14; sections 18–20 are farther below the viewport. The rail stays in this position through most of the long document. Clicking Payment works and places its heading at y88.375, so the issue is rail reachability rather than broken anchor scrolling."
+    },
+    {
+      "id": "TC18",
+      "priority": "P2",
+      "category": "Layout / grid",
+      "title": "Three-card groups leave a vacant column and create cramped or uneven content",
+      "urls": [
+        "https://agiworkforce.com/careers",
+        "https://agiworkforce.com/contact-sales",
+        "https://agiworkforce.com/agent-permissions"
+      ],
+      "evidence": [
+        "Careers displays two approximately 354 px cards, then one 1112 px-wide card, leaving the right third of the first row empty.",
+        "Sales uses the same layout with very different copy lengths, creating a tall empty area in the short card.",
+        "Approvals uses two very narrow cards within its legal reading column, then a full-width third card; headings wrap to several short lines."
+      ],
+      "impact": "The grid looks accidental and slows reading, especially in the permissions document.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Use three balanced columns only where width supports them; use a purposeful two-column layout or one-column labelled list in the legal template.",
+      "acceptance": "All card groups have intentional row balance; no empty third-column hole; headings and content have a usable reading measure at the tested viewport.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for observed content/layout; no backend or legal determination",
+      "screenshots": [
+        "screenshots-trust-expanded/6-01.jpg",
+        "screenshots-trust-expanded/10-01.jpg",
+        "screenshots-trust-expanded/17-14.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "Careers displays two approximately 354 px cards, then one 1112 px-wide card, leaving the right third of the first row empty. Sales uses the same layout with very different copy lengths, creating a tall empty area in the short card. Approvals uses two very narrow cards within its legal reading column, then a full-width third card; headings wrap to several short lines."
+    },
+    {
+      "id": "TC19",
+      "priority": "P2",
+      "category": "Action label / destination",
+      "title": "Careers Get notified leads to downloads rather than a hiring-notification path",
+      "urls": ["https://agiworkforce.com/careers"],
+      "evidence": [
+        "The Careers hero offers Get notified while discussing no current openings.",
+        "The inspected link destination is /download; no hiring notification control is offered by the link."
+      ],
+      "impact": "The CTA promises a notification step but takes a prospective applicant to release/download content.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Rename the CTA to match release-status navigation, or supply a clearly described job-alert path if one actually exists.",
+      "acceptance": "The visible action label accurately describes the first destination and any subscription scope before a user submits information.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for observed content/layout; no backend or legal determination",
+      "screenshots": ["screenshots-trust-expanded/6-00.jpg"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "The Careers hero offers Get notified while discussing no current openings. The inspected link destination is /download; no hiring notification control is offered by the link."
+    },
+    {
+      "id": "TC20",
+      "priority": "P2",
+      "category": "Information architecture / citations",
+      "title": "Policy summaries promise specific references but link to long document roots",
+      "urls": [
+        "https://agiworkforce.com/data-use",
+        "https://agiworkforce.com/legal/eu-representative"
+      ],
+      "evidence": [
+        "Data use promises links to the part of the policy governing each answer, but repeated privacy-policy links all point to /privacy without section fragments.",
+        "EU representative text mentions specific Privacy and DPA sections while linking to page roots.",
+        "The reviewed Privacy document is 23911 px long; DPA is 20091 px."
+      ],
+      "impact": "Visitors must search long documents to verify a short answer, undermining the summary’s intended simplicity.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Deep-link each claim to its actual current heading/anchor and use descriptive destination labels. Add automated link integrity checks during normal site QA.",
+      "acceptance": "Each section-specific reference lands on the relevant heading below the fixed header; wording and destination match.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for observed content/layout; no backend or legal determination",
+      "screenshots": [
+        "screenshots-trust-expanded/21-00.jpg",
+        "screenshots-trust-expanded/21-03.jpg",
+        "screenshots-trust-expanded/14-02.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "Data use promises links to the part of the policy governing each answer, but repeated privacy-policy links all point to /privacy without section fragments. EU representative text mentions specific Privacy and DPA sections while linking to page roots. The reviewed Privacy document is 23911 px long; DPA is 20091 px."
+    },
+    {
+      "id": "RX-F01",
+      "priority": "P2",
+      "category": "Observed public content or layout",
+      "title": "Policy-history hero delays access to the actual version list",
+      "urls": [
+        "https://agiworkforce.com/legal/archive/terms",
+        "https://agiworkforce.com/legal/archive/acceptable-use",
+        "https://agiworkforce.com/legal/archive/agent-permissions",
+        "https://agiworkforce.com/legal/archive/privacy",
+        "https://agiworkforce.com/legal/archive/cookies",
+        "https://agiworkforce.com/legal/archive/copyright",
+        "https://agiworkforce.com/legal/archive/subprocessors",
+        "https://agiworkforce.com/legal/archive/refund-policy",
+        "https://agiworkforce.com/legal/archive/accessibility",
+        "https://agiworkforce.com/legal/archive/trust",
+        "https://agiworkforce.com/legal/archive/mobile-legal"
+      ],
+      "evidence": [
+        "All 11 history indexes begin their Versions list at document y=746.05 CSS px in a 757 px-high viewport. The first row text starts below the viewport, after a centered hero and large vertical transitions."
+      ],
+      "impact": "No separate behavioral impact was measured; the recommendation addresses the recorded public-page issue.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Use a compact history-page hero or a visible Jump to versions link so the first version and its status can be seen immediately. Keep the policy identity and introductory explanation.",
+      "acceptance": "At 1180×757 CSS px, the current version date and status/link are visible without scrolling, or a clearly visible jump control moves focus and scroll position to the list.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for recorded layout/content; design impact is a qualitative assessment",
+      "screenshots": ["screenshots-release-index/history-terms-0.png"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "All 11 history indexes begin their Versions list at document y=746.05 CSS px in a 757 px-high viewport. The first row text starts below the viewport, after a centered hero and large vertical transitions."
+    },
+    {
+      "id": "RX-F02",
+      "priority": "P2",
+      "category": "Observed public content or layout",
+      "title": "Policy histories and archives use long small-text reading measures",
+      "urls": [
+        "https://agiworkforce.com/legal/archive/privacy",
+        "https://agiworkforce.com/legal/archive/agent-permissions",
+        "https://agiworkforce.com/legal/archive/subprocessors",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-27",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-22",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-09-22",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-22",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-22",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-21",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-21",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-09-21",
+        "https://agiworkforce.com/legal/archive/terms/2026-08-11",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-08-05",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-02",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-12",
+        "https://agiworkforce.com/legal/archive/cookies/2026-09-12",
+        "https://agiworkforce.com/legal/archive/copyright/2026-08-06",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-12",
+        "https://agiworkforce.com/legal/archive/refund-policy/2026-08-13",
+        "https://agiworkforce.com/legal/archive/accessibility/2026-08-05",
+        "https://agiworkforce.com/legal/archive/trust/2026-09-12",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-08-13"
+      ],
+      "evidence": [
+        "History rows use 14 px text with 22.4 px line height; the summary span measured 898 CSS px wide on the shared template. The privacy, approvals, and subprocessor histories contain several multi-line paragraphs at that measure.",
+        "Additional observed evidence (PA03): Ledger labels are 12 px / 18 px monospace in a 192 px column. Values are 14 px / 22.4 px in an approximately 898 px column. Some rows contain several paragraphs, while long labels wrap repeatedly. Adjacent prose is larger, 18 px."
+      ],
+      "impact": "No separate behavioral impact was measured; the recommendation addresses the recorded public-page issue.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Constrain summary measure or increase its text size and row spacing. Keep dates aligned and retain every publication qualifier; consider separating status from the prose. Preserve every historical row. Use 14–16 px labels and 16 px / 24 px descriptions as proposed values; constrain long text to a comfortable measure, or stack label above value in dense rows and narrow layouts. Keep region, mode or purpose labels explicit where present in the record.",
+      "acceptance": "Long summaries are comfortable to scan at desktop size, dates remain adjacent to their summaries, links are distinct, and the complete publication qualifiers remain available. Validate narrow viewport reflow separately. Long rows can be read without losing the associated label; type remains comfortably legible at 100% zoom; no horizontal overflow or truncated historical text is introduced.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for recorded layout/content; design impact is a qualitative assessment",
+      "screenshots": [
+        "screenshots-release-index/history-privacy-1.png",
+        "screenshots-policy-archives/00-07.jpg",
+        "screenshots-policy-archives/03-05.jpg",
+        "screenshots-policy-archives/04-09.jpg",
+        "screenshots-policy-archives/12-06.jpg"
+      ],
+      "merged_from": ["PA03"],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "History rows use 14 px text with 22.4 px line height; the summary span measured 898 CSS px wide on the shared template. The privacy, approvals, and subprocessor histories contain several multi-line paragraphs at that measure."
+    },
+    {
+      "id": "FV01",
+      "priority": "P2",
+      "category": "Discovery information architecture",
+      "title": "Feature stories lack contextual links to detail pages",
+      "urls": ["https://agiworkforce.com/features"],
+      "evidence": [
+        "Six prominent feature stories have no contextual links to their detail pages. The inspected #loop section contained zero anchors, while the corresponding pages were available through the global Features menu."
+      ],
+      "impact": "Interested readers must rediscover the feature in the global navigation or footer. This adds effort; no conversion effect was measured.",
+      "reproduction": "Open /features. Inspect the six story sections in #loop and look for a contextual detail link in each. Compare their destinations with the pages offered by the global Features menu.",
+      "fix": "Add a descriptive Learn more link after each feature summary. Preserve the pinned preview if it continues to support the current section.",
+      "acceptance": "Each story has a keyboard-accessible link to the correct public feature detail. No authentication gate interrupts that public documentation journey.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High",
+      "screenshots": ["screenshots-feature-resource-depth/features-04-projects.png"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Daily loop: six feature stories",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "Six prominent feature stories have no contextual links to their detail pages. The inspected #loop section contained zero anchors, while the corresponding pages were available through the global Features menu."
+    },
+    {
+      "id": "FV02",
+      "priority": "P2",
+      "category": "Content hierarchy / audience fit",
+      "title": "Artifact page leads with implementation mechanics",
+      "urls": ["https://agiworkforce.com/features/artifacts"],
+      "evidence": [
+        "The Artifacts feature page leads with Babel and React mounting, HTML escaping, content-keyed versions and reconstruction mechanics. Usable output examples remain confined to a small hero illustration."
+      ],
+      "impact": "General users are asked to decode implementation details before learning what they can create,keep and share. Technical transparency is valuable,but its prominence weakens product explanation.",
+      "reproduction": "Open /features/artifacts. Read the first two substantive sections and compare the prominence of usable examples with the implementation-language paragraphs. No artifact creation or code execution is required.",
+      "fix": "Lead with representative outputs, editing and version recovery, and ownership. Move implementation mechanics into a clearly labelled advanced reference while preserving material security and storage restrictions.",
+      "acceptance": "A nontechnical visitor can identify supported outputs and how to revise or export them from the first two sections. Technical claims remain findable and accurately qualified.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High observation; design judgment",
+      "screenshots": [
+        "screenshots-feature-resource-depth/artifacts-full-02.png",
+        "screenshots-feature-resource-depth/artifacts-full-04.png",
+        "screenshots-feature-resource-depth/artifacts-full-07.png"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Rendering,versions and gallery sections",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "The Artifacts feature page leads with Babel and React mounting, HTML escaping, content-keyed versions and reconstruction mechanics. Usable output examples remain confined to a small hero illustration."
+    },
+    {
+      "id": "FV04",
+      "priority": "P2",
+      "category": "Reference navigation and content hierarchy",
+      "title": "Long reference pages need local navigation and clearer hierarchy",
+      "urls": [
+        "https://agiworkforce.com/docs",
+        "https://agiworkforce.com/api-docs",
+        "https://agiworkforce.com/faq",
+        "https://agiworkforce.com/status",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-27",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-22",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-09-22",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-22",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-22",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-21",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-21",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-09-21",
+        "https://agiworkforce.com/legal/archive/terms/2026-08-11",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-08-05",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-02",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-12",
+        "https://agiworkforce.com/legal/archive/cookies/2026-09-12",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-12",
+        "https://agiworkforce.com/legal/archive/trust/2026-09-12",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-08-13"
+      ],
+      "evidence": [
+        "Fully traversed page heights were 9,333 CSS pixels (Docs), 7,068 (API default), 5,775 (FAQ), and 9,723 (Status). Main bodies provide no comprehensive local contents rail or question navigation. Long prose precedes urgent status actions, and many FAQ references are plain text.",
+        "Additional observed evidence (PA02): No main-content navigation landmark or contents list was rendered on the 19 inspected archives. Several bodies exceed 10,000 CSS px; the longest is 16,223 px including chrome/footer. The site header stays available, but it does not navigate historical policy sections."
+      ],
+      "impact": "Visitors seeking a known answer must repeatedly scan long pages; engineering disclosure competes with immediate decision/action content. No timed usability or conversion result is claimed.",
+      "reproduction": "Open the listed public URL, locate Long documentation, FAQ and status bodies, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Add keyboard-accessible local contents anchors with sticky-header-safe offsets, meaningful grouping and contextual source/action links. Put status impact/freshness/reporting first. Keep important limitations, but move implementation rationale into subordinate reference details. Add a contents list generated from the preserved section headings and a compact current-version/history control. Use an in-flow list or collapsible contents on narrow layouts; retain proper anchor offsets under the sticky header.",
+      "acceptance": "Every major section is reachable from local navigation; focus/anchor destinations remain visible below sticky header; current status and report action appear near the top; FAQ policy references open the named source. Every preserved major heading is reachable by keyboard from local contents and lands visibly below the header. Contents does not obscure text at the narrowest supported width.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High observation; design judgment",
+      "screenshots": [
+        "screenshots-feature-resource-depth/docs-04.png",
+        "screenshots-feature-resource-depth/api-docs-05.png",
+        "screenshots-feature-resource-depth/faq-07.png",
+        "screenshots-feature-resource-depth/status-18.png",
+        "screenshots-policy-archives/00-02.jpg",
+        "screenshots-policy-archives/08-12.jpg",
+        "screenshots-policy-archives/17-15.jpg"
+      ],
+      "merged_from": ["PA02"],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Long documentation, FAQ and status bodies",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "Fully traversed page heights were 9,333 CSS pixels (Docs), 7,068 (API default), 5,775 (FAQ), and 9,723 (Status). Main bodies provide no comprehensive local contents rail or question navigation. Long prose precedes urgent status actions, and many FAQ references are plain text."
+    },
+    {
+      "id": "FV05",
+      "priority": "P2",
+      "category": "Onboarding priority",
+      "title": "Get started prioritizes unpublished CLI setup over the live Web path",
+      "urls": ["https://agiworkforce.com/get-started"],
+      "evidence": [
+        "The first viewport prioritizes terminal commands, Check availability and CLI reference. The live Web action appears below the fold in Install, which marks CLI pending. Local and BYOK precede a wider Managed Cloud card."
+      ],
+      "impact": "The broad five-minute onboarding promise steers newcomers toward a distribution path that this same page says is not published. MA01 separately tracks the contradictory availability copy.",
+      "reproduction": "Open the listed public URL, locate Hero and mode-selection order, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Lead with Try AGI Web and a simple live-path checklist. Separate forthcoming developer setup from current product access, preserving exact Local/BYOK distinctions.",
+      "acceptance": "A newcomer can identify and enter the currently available surface in the first viewport; preview paths show prerequisites and accurate release state before commands.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High observation; design judgment",
+      "screenshots": [
+        "screenshots-feature-resource-depth/get-started-01.png",
+        "screenshots-feature-resource-depth/get-started-02.png",
+        "screenshots-feature-resource-depth/get-started-04.png"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Hero and mode-selection order",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "The first viewport prioritizes terminal commands, Check availability and CLI reference. The live Web action appears below the fold in Install, which marks CLI pending. Local and BYOK precede a wider Managed Cloud card."
+    },
+    {
+      "id": "ECO02",
+      "priority": "P2",
+      "category": "Accessibility state semantics",
+      "title": "Gallery collection selection is only exposed visually",
+      "urls": ["https://agiworkforce.com/gallery"],
+      "evidence": [
+        "After selecting Inspiration, its button is visually dark. The DOM exposes no role override, aria-pressed, aria-selected or aria-controls. The AX snapshot identifies ordinary buttons without a selected state."
+      ],
+      "impact": "A user relying on the accessible control state may not be told which collection is active. This is a targeted semantics observation, not a full screen-reader conformance test.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Implement a labelled tablist/tab/tabpanel pattern with aria-selected and keyboard navigation, or a labelled toggle group with aria-pressed.",
+      "acceptance": "Keyboard and screen-reader checks announce the current collection and update it when the user switches views.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for recorded layout/content; design impact is a qualitative assessment",
+      "screenshots": ["screenshots-ecosystem-depth/gallery-00.png"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "After selecting Inspiration, its button is visually dark. The DOM exposes no role override, aria-pressed, aria-selected or aria-controls. The AX snapshot identifies ordinary buttons without a selected state."
+    },
+    {
+      "id": "TD02",
+      "priority": "P2",
+      "category": "Layout",
+      "title": "Security mode comparison wastes width and creates narrow text towers",
+      "urls": ["https://agiworkforce.com/security"],
+      "evidence": [
+        "At 1180 × 757 CSS px, the Local and BYOK prose sits in 148 px-wide columns using 14 px type, while the Managed Cloud card below has a 576 px body width. BYOK prose alone is 368.7 px tall."
+      ],
+      "impact": "Important privacy-mode distinctions are harder to compare and require disproportionate scrolling.",
+      "reproduction": "Open /security at 1180 × 757 CSS px and scroll to the mode comparison. Compare the Local and BYOK text columns with the Managed Cloud block below. Inspect their computed widths and type sizes; do not test the underlying processing modes.",
+      "fix": "Use balanced stacked mode rows or a genuine comparison layout within the 684 px content column, with a comfortable reading measure and consistent hierarchy.",
+      "acceptance": "All three modes can be compared with consistent widths; no narrow text towers at desktop widths; preserve all route/availability qualifications.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High measured desktop layout",
+      "screenshots": ["screenshots-journey-depth/security-depth-2.jpg"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Security page mode comparison, Local and BYOK cards above Managed Cloud",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "At 1180 × 757 CSS px, the Local and BYOK prose sits in 148 px-wide columns using 14 px type, while the Managed Cloud card below has a 576 px body width. BYOK prose alone is 368.7 px tall."
+    },
+    {
+      "id": "JD01",
+      "priority": "P2",
+      "category": "Observed destination/content mismatch",
+      "title": "BYOK/catalog prose promises token prices but provider tiles do not provide them",
+      "urls": ["https://agiworkforce.com/byok", "https://agiworkforce.com/providers"],
+      "evidence": [
+        "The BYOK closing action and Providers roster paragraph promise published per-million-token prices. All 14 provider tiles instead show Provider rates without numeric prices or rate links."
+      ],
+      "impact": "No separate behavioral impact was measured; the recommendation addresses the recorded public-page issue.",
+      "reproduction": "Read the token-price promise near the end of /byok and the introduction to the /providers roster. Inspect the 14 provider tiles for numeric rates and official rate destinations. Record the scope of the Provider rates label rather than inferring a price.",
+      "fix": "Supply scoped, dated prices or official rate links. Otherwise, remove the unsupported promise that this catalog contains token prices.",
+      "acceptance": "A visitor following the catalog's price promise can find the stated information with its scope and date, or the copy accurately describes the non-price content available.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High",
+      "screenshots": [
+        "screenshots-journey-depth/byok-7.jpg",
+        "screenshots-journey-depth/providers-2.jpg",
+        "screenshots-journey-depth/providers-3.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "BYOK closing catalog link and Providers roster",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "The BYOK closing action and Providers roster paragraph promise published per-million-token prices. All 14 provider tiles instead show Provider rates without numeric prices or rate links."
+    },
+    {
+      "id": "JD02",
+      "priority": "P2",
+      "category": "Observed interaction-pattern gap",
+      "title": "Provider example tab roles lack expected arrow-key behavior",
+      "urls": ["https://agiworkforce.com/providers"],
+      "evidence": [
+        "All five role=tab buttons have tabIndex 0. ArrowLeft while Refused was focused left focus and selection unchanged. Click switching worked. This is a tab-pattern consistency gap, not proof of complete keyboard inoperability or a blanket WCAG failure."
+      ],
+      "impact": "No separate behavioral impact was measured; the recommendation addresses the recorded public-page issue.",
+      "reproduction": "Open /providers and locate the example-state tab controls. Inspect role, tabindex and selection attributes. Focus Refused, press ArrowLeft, and compare focus and selection with the preceding state. Click the controls separately to confirm that the observed arrow-key gap is not being presented as complete inoperability.",
+      "fix": "Implement consistent arrow-key movement and roving focus for the tabs. If a tab pattern is not intended, use ordinary buttons with a clear programmatic pressed state.",
+      "acceptance": "Keyboard users can move through each control group with consistent, documented behavior and visible selection without losing the associated content.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High on checked state",
+      "screenshots": ["screenshots-journey-depth/providers-refused-settled.jpg"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Providers example-state tab groups",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "All five role=tab buttons have tabIndex 0. ArrowLeft while Refused was focused left focus and selection unchanged. Click switching worked. This is a tab-pattern consistency gap, not proof of complete keyboard inoperability or a blanket WCAG failure."
+    },
+    {
+      "id": "FR11",
+      "severity": "P3",
+      "category": "Copy quality",
+      "title": "Imported and implementation-centric copy needs an editorial pass",
+      "urls": [
+        "https://agiworkforce.com/api-docs",
+        "https://agiworkforce.com/connectors/mcp-directory",
+        "https://agiworkforce.com/solutions",
+        "https://agiworkforce.com/legal/archive/accessibility",
+        "https://agiworkforce.com/legal/archive/agent-permissions",
+        "https://agiworkforce.com/legal/archive/subprocessors",
+        "https://agiworkforce.com/legal/archive/copyright"
+      ],
+      "evidence": [
+        "/api-docs contains BYOK on never touches this gateway. MCP entries include Alma: inside every the assistant conversation and Fathom: part of every the assistant conversation. /solutions describes itself as an index that argues nothing on its own, rather than explaining a buyer outcome.",
+        "Additional observed evidence (RX-F04): Rendered introductions say “the accessibility,” “the approvals,” and “the subprocessors”; the copyright introduction lowercases “ip”."
+      ],
+      "impact": "Malformed substitutions and meta-copy lower trust and impose unnecessary interpretation effort.",
+      "fix": "Correct substitution grammar, add human editorial review for imported directory descriptions and write outcome-first page introductions. Use precise document names: accessibility statement, approvals policy, subprocessor list, and Copyright and IP complaints.",
+      "acceptance": "No malformed product-name substitutions, broken sentence fragments or internal editorial commentary remain in a public-copy sweep. Each history introduction reads naturally and preserves the correct current-document destination.",
+      "screenshots": [
+        "screenshots-release-index/history-accessibility-0.png",
+        "screenshots-release-index/history-agent-permissions-0.png",
+        "screenshots-release-index/history-subprocessors-0.png",
+        "screenshots-release-index/history-copyright-0.png"
+      ],
+      "priority": "P3",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": ["RX-F04"],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The API and MCP pages contain malformed substitutions such as \"every the assistant conversation\" and an incomplete BYOK sentence. Solutions includes internal editorial framing rather than a concise buyer explanation."
+    },
+    {
+      "id": "FR12",
+      "severity": "P3",
+      "category": "Design recommendation based on reviewed examples",
+      "title": "Gallery proof is concentrated on technical samples",
+      "urls": ["https://agiworkforce.com/gallery"],
+      "evidence": [
+        "The six reviewed public examples are technical or interface samples: SQL, Python, a flow chart, a gradient button, an SVG placeholder and an HTML card grid.",
+        "The saved evidence does not establish an empty anonymous default. That earlier assertion is withdrawn. The screenshot named gallery-default.jpg actually shows Inspiration selected with a populated grid."
+      ],
+      "impact": "The inspected sample set gives limited evidence for the documents, presentations and broader business work emphasized by the marketing pages. This is a storytelling recommendation, not proof of a broken default state.",
+      "fix": "Broaden the public example set with polished, genuinely supported business and technical outputs. Use owner-approved synthetic content, truthful labels and working previews; do not fabricate product capability or customer work.",
+      "acceptance": "Every published example renders correctly and illustrates an advertised, verified output. Separately verify the anonymous opening state before making a default-state claim.",
+      "screenshots": [
+        "screenshots-features/gallery-default.jpg",
+        "screenshots-features/gallery-inspiration.jpg"
+      ],
+      "priority": "P3",
+      "verification": "Six public sample types were reviewed. The earlier empty-anonymous-default assertion was not established by retained evidence and is withdrawn.",
+      "confidence": "High for the observed example types; qualitative design recommendation; anonymous default unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product design and frontend engineering",
+      "status": "Recommendation only; earlier anonymous default claim withdrawn",
+      "brief": "The six inspected public samples emphasize code and interface examples. Broader, owner-approved business outputs would better substantiate the marketing story. The earlier claim of an empty anonymous default is not established by retained evidence and is withdrawn."
+    },
+    {
+      "id": "TC15",
+      "severity": "Low",
+      "category": "Editorial drift",
+      "title": "SLA summary counts do not match its own measured-domain list",
+      "urls": ["https://agiworkforce.com/sla"],
+      "evidence": [
+        "SLA says \"Three of the fourteen domains have no instrument yet.\" The visible list contains 16 named domains; only Notifications is explicitly marked not measured. \"The measured objectives below\" also appears after the table it refers to."
+      ],
+      "impact": "Small but verifiable errors weaken a page built around precise, measured commitments.",
+      "fix": "Derive summary counts and directional references from the rendered source data, or omit the counts.",
+      "acceptance": "Counts, labels and above/below references agree with the current table.",
+      "screenshots": ["screenshots-trust/sla.jpg"],
+      "observedAt": "2026-10-03T18:47:09Z-2026-10-03T18:58:08Z",
+      "priority": "P3",
+      "verification": "Rendered public content reviewed; product implementation was not tested.",
+      "confidence": "High for the observed public wording or UI; backend behavior unverified",
+      "reproduction": "Open the listed public URLs in a signed-out desktop browser, locate the statements or interface described in the evidence, and compare the displayed state.",
+      "merged_from": [],
+      "suggested_owner": "Product content owner and engineering",
+      "status": "Open for remediation",
+      "brief": "The SLA introduction says three of fourteen domains lack instruments, but the visible list contains sixteen domains and only Notifications is explicitly marked unmeasured. A directional reference also says below after the table."
+    },
+    {
+      "id": "PV04",
+      "priority": "P3",
+      "category": "Copy / composition",
+      "title": "Product pages repeat technical explanations across sections",
+      "urls": [
+        "https://agiworkforce.com/desktop",
+        "https://agiworkforce.com/web",
+        "https://agiworkforce.com/chrome-extension"
+      ],
+      "evidence": [
+        "Account routing, permissions and availability mechanics recur in the hero, capability and trust cards, specifications and final call to action. At the tested width, the Desktop page extends 5545 CSS px and Web extends 4792 px."
+      ],
+      "impact": "Repetition increases scanning effort without proportionate new evidence. Length is not itself a defect; repeated information rather than necessary technical detail is the issue.",
+      "reproduction": "Open the listed public URL, locate Hero, repeated trust explanations, release information and closing CTA, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Use one clear benefit statement, one specific workflow, one boundary explanation, one technical reference and one current availability answer. Move API/release-job prose out of conversion copy.",
+      "acceptance": "Each section has a distinct visitor question; key limitations remain visible once, and no CTA paragraph repeats an earlier explanation verbatim.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High observation; design judgment",
+      "screenshots": [
+        "screenshots-product-depth/desktop-01-hero.png",
+        "screenshots-product-depth/desktop-04-trust.png",
+        "screenshots-product-depth/desktop-06-platforms.png",
+        "screenshots-product-depth/desktop-09-cta.png"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Hero, repeated trust explanations, release information and closing CTA",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "Account routing, permissions and availability mechanics recur in the hero, capability and trust cards, specifications and final call to action. At the tested width, the Desktop page extends 5545 CSS px and Web extends 4792 px."
+    },
+    {
+      "id": "PV06",
+      "priority": "P3",
+      "category": "Credibility / public evidence",
+      "title": "Chrome security reference is a nonclickable repository path",
+      "urls": ["https://agiworkforce.com/chrome-extension"],
+      "evidence": [
+        "The Chrome security-story row contains an internal-looking repository path rather than a usable public document link. The inspected row had zero links. The path alone does not establish sensitive exposure."
+      ],
+      "impact": "This supplies implementation trivia rather than inspectable evidence. The path alone is not sensitive exposure or an exploitable security finding.",
+      "reproduction": "Open the listed public URL, locate What stays where / Security story table row, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Link to a useful public security summary or threat-boundary document with scope and date. Remove the bare path if it serves no visitor need.",
+      "acceptance": "The row takes an unauthenticated visitor to useful public evidence or clearly states what information is available on request.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High",
+      "screenshots": ["screenshots-product-depth/chrome-07-specs.png"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "What stays where / Security story table row",
+      "state": "Recorded public-page state",
+      "viewport": [1180, 757],
+      "brief": "The Chrome security-story row contains an internal-looking repository path rather than a usable public document link. The inspected row had zero links. The path alone does not establish sensitive exposure."
+    },
+    {
+      "id": "TC21",
+      "priority": "P3",
+      "category": "Editorial quality",
+      "title": "Data-use summary exposes editing instructions and overstates its resistance to drift",
+      "urls": ["https://agiworkforce.com/data-use"],
+      "evidence": [
+        "The closing Why this page cannot drift section contains: If you are editing this page and find yourself typing a number, link to the section instead.",
+        "It says it states no retention window or commitment while an earlier answer describes deletion scheduling within 24 hours."
+      ],
+      "impact": "Editor-facing process prose distracts visitors and the absolute quality claim is contradicted by the page itself. This is not evidence of sensitive information leakage.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Remove editing instructions and replace cannot-drift wording with a modest current-policy summary and exact references.",
+      "acceptance": "No public editor-directed instructions remain; the summary does not make a stronger consistency claim than its evidence supports.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for observed content/layout; no backend or legal determination",
+      "screenshots": [
+        "screenshots-trust-expanded/21-05.jpg",
+        "screenshots-trust-expanded/21-03.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "The closing Why this page cannot drift section contains: If you are editing this page and find yourself typing a number, link to the section instead. It says it states no retention window or commitment while an earlier answer describes deletion scheduling within 24 hours."
+    },
+    {
+      "id": "TC22",
+      "priority": "P3",
+      "category": "Content organization",
+      "title": "Approvals repeats the Chrome tool inventory without labelled surface groups",
+      "urls": ["https://agiworkforce.com/agent-permissions"],
+      "evidence": [
+        "Read your Chrome tab, Capture your Chrome tab, Read the Chrome console, Read Chrome network activity, Open a page in Chrome, Click in Chrome, Type in Chrome and Download through Chrome occur in two consecutive groups.",
+        "Descriptions differ mainly between the desktop app always asks first and AGI always asks first; no visible group header clarifies a surface difference."
+      ],
+      "impact": "Readers cannot tell whether these are duplicates or materially different approval boundaries, and the already long inventory becomes longer.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Consolidate identical entries or label surface-specific groups and explain each real difference.",
+      "acceptance": "Each tool appears once per clearly named surface; repeated entries have an explicit reason and no ambiguous approval wording.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for observed content/layout; no backend or legal determination",
+      "screenshots": [
+        "screenshots-trust-expanded/17-10.jpg",
+        "screenshots-trust-expanded/17-11.jpg",
+        "screenshots-trust-expanded/17-12.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "Read your Chrome tab, Capture your Chrome tab, Read the Chrome console, Read Chrome network activity, Open a page in Chrome, Click in Chrome, Type in Chrome and Download through Chrome occur in two consecutive groups. Descriptions differ mainly between the desktop app always asks first and AGI always asks first; no visible group header clarifies a surface difference."
+    },
+    {
+      "id": "RX-F03",
+      "priority": "P3",
+      "category": "Observed public content or layout",
+      "title": "Historical release details lack contextual current-status links",
+      "urls": [
+        "https://agiworkforce.com/release-notes/2026-09-27",
+        "https://agiworkforce.com/release-notes/2026-09-20",
+        "https://agiworkforce.com/release-notes/2026-09-15",
+        "https://agiworkforce.com/release-notes/2026-09-05",
+        "https://agiworkforce.com/release-notes/2026-07-31",
+        "https://agiworkforce.com/release-notes/2026-07-03",
+        "https://agiworkforce.com/release-notes/2026-06-24",
+        "https://agiworkforce.com/release-notes/2026-05-08",
+        "https://agiworkforce.com/release-notes/2026-05-04",
+        "https://agiworkforce.com/release-notes/2026-05-03",
+        "https://agiworkforce.com/release-notes/2026-02-to-2026-05"
+      ],
+      "evidence": [
+        "The only main-content link on all 11 release detail pages is All release notes. The 24 June entry mentions a security page without linking it; desktop and CLI entries discuss historical release states while the shared footer lists current surfaces as coming soon."
+      ],
+      "impact": "No separate behavioral impact was measured; the recommendation addresses the recorded public-page issue.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Preserve the historical text and date. Where helpful, add a clearly labeled current release-status or related documentation link; link the named security page directly. Do not rewrite history as current availability.",
+      "acceptance": "A reader can reach current status or the named policy from the release body without searching global navigation; historical and current claims remain clearly distinguished.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for recorded layout/content; design impact is a qualitative assessment",
+      "screenshots": [
+        "screenshots-release-index/release-2026-06-24-0.png",
+        "screenshots-release-index/release-2026-07-03-0.png"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "The only main-content link on all 11 release detail pages is All release notes. The 24 June entry mentions a security page without linking it; desktop and CLI entries discuss historical release states while the shared footer lists current surfaces as coming soon."
+    },
+    {
+      "id": "ECO01",
+      "priority": "P3",
+      "category": "Visual asset resilience",
+      "title": "Three public MCP provider logos render broken-image glyphs",
+      "urls": ["https://agiworkforce.com/connectors/mcp-directory"],
+      "evidence": [
+        "BrightHire, Chronograph and Clarity AI show broken 28×28 logo images on two settled full-scroll reviews. Final UI-backed DOM check reports complete=true,naturalWidth=0 for these three images."
+      ],
+      "impact": "Broken brand assets make the otherwise populated directory look poorly maintained and weaken recognition.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Use valid image assets and an initials/generic-icon fallback when a logo fails. Keep provider text visible.",
+      "acceptance": "All 60 visible base cards show either a loaded icon or deliberate fallback; no browser broken-image glyph appears after loading settles.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for recorded layout/content; design impact is a qualitative assessment",
+      "screenshots": ["screenshots-ecosystem-depth/mcp-directory-06.png"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "BrightHire, Chronograph and Clarity AI show broken 28×28 logo images on two settled full-scroll reviews. Final UI-backed DOM check reports complete=true,naturalWidth=0 for these three images."
+    },
+    {
+      "id": "TD01",
+      "priority": "P3",
+      "category": "Information architecture",
+      "title": "Trust history overwhelms current posture",
+      "urls": ["https://agiworkforce.com/trust"],
+      "evidence": [
+        "The changes section occupies 8894 CSS px of a 20197 px Trust page. Its 36 dated rows repeat detailed route-count narratives, although the page already offers a Previous versions destination."
+      ],
+      "impact": "Reviewers must traverse a long historical ledger to reach related evidence and can miss the current posture.",
+      "reproduction": "Open /trust at the recorded desktop width and scroll from current posture into the complete changes ledger. Compare the ledger height and 36 dated rows with the existing Previous versions route. The recommendation concerns information hierarchy, not deletion of historical evidence.",
+      "fix": "Keep a short recent-changes list on the trust overview and move the complete dated ledger to its clearly linked history; preserve truthful history.",
+      "acceptance": "Current controls and their evidence are reachable without traversing the complete historical ledger; history remains available and dates are consistently ordered.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High observed layout; recommendation is design judgment",
+      "screenshots": [
+        "screenshots-journey-depth/trust-depth-16.jpg",
+        "screenshots-journey-depth/trust-depth-24.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "Trust page changes ledger",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "The changes section occupies 8894 CSS px of a 20197 px Trust page. Its 36 dated rows repeat detailed route-count narratives, although the page already offers a Previous versions destination."
+    },
+    {
+      "id": "JD03",
+      "priority": "P3",
+      "category": "Observed utility-index copy overreach",
+      "title": "HTML sitemap promises every public page but lists only key routes",
+      "urls": ["https://agiworkforce.com/sitemap-page", "https://agiworkforce.com/help"],
+      "evidence": [
+        "The sitemap lists 81 main routes while describing itself as every public page in one place. Current help articles and gallery details can be discovered through their hubs but are not directly included."
+      ],
+      "impact": "No separate behavioral impact was measured; the recommendation addresses the recorded public-page issue.",
+      "reproduction": "Open /sitemap-page and compare its every-public-page wording with the 81 listed main routes. Follow the public Help and Gallery hubs to see that additional detail routes exist outside that index.",
+      "fix": "Describe the page as a directory of key pages and sections, or maintain a complete current-detail index. Distinguish historical versions from current pages.",
+      "acceptance": "The scope description matches the public routes actually included.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High",
+      "screenshots": ["screenshots-journey-depth/sitemap-00.jpg"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "HTML sitemap introduction and route list",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "The sitemap lists 81 main routes while describing itself as every public page in one place. Current help articles and gallery details can be discovered through their hubs but are not directly included."
+    },
+    {
+      "id": "PA04",
+      "priority": "P3",
+      "category": "Design recommendation",
+      "title": "Archive context disappears once the hero scrolls away",
+      "urls": [
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-27",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-22",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-09-22",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-22",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-22",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-21",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-21",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-09-21",
+        "https://agiworkforce.com/legal/archive/terms/2026-08-11",
+        "https://agiworkforce.com/legal/archive/acceptable-use/2026-08-05",
+        "https://agiworkforce.com/legal/archive/agent-permissions/2026-09-02",
+        "https://agiworkforce.com/legal/archive/privacy/2026-09-12",
+        "https://agiworkforce.com/legal/archive/cookies/2026-09-12",
+        "https://agiworkforce.com/legal/archive/copyright/2026-08-06",
+        "https://agiworkforce.com/legal/archive/subprocessors/2026-09-12",
+        "https://agiworkforce.com/legal/archive/refund-policy/2026-08-13",
+        "https://agiworkforce.com/legal/archive/accessibility/2026-08-05",
+        "https://agiworkforce.com/legal/archive/trust/2026-09-12",
+        "https://agiworkforce.com/legal/archive/mobile-legal/2026-08-13"
+      ],
+      "evidence": [
+        "Each hero clearly gives the version date, replacement context and current/history links. Eight distinguish a settled version that was superseded before publication; eleven describe a version that applied on the site. The hero is not persistent; the shared site header contains no version marker."
+      ],
+      "impact": "The top-level historical framing is a strength. Deep readers can nevertheless lose that context when the body still uses words such as “current” or “today”. This is not evidence that a historical statement contradicts current policy.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Keep all original dated text. Add a compact persistent “Historical version · [date]” indicator and current-version link, or repeat an archive annotation alongside local contents and at the body end. Make published-versus-never-published status explicit without rewriting the archived record.",
+      "acceptance": "At the start, middle and end, a reader can determine the version and reach the current policy without confusing the historical body with current policy.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High",
+      "screenshots": [
+        "screenshots-policy-archives/00-00.jpg",
+        "screenshots-policy-archives/00-30.jpg",
+        "screenshots-policy-archives/18-00.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "Each hero clearly gives the version date, replacement context and current/history links. Eight distinguish a settled version that was superseded before publication; eleven describe a version that applied on the site. The hero is not persistent; the shared site header contains no version marker."
+    },
+    {
+      "id": "PA05",
+      "priority": "P3",
+      "category": "Observed archive presentation defect",
+      "title": "Cookie archive renders a mid-sentence choices paragraph",
+      "urls": ["https://agiworkforce.com/legal/archive/cookies/2026-09-12"],
+      "evidence": [
+        "Under “05 · Your choices.” the paragraph starts “at any time: analytics stays off until you turn it on…”. No cookie-preference button or other control is rendered in the archived main content."
+      ],
+      "impact": "The sentence lacks its introductory action. The audit does not establish whether text was omitted from the archive or the original record was already incomplete.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Compare against the preserved original and repair the archive viewer if it omits text or a control label. If an original control is unavailable, retain an explanatory static label and add a clearly separated current-preferences route. Do not silently change historical substance.",
+      "acceptance": "The archived sentence is complete or the missing original element is explicitly annotated, and historical content remains distinguishable from any current action.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for visible incomplete sentence; cause unverified",
+      "screenshots": [
+        "screenshots-policy-archives/12-10.jpg",
+        "screenshots-policy-archives/12-11.jpg"
+      ],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "Under “05 · Your choices.” the paragraph starts “at any time: analytics stays off until you turn it on…”. No cookie-preference button or other control is rendered in the archived main content."
+    },
+    {
+      "id": "PA06",
+      "priority": "P3",
+      "category": "Observed archive presentation defect",
+      "title": "Trust archive has an empty closing section",
+      "urls": ["https://agiworkforce.com/legal/archive/trust/2026-09-12"],
+      "evidence": [
+        "“Go deeper on any of it.” is rendered at document y 10,799 CSS px, with no following section text or link before the footer."
+      ],
+      "impact": "The heading creates an expectation of a next step that the visible archive does not fulfill. Whether original content was omitted is unverified.",
+      "reproduction": "Open the listed public URL, locate the recorded section or element, and reproduce the state described in the evidence. Do not submit forms or enter application areas.",
+      "fix": "Check the preserved original. Restore omitted historical content or annotate that the original action is unavailable in the archive. Keep any current trust/contact link separate from the historical body.",
+      "acceptance": "The closing section contains its preserved content or a clear archive annotation; it no longer presents an unexplained empty action prompt.",
+      "verification": "Public browser observations only. No backend implementation, authenticated product behavior or full standards conformance is established.",
+      "confidence": "High for empty section; cause unverified",
+      "screenshots": ["screenshots-policy-archives/17-22.jpg"],
+      "merged_from": [],
+      "suggested_owner": "Product content and frontend engineering",
+      "status": "Open for remediation or design review",
+      "location": "See identifying observation and screenshots",
+      "state": "Recorded public-page state",
+      "viewport": {
+        "width": 1180,
+        "height": 757
+      },
+      "brief": "“Go deeper on any of it.” is rendered at document y 10,799 CSS px, with no following section text or link before the footer."
+    }
+  ],
+  "aliases": {
+    "TC01": "MA01",
+    "FR01": "MA01",
+    "HA02": "MA01",
+    "FR04": "MA03",
+    "FR07": "MA04",
+    "EX01": "MA01",
+    "EX02": "FR08",
+    "EX03": "FR03",
+    "EX04": "FR10",
+    "EX05": "MA02",
+    "HC01": "HA06",
+    "RX-F04": "FR11",
+    "FV03": "FR02",
+    "PA01": "HA06",
+    "PA02": "FV04",
+    "PA03": "RX-F02"
+  }
+}
