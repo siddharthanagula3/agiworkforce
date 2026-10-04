@@ -86,6 +86,12 @@ export const PROTOCOL_ROUTE_PROVIDER_IDS: readonly string[] = [...PROTOCOL_ROUTE
  * Managed OpenRouter traffic asks OpenRouter to try the cheapest host serving
  * the model first. The registry prices the OpenRouter route at that host, and
  * the request builder pairs this with a max_price ceiling from the same sheet.
+ *
+ * Every managed chat request this adapter sends to OpenRouter denies data
+ * collection (D-2026-09-15-06). OpenRouter allows it unless the request says
+ * otherwise, so the denial is a required preference that request metadata
+ * cannot relax, not a default. Media routes that post to OpenRouter by direct
+ * fetch do not pass through here.
  */
 type OpenRouterProviderRoutingPreferences = NonNullable<
   ProviderAdapterConfigMap['open_router']['providerRouting']
@@ -94,6 +100,9 @@ type VercelGatewayProviderOptions = NonNullable<
   ProviderAdapterConfigMap['vercel_gateway']['providerOptions']
 >;
 const OPENROUTER_MANAGED_PROVIDER_ROUTING: OpenRouterProviderRoutingPreferences = { sort: 'price' };
+const OPENROUTER_MANAGED_REQUIRED_PROVIDER_ROUTING: OpenRouterProviderRoutingPreferences = {
+  dataCollection: 'deny',
+};
 const VERCEL_GATEWAY_MANAGED_PROVIDER_OPTIONS: VercelGatewayProviderOptions = { sort: 'cost' };
 
 export interface ServerProviderAdapterOptions {
@@ -342,6 +351,7 @@ export function buildServerProviderAdapter(
     return createProviderAdapter('open_router', {
       ...baseConfig,
       providerRouting: OPENROUTER_MANAGED_PROVIDER_ROUTING,
+      requiredProviderRouting: OPENROUTER_MANAGED_REQUIRED_PROVIDER_ROUTING,
       ...(options.openRouterCacheRetention !== undefined
         ? { anthropicCacheRetention: options.openRouterCacheRetention }
         : {}),

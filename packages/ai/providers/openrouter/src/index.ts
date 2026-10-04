@@ -69,6 +69,7 @@ export interface OpenRouterAdapterConfig extends ProviderAdapterConfig {
   appTitle?: string;
   anthropicCacheRetention?: OpenRouterAnthropicCacheRetention;
   providerRouting?: OpenRouterProviderRoutingPreferences;
+  requiredProviderRouting?: OpenRouterProviderRoutingPreferences;
 }
 
 const ENDPOINT_POOL_EXHAUSTED_MARKER = '0 endpoints out of';
@@ -164,6 +165,7 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
           config.providerRouting,
           req.metadata,
           req.zeroDataRetentionOnly,
+          config.requiredProviderRouting,
         );
 
         params.stream_options = { include_usage: true };

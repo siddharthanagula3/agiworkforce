@@ -117,6 +117,80 @@ describe('applyOpenRouterProviderRouting', () => {
     });
   });
 
+  it('keeps a required preference when request metadata asks for the opposite', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(
+      params,
+      { sort: 'price' },
+      { openRouterProviderRouting: { dataCollection: 'allow' } },
+      undefined,
+      { dataCollection: 'deny' },
+    );
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      sort: 'price',
+      data_collection: 'deny',
+    });
+  });
+
+  it('lets request metadata allow collection when nothing is required', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(
+      params,
+      { sort: 'price', dataCollection: 'deny' },
+      { openRouterProviderRouting: { dataCollection: 'allow' } },
+    );
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      sort: 'price',
+      data_collection: 'allow',
+    });
+  });
+
+  it('sends a required preference even when no default and no metadata are supplied', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(params, undefined, undefined, undefined, {
+      dataCollection: 'deny',
+    });
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      data_collection: 'deny',
+    });
+  });
+
+  it('leaves the overridable default and the request ceiling in place beside a required preference', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(
+      params,
+      { sort: 'price' },
+      {
+        openRouterProviderRouting: {
+          sort: 'throughput',
+          maxPrice: { prompt: 2, completion: 12 },
+          order: ['together'],
+          allowFallbacks: true,
+        },
+      },
+      undefined,
+      { dataCollection: 'deny' },
+    );
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      order: ['together'],
+      allow_fallbacks: true,
+      data_collection: 'deny',
+      sort: 'throughput',
+      max_price: { prompt: 2, completion: 12 },
+    });
+  });
+
+  it('denies collection under the zero-retention requirement whatever the required preference says', () => {
+    const params = buildParams();
+    applyOpenRouterProviderRouting(params, undefined, undefined, true, {
+      dataCollection: 'allow',
+    });
+    expect((params as unknown as { provider?: unknown }).provider).toEqual({
+      data_collection: 'deny',
+      zdr: true,
+    });
+  });
+
   it('drops a malformed sort or a negative ceiling from request metadata', () => {
     const params = buildParams();
     applyOpenRouterProviderRouting(params, undefined, {
