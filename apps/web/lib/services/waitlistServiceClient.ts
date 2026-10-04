@@ -1,7 +1,6 @@
-
 import type { InviteCodeError } from '@shared/components/cloud-bridge/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import type { ConsentDecision } from '@/lib/consent-purposes';
+import { isWaitlistSource, type ConsentDecision } from '@/lib/consent-purposes';
 
 export interface RedeemInviteResult {
   success: boolean;
@@ -83,11 +82,7 @@ export async function redeemInviteCode(code: string, source: string): Promise<Re
 
 export async function joinPublicWaitlist(entry: WaitlistEntry): Promise<JoinWaitlistResult> {
   try {
-    const allowedSources = new Set(['website', 'byok', 'sync', 'billing', 'mobile', 'other']);
-    const source =
-      entry.referralSource && allowedSources.has(entry.referralSource)
-        ? entry.referralSource
-        : 'website';
+    const source = isWaitlistSource(entry.referralSource) ? entry.referralSource : 'website';
 
     const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
     const res = await fetch('/api/waitlist/public', {
