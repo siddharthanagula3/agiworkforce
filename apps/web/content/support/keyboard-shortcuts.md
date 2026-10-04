@@ -3,8 +3,8 @@ id: keyboard-shortcuts
 title: Keyboard shortcuts
 path: /chat
 category: chat
-tags: keyboard, shortcut, shortcuts, hotkey, cmd k, ctrl k, new chat shortcut, toggle sidebar, escape, regenerate shortcut, disable shortcut
-updated: 2026-09-17
+tags: keyboard, shortcut, shortcuts, hotkey, search shortcut, cmd shift f, ctrl shift f, new chat shortcut, toggle sidebar, escape, regenerate shortcut, disable shortcut
+updated: 2026-10-03
 scope: public
 ---
 
@@ -14,7 +14,7 @@ On macOS use Cmd where this says Ctrl.
 
 | Shortcut     | What it does            |
 | ------------ | ----------------------- |
-| Ctrl+K       | Open search             |
+| Shift+Ctrl+F | Open search             |
 | Ctrl+/       | Show keyboard shortcuts |
 | Shift+Ctrl+O | New conversation        |
 | Ctrl+B       | Toggle sidebar          |

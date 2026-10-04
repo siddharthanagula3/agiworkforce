@@ -1321,15 +1321,16 @@
         "shortcut",
         "shortcuts",
         "hotkey",
-        "cmd k",
-        "ctrl k",
+        "search shortcut",
+        "cmd shift f",
+        "ctrl shift f",
         "new chat shortcut",
         "toggle sidebar",
         "escape",
         "regenerate shortcut",
         "disable shortcut"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-10-03",
       "source": "content/support/keyboard-shortcuts.md",
       "chunks": [
         {
@@ -1337,7 +1338,7 @@
           "ordinal": 0,
           "heading": "The list",
           "headingPath": "Keyboard shortcuts › The list",
-          "text": "On macOS use Cmd where this says Ctrl.\n\n| Shortcut     | What it does            |\n| ------------ | ----------------------- |\n| Ctrl+K       | Open search             |\n| Ctrl+/       | Show keyboard shortcuts |\n| Shift+Ctrl+O | New conversation        |\n| Ctrl+B       | Toggle sidebar          |\n| Escape       | Focus message composer  |\n| Shift+Ctrl+C | Copy last message       |\n| Shift+Ctrl+R | Regenerate last message |\n| Shift+Ctrl+A | Toggle artifacts panel  |"
+          "text": "On macOS use Cmd where this says Ctrl.\n\n| Shortcut     | What it does            |\n| ------------ | ----------------------- |\n| Shift+Ctrl+F | Open search             |\n| Ctrl+/       | Show keyboard shortcuts |\n| Shift+Ctrl+O | New conversation        |\n| Ctrl+B       | Toggle sidebar          |\n| Escape       | Focus message composer  |\n| Shift+Ctrl+C | Copy last message       |\n| Shift+Ctrl+R | Regenerate last message |\n| Shift+Ctrl+A | Toggle artifacts panel  |"
         },
         {
           "id": "keyboard-shortcuts#1",

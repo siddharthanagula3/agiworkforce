@@ -75,7 +75,7 @@
     },
     {
       "doc": "keyboard-shortcuts",
-      "sha256": "26df3b7f65fc1cb8ac8ce2f297747ff8c75286e60556c24451550afedac9ac78"
+      "indexed": true
     },
     {
       "doc": "library",
@@ -4687,6 +4687,40 @@
           "text": "effective: workspaceActive ? workspace : hostActive ? host : '',"
         }
       ]
+    },
+    {
+      "id": "shortcuts-table-matches-the-registry",
+      "doc": "keyboard-shortcuts",
+      "section": "The list",
+      "kind": "rows",
+      "rows": 8,
+      "implementation": [
+        "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts#KEYBOARD_SHORTCUT_DOCS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/__tests__/shortcut-article-drift.test.ts",
+          "name": "lists exactly the registered shortcuts with the same keys and descriptions"
+        }
+      ]
+    },
+    {
+      "id": "shortcuts-switched-off-stop-firing",
+      "doc": "keyboard-shortcuts",
+      "section": "Turning one off",
+      "kind": "prose",
+      "sentence": "A shortcut you switch off stops firing, it does not merely look disabled, so a binding that clashes with something else in your setup can be released.",
+      "implementation": [
+        "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts#disabledShortcutIds"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/hooks/__tests__/shortcut-toggle-wired.test.tsx",
+          "name": "does not fire once the shortcut is switched off"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -4891,6 +4925,15 @@
       "sentence": "Support asks for these when investigating an issue; they identify the account, they are not secrets that grant access.",
       "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
       "why": "editorial-rule"
+    },
+    {
+      "id": "shortcuts-browser-reserves-new-window",
+      "doc": "keyboard-shortcuts",
+      "section": "Why new chat is Shift and not plain Ctrl+N",
+      "kind": "prose",
+      "sentence": "Ctrl+N and Cmd+N are reserved by the browser for a new window, so the page never receives the keypress and nothing can be bound to it.",
+      "implementation": ["apps/web/features/chat/hooks/use-keyboard-shortcuts.ts"],
+      "why": "external-fact"
     }
   ]
 }
