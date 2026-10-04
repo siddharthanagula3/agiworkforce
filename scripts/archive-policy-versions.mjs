@@ -30,6 +30,7 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SPEC = 'scripts/lib/policy-archive-render-spec.mjs';
 const SPEC_NAME = 'policy-archive-render.test.ts';
+const SPEC_HELPER = 'scripts/lib/policy-archive-extract.mjs';
 const SPARSE = ['/apps/web/', '/packages/', '/*.json', '/*.ts', '/*.mjs', '/*.yaml'];
 const MAIN_REF = 'origin/main';
 
@@ -130,6 +131,10 @@ function renderAt(commit, targets, workdir) {
     execFileSync('git', ['-C', dir, 'checkout', '--quiet']);
     linkModules(dir);
     fs.copyFileSync(path.join(root, SPEC), path.join(dir, 'apps/web', SPEC_NAME));
+    fs.copyFileSync(
+      path.join(root, SPEC_HELPER),
+      path.join(dir, 'apps/web', path.basename(SPEC_HELPER)),
+    );
     const payload = targets.map((target) => {
       const out = path.join(root, archiveFile(target.key, target.date));
       fs.mkdirSync(path.dirname(out), { recursive: true });
