@@ -1067,6 +1067,47 @@
           "text": "Go deeper on any of it."
         }
       ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Security mechanisms",
+            "href": "/security"
+          }
+        ],
+        [
+          {
+            "text": "Live status",
+            "href": "/status"
+          }
+        ],
+        [
+          {
+            "text": "Privacy policy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ],
+        [
+          {
+            "text": "Data processing addendum",
+            "href": "/dpa"
+          }
+        ],
+        [
+          {
+            "text": "Service levels",
+            "href": "/sla"
+          }
+        ]
+      ]
     }
   ]
 }

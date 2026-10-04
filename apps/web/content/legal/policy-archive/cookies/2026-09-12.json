@@ -846,7 +846,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "at any time: analytics stays off until you turn it on, and switching it back off stops it loading on your next page view. You can also manage cookies through your browser; clearing them will sign you out of any active session. For data export or deletion, see the "
+          "text": "Change your cookie preferences at any time: analytics stays off until you turn it on, and switching it back off stops it loading on your next page view. You can also manage cookies through your browser; clearing them will sign you out of any active session. For data export or deletion, see the "
         },
         {
           "text": "privacy policy",
@@ -855,6 +855,23 @@
         {
           "text": "."
         }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Privacy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ]
       ]
     }
   ]
