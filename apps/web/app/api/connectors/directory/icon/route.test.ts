@@ -83,6 +83,16 @@ describe('GET /api/connectors/directory/icon', () => {
     expect(response.status).toBe(404);
   });
 
+  it('404s for an empty upstream icon instead of a zero-byte 200', async () => {
+    mocks.getDirectoryIconUrl.mockResolvedValueOnce('https://cdn.example.com/brighthire.ico');
+    mocks.getIconForUrl.mockResolvedValueOnce(null);
+
+    const response = await GET(request('?id=brighthire'));
+
+    expect(response.status).toBe(404);
+    expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);
+  });
+
   it('streams the cached icon bytes with the right content type', async () => {
     mocks.getDirectoryIconUrl.mockResolvedValueOnce('https://cdn.example.com/notion.png');
     mocks.getIconForUrl.mockResolvedValueOnce({

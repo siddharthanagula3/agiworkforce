@@ -6,6 +6,7 @@ import { NeonMcpResponseCacheStore } from '@/lib/connectors/mcp-runtime-cache';
 const ICON_CACHE_METHOD = 'connectors.directory.icon';
 const ICON_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 export const ICON_MAX_BYTES = 262_144;
+const MIN_ICON_BYTES = 1;
 export const PAGE_HEAD_MAX_BYTES = 65_536;
 export const MAX_REDIRECT_HOPS = 3;
 const FETCH_STEP_TIMEOUT_MS = 5_000;
@@ -155,7 +156,7 @@ async function fetchIcon(url: string): Promise<CachedIcon | null> {
       return null;
     }
     const body = await timed(controller, () => readBoundedBody(response, ICON_MAX_BYTES));
-    if (!body) return null;
+    if (!body || body.byteLength < MIN_ICON_BYTES) return null;
     return { contentType, base64: body.toString('base64') };
   } catch {
     return null;
@@ -185,7 +186,8 @@ export async function getIconForUrl(url: string): Promise<CachedIcon | null> {
   const cached = await cacheStore.get(key);
   if (cached) {
     try {
-      return JSON.parse(cached.value) as CachedIcon;
+      const icon = JSON.parse(cached.value) as CachedIcon;
+      if (icon.base64) return icon;
     } catch {
       return null;
     }

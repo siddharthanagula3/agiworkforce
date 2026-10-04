@@ -13,6 +13,7 @@ import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
 import { isConnectableNow } from '@/lib/connectors/directory/snapshot-view';
 import { helpEntryPoint, helpHref } from '@/lib/support/help-entry-points';
+import { DirectoryCardIcon } from './DirectoryCardIcon';
 import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
 
 export const dynamic = 'force-dynamic';
@@ -182,13 +183,7 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
                     >
                       <div className="flex items-center gap-2.5">
                         {icon ? (
-                          <img
-                            src={icon}
-                            alt=""
-                            width={28}
-                            height={28}
-                            className="h-7 w-7 shrink-0 rounded-md"
-                          />
+                          <DirectoryCardIcon src={icon} monogram={record.monogram} />
                         ) : (
                           <span
                             aria-hidden
