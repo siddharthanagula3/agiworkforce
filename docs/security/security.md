@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-09-29
+Last updated: 2026-10-03
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -214,30 +214,54 @@ catalog-assembly path.
 
 ### 1.2 What Managed Cloud can actually connect
 
-`apps/web/lib/user-connector-tools.ts` (module header). Exactly four sources:
+`apps/web/lib/user-connector-tools.ts` (module header). The sources are listed
+by the credential each one holds, and the table carries no count: a source is
+added when the code gains one. Bank accounts, for example, connect through
+Plaid Link and keep the Plaid item token encrypted
+(`lib/connectors/bank-accounts.ts`).
 
-| Source                               | Gate                                                            | Credential location                                                                 |
-| ------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| GitHub App built-in                  | a usable GitHub App installation                                | `github_installations.access_token_enc`, resolved per request                       |
-| Operator-mapped remote MCP servers   | active `user_connectors` row + `CONNECTOR_MCP_SERVERS_JSON`     | operator config, server-side                                                        |
-| User's own custom remote MCP servers | `user_custom_connectors` row                                    | URL + optional bearer token, encrypted (`lib/custom-connector-crypto.ts`)           |
-| Platform-OAuth directory connectors  | `connector_oauth_grants` row + `CONNECTOR_OAUTH_PROVIDERS_JSON` | per-user access/refresh tokens, AES-256-GCM (`lib/connectors/oauth-store.ts`, 0097) |
+| Source                               | Gate                                                                                            | Credential location                                                                 |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| GitHub App built-in                  | a usable GitHub App installation                                                                | `github_installations.access_token_enc`, resolved per request                       |
+| Operator-mapped remote MCP servers   | active `user_connectors` row + `CONNECTOR_MCP_SERVERS_JSON`                                     | operator config, server-side                                                        |
+| User's own custom remote MCP servers | `user_custom_connectors` row                                                                    | URL + optional bearer token, encrypted (`lib/custom-connector-crypto.ts`)           |
+| Platform-OAuth directory connectors  | `connector_oauth_grants` row + `CONNECTOR_OAUTH_PROVIDERS_JSON`                                 | per-user access/refresh tokens, AES-256-GCM (`lib/connectors/oauth-store.ts`, 0097) |
+| Self-registered MCP endpoints        | `connector_oauth_grants` row + a `cimd` or `dynamic` entry in `lib/connectors/mcp-endpoints.ts` | the same grant table and encryption, written by `lib/connectors/mcp-discovery.ts`   |
+| Directory-discovered OAuth servers   | `connector_oauth_grants` row + a directory record (`lib/connectors/mcp-directory-targets.ts`)   | the same grant table and encryption, written by `lib/connectors/mcp-discovery.ts`   |
 
-The fourth source is the only one where **the platform holds the OAuth client and
-the user holds the grant**. Its authority is therefore bounded by the scopes the
-user consented to at the provider, recorded on the grant row, not by operator
-configuration. The client credentials live in
+The fourth source is the only one where **the operator holds the OAuth client and
+the user holds the grant**. The client credentials live in
 `CONNECTOR_OAUTH_<ID>_CLIENT_ID` / `_CLIENT_SECRET`, never in the descriptor
-JSON. Grants are strictly personal: `connector_oauth_grants` is scoped by
-`user_id` with no `organization_id`, so switching workspace never inherits
-another member's tokens (migration 0097 header).
+JSON. The fifth and sixth sources need no operator client: the client is
+registered with the provider's authorization server at connect time, or
+identified by a client metadata document (`lib/connectors/mcp-oauth-clients.ts`,
+`lib/connectors/mcp-client-metadata.ts`). In all three the authority is bounded
+by the scopes the user consented to at the provider, recorded on the grant row,
+not by operator configuration. Grants are strictly personal:
+`connector_oauth_grants` is scoped by `user_id` with no `organization_id`, so
+switching workspace never inherits another member's tokens (migration 0097
+header).
 
-As of 2026-08-05 no provider is configured in production, so this source
-contributes no connectors and every directory entry still reports unavailable.
+Which of these a deployment offers is decided from its configuration at request
+time, and this file records no production state for it. A connector that needs
+an operator client reports `needs-setup` until its descriptor and client pair
+exist, a self-registered endpoint needs only the token key and a public callback
+origin, and a connector with no remote server reports `unavailable`
+(`describeConnectorSetup` in `lib/connectors/oauth-setup.ts`, mapped to the
+directory state by `lib/connectors/directory/connectable.ts`).
+
+Disconnecting, and erasing an account, destroys the stored tokens in every case
+and asks the provider to revoke only where the connector's descriptor carries a
+`revocationUrl`, so a self-registered or directory-discovered grant is destroyed
+here without an upstream revocation call (`disconnectConnectorOAuthGrant` and
+`revokeAllConnectorTokensAtProviders` in `lib/connectors/oauth-access.ts`).
 
 `user_connectors` holds only `connector_id + auth_type + is_active`. **No tokens,
-no endpoint URLs.** `POST /api/connectors` returns 501 for every branded catalog
-connector and for device-local ids (`app/api/connectors/route.ts`).
+no endpoint URLs.** `POST /api/connectors` writes that row only for an
+operator-mapped connector; any other OAuth-capable connector is answered 409
+with `oauthStartPath` once its setup is complete and refused with 501 or 503
+while it is not, and a device-local id or a connector with no authorization path
+is answered 501 (`app/api/connectors/route.ts`).
 
 GitHub built-in tools, complete list (`user-connector-tools.ts`):
 `get_pull_request_diff`, `post_issue_comment`, `post_pull_request_review`.
@@ -367,13 +391,15 @@ API calls each scope covers.
 
 ### 1.8 Known gaps this file deliberately records rather than papers over
 
-1. **A branded catalog connector can only be OAuth-connected where the operator
-   configured it.** The hosted broker now exists end to end
+1. **A connector that needs an operator OAuth client can only be connected where
+   the operator configured it.** The hosted broker exists end to end
    (`/api/connectors/oauth/start` → `/api/connectors/oauth/callback`, grants in
-   `apps/web/lib/connectors/oauth-store.ts`), but
-   `apps/web/lib/connectors/oauth-registry.ts` ships **zero** providers on
-   purpose, a provider becomes connectable only when an operator supplies its
-   endpoints and client credentials. `GET /api/connectors` reports the ids that
+   `apps/web/lib/connectors/oauth-store.ts`), and
+   `apps/web/lib/connectors/oauth-registry.ts` ships **zero** descriptor providers
+   on purpose, so such a provider becomes connectable only when an operator
+   supplies its endpoints and client credentials, while a self-registered MCP
+   endpoint or a directory-discovered server needs no operator client.
+   `GET /api/connectors` reports the ids that
    are genuinely connectable in a given deployment, and the catalog labels every
    other entry from that answer, so an unconfigured connector renders as
    unavailable rather than offering a Connect button that 501s.
@@ -435,15 +461,19 @@ the authorization URL by `buildAuthorizationUrl` in the same file. So the only
 place this repository can enforce minimality is where that descriptor is loaded.
 That is what the ceiling table below does.
 
-**Current state: no OAuth provider is configured in production.** Section 2 of
-Section 1.2 records this as of
-2026-08-05 and it still holds. The enforcement described here is therefore
-inert against live traffic today. It exists so that the first operator who
+**Whether a descriptor provider is configured is a property of the deployment,
+decided as section 1.2 describes.** This file records no production state for
+it. The enforcement described here applies from the moment a descriptor is
+loaded. It exists so that the first operator who
 configures a provider cannot quietly request more than this file permits.
 
 ### The four connector sources, and which one has scopes at all
 
-Mirrors section 1.2, which cites `apps/web/lib/user-connector-tools.ts`.
+Covers the first four sources of section 1.2, which cites
+`apps/web/lib/user-connector-tools.ts`. The self-registered and
+directory-discovered sources request scopes on the discovered path, where
+`ceilingScopeFor` in `apps/web/lib/connectors/mcp-discovery.ts` narrows a
+connector with an enforced ceiling to that ceiling.
 
 | Source                               | Who decides the authority                                       | Scope ceiling applies?                              |
 | ------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------- |

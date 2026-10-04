@@ -162,6 +162,7 @@ export default function AgentPermissionsPage() {
                     </h2>
                   </div>
                   <FactGrid
+                    layout="rows"
                     items={[
                       {
                         meta: 'Connectors',
@@ -333,8 +334,8 @@ export default function AgentPermissionsPage() {
                     Desktop runs tools on your machine, so it carries its own gate: dangerous tools
                     prompt in manual mode, per-tool approval policies are stored and reapplied, and
                     connector settings expose a standing Always allow / Needs approval / Blocked
-                    control for each tool. Desktop is also the only surface today that completes a
-                    real OAuth flow. See the next section.
+                    control for each tool. Desktop signs in to connectors through the same
+                    account-scoped flow as the web app. See the next section.
                   </Prose>
                 </Stack>
               </Section>
@@ -352,14 +353,12 @@ export default function AgentPermissionsPage() {
                     </Prose>
                   </div>
 
-                  <h3 className="agi-ds-h3">
-                    Managed Cloud connects exactly three kinds of thing.
-                  </h3>
+                  <h3 className="agi-ds-h3">A connector is defined by the credential behind it.</h3>
                   <Ledger
-                    caption="What Managed Cloud connects"
+                    caption="Connector credentials on Managed Cloud"
                     rows={[
                       {
-                        label: 'The GitHub App',
+                        label: 'GitHub App installation',
                         value:
                           'Three tools: read a pull-request diff, post an issue or pull-request comment, and post a pull-request review. Access comes from the GitHub App installation you authorize; its permission set is configured on GitHub during install and is shown to you there. We do not restate it here, because it is not declared in our own code and we will not guess at a permission list on your behalf.',
                       },
@@ -369,23 +368,42 @@ export default function AgentPermissionsPage() {
                           'Remote MCP endpoints configured server-side by AGI. The endpoint and its credentials stay server-side; nothing you supply flows into them.',
                       },
                       {
-                        label: 'Your own remote MCP servers',
+                        label: 'Your own MCP server',
                         value:
                           'A server URL you provide, with an optional bearer token that is encrypted at rest and scoped to your account alone. Its tools are whatever that server advertises at runtime.',
+                      },
+                      {
+                        label: 'Connectors you sign in to at the provider',
+                        value:
+                          'You approve access on the provider\u2019s own consent screen, and the provider returns an access token and, where it issues one, a refresh token. Both are encrypted with AES-256-GCM and stored in your AGI account.',
                       },
                     ]}
                   />
 
                   <Prose>
                     <strong>
-                      Every other connector in the directory is not connectable on the web today.
+                      A connector you sign in to is connectable only where the directory shows
+                      &ldquo;Connect&rdquo;.
                     </strong>{' '}
-                    Attempting to connect one returns an explicit &ldquo;not implemented&rdquo;
-                    response rather than a fake connected state. No OAuth token for Gmail, Drive,
-                    Slack, Notion, or any other branded catalog connector is stored in your AGI
-                    account, because no such flow exists on the web. The record we keep for a
-                    connector is an enablement flag: a connector id, an auth type, and whether it is
-                    active. It holds no tokens and no endpoint URLs.
+                    Some connectors, including the Google and Microsoft ones, depend on an app
+                    registration with the provider that may not be in place. The directory marks
+                    those &ldquo;Needs setup&rdquo; rather than offering a sign-in that cannot
+                    finish, and attempting to connect one returns an explicit refusal rather than a
+                    fake connected state.
+                  </Prose>
+                  <Prose>
+                    The record AGI keeps follows from the credential. For an operator-configured
+                    connector it is an enablement record: a connector id, an auth type, and whether
+                    it is active. That record holds no tokens and no endpoint URLs. For a connector
+                    you sign in to it is a grant: the encrypted tokens, the scopes the provider
+                    granted, a label for the account you connected where one was given, and the
+                    provider addresses needed to use and refresh the tokens.
+                  </Prose>
+                  <Prose>
+                    When you disconnect a connector, and when your account is deleted, AGI deletes
+                    its copy of the tokens and asks the provider to revoke them where the connector
+                    has a revocation endpoint configured. Where it has none, also remove AGI in that
+                    provider&rsquo;s own account settings.
                   </Prose>
 
                   <h3 className="agi-ds-h3">Desktop uses the managed connector service.</h3>
