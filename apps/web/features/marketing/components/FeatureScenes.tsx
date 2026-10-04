@@ -29,7 +29,7 @@ export function AgentRunWindow() {
   return (
     <AppWindow
       title="agiworkforce.com/chat · agent run"
-      badge="Local"
+      badge="Web"
       label="An AGI agent run paused on an approval"
     >
       <div className="agi-sc-split" data-cols="3-2">
@@ -54,7 +54,7 @@ export function AgentRunWindow() {
                 <span className="agi-mk-btn">Deny</span>
               </span>
             </div>
-            <Receipt route={ROUTE_RECEIPTS.local} tokensIn="12k" tokensOut="1.1k" time="58 s" />
+            <Receipt route={ROUTE_RECEIPTS.managed} tokensIn="12k" tokensOut="1.1k" time="58 s" />
           </div>
         </div>
         <aside className="agi-sc-rail">
@@ -202,12 +202,12 @@ const MEMORY_FACTS = [
 
 export function MemoryWindow() {
   return (
-    <AppWindow title="Settings · Memory" badge="Local" label="The AGI memory list in settings">
+    <AppWindow title="Settings · Memory" badge="Web" label="The AGI memory list in settings">
       <div className="agi-sc-page">
         <div className="agi-sc-page-head">
           <span className="agi-sc-page-title">Memory</span>
           <span className="agi-sc-toggle" data-on="true">
-            <i /> On · stays on this device
+            <i /> On · saved to your account
           </span>
         </div>
         <div className="agi-sc-search">Search memory…</div>
@@ -258,7 +258,7 @@ export function ProjectWindow() {
       <div className="agi-sc-page">
         <div className="agi-sc-page-head">
           <span className="agi-sc-page-title">Investor deck</span>
-          <span className="agi-sc-meta">3 threads · 4 files · Local and Cloud allowed</span>
+          <span className="agi-sc-meta">3 threads · 4 files</span>
         </div>
         <div className="agi-sc-card">
           <span className="agi-sc-card-head">Instructions</span>

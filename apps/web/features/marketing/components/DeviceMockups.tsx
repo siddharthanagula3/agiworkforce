@@ -3,6 +3,7 @@ import './motion/motion.css';
 import { Typewriter, type TypedLine, type TypedLineClasses } from './motion/Typewriter';
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 const LOCAL_RUNTIME_LABEL = `${(CLI_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
@@ -25,6 +26,9 @@ export interface DeviceWindowProps {
   title?: string;
   badge?: string;
   className?: string;
+}
+
+export interface TerminalWindowProps extends DeviceWindowProps {
   routeMode?: RouteMode;
 }
 
@@ -173,7 +177,7 @@ function PanelComposer() {
       </span>
       <span className="agi-dev-panelcomposer-foot">
         <span>Paired · Desktop bridge</span>
-        <span>Local ∨</span>
+        <span>{PRIVACY_MODE_DISPLAY.managed.label}</span>
       </span>
     </div>
   );
@@ -181,11 +185,10 @@ function PanelComposer() {
 
 export function DesktopWindow({
   title = 'AGI Workforce',
-  badge = 'Local',
+  badge = 'Cloud',
   className,
-  routeMode = 'local',
 }: DeviceWindowProps) {
-  const route = ROUTE_RECEIPTS[routeMode];
+  const route = ROUTE_RECEIPTS.managed;
   return (
     <DeviceRoot type="desktop" label={`${title} desktop app interface`} className={className}>
       <WindowBar title={title} badge={badge} />
@@ -379,7 +382,7 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
         <div className="agi-cr-panel">
           <div className="agi-cr-panel-head">
             <span className="agi-cr-panel-logo">AGI</span>
-            <span className="agi-cr-panel-mode">◆ Local</span>
+            <span className="agi-cr-panel-mode">◆ {PRIVACY_MODE_DISPLAY.managed.label}</span>
           </div>
           <PageContextStrip />
           <div className="agi-cr-chat">
@@ -631,7 +634,7 @@ export function TerminalWindow({
   badge = 'sandboxed',
   className,
   routeMode = 'local',
-}: DeviceWindowProps) {
+}: TerminalWindowProps) {
   const isByok = routeMode === 'byok';
   const isManaged = routeMode === 'managed';
   const routeLabel = isByok ? 'BYOK' : isManaged ? 'managed cloud' : 'local model';
