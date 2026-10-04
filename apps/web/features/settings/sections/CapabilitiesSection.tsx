@@ -11,6 +11,7 @@ import {
   RemoteControlSection,
   LocalAccessSection,
 } from '@/features/desktop-host';
+import { PaneTitle } from '@shared/components/PaneTitle';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
@@ -30,7 +31,7 @@ export function CapabilitiesSection() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-h2 text-foreground">Capabilities</h2>
+        <PaneTitle>Capabilities</PaneTitle>
         <p className="mt-1 text-sm text-muted-foreground">
           Control what AGI can do in your conversations.
         </p>

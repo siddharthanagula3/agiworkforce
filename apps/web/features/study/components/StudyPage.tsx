@@ -7,6 +7,7 @@ import { Spinner } from '@agiworkforce/ui';
 
 import { toUserMessage } from '@/lib/user-error-message';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { PaneTitle } from '@shared/components/PaneTitle';
 
 import {
   MAX_STUDY_TOPIC_LENGTH,
@@ -112,10 +113,10 @@ export function StudyPage({
   return (
     <div className="mx-auto flex w-full max-w-[768px] flex-col gap-8 px-gutter-compact py-8 md:px-gutter-regular">
       <header className="flex flex-col gap-2">
-        <h1 className="flex items-center gap-2 text-h2 text-foreground">
+        <PaneTitle className="flex items-center gap-2">
           <BookOpen aria-hidden="true" className="h-5 w-5" />
           Study
-        </h1>
+        </PaneTitle>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Work through a subject with the model instead of asking it for the answer. A study session
           is an ordinary conversation, so everything you cover stays in your chat history.
