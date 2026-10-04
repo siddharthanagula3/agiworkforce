@@ -47,6 +47,13 @@ describe('the entry point', () => {
     expect(screen.getByRole('combobox', { name: /Where you are with it/ })).toBeVisible();
   });
 
+  it('titles the page with the shared pane title role', async () => {
+    render(<StudyPage api={api()} createConversation={vi.fn()} />);
+
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Study' });
+    expect(heading).toHaveClass('text-h1');
+  });
+
   it('cannot start without a topic', async () => {
     render(<StudyPage api={api()} createConversation={vi.fn()} />);
 
