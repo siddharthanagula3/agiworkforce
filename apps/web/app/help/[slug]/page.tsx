@@ -1,26 +1,13 @@
 import { notFound } from 'next/navigation';
-import ReactMarkdown, { type Components } from 'react-markdown';
 import { Header } from '@shared/components/layout/Header';
+import { HelpArticleBody } from '@/features/support/components/HelpArticleBody';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Section } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { headingAnchor } from '@/lib/support/doc-topics';
 import { getHelpArticle, helpArticlePath } from '@/lib/support/help-articles';
 
 type ArticleProps = { params: Promise<{ slug: string }> };
-
-const MARKDOWN_COMPONENTS: Components = {
-  p: ({ children }) => <Prose>{children}</Prose>,
-  a: ({ href, children }) => (
-    <a href={href} className="agi-ds-link">
-      {children}
-    </a>
-  ),
-  ul: ({ children }) => <ul className="list-disc space-y-2 ps-6">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal space-y-2 ps-6">{children}</ol>,
-  pre: ({ children }) => <pre className="overflow-x-auto rounded-md bg-muted p-4">{children}</pre>,
-};
 
 export async function generateMetadata({ params }: ArticleProps) {
   const { slug } = await params;
@@ -54,24 +41,7 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
         />
         <Section labelledBy="help-article-title" rule>
           <article className="max-w-prose">
-            <Stack gap="loose">
-              {article.sections.map((section) => (
-                <div key={section.id} className="space-y-4">
-                  {section.heading ? (
-                    <h2 className="agi-ds-h2 scroll-mt-24" id={headingAnchor(section.heading)}>
-                      {section.heading}
-                    </h2>
-                  ) : null}
-                  <ReactMarkdown
-                    skipHtml
-                    disallowedElements={['img']}
-                    components={MARKDOWN_COMPONENTS}
-                  >
-                    {section.text}
-                  </ReactMarkdown>
-                </div>
-              ))}
-            </Stack>
+            <HelpArticleBody sections={article.sections} />
           </article>
         </Section>
       </main>
