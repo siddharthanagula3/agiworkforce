@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ArtifactWireDelta, ChatSyncPushResponse } from '@agiworkforce/cloud-contracts';
+import { localModelId } from '@agiworkforce/local-runtime-contract';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { ARTIFACT_PANEL_OVERLAY_QUERY, useArtifactsStore } from './artifacts-store';
 
 function cloudDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta {
@@ -263,6 +265,10 @@ describe('local artifact push batching', () => {
   const CONVERSATION_ID = '00000000-0000-4000-8000-00000000c001';
   const MESSAGE_ID = '00000000-0000-4000-8000-00000000d001';
   const ARTIFACT_ID = '00000000-0000-4000-8000-00000000a001';
+  const SAVED_CONVERSATION_ID = '00000000-0000-4000-8000-00000000c002';
+  const SAVED_MESSAGE_ID = '00000000-0000-4000-8000-00000000d002';
+  const SAVED_ARTIFACT_ID = '00000000-0000-4000-8000-00000000a002';
+  const BOTH_ARTIFACT_IDS = [ARTIFACT_ID, SAVED_ARTIFACT_ID];
 
   function pushableDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta {
     return cloudDelta({
@@ -285,8 +291,47 @@ describe('local artifact push batching', () => {
     });
   }
 
+  function seedSavedChatArtifact(): void {
+    useArtifactsStore.getState().addArtifact({
+      id: SAVED_ARTIFACT_ID,
+      type: 'html',
+      title: 'Saved chat artifact',
+      language: 'html',
+      content: '<main>Saved</main>',
+      messageId: SAVED_MESSAGE_ID,
+      conversationId: SAVED_CONVERSATION_ID,
+    });
+  }
+
+  function heldArtifactIds(): string[] {
+    return useArtifactsStore
+      .getState()
+      .artifacts.map((artifact) => artifact.id)
+      .sort();
+  }
+
+  function pushBatchIds(): string[] {
+    return useArtifactsStore
+      .getState()
+      .collectArtifactPushBatch()
+      .map((item) => item.id)
+      .sort();
+  }
+
+  function browserCopyIds(): string[] {
+    const stored = JSON.parse(localStorage.getItem('agi-artifacts-store') ?? '{}') as {
+      state?: { artifacts?: Array<{ id: string }> };
+    };
+    return (stored.state?.artifacts ?? []).map((artifact) => artifact.id).sort();
+  }
+
   beforeEach(() => {
     useArtifactsStore.getState().clearArtifacts();
+  });
+
+  afterEach(() => {
+    useChatStore.setState({ conversations: [], messagesByConversation: {} });
+    useArtifactsStore.getState().clearArtifactsForConversation(CONVERSATION_ID);
   });
 
   it('queues a locally created artifact for the cloud as an insert', () => {
@@ -496,6 +541,94 @@ describe('local artifact push batching', () => {
     });
 
     expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+  });
+
+  it('never sends an artifact of a temporary chat', () => {
+    useChatStore.setState({
+      conversations: [
+        { id: CONVERSATION_ID, isTemporary: true },
+        { id: SAVED_CONVERSATION_ID },
+      ] as never,
+    });
+    seedLocalArtifact();
+    seedSavedChatArtifact();
+
+    expect(heldArtifactIds()).toEqual(BOTH_ARTIFACT_IDS);
+    expect(pushBatchIds()).toEqual([SAVED_ARTIFACT_ID]);
+
+    useChatStore.getState().updateConversation(CONVERSATION_ID, { isTemporary: false });
+
+    expect(pushBatchIds()).toEqual(BOTH_ARTIFACT_IDS);
+  });
+
+  it('keeps withholding a temporary chat the conversation list has dropped', () => {
+    useChatStore.setState({
+      activeConversationId: null,
+      conversations: [{ id: CONVERSATION_ID, isTemporary: true }] as never,
+      messagesByConversation: {
+        [CONVERSATION_ID]: [{ id: MESSAGE_ID, role: 'assistant', content: 'x' }],
+      } as never,
+    });
+    seedLocalArtifact();
+
+    useChatStore.getState().setConversations([{ id: SAVED_CONVERSATION_ID }] as never);
+    seedSavedChatArtifact();
+
+    expect(useChatStore.getState().conversations.map((conversation) => conversation.id)).toEqual([
+      SAVED_CONVERSATION_ID,
+    ]);
+    expect(heldArtifactIds()).toEqual(BOTH_ARTIFACT_IDS);
+    expect(pushBatchIds()).toEqual([SAVED_ARTIFACT_ID]);
+    expect(browserCopyIds()).toEqual([SAVED_ARTIFACT_ID]);
+  });
+
+  it('withholds an artifact that arrives after the list dropped its temporary chat', () => {
+    useChatStore.setState({
+      activeConversationId: null,
+      conversations: [{ id: CONVERSATION_ID, isTemporary: true }] as never,
+    });
+    useChatStore.getState().setConversations([{ id: SAVED_CONVERSATION_ID }] as never);
+
+    seedLocalArtifact();
+    seedSavedChatArtifact();
+
+    expect(heldArtifactIds()).toEqual(BOTH_ARTIFACT_IDS);
+    expect(pushBatchIds()).toEqual([SAVED_ARTIFACT_ID]);
+    expect(browserCopyIds()).toEqual([SAVED_ARTIFACT_ID]);
+  });
+
+  it.each([
+    ['a turn marked local', { metadata: { privacyMode: 'local' } }],
+    ['a turn on a local model', { model: localModelId('ollama', 'tiny-chat:1b') }],
+  ])('never sends an artifact from a chat answered on this device: %s', (_label, localMarker) => {
+    const turn = { id: MESSAGE_ID, role: 'assistant', content: 'x' };
+    useChatStore.setState({
+      conversations: [{ id: CONVERSATION_ID }, { id: SAVED_CONVERSATION_ID }] as never,
+      messagesByConversation: { [CONVERSATION_ID]: [{ ...turn, ...localMarker }] } as never,
+    });
+    seedLocalArtifact();
+    seedSavedChatArtifact();
+
+    expect(heldArtifactIds()).toEqual(BOTH_ARTIFACT_IDS);
+    expect(pushBatchIds()).toEqual([SAVED_ARTIFACT_ID]);
+
+    useChatStore.setState({ messagesByConversation: { [CONVERSATION_ID]: [turn] } as never });
+
+    expect(pushBatchIds()).toEqual(BOTH_ARTIFACT_IDS);
+  });
+
+  it('keeps a temporary chat out of browser storage', () => {
+    useChatStore.setState({
+      conversations: [
+        { id: CONVERSATION_ID, isTemporary: true },
+        { id: SAVED_CONVERSATION_ID },
+      ] as never,
+    });
+    seedLocalArtifact();
+    seedSavedChatArtifact();
+
+    expect(heldArtifactIds()).toEqual(BOTH_ARTIFACT_IDS);
+    expect(browserCopyIds()).toEqual([SAVED_ARTIFACT_ID]);
   });
 });
 
