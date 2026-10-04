@@ -20,6 +20,7 @@ import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 import { logger } from '@shared/lib/logger';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { conversationHoldsLocalTurns } from '../lib/local-origin';
 
 const MAX_RETAINED_ARTIFACTS = 200;
 const MAX_ARTIFACTS_PER_PUSH = 500;
@@ -308,6 +309,22 @@ function buildPersistedShape(): PersistedShape {
   return { artifacts, versionsById, selectedArtifactId };
 }
 
+const _temporaryConversationIdsSeen = new Set<string>();
+
+function noteTemporaryConversations(
+  conversations: ReadonlyArray<{ id: string; isTemporary?: boolean }>,
+): void {
+  for (const conversation of conversations) {
+    if (conversation.isTemporary) _temporaryConversationIdsSeen.add(conversation.id);
+    else _temporaryConversationIdsSeen.delete(conversation.id);
+  }
+}
+
+function temporaryConversationIds(): Set<string> {
+  noteTemporaryConversations(useChatStore.getState().conversations);
+  return new Set(_temporaryConversationIdsSeen);
+}
+
 let _persistDegraded = false;
 
 export function isArtifactPersistenceDegraded(): boolean {
@@ -389,12 +406,7 @@ const _persistStore = create<PersistedShape>()(
       return persisted as PersistedShape;
     },
     partialize: (state) => {
-      const temporaryIds = new Set(
-        useChatStore
-          .getState()
-          .conversations.filter((conversation) => conversation.isTemporary)
-          .map((conversation) => conversation.id),
-      );
+      const temporaryIds = temporaryConversationIds();
       if (temporaryIds.size === 0) {
         return {
           artifacts: state.artifacts,
@@ -741,6 +753,7 @@ const actions = {
   },
 
   clearArtifactsForConversation(conversationId: string): void {
+    _temporaryConversationIdsSeen.delete(conversationId);
     const doomed = _sharedArtifactStore
       .getState()
       .artifacts.filter((a) => a.conversationId === conversationId)
@@ -778,9 +791,25 @@ const actions = {
   collectArtifactPushBatch(): ArtifactSyncPushItem[] {
     const batch: ArtifactSyncPushItem[] = [];
     const snapshots = new Map<string, CloudArtifact>();
+    const temporaryIds = temporaryConversationIds();
+    const { messagesByConversation } = useChatStore.getState();
+    const answeredOnDevice = new Map<string, boolean>();
+    const staysOffTheAccount = (conversationId: string): boolean => {
+      if (temporaryIds.has(conversationId)) return true;
+      const known = answeredOnDevice.get(conversationId);
+      if (known !== undefined) return known;
+      const holdsLocalTurns = conversationHoldsLocalTurns(
+        messagesByConversation[conversationId] ?? [],
+      );
+      answeredOnDevice.set(conversationId, holdsLocalTurns);
+      return holdsLocalTurns;
+    };
 
     for (const artifact of _sharedArtifactStore.getState().artifacts) {
       if (batch.length >= MAX_ARTIFACTS_PER_PUSH) break;
+      if (artifact.conversationId !== undefined && staysOffTheAccount(artifact.conversationId)) {
+        continue;
+      }
       if (_rejectedPushContentById[artifact.id] === artifact.content) continue;
       const cloud = cloudCopyOf(artifact.id);
       if (cloud?.deletedAt) continue;
@@ -936,6 +965,9 @@ function chatLifecycleSignature(): string {
 if (typeof window !== 'undefined') {
   let lastSignature = chatLifecycleSignature();
   useChatStore.subscribe((state, previous) => {
+    if (state.conversations !== previous.conversations) {
+      noteTemporaryConversations(state.conversations);
+    }
     for (const conversationId of findDeletedConversationIds(previous, state)) {
       actions.clearArtifactsForConversation(conversationId);
     }
