@@ -46,7 +46,7 @@ export function StaleSessionRecovery({
   const stuck = alreadyRetried || failed;
 
   return (
-    <main className="flex min-h-[60vh] items-center justify-center p-6">
+    <main id="main-content" className="flex min-h-[60vh] items-center justify-center p-6">
       <div className="max-w-md text-center">
         <h1 className="mb-2 text-h2 text-foreground">
           {stuck ? 'We could not finish signing you in' : 'Finishing sign-in…'}

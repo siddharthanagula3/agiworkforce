@@ -72,14 +72,13 @@ function landmarkReport(fileName: string, source: string): LandmarkReport {
   collect(sourceFile);
 
   const problems: string[] = [];
-  if (!rendersSiteChrome) return { rendersSiteChrome, problems };
 
   for (const main of mains) {
     const where = `${fileName}:${lineOf(main)}`;
     if (attributeText(main, 'id') !== SKIP_TARGET) {
       problems.push(`${where} main lacks id="${SKIP_TARGET}"`);
     }
-    if (!ts.isJsxOpeningElement(main)) continue;
+    if (!rendersSiteChrome || !ts.isJsxOpeningElement(main)) continue;
     const nested = (node: ts.Node): void => {
       if (isJsxTag(node)) {
         const name = node.tagName.getText();
@@ -93,6 +92,20 @@ function landmarkReport(fileName: string, source: string): LandmarkReport {
   }
   return { rendersSiteChrome, problems };
 }
+
+const UNTARGETED_MAIN_ALLOWLIST: Record<string, string> = {
+  'app/dev/renderer-probe/page.tsx': 'development-only probe, not reachable in production',
+  'app/dev/token-probe/page.tsx': 'development-only probe, not reachable in production',
+  'app/operator/support/page.tsx': 'signed-in operator console, no marketing chrome',
+  'features/admin/pages/AdminConsolePage.tsx': 'signed-in admin console, no marketing chrome',
+  'features/admin/pages/DirectorySyncAdminPage.tsx': 'signed-in admin console, no marketing chrome',
+  'features/admin/pages/PluginModerationPage.tsx': 'signed-in admin console, no marketing chrome',
+  'features/admin/pages/RefundOperationsPage.tsx': 'signed-in admin console, no marketing chrome',
+  'features/admin/pages/ReleaseDashboardPage.tsx': 'signed-in admin console, no marketing chrome',
+  'features/admin/pages/WorkspaceDeletionPage.tsx': 'signed-in admin console, no marketing chrome',
+  'features/workspace-console/components/WorkspaceConsoleShell.tsx':
+    'signed-in workspace console, no marketing chrome',
+};
 
 const page = (body: string) =>
   `export default function Page() {\n  return (\n    <div data-design="agi">\n${body}\n    </div>\n  );\n}\n`;
@@ -231,6 +244,32 @@ describe('public pages keep the site chrome outside the main landmark', () => {
 
   it('gives each of those files a main the skip link can reach, with the chrome outside it', () => {
     expect(chromeFiles.flatMap((file) => file.problems)).toEqual([]);
+  });
+
+  it('gives every main outside the allowlist the skip target id', () => {
+    const offenders = scanned
+      .filter((file) => !(file.name in UNTARGETED_MAIN_ALLOWLIST))
+      .flatMap((file) => file.problems.filter((problem) => problem.includes('lacks id')));
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps the allowlist limited to files that still render a main without the id', () => {
+    const stale = Object.keys(UNTARGETED_MAIN_ALLOWLIST).filter(
+      (name) =>
+        !scanned.some(
+          (file) =>
+            file.name === name && file.problems.some((problem) => problem.includes('lacks id')),
+        ),
+    );
+    expect(stale).toEqual([]);
+  });
+
+  it('reports a bare main in a file that renders no site chrome', () => {
+    const source = page('      <main className="p-6"><h1>Title</h1></main>');
+    expect(landmarkReport('fixture.tsx', source)).toEqual({
+      rendersSiteChrome: false,
+      problems: ['fixture.tsx:4 main lacks id="main-content"'],
+    });
   });
 
   it('accepts a page with the header before main and the footer after it', () => {

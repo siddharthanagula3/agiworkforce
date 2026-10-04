@@ -35,7 +35,7 @@ export default function Error({
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <main className="flex-1 flex items-center justify-center">
+      <main id="main-content" className="flex-1 flex items-center justify-center">
         <div className="container mx-auto px-4 text-center">
           <div className="mb-8">
             <div

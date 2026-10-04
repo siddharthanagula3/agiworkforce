@@ -19,7 +19,10 @@ export function SharedSchedulePreview({
   const addHref = `/chat/schedules?${SCHEDULE_SHARE_QUERY_PARAM}=${encodeURIComponent(token)}`;
 
   return (
-    <main className="flex min-h-screen justify-center bg-background px-4 py-12 text-foreground">
+    <main
+      id="main-content"
+      className="flex min-h-screen justify-center bg-background px-4 py-12 text-foreground"
+    >
       <article className="w-full max-w-[768px]">
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <CalendarClock className="h-4 w-4" aria-hidden="true" />

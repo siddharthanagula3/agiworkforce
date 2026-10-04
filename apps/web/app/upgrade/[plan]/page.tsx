@@ -21,7 +21,7 @@ export default async function UpgradePlanPage({ params }: { params: Promise<{ pl
   if (!userId) redirect(sessionExpiredRedirect(`/upgrade/${plan}`));
 
   return (
-    <main className="min-h-screen">
+    <main id="main-content" className="min-h-screen">
       <UpgradeOrderScreen plan={plan as SelfServeIndividualPlanTier} />
     </main>
   );

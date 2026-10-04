@@ -76,7 +76,7 @@ export function UpgradeWelcome({
   }, [planActivated, refreshUser]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-16">
+    <main id="main-content" className="flex min-h-screen items-center justify-center px-6 py-16">
       <div className="w-full max-w-xl">
         <div className="flex flex-col items-center text-center">
           <StatusMark activated={planActivated} />

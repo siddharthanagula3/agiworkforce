@@ -111,7 +111,10 @@ export function PublishedArtifactView({
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-4 px-4 py-8">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-4 px-4 py-8"
+    >
       <header className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-h2 text-foreground">{heading}</h1>
