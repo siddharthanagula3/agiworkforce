@@ -36,7 +36,10 @@ interface RegistryView {
     { features: Record<string, { implementation?: string } | undefined>; trustModes: string[] }
   >;
   capabilities: Record<string, Record<string, boolean | null>>;
-  governance: Record<string, { residencyRegions?: readonly string[] | null }>;
+  governance: Record<
+    string,
+    { residencyRegions?: readonly string[] | null; trainsOnInputs?: string }
+  >;
   policies: { auto: { tierAllowedSlots: Record<string, unknown>; tasks: Record<string, unknown> } };
 }
 
@@ -49,6 +52,12 @@ const SELECTIONS = ['auto', 'auto-economy', 'auto-balanced', 'auto-premium'];
 const REGIONS = [null, 'us', 'eu'];
 
 const MANAGED: RoutingTrustMode = 'managed_cloud';
+const KEEPS_INPUTS_OUT_OF_TRAINING = new Set(['never', 'opt_in']);
+
+function mayTrainOnInputs(providerId: string): boolean {
+  const policy = registry.governance[providerId]?.trainsOnInputs;
+  return policy === undefined || !KEEPS_INPUTS_OUT_OF_TRAINING.has(policy);
+}
 
 function seeded(seed: number): () => number {
   let state = seed >>> 0;
@@ -81,6 +90,7 @@ function sweepRequests(count: number): AutoRoutingRequest[] {
       ...(draw() < 0.2 ? { residencyRegion: pick(draw, ['us', 'eu']) } : {}),
       ...(draw() < 0.2 ? { excludedRouteHosts: new Set(['open_router']) } : {}),
       requestId: `sweep-${index}`,
+      ...(draw() < 0.25 ? { noTrainingOnly: true } : {}),
     });
   }
   return requests;
@@ -117,6 +127,12 @@ function admissionFaults(routeId: string, request: AutoRoutingRequest): string[]
       honoursPerRequest ||
       (request.zeroDataRetentionProviders?.has(route.provider) ?? false);
     if (!permitted) faults.push('route does not guarantee zero data retention');
+  }
+
+  if (request.noTrainingOnly) {
+    for (const identity of new Set([model.identity.provider, route.provider])) {
+      if (mayTrainOnInputs(identity)) faults.push(`${identity} may train on inputs`);
+    }
   }
 
   const transportRegions = registry.governance[route.provider]?.residencyRegions;
@@ -293,6 +309,68 @@ describe('each admission rule, mutated one at a time', () => {
         admissionFaults(decision.routeId, { ...baseline, zeroDataRetentionOnly: true }),
       ).toEqual([]);
     }
+  });
+
+  it('refuses a model whose vendor may train on inputs', () => {
+    const modelKey = Object.keys(registry.models).find(
+      (candidate) =>
+        mayTrainOnInputs(registry.models[candidate]!.identity.provider) &&
+        resolveAutoRoute({ ...baseline, selection: candidate }).status === 'selected',
+    );
+    expect(modelKey).toBeDefined();
+    const decision = resolveAutoRoute({ ...baseline, selection: modelKey, noTrainingOnly: true });
+    expect(decision).toMatchObject({ status: 'unavailable', code: 'explicit_model_ineligible' });
+    if (decision.status === 'unavailable') {
+      expect(decision.reasons.join(' ')).toContain('may train on inputs');
+    }
+  });
+
+  it('refuses a transport that may train on inputs, whatever the vendor promises', () => {
+    const pinned = Object.entries(registry.routes).find(
+      ([routeId, route]) =>
+        !mayTrainOnInputs(registry.models[route.modelKey]?.identity.provider ?? '') &&
+        mayTrainOnInputs(route.provider) &&
+        resolveAutoRoute({ ...baseline, selection: route.modelKey, requiredRouteId: routeId })
+          .status === 'selected',
+    );
+    expect(pinned).toBeDefined();
+    if (!pinned) return;
+    const [routeId, route] = pinned;
+    const request = { ...baseline, selection: route.modelKey, noTrainingOnly: true };
+    expect(resolveAutoRoute({ ...request, requiredRouteId: routeId })).toMatchObject({
+      status: 'unavailable',
+      code: 'explicit_route_ineligible',
+    });
+    const rerouted = resolveAutoRoute(request);
+    if (rerouted.status === 'selected') {
+      expect(admissionFaults(rerouted.routeId, request)).toEqual([]);
+      for (const fallback of rerouted.fallbacks) {
+        expect(admissionFaults(fallback.routeId, request)).toEqual([]);
+      }
+    } else {
+      expect(rerouted.reasons.join(' ')).toContain('may train on inputs');
+    }
+  });
+
+  it('refuses the plan whose only model may train, rather than parking on it', () => {
+    const request: AutoRoutingRequest = {
+      ...baseline,
+      subscriptionTier: 'free',
+      taskType: 'simple_chat',
+    };
+    const unfiltered = resolveAutoRoute(request);
+    if (unfiltered.status !== 'selected') throw new Error('the free lane selected nothing');
+    expect(admissionFaults(unfiltered.routeId, { ...request, noTrainingOnly: true })).not.toEqual(
+      [],
+    );
+    const decision = resolveAutoRoute({
+      ...request,
+      noTrainingOnly: true,
+      availableProviderIds: new Set(
+        Object.keys(registry.governance).filter((providerId) => !mayTrainOnInputs(providerId)),
+      ),
+    });
+    expect(decision).toMatchObject({ status: 'unavailable', code: 'no_eligible_route' });
   });
 
   it('prefers a healthy route over one the store has parked', () => {

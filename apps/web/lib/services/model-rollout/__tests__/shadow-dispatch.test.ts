@@ -85,7 +85,7 @@ const SHADOW: ShadowMirror = {
 };
 
 const SERVED_TRACE = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   policyVersion: 17,
   requestId: 'request-1',
   selection: 'auto',
@@ -117,6 +117,7 @@ const SERVED_TRACE = {
     budgetConstrained: false,
     workspaceModelPolicy: false,
     zeroDataRetentionOnly: false,
+    noTrainingOnly: false,
     usOnly: false,
     excludedProviderCount: 0,
     excludedRouteHostCount: 0,

@@ -295,6 +295,7 @@ describe('a served turn is measured where its decision was traced', () => {
       budgetConstrained: false,
       workspaceModelPolicy: false,
       zeroDataRetentionOnly: false,
+      noTrainingOnly: false,
       usOnly: false,
       excludedProviderCount: 0,
       excludedRouteHostCount: 0,

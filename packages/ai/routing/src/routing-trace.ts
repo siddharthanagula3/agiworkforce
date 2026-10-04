@@ -11,7 +11,7 @@ import {
 } from './auto';
 import { taskFamilyRoutingStageEnabled } from './task-family-routing';
 
-export const ROUTING_TRACE_SCHEMA_VERSION = 3;
+export const ROUTING_TRACE_SCHEMA_VERSION = 4;
 
 export const ROUTING_POLICY_VERSION: number = routingPolicies.release.policyVersion;
 
@@ -78,6 +78,7 @@ export interface RoutingDecisionTrace {
     budgetConstrained: boolean;
     workspaceModelPolicy: boolean;
     zeroDataRetentionOnly: boolean;
+    noTrainingOnly: boolean;
     usOnly: boolean;
     excludedProviderCount: number;
     excludedRouteHostCount: number;
@@ -201,6 +202,7 @@ export function buildRoutingDecisionTrace(
       budgetConstrained: request.budgetRemainingCents !== undefined,
       workspaceModelPolicy: Boolean(request.organizationPolicy),
       zeroDataRetentionOnly: request.zeroDataRetentionOnly === true,
+      noTrainingOnly: request.noTrainingOnly === true,
       usOnly: request.usOnly === true,
       excludedProviderCount: request.excludedProviders?.size ?? 0,
       excludedRouteHostCount: request.excludedRouteHosts?.size ?? 0,

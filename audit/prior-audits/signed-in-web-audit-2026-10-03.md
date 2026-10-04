@@ -186,12 +186,13 @@ preferences are honoured by the free router alias; the page does not say. Whethe
 tool calls inside the chat tool loop reach vendors outside the provider
 governance data. Whether a Free account can pass the AGI Code turn's reservation.
 
-**The first fix.** Lane 19 starts with `L19.0`: every managed OpenRouter request
-denies data collection by default in the provider adapter, which is the rule the
-main chat path already applies. `L19.1` then makes the setting a hard admission
-rule in the router, starting with the lead's probe as a failing test, and the
-later packages carry it to the side calls, AGI Code, code review, media and voice
-routes. The three owner decisions are `L19-D1` (Free plan with the setting on),
+**The first fix.** `L19.0` and `L19.1` are on the branch and not deployed.
+`L19.0`: every managed chat request the provider adapter sends to OpenRouter
+denies data collection, and request metadata cannot relax it; this is the rule
+the main chat path already applied. `L19.1`: `noTrainingOnly` is a hard
+admission rule in the router, with the lead's probe as its first test; no caller
+sets it yet. The later packages carry it to the side calls, AGI Code, code
+review, media and voice routes. The three owner decisions are `L19-D1` (Free plan with the setting on),
 `L19-D2` (the paid pricing cell) and `L19-D3` (background calls), grouped in item
 40 of `audit/decisions/founder-decisions.md`. The corrective action that only the
 owner can take is the dashboard setting in `audit/decisions/founder-actions.md`,

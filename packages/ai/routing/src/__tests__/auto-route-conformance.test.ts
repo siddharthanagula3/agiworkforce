@@ -75,6 +75,21 @@ const CANARY_FIXTURE_PATH = fileURLToPath(
   new URL('./fixtures/auto-route-canary.json', import.meta.url),
 );
 
+/**
+ * The no-training admission rule is TypeScript-only: it answers an account
+ * setting only the server routing path reads, and the Rust resolver has no
+ * caller that holds it. Its cases are pinned here, not replayed by the crate.
+ *
+ * No case in the four files above sets the rule, so they are unaffected by it;
+ * this file moves when a provider's recorded training policy does, and the diff
+ * names every route the rule gained or lost.
+ */
+const NO_TRAINING_FIXTURE_PATH = fileURLToPath(
+  new URL('./fixtures/auto-route-no-training.json', import.meta.url),
+);
+const NO_TRAINING_ALIAS_PREFIX = 'no_training_alias';
+const NO_TRAINING_EXPLICIT_PREFIX = 'no_training_explicit';
+
 /** Ids spread across the hash space so a declared fraction cannot fall entirely on one side. */
 const CANARY_REQUEST_IDS = ['request-a', 'request-b', 'request-c', 'request-d'] as const;
 
@@ -186,6 +201,42 @@ function computeCases(): Record<string, string> {
       trustMode: 'byok',
       currentModelKey: modelKey,
       previousTaskType: 'coding',
+    });
+  }
+
+  return cases;
+}
+
+function computeNoTrainingCases(): Record<string, string> {
+  const cases: Record<string, string> = {};
+  const record = (key: string, request: Parameters<typeof resolveAutoRoute>[0]): void => {
+    cases[key] = encode(
+      resolveAutoRoute({
+        ...request,
+        noTrainingOnly: true,
+        enableTaskFamilyStage: false,
+        enableCanary: false,
+      }),
+    );
+  };
+
+  for (const selection of aliases) {
+    for (const taskType of TASK_TYPES) {
+      for (const subscriptionTier of TIERS) {
+        record(
+          `${NO_TRAINING_ALIAS_PREFIX}|${selection}|${taskType}|${subscriptionTier}|${OBSERVED_TRUST_MODE}`,
+          { selection, taskType, subscriptionTier, trustMode: OBSERVED_TRUST_MODE },
+        );
+      }
+    }
+  }
+
+  for (const modelKey of modelKeys) {
+    record(`${NO_TRAINING_EXPLICIT_PREFIX}|${modelKey}|${OBSERVED_TRUST_MODE}`, {
+      selection: modelKey,
+      taskType: 'general',
+      subscriptionTier: 'max',
+      trustMode: OBSERVED_TRUST_MODE,
     });
   }
 
@@ -392,6 +443,10 @@ describe('auto-route cross-language conformance', () => {
         CANARY_FIXTURE_PATH,
         `${JSON.stringify(computeCanaryCases(), null, FIXTURE_INDENT)}\n`,
       );
+      writeFileSync(
+        NO_TRAINING_FIXTURE_PATH,
+        `${JSON.stringify(computeNoTrainingCases(), null, FIXTURE_INDENT)}\n`,
+      );
       expect(Object.keys(computed).length).toBeGreaterThan(0);
     });
     return;
@@ -494,6 +549,38 @@ describe('auto-route cross-language conformance', () => {
         })
         .filter(([, canary, sharedValue]) => canary !== sharedValue);
       expect(drifted).toEqual([]);
+    });
+  });
+
+  describe('no-training admission conformance', () => {
+    const noTrainingComputed = computeNoTrainingCases();
+    const noTrainingRecorded = JSON.parse(readFileSync(NO_TRAINING_FIXTURE_PATH, 'utf8')) as Record<
+      string,
+      string
+    >;
+
+    it('covers the same cases the fixture records', () => {
+      expect(Object.keys(noTrainingComputed).sort()).toEqual(
+        Object.keys(noTrainingRecorded).sort(),
+      );
+    });
+
+    it('reaches the recorded decision for every case', () => {
+      const drifted = Object.entries(noTrainingComputed).filter(
+        ([key, value]) => noTrainingRecorded[key] !== value,
+      );
+      expect(drifted).toEqual([]);
+    });
+
+    it('changes at least one decision the shared fixture records without the rule', () => {
+      const moved = Object.entries(noTrainingRecorded).filter(([key, value]) => {
+        const [prefix, selection, taskType, subscriptionTier] = key.split('|');
+        if (prefix !== NO_TRAINING_ALIAS_PREFIX) return false;
+        const shared =
+          recorded[sharedCaseKey(selection!, taskType as RoutingTaskType, subscriptionTier!)];
+        return shared !== undefined && shared !== value;
+      });
+      expect(moved.length).toBeGreaterThan(0);
     });
   });
 

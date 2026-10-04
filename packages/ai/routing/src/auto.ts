@@ -1,5 +1,6 @@
 import {
   modelRegistry,
+  providerKeepsInputsOutOfTraining,
   type IntrinsicCapabilityName,
   type ModelCapabilityName as RegistryCapabilityName,
   type ModelCapabilityValue,
@@ -171,6 +172,17 @@ export interface AutoRoutingRequest {
   usOnly?: boolean;
   zeroDataRetentionOnly?: boolean;
   zeroDataRetentionProviders?: ReadonlySet<string>;
+  /**
+   * Admission, not preference: the vendor that owns the model and the transport
+   * that serves it must both keep inputs out of training, and a provider with
+   * no recorded training policy is refused. `availableProviderIds` cannot stand
+   * in for this, because it only ranks and a parked pick ignores it.
+   *
+   * Applies to a model the user named too. The explicit branch of
+   * `resolveAutoRoute` strips `excludedProviders` from the request and must
+   * leave this on it.
+   */
+  noTrainingOnly?: boolean;
   /**
    * Providers Auto may not choose on its own, whatever the ranking says.
    *
@@ -1081,6 +1093,9 @@ function routeAdmissionRejections(
       reasons.push(`route ${routeId} does not guarantee zero data retention`);
     }
   }
+  if (request.noTrainingOnly && !providerKeepsInputsOutOfTraining(route.provider)) {
+    reasons.push(`route ${routeId} may train on inputs through ${route.provider}`);
+  }
 
   const harness = registry.harnesses[route.harnessId];
   for (const feature of task.requiredHarnessFeatures) {
@@ -1320,6 +1335,9 @@ function evaluateEligibility(
   }
   if (request.excludedProviders?.has(model.identity.provider)) {
     reasons.push(`provider ${model.identity.provider} is not available to automatic routing`);
+  }
+  if (request.noTrainingOnly && !providerKeepsInputsOutOfTraining(model.identity.provider)) {
+    reasons.push(`provider ${model.identity.provider} may train on inputs`);
   }
 
   const { admissible, routeReasons, hasTrustModeRoute } = admissibleModelRoutes(
