@@ -159,8 +159,6 @@
     "helpPagesMatch_other": "{{count}} 件のページが一致しました。",
     "omittedFiles_one": "テキストではないファイルを1件除外しました: {{files}}。スキルは参照やスクリプトなどのテキストファイルをまとめられます。",
     "omittedFiles_other": "テキストではない {{count}} 件のファイルを除外しました: {{files}}。スキルは参照やスクリプトなどのテキストファイルをまとめられます。",
-    "packsInstallable_one": "レジストリ内の {{count}} 件のパックは今すぐインストールできます。",
-    "packsInstallable_other": "レジストリ内の {{count}} 件のパックは今すぐインストールできます。",
     "pluginDependenciesInstalled_one": "{{plugin}}と、その依存先のプラグインをインストールしました: {{names}}。",
     "pluginDependenciesInstalled_other": "{{plugin}}と、その依存先のプラグインをインストールしました: {{names}}。",
     "projectDuplicatedFiles_one": "{{count}} 件のファイルとともにプロジェクトを複製しました。",

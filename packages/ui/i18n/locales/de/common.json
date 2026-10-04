@@ -159,8 +159,6 @@
     "helpPagesMatch_other": "{{count}} Seiten stimmen überein.",
     "omittedFiles_one": "Eine Datei, die kein Text ist, wurde ausgelassen: {{files}}. Skills können Textdateien wie Referenzen und Skripte bündeln.",
     "omittedFiles_other": "{{count}} Dateien, die kein Text sind, wurden ausgelassen: {{files}}. Skills können Textdateien wie Referenzen und Skripte bündeln.",
-    "packsInstallable_one": "Das {{count}} Pack in der Registry ist heute installierbar.",
-    "packsInstallable_other": "Alle {{count}} Packs in der Registry sind heute installierbar.",
     "pluginDependenciesInstalled_one": "{{plugin}} und das Plugin installiert, von dem es abhängt: {{names}}.",
     "pluginDependenciesInstalled_other": "{{plugin}} und die Plugins installiert, von denen es abhängt: {{names}}.",
     "projectDuplicatedFiles_one": "Projekt mit {{count}} Datei dupliziert.",

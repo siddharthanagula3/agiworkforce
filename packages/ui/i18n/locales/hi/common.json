@@ -159,8 +159,6 @@
     "helpPagesMatch_other": "{{count}} पेज मैच करते हैं।",
     "omittedFiles_one": "एक फ़ाइल छोड़ दी गई जो टेक्स्ट नहीं है: {{files}}। स्किल में रेफरेंस और स्क्रिप्ट जैसी टेक्स्ट फ़ाइलें बंडल हो सकती हैं।",
     "omittedFiles_other": "{{count}} फ़ाइलें छोड़ दी गईं जो टेक्स्ट नहीं हैं: {{files}}। स्किल में रेफरेंस और स्क्रिप्ट जैसी टेक्स्ट फ़ाइलें बंडल हो सकती हैं।",
-    "packsInstallable_one": "रजिस्ट्री का {{count}} पैक आज इंस्टॉल किया जा सकता है।",
-    "packsInstallable_other": "रजिस्ट्री के सभी {{count}} पैक आज इंस्टॉल किए जा सकते हैं।",
     "pluginDependenciesInstalled_one": "{{plugin}} और जिस प्लगइन पर यह निर्भर है, वह इंस्टॉल हुआ: {{names}}।",
     "pluginDependenciesInstalled_other": "{{plugin}} और जिन प्लगइन पर यह निर्भर है, वे इंस्टॉल हुए: {{names}}।",
     "projectDuplicatedFiles_one": "प्रोजेक्ट {{count}} फ़ाइल के साथ डुप्लिकेट किया गया।",

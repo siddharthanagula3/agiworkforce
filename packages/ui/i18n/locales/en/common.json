@@ -161,8 +161,6 @@
     "dependenciesInstalled_other": "Also installed the plugins it depends on: {{names}}.",
     "pluginDependenciesInstalled_one": "Installed {{plugin}} and the plugin it depends on: {{names}}.",
     "pluginDependenciesInstalled_other": "Installed {{plugin}} and the plugins it depends on: {{names}}.",
-    "packsInstallable_one": "The {{count}} pack in the registry is installable today.",
-    "packsInstallable_other": "All {{count}} packs in the registry are installable today.",
     "helpPagesMatch_one": "{{count}} page matches.",
     "helpPagesMatch_other": "{{count}} pages match.",
     "unsentMessages_one": "You have an unsent message.",
