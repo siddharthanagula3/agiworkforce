@@ -69,7 +69,15 @@ describe('/privacy discloses how a breach notice would reach a reader', () => {
 
     expect(screen.getByRole('heading', { name: 'Security incidents' })).toBeInTheDocument();
     expect(copy).toMatch(/72-hour clock for notifying a regulator where a law requires one/);
-    expect(copy).toMatch(/There is no account-lifecycle mail in this product/);
+    expect(copy).toMatch(
+      /AGI sends email to one account at a time; the Resend entry on \/subprocessors lists those messages\./,
+    );
+    expect(copy).toMatch(
+      /No operator procedure for emailing a set of affected customers has been built or exercised\./,
+    );
+    expect(copy).not.toMatch(/no account-lifecycle mail/i);
+    expect(copy).not.toMatch(/the only email (?:it can send|this product sends)/i);
+    expect(copy).toMatch(/You get no confirmation email\. Cancellation is self-serve/);
     expect(copy).toMatch(
       /as an in-product message and at a dated public address rather than by email/,
     );

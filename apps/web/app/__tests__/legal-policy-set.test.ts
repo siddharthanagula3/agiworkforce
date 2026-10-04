@@ -134,6 +134,16 @@ describe('legal policy set, prohibited claims', () => {
       why: 'Same: no certification exists to claim.',
       files: ['dpa/page.tsx', 'terms/page.tsx', 'privacy/page.tsx', 'legal/page.tsx'],
     },
+    {
+      pattern: /MiniMax[^.]*through OpenRouter/i,
+      why: 'No MiniMax route is admitted for Managed Cloud traffic, so naming it as an OpenRouter recipient discloses a transfer that does not happen. Its models are reachable only with a customer key, as /subprocessors records.',
+      files: ['privacy/page.tsx', 'faq/page.tsx'],
+    },
+    {
+      pattern: /released\s+CLI|POSITIONING\.trustBoundary/i,
+      why: 'A policy is a dated version. It names the CLI and points to /download for release state, because a typed or interpolated status changes the published text with no new version.',
+      files: ['privacy/page.tsx'],
+    },
   ];
 
   for (const { pattern, why, files } of BANNED) {
@@ -155,12 +165,27 @@ describe('legal policy set, prohibited claims', () => {
     const subprocessors = readPublishedCopy('subprocessors', 'page.tsx').replace(/\s+/g, ' ');
     expect(privacy).toMatch(/authenticated same-origin file route/i);
     expect(privacy).toMatch(/owning account.*active Personal or organisation workspace/i);
-    expect(privacy).toMatch(/videos use a.*private bucket/i);
-    expect(privacy).toMatch(/non-video files remain in a public R2.*without signing in/i);
+    expect(privacy).toMatch(
+      /New uploads and generated files, videos included, are written to a private bucket/i,
+    );
+    expect(privacy).toMatch(
+      /Profile pictures are the exception: they are stored in a public R2 bucket, the product returns their address[^.]*without signing in/i,
+    );
+    expect(privacy).toMatch(
+      /Files stored before[^.]*may remain in the public bucket[^.]*without signing in/i,
+    );
+    expect(privacy).not.toMatch(/non-video files remain in a public/i);
+    expect(privacy).not.toMatch(/responses do not (?:expose|return)[^.]*raw/i);
     expect(subprocessors).toMatch(/signed-in, active-workspace-scoped app route/i);
     expect(subprocessors).toMatch(/non-video files remain in a public bucket/i);
     expect(privacy).not.toMatch(/served from permanent public URLs/i);
     expect(subprocessors).not.toMatch(/served from permanent public URLs/i);
+  });
+
+  it('does not re-date the collection-table expansion with the policy date', () => {
+    const privacy = readPublishedCopy('privacy', 'page.tsx').replace(/\s+/g, ' ');
+    expect(privacy).toContain('Why this table grew.');
+    expect(privacy).not.toMatch(/Why this table grew on \{/);
   });
 
   it('does not turn AGI no-training language into a promise about third-party providers', () => {

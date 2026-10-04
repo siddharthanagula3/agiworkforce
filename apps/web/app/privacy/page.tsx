@@ -13,7 +13,6 @@ import {
   Stack,
   type LedgerRow,
 } from '@/features/marketing/components/system';
-import { POSITIONING } from '../../lib/marketing-constants';
 import {
   CONTACT_EMAIL,
   CONTACT_SUBJECTS,
@@ -28,6 +27,7 @@ import {
 } from '@/lib/billing/financial-record-retention';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 import { ERASED_TABLE_COUNT } from '@/lib/legal/published-counts';
+import { PUBLISHED_RETENTION_CRON_TIMES } from '@/lib/legal/published-cron-schedules';
 
 const STATUTORY_RECORD_RETENTION_YEARS = Math.round(STATUTORY_RECORD_RETENTION_DAYS / 365.25);
 const METERING_EVIDENCE_RETENTION_YEARS = Math.round(METERING_EVIDENCE_RETENTION_DAYS / 365.25);
@@ -109,15 +109,19 @@ export const metadata = buildMetadata({
  * separately; __tests__/audit-log-immutability-disclosure.test.ts derives the
  * privileges from the migrations and fails if the prose drifts from them.
  *
- * CLAIM CORRECTED: object storage. Clients now receive only the same-origin
- * `/api/files/{mediaAssetId}` address from `authenticatedMediaUrl()`. That route
- * authenticates the caller, resolves the active workspace, filters the catalog
- * row by owner + workspace + `deleted_at`, and returns `private, no-store`.
- * The storage layer is still split: generated videos use the private bucket,
- * while images/files use `putObject()` in the public bucket. Normal client
- * responses no longer expose those raw URLs, but the underlying non-video
- * object remains public if its storage URL is obtained. Do not collapse these
- * two access layers into either absolute.
+ * CLAIM CORRECTED: object storage. For uploads and generated files, clients
+ * receive only the same-origin `/api/files/{mediaAssetId}` address from
+ * `authenticatedMediaUrl()`. That route authenticates the caller, resolves the
+ * active workspace, filters the catalog row by owner + workspace +
+ * `deleted_at`, and returns `private, no-store`. Every new upload and generated
+ * file, video or not, is written to the private bucket. The only public-bucket
+ * writer is the avatar branch of `/api/uploads/presign`, which hands back the
+ * public address that `/api/me` and the team roster then return; `putObject()`
+ * has no caller. Public-bucket reads remain as a fallback for objects stored
+ * before the private-bucket move, so those can still be public. Do not collapse
+ * this into either absolute: __tests__/security/object-storage-exposure.test.ts
+ * proves the avatar-only writer, and nothing in this repository proves what
+ * the public bucket still holds.
  */
 
 /**
@@ -191,9 +195,12 @@ const MODE_LEDGER: readonly LedgerRow[] = [
     label: 'Local',
     value: (
       <>
-        <strong>Where your prompts go:</strong> from the released CLI to Ollama or LM Studio on
-        loopback. Nothing is transmitted to us and nothing is silently routed to BYOK or Managed
-        Cloud.
+        <strong>Where your prompts go:</strong> from the CLI to Ollama or LM Studio on loopback.
+        Nothing is transmitted to us and nothing is silently routed to BYOK or Managed Cloud. The{' '}
+        <Link href="/download" className="agi-ds-link">
+          download page
+        </Link>{' '}
+        shows which CLI releases are published.
         <br />
         <strong>What we hold:</strong> nothing about the local model request. The current Desktop
         and web apps use Managed Cloud; they do not expose Local inference.
@@ -207,7 +214,7 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         <strong>Where your prompts go:</strong> from your client straight to the provider you
         targeted, on your own API key. We are not in that request path.{' '}
         <strong>
-          Available in the released CLI. The VS Code extension is coming soon. Desktop and web are
+          BYOK is part of the CLI. The VS Code extension is coming soon. Desktop and web are
           cloud-only and have no user-key path, so work on those surfaces is Managed Cloud.
         </strong>
         <br />
@@ -283,10 +290,16 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         Neon. The product gives clients an authenticated same-origin file route that requires both
         the owning account and its active Personal or organisation workspace to match. Missing,
         deleted, foreign, and inactive-workspace files all return the same not-found response, and
-        those responses are private and not stored by browser caches. Generated videos use a
-        separate private bucket. Images and other non-video files remain in a public R2 bucket:
-        normal product responses do not expose its raw URLs, but anyone who obtains an underlying
-        storage URL can access that object without signing in.
+        those responses are private and not stored by browser caches. New uploads and generated
+        files, videos included, are written to a private bucket and are served to you through that
+        signed-in, workspace-scoped route. Profile pictures are the exception: they are stored in a
+        public R2 bucket, the product returns their address to you and to the members of your
+        workspace, and anyone who has that address can open the picture without signing in. Files
+        stored before uploads and generated files moved to the private bucket may remain in the
+        public bucket, and anyone who obtains the underlying storage URL of one can open it without
+        signing in. A data export you request can include these files in its archive, which you
+        download through a short-lived signed link, and anyone who has that link can open the
+        archive without signing in until the link expires.
         <br />
         <strong>Location and camera details in pictures:</strong> before a picture you attach in the
         AGI web, desktop or mobile app leaves your device, AGI removes the location, camera and time
@@ -336,8 +349,8 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     label: 'BYOK keys',
     value: (
       <>
-        <strong>Examples:</strong> provider credentials saved by the released CLI in the operating
-        system credential store.
+        <strong>Examples:</strong> provider credentials saved by the CLI in the operating system
+        credential store.
         <br />
         <strong>Why, and how it is protected:</strong> the CLI reads the key locally and sends
         requests directly to the selected provider; AGI Cloud does not receive it.
@@ -777,10 +790,11 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
         <br />
         <strong>Enforced by:</strong> a database routine deletes entries older than 90 days, run by
         a <strong>scheduled job every night</strong>:{' '}
-        <code>/api/cron/purge-security-audit-logs</code> at 02:30 UTC, registered in{' '}
-        <code>vercel.json</code>. This entry previously said the routine was run by an administrator
-        rather than on a schedule; that stopped being true when the cron was added, and the policy
-        is corrected here rather than left understating what happens.
+        <code>/api/cron/purge-security-audit-logs</code> at{' '}
+        {PUBLISHED_RETENTION_CRON_TIMES.securityAuditLogs}, registered in <code>vercel.json</code>.
+        This entry previously said the routine was run by an administrator rather than on a
+        schedule; that stopped being true when the cron was added, and the policy is corrected here
+        rather than left understating what happens.
       </>
     ),
   },
@@ -905,8 +919,17 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
   },
   {
     label: 'Choose where a request goes',
-    value:
-      'In the released CLI, Local keeps the conversation on your machine and sends us nothing; BYOK goes straight to your provider on your key. VS Code BYOK is coming soon. Web and Desktop are cloud-only.',
+    value: (
+      <>
+        In the CLI, Local keeps the conversation on your machine and sends us nothing; BYOK goes
+        straight to your provider on your key. The{' '}
+        <Link href="/download" className="agi-ds-link">
+          download page
+        </Link>{' '}
+        shows which CLI releases are published. VS Code BYOK is coming soon. Web and Desktop are
+        cloud-only.
+      </>
+    ),
   },
 ];
 
@@ -976,7 +999,11 @@ export default function PrivacyPage() {
               What we collect, what we do not, and how that changes depending on which mode you run.{' '}
               <strong>
                 AGI does not use customer conversation content to train AGI-owned models. We do not
-                sell your data. {POSITIONING.trustBoundary}
+                sell your data. Website users can use AGI managed cloud. The Free plan runs on the
+                free models providers give away, and paid plans with more capacity are opening in
+                stages, so an upgrade needs an access code or a place on the upgrade waitlist. The
+                CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by
+                default, not invite-only.
               </strong>{' '}
               Last updated: {POLICY_LAST_UPDATED.privacy}. Managed Cloud is in public alpha.{' '}
               <PolicyVersionsLink policy="privacy" />
@@ -1032,27 +1059,29 @@ export default function PrivacyPage() {
                   </h2>
                   <Ledger caption="What we collect" rows={COLLECT_LEDGER} />
                   <Prose size="sm">
-                    <strong>Why this table grew on {POLICY_LAST_UPDATED.privacy}.</strong> A review
-                    compared it against every write path in the product and found the six categories
-                    above missing: the things you send us on purpose (feedback with its diagnostic
-                    logs, content reports and support transcripts), search history and memories,
-                    profile fields, the early-access list, device tokens and download records, and
-                    directory-provisioned identities. All of it was already being collected; this
-                    page had not kept up. If you add a collection point and do not add a row here,
-                    that is the defect this paragraph exists to prevent.
+                    <strong>Why this table grew.</strong> A review compared it against every write
+                    path in the product and found the six categories above missing: the things you
+                    send us on purpose (feedback with its diagnostic logs, content reports and
+                    support transcripts), search history and memories, profile fields, the
+                    early-access list, device tokens and download records, and directory-provisioned
+                    identities. All of it was already being collected; this page had not kept up. If
+                    you add a collection point and do not add a row here, that is the defect this
+                    paragraph exists to prevent.
                   </Prose>
                   <Prose size="sm">
                     <strong>Hosted AI providers we may route requests to (Managed Cloud):</strong>{' '}
-                    Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity and Moonshot directly;
-                    MiniMax, Qwen and Zhipu through OpenRouter, which therefore also handles those
-                    requests. Which one depends on the model you select.{' '}
+                    Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity and Moonshot directly; Qwen
+                    and Zhipu through OpenRouter, which therefore also handles those requests,
+                    unless AGI holds its own key for that provider, in which case the request goes
+                    to it directly. MiniMax models receive nothing from Managed Cloud and are
+                    reachable only with your own key. Which one depends on the model you select.{' '}
                     <strong>
                       OpenRouter is additionally the failover for every other chat model in the
                       catalogue
                     </strong>
                     , so if a direct route fails, prompt content for a model from any provider can
-                    pass through it. We would rather say that than let the three named families
-                    imply a narrower answer. The full current list with regions is at{' '}
+                    pass through it. We would rather say that than let the two named families imply
+                    a narrower answer. The full current list with regions is at{' '}
                     <Link href="/subprocessors" className="agi-ds-link">
                       /subprocessors
                     </Link>
@@ -1246,12 +1275,15 @@ export default function PrivacyPage() {
                     , including the parts of that posture we have not built.
                   </Prose>
                   <Prose>
-                    <strong>How a notice would actually reach you.</strong> There is no
-                    account-lifecycle mail in this product. The only email it can send is support
-                    escalation, scheduled-task notification, and operational alerts to us, and none
-                    of those can reach a list of affected customers. So a notice to you would arrive
-                    as an in-product message and at a dated public address rather than by email,
-                    with direct email only where we hold your address and a person sends it by hand.
+                    <strong>How a notice would actually reach you.</strong> AGI sends email to one
+                    account at a time; the Resend entry on{' '}
+                    <Link href="/subprocessors" className="agi-ds-link">
+                      /subprocessors
+                    </Link>{' '}
+                    lists those messages. No operator procedure for emailing a set of affected
+                    customers has been built or exercised. So a notice to you would arrive as an
+                    in-product message and at a dated public address rather than by email, with
+                    direct email only where we hold your address and a person sends it by hand.
                     Neither that in-product notice nor that public page exists as a built feature
                     today; they would be put up during the incident. The same statement is in
                     section 10 of the{' '}
@@ -1300,7 +1332,7 @@ export default function PrivacyPage() {
                       {
                         label: 'Deletion',
                         value:
-                          'Request account deletion from the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email, because the only email this product sends is support escalation, scheduled-task notifications and operational alerts to us: there is no account-lifecycle mail. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
+                          'Request account deletion from the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
                       },
                       {
                         label: 'Everything else',
