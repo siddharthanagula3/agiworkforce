@@ -65,8 +65,7 @@ const RUN_HEALTH_CHECKS = functionBody(PROBE_SOURCE, 'runHealthChecks');
 const ROUTED_CAPABILITY = functionBody(PROBE_SOURCE, 'checkRoutedCapability');
 const WORK_QUEUES = functionBody(PROBE_SOURCE, 'checkWorkQueues');
 const RETRIEVAL = functionBody(PROBE_SOURCE, 'checkRetrieval');
-
-const UNDESCRIBED_CHECKS = ['cache', 'vector'];
+const CACHE = functionBody(PROBE_SOURCE, 'checkCache');
 
 interface ProbeBinding {
   copy: readonly string[];
@@ -91,19 +90,68 @@ const BINDINGS: Record<string, ProbeBinding> = {
     ],
   },
   database: {
-    copy: ['A query is executed against the primary database', 'up to a minute'],
+    copy: [
+      'A query is executed against the primary database',
+      'reused for up to a minute',
+      'The first read after that starts another query and is itself answered with the older one',
+      'as old as the last successful check stated at the top of this page',
+    ],
     probe: [
-      { in: RUN_HEALTH_CHECKS, contains: ["getNeonDb().query('select 1')"] },
-      { in: PROBE_SOURCE, contains: ['revalidate: RENDER_CACHE_SECONDS.liveSignal'] },
+      {
+        in: RUN_HEALTH_CHECKS,
+        contains: ["getNeonDb().query('select 1')", 'timestamp: new Date().toISOString()'],
+      },
+      {
+        in: PROBE_SOURCE,
+        contains: [
+          'getCachedHealthChecks = cachedRenderInput(runHealthChecks',
+          'revalidate: RENDER_CACHE_SECONDS.liveSignal',
+        ],
+      },
+    ],
+  },
+  cache: {
+    copy: [
+      'One read of a fixed key against the key-value store returns within a second',
+      'fail closed without that store',
+      'does not exercise the rate limiter',
+      'the row passes and says not configured',
+    ],
+    probe: [
+      {
+        in: CACHE,
+        contains: [
+          'store.get<string>(CACHE_PROBE_KEY)',
+          'CACHE_PROBE_TIMEOUT_MS',
+          "{ status: 'healthy', message: 'not configured' }",
+        ],
+      },
+      { in: PROBE_SOURCE, contains: ['const CACHE_PROBE_TIMEOUT_MS = 1_000;'] },
+      { in: RUN_HEALTH_CHECKS, contains: ['checks.cache = await checkCache()'] },
+    ],
+    absent: [
+      { in: CACHE, pattern: /store\.(?!get\b)\w+[<(]/ },
+      { in: CACHE, pattern: /getKeyValueRateLimiter/ },
     ],
   },
   stripe: {
     copy: [
       'A read call to the payments API returns',
-      'degrades billing only',
-      'does not report a platform outage',
+      'every plan price on sale is active',
+      'some or all purchases may fail',
+      'existing plans keep working and chat is unaffected',
     ],
-    probe: [{ in: RUN_HEALTH_CHECKS, contains: ['stripe.products.list', 'checks.stripe.status'] }],
+    probe: [
+      {
+        in: RUN_HEALTH_CHECKS,
+        contains: [
+          'stripe.products.list',
+          'stripe.prices.retrieve(priceId)',
+          '!price.active && !isGrandfatheredPriceId(priceId)',
+          'checks.stripe.status',
+        ],
+      },
+    ],
     absent: [
       {
         in: RUN_HEALTH_CHECKS,
@@ -155,6 +203,7 @@ const BINDINGS: Record<string, ProbeBinding> = {
   search: {
     copy: [
       'retrieval index the search over your own content reads is present in the database',
+      'runs after the Postgres probe in the same run, so it is exactly as old as that row',
       'never runs a query on your behalf',
     ],
     probe: [
@@ -167,6 +216,25 @@ const BINDINGS: Record<string, ProbeBinding> = {
       },
       { in: RETRIEVAL, contains: ['to_regclass', 'pg_extension'] },
       { in: RUN_HEALTH_CHECKS, contains: ['checks.search = retrieval.search'] },
+    ],
+    absent: [{ in: RETRIEVAL, pattern: /\bfrom\s+(public\.)?retrieval_/i }],
+  },
+  vector: {
+    copy: [
+      'vector extension and the embedding index',
+      'same catalogue query as the Search row',
+      'never runs a query on your behalf',
+    ],
+    probe: [
+      {
+        in: PROBE_SOURCE,
+        contains: ["const EMBEDDING_INDEX = 'public.idx_retrieval_chunks_embedding';"],
+      },
+      {
+        in: RETRIEVAL,
+        contains: ["extname = 'vector'", 'row.vector_extension', 'row.embedding_index'],
+      },
+      { in: RUN_HEALTH_CHECKS, contains: ['checks.vector = retrieval.vector'] },
     ],
     absent: [{ in: RETRIEVAL, pattern: /\bfrom\s+(public\.)?retrieval_/i }],
   },
@@ -189,13 +257,11 @@ describe('the scope rows on /status are bound to the checks they describe', () =
     expect(unknown).toEqual([]);
   });
 
-  it('leaves undescribed only the checks it names here', () => {
+  it('gives every check runHealthChecks sets a row, so none moves the state unseen', () => {
     const described = COVERED.map((row) => row.key);
-    const undescribed = declaredCheckKeys()
-      .filter((key) => !described.includes(key))
-      .sort();
+    const undescribed = declaredCheckKeys().filter((key) => !described.includes(key));
 
-    expect(undescribed).toEqual(UNDESCRIBED_CHECKS);
+    expect(undescribed).toEqual([]);
   });
 
   it('has a binding for exactly the rows it shows, so a new row cannot ship unbound', () => {
@@ -232,9 +298,37 @@ describe('the scope rows on /status are bound to the checks they describe', () =
     expect(nonCore![1]).toContain('checks.stripe');
   });
 
+  it('counts the cache store as core and semantic search as degradable, as their rows say', () => {
+    const core = RUN_HEALTH_CHECKS.match(/const coreHealthy =([\s\S]*?);/);
+    const nonCore = RUN_HEALTH_CHECKS.match(/const nonCoreHealthy = \[([\s\S]*?)\]/);
+
+    expect(core![1]).toContain("checks.cache.status === 'healthy'");
+    expect(core![1]).not.toContain('vector');
+    expect(nonCore![1]).toContain('checks.vector');
+    expect(COVERED.find((row) => row.key === 'cache')?.what).toContain('counts as a core check');
+  });
+
+  it('runs the retrieval probe after the Postgres probe, as the search row says', () => {
+    const postgres = RUN_HEALTH_CHECKS.indexOf("getNeonDb().query('select 1')");
+    const retrieval = RUN_HEALTH_CHECKS.indexOf('await checkRetrieval()');
+
+    expect(postgres).toBeGreaterThan(-1);
+    expect(retrieval).toBeGreaterThan(postgres);
+    expect(COVERED.find((row) => row.key === 'search')?.what).toContain(
+      'runs after the Postgres probe in the same run',
+    );
+  });
+
   it('reuses the answer for the minute the database row states', () => {
     expect(RENDER_CACHE_SECONDS.liveSignal).toBe(60);
     expect(COVERED.find((row) => row.key === 'database')?.what).toContain('up to a minute');
+  });
+
+  it('bounds no row by the reuse window, since a result older than it is still shown', () => {
+    for (const row of COVERED) {
+      expect(row.what, row.key).not.toMatch(/that far behind|the same minute|at most a minute/i);
+    }
+    expect(PAGE_SOURCE).toContain('itself answered with the older result');
   });
 
   it('reads the work row critical threshold from the thresholds the probe judges by', () => {
