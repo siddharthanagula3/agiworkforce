@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-27
+Last updated: 2026-10-03
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -799,3 +799,158 @@ appears under On this device with the Desktop source.
 verification matrix for the coding surface's Local mode.
 **Impact** VERIFICATION-BLOCKING (the last leg of the Local composer proof)
 **Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Billing / Stripe] Price behind the failing payments check (FR09)
+
+**Why founder assistance is required**
+The public `/status` page showed the Payments check failing on 2026-10-03 at
+18:51 GMT, while six other checks passed. The probe (`apps/web/lib/server/health-check.ts`,
+lines 354 to 381) fails when any configured `STRIPE_PRICE_*` is not an active
+recurring Price. The production log on 2026-10-03 at 23:05 UTC records the
+reason: `1 configured Stripe Price(s) are not active recurring Prices`, raised
+after the products read succeeded, so the Stripe API answers and exactly one
+configured Price is inactive or not recurring. Which Price it is can be read
+only in the Stripe Dashboard; the retired Pro yearly Price
+(`WITHDRAWN_BILLING_INTERVALS` in `packages/contracts/types/src/billing-plan-catalog.ts`)
+is the first to check. The public audit attempted no checkout, so whether
+customers can pay is unknown. This extends the price cleanup in
+"[Billing / Stripe] Live-mode cutover, Team product and price cleanup" above.
+**Exact action**
+
+1. The production log line is already read (one configured Price fails the
+   active recurring test); note here which Price it is.
+2. In the Stripe Dashboard, check whether the retired Pro yearly Price, or any
+   Price behind a Vercel `STRIPE_PRICE_*` variable, is archived or sits in a
+   different mode than the key.
+3. Run one authorised checkout on a plan that is on sale.
+4. Publish an incident notice only if that checkout fails.
+
+**Where** Vercel production logs, Stripe Dashboard, `https://agiworkforce.com/api/health`.
+**Needed input** About fifteen minutes and one low-value test checkout (decision L09-D1 of the public website audit).
+**How to verify completion** `GET /api/health` reports `checks.stripe` healthy
+after the probe fix deploys, or the failing step is written down here and the
+checkout result is recorded.
+**What remains after founder action** The probe fix that stops a retired Price failing the check ships as code; audit row FR09 in `audit/prior-audits/public-website-audit-2026-10-03.md` is narrowed, not deleted, until this is recorded.
+**Impact** FEATURE-BLOCKING (upgrades, if checkout is failing)
+**Status** FOUNDER ACTION REQUIRED
+
+## [Security] Three audit exceptions expire on 2026-10-31
+
+**Why founder assistance is required**
+`.github/security-gate-policy.json` waives three dependency advisories until
+2026-10-31: `node-forge-pkcs1-digest-algorithm` (GHSA-86w9-cpqp-85rv),
+`http-cache-semantics-stale-policy-patch` (GHSA-ch52-4w7c-c8xp) and
+`braces-recursive-depth-patch` (GHSA-vfj7-8cjw-p6xm). After that date
+`scripts/check-security-gates.mjs` fails every CI run, which blocks every merge,
+including the fixes for the public website audit. Accepting a known advisory for
+another period is a risk call the owner makes. `NODE-FORGE-PKCS1-DIGEST-ALGORITHM-01` in `audit/registers/known-flaws.md` already carries the node-forge one.
+**Exact action** For each of the three, check whether a fixed upstream release
+now exists. If it does, remove the patch, the `pnpm.auditConfig` ignore and the
+policy exception together (`docs/security/dependency-patches.md`). If it does
+not, approve a new expiry with a written reason, in its own small commit before
+2026-10-31 and independent of the website fixes.
+**Where** `.github/security-gate-policy.json`, `package.json`, `docs/security/dependency-patches.md`.
+**Needed input** The decision per advisory and about thirty minutes.
+**How to verify completion** `node scripts/check-security-gates.mjs` passes with
+the new dates, or with the exceptions removed.
+**What remains after founder action** Nothing; the guard and the regression tests exist.
+**Impact** RELEASE-BLOCKING after 2026-10-31
+**Status** FOUNDER ACTION REQUIRED
+
+## [Production env] Email sender and purge switch (L10-D12)
+
+**Why founder assistance is required**
+The referral-trial reminder is promised by email two days before conversion, and
+the privacy policy says soft-deleted data is held 30 days and then a daily job
+deletes it permanently. Whether production has the sender and the purge switch
+set is visible only in the Vercel project environment. This extends
+"[Production env] Error reporting, tracing, email, push and sign-in providers (F12)"
+above, which already lists `RESEND_API_KEY` and `AGI_NOTIFICATIONS_FROM_EMAIL`.
+**Exact action** Read, by name only, whether `RESEND_API_KEY`,
+`AGI_NOTIFICATIONS_FROM_EMAIL` and `SOFT_DELETED_RESOURCE_PURGE_ENABLED` are set
+in the production environment. If the sender is unset, set it before referral
+trials are promoted; the planned fix grants no trial without it. If the purge switch is
+unset, turn it on or ask for the privacy sentence to be corrected in the same
+policy revision.
+
+Two further items ride on the same read and the same sender. First (L10-D8,
+audit row TC06): read, by name only, whether `AGI_BLOCK_EEA_TRAFFIC` is set in
+the production environment, and say whether it is meant to stay on until an EU
+representative is appointed. The default if you do not answer: the audit work
+cuts only the unprovable "being progressed" clause from the EU representative
+page and publishes nothing about the block; if the flag is on, a reconciled
+statement waits for counsel and a later revision. Second (audit row TC07): once
+the breach-notice drill section exists in `docs/runbooks/personal-data-breach.md`,
+run the drill with recipients you control and log it. The drill records the
+selected channels, the recipient verification, the approved message, the
+delivery evidence and the escalation. No page may say the procedure was
+exercised until that log exists.
+**Where** Vercel project environment (production), `apps/web/.env.example`.
+**Needed input** Four yes or no answers (the three names above and the
+`AGI_BLOCK_EEA_TRAFFIC` value), and a sender address if one is missing. The
+drill needs your own recipient addresses.
+**How to verify completion** The four names are recorded as set or unset, and a test
+trial reminder arrives with the right amount and cancel link. The drill log is
+dated and names its recipients.
+**What remains after founder action** The Stripe test-mode run that proves reminder timing, amount and cancel link needs your authorisation (audit row TC08 in `audit/prior-audits/public-website-audit-2026-10-03.md`). Counsel wording for the EEA statement is held by the counsel entry below (TC06).
+**Impact** FEATURE-BLOCKING (referral trials)
+**Status** FOUNDER ACTION REQUIRED
+
+## [Storage] Public R2 bucket inventory (TC03, L10-D2)
+
+**Why founder assistance is required**
+The public policies disclose that some stored files can be fetched by address
+without signing in. The code at `74bece5d10` has private-object paths for generated media and
+attachments (commit `84b9ca07ce` changed them), but the older public bucket may
+still be addressable and may still hold customer files that catalogue rows point at
+(`apps/web/lib/server/media-storage.ts`, `apps/web/lib/server/project-knowledge-object-storage.ts`).
+Only the storage console shows what it holds, and the public audit did not probe
+it. `audit/prior-audits/release-readiness-2026-08-25.md` item 9 is a historical
+snapshot of the same decision.
+**Exact action** From the storage console, with synthetic probe objects only:
+(1) say whether the public bucket is publicly addressable, (2) list what it
+holds by prefix, (3) say whether media, knowledge or attachment rows still point
+at it, and (4) give the day production first ran the private-bucket change.
+**Where** Cloudflare R2 console, production database (read only).
+**Needed input** The four answers; about thirty minutes. No customer object is opened.
+**How to verify completion** The answers are recorded here and the policy wording
+is dated from them. If customer objects remain, a backfill is planned; if only
+profile pictures remain, the legacy sentence is dropped in a later revision.
+**What remains after founder action** Backfill, removal of the public fallback reads, and a later privacy, DPA and subprocessors revision (audit row TC03 in `audit/prior-audits/public-website-audit-2026-10-03.md`).
+**Impact** EXTERNAL-APPROVAL (policy wording depends on the answers)
+**Status** FOUNDER ACTION REQUIRED
+
+## [Legal] Counsel questions from the public website audit
+
+**Why founder assistance is required**
+The audit corrected several published statements that counsel has not reviewed.
+This extends "[Legal] Counsel review and grievance facts (DPDP)" and
+"[Trust & Safety] Minimum-age policy" above and section 5 of
+`audit/prior-audits/dpdp-audit-log-2026-08-22.md`; it does not replace them.
+Until counsel answers, no new legal conclusion is published, the pages keep
+their open-item statements, and `data-legal-review` stays `pending-counsel`.
+**Exact action** Put these to counsel:
+
+1. Does Article 27 of the GDPR apply, and what interim wording on
+   `/legal/eu-representative` is acceptable (L10-D9, audit row TC06)?
+2. The DPDP notice and annex, verifiable parental consent in section 9, the
+   minimum-age approach, and whether translations are mandatory at this scale
+   (L10-D9).
+3. May the long publication-floor explanation in the policy-changes intro on
+   `/release-notes` move into a disclosure, given that it fixes when the DPA
+   subprocessor objection window starts (L03-D16)? Until counsel answers, both
+   paragraphs stay visible.
+4. Do the corrected DPA storage row and the mail-path statements need separate
+   customer notice beyond the page, its date and `/changelog` (L10-D3)?
+5. Three further points proceed on a default and need only confirmation: one
+   shared launch-notification consent purpose for Mobile, Chrome and VS Code
+   (L06-D4); `/mobile/legal` deferring to `/terms` with no mobile-specific
+   exception (L10-D7); and a neutral pointer on `/mobile` in place of an
+   in-progress compliance status line (L12-D6).
+
+**Where** `apps/web/app/legal/eu-representative/page.tsx`, `apps/web/app/privacy/india/page.tsx`, `apps/web/app/dpa/page.tsx`, `docs/runbooks/personal-data-breach.md`.
+**Needed input** One counsel pass.
+**How to verify completion** Counsel's answers are written down and the `data-legal-review` markers are changed by the owner, not by an agent.
+**What remains after founder action** Wording edits to the policy pages in a dated version (audit rows TC06 and TC07 in `audit/prior-audits/public-website-audit-2026-10-03.md`).
+**Impact** EXTERNAL-APPROVAL
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
