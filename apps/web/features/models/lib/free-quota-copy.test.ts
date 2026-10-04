@@ -25,7 +25,8 @@ describe('free quota failure copy', () => {
 
   it('puts a spent allowance on the provider and the model, never on the account', () => {
     const { message } = freeQuotaFailure('exhausted', context);
-    expect(message).toContain("Fixture Cloud's free allowance for fixture-model is used up");
+    expect(message).toContain('fixture-model has reached its free limit');
+    expect(message).toContain('free allowance from Fixture Cloud');
     expect(message).toContain('not a limit on your account');
     expect(message).toContain('does not renew');
     expect(message).toContain('Choose Fixture Free Router or another free model');

@@ -140,6 +140,48 @@ describe('direct provider experiments without paid fallback', () => {
     }
   });
 
+  it('returns the provider’s own words beside its code when a model is refused', async () => {
+    for (const response of [
+      { code: 'Throttling.AllocationQuota', message: 'Free allocated quota exceeded.' },
+      { error: { code: 'Throttling.AllocationQuota', message: 'Free allocated quota exceeded.' } },
+    ]) {
+      const transport = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(JSON.stringify(response), { status: 429 }));
+      expect(await runQwenQuotaProbe(image, key, policy, transport)).toMatchObject({
+        status: 'failed',
+        providerCode: 'Throttling.AllocationQuota',
+        providerMessage: 'Free allocated quota exceeded.',
+      });
+    }
+  });
+
+  it('returns a failed video task’s own words beside its code', async () => {
+    const transport = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ output: { task_id: 'fixture-task', task_status: 'PENDING' } }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            output: {
+              task_status: 'FAILED',
+              code: 'Throttling.AllocationQuota',
+              message: 'Free allocated quota exceeded.',
+            },
+          }),
+        ),
+      );
+    expect(await runQwenQuotaProbe(video, key, policy, transport, async () => {})).toMatchObject({
+      status: 'failed',
+      providerCode: 'Throttling.AllocationQuota',
+      providerMessage: 'Free allocated quota exceeded.',
+    });
+  });
+
   it('disables paid prompt extension for image generation', async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(

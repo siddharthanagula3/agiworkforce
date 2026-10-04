@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import {
+  FREE_QUOTA_FALLBACK_REQUEST_KEY,
   managedCloudAgentRunPath,
   MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
 } from '@agiworkforce/cloud-contracts';
@@ -12,9 +13,11 @@ import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import {
   listCanonicalModels,
   getProviderOfferings,
+  getRoutingSlotModel,
   AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/types';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { savedMessageId } from '@/features/chat/lib/pending-message-saves';
 import { useChatStream, saveMessageToDb } from './useChatStream';
 import { IN_FLIGHT_TURN_RECHECK_MS } from './inFlightTurnRecovery';
 
@@ -205,15 +208,273 @@ describe('useChatStream', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('shows quota exhaustion without generic retry guidance', async () => {
-    const message =
-      'This model’s free quota has been exhausted. Choose another model in Free to continue.';
+  it('shows a reached free limit as a limit card, never as an error row', async () => {
+    const chatOfferings = Object.entries(getProviderOfferings()).filter(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    );
+    const [limitedKey, limited] = chatOfferings[0]!;
+    const [alternativeKey, alternative] = chatOfferings[1]!;
+    const message = `${limited.displayName} has reached its free limit.`;
     vi.mocked(fetch).mockResolvedValue(
       new Response(
         JSON.stringify({
-          error: { code: 'free_quota_exhausted', message },
+          error: {
+            code: 'free_quota_exhausted',
+            message,
+            free_limit: {
+              model: limitedKey,
+              reason: 'allowance_used',
+              alternative_model: alternativeKey,
+            },
+          },
         }),
         { status: 409 },
+      ),
+    );
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: limitedKey,
+      });
+    });
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.content).toBe('');
+    expect(assistant?.error).toBe(false);
+    expect(assistant?.metadata?.paywall).toMatchObject({
+      reason: message,
+      freeLimit: {
+        modelId: limitedKey,
+        modelName: limited.displayName,
+        reason: 'allowance_used',
+        alternativeModel: { id: alternativeKey, name: alternative.displayName },
+      },
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves a reached free limit with its card, so a reload keeps the reply and the resend guard', async () => {
+    const conversation = { ...TEMP_CONVERSATION, id: 'conv-free-limit', isTemporary: false };
+    useChatStore.setState({ activeConversationId: conversation.id, conversations: [conversation] });
+    const [limitedKey, limited] = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    )!;
+    const message = `${limited.displayName} has reached its free limit.`;
+    const saves: Array<Record<string, unknown>> = [];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).includes('/messages')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        saves.push(body);
+        return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'free_quota_exhausted',
+            message,
+            free_limit: { model: limitedKey, reason: 'allowance_used' },
+          },
+        }),
+        { status: 409 },
+      );
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: conversation.id,
+        model: limitedKey,
+      });
+    });
+
+    await vi.waitFor(() => expect(saves.some((body) => body['role'] === 'assistant')).toBe(true));
+    const saved = saves.find((body) => body['role'] === 'assistant')!;
+    expect(saved['content']).toBe(message);
+    expect(saved['metadata']).toMatchObject({
+      errorCode: 'free_quota_exhausted',
+      paywall: {
+        reason: message,
+        freeLimit: { modelId: limitedKey, reason: 'allowance_used' },
+      },
+    });
+    expect(saves.some((body) => body['role'] === 'user')).toBe(true);
+  });
+
+  it('lets a dismissal of the free limit card wait until the card has been saved', async () => {
+    const conversation = { ...TEMP_CONVERSATION, id: 'conv-free-limit-save', isTemporary: false };
+    useChatStore.setState({ activeConversationId: conversation.id, conversations: [conversation] });
+    const [limitedKey, limited] = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    )!;
+    let answerCardSave!: () => void;
+    const cardSaveAnswered = new Promise<void>((resolve) => {
+      answerCardSave = resolve;
+    });
+    let cardSaveSent = false;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).includes('/messages')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        if (body['role'] === 'assistant') {
+          cardSaveSent = true;
+          await cardSaveAnswered;
+        }
+        return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'free_quota_exhausted',
+            message: `${limited.displayName} has reached its free limit.`,
+            free_limit: { model: limitedKey, reason: 'allowance_used' },
+          },
+        }),
+        { status: 409 },
+      );
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: conversation.id,
+        model: limitedKey,
+      });
+    });
+    await vi.waitFor(() => expect(cardSaveSent).toBe(true));
+    const card = useChatStore
+      .getState()
+      .messagesByConversation[conversation.id]!.find(
+        (message) => message.metadata?.paywall?.freeLimit !== undefined,
+      )!;
+    let settled = false;
+    const saved = savedMessageId(card.id).then((id) => {
+      settled = true;
+      return id;
+    });
+
+    await act(async () => {
+      await new Promise((settle) => setTimeout(settle, 20));
+    });
+    expect(settled).toBe(false);
+
+    answerCardSave();
+    await expect(saved).resolves.toBe(card.id);
+  });
+
+  it('shows the answer a ready free model gave when Free Auto had reached its limit', async () => {
+    const freeRouter = getRoutingSlotModel('router_zero_cost');
+    const [fallbackKey] = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+    )!;
+    const encoder = new TextEncoder();
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  choices: [
+                    { delta: { content: 'Answered by a free model.' }, finish_reason: 'stop' },
+                  ],
+                })}\n\ndata: [DONE]\n\n`,
+              ),
+            );
+            controller.close();
+          },
+        }),
+        {
+          status: 200,
+          headers: new Headers({
+            'X-AGI-Fallback-Reason': 'free_limit_reached',
+            'X-AGI-Resolved-Model': fallbackKey,
+          }),
+        },
+      ),
+    );
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: freeRouter,
+      });
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toBe('/api/llm/v1/chat/completions');
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.content).toBe('Answered by a free model.');
+    expect(assistant?.model).toBe(fallbackKey);
+    expect(assistant?.requestedModel).toBe(freeRouter);
+    expect(assistant?.fallbackReason).toBe('free_limit_reached');
+    expect(assistant?.metadata?.paywall).toBeUndefined();
+  });
+
+  it('tells the server it shows another free model answering for Free Auto', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'Ready.' } }] }]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: getRoutingSlotModel('router_zero_cost'),
+      });
+    });
+
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(body[FREE_QUOTA_FALLBACK_REQUEST_KEY]).toBe(true);
+  });
+
+  it('shows the free limit card, without reading the free catalogue, when Free Auto is refused', async () => {
+    const freeRouter = getRoutingSlotModel('router_zero_cost');
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'free_allowance_exhausted',
+            message: 'The free model has used up the allowance everyone on the Free plan shares.',
+          },
+        }),
+        { status: 429 },
+      ),
+    );
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: freeRouter,
+      });
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.metadata?.paywall?.freeLimit).toMatchObject({
+      modelId: freeRouter,
+      reason: 'shared_pool_used',
+    });
+  });
+
+  it('carries the reset time a usage refusal names onto its card', async () => {
+    const resetsAt = '2099-01-01T00:00:00.000Z';
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'monthly_limit_exceeded',
+            message: 'Usage budget exhausted for this billing period.',
+            resets_at: resetsAt,
+          },
+        }),
+        { status: 402 },
       ),
     );
     const { result } = renderHook(() => useChatStream());
@@ -223,10 +484,7 @@ describe('useChatStream', () => {
     const assistant = useChatStore
       .getState()
       .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
-    expect(assistant?.content).toBe(message);
-    expect(assistant?.metadata?.errorCode).toBe('free_quota_exhausted');
-    expect(assistant?.content).not.toMatch(/try again|start a new chat/i);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(assistant?.metadata?.paywall?.resetAt).toBe(resetsAt);
   });
 
   it('keeps artifact formatting instructions out of the visible and persisted user turn', async () => {
@@ -3649,6 +3907,50 @@ describe('the transcript says what the turn is actually waiting for', () => {
     });
 
     expect(activitySummaries()).toEqual([...unrotated, 'Switched to a backup model']);
+  });
+
+  const FREE_LIMIT_FALLBACK = new Headers({ 'X-AGI-Fallback-Reason': 'free_limit_reached' });
+
+  function assistantRow() {
+    return useChatStore.getState().messages.find((message) => message.role === 'assistant');
+  }
+
+  it('says another free model answered once its reply arrives', async () => {
+    respondWith(ANSWERED, FREE_LIMIT_FALLBACK);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    expect(assistantRow()?.fallbackReason).toBe('free_limit_reached');
+  });
+
+  it('does not say another free model answered when that model produced no reply', async () => {
+    respondWith(
+      `data: ${JSON.stringify({
+        choices: [
+          {
+            index: 0,
+            delta: {
+              x_stream_error: {
+                message: 'The free model returned no answer.',
+                code: 'free_model_empty_response',
+                retryable: false,
+              },
+            },
+            finish_reason: null,
+          },
+        ],
+      })}\n\ndata: [DONE]\n\n`,
+      FREE_LIMIT_FALLBACK,
+    );
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    expect(assistantRow()?.metadata?.streamError).toBeDefined();
+    expect(assistantRow()?.fallbackReason).toBeUndefined();
   });
 
   it('closes the waiting step as soon as the first token arrives', async () => {

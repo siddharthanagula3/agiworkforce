@@ -32,6 +32,7 @@ export interface ProviderOffering {
   quotaChatImageInput?: boolean;
   quotaImageSize?: string;
   quotaThinkingRequired?: boolean;
+  retiresAt?: string;
 }
 
 export function getProviderOfferings(): Readonly<Record<string, ProviderOffering>> {

@@ -167,6 +167,16 @@ describe('a turn the router moved off the model that was asked for', () => {
     expect(metadata['servedModel']).toBe('fixture-served-model');
   });
 
+  it('keeps the substitution notice a turn carries under the key the reader renders', async () => {
+    await persistAssistantTurn({
+      processed: request({ usedFallback: true, fallbackReason: 'free_limit_reached' }),
+      userId: USER_ID,
+      snapshot: snapshot({ model: 'fixture-served-model', fallbackReason: 'free_limit_reached' }),
+    });
+
+    expect(stored(FIRST_TURN_ID).metadata['fallbackReason']).toBe('free_limit_reached');
+  });
+
   it('claims no move on a turn that stayed on the model that was asked for', async () => {
     await persistAssistantTurn({ processed: request(), userId: USER_ID, snapshot: snapshot() });
 

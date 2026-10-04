@@ -3394,7 +3394,24 @@
         "providerStatus": "active",
         "quotaOnlyObserved": true
       }
-    ]
+    ],
+    "freeAutoFallback": {
+      "offeringKeys": [
+        "qwen-quota-038",
+        "qwen-quota-039",
+        "qwen-quota-043",
+        "qwen-quota-044",
+        "qwen-quota-046",
+        "qwen-quota-047",
+        "qwen-quota-144",
+        "qwen-quota-265",
+        "qwen-quota-071",
+        "qwen-quota-072",
+        "qwen-quota-073",
+        "qwen-quota-074"
+      ],
+      "spendOnCapacityShortage": false
+    }
   },
   "quotaExperimentPolicy": {
     "verificationMaxAgeMs": 3600000,

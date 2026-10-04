@@ -79,6 +79,12 @@ export const FreeQuotaInventorySchema = z
         approvedOfferingKeys: z.array(z.string().min(1)).min(1),
       })
       .nullable(),
+    freeAutoFallback: z
+      .object({
+        offeringKeys: z.array(z.string().min(1)).min(1),
+        spendOnCapacityShortage: z.boolean(),
+      })
+      .optional(),
   })
   .superRefine((inventory, context) => {
     const seen = new Set<string>();
@@ -124,6 +130,21 @@ export const FreeQuotaInventorySchema = z
         }
         approved.add(key);
       }
+    }
+    const ranked = new Set<string>();
+    for (const key of inventory.freeAutoFallback?.offeringKeys ?? []) {
+      if (
+        !seen.has(key) ||
+        ranked.has(key) ||
+        getProviderOffering(key)?.quotaProbeProtocol !== 'chat'
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['freeAutoFallback', 'offeringKeys'],
+          message: 'The Free Auto fallback must rank distinct observed chat offerings',
+        });
+      }
+      ranked.add(key);
     }
   });
 

@@ -9,6 +9,8 @@ import {
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
+import { loadFreePools } from '@/lib/server/free-pools';
+import { freeQuotaFixtureNow } from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/api-auth');
 type ScanModule1 = typeof import('@/lib/rate-limit');
 type ScanModule2 = typeof import('@/lib/server/rls-db');
@@ -75,6 +77,7 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
 const { GET } = await import('./route');
 
 const API_KEY = 'fixture-provider-key';
+const NOW = freeQuotaFixtureNow(loadFreePools().inventory!);
 
 async function catalogue(): Promise<{ status: number; body: FreeQuotaCatalogue }> {
   const response = await GET(new NextRequest('https://agiworkforce.com/api/models/free-quota'));
@@ -87,13 +90,17 @@ function ready(body: FreeQuotaCatalogue): string[] {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   mocks.store = createMemoryKeyValueStore();
   mocks.plan.mockResolvedValue('free');
 });
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 it('answers a Free account in production, offering nothing until the setting is attested', async () => {
   const { status, body } = await catalogue();

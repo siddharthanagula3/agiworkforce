@@ -1,9 +1,10 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { ChatMessageList, groupMessages, patchMessageGroups } from './ChatMessageList';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { getSelectableModels } from '@agiworkforce/types';
+import { pickStandardModel } from '@/features/chat/lib/eligible-model';
 
 const ttsMock = vi.hoisted(() => {
   const state = { isSpeaking: false };
@@ -708,6 +709,108 @@ describe('ChatMessageList actions', () => {
     ];
     render(<ChatMessageList messages={messages} onRegenerate={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'regenerate' })).not.toBeInTheDocument();
+  });
+
+  it('offers the free limit card instead of resending to a model whose free allowance is spent', () => {
+    const messages = [
+      makeMessage({ id: 'limited-question', role: 'user', content: 'Hello' }),
+      makeMessage({
+        id: 'limited-reply',
+        role: 'assistant',
+        content: '',
+        metadata: {
+          paywall: {
+            feature: 'model_access',
+            requiredTier: 'basic',
+            reason: 'The free limit for this model is reached.',
+            freeLimit: {
+              modelId: 'fixture-limited',
+              modelName: 'Fixture Limited',
+              reason: 'allowance_used',
+            },
+          },
+        },
+      }),
+    ];
+    render(<ChatMessageList messages={messages} onRegenerate={vi.fn()} />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Free limit reached for Fixture Limited' }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('bubble-limited-question')).queryByRole('button', {
+        name: 'regenerate',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers a paid account a standard model, not an upgrade, on a free limit card', () => {
+    const options = getSelectableModels().map((model) => ({ id: model.id, name: model.name }));
+    const standard = pickStandardModel(options, undefined)!;
+    const onRegenerateWithModel = vi.fn();
+    const messages = [
+      makeMessage({ id: 'paid-question', role: 'user', content: 'Draw a paper boat' }),
+      makeMessage({
+        id: 'paid-reply',
+        role: 'assistant',
+        content: '',
+        metadata: {
+          paywall: {
+            feature: 'model_access',
+            requiredTier: 'max',
+            reason: 'The free limit for this model is reached.',
+            recoveryAction: 'upgrade',
+            showUpgradeCta: false,
+            suggestStandardModel: true,
+            freeLimit: {
+              modelId: 'fixture-free-image',
+              modelName: 'Fixture Free Image',
+              reason: 'allowance_used',
+            },
+          },
+        },
+      }),
+    ];
+    render(
+      <ChatMessageList
+        messages={messages}
+        currentTier="pro"
+        onRegenerateWithModel={onRegenerateWithModel}
+        regenerateModelOptions={options}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /^Upgrade to/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: `Switch to ${standard.name}` }));
+    expect(onRegenerateWithModel).toHaveBeenCalledWith('paid-reply', standard.id);
+  });
+
+  it('keeps the own-key option a saved shared free pool card carries', () => {
+    const messages = [
+      makeMessage({ id: 'pool-question', role: 'user', content: 'Hello' }),
+      makeMessage({
+        id: 'pool-reply',
+        role: 'assistant',
+        content: 'The free model has used up the allowance everyone on the Free plan shares.',
+        metadata: {
+          errorCode: 'free_allowance_exhausted',
+          paywall: {
+            feature: 'model_access',
+            requiredTier: 'basic',
+            reason: 'The free model has used up the allowance everyone on the Free plan shares.',
+            freeLimit: {
+              modelId: 'fixture-free-auto',
+              modelName: 'Fixture Free Auto',
+              reason: 'shared_pool_used',
+              byokHref: '/byok',
+            },
+          },
+        },
+      }),
+    ];
+    render(<ChatMessageList messages={messages} onRegenerate={vi.fn()} />);
+
+    expect(screen.getByRole('link', { name: 'Use your own key' })).toHaveAttribute('href', '/byok');
   });
 
   it('calls onRegenerate with correct messageId for assistant messages', () => {

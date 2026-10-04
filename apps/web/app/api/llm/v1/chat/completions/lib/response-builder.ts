@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import { secureToken } from '@/lib/secure-random';
@@ -11,9 +12,14 @@ import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { settleJsonObjectCompletion, wantsJsonObject } from './json-object-mode';
 import { settleJsonSchemaCompletion, wantsJsonSchema } from './json-schema-mode';
-import { mapClassifiedUpstreamError, type UpstreamErrorShape } from './upstream-error-copy';
+import {
+  FREE_ALLOWANCE_EXHAUSTED_CODE,
+  mapClassifiedUpstreamError,
+  type UpstreamErrorShape,
+} from './upstream-error-copy';
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
+import { FREE_LANE_RECOVERY } from '@/lib/services/free-lane/stage';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import {
   observeFreeLaneSettlement,
@@ -446,6 +452,20 @@ export async function buildNonStreamResponse(
   return response;
 }
 
+const MS_PER_SECOND = 1_000;
+
+function sharedPoolFreeLimit(requestedModel: string, shape: UpstreamErrorShape): FreeLimit {
+  return {
+    model: requestedModel,
+    reason: 'shared_pool_used',
+    ...(shape.retryAfterSeconds !== undefined
+      ? {
+          resets_at: new Date(Date.now() + shape.retryAfterSeconds * MS_PER_SECOND).toISOString(),
+        }
+      : {}),
+  };
+}
+
 export function buildUpstreamErrorResponse(
   error: unknown,
   provider: string,
@@ -515,6 +535,12 @@ export function buildUpstreamErrorResponse(
         type: shape.type,
         code: shape.code,
         retryable: classified.retryable,
+        ...(shape.code === FREE_ALLOWANCE_EXHAUSTED_CODE
+          ? {
+              recovery: FREE_LANE_RECOVERY,
+              free_limit: sharedPoolFreeLimit(requestedModel, shape),
+            }
+          : {}),
       },
     },
     { status: shape.status },
