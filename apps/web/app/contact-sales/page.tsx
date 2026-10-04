@@ -39,11 +39,18 @@ export default function ContactSalesPage() {
           em="sales."
           lede={
             <>
-              Email <strong>{CONTACT_EMAIL}</strong> with what you&rsquo;re trying to do, how big
-              your team is, and what your security review needs.
+              Email{' '}
+              <a className="agi-ds-link" href={contactMailto()}>
+                {CONTACT_EMAIL}
+              </a>{' '}
+              with what you&rsquo;re trying to do, how big your team is, and what your security
+              review needs.
             </>
           }
-          ctas={[]}
+          ctas={[
+            { href: contactMailto(), label: `Email ${CONTACT_EMAIL}`, variant: 'primary' },
+            { href: '/enterprise', label: 'See what Enterprise includes', variant: 'secondary' },
+          ]}
           visual={
             <Stack gap="base">
               <Eyebrow>{AUDIENCE_ROUTES_CAPTION}</Eyebrow>
