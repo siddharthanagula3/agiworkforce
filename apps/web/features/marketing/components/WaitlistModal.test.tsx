@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WaitlistModalProvider, WaitlistTrigger } from './WaitlistModal';
 
 const mockJoinPublicWaitlist = vi.fn();
@@ -10,6 +10,21 @@ vi.mock('@/lib/services/waitlistServiceClient', () => ({
 
 function grantRequiredConsent() {
   fireEvent.click(screen.getByRole('checkbox', { name: /store my email address/i }));
+}
+
+const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+async function openDialog(triggerLabel: string) {
+  render(
+    <WaitlistModalProvider>
+      <WaitlistTrigger label={triggerLabel} />
+    </WaitlistModalProvider>,
+  );
+  const trigger = screen.getByRole('button', { name: triggerLabel });
+  trigger.focus();
+  fireEvent.click(trigger);
+  const dialog = await screen.findByRole('dialog', undefined, { timeout: 5_000 });
+  return { trigger, dialog };
 }
 
 describe('WaitlistModal', () => {
@@ -201,5 +216,79 @@ describe('WaitlistModal', () => {
         ],
       });
     });
+  });
+
+  it('shows the email label instead of hiding it from sighted visitors', async () => {
+    const { dialog } = await openDialog('Team access');
+
+    const label = within(dialog).getByText('Email address', { exact: true });
+    expect(label.tagName).toBe('LABEL');
+    expect(label).not.toHaveClass('sr-only');
+    expect(label).toHaveClass('agi-ds-field-label');
+    expect(label.closest('.agi-ds-field')).toContainElement(
+      within(dialog).getByRole('textbox', { name: 'Email address' }),
+    );
+    expect(dialog.querySelector('form')).toHaveClass('agi-ds-form');
+    expect(dialog.querySelector('.agi-ds-form-row')).toBeNull();
+  });
+
+  it('keeps the title in a head that sits outside the scrolling body', async () => {
+    const { dialog } = await openDialog('Team access');
+
+    const head = dialog.querySelector('.agi-ds-waitlist-head');
+    const body = dialog.querySelector('.agi-ds-waitlist-body');
+    expect(head?.parentElement).toBe(dialog);
+    expect(body?.parentElement).toBe(dialog);
+
+    const title = within(dialog).getByRole('heading', { name: 'Discuss Enterprise access' });
+    expect(head).toContainElement(title);
+    expect(body).not.toContainElement(title);
+    expect(body).toContainElement(dialog.querySelector('form'));
+    expect(body).toContainElement(dialog.querySelector('.agi-ds-hint'));
+    expect(body).not.toContainElement(
+      within(dialog).getByRole('button', { name: 'Close waitlist dialog' }),
+    );
+  });
+
+  it('keeps the success title in the head and its message in the body', async () => {
+    mockJoinPublicWaitlist.mockResolvedValue({ success: true });
+    const { dialog } = await openDialog('Team access');
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Email address' }), {
+      target: { value: 'visitor@example.com' },
+    });
+    grantRequiredConsent();
+    fireEvent.click(within(dialog).getByRole('button', { name: /^join waitlist$/i }));
+
+    const title = await within(dialog).findByRole('heading', { name: /you.re on the list/i });
+    expect(title.closest('.agi-ds-waitlist-head')).not.toBeNull();
+    expect(title.closest('.agi-ds-waitlist-body')).toBeNull();
+    expect(
+      within(dialog)
+        .getByRole('link', { name: '/privacy/requests' })
+        .closest('.agi-ds-waitlist-body'),
+    ).not.toBeNull();
+  });
+
+  it('orders focus from the email field to the close control', async () => {
+    const { dialog } = await openDialog('Team access');
+
+    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE));
+    expect(focusable[0]).toBe(within(dialog).getByRole('textbox', { name: 'Email address' }));
+    expect(focusable.at(-1)).toBe(
+      within(dialog).getByRole('button', { name: 'Close waitlist dialog' }),
+    );
+  });
+
+  it('starts focus on the email field and returns it to the trigger on Escape', async () => {
+    const { trigger, dialog } = await openDialog('Team access');
+
+    const email = within(dialog).getByRole('textbox', { name: 'Email address' });
+    await waitFor(() => expect(email).toHaveFocus());
+
+    fireEvent.keyDown(email, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });
