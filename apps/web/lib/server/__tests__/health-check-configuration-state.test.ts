@@ -26,7 +26,10 @@ vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueSt
 vi.mock('@/lib/server/stripe-client', () => ({
   getStripeClientOrNull: mocks.getStripeClientOrNull,
 }));
-vi.mock('@/lib/price-tier-mapping', () => ({ getConfiguredStripePriceIds: vi.fn(() => []) }));
+vi.mock('@/lib/price-tier-mapping', () => ({
+  getConfiguredStripePriceIds: vi.fn(() => []),
+  isGrandfatheredPriceId: vi.fn(() => false),
+}));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   listAvailableManagedProviderIds: mocks.listAvailableManagedProviderIds,
 }));
