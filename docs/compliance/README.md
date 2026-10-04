@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-10-02
+Last updated: 2026-10-03
 
 Verified platform and legal obligations: Apple, Google Play, Microsoft, Chrome
 Web Store, VS Code Marketplace, privacy regimes, and regional requirements.
@@ -45,12 +45,21 @@ per-document revision dates, canonical routes and their aliases) come from
 2. **Every factual claim must be provable from this repository.** If the code
    does not prove it, cut the sentence or mark it as an absence.
 3. **Do not promise emailed notice.** Not because there is no mail provider.
-   `apps/web/lib/support/handoff/resend-client.ts` calls the Resend HTTP API over
-   plain `fetch`, which is why a dependency grep never found it. The claim fails
-   for the narrower true reason: no mailing path here can reach an arbitrary
-   list of customers. Notice is the policy page plus `/changelog`. The original
-   wording was corrected on 2026-08-14 and is banned from every published page
-   by `apps/web/app/__tests__/legal-policy-set.test.ts`.
+   The product mails one account at a time, including security alerts,
+   account-security codes, data-export-ready mail, billing and trial notices,
+   spend alerts, team invitations, scheduled-task completion mail and support
+   ticket mail to the customer. The Resend row of
+   `apps/web/app/subprocessors/page.tsx` is the canonical list. That mail goes
+   through the Resend wrappers in `apps/web/lib/support/handoff/resend-client.ts`
+   and `apps/web/lib/services/notification-email-service.ts`. The wrappers call
+   the Resend HTTP API over plain `fetch` with no email package, so a
+   dependency grep never found the mail path. `sendBulkTransactionalEmail` can
+   mail an arbitrary list and is tested, but no operator tool calls it and no
+   notice has been sent that way. The claim fails for the narrower true reason:
+   there is no broadcast tool or exercised procedure that reaches a set of
+   customers. Notice is the policy page plus `/changelog`. The original wording
+   was corrected on 2026-08-14 and is banned from every published page by
+   `apps/web/app/__tests__/legal-policy-set.test.ts`.
 4. **Do not claim a certification.** There is no SOC 2 report, ISO 27001
    certificate or HIPAA position. `/trust` carries the dated status.
 5. **Respect the trust boundaries.** Local, BYOK and Managed Cloud are separate,

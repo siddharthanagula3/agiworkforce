@@ -372,10 +372,11 @@ const externalResourceReferenceExportSchema = z.object({
 
 /**
  * Metadata, not bytes. The export is a JSON download and inlining media would
- * make it unusable. `storage_url` is a private object-storage key that resolves
- * for nobody on its own, so each row is served with a `download_url` on the
- * account's authenticated media route, and `export_metadata.media_downloads`
- * states what that link needs and whether it expires.
+ * make it unusable. `storage_url` is an object-storage key, or a public address
+ * on rows stored before uploads moved to the private bucket, so each row is
+ * served with a `download_url` on the account's authenticated media route, and
+ * `export_metadata.media_downloads` states what that link needs and whether it
+ * expires.
  */
 const mediaAssetExportSchema = z.object({
   id: z.string(),
@@ -2132,7 +2133,7 @@ const MEDIA_DOWNLOADS_DOCUMENTATION = {
   expiry:
     'These links do not expire. Each request is authorised on its own, so the export stays usable and stays private if the file is copied.',
   storage_url:
-    'A private object-storage key kept for reference. It is not a download link and resolves for nobody on its own.',
+    'An object-storage key kept for reference. It is not a download link: use download_url. Rows stored before uploads moved to the private bucket may hold a public address instead of a key.',
 } as const;
 
 function exportOrigin(request: NextRequest): string {
