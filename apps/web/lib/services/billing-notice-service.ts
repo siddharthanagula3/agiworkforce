@@ -37,6 +37,15 @@ async function readProfileEmail(db: DatabaseAdapter, userId: string): Promise<st
   return profile?.email?.trim() || null;
 }
 
+function billingNoticeSender(): string | null {
+  const from = process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim();
+  return from && isNotificationEmailConfigured() ? from : null;
+}
+
+export function isBillingNoticeEmailConfigured(): boolean {
+  return billingNoticeSender() !== null;
+}
+
 export async function sendBillingNotice(
   db: DatabaseAdapter,
   notice: BillingNotice,
@@ -51,9 +60,9 @@ export async function sendBillingNotice(
     dedupeKey: notice.dedupeKey,
   });
 
-  const from = process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim();
+  const from = billingNoticeSender();
   const to = await readProfileEmail(db, notice.userId);
-  if (!to || !from || !isNotificationEmailConfigured()) {
+  if (!to || !from) {
     logger.warn(
       { userId: notice.userId, dedupeKey: notice.dedupeKey },
       'Billing notice recorded in the app only; no email address or sender is configured',

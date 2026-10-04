@@ -3,11 +3,13 @@ import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/server/neon-db');
 type ScanModule1 = typeof import('@/lib/server/stripe-client');
 type ScanModule2 = typeof import('@/lib/services/trial-reminder-service');
+type ScanModule3 = typeof import('@/lib/services/billing-notice-service');
 
 const mocks = vi.hoisted(() => ({
   getNeonDb: vi.fn(),
   getStripeClientOrNull: vi.fn(),
   remindConvertingTrials: vi.fn(),
+  sendBillingNotice: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -22,6 +24,10 @@ vi.mock('@/lib/server/stripe-client', async (importOriginal) => ({
 vi.mock('@/lib/services/trial-reminder-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
   remindConvertingTrials: mocks.remindConvertingTrials,
+}));
+vi.mock('@/lib/services/billing-notice-service', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule3>()),
+  sendBillingNotice: mocks.sendBillingNotice,
 }));
 
 import { GET } from './route';
@@ -89,6 +95,37 @@ describe('GET /api/cron/remind-trials', () => {
     const response = await GET(cron());
 
     expect(await response.json()).toMatchObject({ failed: 1, remaining: true });
+  });
+
+  it('reports a reminder that was recorded in the app but not emailed as failed', async () => {
+    const { remindConvertingTrials } = await vi.importActual<ScanModule2>(
+      '@/lib/services/trial-reminder-service',
+    );
+    mocks.remindConvertingTrials.mockImplementationOnce(remindConvertingTrials);
+    mocks.sendBillingNotice.mockResolvedValue({ recorded: true, emailed: false });
+    DB.query.mockResolvedValueOnce([
+      { user_id: 'user_123', stripe_subscription_id: 'sub_1TrialEndingAbc123', plan_tier: 'pro' },
+    ]);
+    const stripe = {
+      subscriptions: {
+        retrieve: vi.fn(async () => ({
+          id: 'sub_1TrialEndingAbc123',
+          status: 'trialing',
+          trial_end: Math.floor(Date.now() / 1000) + 3600,
+          cancel_at_period_end: false,
+          cancel_at: null,
+          items: { data: [{ price: { recurring: { interval: 'month' } } }] },
+        })),
+      },
+      invoices: { createPreview: vi.fn(async () => ({ amount_due: 2000, currency: 'usd' })) },
+    };
+    mocks.getStripeClientOrNull.mockReturnValueOnce(stripe);
+
+    const response = await GET(cron());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ reminded: 0, skipped: 0, failed: 1, remaining: false });
+    expect(mocks.sendBillingNotice).toHaveBeenCalledTimes(1);
   });
 
   it('answers 500 without the cause when the sweep throws', async () => {

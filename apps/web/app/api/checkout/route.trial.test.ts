@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@agiworkforce/types');
 type ScanModule1 = typeof import('@/lib/server/billing-waitlist-access');
@@ -90,6 +90,7 @@ vi.mock('stripe', () => ({
 }));
 
 import { POST } from './route';
+import { logger } from '@/lib/logger';
 
 function makeRequest() {
   return new NextRequest('https://agiworkforce.com/api/checkout', {
@@ -111,6 +112,8 @@ describe('POST /api/checkout, trials', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['NEXT_PUBLIC_APP_URL'] = 'https://agiworkforce.com';
+    vi.stubEnv('RESEND_API_KEY', 're_test_key');
+    vi.stubEnv('AGI_NOTIFICATIONS_FROM_EMAIL', 'AGI Workforce <notifications@agiworkforce.test>');
     trialMocks.trialDays.mockReturnValue(null);
     dbMocks.query.mockImplementation(async () => []);
     dbMocks.execute.mockResolvedValue(1);
@@ -122,6 +125,8 @@ describe('POST /api/checkout, trials', () => {
     });
     waitlistAccessMocks.hasAccess.mockResolvedValue(true);
   });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   it('starts no trial while the catalog sets no trial length', async () => {
     const response = await POST(makeRequest());
@@ -143,7 +148,32 @@ describe('POST /api/checkout, trials', () => {
       trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
     });
     expect(sessionParams()['payment_method_collection']).toBe('always');
+    expect(JSON.stringify(sessionParams()['custom_text'])).toContain(
+      'we email you a reminder with a one-click cancel link',
+    );
   });
+
+  it.each([
+    ['the notifications sender address', 'AGI_NOTIFICATIONS_FROM_EMAIL'],
+    ['the email provider key', 'RESEND_API_KEY'],
+  ])(
+    'checks out without a trial, and so without its reminder promise, when %s is not configured',
+    async (_missing, variable) => {
+      trialMocks.trialDays.mockReturnValue(14);
+      vi.stubEnv(variable, '');
+
+      const response = await POST(makeRequest());
+
+      expect(response.status).toBe(200);
+      expect(subscriptionData()).not.toHaveProperty('trial_period_days');
+      expect(sessionParams()).not.toHaveProperty('payment_method_collection');
+      expect(sessionParams()['custom_text']).not.toHaveProperty('submit');
+      expect(logger.error).toHaveBeenCalledWith(
+        { userId: 'user_123', plan: 'pro' },
+        expect.stringContaining('Billing notice email is not configured'),
+      );
+    },
+  );
 
   it('gives no second trial to an account that already had a subscription', async () => {
     trialMocks.trialDays.mockReturnValue(14);

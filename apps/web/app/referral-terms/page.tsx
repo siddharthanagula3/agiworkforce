@@ -123,11 +123,11 @@ export default function ReferralTermsPage() {
             <Prose>
               Before your card is taken, checkout shows the {PRO} price and the date the trial
               converts. When the trial ends it converts automatically into a paid {PRO} subscription
-              at that price plus any applicable tax, billed every month or every year as you chose
-              at checkout, until you cancel. {TRIAL_REMINDER_DAYS} days before it converts we email
-              you a reminder with the amount, the date and a one-click cancel link. Cancel from that
-              link or in Settings &gt; Billing any time before the trial ends and you are not
-              charged; {PRO} stays on until the trial ends. Once a payment is taken, our{' '}
+              at that price plus any applicable tax, billed every month, until you cancel.{' '}
+              {TRIAL_REMINDER_DAYS} days before it converts we email you a reminder with the amount,
+              the date and a one-click cancel link. Cancel from that link or in Settings &gt;
+              Billing any time before the trial ends and you are not charged; {PRO} stays on until
+              the trial ends. Once a payment is taken, our{' '}
               <Link href={CANONICAL_POLICY_ROUTES.refunds} className="agi-ds-link">
                 refund policy
               </Link>{' '}

@@ -44,6 +44,8 @@ export type TrialCancelOutcome =
       changed: boolean;
     };
 
+type TrialReminderOutcome = 'reminded' | 'skipped' | 'unsent';
+
 interface ConvertingTrial {
   user_id: string;
   stripe_subscription_id: string;
@@ -105,7 +107,7 @@ async function remindTrial(
   db: DatabaseAdapter,
   stripe: Stripe,
   trial: ConvertingTrial,
-): Promise<boolean> {
+): Promise<TrialReminderOutcome> {
   const subscription = await stripe.subscriptions.retrieve(trial.stripe_subscription_id);
   const trialEnd = subscription.trial_end;
   if (
@@ -114,7 +116,7 @@ async function remindTrial(
     isCancelledBeforeCharge(subscription) ||
     trialEnd * 1000 > Date.now() + TRIAL_REMINDER_DAYS * DAY_MS
   ) {
-    return false;
+    return 'skipped';
   }
 
   const preview = await stripe.invoices.createPreview({ subscription: subscription.id });
@@ -133,7 +135,7 @@ async function remindTrial(
     );
   }
 
-  await sendBillingNotice(db, {
+  const { recorded, emailed } = await sendBillingNotice(db, {
     userId: trial.user_id,
     title: `Your ${plan} trial ends on ${formatDay(trialEnd)}`,
     message:
@@ -147,7 +149,14 @@ async function remindTrial(
       ? { label: 'Cancel your trial', url: cancelUrl }
       : { label: 'Manage your plan', url: absoluteUrl('/settings/billing') },
   });
-  return true;
+  if (!emailed) {
+    logger.error(
+      { userId: trial.user_id, subscriptionId: subscription.id, recorded },
+      'Trial reminder was not emailed; a reminder recorded in the app is not sent again',
+    );
+    return 'unsent';
+  }
+  return 'reminded';
 }
 
 export async function remindConvertingTrials(
@@ -182,8 +191,10 @@ export async function remindConvertingTrials(
   };
   for (const trial of due.slice(0, maxReminders)) {
     try {
-      if (await remindTrial(db, stripe, trial)) summary.reminded += 1;
-      else summary.skipped += 1;
+      const outcome = await remindTrial(db, stripe, trial);
+      if (outcome === 'reminded') summary.reminded += 1;
+      else if (outcome === 'skipped') summary.skipped += 1;
+      else summary.failed += 1;
     } catch (error) {
       summary.failed += 1;
       logger.error(
