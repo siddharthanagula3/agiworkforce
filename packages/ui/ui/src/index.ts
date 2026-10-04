@@ -383,6 +383,7 @@ export {
   type UnsavedChangesGuardOptions,
 } from './primitives/UnsavedChanges';
 export { useMenuKeyboard } from './primitives/useMenuKeyboard';
+export { useTablistKeyboard } from './primitives/useTablistKeyboard';
 export {
   useCombobox,
   type ComboboxInputProps,

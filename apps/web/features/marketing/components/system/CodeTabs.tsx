@@ -1,5 +1,6 @@
 'use client';
 
+import { useTablistKeyboard } from '@agiworkforce/ui';
 import { useId, useState } from 'react';
 
 export interface CodeTab {
@@ -11,6 +12,7 @@ export interface CodeTab {
 
 const COPY_LABEL = 'Copy';
 const COPIED_LABEL = 'Copied';
+const COPIED_ANNOUNCEMENT = 'Copied to clipboard';
 const COPIED_RESET_MS = 1600;
 
 export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: string }) {
@@ -18,6 +20,13 @@ export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: str
   const [copied, setCopied] = useState(false);
   const id = useId();
   const tab = tabs[active] ?? tabs[0];
+  const tabId = (position: number) => `${id}-tab-${position}`;
+  const { onKeyDown, tabIndexFor } = useTablistKeyboard({
+    count: tabs.length,
+    active,
+    onSelect: setActive,
+    tabId,
+  });
   if (!tab) return null;
 
   const copy = async () => {
@@ -33,14 +42,20 @@ export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: str
   return (
     <figure className="agi-ds-codetabs" aria-label={title}>
       <div className="agi-ds-codetabs-bar">
-        <div className="agi-ds-codetabs-tabs" role="tablist" aria-label={title}>
+        <div
+          className="agi-ds-codetabs-tabs"
+          role="tablist"
+          aria-label={title}
+          onKeyDown={onKeyDown}
+        >
           {tabs.map((entry, index) => (
             <button
               type="button"
               role="tab"
-              id={`${id}-tab-${index}`}
+              id={tabId(index)}
               aria-selected={index === active}
               aria-controls={`${id}-panel`}
+              tabIndex={tabIndexFor(index)}
               className="agi-ds-codetabs-tab"
               onClick={() => setActive(index)}
               key={entry.label}
@@ -52,6 +67,9 @@ export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: str
         <button type="button" className="agi-ds-codetabs-copy" onClick={copy}>
           {copied ? COPIED_LABEL : COPY_LABEL}
         </button>
+        <span className="sr-only" role="status" aria-live="polite">
+          {copied ? COPIED_ANNOUNCEMENT : ''}
+        </span>
       </div>
       <pre
         className="agi-ds-codetabs-code"
