@@ -202,16 +202,27 @@
       "id": "platform-holds-only-the-directory-oauth-client",
       "section": "1.2 What Managed Cloud can actually connect",
       "kind": "prose",
-      "sentence": "The fourth source is the only one where **the platform holds the OAuth client and the user holds the grant**.",
+      "sentence": "The fourth source is the only one where **the operator holds the OAuth client and the user holds the grant**.",
       "implementation": [
         "apps/web/lib/user-connector-tools.ts",
-        "apps/web/lib/connectors/oauth-store.ts"
+        "apps/web/lib/connectors/oauth-store.ts",
+        "apps/web/lib/connectors/oauth-registry.ts"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/connectors/__tests__/oauth-store.test.ts",
           "name": "grants"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.test.ts",
+          "name": "does not advertise a described provider until its client credentials exist"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "advertises every self-service MCP connector without any operator OAuth app"
         }
       ]
     },
@@ -252,16 +263,67 @@
       ]
     },
     {
-      "id": "no-oauth-provider-is-configured",
+      "id": "connector-availability-follows-deployment-config",
       "section": "1.2 What Managed Cloud can actually connect",
       "kind": "prose",
-      "sentence": "As of 2026-08-05 no provider is configured in production, so this source contributes no connectors and every directory entry still reports unavailable.",
-      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "sentence": "A connector that needs an operator client reports `needs-setup` until its descriptor and client pair exist, a self-registered endpoint needs only the token key and a public callback origin, and a connector with no remote server reports `unavailable` (`describeConnectorSetup` in `lib/connectors/oauth-setup.ts`, mapped to the directory state by `lib/connectors/directory/connectable.ts`).",
+      "implementation": [
+        "apps/web/lib/connectors/oauth-setup.ts#describeConnectorSetup",
+        "apps/web/lib/connectors/directory/connectable.ts#connectableForInternalId"
+      ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/lib/connectors/__tests__/oauth-registry.test.ts",
-          "name": "connector OAuth registry, availability is earned, not assumed"
+          "file": "apps/web/lib/connectors/__tests__/oauth-setup.test.ts",
+          "name": "names the descriptor and both client env names for an unconfigured first-party OAuth connector"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-setup.test.ts",
+          "name": "asks only for the public callback origin on a self-service MCP endpoint"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/directory/__tests__/connectable.test.ts",
+          "name": "gates generic oauth2 catalog connectors without an MCP endpoint on the client pair"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/directory/__tests__/connectable.test.ts",
+          "name": "reports a connector with no remote server as unavailable, not as awaiting setup"
+        }
+      ]
+    },
+    {
+      "id": "provider-revocation-needs-a-revocation-endpoint",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "Disconnecting, and erasing an account, destroys the stored tokens in every case and asks the provider to revoke only where the connector's descriptor carries a `revocationUrl`, so a self-registered or directory-discovered grant is destroyed here without an upstream revocation call (`disconnectConnectorOAuthGrant` and `revokeAllConnectorTokensAtProviders` in `lib/connectors/oauth-access.ts`).",
+      "implementation": [
+        "apps/web/lib/connectors/oauth-access.ts#disconnectConnectorOAuthGrant",
+        "apps/web/lib/connectors/oauth-access.ts#revokeAllConnectorTokensAtProviders",
+        "apps/web/lib/connectors/oauth-store.ts#revokeConnectorOAuthGrant"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "revokes locally even when the provider exposes no revocation endpoint"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "revokes at the provider first, preferring the refresh token"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "revokes every account of every connector that has a revocation endpoint"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-store.test.ts",
+          "name": "drops both ciphertext columns in the same statement that flags revocation"
         }
       ]
     },
@@ -279,16 +341,46 @@
       ]
     },
     {
-      "id": "connector-post-refuses-branded-ids",
+      "id": "connector-post-writes-only-operator-mapped-rows",
       "section": "1.2 What Managed Cloud can actually connect",
       "kind": "prose",
-      "sentence": "**No tokens, no endpoint URLs.** `POST /api/connectors` returns 501 for every branded catalog connector and for device-local ids (`app/api/connectors/route.ts`).",
+      "sentence": "**No tokens, no endpoint URLs.** `POST /api/connectors` writes that row only for an operator-mapped connector; any other OAuth-capable connector is answered 409 with `oauthStartPath` once its setup is complete and refused with 501 or 503 while it is not, and a device-local id or a connector with no authorization path is answered 501 (`app/api/connectors/route.ts`).",
       "implementation": ["apps/web/app/api/connectors/route.ts"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/connectors/route.test.ts",
           "name": "/api/connectors managed-cloud capability boundary"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "sends an OAuth provider through the authorization flow, not a directory toggle"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "sends a self-service MCP connector to authorization rather than saving a row"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "501 for a curated OAuth connector that still needs setup"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "shows a storage configuration error before redirecting to OAuth"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "answers an unbuilt connector honestly instead of pretending it saved"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "rejects a device-local connector before any Cloud persistence"
         }
       ]
     },
@@ -397,13 +489,26 @@
       "id": "oauth-registry-ships-no-providers",
       "section": "1.8 Known gaps this file deliberately records rather than papers over",
       "kind": "prose",
-      "sentence": "**A branded catalog connector can only be OAuth-connected where the operator configured it.** The hosted broker now exists end to end (`/api/connectors/oauth/start` → `/api/connectors/oauth/callback`, grants in `apps/web/lib/connectors/oauth-store.ts`), but `apps/web/lib/connectors/oauth-registry.ts` ships **zero** providers on purpose, a provider becomes connectable only when an operator supplies its endpoints and client credentials.",
-      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "sentence": "**A connector that needs an operator OAuth client can only be connected where the operator configured it.** The hosted broker exists end to end (`/api/connectors/oauth/start` → `/api/connectors/oauth/callback`, grants in `apps/web/lib/connectors/oauth-store.ts`), and `apps/web/lib/connectors/oauth-registry.ts` ships **zero** descriptor providers on purpose, so such a provider becomes connectable only when an operator supplies its endpoints and client credentials, while a self-registered MCP endpoint or a directory-discovered server needs no operator client.",
+      "implementation": [
+        "apps/web/lib/connectors/oauth-registry.ts",
+        "apps/web/lib/connectors/mcp-endpoints.ts#isSelfServiceConnector"
+      ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/connectors/__tests__/oauth-registry.test.ts",
           "name": "connector OAuth registry, availability is earned, not assumed"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "advertises every self-service MCP connector without any operator OAuth app"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "keeps a preregistered MCP connector unavailable until an operator configures its OAuth app"
         }
       ]
     },
@@ -1342,11 +1447,14 @@
       ]
     },
     {
-      "id": "the-four-connector-sources",
+      "id": "the-connector-sources",
       "section": "1.2 What Managed Cloud can actually connect",
       "kind": "rows",
-      "rows": 4,
-      "implementation": ["apps/web/lib/user-connector-tools.ts"],
+      "rows": 6,
+      "implementation": [
+        "apps/web/lib/user-connector-tools.ts",
+        "apps/web/lib/connectors/mcp-discovery.ts"
+      ],
       "proof": [
         {
           "kind": "guard",
@@ -1356,6 +1464,16 @@
           "kind": "test",
           "file": "apps/web/lib/__tests__/user-connector-tools.test.ts",
           "name": "loadUserConnectorToolDefs, remote connector gate"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-store.test.ts",
+          "name": "encrypts both tokens and clears any prior revocation on reconnect"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "reports a self-service MCP grant as connected after discovered OAuth completes"
         }
       ]
     },
@@ -1441,6 +1559,25 @@
           "kind": "test",
           "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
           "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "discovered-path-narrows-to-the-ceiling",
+      "section": "The four connector sources, and which one has scopes at all",
+      "kind": "prose",
+      "sentence": "The self-registered and directory-discovered sources request scopes on the discovered path, where `ceilingScopeFor` in `apps/web/lib/connectors/mcp-discovery.ts` narrows a connector with an enforced ceiling to that ceiling.",
+      "implementation": ["apps/web/lib/connectors/mcp-discovery.ts#ceilingScopeFor"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/mcp-discovery.test.ts",
+          "name": "documented scope ceilings on the discovered path"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/mcp-discovery.test.ts",
+          "name": "asks only for the ceiling scopes the resource advertises"
         }
       ]
     },
