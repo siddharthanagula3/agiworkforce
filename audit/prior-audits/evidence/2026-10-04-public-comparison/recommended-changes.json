@@ -1,0 +1,96 @@
+{
+  "audit": "Extended live public website comparison (ChatGPT, Claude and AGI Workforce)",
+  "date": "4 October 2026 UTC",
+  "observed": "00:35 to 00:45 UTC, signed-out, cloud browser at 1180 x 757 CSS px, eight routes",
+  "note": "PC ids map to the report's R ids. In the report, route_refs L01 to L08 are its own route ids (L03 /use-cases, L07 /features/plugins, L08 the MCP directory), not this repository's remediation lanes. Screenshots are not in git.",
+  "recommendations": [
+    {
+      "id": "PC01",
+      "audit_id": "R01",
+      "priority": "P1",
+      "title": "Resolve release availability wording",
+      "scope": "AGI /use-cases; /features/plugins; /connectors/mcp-directory",
+      "classification": "Contradictory public copy",
+      "evidence": "Released/installable language coexists with CLI coming-soon language",
+      "acceptance": "One owner-verified surface/distribution source; hero/body/catalog/download/footer agree",
+      "route_refs_in_the_report": "L03; L07; L08"
+    },
+    {
+      "id": "PC02",
+      "audit_id": "R02",
+      "priority": "P2",
+      "title": "Publish an accurate public Study entry",
+      "scope": "AGI public learning journey",
+      "classification": "Missing public route in prior 184-route baseline",
+      "evidence": "Authenticated Study configuration exists; no lesson execution tested",
+      "acceptance": "Explain three modes, eligibility and actual start/resume path; label demonstrations",
+      "route_refs_in_the_report": "L01; L02; L03; prior authenticated Study"
+    },
+    {
+      "id": "PC03",
+      "audit_id": "R03",
+      "priority": "P2",
+      "title": "Keep search results in view after submitting",
+      "scope": "AGI MCP directory",
+      "classification": "Observed interaction friction",
+      "evidence": "Gmail search works but returns viewport to hero",
+      "acceptance": "Result heading/count visible and appropriately announced after query; URL retained",
+      "route_refs_in_the_report": "L08"
+    },
+    {
+      "id": "PC04",
+      "audit_id": "R04",
+      "priority": "P2",
+      "title": "Provide a public connector inspection step",
+      "scope": "AGI MCP directory sampled card",
+      "classification": "Incomplete sampled discovery path",
+      "evidence": "First three sampled cards have no links/buttons; Superhuman click unchanged",
+      "acceptance": "Reliable metadata/detail route or clearly explained next action; keyboard equivalent",
+      "route_refs_in_the_report": "L05; L06; L08"
+    },
+    {
+      "id": "PC05",
+      "audit_id": "R05",
+      "priority": "P2",
+      "title": "Add a readable practical plugin example",
+      "scope": "AGI plugin explainer",
+      "classification": "Incomplete outcome explanation",
+      "evidence": "Current page foregrounds technical execution boundary",
+      "acceptance": "Concrete task/result plus precise surface eligibility; retain integrity and trust warnings",
+      "route_refs_in_the_report": "L04; L07"
+    },
+    {
+      "id": "PC06",
+      "audit_id": "R06",
+      "priority": "P2",
+      "title": "Clarify public search and indexed catalog scope",
+      "scope": "AGI MCP directory",
+      "classification": "Copy and scope clarification",
+      "evidence": "Public Gmail search returns 29 despite whole-index sign-in wording",
+      "acceptance": "Accurate distinction among search, first-60 display, connection and account-only functions",
+      "route_refs_in_the_report": "L08"
+    },
+    {
+      "id": "PC07",
+      "audit_id": "R07",
+      "priority": "P3",
+      "title": "Show a role-selected example where useful",
+      "scope": "AGI use cases",
+      "classification": "Optional explanatory pattern",
+      "evidence": "Existing four-role card hub present; no learner card",
+      "acceptance": "Every advertised choice yields relevant truthful example/destination; keyboard state works",
+      "route_refs_in_the_report": "L01; L02; L03"
+    },
+    {
+      "id": "PC08",
+      "audit_id": "R08",
+      "priority": "Conditional",
+      "title": "Evaluate an institutional education page",
+      "scope": "AGI education positioning",
+      "classification": "Product and market choice",
+      "evidence": "Study UI does not establish institution offer or assurance",
+      "acceptance": "Publish only supported offer, requirements and evidence; preserve individual learner route",
+      "route_refs_in_the_report": "L02; L03"
+    }
+  ]
+}

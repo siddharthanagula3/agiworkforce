@@ -1,0 +1,212 @@
+{
+  "audit": "AGI Workforce authenticated interface audit",
+  "date": "3 October 2026",
+  "observed": "22:28 to 22:51 UTC, signed-in Free-plan account, cloud browser at 1180, 768 and 500 CSS px wide, read-only",
+  "note": "AF ids map to the audit's F ids. AX ids are items taken from its screen-by-screen notes (section D); the audit did not number them. Evidence images are not in git.",
+  "findings": [
+    {
+      "id": "AF01",
+      "audit_id": "F01",
+      "priority": "P1",
+      "title": "Resolve conflicting artifact privacy guidance",
+      "classification": "P1 | Confirmed user facing copy inconsistency | High for the wording conflict; backend behavior unverified",
+      "screen_and_state": "https://agiworkforce.com/ · Artifacts pane and Settings privacy guidance · authenticated empty chat · 1180 × 757 CSS px",
+      "evidence": "E09 shows the Artifacts header labeled Synced while its notice says an artifact leaves the device only when published and inherits a local, BYOK or managed conversation boundary. Privacy says: Artifacts you create here are synced to your account; conversations are stored in your account directly, not synced from this browser. Capabilities says Hosted Web and Desktop are Managed Cloud only. These are observed UI statements, not independently verified implementation facts.",
+      "impact": "A user deciding whether to include sensitive work cannot reconcile local-only and cloud-synced descriptions. The problem is consequential even without evidence of an actual data leak.",
+      "recommendation": "Have the product and privacy owners establish the actual storage, sync, publishing and model-processing boundaries. Replace the inconsistent notices with one accurate explanation, adapted to the active surface and runtime. Use explicit wording for sync versus public sharing. Keep a details link and preserve relevant choices.",
+      "acceptance": "The same artifact state has mutually consistent labels in its pane, Privacy and Capabilities. A user can distinguish saved to the account, sent to a provider, and published to other people. Test the wording against the implemented behavior; do not claim local-only storage without evidence."
+    },
+    {
+      "id": "AF02",
+      "audit_id": "F02",
+      "priority": "P2",
+      "title": "Unify help access and stop composer obstruction",
+      "classification": "P2 | Confirmed overlap with a design recommendation | High",
+      "screen_and_state": "https://agiworkforce.com/ and https://agiworkforce.com/chat · blank chat with Support closed/open · 1180 × 757, 768 × 757 and 500 × 757 CSS px",
+      "evidence": "E02 shows the approximately 380 × 340 px floating Support panel covering the right side of the composer and secondary controls at 1180 px. At 500 px, E17 shows it covering the entire main composer. The closed launcher did not overlap the composer. Direct DOM observations found one Open product support control on the root route and none on /chat; E15 captures /chat without the launcher at 768 px. Equivalent blank-chat entry routes therefore have inconsistent help placement. Account-menu help and Settings Help also exist. Escape closed Support and restored focus to its launcher.",
+      "impact": "Opening help obscures the workspace needed to continue the task and creates two competing inputs. Multiple help entry points leave their relationship unclear.",
+      "recommendation": "Keep one stable, discoverable Help entry across the authenticated shell, including both blank-chat routes. Prefer a side panel that reserves space at desktop widths and a deliberate full-height sheet or modal at narrow widths. Consolidate product answers, documentation and human contact behind understandable choices. Preserve the observed Escape dismissal and focus restoration. A root-only inherited widget is a hypothesis to investigate, not a confirmed cause.",
+      "acceptance": "Help remains easy to find. At all tested widths, opening it either preserves an unobscured usable composer or clearly enters a modal mode. Closing restores focus to the invoking control and preserves the unsent draft. No action sends a support message merely by opening help."
+    },
+    {
+      "id": "AF03",
+      "audit_id": "F03",
+      "priority": "P2",
+      "title": "Shorten the free model notice without losing its meaning",
+      "classification": "P2 | Independent information hierarchy judgment | High for the observed layout; owner verification required for replacement policy wording",
+      "screen_and_state": "https://agiworkforce.com/ · initial new chat with free model selected · 1180 × 757 CSS px",
+      "evidence": "E01 shows a roughly 101 px tall, 736 px wide data-use notice above the 110 px tall composer. Its computed text is 13 px Geist with about 21.1 px leading. The explanation includes a question-and-answer sequence, a privacy-setting instruction and a link that wraps across lines.",
+      "impact": "The warning carries important information but takes nearly as much vertical space as the task input. Fragmented phrasing and a split link make it harder to extract the risk and available choice quickly.",
+      "recommendation": "Keep the immediate risk summary, one clear Data use and privacy link, and a direct way to reach the relevant setting. Move detailed provider terms and exceptions to the linked explanation. Use concise verified wording, with dismissal and re-access behavior defined. Do not reduce necessary information to unreadably small text or assume all notices can fit one line.",
+      "acceptance": "Before submission, a user can understand the provider-training risk and the available privacy choice. The link remains recognizable and does not break into awkward fragments. Dismissal does not remove policy access, and a material change of provider or privacy behavior resurfaces the necessary information."
+    },
+    {
+      "id": "AF04",
+      "audit_id": "F04",
+      "priority": "P2",
+      "title": "Make the selected model fully legible",
+      "classification": "P2 | Confirmed presentation defect | High",
+      "screen_and_state": "https://agiworkforce.com/ · composer with OpenRouter Free Auto selected · 1180 × 757 and 500 × 757 CSS px",
+      "evidence": "E01 and the rendered DOM observation show OpenRouter Free A… in a 200 px desktop selector. E16 and measured narrow-view data show the label truncating further at 500 px; the selector becomes 144 × 28 px with 12/16 px text. The complete selection is OpenRouter Free Auto and the accessible label is Change model. The main message input remains 16/24 px at 500 px.",
+      "impact": "A user has to open or inspect a control to understand a decision that affects capability, availability and data handling.",
+      "recommendation": "Use a short, unambiguous canonical label such as Free Auto, with full provider and model detail in the menu, or allocate enough space for the complete name. Maintain ordinary toolbar legibility rather than relying on smaller type at narrow widths. Keep a complete accessible name and tooltip.",
+      "acceptance": "The active model is unambiguous at the audited desktop width and tested narrower widths. Focus or hover reveals the full provider and model name. Selection and any unavailable state agree between the composer and model menu."
+    },
+    {
+      "id": "AF05",
+      "audit_id": "F05",
+      "priority": "P2",
+      "title": "Reduce competing onboarding rows",
+      "classification": "P2 | Independent information hierarchy judgment | High for current density; repeat visit persistence untested",
+      "screen_and_state": "https://agiworkforce.com/ · initial new chat · 1180 × 757 CSS px",
+      "evidence": "E01 shows five task-example pills plus a separate Connect your apps row with Gmail, Google Calendar, Google Drive, All connectors and a hide control. The app setup row has visual weight comparable to the task examples.",
+      "impact": "The empty state asks the user to choose both a task and a setup path. Optional integrations can look like prerequisites to beginning work.",
+      "recommendation": "Keep a compact set of task examples. Move integration discovery into Add context from apps within the attachments/context area. Use one optional first-use connector suggestion where useful, with a persistent user-controlled dismissal. Do not remove integration functionality.",
+      "acceptance": "A user can immediately see where to type and recognize app setup as optional. Returning users are not repeatedly shown a dismissed nonessential invitation. Every connector remains reachable through a clearly labeled route without adding more permanent buttons to the empty canvas."
+    },
+    {
+      "id": "AF06",
+      "audit_id": "F06",
+      "priority": "P2",
+      "title": "Group project context with the composer",
+      "classification": "P2 | Independent layout judgment | High",
+      "screen_and_state": "https://agiworkforce.com/ · new chat · 1180 × 757 CSS px",
+      "evidence": "E01 and DOM measurements show a 104 × 30 px Project control beneath the composer at y506, followed by examples beginning at y565. The project control sits in a separate row with little explanation of its relationship to the current draft.",
+      "impact": "The extra row and gap weaken the grouping of related context controls and increase the number of visual zones the user must scan.",
+      "recommendation": "Place project selection in the composer context row or attachments/context menu. When selected, display a named context chip attached to the composer. Align it with other context indicators rather than centering unrelated example controls around it.",
+      "acceptance": "The selected project is understandable before submission and can be changed or cleared without disturbing the draft. The empty state has one coherent context group and consistent spacing at desktop and narrow widths."
+    },
+    {
+      "id": "AF07",
+      "audit_id": "F07",
+      "priority": "P3",
+      "title": "Use one upgrade entry in the account area",
+      "classification": "P3 | Independent redundancy judgment | High for the observed expanded sidebar",
+      "screen_and_state": "https://agiworkforce.com/ · expanded sidebar · 1180 × 757 CSS px",
+      "evidence": "Rendered interface observation: the lower sidebar shows Free plan with Upgrade, followed by an account button carrying a second UPGRADE badge within roughly 70 px. Account-menu Upgrade adds another access route. Private sidebar records were excluded from image captures.",
+      "impact": "Repeated promotion gives a secondary commercial action more weight than necessary and makes the navigation footer feel crowded.",
+      "recommendation": "Keep plan status and one clear upgrade action in the account area. Use contextual upgrade explanations when a user reaches a relevant limit. Keep billing information accessible without repeating a badge immediately beside the same destination.",
+      "acceptance": "The resting expanded sidebar contains no adjacent duplicate upgrade calls to action. Plan and billing access remain clear; a capability limit explains why upgrading is relevant without obscuring the user's work."
+    },
+    {
+      "id": "AF08",
+      "audit_id": "F08",
+      "priority": "P3",
+      "title": "Surface sources and artifacts when they have a clear role",
+      "classification": "P3 | Independent information architecture judgment | High for empty panel states; active conversation behavior untested",
+      "screen_and_state": "https://agiworkforce.com/ · empty chat and sources or artifacts panes · 1180 × 757 CSS px",
+      "evidence": "The top-right header contains persistent 36 × 36 px Sources and Artifacts buttons. E08 shows No saved report yet. E09 shows No artifacts yet. Their empty-state purpose is capability discovery rather than access to existing output.",
+      "impact": "Detached controls in an otherwise sparse header add conceptual work before the user has created anything. Opening an empty panel does not advance the initial task.",
+      "recommendation": "Make these capabilities discoverable in a named secondary tools entry, then show dedicated controls or counts when relevant output exists. Preserve easy access for users intentionally exploring research or artifacts. Keep useful empty explanations and distinguish no content from loading or errors.",
+      "acceptance": "New users can discover research sources and artifacts without unexplained permanent header icons. Relevant results are one clear action away when present. Empty, loading, failed and unavailable states have distinct wording and recovery behavior."
+    },
+    {
+      "id": "AF09",
+      "audit_id": "F09",
+      "priority": "P3",
+      "title": "Clarify the two voice actions",
+      "classification": "P3 | Independent interaction clarity judgment | High for appearance and accessible names; activation behavior untested",
+      "screen_and_state": "https://agiworkforce.com/ · composer toolbar · 1180 × 757 CSS px",
+      "evidence": "E01 shows adjacent 36 × 36 px microphone and filled waveform controls. Accessible labels distinguish voice input and voice mode, but their visual functions are not explained by the icons alone. Neither was activated.",
+      "impact": "A user may be unsure whether an action will transcribe text into the draft or begin a live voice session, especially because the filled waveform has strong visual emphasis.",
+      "recommendation": "Use explicit Dictate a message and Start a voice conversation tooltips and accessible names, after confirming the actual behavior. Consider one labeled Voice options menu if the two actions compete with text entry, while retaining a direct shortcut if usage supports it.",
+      "acceptance": "Keyboard and pointer users can distinguish dictation from a voice conversation before activation. Permission prompts occur only when needed, and cancelling leaves the draft unchanged. These activation checks require separate test authorization."
+    },
+    {
+      "id": "AF10",
+      "audit_id": "F10",
+      "priority": "P2",
+      "title": "Offer search recovery before project creation",
+      "classification": "P2 | Confirmed state copy mismatch | High",
+      "screen_and_state": "https://agiworkforce.com/chat/projects · nonmatching search with existing projects · 1180 × 757 CSS px",
+      "evidence": "E11 shows a no-matching-projects result followed by Create one to group conversations, attach files, and share instructions. The collection is populated; the query is what makes the displayed results empty. The Library no-match state in E10 correctly suggests a shorter search.",
+      "impact": "A user trying to find existing work is directed toward making new content rather than recovering the current search. The wording blurs genuine emptiness and a filtered result.",
+      "recommendation": "Use Try another name or clear the search. Make Clear search an explicit recovery action. Keep project creation available as a secondary action, and reserve first-project instructions for a genuinely empty collection.",
+      "acceptance": "A no-match query displays search recovery and never implies that the account has no projects. Clearing the query restores the existing collection. A genuinely empty collection presents a separate creation-oriented state."
+    },
+    {
+      "id": "AF11",
+      "audit_id": "F11",
+      "priority": "P2",
+      "title": "Clarify model availability and catalog scope",
+      "classification": "P2 | Confirmed wording ambiguity and independent menu density judgment | High for visible messages; actual fallback response untested",
+      "screen_and_state": "https://agiworkforce.com/ · model picker and All models view · 1180 × 757 CSS px",
+      "evidence": "The settled picker says Free models are paused right now and also Keep chatting with OpenRouter Free Auto. A fallback remains selected. All models reports 24 while the large provider/filter view exposes one available OpenRouter row and several zero-count provider groups. These are DOM and direct interface observations; no archived model-menu image is used.",
+      "impact": "The user must interpret whether chat is unavailable, whether a fallback works and whether counts describe their entitlement or a broader catalog. Many empty groups and filters consume attention without helping this Free-plan choice.",
+      "recommendation": "Distinguish the temporarily paused pool from the selected fallback, and explain the fallback availability without implying that it was tested. Label Available to you versus All models and scope each count. Default to usable models; collapse empty provider groups. Keep broader catalog and plan information discoverable but secondary.",
+      "acceptance": "Before submission, the user can identify the selected model, its current availability and the meaning of every count. Known unavailability has a concrete next action. Verify fallback responses in a separately authorized test; do not treat this audit as evidence of successful generation."
+    },
+    {
+      "id": "AF12",
+      "audit_id": "F12",
+      "priority": "P2",
+      "title": "Organize settings and standardize page hierarchy",
+      "classification": "P2 | Independent information architecture and typography judgment | High for navigation and measured samples; no claim of universal type failure",
+      "screen_and_state": "Settings at 1180 × 757 and 500 × 757 CSS px; measured title samples on /chat/study and /chat/images",
+      "evidence": "The desktop Settings modal has a 220 px navigation column and independently scrolling content. At 500 px, all 20 destinations occupy one horizontally scrollable strip above independently scrolling content; E18 shows the loaded Help state. General mixes profile, response style, preferences, accessibility, model behavior, voice and commands. Measured title samples vary by role: Study 20/26 px, Images 24/32 px and the welcome 28/33.6 px. These differences call for intentional role definitions, not identical sizing everywhere.",
+      "impact": "Users must scan a long settings list and mixed content to predict where a setting lives. Inconsistent heading roles make similar pages feel assembled from separate patterns.",
+      "recommendation": "Separate Profile, Appearance and accessibility, Conversation behavior, Voice and advanced customization. Keep workspace, billing, privacy/security and help distinct. At narrow widths, use a settings list that opens a detail view with Back and persistent search, instead of requiring traversal of 20 horizontal items. Define consistent heading roles, spacing and section anchors.",
+      "acceptance": "A user can find profile, display, conversation and privacy controls from clear categories. Similar page roles use the same heading ladder and spacing. Independent scrolling has visible affordances, and navigation remains operable by keyboard and at narrow widths."
+    },
+    {
+      "id": "AF13",
+      "audit_id": "F13",
+      "priority": "P3",
+      "title": "Verify platform aware shortcut hints",
+      "classification": "P3 | Platform aware shortcut recommendation | Displayed hints observed; platform detection and bindings unverified",
+      "screen_and_state": "Expanded navigation, account menu and Search Conversations dialog · Linux Chromium · 1180 × 757 CSS px",
+      "evidence": "Mac-style Shift-Command-F and Command-slash hints were observed. The supported page evaluator did not expose navigator.platform or userAgent, and no alternate access route was attempted. The browser-reported platform, remote keyboard and actual shortcut actions remain unverified.",
+      "impact": "If the hints do not match the user’s keyboard and supported bindings, otherwise useful shortcut discovery will be misleading. The observed Mac-style glyphs alone do not establish that mismatch.",
+      "recommendation": "Verify how the product detects the user’s platform and keyboard, then render hints matching the actual supported bindings. Keep a keyboard-shortcuts reference with clear alternative bindings where needed.",
+      "acceptance": "Linux and Windows show the tested Ctrl-based or other supported bindings, while macOS shows its supported Command bindings. The displayed shortcut activates the same action without relying on an undocumented alternative."
+    },
+    {
+      "id": "AF14",
+      "audit_id": "F14",
+      "priority": "P3",
+      "title": "Bring the unused code workspace into one visual group",
+      "classification": "P3 | Independent empty state layout judgment | High for observed layout; transition into active work untested",
+      "screen_and_state": "https://agiworkforce.com/code · unused AGI Code workspace · 1180 × 757 CSS px",
+      "evidence": "Direct interface observation placed the greeting near y95 and the composer at y641–737, leaving roughly 500 px of blank middle space. E14 is a composer-only clip and supports the toolbar/model state, not the full-page gap. Context chips include Cloud · Isolated and Select repository; Approval mode is visible. No repository or task action was activated.",
+      "impact": "On an unused workspace, related greeting, context and entry controls are visually far apart, while the operational model label is still truncated. The space may be appropriate for active work but contributes little guidance before a task begins.",
+      "recommendation": "Group a compact task heading, repository/context choice and composer in the unused state. Move the composer to its working dock after a task begins, without jumping focus or losing the draft. Preserve the active-work canvas rather than filling the gap with decorative content.",
+      "acceptance": "The empty state presents context and task entry as one coherent group. The transition into work preserves input and focus and makes room for output. Confirm that transition in an explicitly authorized disposable task test."
+    },
+    {
+      "id": "AF15",
+      "audit_id": "F15",
+      "priority": "P2",
+      "title": "Explain the collapsed code approval mode",
+      "classification": "P2 | Independent control clarity judgment | High for visible wording; permission enforcement untested",
+      "screen_and_state": "https://agiworkforce.com/code · approval menu opened read only · 1180 × 757 CSS px",
+      "evidence": "The collapsed label is Auto. Its selected menu description is Run read-only actions without asking, explained as reads, searches, page fetches and sandboxed code running on their own while writes still ask. Other approval choices are present, but none was selected and no task ran.",
+      "impact": "Auto alone does not communicate the boundary of delegated actions. The expanded explanation is much more informative for a consequential control.",
+      "recommendation": "Use a concise label such as Read-only auto and retain the full explanation in the menu and accessible description. Keep active approval mode and task budget understandable before a task begins. Verify the label against actual enforcement before release.",
+      "acceptance": "A user can describe which actions require approval from the collapsed control and its accessible explanation. Changing or testing an approval mode is done only in an explicitly authorized test. The UI and enforcement agree; this audit does not claim that agreement was tested."
+    },
+    {
+      "id": "AX01",
+      "audit_id": "section D screen notes",
+      "priority": "P3",
+      "title": "Model About panel shows empty price fields and an internal lifecycle label",
+      "note": "Section D, model selection: \"About exposes capabilities, context/output ceilings, missing price fields and an internal-sounding lifecycle label promoted; present useful use cases and availability before such metadata.\" Find the model About/details panel, what it renders when a price is unknown, and where the lifecycle value \"promoted\" comes from (model registry). Decide what a user-facing label should be, or whether the field should be hidden.",
+      "source_lines": [330, 332]
+    },
+    {
+      "id": "AX02",
+      "audit_id": "section D screen notes",
+      "priority": "P3",
+      "title": "Connectors settings: empty Connected tab has no browse action and the catalog total reads like a result count",
+      "note": "Section D, Connectors: \"Add Browse connectors to the empty state and label the 38,255 total as catalog scope rather than an apparent result count. Varied Connect, Needs setup and Not available yet labels mean catalog presence does not establish usability.\" Preserve the loading / no connections / no matches distinction that the audit praises.",
+      "source_lines": [362, 364]
+    },
+    {
+      "id": "AX03",
+      "audit_id": "section D screen notes",
+      "priority": "P3",
+      "title": "Images page introduction implies creating on the page; Schedules plan-gated empty card is oversized",
+      "note": "Section D, Images: \"The introduction implies creating on this page although the visible entry is a separate chat-mode action. Suggested clearer copy: Create images in chat. Your saved images appear here.\" Section D, Schedules: keep the Free-plan explanation and contextual upgrade action, \"the large empty card may be compacted\". Two small copy/layout items on two pages; report each owner separately.",
+      "source_lines": [386, 396]
+    }
+  ]
+}

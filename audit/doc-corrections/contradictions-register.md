@@ -219,7 +219,7 @@ These belong in the next scan's scope note.
 - **Code shows:**
   - the Free plan's own disclosure answers "Not by AGI. Free model providers may." (`apps/web/lib/compliance/free-plan-training-disclosure.ts:3,8`);
   - the privacy page narrows its claim to "AGI-owned models" (`apps/web/app/privacy/page.tsx:873`; the cited lines 133 and 447 no longer hold that text);
-  - Free-plan traffic goes to providers' free models, which may train, and there is no opt-out.
+  - Free-plan traffic goes to providers' free models, which may train. An opt-out toggle exists (`keepOutOfProviderTraining` in `apps/web/features/settings/sections/PrivacySection.tsx`, enforced for chat in `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`); on the Free plan it refuses chat because no Free model qualifies, and enforcement is incomplete on other paths, which lane 19 records (`WEB-PROVIDER-TRAINING-SETTING-01` in `audit/registers/known-flaws.md`).
 - **Verdict:** Contradicted premise. S85.12 web/desktop/mobile is **missing**, with a product decision needed.
 - **Doc to update:** `wire-or-cut.md` (superseding row) and `audit/ui-gaps.csv` GAP-259 (living). The decision itself is the founder's call.
 
