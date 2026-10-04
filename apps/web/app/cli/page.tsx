@@ -5,7 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FeatureGrid } from '@/features/marketing/components/LandingSections';
 import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/SurfaceSections';
-import { MARKETING, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { SURFACE_STATUS } from '../../lib/marketing-constants';
 import { CliInstallCommand } from './CliInstallCommand';
 
 export const metadata = buildMetadata({
@@ -172,7 +172,7 @@ export default function CliPage() {
               title: 'Your keys, your billing.',
               body: 'Run agi login <provider>, such as agi login anthropic, and paste your key. A bare agi login signs in to your AGI account instead.',
               points: [
-                `${MARKETING.providers.display} providers plus custom OpenAI-compatible endpoints`,
+                'Provider keys for the built-in providers, plus custom OpenAI-compatible endpoints',
                 'Traffic goes directly to your provider',
                 '/continue-with-byok is an explicit, visible step',
                 'agi auth-status shows every configured provider',

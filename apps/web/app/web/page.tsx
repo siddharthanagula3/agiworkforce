@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import {
   Bento,
   Eyebrow,
+  Prose,
   Section,
   Stack,
   StatBand,
@@ -19,7 +20,15 @@ import {
   ProjectWindow,
   ResearchWindow,
 } from '@/features/marketing/components/FeatureScenes';
-import { approximateCount, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
+import {
+  CLI_AVAILABILITY_NOTE,
+  RELEASED_SURFACES,
+  SURFACE_NAMES,
+  SURFACE_STATUS,
+  surfaceCta,
+} from '@/lib/marketing-constants';
+import { joinSurfaceNames } from '@/lib/surface-status';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 
 export const metadata = buildMetadata({
@@ -28,6 +37,18 @@ export const metadata = buildMetadata({
     'Chat, projects, artifacts, memory, deep research and agents in the browser, with every admitted model behind one selector and the route named on every reply.',
   path: '/web',
 });
+
+const RELEASED_SURFACE_NAMES = joinSurfaceNames(
+  RELEASED_SURFACES.map((surface) => SURFACE_NAMES[surface]),
+);
+const RELEASED_SURFACE_NOUN = RELEASED_SURFACES.length === 1 ? 'surface' : 'surfaces';
+const DESKTOP_CTA = surfaceCta('desktop');
+const FINAL_CTA_BODY = [
+  'Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds approved folders, computer use, connectors and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
+  CLI_AVAILABILITY_NOTE,
+]
+  .filter(Boolean)
+  .join(' ');
 
 const IDS = {
   hero: 'agi-web-title',
@@ -81,21 +102,33 @@ export default function WebSurfacePage() {
           <h2 className="sr-only" id={IDS.numbers}>
             AGI Web in numbers
           </h2>
-          <StatBand
-            label="AGI Web in numbers"
-            stats={[
-              {
-                value: approximateCount(MARKETING.models.count),
-                label: 'models behind one selector',
-              },
-              {
-                value: approximateCount(MARKETING.providers.count),
-                label: 'providers in the catalog',
-              },
-              { value: '1', label: 'route: AGI managed cloud' },
-              { value: '3', label: 'surfaces released: Web, Desktop, CLI' },
-            ]}
-          />
+          <Stack>
+            <StatBand
+              label="AGI Web in numbers"
+              stats={[
+                {
+                  value: String(CATALOG_SCOPES.managedRosterModels.value),
+                  label: 'models on the managed roster, by plan',
+                },
+                { value: '1', label: 'route: AGI managed cloud' },
+                {
+                  value: String(RELEASED_SURFACES.length),
+                  label: `${RELEASED_SURFACE_NOUN} released: ${RELEASED_SURFACE_NAMES}`,
+                },
+              ]}
+            />
+            <Prose size="sm">
+              Which of the {CATALOG_SCOPES.managedRosterModels.value} each plan includes is on{' '}
+              <Link href="/pricing" className="agi-ds-link">
+                the pricing page
+              </Link>
+              . The wider catalogue is on{' '}
+              <Link href="/providers#definitions" className="agi-ds-link">
+                the providers page
+              </Link>
+              , with what each count means.
+            </Prose>
+          </Stack>
         </Section>
 
         <Section id="status" labelledBy={IDS.status} rule>
@@ -167,10 +200,10 @@ export default function WebSurfacePage() {
         <FinalCta
           eyebrow="Start"
           title="Open it in a tab, or take it with you."
-          body="Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds approved folders, computer use, connectors and scheduled work on the same managed-cloud account; Local and BYOK are available from the CLI."
+          body={FINAL_CTA_BODY}
           ctas={[
             { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: DESKTOP_CTA.href, label: DESKTOP_CTA.label },
             { href: '/pricing', label: 'See pricing' },
           ]}
           stamp={SURFACE_STATUS.web}

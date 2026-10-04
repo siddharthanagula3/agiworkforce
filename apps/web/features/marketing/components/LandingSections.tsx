@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { PROVIDERS_IN_ORDER } from '@agiworkforce/types';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { CLI_LOCAL_RUNTIME_IDS, LAUNCH, MARKETING, POSITIONING } from '@/lib/marketing-constants';
 import { providerLabel } from './landing/landing-content';
 import { ProviderLogo, hasProviderLogo } from './ProviderLogo';
@@ -75,13 +76,16 @@ const DEFAULT_PANEL_ROWS: LedgerRow[] = [
   { k: 'Launch', v: LAUNCH.shortLabel },
   { k: 'Modes', v: 'Local, BYOK, Cloud (public alpha)' },
   { k: 'Surfaces', v: 'Web, Mobile, Desktop, CLI, Chrome, VS Code' },
-  { k: 'Boundary', v: POSITIONING.trustBoundary },
+  { k: 'Boundary', v: POSITIONING.routeBoundary },
 ];
 
 const DEFAULT_STATS: StatItem[] = [
-  { label: MARKETING.providers.label, value: MARKETING.providers.display },
+  { label: CATALOG_SCOPES.byokProviders.label, value: `${CATALOG_SCOPES.byokProviders.value}` },
   { label: MARKETING.surfaces.label, value: MARKETING.surfaces.display },
-  { label: MARKETING.models.label, value: MARKETING.models.display },
+  {
+    label: CATALOG_SCOPES.catalogueEntries.label,
+    value: `${CATALOG_SCOPES.catalogueEntries.value}`,
+  },
 ];
 
 const PROVIDER_PILLS = [

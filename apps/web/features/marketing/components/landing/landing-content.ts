@@ -5,8 +5,11 @@ import {
   BYOK_SURFACES,
   CLI_LOCAL_RUNTIMES,
   COMING_SOON_LABEL,
+  LOCAL_RUNTIME_LABEL_SUFFIX,
   SURFACE_STATUS,
+  surfaceCta,
 } from '@/lib/marketing-constants';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { LANE_NAMES, type LaneId } from '../system/lanes';
 import { WEB_ENTRY_HREF } from '../system/nav';
 
@@ -26,13 +29,11 @@ const catalogProviders = modelsCatalogJson.providers as unknown as Record<
   string,
   { label: string; defaultModel?: string }
 >;
-const LOCAL_SUFFIX = /\s+\(Local\)$/;
 
 export const modelName = (id: string): string => catalogModels[id]?.name ?? id;
 export const providerLabel = (id: string): string =>
-  (catalogProviders[id]?.label ?? id).replace(LOCAL_SUFFIX, '');
+  (catalogProviders[id]?.label ?? id).replace(LOCAL_RUNTIME_LABEL_SUFFIX, '');
 
-export const CLI_HREF = '/download';
 export const PRICING_HREF = '/pricing';
 export const LOCAL_HREF = '/local';
 export const BYOK_HREF = '/byok';
@@ -43,7 +44,7 @@ export const HERO = {
   title: 'One AI workspace. You choose where it runs.',
   lede: 'Work with the same assistant on the web and in your terminal. Run each request locally, through a provider key you already own, or on AGI Cloud, and see the route, model, privacy boundary and cost beneath every answer.',
   primary: { label: 'Try AGI Web', href: WEB_ENTRY_HREF },
-  secondary: { label: 'Install the CLI', href: CLI_HREF },
+  secondary: surfaceCta('cli'),
 } as const;
 
 export const CONSOLE_URL = 'agiworkforce.com/chat';
@@ -263,9 +264,6 @@ export const CONSOLE_LANES: readonly ConsoleLane[] = [
   },
 ];
 
-export const CATALOG_MODEL_COUNT = Object.keys(catalogModels).length;
-export const PROVIDER_INTEGRATION_COUNT = Object.keys(catalogProviders).length;
-
 export const ROUTES = {
   title: 'Every answer comes with a receipt.',
   lede: 'Three routes, one workspace. The route is recorded when the answer finishes and printed under it, so the same question answered three ways reads as three different receipts.',
@@ -324,7 +322,7 @@ export const ROUTES = {
 
 export const MODELS_SECTION = {
   title: 'Every model. One composer.',
-  lede: `Pick any of ${CATALOG_MODEL_COUNT} models by name and that model answers, nothing substitutes behind your back. Or leave it on Auto and the router takes the lowest-cost route whose terms allow it, counting prompt-cache hits before it decides.`,
+  lede: `Pick any of ${CATALOG_SCOPES.catalogueEntries.text} by name and that model answers, nothing substitutes behind your back. Or leave it on Auto and the router takes the lowest-cost route whose terms allow it, counting prompt-cache hits before it decides.`,
   points: [
     { title: 'Exact means exact', body: 'Ask for a model by name and that model answers.' },
     {
@@ -332,7 +330,7 @@ export const MODELS_SECTION = {
       body: 'The router weighs cost, terms and cache hits, then names its choice on the receipt.',
     },
     {
-      title: `${PROVIDER_INTEGRATION_COUNT} providers and local runtimes`,
+      title: `${CATALOG_SCOPES.byokProviders.text} and ${CATALOG_SCOPES.localRuntimes.text}`,
       body: 'One catalog, one price sheet, one picker that shows what each model supports.',
     },
   ],

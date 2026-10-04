@@ -85,10 +85,14 @@ describe('model and provider counts', () => {
     expect(MARKETING.providers.count).toBe(Object.keys(modelsCatalogJson.providers).length);
   });
 
-  it('keeps the conservative provider floor truthful', () => {
-    const floor = Number(MARKETING.providers.display.replace(/\D/g, ''));
-    expect(Number.isFinite(floor)).toBe(true);
-    expect(MARKETING.providers.count).toBeGreaterThanOrEqual(floor);
+  it('prints the provider count exactly, with no floor', () => {
+    expect(MARKETING.providers.display).toBe(String(MARKETING.providers.count));
+    expect(MARKETING.providers.display).toMatch(/^\d+$/);
+  });
+
+  it('prints the model count exactly, with no floor', () => {
+    expect(MARKETING.models.display).toMatch(/^\d+$/);
+    expect(MARKETING.models.display).toBe(String(Object.keys(modelsCatalogJson.models).length));
   });
 
   it('dates the catalog from its own lastUpdated stamp', () => {
