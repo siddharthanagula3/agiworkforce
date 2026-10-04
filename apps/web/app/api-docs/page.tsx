@@ -198,7 +198,7 @@ export default function ApiDocsPage() {
             points={[
               'Stream tokens back with stream: true',
               'model: "auto" routes per request; name a model to pin it',
-              `BYOK on ${BYOK_SURFACES.shipped} never touches this gateway`,
+              `BYOK on ${BYOK_SURFACES.label} never touches this gateway`,
             ]}
             visual={
               <CodeTabs tabs={CREDENTIAL_TABS} title="Which credential each endpoint takes" />

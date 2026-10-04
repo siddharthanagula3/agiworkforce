@@ -13,6 +13,13 @@ import {
   softwareApplicationSchema,
   webSiteSchema,
 } from '@/lib/seo/structured-data';
+import {
+  RELEASED_SURFACES,
+  SURFACE_NAMES,
+  SURFACE_PLATFORMS,
+  UNRELEASED_SURFACES,
+  releasedPlatforms,
+} from '@/lib/surface-status';
 
 function og(meta: ReturnType<typeof buildMetadata>) {
   return meta.openGraph as {
@@ -175,6 +182,38 @@ describe('structured data', () => {
   it('SoftwareApplication schema is well-formed', () => {
     const schema = softwareApplicationSchema();
     expect(schema['@type']).toBe('SoftwareApplication');
+  });
+
+  it('SoftwareApplication lists only the platforms of released surfaces', () => {
+    const operatingSystem = softwareApplicationSchema()['operatingSystem'] as string;
+    const listed = operatingSystem.split(', ');
+
+    expect(listed).toEqual(releasedPlatforms());
+    expect(listed).toEqual([
+      ...new Set(RELEASED_SURFACES.flatMap((surface) => SURFACE_PLATFORMS[surface])),
+    ]);
+    for (const surface of UNRELEASED_SURFACES) {
+      for (const platform of SURFACE_PLATFORMS[surface]) {
+        if (releasedPlatforms().includes(platform)) continue;
+        expect(listed, `${platform} belongs to unreleased ${surface}`).not.toContain(platform);
+      }
+    }
+  });
+
+  it.each([
+    ['Organization', organizationSchema],
+    ['SoftwareApplication', softwareApplicationSchema],
+  ])('%s description names only released surfaces', (_type, build) => {
+    const description = build()['description'] as string;
+
+    for (const surface of RELEASED_SURFACES) {
+      expect(description).toContain(SURFACE_NAMES[surface]);
+    }
+    for (const surface of UNRELEASED_SURFACES) {
+      expect(description, `${surface} is not released`).not.toMatch(
+        new RegExp(`\\b${SURFACE_NAMES[surface]}\\b`, 'i'),
+      );
+    }
   });
 
   it('FAQPage schema maps Q/A pairs to Question/Answer nodes', () => {

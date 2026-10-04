@@ -1,4 +1,9 @@
-import { MARKETING, POSITIONING } from '@/lib/marketing-constants';
+import {
+  CLI_AVAILABILITY_NOTE,
+  MARKETING,
+  POSITIONING,
+  surfaceAvailabilitySummary,
+} from '@/lib/marketing-constants';
 import type { CorpusChunk } from '../types';
 import { buildStaticDataChunks } from './static-data-source';
 import { corpusArtifactSchema, isPublicCorpusPath } from './schema';
@@ -10,8 +15,10 @@ const FACT_TOKENS: Readonly<Record<string, string>> = Object.freeze({
   'MARKETING.models.display': MARKETING.models.display,
   'MARKETING.models.count': String(MARKETING.models.count),
   'MARKETING.surfaces.display': MARKETING.surfaces.display,
-  'POSITIONING.trustBoundary': POSITIONING.trustBoundary,
+  'POSITIONING.trustBoundary': POSITIONING.routeBoundary,
   'POSITIONING.wedge': POSITIONING.wedge,
+  'AVAILABILITY.cli': CLI_AVAILABILITY_NOTE,
+  'AVAILABILITY.summary': surfaceAvailabilitySummary(),
 });
 
 const TOKEN_PATTERN = /\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g;

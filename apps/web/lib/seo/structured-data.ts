@@ -16,8 +16,19 @@ import {
   SOCIAL_PROFILES,
   SUPPORT_EMAIL,
 } from './site';
+import {
+  AVAILABLE_NOW_LABEL,
+  RELEASED_SURFACES,
+  SURFACE_NAMES,
+  joinSurfaceNames,
+  releasedPlatforms,
+} from '@/lib/surface-status';
 
 type JsonLdObject = Record<string, unknown>;
+
+const RELEASED_ON = `${AVAILABLE_NOW_LABEL} on ${joinSurfaceNames(
+  RELEASED_SURFACES.map((surface) => SURFACE_NAMES[surface]),
+)}.`;
 
 export function organizationSchema(): JsonLdObject {
   return {
@@ -27,8 +38,7 @@ export function organizationSchema(): JsonLdObject {
     legalName: SITE_LEGAL_NAME,
     url: SITE_URL,
     logo: `${SITE_URL}/logo.png`,
-    description:
-      'AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation, with managed cloud on Web and Desktop and Local or BYOK workflows in the CLI.',
+    description: `AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation. ${RELEASED_ON}`,
     sameAs: [...SOCIAL_PROFILES],
     contactPoint: {
       '@type': 'ContactPoint',
@@ -53,10 +63,9 @@ export function softwareApplicationSchema(): JsonLdObject {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: SITE_NAME,
-    description:
-      'AI workspace with managed cloud on Web and Desktop, plus Local and BYOK developer workflows in the CLI.',
+    description: `AI workspace with chat, projects and artifacts on managed cloud. ${RELEASED_ON}`,
     applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Web, macOS, Windows, Linux, iOS, Android',
+    operatingSystem: releasedPlatforms().join(', '),
     url: SITE_URL,
     image: OG_IMAGE_URL,
     publisher: { '@type': 'Organization', name: SITE_NAME },

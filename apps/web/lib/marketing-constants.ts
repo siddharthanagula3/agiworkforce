@@ -4,13 +4,26 @@ import {
   managedUsageComparisonLines,
   modelsCatalogJson,
 } from '@agiworkforce/types';
-import { COMING_SOON_LABEL, SURFACE_STATUS } from './surface-status';
+import {
+  CLI_AVAILABILITY_NOTE,
+  COMING_SOON_LABEL,
+  SURFACE_STATUS,
+  joinSurfaceNames,
+} from './surface-status';
 
 export {
   AVAILABLE_NOW_LABEL,
+  CLI_AVAILABILITY_NOTE,
   COMING_SOON_LABEL,
   NOTIFY_CTA,
+  RELEASED_SURFACES,
+  SURFACE_NAMES,
+  SURFACE_PLATFORMS,
   SURFACE_STATUS,
+  UNRELEASED_SURFACES,
+  isReleased,
+  surfaceAvailabilitySummary,
+  surfaceCta,
 } from './surface-status';
 
 export const MARKETING_MODEL_PILLS = [
@@ -30,17 +43,21 @@ export const POSITIONING = {
   wedge: 'Try AGI on the web. Run Local and BYOK from the CLI. Managed cloud, open by default.',
   trustBoundary:
     'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.',
+  routeBoundary: [
+    'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist.',
+    'The CLI supports Local and BYOK.',
+    CLI_AVAILABILITY_NOTE,
+    `VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}.`,
+    'Managed cloud is open by default, not invite-only.',
+  ]
+    .filter(Boolean)
+    .join(' '),
   cloudInvite:
     'Managed cloud is open by default. Higher capacity is a paid subscription, and paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
 } as const;
 
 const BYOK_SURFACE_IDS = ['cli', 'vscode'] as const;
 const BYOK_SURFACE_NAMES = { cli: 'the CLI', vscode: 'VS Code' } as const;
-
-function joinSurfaceNames(names: readonly string[]): string {
-  if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
 
 function sentence(names: readonly string[], one: string, many: string): string {
   if (names.length === 0) return '';
@@ -58,7 +75,6 @@ const pendingByokSurfaces = BYOK_SURFACE_IDS.filter(
 export const BYOK_SURFACES = {
   label: 'CLI and VS Code',
   compact: 'CLI · VS Code',
-  shipped: joinSurfaceNames(shippedByokSurfaces),
   availability: [
     sentence(shippedByokSurfaces, 'has a published release', 'have published releases'),
     sentence(pendingByokSurfaces, 'is coming soon', 'are coming soon'),

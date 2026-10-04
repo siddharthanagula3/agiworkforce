@@ -1,0 +1,22 @@
+[
+  {
+    "file": "app/providers/page.tsx",
+    "phrase": "released"
+  },
+  {
+    "file": "app/web/page.tsx",
+    "phrase": "Get AGI Desktop"
+  },
+  {
+    "file": "app/web/page.tsx",
+    "phrase": "released"
+  },
+  {
+    "file": "app/web/page.tsx",
+    "phrase": "surfaces released"
+  },
+  {
+    "file": "features/marketing/components/landing/landing-content.ts",
+    "phrase": "Install the CLI"
+  }
+]
