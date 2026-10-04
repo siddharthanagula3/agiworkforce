@@ -46,6 +46,8 @@ const FEATURES: readonly ScrollFeature[] = [
       'Auto picks the model per message, or you pin one',
       'Search, code and files as tool rows you can open',
     ],
+    href: '/features/ai-chat',
+    linkLabel: 'Learn more about AI chat',
     visual: <WebWindow />,
   },
   {
@@ -54,6 +56,8 @@ const FEATURES: readonly ScrollFeature[] = [
     title: 'Substantial output leaves the message stream.',
     body: 'Documents, code and diagrams open in a versioned panel beside the chat, with the render on one tab and the source on the other.',
     points: ['Every version kept, any version restored', 'Copy, download, or open in the Library'],
+    href: '/features/artifacts',
+    linkLabel: 'Learn more about artifacts',
     visual: <ArtifactsWindow />,
   },
   {
@@ -61,7 +65,9 @@ const FEATURES: readonly ScrollFeature[] = [
     eyebrow: 'Projects',
     title: 'A project rebuilds its own context into every prompt.',
     body: 'Standing instructions, files and the threads you already ran are reassembled into the system message for each request, ranked against the question you asked.',
-    points: ['Instructions and files follow every thread', 'Local and Cloud allowed per project'],
+    points: ['Instructions and files follow every thread', 'Context ranked against each question'],
+    href: '/features/projects',
+    linkLabel: 'Learn more about projects',
     visual: <ProjectWindow />,
   },
   {
@@ -69,7 +75,9 @@ const FEATURES: readonly ScrollFeature[] = [
     eyebrow: 'Memory',
     title: 'Every fact AGI keeps is a sentence you can read.',
     body: 'Short sentences written by you, a finished chat or an import, with the source beside each one and the whole list under your control.',
-    points: ['Search, rewrite or delete any line', 'Stays on the device in Local mode'],
+    points: ['Search, rewrite or delete any line', 'A temporary chat never writes to the list'],
+    href: '/features/memory',
+    linkLabel: 'Learn more about memory',
     visual: <MemoryWindow />,
   },
   {
@@ -78,6 +86,8 @@ const FEATURES: readonly ScrollFeature[] = [
     title: 'Every claim names the source it came from.',
     body: 'The run writes out its searches, waits for you to approve them, then returns a report with a numbered citation behind each factual claim.',
     points: ['Plan approved before anything searches', 'Rejected sources listed with the reason'],
+    href: '/features/deep-research',
+    linkLabel: 'Learn more about deep research',
     visual: <ResearchWindow />,
   },
   {
@@ -86,6 +96,8 @@ const FEATURES: readonly ScrollFeature[] = [
     title: 'Delegation only works if the default is no.',
     body: 'An agent reads files, runs commands and calls connectors, and every risky step opens an approval you answer, inside a permission list you set for the run.',
     points: ['Allow once, always, or deny per tool', 'Commands run in an OS sandbox'],
+    href: '/features/agents',
+    linkLabel: 'Learn more about agents',
     visual: <AgentRunWindow />,
   },
 ];
@@ -131,8 +143,9 @@ export default function FeaturesPage() {
               </h1>
               <p className="agi-lp-lede">
                 Projects, artifacts, memory, research, and agents are not separate products: they
-                are what a chat can reach into. Every one runs in Local, BYOK, or AGI Cloud, and the
-                lane that answered is labelled on the reply.
+                are what a chat can reach into. Every one opens from the same composer on a
+                managed-cloud account, and each reply names the model that answered in its actions
+                menu. Local and BYOK are CLI routes.
               </p>
               <ButtonRow>
                 <Button href="/login?redirectTo=%2F">Try AGI Web</Button>
