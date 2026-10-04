@@ -1,3 +1,5 @@
+import { FREE_QUOTA_EXHAUSTED_CODE, FREE_QUOTA_EXPIRED_CODE } from '@agiworkforce/cloud-contracts';
+
 export type FreeQuotaFailure =
   | 'exhausted'
   | 'expired'
@@ -6,6 +8,7 @@ export type FreeQuotaFailure =
   | 'interrupted'
   | 'too_long'
   | 'provider_failed'
+  | 'blocked'
   | 'plan'
   | 'unsupported_prompt'
   | 'duplicate'
@@ -32,6 +35,7 @@ const FAILURE_STATUS: Readonly<Record<FreeQuotaFailure, number>> = {
   interrupted: 502,
   too_long: 400,
   provider_failed: 502,
+  blocked: 422,
   plan: 403,
   unsupported_prompt: 400,
   duplicate: 409,
@@ -39,13 +43,14 @@ const FAILURE_STATUS: Readonly<Record<FreeQuotaFailure, number>> = {
 };
 
 export const FREE_QUOTA_FAILURE_CODES: Readonly<Record<FreeQuotaFailure, string>> = {
-  exhausted: 'free_quota_exhausted',
-  expired: 'free_quota_expired',
+  exhausted: FREE_QUOTA_EXHAUSTED_CODE,
+  expired: FREE_QUOTA_EXPIRED_CODE,
   unavailable: 'free_quota_unavailable',
   busy: 'provider_rate_limited',
   interrupted: 'stream_interrupted',
   too_long: 'context_length_exceeded',
   provider_failed: 'provider_unreachable',
+  blocked: 'content_filter',
   plan: 'model_not_available',
   unsupported_prompt: 'free_quota_prompt_unsupported',
   duplicate: 'free_quota_duplicate',
@@ -62,9 +67,9 @@ function failureMessage(failure: FreeQuotaFailure, context: FreeQuotaFailureCont
   const { issuer, modelName } = context;
   switch (failure) {
     case 'exhausted':
-      return `${issuer}'s free allowance for ${modelName} is used up. It is the provider's allowance for this model, not a limit on your account, and it does not renew. ${nextStep(context)}`;
+      return `${modelName} has reached its free limit. Its free allowance from ${issuer} is shared by everyone and does not renew, so this is not a limit on your account. ${nextStep(context)}`;
     case 'expired':
-      return `${issuer}'s free allowance for ${modelName} ${
+      return `The free offer for ${modelName} from ${issuer} ${
         context.expiresOn ? `ended on ${context.expiresOn}` : 'has ended'
       }. ${nextStep(context)}`;
     case 'unavailable':
@@ -77,6 +82,8 @@ function failureMessage(failure: FreeQuotaFailure, context: FreeQuotaFailureCont
       return `This conversation is too long for ${modelName}. Start a new chat, or choose another free model.`;
     case 'provider_failed':
       return `${issuer} could not answer with ${modelName} just now, and no other model was used. Send your message again, or choose another free model.`;
+    case 'blocked':
+      return `${issuer}'s safety system stopped ${modelName} from answering this message. Rephrase it, or choose another free model.`;
     case 'plan':
       return `${issuer} free models are part of the Free plan. Choose a model your plan includes.`;
     case 'unsupported_prompt':

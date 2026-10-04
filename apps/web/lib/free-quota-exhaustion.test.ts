@@ -166,7 +166,102 @@ describe('provider refusals on a free model', () => {
         code: 'insufficient_quota',
         message: 'You exceeded your current quota, please check your plan and billing details.',
       },
-      'billing',
+      'busy',
+    ],
+    [
+      {
+        status: 429,
+        code: 'Throttling.AllocationQuota',
+        message: 'Allocated quota exceeded, please increase your quota limit.',
+      },
+      'busy',
+    ],
+    [
+      {
+        status: 429,
+        code: 'Throttling.AllocationQuota',
+        message: 'Free allocated quota exceeded.',
+      },
+      'exhausted',
+    ],
+    [
+      { status: 429, code: 'insufficient_quota', message: 'Free allocated quota exceeded.' },
+      'exhausted',
+    ],
+    [
+      { status: 429, code: 'limit_requests', message: 'You have exceeded your request limit.' },
+      'busy',
+    ],
+    [
+      { status: 429, code: 'Throttling.BurstRate', message: 'Request rate increased too quickly.' },
+      'busy',
+    ],
+    [{ status: 429, code: 'PrepaidBillOverdue', message: 'bill overdue' }, 'account_billing'],
+    [
+      { status: 429, code: 'CommodityNotPurchased', message: 'Commodity has not purchased yet' },
+      'account_billing',
+    ],
+    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'refused'],
+    [{ status: 403, code: 'AccessDenied', message: 'Access denied.' }, 'refused'],
+    [{ status: 403, code: 'access_denied', message: 'Access denied.' }, 'refused'],
+    [
+      {
+        status: 403,
+        code: 'AccessDenied',
+        message: 'current user api does not support synchronous calls.',
+      },
+      'refused',
+    ],
+    [
+      { status: 403, code: 'Endpoint.AccessDenied', message: 'Workspace endpoint access denied.' },
+      'withdrawn',
+    ],
+    [{ status: 404, code: 'model_not_found', message: 'Model can not be found.' }, 'refused'],
+    [
+      {
+        status: 404,
+        code: 'model_not_supported',
+        message: 'Unsupported model xxx for OpenAI compatibility mode.',
+      },
+      'refused',
+    ],
+    [
+      { status: 403, code: 'Workspace.AccessDenied', message: 'Workspace access denied.' },
+      'refused',
+    ],
+    [{ status: 403, code: 'App.AccessDenied', message: 'App access denied.' }, 'refused'],
+    [{ status: 400, code: 'InvalidParameter', message: 'Model not exist.' }, 'refused'],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'The image url is invalid: model not exist in path',
+      },
+      'unavailable',
+    ],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'Input text cannot be used: model not exist.',
+      },
+      'failed',
+    ],
+    [
+      {
+        status: 500,
+        code: 'InternalError.Algo',
+        message: "An error occurred in model serving, error message is: [Cluster 'xxx' not found!]",
+      },
+      'unavailable',
+    ],
+    [
+      {
+        status: 400,
+        code: 'DataInspectionFailed',
+        message: 'Input or output data may contain inappropriate content.',
+      },
+      'blocked',
     ],
     [
       { status: 400, code: 'Arrearage', message: 'account not in good standing' },

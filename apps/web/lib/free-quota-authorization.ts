@@ -3,7 +3,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { KeyValueStore } from '@agiworkforce/key-value';
-import { classifyError } from '@agiworkforce/provider-runtime';
+import {
+  MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+  MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
+  MODEL_STUDIO_MODEL_RETIRED_HINT,
+  classifyModelStudioError,
+} from '@agiworkforce/provider-runtime';
 import {
   getProviderOffering,
   listCanonicalModels,
@@ -131,7 +137,7 @@ function turnKey(userId: string, requestId: string): string {
 }
 
 const HoldSchema = z.object({
-  cause: z.enum(['exhausted', 'billing']),
+  cause: z.enum(['exhausted', 'billing', 'withdrawn', 'refused']),
   atMs: z.number().int().positive(),
 });
 
@@ -160,6 +166,14 @@ export interface FreeQuotaState {
   used: ReadonlyMap<string, number>;
 }
 
+const ATTESTATION_LIFTED_HOLDS: ReadonlySet<FreeQuotaHoldCause> = new Set(['withdrawn', 'refused']);
+
+function holdInForce(hold: z.infer<typeof HoldSchema>, attestedAtMs: number | null): boolean {
+  return (
+    !ATTESTATION_LIFTED_HOLDS.has(hold.cause) || attestedAtMs === null || hold.atMs >= attestedAtMs
+  );
+}
+
 export async function readFreeQuotaState(
   store: KeyValueStore,
   input: { apiKey: string; observedOn: string; offeringKeys: readonly string[] },
@@ -175,10 +189,12 @@ export async function readFreeQuotaState(
   const [attestation, suspension, holds, ...used] = await batch.exec();
   const parsedAttestation = QuotaAttestationSchema.safeParse(decoded(attestation));
   const parsedSuspension = SuspensionSchema.safeParse(decoded(suspension));
+  const attestedAtMs = parsedAttestation.success ? parsedAttestation.data.checkedAtMs : null;
   const holdEntries = new Map<string, FreeQuotaHoldCause>();
   for (const [key, value] of Object.entries((holds ?? {}) as Record<string, unknown>)) {
     const hold = HoldSchema.safeParse(decoded(value));
-    holdEntries.set(key, hold.success ? hold.data.cause : 'billing');
+    if (!hold.success) holdEntries.set(key, 'billing');
+    else if (holdInForce(hold.data, attestedAtMs)) holdEntries.set(key, hold.data.cause);
   }
   const usedEntries = new Map<string, number>();
   input.offeringKeys.forEach((key, index) => {
@@ -330,7 +346,8 @@ export type FreeQuotaUnavailableReason =
   | 'attestation_other_credential'
   | 'attestation_stale'
   | 'attestation_excludes_offering'
-  | 'managed_route_shares_allowance';
+  | 'managed_route_shares_allowance'
+  | 'provider_refused';
 
 export type FreeQuotaDecision =
   | { status: Extract<FreeQuotaStatus, 'ready'>; usable: number; used: number }
@@ -353,12 +370,22 @@ function unavailable(reason: FreeQuotaUnavailableReason): FreeQuotaDecision {
   return { status: 'unavailable', reason };
 }
 
+export function freeQuotaEndsOn(
+  entry: FreeQuotaObservation,
+  offering: ProviderOffering | null,
+): string | null {
+  const retiresOn = offering?.retiresAt?.slice(0, 10) ?? null;
+  if (retiresOn === null) return entry.expiresOn;
+  return entry.expiresOn === null || retiresOn < entry.expiresOn ? retiresOn : entry.expiresOn;
+}
+
 export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuotaDecision {
   const { entry, offering, policy, nowMs, apiKey, state } = input;
   const today = new Date(nowMs).toISOString().slice(0, 10);
   if (
     entry.providerStatus === 'expired' ||
-    (entry.expiresOn !== null && entry.expiresOn <= today)
+    (entry.expiresOn !== null && entry.expiresOn <= today) ||
+    (offering?.retiresAt !== undefined && Date.parse(offering.retiresAt) <= nowMs)
   ) {
     return { status: 'expired' };
   }
@@ -381,7 +408,10 @@ export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuot
   if (sharesManagedRoute(offering)) return unavailable('managed_route_shares_allowance');
   if (!apiKey) return unavailable('credential_missing');
   if (!state) return unavailable('shared_state_unavailable');
-  if (state.holds.has(entry.offeringKey)) return { status: 'exhausted', cause: 'provider' };
+  const hold = state.holds.get(entry.offeringKey);
+  if (hold === 'withdrawn') return { status: 'expired' };
+  if (hold === 'refused') return unavailable('provider_refused');
+  if (hold) return { status: 'exhausted', cause: 'provider' };
   const usable = usableAllowance(entry, policy);
   const used = state.used.get(entry.offeringKey) ?? 0;
   if (used + minimumTurnUnits(offering, policy) > usable) {
@@ -443,27 +473,24 @@ export async function settleFreeQuotaAllowance(
 }
 
 export type FreeQuotaRefusal =
-  'exhausted' | 'billing' | 'account_billing' | 'busy' | 'interrupted' | 'too_long' | 'failed';
-
-// Model Studio's account-level billing refusals (error-code reference, read 2026-09-21): each
-// proves the account carries charges or arrears, so no free model on it can be trusted as free.
-const ACCOUNT_BILLING_SIGNALS: ReadonlySet<string> = new Set([
-  'arrearage',
-  'budgetlimitexceeded',
-  'prepaidbilloverdue',
-  'postpaidbilloverdue',
-  'commoditynotpurchased',
-]);
+  | 'exhausted'
+  | 'billing'
+  | 'account_billing'
+  | 'busy'
+  | 'interrupted'
+  | 'too_long'
+  | 'unavailable'
+  | 'refused'
+  | 'withdrawn'
+  | 'blocked'
+  | 'failed';
 
 export function classifyFreeQuotaRefusal(failure: {
   status?: number;
   code?: string;
   message?: string;
 }): FreeQuotaRefusal {
-  if (failure.code && ACCOUNT_BILLING_SIGNALS.has(failure.code.trim().toLowerCase())) {
-    return 'account_billing';
-  }
-  const classified = classifyError({
+  const classified = classifyModelStudioError({
     ...(failure.status === undefined ? {} : { status: failure.status }),
     ...(failure.code === undefined ? {} : { code: failure.code }),
     message: failure.message ?? '',
@@ -472,7 +499,9 @@ export function classifyFreeQuotaRefusal(failure: {
     case 'quota_exhausted':
       return 'exhausted';
     case 'billing_exhausted':
-      return 'billing';
+      return classified.providerHint === MODEL_STUDIO_ACCOUNT_BILLING_HINT
+        ? 'account_billing'
+        : 'billing';
     case 'rate_limit':
     case 'server_overload':
       return 'busy';
@@ -482,6 +511,19 @@ export function classifyFreeQuotaRefusal(failure: {
       return 'interrupted';
     case 'context_overflow':
       return 'too_long';
+    case 'invalid_model':
+      switch (classified.providerHint) {
+        case MODEL_STUDIO_MODEL_RETIRED_HINT:
+          return 'withdrawn';
+        case MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT:
+        case MODEL_STUDIO_MODEL_NOT_FOUND_HINT:
+          return 'refused';
+        default:
+          return 'unavailable';
+      }
+    case 'safety':
+    case 'content_blocked':
+      return 'blocked';
     default:
       return 'failed';
   }

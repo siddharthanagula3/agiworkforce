@@ -12,6 +12,7 @@ import {
   PolicySchema,
   attestationFromVerification,
   decideFreeQuotaOffering,
+  freeQuotaEndsOn,
   readFreeQuotaState,
   readLocalQuotaVerification,
   type FreeQuotaDecision,
@@ -181,6 +182,50 @@ export async function resolveFreeQuotaDecisions(
   };
 }
 
+export async function resolveReadyFreeQuotaOffering(
+  context: FreeQuotaContext,
+  input: {
+    inventory: FreeQuotaInventory;
+    category: ProviderOfferingCategory;
+    protocol: ProviderOffering['quotaProbeProtocol'];
+    needsImageInput: boolean;
+    excludeKey?: string;
+    ranking?: readonly string[];
+  },
+): Promise<string | null> {
+  const decisions = await resolveFreeQuotaDecisions(context, { inventory: input.inventory });
+  if (!decisions) return null;
+  const candidates = input.ranking
+    ? input.ranking.flatMap((key) =>
+        decisions.offerings.filter(({ entry }) => entry.offeringKey === key),
+      )
+    : decisions.offerings;
+  const ready = candidates.find(
+    ({ entry, offering, decision }) =>
+      entry.offeringKey !== input.excludeKey &&
+      decision.status === 'ready' &&
+      offering.category === input.category &&
+      offering.quotaProbeProtocol === input.protocol &&
+      (!input.needsImageInput || offering.quotaChatImageInput === true),
+  );
+  return ready?.entry.offeringKey ?? null;
+}
+
+export async function resolveFreeQuotaAlternative(
+  context: FreeQuotaContext,
+  input: { inventory: FreeQuotaInventory; refusedKey: string; needsImageInput: boolean },
+): Promise<string | null> {
+  const refused = getProviderOffering(input.refusedKey);
+  if (!refused) return null;
+  return resolveReadyFreeQuotaOffering(context, {
+    inventory: input.inventory,
+    category: refused.category,
+    protocol: refused.quotaProbeProtocol,
+    needsImageInput: input.needsImageInput,
+    excludeKey: input.refusedKey,
+  });
+}
+
 export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuotaCatalogue {
   const { inventory } = decisions;
   const policy = loadFreeQuotaPolicy();
@@ -198,7 +243,7 @@ export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuot
       limit: entry.limit,
       unit: entry.unit,
       consumedApproximate: entry.consumedApproximate,
-      expiresOn: entry.expiresOn,
+      expiresOn: freeQuotaEndsOn(entry, offering),
       status: decision.status,
       ...(offering.quotaProbeProtocol === 'image-sync'
         ? { outputSize: offering.quotaImageSize ?? policy.imageSize }

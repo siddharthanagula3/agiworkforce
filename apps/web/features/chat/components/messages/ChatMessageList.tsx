@@ -710,6 +710,21 @@ const MessageRow = memo(function MessageRow({
         : undefined,
     [paywall?.freeCapacity, onRegenerate, handleRegenerate],
   );
+  const freeLimitRecovery = useMemo(
+    () =>
+      paywall?.freeLimit
+        ? {
+            modelName: paywall.freeLimit.modelName,
+            reason: paywall.freeLimit.reason,
+            ...(paywall.freeLimit.alternativeModel
+              ? { alternativeModel: paywall.freeLimit.alternativeModel }
+              : {}),
+            ...(paywall.freeLimit.byokHref ? { byokHref: paywall.freeLimit.byokHref } : {}),
+            ...(onRegenerateWithModel ? { onSwitchModel: handlePaywallSwitchModel } : {}),
+          }
+        : undefined,
+    [paywall?.freeLimit, onRegenerateWithModel, handlePaywallSwitchModel],
+  );
   const handleRegenerateImage = useCallback(
     (opts: ImageRevisionRequest) => onRegenerateImage!(message.id, opts),
     [onRegenerateImage, message.id],
@@ -754,6 +769,7 @@ const MessageRow = memo(function MessageRow({
               resetLabel={paywallResetLabel(paywall)}
               recoveryAction={paywall.recoveryAction ?? 'upgrade'}
               {...(freeCapacityRecovery ? { freeCapacity: freeCapacityRecovery } : {})}
+              {...(freeLimitRecovery ? { freeLimit: freeLimitRecovery } : {})}
               {...(paywallAlternative
                 ? { alternativeModel: paywallAlternative, onSwitchModel: handlePaywallSwitchModel }
                 : {})}
@@ -1066,9 +1082,12 @@ const RESEND_BLOCKED_ID_SEPARATOR = '\n';
 
 function replyBlocksResend(reply: ChatMessage | undefined): boolean {
   if (reply?.role !== 'assistant') return false;
+  const freeLimitReason = getMeta(reply)?.paywall?.freeLimit?.reason;
   return (
     MEDIA_GENERATION_TOOL_TYPES.has(reply.metadata?.['toolType']) ||
-    reply.metadata?.['errorCode'] === FREE_QUOTA_EXHAUSTED_CODE
+    reply.metadata?.['errorCode'] === FREE_QUOTA_EXHAUSTED_CODE ||
+    freeLimitReason === 'allowance_used' ||
+    freeLimitReason === 'allowance_ended'
   );
 }
 

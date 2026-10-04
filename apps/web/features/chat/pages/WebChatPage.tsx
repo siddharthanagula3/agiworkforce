@@ -254,6 +254,7 @@ import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import { hasPendingApproval } from '../lib/pending-approval';
+import { savedMessageId } from '../lib/pending-message-saves';
 import {
   WorkSessionPanel,
   WorkSessionToggleButton,
@@ -768,6 +769,7 @@ async function deleteConversationMessage(params: {
   messageId: string;
   authToken: string;
   subtree?: boolean;
+  missingIsDeleted?: boolean;
 }): Promise<string | null> {
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
@@ -783,6 +785,7 @@ async function deleteConversationMessage(params: {
     },
   );
 
+  if (params.missingIsDeleted && response.status === 404) return null;
   if (!response.ok) {
     throw new Error(await readChatMutationError(response, 'Failed to delete message'));
   }
@@ -4317,7 +4320,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   ]);
 
   const deletePersistedMessages = useCallback(
-    async (ids: string[]): Promise<boolean> => {
+    async (ids: string[], options: { missingIsDeleted?: boolean } = {}): Promise<boolean> => {
       if (!displayedConversationId || ids.length === 0) return false;
       const conversationId = displayedConversationId;
       const mutationIds = [...new Set(ids)];
@@ -4351,6 +4354,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             conversationId,
             messageId,
             authToken,
+            ...(options.missingIsDeleted ? { missingIsDeleted: true } : {}),
           });
           // AUDIT-FIX ROOT-CAUSE: delete from the conversation the row belongs
           // to; the loop awaits a network call per message and the user can
@@ -4528,11 +4532,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             (candidate) => candidate.id === id,
           )
         : undefined;
-      const isPersistedMediaRefusal =
+      const isPersistedRefusal =
         message?.metadata?.toolType === 'image-generation' ||
-        message?.metadata?.toolType === 'video-generation';
-      if (isPersistedMediaRefusal) {
-        void deletePersistedMessages([id]);
+        message?.metadata?.toolType === 'video-generation' ||
+        message?.metadata?.paywall?.freeLimit !== undefined;
+      if (isPersistedRefusal) {
+        void savedMessageId(id).then((savedId) =>
+          deletePersistedMessages([savedId], { missingIsDeleted: true }),
+        );
         return;
       }
       // Legacy chat-stream quota cards are synthetic and have no server row.
@@ -4958,9 +4965,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRegenerateWithModel = useCallback(
     async (id: string, modelId: string) => {
-      await handleRegenerateMessage(id, resolveSelectableModelId(modelId));
+      const targetModelId = resolveSelectableModelId(modelId);
+      const limitCard = displayedMessages.find((message) => message.id === id)?.metadata?.paywall;
+      if (limitCard && !(await handleConversationModelChange(targetModelId))) return;
+      await handleRegenerateMessage(id, targetModelId);
     },
-    [handleRegenerateMessage],
+    [displayedMessages, handleConversationModelChange, handleRegenerateMessage],
   );
 
   const lastAssistantMessage = useMemo(

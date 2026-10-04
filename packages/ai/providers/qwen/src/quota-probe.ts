@@ -19,6 +19,7 @@ export interface QwenQuotaProbeResult {
   artifactUrl?: string;
   usage?: unknown;
   providerCode?: string;
+  providerMessage?: string;
 }
 
 export interface QwenQuotaInput {
@@ -73,13 +74,15 @@ export async function streamQwenQuotaChat(
 
 type ProbeResponse = {
   code?: string;
-  error?: { code?: string };
+  message?: string;
+  error?: { code?: string; message?: string };
   choices?: { message?: { content?: string } }[];
   usage?: unknown;
   output?: {
     task_id?: string;
     task_status?: string;
     code?: string;
+    message?: string;
     video_url?: string;
     choices?: { message?: { content?: { image?: string }[] } }[];
   };
@@ -116,8 +119,13 @@ export async function runQwenQuotaProbe(
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     const data = (await response.json()) as ProbeResponse;
-    if (!response.ok)
-      return { code: data.code ?? data.error?.code ?? `provider_http_${response.status}` };
+    if (!response.ok) {
+      const message = data.message ?? data.error?.message;
+      return {
+        code: data.code ?? data.error?.code ?? `provider_http_${response.status}`,
+        ...(message ? { message } : {}),
+      };
+    }
     return data;
   };
   const model = offering.providerModelId;
@@ -194,6 +202,7 @@ export async function runQwenQuotaProbe(
     }
   }
   const code = data.code ?? data.error?.code ?? data.output?.code;
+  const providerMessage = data.message ?? data.error?.message ?? data.output?.message;
   const text = data.choices?.[0]?.message?.content;
   const artifactUrl =
     data.output?.video_url ??
@@ -216,5 +225,6 @@ export async function runQwenQuotaProbe(
     ...(artifactUrl ? { artifactUrl } : {}),
     ...(data.usage ? { usage: data.usage } : {}),
     ...(code ? { providerCode: code } : {}),
+    ...(code && providerMessage ? { providerMessage } : {}),
   };
 }
