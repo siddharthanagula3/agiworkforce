@@ -58,8 +58,15 @@ export default function DeepResearchPage() {
                 every factual claim, the matching sources listed beside it, and a stored copy you
                 can reopen long after the chat has scrolled away.
               </p>
+              <p className="agi-lp-lede">
+                Deep Research is included on Pro plans and above, and needs a research-capable model
+                or Auto.
+              </p>
               <ButtonRow>
                 <Button href="/login?redirectTo=%2Fchat">Start a research run</Button>
+                <Button href="/pricing#pricing-compare-title" variant="secondary">
+                  See plans
+                </Button>
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
@@ -157,14 +164,14 @@ export default function DeepResearchPage() {
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-lp-h2" id={IDS.close}>
-                Deep Research is <em className="agi-lp-accent">a paid feature.</em>
+                Deep Research is <em className="agi-lp-accent">included on Pro plans and above.</em>
               </h2>
               <p className="agi-lp-lede">
-                The toggle stays off on the website free trial, and it needs a model that supports
+                The toggle stays off on the Free and Basic plans, and it needs a model that supports
                 research or the Auto router. The plan page lists what each tier includes.
               </p>
               <ButtonRow>
-                <Button href="/pricing">See which plans include it</Button>
+                <Button href="/pricing#pricing-compare-title">See which plans include it</Button>
               </ButtonRow>
             </div>
           </div>

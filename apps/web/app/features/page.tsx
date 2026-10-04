@@ -85,7 +85,11 @@ const FEATURES: readonly ScrollFeature[] = [
     eyebrow: 'Deep research',
     title: 'Every claim names the source it came from.',
     body: 'The run writes out its searches, waits for you to approve them, then returns a report with a numbered citation behind each factual claim.',
-    points: ['Plan approved before anything searches', 'Rejected sources listed with the reason'],
+    points: [
+      'Plan approved before anything searches',
+      'Rejected sources listed with the reason',
+      'Included on Pro plans and above; web search is on every plan',
+    ],
     href: '/features/deep-research',
     linkLabel: 'Learn more about deep research',
     visual: <ResearchWindow />,
@@ -211,7 +215,7 @@ export default function FeaturesPage() {
                   body: 'AGI Web is free to try in the browser. Local and BYOK need no account at all.',
                   points: [
                     'Every admitted model behind one selector',
-                    'Projects, memory, artifacts and research from the first day',
+                    'Projects, memory, artifacts and web search from the first day',
                     'Every reply names the model that answered it',
                   ],
                   cta: { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
