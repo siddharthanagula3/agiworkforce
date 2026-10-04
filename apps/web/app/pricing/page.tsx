@@ -1,7 +1,7 @@
 'use client';
 
 import { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@/lib/compliance/free-plan-training-disclosure';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
@@ -157,6 +157,7 @@ const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['customMcp', 'Custom MCP'],
   ['skillsConnectors', BILLING_PLAN_CAPABILITY_LABELS.skills_connectors],
   ['agiWork', BILLING_PLAN_CAPABILITY_LABELS.agi_work],
+  ['deepResearch', BILLING_PLAN_CAPABILITY_LABELS.deep_research],
   ['imageGeneration', BILLING_PLAN_CAPABILITY_LABELS.image_generation],
   ['videoGeneration', BILLING_PLAN_CAPABILITY_LABELS.video_generation],
   ['apiAccess', BILLING_PLAN_CAPABILITY_LABELS.managed_api],
@@ -207,6 +208,7 @@ interface CompareRow {
   customMcp: string;
   skillsConnectors: string;
   agiWork: string;
+  deepResearch: string;
   imageGeneration: string;
   videoGeneration: string;
   apiAccess: string;
@@ -216,6 +218,31 @@ interface CompareRow {
   trainingData: string;
   bestFor: string;
   highlighted?: boolean;
+}
+
+const WRAPPING_COMPARISON_COLUMNS: ReadonlySet<string> = new Set([
+  'price',
+  'billingInterval',
+  'usageCapacity',
+  'bestFor',
+]);
+
+function comparisonCellStyle(column: string, highlighted: boolean): CSSProperties {
+  if (column === 'plan') {
+    return {
+      fontWeight: 600,
+      color: highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
+      whiteSpace: 'nowrap',
+    };
+  }
+  if (column === 'price') return { color: 'var(--agi-ink)' };
+  if (WRAPPING_COMPARISON_COLUMNS.has(column)) return { color: 'var(--agi-ink-2)' };
+  return { color: 'var(--agi-ink-2)', whiteSpace: 'nowrap' };
+}
+
+function comparisonCellValue(column: string, row: CompareRow): string {
+  if (column === 'plan') return row.label;
+  return String(row[column as Exclude<keyof CompareRow, 'planId' | 'label' | 'highlighted'>]);
 }
 
 // AGI trains on no plan's content. The Free plan is served by providers' free
@@ -256,6 +283,7 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
     customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : ', ',
     skillsConnectors: capabilityCell(plan, 'skills_connectors'),
     agiWork: capabilityCell(plan, 'agi_work'),
+    deepResearch: capabilityCell(plan, 'deep_research'),
     imageGeneration: capabilityCell(plan, 'image_generation'),
     videoGeneration: capabilityCell(plan, 'video_generation'),
     apiAccess: capabilityCell(plan, 'managed_api'),
@@ -871,6 +899,7 @@ export default function PricingPage() {
       customMcp: 'Unlimited local',
       skillsConnectors: 'Local',
       agiWork: 'Local',
+      deepResearch: capabilityCell('local-only', 'deep_research'),
       imageGeneration: 'Model-dependent',
       videoGeneration: 'Model-dependent',
       apiAccess: 'No',
@@ -892,6 +921,7 @@ export default function PricingPage() {
       customMcp: 'Unlimited custom',
       skillsConnectors: 'Local',
       agiWork: 'Local',
+      deepResearch: capabilityCell('byok', 'deep_research'),
       imageGeneration: 'Provider-dependent',
       videoGeneration: 'Provider-dependent',
       apiAccess: 'Your provider API',
@@ -1461,80 +1491,18 @@ export default function PricingPage() {
                             : 'var(--agi-bg-2)',
                       }}
                     >
-                      <td
-                        style={{
-                          padding: 'var(--space-4) var(--space-4)',
-                          borderBottom: '1px solid var(--agi-rule)',
-                          fontWeight: 600,
-                          color: row.highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.label}
-                      </td>
-                      <td
-                        style={{
-                          padding: 'var(--space-4) var(--space-4)',
-                          borderBottom: '1px solid var(--agi-rule)',
-                          color: 'var(--agi-ink)',
-                        }}
-                      >
-                        {row.price}
-                      </td>
-                      <td
-                        style={{
-                          padding: 'var(--space-4) var(--space-4)',
-                          borderBottom: '1px solid var(--agi-rule)',
-                          color: 'var(--agi-ink-2)',
-                        }}
-                      >
-                        {row.billingInterval}
-                      </td>
-                      <td
-                        style={{
-                          padding: 'var(--space-4) var(--space-4)',
-                          borderBottom: '1px solid var(--agi-rule)',
-                          color: 'var(--agi-ink-2)',
-                        }}
-                      >
-                        {row.usageCapacity}
-                      </td>
-                      {[
-                        row.contextWindow,
-                        row.managedChat,
-                        row.projects,
-                        row.customMcp,
-                        row.skillsConnectors,
-                        row.agiWork,
-                        row.imageGeneration,
-                        row.videoGeneration,
-                        row.apiAccess,
-                        row.developerSurfaces,
-                        row.teamAdmin,
-                        row.enterpriseControls,
-                        row.trainingData,
-                      ].map((value, index) => (
+                      {COMPARISON_COLUMNS.map(([col]) => (
                         <td
-                          key={`${row.planId}-capability-${index}`}
+                          key={`${row.planId}-${col}`}
                           style={{
                             padding: 'var(--space-4) var(--space-4)',
                             borderBottom: '1px solid var(--agi-rule)',
-                            color: 'var(--agi-ink-2)',
-                            whiteSpace: 'nowrap',
+                            ...comparisonCellStyle(col, row.highlighted === true),
                           }}
                         >
-                          {value}
+                          {comparisonCellValue(col, row)}
                         </td>
                       ))}
-                      <td
-                        style={{
-                          padding: 'var(--space-4) var(--space-4)',
-                          borderBottom: '1px solid var(--agi-rule)',
-                          color: 'var(--agi-ink-2)',
-                        }}
-                      >
-                        {row.bestFor}
-                      </td>
                     </tr>
                   ))}
                 </tbody>

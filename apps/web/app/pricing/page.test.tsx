@@ -525,27 +525,52 @@ describe('PricingPage', () => {
     const comparison = screen.getByRole('table', { name: 'Plan capabilities' });
     const rows = within(comparison);
     expect(rows.getByRole('row', { name: /^Free / })).toHaveAccessibleName(
-      'Free free foreverLabel compareFreeUsage Up to 200K tokens Yes 1 project 1 custom MCP Yes No No No No No No No Not by AGI. Free model providers may. compareFreeBestFor',
+      'Free free foreverLabel compareFreeUsage Up to 200K tokens Yes 1 project 1 custom MCP Yes No No No No No No No No Not by AGI. Free model providers may. compareFreeBestFor',
     );
     expect(rows.getByRole('row', { name: /^Basic / })).toHaveAccessibleName(
-      'Basic $7/mo monthlyOnly 5x more usage per session than Free Up to 1.05M tokens Yes 5 projects 5 custom MCP Yes No No No No No No No No compareBasicBestFor',
+      'Basic $7/mo monthlyOnly 5x more usage per session than Free Up to 1.05M tokens Yes 5 projects 5 custom MCP Yes No No No No No No No No No compareBasicBestFor',
     );
     expect(rows.getByRole('row', { name: /^Pro / })).toHaveAccessibleName(
-      'Pro $20/mo monthlyOnly 5x more usage than Basic Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes No No No compareProBestFor',
+      'Pro $20/mo monthlyOnly 5x more usage than Basic Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes Yes No Yes Yes No No No compareProBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 5x / })).toHaveAccessibleName(
-      'Max 5x $100/mo monthlyOnly 5x more usage than Pro Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes No Yes Yes No No No compareMaxBestFor',
+      'Max 5x $100/mo monthlyOnly 5x more usage than Pro Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes Yes No Yes Yes No No No compareMaxBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 20x / })).toHaveAccessibleName(
-      'Max 20x $200/mo monthlyOnly 20x more usage per session than Pro · 10x more weekly usage than Pro Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes Yes Yes Yes No No No Highest-capacity work and video generation',
+      'Max 20x $200/mo monthlyOnly 20x more usage per session than Pro · 10x more weekly usage than Pro Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes Yes Yes Yes Yes No No No Highest-capacity work and video generation',
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team $25/seat/mo compareTeamBilling Same usage as Pro for every seat Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes Yes No No compareTeamBestFor',
+      'Team $25/seat/mo compareTeamBilling Same usage as Pro for every seat Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes Yes No Yes Yes Yes No No compareTeamBestFor',
     );
     // Explicit timeout: this assertion computes the accessible name of every row
     // in the full comparison table, which is genuinely slow in jsdom and sits
     // close to the 5s default even before machine load. Raising it here keeps
     // the failure mode "assertion failed", not "flaky timeout".
+  }, 30_000);
+
+  it('lists Deep Research as a comparison column derived from the plan catalog', () => {
+    render(<PricingPage />);
+
+    const comparison = within(screen.getByRole('table', { name: 'Plan capabilities' }));
+    const headers = comparison.getAllByRole('columnheader');
+    const column = headers.findIndex((header) => header.textContent === 'Deep Research');
+    expect(column).toBeGreaterThan(-1);
+
+    const expected: Record<string, string> = {
+      Free: 'No',
+      Basic: 'No',
+      Pro: 'Yes',
+      'Max 5x': 'Yes',
+      'Max 20x': 'Yes',
+      Team: 'Yes',
+    };
+    const bodyRows = comparison.getAllByRole('row').slice(1);
+    for (const row of bodyRows) {
+      const cells = within(row).getAllByRole('cell');
+      expect(cells).toHaveLength(headers.length);
+      const plan = cells[0]?.textContent ?? '';
+      if (plan in expected) expect(cells[column]?.textContent).toBe(expected[plan]);
+    }
   }, 30_000);
 
   it('states each plan card’s usage relative to the plan below it, never as credit counts', async () => {
