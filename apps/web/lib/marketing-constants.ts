@@ -85,10 +85,11 @@ export const BYOK_SURFACES = {
     'Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI account.',
 } as const;
 
+export const LOCAL_RUNTIME_LABEL_SUFFIX = /\s+\(Local\)$/;
 export const CLI_LOCAL_RUNTIME_IDS = ['ollama', 'lmstudio'] as const;
 const cliLocalRuntimeNames = Object.freeze(
   CLI_LOCAL_RUNTIME_IDS.map((id) =>
-    modelsCatalogJson.providers[id].label.replace(/\s+\(Local\)$/, ''),
+    modelsCatalogJson.providers[id].label.replace(LOCAL_RUNTIME_LABEL_SUFFIX, ''),
   ),
 );
 
@@ -210,7 +211,7 @@ const TEN = 10;
 export const MARKETING = {
   providers: {
     count: CATALOG_PROVIDER_COUNT,
-    display: approximateCount(CATALOG_PROVIDER_COUNT),
+    display: `${CATALOG_PROVIDER_COUNT}`,
     label: 'AI Providers',
   },
   models: { count: CATALOG_MODEL_COUNT, display: `${CATALOG_MODEL_COUNT}`, label: 'Models' },

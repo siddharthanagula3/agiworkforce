@@ -5,7 +5,7 @@ import { getSupportCorpus } from '../corpus';
 import { MIN_ABSOLUTE_SCORE, evaluateRelevanceFloor } from '../policy/relevance-floor';
 import { buildBm25Index, scoreBm25 } from '../retrieval/bm25';
 import { tokenize } from '../retrieval/tokenize';
-import { MARKETING } from '@/lib/marketing-constants';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 
 describe('support corpus', () => {
   it('loads and contains only public paths', () => {
@@ -31,7 +31,7 @@ describe('support corpus', () => {
       .filter((chunk) => chunk.docId === 'providers-and-models')
       .map((chunk) => chunk.text)
       .join('\n');
-    expect(joined).toContain(MARKETING.providers.display);
+    expect(joined).toMatch(new RegExp(`\\b${CATALOG_SCOPES.byokProviders.value}\\b`));
   });
 });
 

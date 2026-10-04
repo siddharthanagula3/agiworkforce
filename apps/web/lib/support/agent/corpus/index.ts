@@ -1,3 +1,4 @@
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import {
   CLI_AVAILABILITY_NOTE,
   MARKETING,
@@ -10,10 +11,10 @@ import { corpusArtifactSchema, isPublicCorpusPath } from './schema';
 import rawCorpus from '../corpus.generated.json';
 
 const FACT_TOKENS: Readonly<Record<string, string>> = Object.freeze({
-  'MARKETING.providers.display': MARKETING.providers.display,
-  'MARKETING.providers.count': String(MARKETING.providers.count),
-  'MARKETING.models.display': MARKETING.models.display,
-  'MARKETING.models.count': String(MARKETING.models.count),
+  'MARKETING.providers.display': String(CATALOG_SCOPES.byokProviders.value),
+  'MARKETING.providers.count': String(CATALOG_SCOPES.byokProviders.value),
+  'MARKETING.models.display': String(CATALOG_SCOPES.byokModelEntries.value),
+  'MARKETING.models.count': String(CATALOG_SCOPES.byokModelEntries.value),
   'MARKETING.surfaces.display': MARKETING.surfaces.display,
   'POSITIONING.trustBoundary': POSITIONING.routeBoundary,
   'POSITIONING.wedge': POSITIONING.wedge,

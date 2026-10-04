@@ -7,6 +7,7 @@ import {
   CodeTabs,
   CtaPanel,
   Eyebrow,
+  Ledger,
   MarketingFooter,
   ProviderGrid,
   Prose,
@@ -18,7 +19,13 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
-import { CATALOG_AS_OF, CLI_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CATALOG_SCOPES, CATALOG_SCOPE_ORDER, GATEWAY_PROVIDER_IDS } from '@/lib/catalog-scopes';
+import {
+  CATALOG_AS_OF,
+  CLI_AVAILABILITY_NOTE,
+  CLI_LOCAL_RUNTIMES,
+  SURFACE_STATUS,
+} from '@/lib/marketing-constants';
 
 interface ProviderRow {
   id: string;
@@ -44,15 +51,11 @@ const PROVIDER_ROWS: ProviderRow[] = BYOK_PROVIDER_IDS.flatMap((id) => {
 
 const LOCAL_RUNTIMES = CLI_LOCAL_RUNTIMES.names;
 
-const CATALOGUED_MODEL_COUNT = PROVIDER_ROWS.reduce((total, row) => total + row.modelCount, 0);
-
 export const metadata = buildMetadata({
   title: 'Providers: the catalog AGI routes to',
   description: `Every cloud provider and local runtime available to the CLI, generated from the shared model catalog the CLI compiles into its binary. Desktop uses managed cloud and accepts no provider key or local-runtime URL. Catalog dated ${CATALOG_AS_OF}.`,
   path: '/providers',
 });
-
-const GATEWAY_IDS = new Set(['open_router', 'vercel_gateway', 'workers_ai', 'nvidia_nim']);
 
 const PROVIDER_TILES: ProviderTile[] = PROVIDER_ROWS.map((row) => ({
   id: row.id,
@@ -60,7 +63,7 @@ const PROVIDER_TILES: ProviderTile[] = PROVIDER_ROWS.map((row) => ({
   defaultModel: row.defaultModel,
   modelCount: row.modelCount,
   billing: 'Billed by provider',
-  kind: GATEWAY_IDS.has(row.id) ? 'gateway' : 'cloud',
+  kind: GATEWAY_PROVIDER_IDS.has(row.id) ? 'gateway' : 'cloud',
 }));
 
 const LOCAL_TILES: ProviderTile[] = LOCAL_RUNTIMES.map((name) => ({
@@ -114,9 +117,9 @@ export default function ProvidersPage() {
         <PageHero
           id="agi-providers-title"
           eyebrow="Provider catalog"
-          title="Every provider, from the one catalogue the apps compile in."
-          em="the apps compile in."
-          lede="A BYOK provider needs a key you own; a local runtime needs a URL you already run. The released CLI supports both. Every row reads its label and default model from the shared catalog."
+          title="Explore providers and local runtimes."
+          em="local runtimes."
+          lede={`A BYOK provider needs a key you own; a local runtime needs a URL you already run. The CLI supports both. ${CLI_AVAILABILITY_NOTE} Every row reads its label and default model from the shared catalog.`}
           ctas={[
             { href: '/byok', label: 'Add a provider key' },
             { href: '/local', label: 'Point at a local runtime', variant: 'secondary' },
@@ -130,9 +133,18 @@ export default function ProvidersPage() {
           <StatBand
             label="The catalogue in numbers"
             stats={[
-              { value: `${PROVIDER_ROWS.length}`, label: 'providers that take your key' },
-              { value: `${CATALOGUED_MODEL_COUNT}`, label: 'catalogued models' },
-              { value: `${LOCAL_RUNTIMES.length}`, label: 'local runtimes in the CLI' },
+              {
+                value: `${CATALOG_SCOPES.byokProviders.value}`,
+                label: 'providers that take your key',
+              },
+              {
+                value: `${CATALOG_SCOPES.byokModelEntries.value}`,
+                label: 'catalogue entries under those providers',
+              },
+              {
+                value: `${CATALOG_SCOPES.localRuntimes.value}`,
+                label: 'local runtimes in the CLI',
+              },
               {
                 value: '$0',
                 label: 'markup on any of them',
@@ -140,6 +152,29 @@ export default function ProvidersPage() {
               },
             ]}
           />
+        </Section>
+
+        <Section id="definitions" labelledBy="agi-providers-definitions-title" rule>
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>How we count</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-providers-definitions-title">
+                Each count answers a different question.
+              </h2>
+              <Prose>
+                These counts come from one catalogue dated {CATALOG_SCOPES.asOf}. They differ
+                because each one counts something different, and none of them is a promise about
+                what a plan includes.
+              </Prose>
+            </div>
+            <Ledger
+              caption="Catalogue counts and what each one counts"
+              rows={CATALOG_SCOPE_ORDER.map((id) => ({
+                label: CATALOG_SCOPES[id].text,
+                value: CATALOG_SCOPES[id].definition,
+              }))}
+            />
+          </Stack>
         </Section>
 
         <Section id="roster" labelledBy="agi-providers-roster-title" rule>
@@ -150,9 +185,10 @@ export default function ProvidersPage() {
                 Each tile is a read from the shared model catalog.
               </h2>
               <Prose>
-                These {PROVIDER_ROWS.length} providers accept a key you hold and bill you on your
-                own account at their own rates. AGI adds no markup and shows no per-token price.
-                Between them they carry {CATALOGUED_MODEL_COUNT} catalogued models.
+                These {CATALOG_SCOPES.byokProviders.value} providers accept a key you hold and bill
+                you on your own account at their own rates. AGI adds no markup and shows no
+                per-token price. Between them they carry {CATALOG_SCOPES.byokModelEntries.value}{' '}
+                catalogue entries.
               </Prose>
             </div>
             <ProviderGrid tiles={PROVIDER_TILES} label="Cloud providers and gateways" />
