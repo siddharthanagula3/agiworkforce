@@ -159,8 +159,6 @@
     "helpPagesMatch_other": "{{count}} pagine corrispondono.",
     "omittedFiles_one": "Escluso un file che non è testo: {{files}}. Gli skill possono includere file di testo come riferimenti e script.",
     "omittedFiles_other": "Esclusi {{count}} file che non sono testo: {{files}}. Gli skill possono includere file di testo come riferimenti e script.",
-    "packsInstallable_one": "Il {{count}} pack nel registro è installabile oggi.",
-    "packsInstallable_other": "Tutti i {{count}} pack nel registro sono installabili oggi.",
     "pluginDependenciesInstalled_one": "Installato {{plugin}} e il plugin da cui dipende: {{names}}.",
     "pluginDependenciesInstalled_other": "Installato {{plugin}} e i plugin da cui dipende: {{names}}.",
     "projectDuplicatedFiles_one": "Progetto duplicato con {{count}} file.",

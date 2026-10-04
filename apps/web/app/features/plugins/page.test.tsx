@@ -63,6 +63,21 @@ describe('FeaturesPluginsPage launch-state claims', () => {
     loadPluginCatalogMock.mockResolvedValue({
       status: 'ok',
       entries: [
+        entry({ status: 'published', webInstallable: true }),
+        entry({ id: 'crm-sync', name: 'CRM Sync' }),
+      ],
+    });
+
+    render(await FeaturesPluginsPage());
+
+    expect(screen.getAllByText(/1 of 2 packs install on the web/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/installable today/i)).not.toBeInTheDocument();
+  });
+
+  it('counts a CLI-published pack in its own sentence, not as a web install', async () => {
+    loadPluginCatalogMock.mockResolvedValue({
+      status: 'ok',
+      entries: [
         entry({
           status: 'published',
           distribution: { manifestUrl: 'https://example.com/plugin.json', sha256: null },
@@ -73,7 +88,9 @@ describe('FeaturesPluginsPage launch-state claims', () => {
 
     render(await FeaturesPluginsPage());
 
-    expect(screen.getAllByText(/1 of 2 packs are installable today/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/no pack installs on the web yet/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/1 is published for the CLI/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/installable today/i)).not.toBeInTheDocument();
   });
 
   it('never hardcodes a CLI-preview-only launch state', async () => {

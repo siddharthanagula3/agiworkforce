@@ -159,8 +159,6 @@
     "helpPagesMatch_other": "{{count}} páginas correspondem.",
     "omittedFiles_one": "Um arquivo que não é texto foi deixado de fora: {{files}}. Skills podem empacotar arquivos de texto como referências e scripts.",
     "omittedFiles_other": "{{count}} arquivos que não são texto foram deixados de fora: {{files}}. Skills podem empacotar arquivos de texto como referências e scripts.",
-    "packsInstallable_one": "O {{count}} pack no registro está instalável hoje.",
-    "packsInstallable_other": "Todos os {{count}} packs no registro estão instaláveis hoje.",
     "pluginDependenciesInstalled_one": "Instalou {{plugin}} e o plugin do qual depende: {{names}}.",
     "pluginDependenciesInstalled_other": "Instalou {{plugin}} e os plugins dos quais depende: {{names}}.",
     "projectDuplicatedFiles_one": "Projeto duplicado com {{count}} arquivo.",

@@ -159,8 +159,6 @@
     "helpPagesMatch_other": "{{count}} 个页面匹配。",
     "omittedFiles_one": "已省略一个非文本文件：{{files}}。技能可以打包参考资料和脚本等文本文件。",
     "omittedFiles_other": "已省略 {{count}} 个非文本文件：{{files}}。技能可以打包参考资料和脚本等文本文件。",
-    "packsInstallable_one": "注册表中的 {{count}} 个包今天均可安装。",
-    "packsInstallable_other": "注册表中的 {{count}} 个包今天均可安装。",
     "pluginDependenciesInstalled_one": "已安装 {{plugin}} 及其所依赖的插件：{{names}}。",
     "pluginDependenciesInstalled_other": "已安装 {{plugin}} 及其所依赖的插件：{{names}}。",
     "projectDuplicatedFiles_one": "已复制项目，含 {{count}} 个文件。",

@@ -76,7 +76,25 @@ describe('PluginsPage availability claim', () => {
     expect(screen.getByText(DECLARED_ONLY_CLAIM)).toBeInTheDocument();
   });
 
-  it('counts installable packs against the rows actually read', async () => {
+  it('counts web-installable packs against the rows actually read', async () => {
+    loadPluginCatalogMock.mockResolvedValue({
+      status: 'ok',
+      entries: [
+        entry({ status: 'published', webInstallable: true }),
+        entry({ id: 'crm-sync', name: 'CRM Sync' }),
+      ],
+    });
+
+    render(await PluginsPage());
+
+    expect(screen.getByText(/1 of 2 packs install on the web/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/the other one is declared and not yet published/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/installable today/i)).not.toBeInTheDocument();
+  });
+
+  it('counts a CLI-published pack in its own sentence, not as a web install', async () => {
     loadPluginCatalogMock.mockResolvedValue({
       status: 'ok',
       entries: [
@@ -90,7 +108,9 @@ describe('PluginsPage availability claim', () => {
 
     render(await PluginsPage());
 
-    expect(screen.getByText(/1 of 2 packs are installable today/i)).toBeInTheDocument();
+    expect(screen.getByText(/no pack installs on the web yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 is published for the CLI/i)).toBeInTheDocument();
+    expect(screen.queryByText(/installable today/i)).not.toBeInTheDocument();
   });
 });
 

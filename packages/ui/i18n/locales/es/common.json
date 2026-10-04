@@ -159,8 +159,6 @@
     "helpPagesMatch_other": "{{count}} páginas coinciden.",
     "omittedFiles_one": "Se omitió un archivo que no es de texto: {{files}}. Los skills pueden incluir archivos de texto como referencias y scripts.",
     "omittedFiles_other": "Se omitieron {{count}} archivos que no son de texto: {{files}}. Los skills pueden incluir archivos de texto como referencias y scripts.",
-    "packsInstallable_one": "El {{count}} paquete del registro se puede instalar hoy.",
-    "packsInstallable_other": "Los {{count}} paquetes del registro se pueden instalar hoy.",
     "pluginDependenciesInstalled_one": "Se instaló {{plugin}} y el complemento del que depende: {{names}}.",
     "pluginDependenciesInstalled_other": "Se instaló {{plugin}} y los complementos de los que depende: {{names}}.",
     "projectDuplicatedFiles_one": "Proyecto duplicado con {{count}} archivo.",
