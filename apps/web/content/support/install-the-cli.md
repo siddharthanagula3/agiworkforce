@@ -44,7 +44,7 @@ agi                # the interactive terminal UI
 `agi init` creates `~/.agiworkforce/`, and `agi onboarding` walks the first-time
 setup.
 
-A bare `agi login` never asks for a provider key; [Bring your own provider keys](/help/byok-provider-keys) covers `agi login <provider>`.
+A bare `agi login` never asks for a provider key; [Bring your own provider keys](https://agiworkforce.com/help/byok-provider-keys) covers `agi login <provider>`.
 
 ## Sessions
 
