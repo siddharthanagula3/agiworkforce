@@ -93,35 +93,35 @@ export interface FactItem {
   body: ReactNode;
 }
 
-export function FactGrid({ items }: { items: readonly FactItem[] }) {
-  const spanLastItem = items.length % 2 === 1;
+const EQUAL_THIRDS_ITEM_COUNT = 3;
+
+export function FactGrid({
+  items,
+  layout = 'grid',
+}: {
+  items: readonly FactItem[];
+  layout?: 'grid' | 'rows';
+}) {
+  const stacked = layout === 'rows';
+  const spanLastItem =
+    !stacked && items.length % 2 === 1 && items.length !== EQUAL_THIRDS_ITEM_COUNT;
   const lastIndex = items.length - 1;
 
-  return (
-    <div className="agi-ds-grid-2">
-      {items.map((item, index) => {
-        const fact = (
-          <>
-            <Eyebrow>{item.meta}</Eyebrow>
-            <h3 className="agi-ds-h3">{item.title}</h3>
-            <Prose size="sm">{item.body}</Prose>
-          </>
-        );
-
-        if (spanLastItem && index === lastIndex) {
-          return (
-            <div className="agi-ds-card" style={{ gridColumn: '1 / -1' }} key={item.title}>
-              {fact}
-            </div>
-          );
-        }
-
-        return (
-          <div className="agi-ds-card" key={item.title}>
-            {fact}
-          </div>
-        );
-      })}
+  const cards = items.map((item, index) => (
+    <div
+      className={stacked ? 'agi-ds-card agi-ds-full' : 'agi-ds-card'}
+      style={spanLastItem && index === lastIndex ? { gridColumn: '1 / -1' } : undefined}
+      key={item.title}
+    >
+      <Eyebrow>{item.meta}</Eyebrow>
+      <h3 className="agi-ds-h3">{item.title}</h3>
+      <Prose size="sm">{item.body}</Prose>
     </div>
-  );
+  ));
+
+  if (stacked) {
+    return <Stack className="agi-ds-full">{cards}</Stack>;
+  }
+
+  return <div className="agi-ds-grid-2">{cards}</div>;
 }
