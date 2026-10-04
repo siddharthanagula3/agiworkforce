@@ -59,7 +59,7 @@ const PROVIDER_TILES: ProviderTile[] = PROVIDER_ROWS.map((row) => ({
   label: row.label,
   defaultModel: row.defaultModel,
   modelCount: row.modelCount,
-  price: 'Provider rates',
+  billing: 'Billed by provider',
   kind: GATEWAY_IDS.has(row.id) ? 'gateway' : 'cloud',
 }));
 
@@ -68,7 +68,7 @@ const LOCAL_TILES: ProviderTile[] = LOCAL_RUNTIMES.map((name) => ({
   label: name,
   defaultModel: '',
   modelCount: 0,
-  price: 'No key, no meter',
+  billing: 'No key, no meter',
   kind: 'local',
 }));
 
@@ -150,10 +150,9 @@ export default function ProvidersPage() {
                 Each tile is a read from the shared model catalog.
               </h2>
               <Prose>
-                These {PROVIDER_ROWS.length} providers accept a key you hold, bill you on your own
-                account, and between them carry {CATALOGUED_MODEL_COUNT} catalogued models. The
-                price is the provider&rsquo;s base list rate per million tokens as the catalog
-                records it; individual models and long-input bands can sit above or below it.
+                These {PROVIDER_ROWS.length} providers accept a key you hold and bill you on your
+                own account at their own rates. AGI adds no markup and shows no per-token price.
+                Between them they carry {CATALOGUED_MODEL_COUNT} catalogued models.
               </Prose>
             </div>
             <ProviderGrid tiles={PROVIDER_TILES} label="Cloud providers and gateways" />
@@ -176,8 +175,8 @@ export default function ProvidersPage() {
             body={
               <p>
                 <code>packages/contracts/types/src/models.json</code> is embedded in the CLI, and
-                the web app imports the same module. Adding a provider or moving a price moves both
-                and this page at once. The CLI surface itself is {SURFACE_STATUS.cli.toLowerCase()}.
+                the web app imports the same module. Adding a provider moves both and this page at
+                once. The CLI surface itself is {SURFACE_STATUS.cli.toLowerCase()}.
               </p>
             }
             visual={<CodeTabs tabs={SOURCE_TABS} title="How each surface reads the catalog" />}

@@ -170,8 +170,9 @@ export default function ByokPage() {
                 <em className="agi-ds-accent">through the provider you already pay.</em>
               </h2>
               <Prose size="lg">
-                The catalog lists each provider AGI can address, how many models it exposes, how it
-                authenticates, and the per-million-token price it publishes.
+                The catalog lists each provider AGI can address, how many models it carries, its
+                default model, and whether it takes your key directly or is a gateway. You pay the
+                provider at its own rates.
               </Prose>
               <ButtonRow>
                 <Button href="/providers" variant="secondary">

@@ -36,7 +36,11 @@ const PATTERNS = [
 ] as const;
 
 const HERO_CTAS = [
-  { href: '/apps', label: 'Browse apps and connectors', variant: 'primary' as const },
+  {
+    href: '/connectors/mcp-directory',
+    label: 'Browse the connector directory',
+    variant: 'primary' as const,
+  },
   { href: '/providers', label: 'See providers', variant: 'secondary' as const },
 ] as const;
 
