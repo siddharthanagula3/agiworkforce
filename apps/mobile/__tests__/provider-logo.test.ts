@@ -1,5 +1,6 @@
 import {
   hasProviderLogoPath,
+  resolveLogoProviderId,
   usesProviderAppTile,
 } from '../src/features/model-picker/components/ProviderLogo';
 
@@ -24,5 +25,11 @@ describe('ProviderLogo', () => {
   it('keeps AGI/internal provider rows on deliberate fallback marks', () => {
     expect(hasProviderLogoPath('agi-cloud')).toBe(false);
     expect(hasProviderLogoPath('custom-openai-compatible')).toBe(false);
+  });
+
+  it('resolves registry provider spellings to the display identity', () => {
+    expect(resolveLogoProviderId('open_router')).toBe('openrouter');
+    expect(resolveLogoProviderId('openai')).toBe('openai');
+    expect(resolveLogoProviderId('not-a-provider')).toBe('not-a-provider');
   });
 });
