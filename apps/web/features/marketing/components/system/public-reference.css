@@ -1,0 +1,305 @@
+[data-design='agi'][data-public-reference] {
+  background: var(--public-surface-page);
+  color: var(--public-ink);
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-body);
+  line-height: var(--public-leading-body);
+}
+
+body:has([data-design='agi'][data-public-reference]) {
+  block-size: auto;
+  min-block-size: 100%;
+}
+
+[data-design='agi'][data-public-reference] :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--public-font-text);
+  font-style: normal;
+  font-weight: var(--public-heading-weight);
+  line-height: var(--public-leading-heading);
+  text-wrap: balance;
+  scroll-margin-block-start: var(--public-anchor-offset);
+}
+
+[data-design='agi'][data-public-reference] h1 {
+  font-size: var(--public-text-title);
+}
+
+[data-design='agi'][data-public-reference] :is(h2, h3, h4, h5, h6) {
+  font-size: var(--public-text-section);
+}
+
+[data-design='agi'][data-public-reference] :is(p, li, dd, dt, blockquote) {
+  text-wrap: pretty;
+}
+
+[data-design='agi'][data-public-reference] :is(pre, code, kbd, samp) {
+  font-family: var(--public-font-code);
+  font-size: var(--public-text-code);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-container {
+  max-inline-size: var(--public-container-width);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-pagehead {
+  padding-block: var(--public-pagehead-space);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-section {
+  padding-block: var(--public-section-space);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-prose {
+  max-inline-size: var(--public-reading-width);
+  font-size: var(--public-text-body);
+  line-height: var(--public-leading-body);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-prose[data-size='lg'] {
+  font-size: var(--public-text-lede);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-eyebrow {
+  font-family: var(--public-font-code);
+  font-size: var(--public-text-code);
+  line-height: var(--public-leading-control);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--public-control-desktop);
+  background-image: none;
+  color: var(--public-accent);
+  text-decoration: underline;
+  text-underline-offset: var(--stroke-hairline);
+  transition: none;
+}
+
+body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent'] h3 {
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-section);
+  line-height: var(--public-leading-heading);
+  text-wrap: balance;
+  padding-block: var(--space-1);
+}
+
+html:has([data-design='agi'][data-public-reference]) {
+  scroll-padding-block-start: var(--public-anchor-offset, var(--space-8));
+  scroll-padding-block-end: var(--agi-consent-inset, 0px);
+}
+
+body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent'] > div {
+  display: flex;
+  flex-direction: column;
+  max-block-size: var(--public-consent-max-block-size);
+  overflow: hidden;
+  background: var(--public-surface-elevated);
+}
+
+body:has([data-design='agi'][data-public-reference])
+  [aria-label='Cookie consent']
+  > div
+  > div:nth-child(2) {
+  flex: none;
+  z-index: var(--z-content-raised);
+  padding-block: var(--space-2);
+  background: var(--public-surface-elevated);
+}
+
+body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent'] p {
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-body);
+  line-height: var(--public-leading-body);
+  color: var(--public-ink-secondary);
+  text-wrap: pretty;
+  min-block-size: 0;
+  padding-block: var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: var(--space-2);
+  background: var(--public-surface-elevated);
+  scrollbar-color: var(--public-rule-strong) var(--public-surface-elevated);
+  scrollbar-gutter: stable;
+}
+
+body:has([data-design='agi'][data-public-reference])
+  [aria-label='Cookie consent']
+  p::-webkit-scrollbar {
+  inline-size: var(--space-2);
+}
+
+body:has([data-design='agi'][data-public-reference])
+  [aria-label='Cookie consent']
+  p::-webkit-scrollbar-thumb {
+  background: var(--public-rule-strong);
+}
+
+body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent'] button,
+body:has([data-design='agi'][data-public-reference]) nav[aria-label='Skip links'] a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--public-control-touch);
+  min-inline-size: var(--public-control-touch);
+  block-size: auto;
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-control);
+  line-height: var(--public-leading-control);
+}
+
+body:has([data-design='agi'][data-public-reference])
+  [aria-label='Cookie consent']
+  > div
+  > div:first-child {
+  min-block-size: 0;
+  align-items: stretch;
+  overflow: visible;
+  padding-inline-end: var(--public-control-touch);
+}
+
+body:has([data-design='agi'][data-public-reference])
+  [aria-label='Cookie consent']
+  > div
+  > div:first-child
+  > div {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent'] h3,
+body:has([data-design='agi'][data-public-reference])
+  [aria-label='Cookie consent']
+  > div
+  > div:first-child
+  > svg {
+  flex: none;
+}
+
+body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent'] p a {
+  position: relative;
+  z-index: var(--z-content-raised);
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--public-control-touch);
+  min-inline-size: var(--public-control-touch);
+}
+
+body:has([data-design='agi'][data-public-reference])
+  [aria-label='Cookie consent']
+  :is(a[href], button):focus-visible {
+  outline: calc(var(--stroke-hairline) * 2) solid var(--public-accent);
+  outline-offset: calc(var(--stroke-hairline) * 2);
+}
+
+[data-design='agi'][data-public-reference]
+  :is(.agi-ds-btn, .agi-ds-navlink, .agi-ds-navgroup-trigger, .agi-ds-mobile-nav-link) {
+  min-block-size: var(--public-control-desktop);
+  min-inline-size: var(--public-control-desktop);
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-control);
+  line-height: var(--public-leading-control);
+}
+
+[data-design='agi'][data-public-reference]
+  :is(.agi-ds-wordmark, .agi-ds-footer-wordmark, .agi-ds-footer-statement) {
+  font-size: var(--public-text-body);
+  line-height: var(--public-leading-body);
+}
+
+[data-design='agi'][data-public-reference]
+  :is(.agi-ds-footer-title, .agi-ds-mobile-nav-heading, .agi-ds-navpanel-title) {
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-control);
+  line-height: var(--public-leading-control);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-navpanel-desc {
+  font-size: var(--public-text-meta);
+  line-height: var(--public-leading-body);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-navpanel-footer {
+  font-size: var(--public-text-code);
+  line-height: var(--public-leading-control);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-footer-list {
+  gap: var(--space-1);
+}
+
+[data-design='agi'][data-public-reference]
+  :is(.agi-ds-footer-link, .agi-ds-footer-legal a, .agi-ds-footer-legal-button) {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--public-control-desktop);
+  min-inline-size: var(--public-control-desktop);
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-control);
+  line-height: var(--public-leading-control);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-footer-link {
+  inline-size: 100%;
+  flex-wrap: wrap;
+  column-gap: var(--space-1);
+}
+
+[data-design='agi'][data-public-reference] .agi-ds-footer-legal {
+  font-size: var(--public-text-meta);
+  line-height: var(--public-leading-body);
+}
+
+[data-design='agi'][data-public-reference]
+  :is(a[href], button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: calc(var(--stroke-hairline) * 2) solid var(--public-accent);
+  outline-offset: calc(var(--stroke-hairline) * 2);
+}
+
+[data-design='agi'][data-public-reference] *,
+[data-design='agi'][data-public-reference] *::before,
+[data-design='agi'][data-public-reference] *::after {
+  transition-property: transform, opacity;
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  [data-design='agi'][data-public-reference]
+    :is(
+      .agi-ds-btn,
+      .agi-ds-link,
+      .agi-ds-navlink,
+      .agi-ds-navgroup-trigger,
+      .agi-ds-theme-toggle,
+      .agi-ds-wordmark,
+      .agi-ds-mobile-nav-trigger,
+      .agi-ds-mobile-nav-link,
+      .agi-ds-navpanel-item,
+      .agi-ds-footer-link,
+      .agi-ds-footer-legal a,
+      .agi-ds-footer-legal-button
+    ) {
+    min-block-size: var(--public-control-touch);
+    min-inline-size: var(--public-control-touch);
+  }
+
+  [data-design='agi'][data-public-reference] .agi-ds-section {
+    padding-block: var(--public-section-gap);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:has([data-design='agi'][data-public-reference]),
+  body:has([data-design='agi'][data-public-reference]) *,
+  body:has([data-design='agi'][data-public-reference]) *::before,
+  body:has([data-design='agi'][data-public-reference]) *::after,
+  [data-design='agi'][data-public-reference],
+  [data-design='agi'][data-public-reference] *,
+  [data-design='agi'][data-public-reference] *::before,
+  [data-design='agi'][data-public-reference] *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,12 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { FactGrid, type FactItem } from './shared';
+import { FactGrid, PageHero, type FactItem } from './shared';
 
-const STYLESHEET = readFileSync(resolve(__dirname, '..', '..', 'system', 'system.css'), 'utf8');
+const SYSTEM_DIR = resolve(__dirname, '..', '..', 'system');
+const STYLESHEET = [
+  readFileSync(resolve(SYSTEM_DIR, 'system.css'), 'utf8'),
+  readFileSync(resolve(SYSTEM_DIR, 'page-header.css'), 'utf8'),
+].join('\n');
 const FULL_SPAN = '1 / -1';
 
 let sheet: HTMLStyleElement;
@@ -43,20 +47,187 @@ function renderGrid(count: number, layout?: 'grid' | 'rows') {
   };
 }
 
-function declaredWidth(element: Element): string | null {
+function declaredProperty(element: Element, property: string): string | null {
   let value: string | null = null;
   for (const rule of Array.from(sheet.sheet?.cssRules ?? [])) {
-    if (!(rule instanceof CSSStyleRule) || !rule.style.width) continue;
+    if (!(rule instanceof CSSStyleRule)) continue;
+    const declared = rule.style.getPropertyValue(property);
+    if (!declared) continue;
     let matches = false;
     try {
       matches = element.matches(rule.selectorText);
     } catch {
       matches = false;
     }
-    if (matches) value = rule.style.width;
+    if (matches) value = declared;
   }
   return value;
 }
+
+function declaredWidth(element: Element): string | null {
+  return declaredProperty(element, 'width');
+}
+
+const HERO_CTAS = [
+  { href: '/security', label: 'Read the mechanisms' },
+  { href: '#verify', label: 'Verify us yourself', variant: 'secondary' as const },
+];
+
+function renderHero(props: Partial<Parameters<typeof PageHero>[0]> = {}) {
+  const { container } = render(
+    <div data-design="agi" className="agi-ds-page">
+      <PageHero
+        id="agi-trust-title"
+        eyebrow="Trust"
+        title="Claims with dates."
+        em="dates."
+        lede="A posture ledger, not a badge wall."
+        ctas={HERO_CTAS}
+        {...props}
+      />
+    </div>,
+  );
+  const header = container.querySelector<HTMLElement>('section.agi-ds-pagehead');
+  if (!header) throw new Error('PageHero rendered no .agi-ds-pagehead section');
+  return { container, header };
+}
+
+describe('PageHero', () => {
+  it('keeps the label, accessible title, actions and visual without introductory copy in minimal mode', () => {
+    const { header } = renderHero({ minimal: true, visual: <div data-testid="visual" /> });
+
+    expect(header.getAttribute('aria-labelledby')).toBe('agi-trust-title');
+    const title = screen.getByRole('heading', { level: 1, name: 'Claims with dates.' });
+    expect(title).toHaveClass('sr-only');
+    expect(header.querySelector('.agi-ds-pagehead-label')?.textContent).toBe('Trust');
+    expect(screen.queryByText('A posture ledger, not a badge wall.')).not.toBeInTheDocument();
+    expect(screen.getByTestId('visual')).toBeInTheDocument();
+    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/security',
+      '#verify',
+    ]);
+  });
+
+  it('is a title block: label, h1 carrying the id, lede and the buttons in order', () => {
+    const { header } = renderHero();
+
+    expect(header.getAttribute('aria-labelledby')).toBe('agi-trust-title');
+    const title = screen.getByRole('heading', { level: 1, name: 'Claims with dates.' });
+    expect(title.id).toBe('agi-trust-title');
+    expect(header.querySelector('.agi-ds-pagehead-label')?.textContent).toBe('Trust');
+    expect(header.querySelector('.agi-ds-pagehead-lede')?.textContent).toBe(
+      'A posture ledger, not a badge wall.',
+    );
+    expect(
+      screen.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')]),
+    ).toEqual([
+      ['Read the mechanisms', '/security'],
+      ['Verify us yourself', '#verify'],
+    ]);
+    expect(header.querySelector('.agi-ds-pagehead-label')?.compareDocumentPosition(title)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('renders no button row when there are no calls to action', () => {
+    const { header } = renderHero({ ctas: [] });
+
+    expect(header.querySelector('.agi-ds-btn-row')).toBeNull();
+    expect(screen.queryAllByRole('link')).toEqual([]);
+  });
+
+  it('carries nothing from the landing hero: no hero, eyebrow or accent class, no em or i', () => {
+    const { container, header } = renderHero();
+
+    expect(container.querySelector('.agi-ds-hero, .agi-ds-eyebrow, .agi-ds-accent')).toBeNull();
+    expect(container.querySelector('.agi-ds-h1')).toBeNull();
+    expect(header.querySelector('em, i')).toBeNull();
+    expect(header.querySelector('[style]')).toBeNull();
+  });
+
+  it('keeps the emphasised fragment as a span in the accent text colour, same family and weight', () => {
+    const { header } = renderHero();
+
+    const fragment = header.querySelector<HTMLElement>('.agi-ds-pagehead-em');
+    expect(fragment?.tagName).toBe('SPAN');
+    expect(fragment?.textContent).toBe('dates.');
+    expect(fragment?.closest('h1')?.textContent).toBe('Claims with dates.');
+    expect(declaredProperty(fragment!, 'color')).toBe('var(--agi-accent-text)');
+    expect(declaredProperty(fragment!, 'font-style')).toBeNull();
+    expect(declaredProperty(fragment!, 'font-family')).toBeNull();
+    expect(declaredProperty(fragment!, 'font-weight')).toBeNull();
+  });
+
+  it('renders the whole title plain when the fragment is not part of it', () => {
+    const { header } = renderHero({ em: 'elsewhere' });
+
+    expect(header.querySelector('.agi-ds-pagehead-em')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Claims with dates.');
+  });
+
+  it('sets the title in the sans family, upright, at the 2xl size, with a sentence-case label', () => {
+    const { header } = renderHero();
+    const title = screen.getByRole('heading', { level: 1 });
+    const label = header.querySelector('.agi-ds-pagehead-label')!;
+
+    expect(declaredProperty(title, 'font-family')).toBe('var(--agi-font)');
+    expect(declaredProperty(title, 'font-style')).toBe('normal');
+    expect(declaredProperty(title, 'font-size')).toBe('var(--agi-text-2xl)');
+    expect(declaredProperty(label, 'font-family')).toBe('var(--agi-font)');
+    expect(declaredProperty(label, 'font-size')).toBe('var(--agi-text-md)');
+    expect(declaredProperty(label, 'text-transform')).toBe('none');
+    expect(declaredProperty(label, 'color')).toBe('var(--agi-ink-2)');
+    expect(declaredProperty(header, 'padding-block')).toBe(
+      'var(--agi-pagehead-y-top) var(--agi-pagehead-y-bottom)',
+    );
+  });
+
+  it('pulls the sections of a page that carries the header onto the inner rhythm', () => {
+    const { container } = render(
+      <div data-design="agi" className="agi-ds-page">
+        <main>
+          <PageHero id="agi-trust-title" eyebrow="Trust" title="Claims." lede="Dated." ctas={[]} />
+          <section className="agi-ds-section" data-size="md" />
+          <section className="agi-ds-section" data-size="sm" />
+        </main>
+      </div>,
+    );
+    const [body, compact] = Array.from(container.querySelectorAll('.agi-ds-section'));
+
+    expect(declaredProperty(body!, 'padding-block')).toBe('var(--agi-section-y-inner)');
+    expect(declaredProperty(compact!, 'padding-block')).toBe('var(--agi-section-y-xs)');
+  });
+
+  it('leaves the sections of a page without the header on the landing rhythm', () => {
+    const { container } = render(
+      <div data-design="agi" className="agi-ds-page">
+        <section className="agi-ds-section" data-size="md" />
+      </div>,
+    );
+
+    expect(declaredProperty(container.querySelector('.agi-ds-section')!, 'padding-block')).toBe(
+      'var(--agi-section-y-md)',
+    );
+  });
+
+  it('places text-only copy straight in the container, on the section grid', () => {
+    const { header } = renderHero();
+    const container = header.querySelector('.agi-ds-container');
+
+    expect(container?.firstElementChild?.classList.contains('agi-ds-pagehead-copy')).toBe(true);
+    expect(header.querySelector('.agi-ds-pagehead-split')).toBeNull();
+  });
+
+  it('renders the visual beside the copy in a split', () => {
+    const { header } = renderHero({ visual: <div data-testid="visual" /> });
+
+    expect(screen.getByTestId('visual')).toBeInTheDocument();
+    const split = header.querySelector('.agi-ds-pagehead-split');
+    expect(split?.children).toHaveLength(2);
+    expect(split?.firstElementChild?.classList.contains('agi-ds-pagehead-copy')).toBe(true);
+    expect(split?.lastElementChild).toBe(screen.getByTestId('visual'));
+  });
+});
 
 describe('FactGrid', () => {
   it('leaves three items to the three equal columns the stylesheet gives exactly three children', () => {

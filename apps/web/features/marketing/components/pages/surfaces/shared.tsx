@@ -15,6 +15,7 @@ export function PageHero({
   lede,
   ctas,
   visual,
+  minimal = false,
 }: {
   id: string;
   eyebrow: string;
@@ -23,16 +24,17 @@ export function PageHero({
   lede: ReactNode;
   ctas: readonly PageCta[];
   visual?: ReactNode;
+  minimal?: boolean;
 }) {
   const copy = (
-    <Stack gap="loose">
+    <Stack className="agi-ds-pagehead-copy">
       <div>
-        <Eyebrow>{eyebrow}</Eyebrow>
-        <h1 className="agi-ds-h1" id={id}>
+        <span className="agi-ds-pagehead-label">{eyebrow}</span>
+        <h1 className={minimal ? 'sr-only' : 'agi-ds-pagehead-title'} id={id}>
           {em && title.includes(em) ? (
             <>
               {title.slice(0, title.indexOf(em))}
-              <em className="agi-ds-accent">{em}</em>
+              <span className="agi-ds-pagehead-em">{em}</span>
               {title.slice(title.indexOf(em) + em.length)}
             </>
           ) : (
@@ -40,7 +42,7 @@ export function PageHero({
           )}
         </h1>
       </div>
-      <Prose size="lg">{lede}</Prose>
+      {!minimal ? <Prose className="agi-ds-pagehead-lede">{lede}</Prose> : null}
       {ctas.length > 0 ? (
         <ButtonRow>
           {ctas.map((cta) => (
@@ -53,23 +55,21 @@ export function PageHero({
     </Stack>
   );
 
-  if (!visual) {
-    return (
-      <section className="agi-ds-section agi-ds-hero" aria-labelledby={id}>
-        <div className="agi-ds-container">
-          <div style={{ width: 'fit-content', maxWidth: '100%', marginInline: 'auto' }}>{copy}</div>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section className="agi-ds-section agi-ds-hero" aria-labelledby={id}>
+    <section
+      className="agi-ds-pagehead"
+      aria-labelledby={id}
+      data-minimal={minimal ? 'true' : undefined}
+    >
       <div className="agi-ds-container">
-        <div className="agi-ds-grid-2">
-          {copy}
-          {visual}
-        </div>
+        {visual ? (
+          <div className="agi-ds-pagehead-split">
+            {copy}
+            {visual}
+          </div>
+        ) : (
+          copy
+        )}
       </div>
     </section>
   );

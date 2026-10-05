@@ -42,7 +42,8 @@ const BLOCK_TAGS = new Set([
 const ACTION_CLASS = /\bagi-ds-btn(-row)?\b/;
 const LINK_ROW_CLASS = /(^|\s)agi-ds-btn-row(\s|$)/;
 const CONCEALED = '[aria-hidden="true"], [hidden]';
-const PAGE_HERO = '.agi-ds-hero';
+const PAGE_HERO = '.agi-ds-pagehead';
+const LABEL_CLASS = /\bagi-ds-(eyebrow|pagehead-label)\b/;
 
 function classOf(element) {
   return element.getAttribute('class') ?? '';
@@ -207,7 +208,7 @@ export function extract(root) {
           header,
           rows: cells.slice(1),
         });
-      } else if (/\bagi-ds-eyebrow\b/.test(className)) {
+      } else if (LABEL_CLASS.test(className)) {
         const segments = content(child);
         if (segments.length > 0) blocks.push({ type: 'eyebrow', content: segments });
       } else if (hasBlockChild(child)) {
