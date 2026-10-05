@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TERMS_ACCEPTANCE_PATH } from '../../../../packages/contracts/cloud-contracts/src/terms-acceptance.ts';
-import { FREE_QUOTA_CATALOGUE_PATH } from '../../../../packages/contracts/cloud-contracts/src/free-quota.ts';
+import { FREE_QUOTA_CATALOGUE_PATH } from '../../../../packages/contracts/cloud-contracts/src/free-quota-paths.ts';
 import { checkCloudApi } from './check-cloud-api.mjs';
 
 test('required Cloud routes answer with an authentication challenge', async () => {

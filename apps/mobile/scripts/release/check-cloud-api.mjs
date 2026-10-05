@@ -3,7 +3,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TERMS_ACCEPTANCE_PATH } from '../../../../packages/contracts/cloud-contracts/src/terms-acceptance.ts';
-import { FREE_QUOTA_CATALOGUE_PATH } from '../../../../packages/contracts/cloud-contracts/src/free-quota.ts';
+import { FREE_QUOTA_CATALOGUE_PATH } from '../../../../packages/contracts/cloud-contracts/src/free-quota-paths.ts';
 
 const REQUIRED_ROUTES = [
   { label: 'Terms status', path: TERMS_ACCEPTANCE_PATH },
