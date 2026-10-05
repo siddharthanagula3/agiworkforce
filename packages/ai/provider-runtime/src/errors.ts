@@ -510,10 +510,13 @@ export const MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT = 'model_access_denied';
 export const MODEL_STUDIO_MODEL_NOT_FOUND_HINT = 'model_not_found';
 export const MODEL_STUDIO_MODEL_RETIRED_HINT = 'model_retired';
 
-const MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGES: readonly string[] = [
-  'free tier of the model has been exhausted',
-  'free allocated quota exceeded',
-];
+// A spent free allocation on a model with no paid route shares its codes with
+// an ordinary throttle, so the whole documented message decides it.
+const MODEL_STUDIO_FREE_ALLOCATION_SPENT_CODES: ReadonlySet<string> = new Set([
+  'throttling.allocationquota',
+  'insufficient_quota',
+]);
+const MODEL_STUDIO_FREE_ALLOCATION_SPENT_MESSAGE = 'free allocated quota exceeded.';
 const MODEL_STUDIO_THROTTLING_CODES: ReadonlySet<string> = new Set([
   'throttling',
   'throttling.ratequota',
@@ -585,9 +588,21 @@ function errorCodeFields(e: SDKErrorLike): string[] {
     .map((raw) => raw.trim().toLowerCase());
 }
 
-function matchesAllocationQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
+// What may prove an allowance or a balance spent. A consumer that withdraws a
+// model for every account on that proof must not take it from wording a
+// provider can echo back from the request.
+type ExhaustionEvidence = 'code_fields' | 'code_fields_or_message';
+
+function matchesAllocationQuotaExhausted(
+  e: SDKErrorLike,
+  lowerMessage: string,
+  evidence: ExhaustionEvidence,
+): boolean {
   if (errorCodeFields(e).some((code) => ALLOCATION_QUOTA_CODES.has(code))) return true;
-  return [...ALLOCATION_QUOTA_CODES].some((code) => lowerMessage.includes(code));
+  return (
+    evidence === 'code_fields_or_message' &&
+    [...ALLOCATION_QUOTA_CODES].some((code) => lowerMessage.includes(code))
+  );
 }
 
 function matchesMinimumDiscountUnavailable(e: SDKErrorLike, lowerMessage: string): boolean {
@@ -728,9 +743,11 @@ function matchesBillingExhausted(
   e: SDKErrorLike,
   status: number | undefined,
   lowerMessage: string,
+  evidence: ExhaustionEvidence,
 ): boolean {
   if (status === 402) return true;
   if (errorCodeFields(e).some((code) => BILLING_EXHAUSTED_CODES.has(code))) return true;
+  if (evidence === 'code_fields') return false;
   return (
     lowerMessage.includes('credit balance is too low') ||
     lowerMessage.includes('insufficient credit') ||
@@ -831,6 +848,13 @@ function matchesConnection(name: string | undefined, message: string): boolean {
  * @returns ClassifiedError with retry/fallback hints.
  */
 export function classifyError(err: unknown): ClassifiedError {
+  return classifyWithExhaustionEvidence(err, 'code_fields_or_message');
+}
+
+function classifyWithExhaustionEvidence(
+  err: unknown,
+  exhaustionEvidence: ExhaustionEvidence,
+): ClassifiedError {
   // First, and before any text is looked at. A classification that survived the
   // stream-chunk boundary was computed from structure the adapter could see and
   // this layer cannot; re-deriving it from the message would only discard a
@@ -898,7 +922,7 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  if (matchesAllocationQuotaExhausted(e, lower)) {
+  if (matchesAllocationQuotaExhausted(e, lower, exhaustionEvidence)) {
     return {
       category: 'quota_exhausted',
       code: FREE_QUOTA_EXHAUSTED_CODE,
@@ -959,7 +983,7 @@ export function classifyError(err: unknown): ClassifiedError {
     // help while a different pool is fine. A plain 429 is back-pressure and IS
     // worth waiting out. All three were previously collapsed into `rate_limit`,
     // and then the first two into `quota_exhausted`.
-    if (matchesBillingExhausted(e, status, lower)) {
+    if (matchesBillingExhausted(e, status, lower, exhaustionEvidence)) {
       return {
         category: 'billing_exhausted',
         code: 'credit_balance_low',
@@ -1078,7 +1102,7 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  if (matchesBillingExhausted(e, status, lower)) {
+  if (matchesBillingExhausted(e, status, lower, exhaustionEvidence)) {
     return {
       category: 'billing_exhausted',
       code: status === 402 ? 'payment_required_402' : 'credit_balance_low',
@@ -1172,13 +1196,16 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
   const codes = errorCodeFields(e);
   const status = extractStatus(e);
   const message = extractMessage(e);
-  const lower = message.toLowerCase();
   const withStatus = typeof status === 'number' ? { status } : {};
   const named = (set: ReadonlySet<string>) => codes.some((code) => set.has(code));
+  const statedMessage = (typeof e.error?.message === 'string' ? e.error.message : message)
+    .trim()
+    .toLowerCase();
 
   if (
     named(ALLOCATION_QUOTA_CODES) ||
-    MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGES.some((sentence) => lower.includes(sentence))
+    (named(MODEL_STUDIO_FREE_ALLOCATION_SPENT_CODES) &&
+      statedMessage === MODEL_STUDIO_FREE_ALLOCATION_SPENT_MESSAGE)
   ) {
     return {
       category: 'quota_exhausted',
@@ -1239,10 +1266,9 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       providerHint: modelRefusalHint,
     };
   }
-  const statedMessage = typeof e.error?.message === 'string' ? e.error.message : message;
   if (
     named(MODEL_STUDIO_MODEL_NOT_FOUND_CODES) ||
-    statedMessage.trim().toLowerCase() === MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE
+    statedMessage === MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE
   ) {
     return {
       category: 'invalid_model',
@@ -1254,7 +1280,7 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       providerHint: MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
     };
   }
-  return classifyError(err);
+  return classifyWithExhaustionEvidence(err, 'code_fields');
 }
 
 export function parseContextOverflow(
