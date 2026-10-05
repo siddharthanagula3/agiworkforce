@@ -79,6 +79,7 @@
 }
 
 [data-design='agi'] {
+  --public-page-title-size: clamp(2.125rem, 1.875rem + 1vw, 2.75rem);
   --agi-section-y-inner: 4.5rem;
   --agi-section-y-inner-compact: 3rem;
   --agi-pagehead-y-top: 4rem;
@@ -91,6 +92,7 @@
 }
 
 [data-design='agi'].dx {
+  --dx-text-title: var(--public-page-title-size);
   --dx-text-control: 1rem;
   --dx-text-code: 0.9375rem;
   --dx-font-code: var(--font-geist-mono), ui-monospace, monospace;
@@ -107,7 +109,7 @@ body:has([data-design='agi'][data-public-reference]) {
   --public-text-lede: 1.3125rem;
   --public-text-value: 1.375rem;
   --public-text-section: 1.625rem;
-  --public-text-title: clamp(2.125rem, 1.875rem + 1vw, 2.75rem);
+  --public-text-title: var(--public-page-title-size);
   --public-font-text: var(--font-geist-sans), system-ui, sans-serif;
   --public-font-code: var(--font-geist-mono), ui-monospace, monospace;
   --public-leading-body: 1.65;
@@ -211,7 +213,8 @@ html[data-theme='light'] body:has([data-design='agi'][data-public-reference]) {
   --agi-button-bg-hover: var(--public-action-hover);
 }
 
-[data-design='agi'] .agi-web-responsive {
+[data-design='agi'] .agi-web-responsive,
+[data-design='agi'] .agi-panel-responsive {
   --public-mockup-font-text: var(--font-geist-sans), system-ui, sans-serif;
   --public-mockup-font-code: var(--font-geist-mono), ui-monospace, monospace;
   --public-mockup-text-meta: 0.875rem;
