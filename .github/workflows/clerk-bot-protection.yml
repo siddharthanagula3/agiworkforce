@@ -8,6 +8,7 @@ on:
     paths:
       - 'scripts/check-clerk-bot-protection.mjs'
       - 'scripts/check-clerk-bot-protection.test.mjs'
+      - 'apps/web/features/auth/authContract.ts'
       - '.github/workflows/clerk-bot-protection.yml'
 
 permissions:
