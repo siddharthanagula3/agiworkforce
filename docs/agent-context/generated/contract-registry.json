@@ -181,6 +181,7 @@
     "file-digest",
     "finance",
     "free-quota",
+    "free-quota-paths",
     "generated-files",
     "header-names",
     "health-space",

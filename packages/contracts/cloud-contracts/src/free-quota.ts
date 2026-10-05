@@ -5,8 +5,13 @@ import {
   ManagedCloudMessageMetadataSchema,
 } from './conversations';
 
-export const FREE_QUOTA_CATALOGUE_PATH = '/api/models/free-quota';
-export const FREE_QUOTA_COMPLETIONS_PATH = '/api/models/free-quota/completions';
+export {
+  FREE_QUOTA_ATTESTATION_PATH,
+  FREE_QUOTA_CATALOGUE_PATH,
+  FREE_QUOTA_COMPLETIONS_PATH,
+  FREE_QUOTA_MEDIA_OFFER_PATH,
+} from './free-quota-paths';
+
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_QUOTA_EXPIRED_CODE = 'free_quota_expired';
 export const FREE_ALLOWANCE_EXHAUSTED_CODE = 'free_allowance_exhausted';
@@ -163,8 +168,6 @@ export const FreeQuotaCatalogueSchema = z.object({
   limitedOffer: z.array(FreeQuotaLimitedOfferSchema).optional(),
 });
 
-export const FREE_QUOTA_MEDIA_OFFER_PATH = '/api/models/free-quota/media-offer';
-
 export const FreeQuotaMediaOfferSchema = z.object({
   image: z.object({ lastDay: z.string().date().nullable() }).nullable(),
   video: z.object({ lastDay: z.string().date().nullable() }).nullable(),
@@ -176,8 +179,6 @@ export type FreeQuotaCatalogue = z.infer<typeof FreeQuotaCatalogueSchema>;
 export type FreeQuotaMediaCategory = (typeof FREE_QUOTA_MEDIA_CATEGORIES)[number];
 export type FreeQuotaLimitedOffer = z.infer<typeof FreeQuotaLimitedOfferSchema>;
 export type FreeQuotaMediaOffer = z.infer<typeof FreeQuotaMediaOfferSchema>;
-
-export const FREE_QUOTA_ATTESTATION_PATH = '/api/models/free-quota/attestation';
 
 export const FREE_QUOTA_UNAVAILABLE_REASONS = [
   'not_integrated',
