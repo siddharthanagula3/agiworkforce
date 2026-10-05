@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readFreeMediaOffer } from '@/lib/server/free-media-offer-reader';
@@ -15,7 +16,8 @@ const SHARED_CACHE = {
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'model-catalog');
   if (rateLimitResponse) return rateLimitResponse;
-  return NextResponse.json(await readFreeMediaOffer(), { headers: SHARED_CACHE });
+  const offer: FreeQuotaMediaOffer = await readFreeMediaOffer();
+  return NextResponse.json(offer, { headers: SHARED_CACHE });
 }
 
 export const GET = withErrorHandler(handleGet);
