@@ -29,11 +29,11 @@ export default async function AccountSecurityVerifyPage({
 
   if (typeof params.handoff === 'string' && HANDOFF_PATTERN.test(params.handoff)) {
     return (
-      <AuthLayout>
+      <AuthLayout scene>
         <AuthStepFrame
           heading="Confirm sign-in"
           detail={
-            <p className="text-center">
+            <p>
               Use one of your passkeys or security keys to finish signing in to the AGI app. Only
               continue if you started signing in on this computer in the last few minutes.
             </p>
@@ -51,11 +51,11 @@ export default async function AccountSecurityVerifyPage({
   if (await subjectSessionPassesAccountSecurity(subject, sessionId)) redirect(redirectTo);
 
   return (
-    <AuthLayout>
+    <AuthLayout scene>
       <AuthStepFrame
         heading="Verify it's you"
         detail={
-          <p className="text-center">
+          <p>
             Advanced Account Security is on for this account. Continue with one of your passkeys or
             security keys.
           </p>

@@ -100,8 +100,6 @@ const BOUNDARY_MINIMUM = 3;
  * that shows where the control is, which is what --rule-strong exists for.
  */
 const KNOWN_SHORTFALLS = new Map<string, string>([
-  ['AUTH_INPUT_CLASS:rule', 'the text field has no fill, so this outline is the whole control'],
-  ['AUTH_PROVIDER_BUTTON_CLASS:rule', 'the provider button has no fill either'],
   ['AUTH_BADGE_CLASS:rule', 'the last-used badge is outlined rather than filled'],
 ]);
 

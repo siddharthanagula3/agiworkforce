@@ -14,11 +14,11 @@ export const metadata: Metadata = {
 
 export default function AccountSecurityUndoPage() {
   return (
-    <AuthLayout>
+    <AuthLayout scene>
       <AuthStepFrame
         heading="Was this not you?"
         detail={
-          <p className="text-center">
+          <p>
             Advanced Account Security was turned on for your account. If you did not do it, turn it
             off here without a passkey. Every session and linked device is signed out, your password
             is reset, and the passkeys, security keys and recovery keys added when it was turned on

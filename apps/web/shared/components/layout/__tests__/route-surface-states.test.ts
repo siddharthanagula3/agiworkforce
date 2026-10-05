@@ -109,6 +109,7 @@ const ROUTES_WITHOUT_A_LOADING_BOUNDARY: Record<string, string> = {
   'legal/archive/[policy]/[date]':
     'prerendered through generateStaticParams with dynamicParams off, so nothing resolves at request time',
   'copyright/report': 'awaits only its own searchParams, so there is no request to wait on',
+  'dev/auth-scene': 'awaits only its own searchParams, so there is no request to wait on',
   'use-cases/[slug]':
     'prerendered through generateStaticParams, so nothing resolves at request time',
   'open/[target]/[id]':

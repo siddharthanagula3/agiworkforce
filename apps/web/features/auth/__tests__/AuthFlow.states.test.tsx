@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const client = vi.hoisted(() => ({
@@ -88,8 +88,33 @@ describe('AuthFlow named states', () => {
     await submitEmail();
 
     expect(screen.getByTestId('auth-phase')).toHaveTextContent('Checking your account');
-    gate.resolve({ status: 'complete' });
+    gate.resolve({
+      status: 'next',
+      step: { kind: 'password', email: EMAIL, methods: ['password'] },
+    });
     await waitFor(() => expect(screen.getByTestId('auth-phase')).toBeEmptyDOMElement());
+  });
+
+  it('holds the form once the account is signed in, so a second Continue sends nothing', async () => {
+    client.startWithEmail.mockResolvedValue({
+      status: 'next',
+      step: { kind: 'new_password', email: EMAIL, purpose: 'sign_up' },
+    });
+    renderFlow();
+    await submitEmail();
+
+    await userEvent.type(await screen.findByLabelText('Password'), 'a long passphrase');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('auth-phase')).toHaveTextContent('Signing you in'),
+    );
+    expect(screen.getByLabelText('Password')).toBeDisabled();
+    act(() => {
+      fireEvent.submit(screen.getByLabelText('Password').closest('form') as HTMLFormElement);
+    });
+
+    expect(client.submitNewPassword).toHaveBeenCalledTimes(1);
   });
 
   it('says it is waiting for the passkey rather than showing a bare spinner', async () => {
@@ -223,6 +248,34 @@ describe('AuthFlow named states', () => {
       label: 'Backup code',
       hint: null,
     });
+  });
+
+  it('sends one verification when Continue is pressed twice before the screen updates', async () => {
+    client.startWithEmail.mockResolvedValue({
+      status: 'next',
+      step: { kind: 'code', email: EMAIL, purpose: 'sign_in', methods: [] },
+    });
+    client.submitCode.mockResolvedValueOnce({
+      status: 'failed',
+      kind: 'code_incorrect',
+      message: AUTH_ERROR_SOURCE_COPY.code_incorrect.message,
+      field: 'code',
+    });
+    const gate = held<AuthResult>();
+    client.submitCode.mockReturnValueOnce(gate.promise);
+    renderFlow();
+    await submitEmail();
+
+    await userEvent.type(await screen.findByLabelText('Code'), '111111');
+    await screen.findByText(AUTH_ERROR_SOURCE_COPY.code_incorrect.message);
+    const form = screen.getByLabelText('Code').closest('form') as HTMLFormElement;
+    act(() => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+
+    expect(client.submitCode).toHaveBeenCalledTimes(2);
+    await act(async () => gate.resolve({ status: 'complete' }));
   });
 
   it('offers recovery when the account has no backup code left to fall back on', async () => {

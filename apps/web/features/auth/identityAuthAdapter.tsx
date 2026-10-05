@@ -12,6 +12,7 @@ import type {
   AuthCodePurpose,
   AuthMethodId,
   AuthMode,
+  AuthPasswordPurpose,
   AuthProviderId,
   AuthRedirects,
   AuthResult,
@@ -51,12 +52,36 @@ const SECOND_FACTOR_PRIORITY: readonly AuthSecondFactorKind[] = [
 ];
 
 // Email is the weakest second factor because it usually shares a recovery path
-// with the first factor, so it is offered only when the deployment allows it.
+// with the first factor, so it is offered beside a stronger one only when the
+// deployment allows it.
 const POLICY_GATED_SECOND_FACTORS: readonly AuthSecondFactorKind[] = ['email'];
+
+const SIGN_UP_PASSWORD_FIELD = 'password';
+const VERIFIED_STATUS = 'verified';
+const FIRST_FACTOR_PASSED_STATUSES: readonly string[] = [
+  'needs_second_factor',
+  'needs_client_trust',
+  'complete',
+];
+
+const EMAIL_CODE_STRATEGY = 'email_code';
+
+const STAY_ON_PAGE = (): void => undefined;
 
 interface VendorFactor {
   strategy: string;
   safeIdentifier?: string;
+}
+
+function asksForPassword(result: AuthResult): boolean {
+  return result.status === 'next' && result.step.kind === 'password';
+}
+
+function markPasswordless(result: AuthResult): AuthResult {
+  if (result.status !== 'next') return result;
+  const { step } = result;
+  if (step.kind !== 'code' || step.purpose !== 'sign_in') return result;
+  return { status: 'next', step: { ...step, passwordless: true } };
 }
 
 export interface IdentityAuthOptions {
@@ -169,6 +194,43 @@ export function useIdentityAuthClient(
     [],
   );
 
+  const missingRequirement = useCallback(
+    (fields: readonly string[]): AuthResult => ({
+      status: 'failed',
+      kind: 'unexpected',
+      message: copyRef.current.text(
+        'flow.signUp.missingFields',
+        'This sign-up also needs {{fields}}, which this page cannot collect. Contact support to finish creating your account.',
+        { fields: fields.map((field) => field.replaceAll('_', ' ')).join(', ') },
+      ),
+    }),
+    [],
+  );
+
+  const unconfirmedAddress = useCallback(
+    (error: unknown, email: string): AuthResult =>
+      fail(error, {
+        message: copyRef.current.text(
+          'flow.signUp.unconfirmedAddress',
+          'Your account for {{email}} was created, but we could not confirm the address, so we did not sign you in. Contact support to finish setting it up.',
+          { email },
+        ),
+      }),
+    [fail],
+  );
+
+  const unsentAddressCode = useCallback(
+    (error: unknown, email: string): AuthResult =>
+      fail(error, {
+        message: copyRef.current.text(
+          'flow.signUp.unsentAddressCode',
+          'Your account for {{email}} was created, but we could not send the code that confirms the address, so we did not sign you in. Contact support to finish setting it up.',
+          { email },
+        ),
+      }),
+    [fail],
+  );
+
   const firstFactors = useCallback(
     (): readonly VendorFactor[] =>
       (signInRef.current.supportedFirstFactors ?? []) as VendorFactor[],
@@ -222,9 +284,12 @@ export function useIdentityAuthClient(
   }, [fail]);
 
   const sendSignInEmailCode = useCallback(
-    async (email: string): Promise<AuthResult> => {
+    async (
+      email: string,
+      onFailure: (error: unknown) => AuthResult = fail,
+    ): Promise<AuthResult> => {
       const { error } = await signInRef.current.emailCode.sendCode();
-      if (error) return fail(error);
+      if (error) return onFailure(error);
       return {
         status: 'next',
         step: { kind: 'code', email, purpose: 'sign_in', methods: availableMethods() },
@@ -249,6 +314,15 @@ export function useIdentityAuthClient(
     [fail],
   );
 
+  const verifyDevice = useCallback(
+    async (email: string): Promise<AuthResult> => {
+      const { error } = await signInRef.current.mfa.sendEmailCode();
+      if (error) return fail(error);
+      return { status: 'next', step: { kind: 'code', email, purpose: 'device', methods: [] } };
+    },
+    [fail],
+  );
+
   const resolveSignInState = useCallback(
     async (email: string): Promise<AuthResult> => {
       const current = signInRef.current;
@@ -256,11 +330,16 @@ export function useIdentityAuthClient(
       if (current.status === 'complete') return finalizeSignIn();
 
       if (current.status === 'needs_new_password') {
-        return { status: 'next', step: { kind: 'new_password', email } };
+        return { status: 'next', step: { kind: 'new_password', email, purpose: 'reset' } };
       }
 
-      if (current.status === 'needs_second_factor') {
-        const factors = orderedSecondFactors(current.supportedSecondFactors as VendorFactor[]);
+      if (current.status === 'needs_second_factor' || current.status === 'needs_client_trust') {
+        const offered = current.supportedSecondFactors as VendorFactor[];
+        const factors = orderedSecondFactors(offered);
+        const emailFactor = offered.find((factor) => factor.strategy === EMAIL_CODE_STRATEGY);
+        if (emailFactor && factors.every((factor) => factor.kind === 'email')) {
+          return verifyDevice(emailFactor.safeIdentifier ?? email);
+        }
         const factor = factors[0];
         if (!factor) return unexpected('unexpected');
         const sendFailure = await prepareSecondFactor(factor);
@@ -291,18 +370,70 @@ export function useIdentityAuthClient(
       sendSignInEmailCode,
       startEnterpriseSso,
       unexpected,
+      verifyDevice,
     ],
+  );
+
+  const proveAddressBySignIn = useCallback(
+    async (email: string, unprovenSessionId: string | null): Promise<AuthResult> => {
+      const unproven = clerk.client?.sessions.find((session) => session.id === unprovenSessionId);
+      // A session the client no longer lists cannot be removed by id, and
+      // leaving it would sign in an address nobody has proven.
+      try {
+        if (unproven) await unproven.remove();
+        else if (unprovenSessionId !== null) await clerk.signOut(STAY_ON_PAGE);
+      } catch (error) {
+        if (unproven) await clerk.signOut(STAY_ON_PAGE);
+        return unconfirmedAddress(error, email);
+      }
+      const { error } = await signInRef.current.create({ identifier: email });
+      if (error) return unconfirmedAddress(error, email);
+      return sendSignInEmailCode(email, (sendError) => unsentAddressCode(sendError, email));
+    },
+    [clerk, sendSignInEmailCode, unconfirmedAddress, unsentAddressCode],
   );
 
   const resolveSignUpState = useCallback(
     async (email: string): Promise<AuthResult> => {
       const current = signUpRef.current;
-      if (current.status === 'complete') return finalizeSignUp();
-      const { error } = await current.verifications.sendEmailCode();
-      if (error) return fail(error);
-      return { status: 'next', step: { kind: 'code', email, purpose: 'sign_up', methods: [] } };
+      const addressProven = current.verifications.emailAddress.status === VERIFIED_STATUS;
+      if (current.status === 'complete') {
+        return addressProven
+          ? finalizeSignUp()
+          : proveAddressBySignIn(email, current.createdSessionId);
+      }
+
+      const uncollectable = current.missingFields.filter(
+        (field) => field !== SIGN_UP_PASSWORD_FIELD,
+      );
+      if (uncollectable.length > 0) return missingRequirement(uncollectable);
+
+      if (!addressProven) {
+        const { error } = await current.verifications.sendEmailCode();
+        if (error) return fail(error);
+        return { status: 'next', step: { kind: 'code', email, purpose: 'sign_up', methods: [] } };
+      }
+
+      if (current.missingFields.includes(SIGN_UP_PASSWORD_FIELD)) {
+        return { status: 'next', step: { kind: 'new_password', email, purpose: 'sign_up' } };
+      }
+
+      return unexpected('unexpected');
     },
-    [fail, finalizeSignUp],
+    [fail, finalizeSignUp, missingRequirement, proveAddressBySignIn, unexpected],
+  );
+
+  const startSignIn = useCallback(
+    async (email: string): Promise<AuthResult> => {
+      const { error } = await signInRef.current.create({ identifier: email });
+      if (error) {
+        const kind = classifyAuthError(error).kind;
+        if (kind === 'identifier_not_found') return fail(error, { switchMode: true });
+        return fail(error);
+      }
+      return resolveSignInState(email);
+    },
+    [fail, resolveSignInState],
   );
 
   const startWithEmail = useCallback(
@@ -320,15 +451,9 @@ export function useIdentityAuthClient(
         return resolveSignUpState(email);
       }
 
-      const { error } = await signInRef.current.create({ identifier: email });
-      if (error) {
-        const kind = classifyAuthError(error).kind;
-        if (kind === 'identifier_not_found') return fail(error, { switchMode: true });
-        return fail(error);
-      }
-      return resolveSignInState(email);
+      return startSignIn(email);
     },
-    [fail, mode, resolveSignInState, resolveSignUpState],
+    [fail, mode, resolveSignUpState, startSignIn],
   );
 
   const submitPassword = useCallback(
@@ -340,41 +465,67 @@ export function useIdentityAuthClient(
     [fail, resolveSignInState],
   );
 
+  const signInWithPassword = useCallback(
+    async (email: string, password: string): Promise<AuthResult> => {
+      const started = await startSignIn(email);
+      if (asksForPassword(started)) return submitPassword(password);
+      return markPasswordless(started);
+    },
+    [startSignIn, submitPassword],
+  );
+
   const submitCode = useCallback(
     async (code: string, purpose: AuthCodePurpose): Promise<AuthResult> => {
       if (purpose === 'sign_up') {
-        const { error } = await signUpRef.current.verifications.verifyEmailCode({ code });
-        if (error) return fail(error);
-        if (signUpRef.current.status === 'complete') return finalizeSignUp();
-        return unexpected('unexpected');
+        const signUp = signUpRef.current;
+        if (signUp.verifications.emailAddress.status !== VERIFIED_STATUS) {
+          const { error } = await signUp.verifications.verifyEmailCode({ code });
+          if (error) return fail(error);
+        }
+        return resolveSignUpState(signUpRef.current.emailAddress ?? '');
       }
 
-      const email = signInRef.current.identifier ?? '';
+      const signIn = signInRef.current;
+      const email = signIn.identifier ?? '';
       if (purpose === 'reset') {
-        const { error } = await signInRef.current.resetPasswordEmailCode.verifyCode({ code });
+        const { error } = await signIn.resetPasswordEmailCode.verifyCode({ code });
         if (error) return fail(error);
-        return { status: 'next', step: { kind: 'new_password', email } };
+        return { status: 'next', step: { kind: 'new_password', email, purpose: 'reset' } };
       }
 
-      const { error } = await signInRef.current.emailCode.verifyCode({ code });
-      if (error) return fail(error);
+      if (purpose === 'device') {
+        if (signIn.status !== 'complete') {
+          const { error } = await signIn.mfa.verifyEmailCode({ code });
+          if (error) return fail(error);
+        }
+        return resolveSignInState(email);
+      }
+
+      if (!FIRST_FACTOR_PASSED_STATUSES.includes(signIn.status)) {
+        const { error } = await signIn.emailCode.verifyCode({ code });
+        if (error) return fail(error);
+      }
       return resolveSignInState(email);
     },
-    [fail, finalizeSignUp, resolveSignInState, unexpected],
+    [fail, resolveSignInState, resolveSignUpState],
   );
 
   const resendCode = useCallback(
     async (purpose: AuthCodePurpose): Promise<AuthResult> => {
       if (purpose === 'sign_up') {
         const { error } = await signUpRef.current.verifications.sendEmailCode();
-        return error ? fail(error, { inline: true }) : { status: 'complete' };
+        return error ? fail(error, { inline: true }) : { status: 'sent' };
       }
       if (purpose === 'reset') {
         const { error } = await signInRef.current.resetPasswordEmailCode.sendCode();
-        return error ? fail(error, { inline: true }) : { status: 'complete' };
+        return error ? fail(error, { inline: true }) : { status: 'sent' };
+      }
+      if (purpose === 'device') {
+        const { error } = await signInRef.current.mfa.sendEmailCode();
+        return error ? fail(error, { inline: true }) : { status: 'sent' };
       }
       const { error } = await signInRef.current.emailCode.sendCode();
-      return error ? fail(error, { inline: true }) : { status: 'complete' };
+      return error ? fail(error, { inline: true }) : { status: 'sent' };
     },
     [fail],
   );
@@ -410,12 +561,21 @@ export function useIdentityAuthClient(
   );
 
   const submitNewPassword = useCallback(
-    async (password: string): Promise<AuthResult> => {
+    async (password: string, purpose: AuthPasswordPurpose): Promise<AuthResult> => {
+      if (purpose === 'sign_up') {
+        const signUp = signUpRef.current;
+        if (signUp.verifications.emailAddress.status !== VERIFIED_STATUS) {
+          return resolveSignUpState(signUp.emailAddress ?? '');
+        }
+        const { error } = await signUp.password({ password });
+        if (error) return fail(error);
+        return resolveSignUpState(signUpRef.current.emailAddress ?? '');
+      }
       const { error } = await signInRef.current.resetPasswordEmailCode.submitPassword({ password });
       if (error) return fail(error);
       return resolveSignInState(signInRef.current.identifier ?? '');
     },
-    [fail, resolveSignInState],
+    [fail, resolveSignInState, resolveSignUpState],
   );
 
   const startPasswordReset = useCallback(async (): Promise<AuthResult> => {
@@ -427,6 +587,15 @@ export function useIdentityAuthClient(
       step: { kind: 'code', email, purpose: 'reset', methods: availableMethods() },
     };
   }, [availableMethods, fail]);
+
+  const startPasswordResetFor = useCallback(
+    async (email: string): Promise<AuthResult> => {
+      const started = await startSignIn(email);
+      if (asksForPassword(started)) return startPasswordReset();
+      return markPasswordless(started);
+    },
+    [startPasswordReset, startSignIn],
+  );
 
   const signInWithPasskey = useCallback(async (): Promise<AuthResult> => {
     const { error } = await signInRef.current.passkey({ flow: 'discoverable' });
@@ -478,6 +647,7 @@ export function useIdentityAuthClient(
     () => ({
       isReady,
       startWithEmail,
+      signInWithPassword,
       submitPassword,
       submitCode,
       resendCode,
@@ -485,6 +655,7 @@ export function useIdentityAuthClient(
       switchSecondFactor,
       submitNewPassword,
       startPasswordReset,
+      startPasswordResetFor,
       startMethod,
       startProvider,
       signInWithPasskey,
@@ -495,8 +666,10 @@ export function useIdentityAuthClient(
       resendCode,
       restart,
       signInWithPasskey,
+      signInWithPassword,
       startMethod,
       startPasswordReset,
+      startPasswordResetFor,
       startProvider,
       startWithEmail,
       submitCode,

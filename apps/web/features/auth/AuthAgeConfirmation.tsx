@@ -10,12 +10,7 @@ import {
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 
 import { useAuthCopy } from './authCopy';
-import {
-  AUTH_CHECKBOX_CLASS,
-  AUTH_CHECK_ROW_CLASS,
-  AUTH_HINT_CLASS,
-  AUTH_LINK_CLASS,
-} from './authStyles';
+import { AUTH_CHECKBOX_CLASS, AUTH_CHECK_ROW_CLASS, AUTH_FOOTER_LINK_CLASS } from './authStyles';
 
 const TERMS_ELIGIBILITY_HREF = `${CANONICAL_POLICY_ROUTES.terms}#s-02`;
 
@@ -33,7 +28,10 @@ export function AuthAgeConfirmation({
   const noticeId = useId();
 
   return (
-    <div className="mb-6" data-testid="auth-age-confirmation">
+    <div
+      className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1"
+      data-testid="auth-age-confirmation"
+    >
       <label htmlFor={checkboxId} className={AUTH_CHECK_ROW_CLASS}>
         <input
           id={checkboxId}
@@ -46,12 +44,15 @@ export function AuthAgeConfirmation({
         />
         <span>{copy.text('flow.age.confirm', ACCOUNT_AGE_CONFIRMATION_LABEL)}</span>
       </label>
+      <Link
+        href={TERMS_ELIGIBILITY_HREF}
+        className={`${AUTH_FOOTER_LINK_CLASS} -my-2.5 inline-flex min-h-11 items-center text-sm leading-normal underline`}
+      >
+        {copy.text('flow.age.terms', 'Age requirements')}
+      </Link>
       {confirmed ? null : (
-        <p id={noticeId} className={AUTH_HINT_CLASS}>
-          {copy.text('flow.age.notice', ACCOUNT_AGE_REQUIREMENT_NOTICE)}{' '}
-          <Link href={TERMS_ELIGIBILITY_HREF} className={AUTH_LINK_CLASS}>
-            {copy.text('flow.age.terms', 'Terms of Use, section 2')}
-          </Link>
+        <p id={noticeId} className="sr-only">
+          {copy.text('flow.age.notice', ACCOUNT_AGE_REQUIREMENT_NOTICE)}
         </p>
       )}
     </div>

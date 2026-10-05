@@ -1,4 +1,10 @@
+import { headers } from 'next/headers';
+
+import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
+import { logger } from '@/lib/logger';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
+import { readLatestConsent } from '@/lib/server/consent-records';
 import { hasAcceptedAnyTerms, hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
 import { TermsGate } from '../../signup/TermsGate';
 import { StaleSessionRecovery } from './StaleSessionRecovery';
@@ -8,12 +14,25 @@ import {
 } from '../../signup/complete/RecordTermsAcceptance';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
+import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
 import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
+import { ConfirmEmailStep } from '@/features/auth/ConfirmEmailStep';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { TermsReviewSignOut } from './TermsReviewSignOut';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
+
+// An account that granted, refused or withdrew is never asked again, and a
+// ledger that cannot be read is not taken to mean nobody asked.
+async function neverAskedAboutProductUpdates(userId: string): Promise<boolean> {
+  try {
+    return (await readLatestConsent(userId, PRODUCT_UPDATES_CONSENT_PURPOSE.id)) === null;
+  } catch (error) {
+    logger.error({ error, userId }, 'Could not read the product updates decision at sign-in');
+    return false;
+  }
+}
 
 export default async function LoginCompletePage({
   searchParams,
@@ -53,8 +72,16 @@ export default async function LoginCompletePage({
       isDesktopSurface ? '&surface=desktop' : ''
     }`;
     return (
-      <AuthLayout embedded={isDesktopSurface}>
+      <AuthLayout embedded={isDesktopSurface} scene>
         <AccountAccessNotice denial={access} signInHref={loginHref} />
+      </AuthLayout>
+    );
+  }
+
+  if (!(await readPrimaryEmailState(userId)).confirmed) {
+    return (
+      <AuthLayout embedded={isDesktopSurface} scene>
+        <ConfirmEmailStep footer={<TermsReviewSignOut />} />
       </AuthLayout>
     );
   }
@@ -69,22 +96,24 @@ export default async function LoginCompletePage({
     return <ContinueWithCurrentTerms redirectTo={redirectTo} />;
   }
   const firstAcceptance = !(await hasAcceptedAnyTerms(userId));
+  const offerProductUpdates = firstAcceptance && (await neverAskedAboutProductUpdates(userId));
+  const optedOutBySignal = offerProductUpdates && readGlobalPrivacyControlHeader(await headers());
 
   return (
-    <AuthLayout embedded={isDesktopSurface}>
+    <AuthLayout embedded={isDesktopSurface} scene>
       <AuthStepFrame
         heading="Finish signing in"
-        detail={
-          <p className="text-center">Review and accept our terms to continue to your account.</p>
-        }
+        detail={<p>Review and accept our terms to continue to your account.</p>}
         footer={<TermsReviewSignOut />}
       >
-        <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue">
-          <RecordTermsAcceptance
-            redirectTo={redirectTo}
-            surface="web-login"
-            confirmAge={firstAcceptance}
-          />
+        <TermsGate
+          restorePreAuthMarker={false}
+          confirmationLabel="Continue"
+          confirmAge={firstAcceptance}
+          offerProductUpdates={offerProductUpdates}
+          optedOutBySignal={optedOutBySignal}
+        >
+          <RecordTermsAcceptance redirectTo={redirectTo} surface="web-login" />
         </TermsGate>
       </AuthStepFrame>
     </AuthLayout>

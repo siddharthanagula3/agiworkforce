@@ -6,8 +6,8 @@ import { beginBrowserSignIn } from '@/features/desktop-host/lib/browser-sign-in'
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import {
   AUTH_ERROR_CLASS,
-  AUTH_LINK_CLASS,
   AUTH_PRIMARY_BUTTON_CLASS,
+  AUTH_STANDALONE_LINK_CLASS,
   AUTH_STEP_LINKS_CLASS,
 } from '@/features/auth/authStyles';
 import { useIdentityTicketSignIn } from '@/features/auth/identityAuthAdapter';
@@ -109,7 +109,7 @@ export function DesktopSignInComplete({
         {RETRY_LABEL}
       </button>
       <div className={AUTH_STEP_LINKS_CLASS}>
-        <a className={AUTH_LINK_CLASS} href={loginUrl}>
+        <a className={AUTH_STANDALONE_LINK_CLASS} href={loginUrl}>
           {SIGN_IN_HERE}
         </a>
       </div>

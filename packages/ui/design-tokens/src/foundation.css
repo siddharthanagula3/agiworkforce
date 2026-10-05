@@ -174,6 +174,36 @@
     --diff-removed-fill: #fde6e6;
     --diff-removed-text: #8f1d22;
 
+    /* The sign-in scene: the pale ground the page sits on and four flat
+     * character fills. Decorative, so the bodies only have to read as distinct
+     * shapes on the ground; the face colours are the only pairs that carry a
+     * legibility bar. */
+    --auth-scene-panel: #e8e3e5;
+    --auth-scene-purple: #6a34ff;
+    --auth-scene-black: #18191e;
+    --auth-scene-orange: #fd762a;
+    --auth-scene-yellow: #e2c009;
+    --auth-scene-face: #15161b;
+    --auth-scene-eye: var(--n-0);
+    --auth-scene-breath: 4600ms;
+    --auth-scene-breath-curve: cubic-bezier(0.45, 0, 0.55, 1);
+    --auth-scene-breath-offset: 1900ms;
+    --auth-scene-stagger: 70ms;
+    --auth-scene-arrive: 820ms;
+    --auth-scene-arrive-stagger: 160ms;
+    --auth-scene-enter-rise: 18px;
+    --auth-scene-hop: 8px;
+
+    /* The sign-in form draws on the elevated panel: one dark action, quiet
+     * provider pills, and an underline beneath each field. Every label pair
+     * and the line's 3:1 boundary are measured in theme-contrast.test.ts. */
+    --auth-primary-fill: var(--n-950);
+    --auth-primary-fill-hover: var(--n-800);
+    --auth-primary-on-fill: var(--n-0);
+    --auth-provider-fill: var(--n-100);
+    --auth-provider-fill-hover: var(--n-200);
+    --auth-field-line: var(--rule-strong);
+
     /* ---- layer 2: mode-invariant ---------------------------------------- */
     /* One radius ladder for every surface. The size-named --chat-radius-* and
      * --radius-* families are indirections into these rungs, so a rung moves in
@@ -392,6 +422,21 @@
     --diff-added-text: #7fd6a8;
     --diff-removed-fill: #3a1216;
     --diff-removed-text: #f5a3a8;
+
+    --auth-scene-panel: #2a2935;
+    --auth-scene-purple: #8b6cf6;
+    --auth-scene-black: #0c0d11;
+    --auth-scene-orange: #f0955a;
+    --auth-scene-yellow: #e6d05a;
+    --auth-scene-face: #15161b;
+    --auth-scene-eye: var(--n-0);
+
+    --auth-primary-fill: var(--n-25);
+    --auth-primary-fill-hover: var(--n-100);
+    --auth-primary-on-fill: var(--n-1000);
+    --auth-provider-fill: var(--n-850);
+    --auth-provider-fill-hover: var(--n-800);
+    --auth-field-line: #6e7482; /* 3.57 on surface-elevated */
 
     --elevation-1: 0 1px 2px rgb(0 0 0 / 0.5);
     --elevation-2: 0 2px 4px rgb(0 0 0 / 0.4), 0 4px 12px -4px rgb(0 0 0 / 0.6);

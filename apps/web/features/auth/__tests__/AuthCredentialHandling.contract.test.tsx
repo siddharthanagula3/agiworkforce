@@ -94,6 +94,7 @@ describe('what the sign-in screens do with a credential', () => {
 
   it('asks the browser for the right credential on every field that takes one', () => {
     const expected: Readonly<Record<string, string>> = {
+      'AuthEmailStep.tsx': 'autoComplete="current-password"',
       'AuthPasswordStep.tsx': 'autoComplete="current-password"',
       'AuthNewPasswordStep.tsx': 'autoComplete="new-password"',
       'AuthCodeStep.tsx': 'autoComplete="one-time-code"',

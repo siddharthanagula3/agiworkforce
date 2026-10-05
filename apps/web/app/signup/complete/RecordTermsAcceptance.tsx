@@ -7,16 +7,19 @@ import { Spinner } from '@agiworkforce/ui';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { AuthAgeConfirmation } from '@/features/auth/AuthAgeConfirmation';
 import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
-import { AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
-import { clearTermsGateMarker, hasCurrentTermsGateMarker } from '../TermsGate';
+import { useProductUpdatesGrant } from '@/features/auth/productUpdatesChoice';
+import {
+  clearSignupAttemptMarkers,
+  hasCurrentTermsGateMarker,
+  readCarriedProductUpdatesChoice,
+} from '../signupAttemptMarkers';
 
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
 
   useEffect(() => {
-    clearTermsGateMarker();
+    clearSignupAttemptMarkers();
     router.replace(redirectTo);
   }, [redirectTo, router]);
 
@@ -26,72 +29,72 @@ export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string })
 export function RecordTermsAcceptance({
   redirectTo,
   surface = 'web-signup',
-  confirmAge = false,
 }: {
   redirectTo: string;
   surface?: 'web-signup' | 'web-login';
-  confirmAge?: boolean;
 }) {
   const { isLoaded, isSignedIn } = useSession();
   const completedSignUp = useCompletedSignUpForCurrentSession();
   const router = useRouter();
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
-  const [ageStep, setAgeStep] = useState(false);
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const attempted = useRef(false);
+  const grantedOnThisScreen = useProductUpdatesGrant();
+  const carriedGrant = useRef<string | null>(null);
 
   const record = useCallback(async () => {
     setFailure('none');
+    const productUpdatesNoticeVersion =
+      surface === 'web-signup' ? carriedGrant.current : grantedOnThisScreen;
     try {
       const response = await fetch('/api/terms/accept', {
         method: 'POST',
         credentials: 'include',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ surface, version: POLICY_LAST_UPDATED.terms }),
+        body: JSON.stringify({
+          surface,
+          version: POLICY_LAST_UPDATED.terms,
+          ...(productUpdatesNoticeVersion ? { productUpdatesNoticeVersion } : {}),
+        }),
       });
       if (response.status === 409) {
         setFailure('outdated');
         return;
       }
       if (!response.ok) throw new Error(`terms acceptance failed: ${response.status}`);
-      clearTermsGateMarker();
+      clearSignupAttemptMarkers();
       router.replace(redirectTo);
     } catch {
       setFailure('retryable');
     }
-  }, [redirectTo, router, surface]);
+  }, [grantedOnThisScreen, redirectTo, router, surface]);
 
   useEffect(() => {
     if (!isLoaded || !completedSignUp.isLoaded || attempted.current) return;
     attempted.current = true;
     if (!isSignedIn) {
-      clearTermsGateMarker();
+      clearSignupAttemptMarkers();
       router.replace(redirectTo);
       return;
     }
-    if (
-      surface === 'web-signup' &&
-      (!hasCurrentTermsGateMarker() || !completedSignUp.isCurrentSession)
-    ) {
-      clearTermsGateMarker();
-      router.replace(
-        buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
-      );
-      return;
-    }
-    if (
-      surface === 'web-login' &&
-      (confirmAge || (completedSignUp.createdThisSession && !completedSignUp.isCurrentSession))
-    ) {
-      setAgeStep(true);
-      return;
+    if (surface === 'web-signup') {
+      const carried = readCarriedProductUpdatesChoice();
+      if (
+        !hasCurrentTermsGateMarker() ||
+        !completedSignUp.createdThisSession ||
+        carried.kind === 'stale'
+      ) {
+        clearSignupAttemptMarkers();
+        router.replace(
+          buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
+        );
+        return;
+      }
+      carriedGrant.current = carried.kind === 'current' ? carried.noticeVersion : null;
     }
     void record();
   }, [
     completedSignUp.createdThisSession,
-    completedSignUp.isCurrentSession,
     completedSignUp.isLoaded,
-    confirmAge,
     isLoaded,
     isSignedIn,
     record,
@@ -99,25 +102,6 @@ export function RecordTermsAcceptance({
     router,
     surface,
   ]);
-
-  if (ageStep) {
-    return (
-      <div className="mt-6 flex flex-col" data-testid="terms-age-confirmation">
-        <AuthAgeConfirmation confirmed={ageConfirmed} disabled={false} onChange={setAgeConfirmed} />
-        <button
-          type="button"
-          className={AUTH_PRIMARY_BUTTON_CLASS}
-          disabled={!ageConfirmed}
-          onClick={() => {
-            setAgeStep(false);
-            void record();
-          }}
-        >
-          Continue
-        </button>
-      </div>
-    );
-  }
 
   if (failure === 'outdated') {
     return (

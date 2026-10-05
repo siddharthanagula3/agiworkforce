@@ -72,26 +72,20 @@ export function useSession(): IdentitySessionState {
 
 export function useCompletedSignUpForCurrentSession(): {
   isLoaded: boolean;
-  isCurrentSession: boolean;
   createdThisSession: boolean;
 } {
   const { isLoaded: authLoaded, userId, sessionId } = useAuth();
   const { fetchStatus, signUp } = useSignUp();
   const isLoaded = authLoaded && fetchStatus === 'idle';
-  const createdThisSession =
-    isLoaded &&
-    signUp.status === 'complete' &&
-    userId !== null &&
-    sessionId !== null &&
-    signUp.createdUserId === userId &&
-    signUp.createdSessionId === sessionId;
   return {
     isLoaded,
-    createdThisSession,
-    isCurrentSession:
-      createdThisSession &&
-      typeof signUp.legalAcceptedAt === 'number' &&
-      signUp.legalAcceptedAt > 0,
+    createdThisSession:
+      isLoaded &&
+      signUp.status === 'complete' &&
+      userId !== null &&
+      sessionId !== null &&
+      signUp.createdUserId === userId &&
+      signUp.createdSessionId === sessionId,
   };
 }
 
@@ -332,6 +326,67 @@ export function useConnectedAccounts(): IdentityConnectedAccountsState {
   );
 
   return { isLoaded, accounts, connect, disconnect };
+}
+
+const EMAIL_CODE_STRATEGY = 'email_code';
+
+export interface IdentityEmailConfirmation {
+  isLoaded: boolean;
+  email: string | null;
+  sendCode: () => Promise<void>;
+  confirm: (code: string) => Promise<void>;
+  endOtherSessions: () => Promise<void>;
+}
+
+export function usePrimaryEmailConfirmation(): IdentityEmailConfirmation {
+  const { isLoaded, user } = useUser();
+  const { session } = useProviderSession();
+  const userRef = useRef(user);
+  userRef.current = user;
+  const sessionIdRef = useRef(session?.id ?? null);
+  sessionIdRef.current = session?.id ?? null;
+
+  const primaryAddress = useCallback(() => {
+    const address = userRef.current?.primaryEmailAddress;
+    if (!address) throw new Error('This account has no email address to confirm.');
+    return address;
+  }, []);
+
+  const sendCode = useCallback(async () => {
+    await primaryAddress().prepareVerification({ strategy: EMAIL_CODE_STRATEGY });
+  }, [primaryAddress]);
+
+  const confirm = useCallback(
+    async (code: string) => {
+      await primaryAddress().attemptVerification({ code });
+    },
+    [primaryAddress],
+  );
+
+  const endOtherSessions = useCallback(async () => {
+    const current = userRef.current;
+    const currentSessionId = sessionIdRef.current;
+    if (!current || !currentSessionId) {
+      throw new Error('Sign in again to finish confirming your email address.');
+    }
+    const sessions = await current.getSessions();
+    if (!sessions.some((candidate) => candidate.id === currentSessionId)) {
+      throw new Error('The sessions on this account could not be read. Try again.');
+    }
+    await Promise.all(
+      sessions
+        .filter((candidate) => candidate.id !== currentSessionId)
+        .map((candidate) => candidate.revoke()),
+    );
+  }, []);
+
+  return {
+    isLoaded,
+    email: optional(user?.primaryEmailAddress?.emailAddress),
+    sendCode,
+    confirm,
+    endOtherSessions,
+  };
 }
 
 export function useSessionReverification(): IdentityReverification {

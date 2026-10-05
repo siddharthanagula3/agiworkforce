@@ -82,6 +82,31 @@ describe('auth error taxonomy', () => {
     expect(dropped.kind).toBe('unexpected');
   });
 
+  it('keeps the strength suggestions that come with a password refused as too weak', () => {
+    const descriptor = classifyAuthError(
+      vendor({
+        code: 'form_password_not_strong_enough',
+        longMessage: 'Given password is not strong enough.',
+        meta: {
+          paramName: 'password',
+          zxcvbn: {
+            suggestions: [
+              { code: 'anotherWord', message: 'Add more words that are less common.' },
+              { code: 'repeated', message: 'Avoid repeated words and characters.' },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(descriptor).toEqual({
+      kind: 'unexpected',
+      field: 'password',
+      vendorMessage:
+        'Given password is not strong enough. Add more words that are less common. Avoid repeated words and characters.',
+    });
+  });
+
   it('maps the parameter a vendor names to the field the form owns', () => {
     expect(classifyAuthError(vendor({ meta: { paramName: 'identifier' } })).field).toBe('email');
     expect(classifyAuthError(vendor({ meta: { paramName: 'emailAddress' } })).field).toBe('email');
