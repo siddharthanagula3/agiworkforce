@@ -93,6 +93,15 @@ export function findConsentPurpose(id: string): ConsentPurpose | undefined {
   return CONSENT_PURPOSES.find((purpose) => purpose.id === id);
 }
 
+function requireConsentPurpose(id: string): ConsentPurpose {
+  const purpose = findConsentPurpose(id);
+  if (!purpose) throw new Error(`Unknown consent purpose: ${id}`);
+  return purpose;
+}
+
+export const PRODUCT_UPDATES_CONSENT_PURPOSE: ConsentPurpose =
+  requireConsentPurpose('product_updates');
+
 export const CONSENT_SURFACES = [
   'web-waitlist-inline',
   'web-waitlist-modal',
@@ -100,6 +109,8 @@ export const CONSENT_SURFACES = [
   'web-cookie-banner',
   'web-settings',
   'mobile-settings',
+  'web-signup',
+  'web-login',
 ] as const;
 
 export type ConsentSurface = (typeof CONSENT_SURFACES)[number];

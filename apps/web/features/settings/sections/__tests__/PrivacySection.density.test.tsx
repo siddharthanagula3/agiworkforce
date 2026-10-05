@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PRODUCT_ANALYTICS_CONSENT_PATH } from '@agiworkforce/types';
 import React from 'react';
+
+import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
@@ -84,6 +86,7 @@ async function waitForLoadedPrivacy() {
     });
     expect(screen.queryByText(/loading account settings/i)).toBeNull();
     expect(screen.queryByText(/loading your product analytics choice/i)).toBeNull();
+    expect(screen.queryByText(/loading your product updates choice/i)).toBeNull();
   });
 }
 
@@ -97,6 +100,19 @@ describe('PrivacySection row density', () => {
     expect(screen.queryByText(/local-first/i)).toBeNull();
     expect(screen.queryByText('Synced to your account')).toBeNull();
     expect(document.querySelector('[class*="rounded-lg border"]')).toBeNull();
+  });
+
+  it('puts the product updates choice beside the product analytics choice', async () => {
+    render(<PrivacySection />);
+    await waitForLoadedPrivacy();
+
+    const analytics = screen.getByRole('switch', { name: 'Product analytics' });
+    const updates = screen.getByRole('switch', { name: PRODUCT_UPDATES_CONSENT_PURPOSE.label });
+    const switches = screen.getAllByRole('switch');
+
+    expect(switches.indexOf(updates)).toBe(switches.indexOf(analytics) + 1);
+    expect(updates).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(PRODUCT_UPDATES_CONSENT_PURPOSE.description)).toBeVisible();
   });
 
   it('shows a saved state only after an actual change', async () => {

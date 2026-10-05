@@ -48,6 +48,7 @@ vi.mock('@/lib/rate-limit', () => ({
   getClientIpForRateLimit: () => '203.0.113.7',
 }));
 
+import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms, recordTermsAcceptance } from './terms';
 import { POST as acceptTerms } from '@/app/api/terms/accept/route';
@@ -60,6 +61,12 @@ function acceptRequest(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+function writes(): [string, unknown[]][] {
+  return (mocks.query.mock.calls as [string, unknown[]][]).filter(([sql]) =>
+    /^\s*insert into/i.test(sql),
+  );
 }
 
 describe('recordTermsAcceptance', () => {
@@ -251,5 +258,190 @@ describe('POST /api/terms/accept', () => {
       currentVersion: CURRENT_TERMS_VERSION,
     });
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it.each(['web-signup', 'web-login'] as const)(
+    'appends the product updates grant to the ledger against %s, after the acceptance',
+    async (surface) => {
+      mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+      mocks.query
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            terms_version: CURRENT_TERMS_VERSION,
+            terms_accepted_at: '2026-10-04T10:00:00.000Z',
+            terms_accepted_surface: surface,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+            granted: true,
+            notice_version: POLICY_LAST_UPDATED.privacy,
+            surface,
+            recorded_at: '2026-10-04T10:00:00.000Z',
+          },
+        ]);
+
+      const response = await acceptTerms(
+        acceptRequest({
+          surface,
+          version: POLICY_LAST_UPDATED.terms,
+          productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mocks.query.mock.calls[0]).toEqual([
+        expect.stringMatching(
+          /from public\.consent_records\s+where user_id = \$1 and purpose = \$2/,
+        ),
+        ['user_abc', PRODUCT_UPDATES_CONSENT_PURPOSE.id],
+      ]);
+      expect(writes().map(([sql]) => sql.match(/insert into public\.(\w+)/i)?.[1])).toEqual([
+        'profiles',
+        'consent_records',
+      ]);
+      expect(writes()[1]?.[1]).toEqual([
+        'user_abc',
+        null,
+        PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        true,
+        POLICY_LAST_UPDATED.privacy,
+        surface,
+      ]);
+    },
+  );
+
+  it('touches only the profile when the product updates box was left unticked', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+    mocks.query.mockResolvedValueOnce([
+      {
+        terms_version: CURRENT_TERMS_VERSION,
+        terms_accepted_at: '2026-10-04T10:00:00.000Z',
+        terms_accepted_surface: 'web-signup',
+      },
+    ]);
+
+    const response = await acceptTerms(acceptRequest());
+
+    expect(response.status).toBe(200);
+    expect(writes().map(([sql]) => sql.match(/insert into public\.(\w+)/i)?.[1])).toEqual([
+      'profiles',
+    ]);
+  });
+
+  it('answers 400 to a product updates choice from a surface that never asks it', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+
+    const response = await acceptTerms(
+      acceptRequest({
+        surface: 'mobile-auth',
+        version: POLICY_LAST_UPDATED.terms,
+        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 and reaches no table when the privacy notice changed after the box was ticked', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+
+    const response = await acceptTerms(
+      acceptRequest({
+        surface: 'web-signup',
+        version: POLICY_LAST_UPDATED.terms,
+        productUpdatesNoticeVersion: '1970-01-01',
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'NOTICE_VERSION_OUTDATED' },
+      currentNoticeVersion: POLICY_LAST_UPDATED.privacy,
+    });
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['granted at sign-up', true, 'web-signup'],
+    ['withdrew in settings', false, 'web-settings'],
+  ] as const)(
+    'appends no second row for an account that already %s',
+    async (_case, granted, decidedOn) => {
+      mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+      mocks.query
+        .mockResolvedValueOnce([
+          {
+            purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+            granted,
+            notice_version: POLICY_LAST_UPDATED.privacy,
+            surface: decidedOn,
+            recorded_at: '2026-10-04T10:05:00.000Z',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            terms_version: CURRENT_TERMS_VERSION,
+            terms_accepted_at: '2026-10-04T10:00:00.000Z',
+            terms_accepted_surface: 'web-signup',
+          },
+        ]);
+
+      const response = await acceptTerms(
+        acceptRequest({
+          surface: 'web-signup',
+          version: POLICY_LAST_UPDATED.terms,
+          productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(writes().map(([sql]) => sql.match(/insert into public\.(\w+)/i)?.[1])).toEqual([
+        'profiles',
+      ]);
+    },
+  );
+
+  it('answers 500 and writes to no table when the ledger cannot be read', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+    mocks.query.mockRejectedValueOnce(new Error('ledger unavailable'));
+
+    const response = await acceptTerms(
+      acceptRequest({
+        surface: 'web-signup',
+        version: POLICY_LAST_UPDATED.terms,
+        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(writes()).toEqual([]);
+  });
+
+  it('answers 500 when the ledger refuses the grant, so the recorder offers a retry', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+    mocks.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          terms_version: CURRENT_TERMS_VERSION,
+          terms_accepted_at: '2026-10-04T10:00:00.000Z',
+          terms_accepted_surface: 'web-signup',
+        },
+      ])
+      .mockRejectedValueOnce(new Error('ledger unavailable'));
+
+    const response = await acceptTerms(
+      acceptRequest({
+        surface: 'web-signup',
+        version: POLICY_LAST_UPDATED.terms,
+        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+      }),
+    );
+
+    expect(response.status).toBe(500);
   });
 });

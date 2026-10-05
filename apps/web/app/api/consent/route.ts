@@ -18,7 +18,7 @@ import {
 } from '@/lib/server/consent-records';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import {
-  isNonEssentialConsentPurpose,
+  grantedUnderGlobalPrivacyControl,
   readGlobalPrivacyControlHeader,
 } from '@/lib/consent-signals';
 
@@ -83,12 +83,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     seen.add(decision.purpose);
   }
 
-  // A browser sending Global Privacy Control has refused every purpose that is
-  // not needed to serve it, so a grant for one is recorded as the refusal it is.
   const optedOut = readGlobalPrivacyControlHeader(request.headers);
   const decisions = parsed.data.decisions.map((decision) => ({
     purpose: decision.purpose,
-    granted: optedOut && isNonEssentialConsentPurpose(decision.purpose) ? false : decision.granted,
+    granted: grantedUnderGlobalPrivacyControl(decision, optedOut),
   }));
 
   try {

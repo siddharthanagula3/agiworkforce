@@ -4,6 +4,7 @@ import { CONSENT_PURPOSES } from './consent-purposes';
 import {
   GLOBAL_PRIVACY_CONTROL_HEADER,
   NON_ESSENTIAL_CONSENT_PURPOSE_IDS,
+  grantedUnderGlobalPrivacyControl,
   isGlobalPrivacyControlValue,
   isNonEssentialConsentPurpose,
   readBrowserGlobalPrivacyControl,
@@ -82,5 +83,42 @@ describe('which purposes the signal covers', () => {
     }
     expect(isNonEssentialConsentPurpose('enterprise_waitlist')).toBe(false);
     expect(isNonEssentialConsentPurpose('platform_availability_waitlist')).toBe(false);
+  });
+});
+
+describe('what the signal does to a decision', () => {
+  const optional = CONSENT_PURPOSES.filter((purpose) => !purpose.necessaryForRequest);
+  const necessary = CONSENT_PURPOSES.filter((purpose) => purpose.necessaryForRequest);
+
+  it('turns a grant for every optional purpose into a refusal', () => {
+    expect(optional.length).toBeGreaterThan(0);
+    for (const purpose of optional) {
+      expect(grantedUnderGlobalPrivacyControl({ purpose: purpose.id, granted: true }, true)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('leaves a grant the request depends on as it was given', () => {
+    expect(necessary.length).toBeGreaterThan(0);
+    for (const purpose of necessary) {
+      expect(grantedUnderGlobalPrivacyControl({ purpose: purpose.id, granted: true }, true)).toBe(
+        true,
+      );
+    }
+  });
+
+  it('never turns a refusal into a grant, and changes nothing without the signal', () => {
+    for (const purpose of CONSENT_PURPOSES) {
+      expect(grantedUnderGlobalPrivacyControl({ purpose: purpose.id, granted: false }, true)).toBe(
+        false,
+      );
+      expect(grantedUnderGlobalPrivacyControl({ purpose: purpose.id, granted: true }, false)).toBe(
+        true,
+      );
+      expect(grantedUnderGlobalPrivacyControl({ purpose: purpose.id, granted: false }, false)).toBe(
+        false,
+      );
+    }
   });
 });
