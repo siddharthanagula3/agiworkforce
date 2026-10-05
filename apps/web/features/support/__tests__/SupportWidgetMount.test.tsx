@@ -13,7 +13,7 @@ vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: () => Promise.resolve('test-csrf'),
 }));
 
-const mockPathname = vi.fn(() => '/');
+const mockPathname = vi.fn(() => '/help');
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname(),
 }));
@@ -54,7 +54,7 @@ function installSignedOutFetch() {
 describe('SupportWidgetMount', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockPathname.mockReturnValue('/');
+    mockPathname.mockReturnValue('/help');
     process.env['NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED'] = '1';
     installSignedOutFetch();
   });
@@ -163,18 +163,30 @@ describe('SupportWidgetMount', () => {
 });
 
 describe('route visibility rules', () => {
-  it('hides on decision-shaped routes and shows on ordinary marketing routes', () => {
+  it('hides on decision-shaped routes', () => {
     expect(isSupportWidgetVisible('/connect/vscode')).toBe(false);
     expect(isSupportWidgetVisible('/sign-in')).toBe(false);
     expect(isSupportWidgetVisible('/status')).toBe(false);
-    expect(isSupportWidgetVisible('/')).toBe(true);
-    expect(isSupportWidgetVisible('/docs')).toBe(true);
     expect(isSupportWidgetVisible(null)).toBe(false);
   });
 
+  it('shows on public pages only inside the help section', () => {
+    expect(isSupportWidgetVisible('/help')).toBe(true);
+    expect(isSupportWidgetVisible('/help/getting-started')).toBe(true);
+    expect(isSupportWidgetVisible('/')).toBe(false);
+    expect(isSupportWidgetVisible('/docs')).toBe(false);
+    expect(isSupportWidgetVisible('/pricing')).toBe(false);
+  });
+
+  it('keeps showing on the signed-in product routes', () => {
+    expect(isSupportWidgetVisible('/chat/abc')).toBe(true);
+    expect(isSupportWidgetVisible('/settings/billing')).toBe(true);
+  });
+
   it('does not treat a prefix collision as a match', () => {
-    expect(isSupportWidgetVisible('/sharedspace')).toBe(true);
-    expect(isSupportWidgetVisible('/statuses')).toBe(true);
+    expect(isSupportWidgetVisible('/helpful')).toBe(false);
+    expect(isSupportWidgetVisible('/chatter')).toBe(false);
+    expect(isSupportWidgetVisible('/statuses')).toBe(false);
   });
 
   it('resolves the product surface for signed-in routes only', () => {
