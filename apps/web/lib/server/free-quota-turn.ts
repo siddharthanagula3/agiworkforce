@@ -23,6 +23,7 @@ import {
 import { logger } from '@/lib/logger';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
 import { resolveFreeOfferingPersonalContext } from '@/lib/services/turn-context-service';
+import { freeQuotaSystemMessages } from '@/lib/server/free-quota-system-messages';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 import { toMemoryCitationsHeaderValue } from '@/lib/chat-project-sources';
 import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
@@ -870,10 +871,10 @@ export async function serveFreeQuotaTurn(
       ...(body.client_timezone ? { timeZone: body.client_timezone } : {}),
     });
     messages.unshift(
-      ...(preamble
-        ? [{ role: 'system' as const, content: stripSystemPromptCacheBoundary(preamble) }]
-        : []),
-      ...personalContext.blocks.map((content) => ({ role: 'system' as const, content })),
+      ...freeQuotaSystemMessages({
+        preamble: preamble ? stripSystemPromptCacheBoundary(preamble) : '',
+        personal: personalContext.blocks,
+      }),
     );
     memoryCitationsHeader = toMemoryCitationsHeaderValue(personalContext.memoryCitations);
   }
