@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle, Button } from '@agiworkforce/ui';
 
-export const ARTIFACT_PRIVACY_NOTICE_STORAGE_KEY = 'agi:artifact-privacy-notice-seen';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+
+import {
+  ARTIFACT_PRIVACY_NOTICE_STORAGE_KEY,
+  ARTIFACT_STORAGE_NOTICE_DISMISS_LABEL,
+  ARTIFACT_STORAGE_NOTICE_SAVED,
+  ARTIFACT_STORAGE_NOTICE_SETTINGS_LABEL,
+  ARTIFACT_STORAGE_NOTICE_SHARED,
+  ARTIFACT_STORAGE_NOTICE_TITLE,
+} from '../lib/artifact-storage-notice-copy';
 
 function hasSeenNotice(): boolean {
   try {
@@ -23,6 +32,7 @@ function markNoticeSeen(): void {
 
 export function ArtifactPrivacyNotice() {
   const [dismissed, setDismissed] = useState(true);
+  const { openSettings } = useSettingsModal();
 
   useEffect(() => {
     setDismissed(hasSeenNotice());
@@ -37,15 +47,18 @@ export function ArtifactPrivacyNotice() {
 
   return (
     <Alert className="mx-3 mt-3 w-auto">
-      <AlertTitle>Artifacts follow your conversation&apos;s privacy</AlertTitle>
+      <AlertTitle>{ARTIFACT_STORAGE_NOTICE_TITLE}</AlertTitle>
       <AlertDescription className="flex flex-col gap-2">
-        <p>
-          An artifact leaves this device only when you publish it, and it inherits the local, BYOK,
-          or managed boundary of the conversation that created it.
-        </p>
-        <Button type="button" size="sm" variant="outline" onClick={dismiss} className="self-start">
-          Got it
-        </Button>
+        <p>{ARTIFACT_STORAGE_NOTICE_SAVED}</p>
+        <p>{ARTIFACT_STORAGE_NOTICE_SHARED}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={dismiss}>
+            {ARTIFACT_STORAGE_NOTICE_DISMISS_LABEL}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => openSettings('privacy')}>
+            {ARTIFACT_STORAGE_NOTICE_SETTINGS_LABEL}
+          </Button>
+        </div>
       </AlertDescription>
     </Alert>
   );

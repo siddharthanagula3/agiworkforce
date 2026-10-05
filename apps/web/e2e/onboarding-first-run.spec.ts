@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { apiCall, signIn } from './qa-capability-harness';
+import { ARTIFACT_STORAGE_NOTICE_TITLE } from '../features/onboarding/lib/artifact-storage-notice-copy';
 import { ONBOARDING_USE_CASES } from '../features/onboarding/lib/use-cases';
 
 const PREFERENCES_PATH = '/api/settings/preferences';
@@ -89,7 +90,7 @@ test.describe('first-run onboarding', () => {
     const artifactsToggle = page.getByTitle('Artifacts');
     await artifactsToggle.click();
 
-    const notice = page.getByText("Artifacts follow your conversation's privacy");
+    const notice = page.getByText(ARTIFACT_STORAGE_NOTICE_TITLE);
     await expect(notice).toBeVisible();
 
     await page.getByRole('button', { name: 'Got it' }).click();
