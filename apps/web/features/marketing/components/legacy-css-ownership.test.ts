@@ -16,13 +16,13 @@ function atRuleContext(rule: Rule): string {
   return context.join(' > ');
 }
 
-function flagshipSelectorOwners(file: string): Map<string, number> {
+function marketingSelectorOwners(file: string): Map<string, number> {
   const source = fs.readFileSync(file, 'utf8');
   const owners = new Map<string, number>();
 
   postcss.parse(source).walkRules((rule) => {
     for (const selector of rule.selectors) {
-      if (!selector.includes('.agi-fl-')) continue;
+      if (!/\.agi-(?:fl|dw|ap)(?:-|\b)/.test(selector)) continue;
       owners.set(`${atRuleContext(rule)} :: ${selector}`, rule.source?.start?.line ?? 0);
     }
   });
@@ -47,10 +47,10 @@ function subEyebrowType(file: string): { line: number; value: string }[] {
 }
 
 describe('legacy flagship stylesheet ownership', () => {
-  it('keeps each flagship selector and responsive context in one stylesheet', () => {
+  it('keeps each flagship and showcase selector in one stylesheet per responsive context', () => {
     const styles = path.resolve(process.cwd(), 'features/marketing/components');
-    const pages = flagshipSelectorOwners(path.join(styles, 'legacy-pages.css'));
-    const landing = flagshipSelectorOwners(path.join(styles, 'legacy-landing.css'));
+    const pages = marketingSelectorOwners(path.join(styles, 'legacy-pages.css'));
+    const landing = marketingSelectorOwners(path.join(styles, 'legacy-landing.css'));
     const duplicates = [...landing.entries()]
       .filter(([key]) => pages.has(key))
       .map(([key, landingLine]) => ({
@@ -68,6 +68,7 @@ describe('legacy flagship stylesheet ownership', () => {
       path.join(styles, 'legacy-pages.css'),
       path.join(styles, 'legacy-landing.css'),
       path.join(styles, 'system/system.css'),
+      path.join(styles, 'system/page-header.css'),
     ];
 
     expect(files.flatMap(subEyebrowType)).toEqual([]);
