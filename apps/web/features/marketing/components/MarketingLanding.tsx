@@ -1,3 +1,4 @@
+import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
 import { Header } from '@shared/components/layout/Header';
 import './legacy-landing.css';
 import './motion/motion.css';
@@ -23,6 +24,7 @@ import {
   ProofRow,
   StartCards,
 } from '@/features/marketing/components/FlagshipSections';
+import { landingAnnouncement } from '@/features/marketing/components/landing-announcement';
 import { RELEASES } from '@/lib/changelog-entries';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
@@ -41,7 +43,11 @@ const LATEST_ENTRIES = RELEASES.slice(0, LATEST_ENTRY_COUNT).map((release) => ({
   summary: release.body[0] ?? '',
 }));
 
-export function MarketingLanding() {
+export function MarketingLanding({
+  freeMediaOffer,
+}: {
+  freeMediaOffer: FreeQuotaMediaOffer | null;
+}) {
   return (
     <div data-design="agi">
       <Header />
@@ -57,11 +63,11 @@ export function MarketingLanding() {
           ]}
           modeRibbon={[]}
           visual={<MobileHeroVisual />}
-          announcement={{
+          announcement={landingAnnouncement(freeMediaOffer, {
             tag: 'New',
             label: `${approximateCount(MARKETING.models.count)} models across ${approximateCount(BYOK_PROVIDER_IDS.length)} providers`,
             href: '/providers',
-          }}
+          })}
         />
 
         <LandingSurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
