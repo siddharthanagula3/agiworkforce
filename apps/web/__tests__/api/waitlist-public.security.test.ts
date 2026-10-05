@@ -75,10 +75,12 @@ vi.mock('@/lib/api-auth', () => ({
 
 import { POST, OPTIONS } from '@/app/api/waitlist/public/route';
 import {
+  CONSENT_PURPOSES,
   WAITLIST_SOURCES,
   consentPurposesForWaitlistSource,
   type WaitlistSource,
 } from '@/lib/consent-purposes';
+import { GLOBAL_PRIVACY_CONTROL_HEADER } from '@/lib/consent-signals';
 
 const CONSENTED = [
   { purpose: 'enterprise_waitlist', granted: true },
@@ -439,6 +441,62 @@ describe('POST /api/waitlist/public, security tests', () => {
       });
       expect(recorded).toContainEqual({ purpose: 'enterprise_waitlist', granted: true });
       expect(recorded).toContainEqual({ purpose: 'product_updates', granted: false });
+    });
+
+    it('writes no row for a purpose the form does not offer', async () => {
+      const offered = new Set(consentPurposesForWaitlistSource('website').map((p) => p.id));
+      const notOffered = CONSENT_PURPOSES.filter((purpose) => !offered.has(purpose.id));
+      expect(notOffered.length).toBeGreaterThan(0);
+
+      const request = makePostRequest({
+        email: 'test@example.com',
+        consent: [
+          ...CONSENTED,
+          ...notOffered.map((purpose) => ({ purpose: purpose.id, granted: true })),
+        ],
+      });
+      const response = await POST(request);
+
+      expect(response.status).toBe(200);
+      const recorded = recordedConsent();
+      expect(recorded).toHaveLength(offered.size);
+      for (const purpose of notOffered) {
+        expect(recorded.map((row) => row.purpose)).not.toContain(purpose.id);
+      }
+    });
+
+    it('records a ticked optional purpose as ticked when the browser sends no signal', async () => {
+      const request = makePostRequest({
+        email: 'test@example.com',
+        consent: [
+          { purpose: 'enterprise_waitlist', granted: true },
+          { purpose: 'product_updates', granted: true },
+        ],
+      });
+      const response = await POST(request);
+
+      expect(response.status).toBe(200);
+      expect(recordedConsent()).toContainEqual({ purpose: 'product_updates', granted: true });
+    });
+
+    it('records a ticked optional purpose as refused under Global Privacy Control', async () => {
+      const request = makePostRequest(
+        {
+          email: 'test@example.com',
+          consent: [
+            { purpose: 'enterprise_waitlist', granted: true },
+            { purpose: 'product_updates', granted: true },
+          ],
+        },
+        { [GLOBAL_PRIVACY_CONTROL_HEADER]: '1' },
+      );
+      const response = await POST(request);
+
+      expect(response.status).toBe(200);
+      const recorded = recordedConsent();
+      expect(recorded).toContainEqual({ purpose: 'enterprise_waitlist', granted: true });
+      expect(recorded).toContainEqual({ purpose: 'product_updates', granted: false });
+      expect(mockExecute).toHaveBeenCalledTimes(1);
     });
 
     it('writes consent BEFORE the address, so a ledger failure stores nothing', async () => {
