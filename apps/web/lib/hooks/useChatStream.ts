@@ -770,6 +770,12 @@ function findConversationMessage(conversationId: string, messageId: string): Mes
   return readConversationMessages(conversationId).find((message) => message.id === messageId);
 }
 
+function disclosedFallbackReason(
+  message: Message | undefined,
+): Pick<MessageMetadata, 'fallbackReason'> {
+  return message?.fallbackReason ? { fallbackReason: message.fallbackReason } : {};
+}
+
 type MessageContent = ReturnType<typeof buildApiMessageContent>;
 type ApiMessage = {
   role: string;
@@ -1729,8 +1735,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
   const streamFallbackReason = response.headers.get(FALLBACK_REASON_HEADER)?.trim();
-  // D-2026-09-05-06. Persisted rather than per-turn, unlike the substitution
-  // code above: a continuity receipt the transcript forgets on reload would
+  // D-2026-09-05-06. Persisted, like the substitution code above once its
+  // reply has text: a continuity receipt the transcript forgets on reload would
   // leave the move unexplained the next time the conversation is opened.
   const movedFromModel = response.headers.get(MOVED_FROM_MODEL_HEADER)?.trim();
   const movedReason = response.headers.get(MOVED_REASON_HEADER)?.trim();
@@ -2364,6 +2370,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (movedFromModel) {
       metadata.movedFromModel = movedFromModel;
       if (movedReason) metadata.movedReason = movedReason;
+    }
+    const fallbackReason = fallbackDisclosed ? streamFallbackReason : seedMetadata?.fallbackReason;
+    if (fallbackReason) {
+      metadata.fallbackReason = fallbackReason;
     }
     if (toolTimeline.length > 0) {
       metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
@@ -4584,16 +4594,21 @@ export function useChatStream(
             return;
           }
 
-          const streamedSoFar =
-            findConversationMessage(conversationId, assistantMessageId)?.content ?? seedContent;
+          const interrupted = findConversationMessage(conversationId, assistantMessageId);
+          const streamedSoFar = interrupted?.content ?? seedContent;
           const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage, errorCode)}`;
+          const interruptedMetadata: MessageMetadata = {
+            ...priorMetadata,
+            ...disclosedFallbackReason(interrupted),
+            ...(errorCode ? { errorCode } : {}),
+          };
           updateMessage(
             assistantMessageId,
             {
               isStreaming: false,
               content: mergedContent,
               error: true,
-              metadata: { ...priorMetadata, ...(errorCode ? { errorCode } : {}) },
+              metadata: interruptedMetadata,
             },
             conversationId,
           );
@@ -4606,11 +4621,7 @@ export function useChatStream(
                 role: 'assistant',
                 content: mergedContent,
                 model,
-                metadata: {
-                  ...priorMetadata,
-                  finishReason: undefined,
-                  ...(errorCode ? { errorCode } : {}),
-                },
+                metadata: { ...interruptedMetadata, finishReason: undefined },
               },
               getAuthToken,
             ).catch((err) => notifyPersistenceFailure('assistant', err));
@@ -5379,6 +5390,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   if (isAbort) {
     const cancelledMetadata: MessageMetadata = {
       ...currentMessage?.metadata,
+      ...disclosedFallbackReason(currentMessage),
       finishReason: 'stopped',
       ...(currentActivity
         ? {
@@ -5549,6 +5561,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
       error: true,
       metadata: {
         ...freshMetadata,
+        ...disclosedFallbackReason(currentMessage),
         isExecutingCode: false,
         isSearching: false,
         ...(errorCode ? { errorCode } : {}),
