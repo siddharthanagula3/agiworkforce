@@ -104,19 +104,17 @@ describe('policy archive extractor', () => {
   it('keeps the calls to action in a page hero out, because the archive page has its own', () => {
     expect(
       blocksOf(
-        `<section class="agi-ds-section agi-ds-hero" aria-labelledby="agi-trust-title">
+        `<section class="agi-ds-pagehead" aria-labelledby="agi-trust-title">
           <div class="agi-ds-container">
-            <div>
-              <div class="agi-ds-stack">
-                <div>
-                  <span class="agi-ds-eyebrow">Trust</span>
-                  <h1 class="agi-ds-h1" id="agi-trust-title">Claims with dates.</h1>
-                </div>
-                <p class="agi-ds-prose">A posture ledger, not a badge wall.</p>
-                <div class="agi-ds-btn-row">
-                  <a class="agi-ds-btn" href="/security">Read the mechanisms</a>
-                  <a class="agi-ds-btn" data-variant="secondary" href="#verify">Verify us yourself</a>
-                </div>
+            <div class="agi-ds-stack agi-ds-pagehead-copy">
+              <div>
+                <span class="agi-ds-pagehead-label">Trust</span>
+                <h1 class="agi-ds-pagehead-title" id="agi-trust-title">Claims with <span class="agi-ds-pagehead-em">dates.</span></h1>
+              </div>
+              <p class="agi-ds-prose agi-ds-pagehead-lede">A posture ledger, not a badge wall.</p>
+              <div class="agi-ds-btn-row">
+                <a class="agi-ds-btn" href="/security">Read the mechanisms</a>
+                <a class="agi-ds-btn" data-variant="secondary" href="#verify">Verify us yourself</a>
               </div>
             </div>
           </div>

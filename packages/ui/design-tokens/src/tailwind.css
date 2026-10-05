@@ -89,3 +89,151 @@
   --agi-header-height: 4rem;
   --agi-header-height-compact: 3rem;
 }
+
+[data-design='agi'].dx {
+  --dx-text-control: 1rem;
+  --dx-text-code: 0.9375rem;
+  --dx-font-code: var(--font-geist-mono), ui-monospace, monospace;
+  --dx-control-size: var(--space-7);
+}
+
+[data-design='agi'][data-public-reference],
+body:has([data-design='agi'][data-public-reference]) {
+  --public-text-meta: 0.875rem;
+  --public-text-code: 0.9375rem;
+  --public-text-control: 1rem;
+  --public-text-body: 1.0625rem;
+  --public-text-reading: 1.0625rem;
+  --public-text-lede: 1.3125rem;
+  --public-text-value: 1.375rem;
+  --public-text-section: 1.625rem;
+  --public-text-title: clamp(2.125rem, 1.875rem + 1vw, 2.75rem);
+  --public-font-text: var(--font-geist-sans), system-ui, sans-serif;
+  --public-font-code: var(--font-geist-mono), ui-monospace, monospace;
+  --public-leading-body: 1.65;
+  --public-leading-reading: 1.7;
+  --public-leading-control: 1.4;
+  --public-leading-heading: 1.2;
+  --public-heading-weight: var(--type-h1-weight);
+  --public-container-width: var(--measure-content);
+  --public-reading-width: 54ch;
+  --public-control-touch: var(--space-7);
+  --public-control-desktop: 24px;
+  --public-card-padding: var(--space-5);
+  --public-section-gap: var(--space-6);
+  --public-section-space: var(--space-8);
+  --public-pagehead-space: var(--space-7);
+  --public-anchor-offset: calc(var(--agi-header-height) + var(--space-4));
+  --public-consent-max-block-size: 40dvh;
+  --public-accent-light: #754500;
+  --public-accent-dark: #f0a84a;
+  --public-surface-page: var(--n-1000);
+  --public-surface-subtle: var(--n-950);
+  --public-surface-elevated: var(--n-900);
+  --public-ink: var(--n-0);
+  --public-ink-secondary: var(--n-300);
+  --public-rule: var(--n-800);
+  --public-rule-strong: var(--n-400);
+  --public-accent: var(--public-accent-dark);
+  --public-action-fill: var(--n-0);
+  --public-action-ink: var(--n-1000);
+  --public-action-hover: var(--n-100);
+  --public-background-channels: 0 0% 3%;
+  --public-foreground-channels: 0 0% 100%;
+  --agi-font: var(--public-font-text);
+  --agi-font-mono: var(--public-font-code);
+  --agi-ground: var(--public-surface-page);
+  --agi-ground-2: var(--public-surface-subtle);
+  --agi-ground-3: var(--public-surface-elevated);
+  --agi-bg: var(--public-surface-page);
+  --agi-bg-2: var(--public-surface-subtle);
+  --agi-bg-3: var(--public-surface-elevated);
+  --agi-card: var(--public-surface-subtle);
+  --agi-ink: var(--public-ink);
+  --agi-ink-2: var(--public-ink-secondary);
+  --agi-ink-3: var(--public-ink-secondary);
+  --agi-ink-quiet: var(--public-ink-secondary);
+  --agi-ink-faint: var(--public-ink-secondary);
+  --agi-rule: var(--public-rule);
+  --agi-rule-strong: var(--public-rule-strong);
+  --agi-accent: var(--public-accent);
+  --agi-accent-text: var(--public-accent);
+  --agi-amber: var(--public-accent);
+  --agi-button-bg: var(--public-action-fill);
+  --agi-button-ink: var(--public-action-ink);
+  --agi-button-bg-hover: var(--public-action-hover);
+  --agi-text-xs: var(--public-text-meta);
+  --agi-text-sm: var(--public-text-control);
+  --agi-text-md: var(--public-text-body);
+  --agi-text-lg: var(--public-text-lede);
+  --agi-text-xl: var(--public-text-section);
+  --agi-text-2xl: var(--public-text-title);
+  --background: var(--public-background-channels);
+  --foreground: var(--public-foreground-channels);
+}
+
+html.light [data-design='agi'][data-public-reference],
+html[data-theme='light'] [data-design='agi'][data-public-reference],
+html.light body:has([data-design='agi'][data-public-reference]),
+html[data-theme='light'] body:has([data-design='agi'][data-public-reference]) {
+  --public-surface-page: var(--n-0);
+  --public-surface-subtle: var(--n-25);
+  --public-surface-elevated: var(--n-50);
+  --public-ink: var(--n-950);
+  --public-ink-secondary: var(--n-700);
+  --public-rule: var(--n-200);
+  --public-rule-strong: var(--n-600);
+  --public-accent: var(--public-accent-light);
+  --public-action-fill: var(--n-950);
+  --public-action-ink: var(--n-0);
+  --public-action-hover: var(--n-800);
+  --public-background-channels: 0 0% 100%;
+  --public-foreground-channels: 0 0% 7%;
+  --agi-ground: var(--public-surface-page);
+  --agi-ground-2: var(--public-surface-subtle);
+  --agi-ground-3: var(--public-surface-elevated);
+  --agi-bg: var(--public-surface-page);
+  --agi-bg-2: var(--public-surface-subtle);
+  --agi-bg-3: var(--public-surface-elevated);
+  --agi-card: var(--public-surface-subtle);
+  --agi-ink: var(--public-ink);
+  --agi-ink-2: var(--public-ink-secondary);
+  --agi-ink-3: var(--public-ink-secondary);
+  --agi-ink-quiet: var(--public-ink-secondary);
+  --agi-ink-faint: var(--public-ink-secondary);
+  --agi-rule: var(--public-rule);
+  --agi-rule-strong: var(--public-rule-strong);
+  --agi-accent: var(--public-accent);
+  --agi-accent-text: var(--public-accent);
+  --agi-amber: var(--public-accent);
+  --agi-button-bg: var(--public-action-fill);
+  --agi-button-ink: var(--public-action-ink);
+  --agi-button-bg-hover: var(--public-action-hover);
+}
+
+[data-design='agi'] .agi-web-responsive {
+  --public-mockup-font-text: var(--font-geist-sans), system-ui, sans-serif;
+  --public-mockup-font-code: var(--font-geist-mono), ui-monospace, monospace;
+  --public-mockup-text-meta: 0.875rem;
+  --public-mockup-text-code: 0.9375rem;
+  --public-mockup-text-control: 1rem;
+  --public-mockup-text-body: 1.0625rem;
+  --public-mockup-leading-text: 1.5;
+  --public-mockup-leading-control: 1.4;
+  --public-mockup-sidebar-basis: 12rem;
+  --public-mockup-chat-basis: 28rem;
+  --public-mockup-summary-basis: 7rem;
+  --public-mockup-table-min: 28rem;
+  --public-mockup-border: 1px;
+  --public-mockup-focus-width: 2px;
+  --public-mockup-control-size: var(--space-7);
+  --public-mockup-gap-sm: var(--space-1);
+  --public-mockup-gap: var(--space-2);
+  --public-mockup-group-gap: var(--space-3);
+  --public-mockup-padding: var(--space-4);
+  --public-mockup-radius: var(--corner-panel);
+  --public-mockup-cell-radius: var(--corner-control);
+  --public-mockup-control-radius: var(--corner-field);
+  --public-mockup-light-size: var(--space-2);
+  --public-mockup-caret-height: var(--space-4);
+}
