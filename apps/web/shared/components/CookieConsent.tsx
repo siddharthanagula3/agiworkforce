@@ -19,6 +19,7 @@ import {
   COOKIE_CONSENT_OPEN_EVENT,
   COOKIE_CONSENT_STORAGE_KEY,
   COOKIE_CONSENT_UPDATED_EVENT,
+  COOKIE_PREFERENCES_LABEL,
   NECESSARY_ONLY_PREFERENCES,
   isAnalyticsLockedByOptOutSignal,
   readCookiePreferences,
@@ -196,7 +197,7 @@ export const CookieConsent = () => {
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Cookie preferences</DialogTitle>
+            <DialogTitle>{COOKIE_PREFERENCES_LABEL}</DialogTitle>
             <DialogDescription>
               These are the only cookie categories this site uses. See the{' '}
               <Link
