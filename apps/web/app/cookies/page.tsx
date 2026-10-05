@@ -17,6 +17,13 @@ import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { CookiePreferencesButton } from './CookiePreferencesButton';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { LEGAL_ENTITY, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE } from '@/lib/consent-signals';
+import {
+  MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+  MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+  TERMS_GATE_STORAGE_KEY,
+} from '@/app/signup/signupAttemptMarkers';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
@@ -225,12 +232,26 @@ const STORAGE: StorageRow[] = [
     source: 'lib/hooks/useTTS.ts',
   },
   {
-    key: 'agi.terms-accepted-version',
+    key: [
+      TERMS_GATE_STORAGE_KEY,
+      MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+      MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+    ].join(', '),
+    store: 'Local storage',
+    holds:
+      'The revision of the terms you accepted and, only if you tick the marketing email box, the privacy notice revision and a random identifier for that sign-up attempt. They carry your choices across a provider sign-up redirect.',
+    clearedBy:
+      'Completing sign-up, using Edit email, starting a provider or passkey sign-in, signing out or clearing site data.',
+    source: 'app/signup/signupAttemptMarkers.ts',
+  },
+  {
+    key: MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
     store: 'Session storage',
     holds:
-      'The revision of the terms you ticked, so signing in with a provider that leaves the page and returns does not lose the click. It is consumed once the account records your acceptance.',
-    clearedBy: 'Closing the tab, or completing sign-up.',
-    source: 'app/signup/TermsGate.tsx',
+      'The same random identifier, kept in this tab only, so a marketing email choice is recorded only for the sign-up it was ticked in, and a choice another tab removed is asked again.',
+    clearedBy:
+      'Closing the tab, completing sign-up, using Edit email, starting a provider or passkey sign-in, signing out or clearing site data.',
+    source: 'app/signup/signupAttemptMarkers.ts',
   },
   {
     key: 'agi.team.invitation-token',
@@ -399,22 +420,29 @@ export default function CookiesPage() {
                     04 &middot; Do Not Track and Global Privacy Control.
                   </h2>
                   <Prose>
-                    <strong>We honour Global Privacy Control.</strong> A browser that sends the
-                    Sec-GPC header, or sets navigator.globalPrivacyControl, is read here as refusing
-                    every purpose that is not needed to serve the request you are making: analytics,
-                    and the product-update list in the consent centre. That refusal wins over an
-                    acceptance stored in this browser, so an earlier &ldquo;allow analytics&rdquo;
-                    choice stops applying for as long as the signal is on, and the analytics switch
-                    in cookie preferences is shown off and locked with the reason beside it.
+                    <strong>We honour Global Privacy Control.</strong> When a consent request sends
+                    the Sec-GPC header, new optional-purpose grants are recorded as refusals. These
+                    include the account choice &ldquo;{MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo;
+                    and waitlist product updates. The sign-up box is also held off when
+                    navigator.globalPrivacyControl is true, with &ldquo;
+                    {GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE}&rdquo; beside it. An existing
+                    account grant shown in Settings is not automatically erased by this browser
+                    signal; you can withdraw it there or in the consent centre. The browser signal
+                    also refuses the product-update list in the consent centre.
+                  </Prose>
+                  <Prose>
+                    For analytics, the signal is a refusal. That refusal wins over an acceptance
+                    stored in this browser, so an earlier &ldquo;allow analytics&rdquo; choice stops
+                    applying for as long as the signal is on, and the analytics switch in cookie
+                    preferences is shown off and locked with the reason beside it.
                   </Prose>
                   <Prose size="sm">
                     What it does not do: it never touches the strictly necessary cookies in the
-                    table above, so it cannot sign you out or keep you from signing in, and it does
-                    not overrule a form you fill in yourself. If you tick a box asking us to email
-                    you, that tick is your instruction and we act on it. Do Not Track is a separate,
-                    older header with no agreed meaning and we still do not read it; the outcome it
-                    asks for is the one Global Privacy Control now gets. We do not sell or share
-                    personal data for advertising, and honouring the signal does not depend on that.
+                    table above, so it cannot sign you out or keep you from signing in. Do Not Track
+                    is a separate, older header with no agreed meaning and we still do not read it;
+                    the outcome it asks for is the one Global Privacy Control now gets. We do not
+                    sell or share personal data for advertising, and honouring the signal does not
+                    depend on that.
                   </Prose>
                 </Stack>
               </Section>
