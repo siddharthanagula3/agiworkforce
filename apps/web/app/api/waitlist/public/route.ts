@@ -19,6 +19,10 @@ import {
   isWaitlistSource,
   type WaitlistSource,
 } from '@/lib/consent-purposes';
+import {
+  grantedUnderGlobalPrivacyControl,
+  readGlobalPrivacyControlHeader,
+} from '@/lib/consent-signals';
 import { getOptionalAuthUser } from '@/lib/api-auth';
 
 function isValidEmail(value: unknown): value is string {
@@ -93,8 +97,15 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const consentSurface: ConsentSurface = isWaitlistConsentSurface(payload.consentSurface)
     ? payload.consentSurface
     : 'web-waitlist-inline';
-  const decisions = parseConsentDecisions(payload.consent);
   const requiredPurposes = consentPurposesForWaitlistSource(source);
+  const offered = new Set<string>(requiredPurposes.map((purpose) => purpose.id));
+  const optedOut = readGlobalPrivacyControlHeader(request.headers);
+  const decisions = parseConsentDecisions(payload.consent)
+    .filter((decision) => offered.has(decision.purpose))
+    .map((decision) => ({
+      ...decision,
+      granted: grantedUnderGlobalPrivacyControl(decision, optedOut),
+    }));
 
   const decided = new Set(decisions.map((decision) => decision.purpose));
   const undecided = requiredPurposes.filter((purpose) => !decided.has(purpose.id));
