@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + web lead
-Last updated: 2026-10-03
+Last updated: 2026-10-04
 
 An external browser audit of the public website, dated 3 October 2026, covering
 184 public routes, with its main measurements taken at 1180 by 757 CSS pixels.
@@ -43,6 +43,53 @@ someone with authority checks them:
   attempted, so customer impact is unknown.
 - FR05: the plan-first exception was read in code and in the pinned test, not
   observed in a live run.
+
+## Local remediation checkpoint, 2026-10-04
+
+Evidence status: observed locally and component verified; production validation
+remains open. Work resumed in `.worktrees/site-audit` from the interrupted visual
+pass. This checkpoint records local progress, not closure of the findings below.
+
+- Observed locally: responsive pricing and native disclosure focus behavior;
+  shared compact page hierarchy, a compact scrolled header with current navigation,
+  a smaller footer, and homepage Tabs for the six product surfaces.
+- Component verified: concise signup retains the consent gate and canonical
+  provider-training details. Signup and chat checks passed. The artifact notice
+  includes temporary chats and conversations that use a Local model as storage
+  exceptions. Connector cards link to snapshot detail pages with inspectable
+  metadata and tools. Their populated browser state remains unverified because
+  the local server has no configured database URL. Authenticated signed-in
+  browser behavior also remains unverified.
+- Validation passed: web typecheck, lint for changed files, focused component
+  tests and browser tests. Browser measurements used a 1180 CSS-pixel dark
+  viewport and a 390 CSS-pixel light viewport. Home, pricing, about, status,
+  signup and contact-sales had no horizontal overflow at those widths.
+- Owner screenshot feedback applied locally: promotional hero headings,
+  descriptions and technical ribbons are removed from the marketing layouts;
+  accessible page titles, availability labels, actions and coded previews remain.
+  Remaining marketing headings use the requested Geist typography.
+- Coded-preview responsiveness checked on all 31 static public routes containing
+  previews at 320 and 390 CSS pixels, including all six homepage surface tabs.
+  Device frames fit their containers, code panes scroll internally, and controls
+  wrap. Homepage diff panes stack and approval commands wrap. The final 29 browser
+  regression tests and stylesheet ownership checks pass. Populated plugin catalog
+  and detail states remain unverified because the local registry is unavailable;
+  their shared responsive components were inspected and tested separately.
+
+The measurements below compare the local worktree before and after this
+continuation; they are not measurements of a newer production deployment.
+
+| Local region              | Before |  After |
+| ------------------------- | -----: | -----: |
+| Six-surface area, desktop | 5946px |  936px |
+| Six-surface area, phone   | 5463px | 1283px |
+| Footer, desktop           |  604px |  498px |
+
+No commit, push or production deployment was performed. The full guard chain
+is not green: policy version drift for `privacy`, `referralTerms` and
+`agentPermissions`, plus cross-surface toolchain and dependency issues, still
+block complete verification. These checks do not resolve the whole public audit
+or replace its owner decisions and live acceptance requirements.
 
 ## Open findings
 
