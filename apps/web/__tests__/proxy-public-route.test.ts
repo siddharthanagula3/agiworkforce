@@ -219,6 +219,22 @@ describe('web proxy', () => {
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });
 
+  it('hands the public pages that read the identity a session without gating them', async () => {
+    const { proxy } = await import('../proxy');
+
+    for (const pathname of ['/apps', '/connectors', '/skills']) {
+      clerkState.clerkPaths = [];
+      const response = await proxy(new NextRequest(`http://localhost${pathname}`), {} as never);
+
+      expect(clerkState.clerkPaths, pathname).toEqual([pathname]);
+      expect(response?.status, pathname).toBe(200);
+      expect(response?.headers.get('location'), pathname).toBeNull();
+      expect(response?.headers.get('Content-Security-Policy'), pathname).toContain(
+        "default-src 'self'",
+      );
+    }
+  });
+
   it('keeps ordinary public marketing pages outside Clerk session middleware', async () => {
     clerkState.clerkPaths = [];
     const { proxy } = await import('../proxy');

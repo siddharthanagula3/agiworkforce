@@ -1,9 +1,11 @@
 import { Suspense } from 'react';
 
+import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { getRequestIdentity } from '@/lib/server/identity';
 import { getManagedSkillCatalog } from '@/lib/services/skill-catalog-service';
-import type { PublicSkill } from './SignedOutSkills';
-import { SkillsRoute } from './SkillsRoute';
+import { reportUnreadableIdentity } from '@/lib/server/unreadable-identity';
+import { SignedOutSkills, type PublicSkill } from './SignedOutSkills';
 
 export const metadata = buildMetadata({
   title: 'Skills',
@@ -13,6 +15,15 @@ export const metadata = buildMetadata({
 });
 
 export const dynamic = 'force-dynamic';
+
+async function isSignedIn(): Promise<boolean> {
+  try {
+    return (await getRequestIdentity()).isSignedIn;
+  } catch (error) {
+    reportUnreadableIdentity(error, '/skills');
+    return false;
+  }
+}
 
 async function loadPublicSkills(): Promise<PublicSkill[] | null> {
   try {
@@ -26,10 +37,13 @@ async function loadPublicSkills(): Promise<PublicSkill[] | null> {
 }
 
 export default async function SkillsPage() {
-  const skills = await loadPublicSkills();
-  return (
-    <Suspense>
-      <SkillsRoute skills={skills} />
-    </Suspense>
-  );
+  if (await isSignedIn()) {
+    return (
+      <Suspense>
+        <SettingsModalRedirect section="skills" />
+      </Suspense>
+    );
+  }
+
+  return <SignedOutSkills skills={await loadPublicSkills()} />;
 }

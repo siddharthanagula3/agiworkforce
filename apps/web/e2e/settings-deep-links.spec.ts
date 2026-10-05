@@ -21,6 +21,8 @@ interface DeepLinkCase {
 const DEEP_LINKS: DeepLinkCase[] = [
   { path: '/settings/archived', heading: 'Archived chats' },
   { path: '/apps', navLabel: 'Plugins' },
+  { path: '/connectors', navLabel: 'Connectors' },
+  { path: '/skills', navLabel: 'Skills' },
   { path: '/billing', heading: 'Billing', navLabel: 'Billing' },
 ];
 

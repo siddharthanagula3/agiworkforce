@@ -102,6 +102,7 @@ const declaresTitle = (segment: Segment) =>
  * them unlisted fails, which is the point of holding the list here.
  */
 const ROUTES_WITHOUT_A_LOADING_BOUNDARY: Record<string, string> = {
+  apps: 'awaits only the identity the request already carries, so there is no request to wait on',
   'auth/desktop': 'awaits only its own searchParams, so there is no request to wait on',
   'auth/sso-callback': 'awaits only its own searchParams, so there is no request to wait on',
   'legal/archive/[policy]':

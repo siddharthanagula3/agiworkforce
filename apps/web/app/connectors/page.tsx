@@ -1,15 +1,19 @@
-'use client';
-
-import { useSession } from '@/lib/identity/client';
 import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
+import { getRequestIdentity } from '@/lib/server/identity';
 import { SignedOutSurface } from '@shared/components/marketing/SignedOutSurface';
+import { reportUnreadableIdentity } from '@/lib/server/unreadable-identity';
 
-function ConnectorsRoute() {
-  const { isSignedIn, isLoaded } = useSession();
+async function isSignedIn(): Promise<boolean> {
+  try {
+    return (await getRequestIdentity()).isSignedIn;
+  } catch (error) {
+    reportUnreadableIdentity(error, '/connectors');
+    return false;
+  }
+}
 
-  if (!isLoaded) return null;
-
-  if (isSignedIn) {
+export default async function ConnectorsRoute() {
+  if (await isSignedIn()) {
     return <SettingsModalRedirect section="connectors" />;
   }
 
@@ -27,5 +31,3 @@ function ConnectorsRoute() {
     </SignedOutSurface>
   );
 }
-
-export default ConnectorsRoute;
