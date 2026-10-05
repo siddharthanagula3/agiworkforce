@@ -29,7 +29,7 @@ vi.mock('../useCountdown', () => ({
   useCountdown: () => [0, () => undefined],
 }));
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 
 import { AuthFlow } from '../AuthFlow';
 import { AuthSceneBridgeProvider } from '../scene/AuthSceneContext';
@@ -67,8 +67,8 @@ function requiredBox(): HTMLElement {
   return within(screen.getByTestId('auth-signup-consent')).getByRole('checkbox');
 }
 
-function productUpdatesBox(): HTMLElement {
-  return screen.getByRole('checkbox', { name: PRODUCT_UPDATES_CONSENT_PURPOSE.label });
+function marketingEmailBox(): HTMLElement {
+  return screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label });
 }
 
 async function submitEmail() {
@@ -166,8 +166,8 @@ describe('what the form tells the scene', () => {
     await userEvent.click(requiredBox());
     await userEvent.click(requiredBox());
     const afterRequired = bridge.map((spy) => spy.mock.calls.length);
-    await userEvent.click(productUpdatesBox());
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
+    await userEvent.click(marketingEmailBox());
 
     expect(bridge.map((spy) => spy.mock.calls.length)).toEqual(afterRequired);
     expect(afterRequired.every((calls) => calls === 0)).toBe(true);
@@ -177,7 +177,7 @@ describe('what the form tells the scene', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
     expect(store.getSnapshot().mood).toBe('error');
 
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
     expect(store.getSnapshot().mood).toBe('error');
     expect(client.startProvider).not.toHaveBeenCalled();
   });

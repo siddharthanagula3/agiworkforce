@@ -4,12 +4,12 @@ import { TERMS_ACCEPTANCE_SURFACES, TermsAcceptanceRequestSchema } from '../term
 
 describe('terms acceptance request', () => {
   it.each(TERMS_ACCEPTANCE_SURFACES)(
-    'stays valid for %s without the product updates field',
+    'stays valid for %s without the marketing email field',
     (surface) => {
       const parsed = TermsAcceptanceRequestSchema.parse({ surface, version: '2026-09-23' });
 
       expect(parsed).toEqual({ surface, version: '2026-09-23' });
-      expect('productUpdatesNoticeVersion' in parsed).toBe(false);
+      expect('marketingEmailNoticeVersion' in parsed).toBe(false);
     },
   );
 
@@ -18,23 +18,33 @@ describe('terms acceptance request', () => {
       TermsAcceptanceRequestSchema.parse({
         surface: 'web-signup',
         version: '2026-09-23',
-        productUpdatesNoticeVersion: '2026-09-29',
+        marketingEmailNoticeVersion: '2026-09-29',
       }),
     ).toEqual({
       surface: 'web-signup',
       version: '2026-09-23',
+      marketingEmailNoticeVersion: '2026-09-29',
+    });
+  });
+
+  it('carries no opt-in under the name the field was first built with', () => {
+    const parsed = TermsAcceptanceRequestSchema.parse({
+      surface: 'web-signup',
+      version: '2026-09-23',
       productUpdatesNoticeVersion: '2026-09-29',
     });
+
+    expect(parsed).toEqual({ surface: 'web-signup', version: '2026-09-23' });
   });
 
   it.each(['', 'x'.repeat(33), null, true, 20260929])(
     'refuses %j as a notice version instead of reading it as an opt-in',
-    (productUpdatesNoticeVersion) => {
+    (marketingEmailNoticeVersion) => {
       expect(
         TermsAcceptanceRequestSchema.safeParse({
           surface: 'web-signup',
           version: '2026-09-23',
-          productUpdatesNoticeVersion,
+          marketingEmailNoticeVersion,
         }).success,
       ).toBe(false);
     },

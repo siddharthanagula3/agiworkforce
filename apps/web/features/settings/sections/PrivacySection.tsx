@@ -33,7 +33,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { ProductAnalyticsConsentRow } from '../components/ProductAnalyticsConsentRow';
-import { ProductUpdatesConsentRow } from '../components/ProductUpdatesConsentRow';
+import { MarketingEmailConsentRow } from '../components/MarketingEmailConsentRow';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 const NAMESPACE = 'privacy';
@@ -612,7 +612,7 @@ export function PrivacySection() {
           </div>
         ))}
         <ProductAnalyticsConsentRow />
-        <ProductUpdatesConsentRow />
+        <MarketingEmailConsentRow />
       </div>
 
       <UsOnlyRoutingPanel />

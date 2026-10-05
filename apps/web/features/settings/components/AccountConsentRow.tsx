@@ -109,6 +109,7 @@ export function AccountConsentRow({
 
   const granted = state.kind === 'ready' && state.granted;
   const grantBlocked = grantBlockedBySignal || grantRefusedByServer;
+  const heldOff = grantBlocked && state.kind === 'ready' && !state.granted;
 
   return (
     <div
@@ -124,7 +125,7 @@ export function AccountConsentRow({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 1 }}>
         <span style={{ fontSize: 14, color: 'var(--text-1)' }}>{label}</span>
         <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>{description}</span>
-        {grantBlocked ? (
+        {heldOff ? (
           <span
             role={grantRefusedByServer ? 'status' : undefined}
             style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}

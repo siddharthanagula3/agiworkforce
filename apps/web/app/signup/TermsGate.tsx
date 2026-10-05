@@ -8,11 +8,11 @@ import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-consta
 import { AUTH_OPTIONAL_CONSENT_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 import { AccountDataDisclosure } from '@/features/auth/AccountDataDisclosure';
 import { AuthAgeConfirmation } from '@/features/auth/AuthAgeConfirmation';
-import { AuthProductUpdatesConsent } from '@/features/auth/AuthProductUpdatesConsent';
+import { AuthMarketingEmailConsent } from '@/features/auth/AuthMarketingEmailConsent';
 import {
-  ProductUpdatesGrantProvider,
-  useProductUpdatesChoice,
-} from '@/features/auth/productUpdatesChoice';
+  MarketingEmailGrantProvider,
+  useMarketingEmailChoice,
+} from '@/features/auth/marketingEmailChoice';
 
 import {
   clearSignupAttemptMarkers,
@@ -28,7 +28,7 @@ export function TermsGate({
   restorePreAuthMarker = true,
   confirmationLabel,
   confirmAge = false,
-  offerProductUpdates = false,
+  offerMarketingEmail = false,
   optedOutBySignal = false,
 }: {
   children: ReactNode;
@@ -36,18 +36,18 @@ export function TermsGate({
   restorePreAuthMarker?: boolean;
   confirmationLabel?: string;
   confirmAge?: boolean;
-  offerProductUpdates?: boolean;
+  offerMarketingEmail?: boolean;
   optedOutBySignal?: boolean;
 }) {
   const [accepted, setAccepted] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const productUpdates = useProductUpdatesChoice(optedOutBySignal);
+  const marketingEmail = useMarketingEmailChoice(optedOutBySignal);
   const checkboxId = useId();
   const ready = accepted && (!confirmAge || ageConfirmed);
-  const productUpdatesGrant =
-    offerProductUpdates && productUpdates.wanted ? POLICY_LAST_UPDATED.privacy : null;
+  const marketingEmailGrant =
+    offerMarketingEmail && marketingEmail.wanted ? POLICY_LAST_UPDATED.privacy : null;
 
   useEffect(() => {
     if (restorePreAuthMarker && hasCurrentTermsGateMarker()) setAccepted(true);
@@ -56,7 +56,7 @@ export function TermsGate({
 
   const onToggle = (next: boolean) => {
     setAccepted(next);
-    if (next) writeSignupAttemptMarkers({ productUpdates: false });
+    if (next) writeSignupAttemptMarkers({ marketingEmail: false });
     else clearSignupAttemptMarkers();
   };
 
@@ -110,9 +110,9 @@ export function TermsGate({
         </p>
       </div>
 
-      {offerProductUpdates ? (
-        <AuthProductUpdatesConsent
-          choice={productUpdates}
+      {offerMarketingEmail ? (
+        <AuthMarketingEmailConsent
+          choice={marketingEmail}
           disabled={!hydrated || confirmed}
           className={`mt-2 ${AUTH_OPTIONAL_CONSENT_CLASS}`}
         />
@@ -131,9 +131,9 @@ export function TermsGate({
         </button>
       ) : ready ? (
         <div className={confirmationLabel ? 'mt-8' : undefined}>
-          <ProductUpdatesGrantProvider value={productUpdatesGrant}>
+          <MarketingEmailGrantProvider value={marketingEmailGrant}>
             {children}
-          </ProductUpdatesGrantProvider>
+          </MarketingEmailGrantProvider>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="terms-gate-blocked" role="status">

@@ -40,11 +40,32 @@ vi.mock('@/lib/client/csrf', () => ({
 
 import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
 
-import { ProductUpdatesGrantProvider } from '@/features/auth/productUpdatesChoice';
+import { MarketingEmailGrantProvider } from '@/features/auth/marketingEmailChoice';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { PRODUCT_UPDATES_CHOICE_STORAGE_KEY } from '../signupAttemptMarkers';
+import {
+  MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+  MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+  writeSignupAttemptMarkers,
+} from '../signupAttemptMarkers';
 import { ContinueWithCurrentTerms, RecordTermsAcceptance } from './RecordTermsAcceptance';
 import SignupCompletePage from './page';
+
+function admitTickedAttemptInThisTab(): void {
+  writeSignupAttemptMarkers({ marketingEmail: true });
+}
+
+function openAnotherTab(): void {
+  window.sessionStorage.clear();
+}
+
+function everyMarker(): (string | null)[] {
+  return [
+    window.localStorage.getItem('agi.terms-accepted-version'),
+    window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY),
+    window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
+    window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
+  ];
+}
 
 function sentBodies(): Record<string, unknown>[] {
   return (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -55,6 +76,7 @@ function sentBodies(): Record<string, unknown>[] {
 describe('signup terms recorder', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
     mocks.replace.mockReset();
     mocks.useAuth.mockReturnValue({
@@ -300,9 +322,10 @@ describe('signup terms recorder', () => {
   });
 });
 
-describe('the product updates choice carried to the recorder', () => {
+describe('the marketing email choice carried to the recorder', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
     mocks.replace.mockReset();
     mocks.useAuth.mockReturnValue({
@@ -327,7 +350,7 @@ describe('the product updates choice carried to the recorder', () => {
   });
 
   it('sends a ticked choice in the request that records the terms, then forgets it', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    admitTickedAttemptInThisTab();
 
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
@@ -336,11 +359,10 @@ describe('the product updates choice carried to the recorder', () => {
       {
         surface: 'web-signup',
         version: POLICY_LAST_UPDATED.terms,
-        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
       },
     ]);
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
-    expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
+    expect(everyMarker()).toEqual([null, null, null, null]);
   });
 
   it('sends no choice when the box was left unticked', async () => {
@@ -351,7 +373,8 @@ describe('the product updates choice carried to the recorder', () => {
   });
 
   it('records nothing for a choice made against an earlier notice, and sends the person to review', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, '1970-01-01');
+    admitTickedAttemptInThisTab();
+    window.localStorage.setItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY, '1970-01-01');
 
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
@@ -360,12 +383,71 @@ describe('the product updates choice carried to the recorder', () => {
     );
     expect(mocks.replace).toHaveBeenCalledTimes(1);
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
     expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
   });
 
+  it('records nothing for a choice ticked in another tab, and sends the person to be asked again', async () => {
+    admitTickedAttemptInThisTab();
+    openAnotherTab();
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
+    );
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(everyMarker()).toEqual([null, null, null, null]);
+  });
+
+  it('records nothing when this tab ticked the box in a different attempt from the one carried', async () => {
+    admitTickedAttemptInThisTab();
+    const thisTabsAttempt = window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY);
+    openAnotherTab();
+    admitTickedAttemptInThisTab();
+    window.sessionStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, String(thisTabsAttempt));
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(everyMarker()).toEqual([null, null, null, null]);
+  });
+
+  it('records nothing for a ticked attempt whose choice another tab removed, and sends the person to be asked again', async () => {
+    admitTickedAttemptInThisTab();
+    const thisTabsAttempt = window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY);
+    openAnotherTab();
+    writeSignupAttemptMarkers({ marketingEmail: false });
+    window.sessionStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, String(thisTabsAttempt));
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
+    );
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(everyMarker()).toEqual([null, null, null, null]);
+  });
+
+  it('records nothing for a choice that carries no attempt id at all', async () => {
+    window.localStorage.setItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+
+    render(<RecordTermsAcceptance redirectTo="/chat" />);
+
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(everyMarker()).toEqual([null, null, null, null]);
+  });
+
   it('never attributes a choice left by another sign-up to the account now signed in', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    admitTickedAttemptInThisTab();
     mocks.useSignUp.mockReturnValue({
       fetchStatus: 'idle',
       signUp: {
@@ -382,22 +464,22 @@ describe('the product updates choice carried to the recorder', () => {
       expect(mocks.replace).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat'),
     );
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
   });
 
   it('drops a carried choice when nobody is signed in to attribute it to', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    admitTickedAttemptInThisTab();
     mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
 
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
   });
 
   it('keeps the choice through a failed write, so Try again records both or neither', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    admitTickedAttemptInThisTab();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(null, { status: 500 }))
@@ -408,10 +490,10 @@ describe('the product updates choice carried to the recorder', () => {
 
     expect(await screen.findByTestId('terms-record-failed')).toBeInTheDocument();
     expect(mocks.replace).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBe(
+    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBe(
       POLICY_LAST_UPDATED.privacy,
     );
-    window.localStorage.removeItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY);
+    window.localStorage.removeItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY);
 
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
 
@@ -419,13 +501,13 @@ describe('the product updates choice carried to the recorder', () => {
     const expected = {
       surface: 'web-signup',
       version: POLICY_LAST_UPDATED.terms,
-      productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+      marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
     };
     expect(sentBodies()).toEqual([expected, expected]);
   });
 
   it('asks for a reload, keeping nothing recorded, when the server says the notice moved on', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    admitTickedAttemptInThisTab();
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -447,9 +529,9 @@ describe('the product updates choice carried to the recorder', () => {
     window.localStorage.clear();
 
     render(
-      <ProductUpdatesGrantProvider value={POLICY_LAST_UPDATED.privacy}>
+      <MarketingEmailGrantProvider value={POLICY_LAST_UPDATED.privacy}>
         <RecordTermsAcceptance redirectTo="/chat" surface="web-login" />
-      </ProductUpdatesGrantProvider>,
+      </MarketingEmailGrantProvider>,
     );
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
@@ -457,26 +539,26 @@ describe('the product updates choice carried to the recorder', () => {
       {
         surface: 'web-login',
         version: POLICY_LAST_UPDATED.terms,
-        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
       },
     ]);
   });
 
   it('never reads a choice out of the browser for the login surface', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    admitTickedAttemptInThisTab();
 
     render(<RecordTermsAcceptance redirectTo="/chat" surface="web-login" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
     expect(sentBodies()).toEqual([{ surface: 'web-login', version: POLICY_LAST_UPDATED.terms }]);
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
   });
 
   it('ignores a choice from the review screen on the sign-up surface, which carries its own', async () => {
     render(
-      <ProductUpdatesGrantProvider value={POLICY_LAST_UPDATED.privacy}>
+      <MarketingEmailGrantProvider value={POLICY_LAST_UPDATED.privacy}>
         <RecordTermsAcceptance redirectTo="/chat" />
-      </ProductUpdatesGrantProvider>,
+      </MarketingEmailGrantProvider>,
     );
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
@@ -484,12 +566,12 @@ describe('the product updates choice carried to the recorder', () => {
   });
 
   it('clears a carried choice when an account that already accepted is waved through', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    admitTickedAttemptInThisTab();
 
     render(<ContinueWithCurrentTerms redirectTo="/chat" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(everyMarker()).toEqual([null, null, null, null]);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
@@ -497,6 +579,7 @@ describe('the product updates choice carried to the recorder', () => {
 describe('/signup/complete agreement record', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     mocks.replace.mockReset();
     mocks.redirect.mockReset();
     mocks.identity.mockResolvedValue({ subject: 'new-user' });

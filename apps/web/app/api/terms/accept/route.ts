@@ -16,7 +16,7 @@ import {
 import { getClerkAuthUser } from '@/lib/api-auth';
 import {
   isConsentSurface,
-  PRODUCT_UPDATES_CONSENT_PURPOSE,
+  MARKETING_EMAIL_CONSENT_PURPOSE,
   type ConsentSurface,
 } from '@/lib/consent-purposes';
 import {
@@ -31,26 +31,26 @@ import {
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
 
-interface ProductUpdatesGrant {
+interface MarketingEmailGrant {
   surface: ConsentSurface;
   noticeVersion: string;
 }
 
-function readProductUpdatesGrant(payload: TermsAcceptanceRequest): ProductUpdatesGrant | null {
-  if (payload.productUpdatesNoticeVersion === undefined) return null;
+function readMarketingEmailGrant(payload: TermsAcceptanceRequest): MarketingEmailGrant | null {
+  if (payload.marketingEmailNoticeVersion === undefined) return null;
   if (!isConsentSurface(payload.surface)) {
-    throw createError.validation('This surface does not ask about product updates', {
+    throw createError.validation('This surface does not ask about marketing email', {
       surface: payload.surface,
     });
   }
-  return { surface: payload.surface, noticeVersion: payload.productUpdatesNoticeVersion };
+  return { surface: payload.surface, noticeVersion: payload.marketingEmailNoticeVersion };
 }
 
 // The box is only ever shown to an account with no decision, so one that
 // exists was made after it: a request repeated past a withdrawal must not
 // turn the email back on.
-async function hasNoProductUpdatesDecision(userId: string): Promise<boolean> {
-  return (await readLatestConsent(userId, PRODUCT_UPDATES_CONSENT_PURPOSE.id)) === null;
+async function hasNoMarketingEmailDecision(userId: string): Promise<boolean> {
+  return (await readLatestConsent(userId, MARKETING_EMAIL_CONSENT_PURPOSE.id)) === null;
 }
 
 async function handleAcceptTerms(request: NextRequest) {
@@ -63,7 +63,7 @@ async function handleAcceptTerms(request: NextRequest) {
   if (!parsed.success) {
     throw createError.badRequest('Invalid terms acceptance payload', parsed.error.flatten());
   }
-  const productUpdates = readProductUpdatesGrant(parsed.data);
+  const marketingEmail = readMarketingEmailGrant(parsed.data);
   if (parsed.data.version !== CURRENT_TERMS_VERSION) {
     return NextResponse.json(
       {
@@ -76,8 +76,8 @@ async function handleAcceptTerms(request: NextRequest) {
       { status: 409 },
     );
   }
-  const currentNoticeVersion = noticeVersionForPurpose(PRODUCT_UPDATES_CONSENT_PURPOSE.id);
-  if (productUpdates && productUpdates.noticeVersion !== currentNoticeVersion) {
+  const currentNoticeVersion = noticeVersionForPurpose(MARKETING_EMAIL_CONSENT_PURPOSE.id);
+  if (marketingEmail && marketingEmail.noticeVersion !== currentNoticeVersion) {
     return NextResponse.json(
       {
         error: {
@@ -92,14 +92,14 @@ async function handleAcceptTerms(request: NextRequest) {
 
   try {
     const undecidedGrant =
-      productUpdates && (await hasNoProductUpdatesDecision(userId)) ? productUpdates : null;
+      marketingEmail && (await hasNoMarketingEmailDecision(userId)) ? marketingEmail : null;
     const acceptance = await recordTermsAcceptance(userId, parsed.data.surface);
     if (undecidedGrant) {
       await recordConsent({
         subject: { kind: 'user', userId },
-        purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id,
         granted: grantedUnderGlobalPrivacyControl(
-          { purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id, granted: true },
+          { purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id, granted: true },
           readGlobalPrivacyControlHeader(request.headers),
         ),
         surface: undecidedGrant.surface,

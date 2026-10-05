@@ -79,3 +79,57 @@ describe('POST /api/consent under Global Privacy Control', () => {
     ]);
   });
 });
+
+describe('POST /api/consent for the account marketing email purpose', () => {
+  beforeEach(() => {
+    mocks.requireCsrfToken.mockResolvedValue(null);
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.recordConsentBatch.mockReset().mockResolvedValue([]);
+  });
+
+  function decide(granted: boolean, surface: string, headers: Record<string, string> = {}) {
+    return POST(
+      new Request('http://localhost:3000/api/consent', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify({
+          decisions: [{ purpose: 'marketing_email', granted }],
+          surface,
+          noticeVersion: CURRENT_NOTICE_VERSION,
+        }),
+      }) as unknown as Parameters<typeof POST>[0],
+    );
+  }
+
+  it.each(['web-settings', 'web-consent-centre'])(
+    'records a grant and a withdrawal made from %s as marketing_email',
+    async (surface) => {
+      expect((await decide(true, surface)).status).toBe(200);
+      expect((await decide(false, surface)).status).toBe(200);
+
+      expect(mocks.recordConsentBatch.mock.calls).toEqual([
+        [
+          { kind: 'user', userId: 'user-1' },
+          [{ purpose: 'marketing_email', granted: true }],
+          surface,
+        ],
+        [
+          { kind: 'user', userId: 'user-1' },
+          [{ purpose: 'marketing_email', granted: false }],
+          surface,
+        ],
+      ]);
+    },
+  );
+
+  it('records a grant as a refusal under Global Privacy Control, and a withdrawal as it was made', async () => {
+    await decide(true, 'web-settings', { 'sec-gpc': '1' });
+    await decide(false, 'web-settings', { 'sec-gpc': '1' });
+
+    expect(mocks.recordConsentBatch.mock.calls.map(([, decisions]) => decisions)).toEqual([
+      [{ purpose: 'marketing_email', granted: false }],
+      [{ purpose: 'marketing_email', granted: false }],
+    ]);
+  });
+});

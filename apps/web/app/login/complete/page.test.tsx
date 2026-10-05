@@ -83,7 +83,7 @@ vi.mock('../../signup/complete/RecordTermsAcceptance', () => ({
   },
 }));
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_HEADER } from '@/lib/consent-signals';
 import LoginCompletePage from './page';
 import {
@@ -330,13 +330,17 @@ describe('/login/complete', () => {
     expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/chat' });
   });
 
-  describe('product updates on the first acceptance', () => {
-    function decision(granted: boolean) {
+  describe('marketing email on the first acceptance', () => {
+    function decision(
+      granted: boolean,
+      surface = 'web-consent-centre',
+      purpose = MARKETING_EMAIL_CONSENT_PURPOSE.id,
+    ) {
       return {
-        purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        purpose,
         granted,
         noticeVersion: '2026-09-29',
-        surface: 'web-consent-centre',
+        surface,
         recordedAt: '2026-10-01T00:00:00.000Z',
       };
     }
@@ -360,27 +364,54 @@ describe('/login/complete', () => {
 
       expect(mocks.latestConsent).toHaveBeenCalledWith(
         'user-1',
-        PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        MARKETING_EMAIL_CONSENT_PURPOSE.id,
       );
       expect(gateProps()).toMatchObject({
         confirmAge: true,
-        offerProductUpdates: true,
+        offerMarketingEmail: true,
         optedOutBySignal: false,
       });
       expect(mocks.recorder).toHaveBeenCalledWith({ redirectTo: '/chat', surface: 'web-login' });
     });
 
     it.each([
-      ['granted', true],
-      ['refused or withdrew', false],
-    ])('never asks an account that already %s', async (_case, granted) => {
+      ['granted at sign-up', true, 'web-signup'],
+      ['granted in Settings', true, 'web-settings'],
+      ['was recorded as refusing under Global Privacy Control', false, 'web-signup'],
+      ['withdrew in Settings', false, 'web-settings'],
+      ['withdrew in the consent centre', false, 'web-consent-centre'],
+    ])('never asks an account that already %s', async (_case, granted, surface) => {
       mocks.acceptedAny.mockResolvedValue(false);
-      mocks.latestConsent.mockResolvedValue(decision(granted));
+      mocks.latestConsent.mockResolvedValue(decision(granted, surface));
 
       await renderTermsStep();
 
-      expect(gateProps()).toMatchObject({ confirmAge: true, offerProductUpdates: false });
+      expect(gateProps()).toMatchObject({ confirmAge: true, offerMarketingEmail: false });
       expect(mocks.headers).not.toHaveBeenCalled();
+    });
+
+    it('asks about the marketing_email purpose and never about waitlist product updates', async () => {
+      mocks.acceptedAny.mockResolvedValue(false);
+
+      await renderTermsStep();
+
+      expect(mocks.latestConsent.mock.calls).toEqual([['user-1', 'marketing_email']]);
+    });
+
+    it.each([
+      ['granted', true],
+      ['refused', false],
+    ])('still asks an account that only %s waitlist product updates', async (_case, granted) => {
+      mocks.acceptedAny.mockResolvedValue(false);
+      mocks.latestConsent.mockImplementation(async (_userId: string, purpose: string) =>
+        purpose === 'product_updates'
+          ? decision(granted, 'web-waitlist-inline', 'product_updates')
+          : null,
+      );
+
+      await renderTermsStep();
+
+      expect(gateProps()).toMatchObject({ confirmAge: true, offerMarketingEmail: true });
     });
 
     it('does not ask when the ledger cannot be read, rather than assume nobody asked', async () => {
@@ -390,7 +421,7 @@ describe('/login/complete', () => {
       await renderTermsStep();
 
       expect(screen.getByTestId('terms-gate')).toBeInTheDocument();
-      expect(gateProps()).toMatchObject({ offerProductUpdates: false, optedOutBySignal: false });
+      expect(gateProps()).toMatchObject({ offerMarketingEmail: false, optedOutBySignal: false });
     });
 
     it('does not ask an existing account that is accepting a revision', async () => {
@@ -398,7 +429,7 @@ describe('/login/complete', () => {
 
       await renderTermsStep();
 
-      expect(gateProps()).toMatchObject({ confirmAge: false, offerProductUpdates: false });
+      expect(gateProps()).toMatchObject({ confirmAge: false, offerMarketingEmail: false });
       expect(mocks.latestConsent).not.toHaveBeenCalled();
     });
 
@@ -409,7 +440,7 @@ describe('/login/complete', () => {
       await renderTermsStep({ review: 'terms' });
 
       expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
-      expect(gateProps()).toMatchObject({ offerProductUpdates: false });
+      expect(gateProps()).toMatchObject({ offerMarketingEmail: false });
       expect(mocks.latestConsent).not.toHaveBeenCalled();
     });
 
@@ -419,7 +450,7 @@ describe('/login/complete', () => {
 
       await renderTermsStep();
 
-      expect(gateProps()).toMatchObject({ offerProductUpdates: true, optedOutBySignal: true });
+      expect(gateProps()).toMatchObject({ offerMarketingEmail: true, optedOutBySignal: true });
     });
 
     it('reads no ledger for an account that needs no terms step at all', async () => {

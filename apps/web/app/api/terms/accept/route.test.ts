@@ -47,7 +47,7 @@ vi.mock('@/lib/server/terms', async (importOriginal) => ({
   recordTermsAcceptance: (...args: unknown[]) => mocks.record(...args),
 }));
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_HEADER } from '@/lib/consent-signals';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { GET, POST } from './route';
@@ -124,7 +124,7 @@ describe('native Terms acceptance API', () => {
   });
 });
 
-describe('product updates asked with the terms', () => {
+describe('marketing email asked with the terms', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.csrf.mockResolvedValue(null);
@@ -133,7 +133,7 @@ describe('product updates asked with the terms', () => {
       acceptedAt: '2026-10-04T00:00:00Z',
     });
     mocks.consent.mockResolvedValue({
-      purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+      purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id,
       granted: true,
       noticeVersion: NOTICE_ON_SCREEN,
       surface: 'web-signup',
@@ -149,7 +149,7 @@ describe('product updates asked with the terms', () => {
       const response = await accept({
         surface,
         version: 'current-policy',
-        productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+        marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
       });
 
       expect(response.status).toBe(200);
@@ -157,7 +157,7 @@ describe('product updates asked with the terms', () => {
       expect(mocks.consent).toHaveBeenCalledTimes(1);
       expect(mocks.consent).toHaveBeenCalledWith({
         subject: { kind: 'user', userId: 'person-a' },
-        purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id,
         granted: true,
         surface,
       });
@@ -166,11 +166,71 @@ describe('product updates asked with the terms', () => {
     },
   );
 
+  it('writes the grant as marketing_email and never as the waitlist product updates purpose', async () => {
+    await accept({
+      surface: 'web-signup',
+      version: 'current-policy',
+      marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
+    });
+
+    expect(
+      mocks.consent.mock.calls.map(([input]) => (input as { purpose: string }).purpose),
+    ).toEqual(['marketing_email']);
+    expect(mocks.latestConsent.mock.calls).toEqual([['person-a', 'marketing_email']]);
+  });
+
+  it.each([
+    ['granted', true],
+    ['refused', false],
+  ])(
+    'still writes the grant for an account that only %s waitlist product updates',
+    async (_case, granted) => {
+      mocks.latestConsent.mockImplementation(async (_userId: string, purpose: string) =>
+        purpose === 'product_updates'
+          ? {
+              purpose: 'product_updates',
+              granted,
+              noticeVersion: NOTICE_ON_SCREEN,
+              surface: 'web-waitlist-inline',
+              recordedAt: '2026-10-01T00:00:00Z',
+            }
+          : null,
+      );
+
+      const response = await accept({
+        surface: 'web-signup',
+        version: 'current-policy',
+        marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
+      });
+
+      expect(response.status).toBe(200);
+      expect(mocks.consent).toHaveBeenCalledTimes(1);
+      expect(mocks.consent).toHaveBeenCalledWith({
+        subject: { kind: 'user', userId: 'person-a' },
+        purpose: 'marketing_email',
+        granted: true,
+        surface: 'web-signup',
+      });
+    },
+  );
+
+  it('does not read the field the box was first built with as an opt-in', async () => {
+    const response = await accept({
+      surface: 'web-signup',
+      version: 'current-policy',
+      productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.latestConsent).not.toHaveBeenCalled();
+    expect(mocks.consent).not.toHaveBeenCalled();
+  });
+
   it('writes the grant before the sign-up event is counted', async () => {
     await accept({
       surface: 'web-signup',
       version: 'current-policy',
-      productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+      marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
     });
 
     expect(mocks.track).toHaveBeenCalledTimes(1);
@@ -193,7 +253,7 @@ describe('product updates asked with the terms', () => {
       accept({
         surface: 'mobile-auth',
         version: 'current-policy',
-        productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+        marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
       }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', statusCode: 400 });
 
@@ -205,7 +265,7 @@ describe('product updates asked with the terms', () => {
     const response = await accept({
       surface: 'web-signup',
       version: 'current-policy',
-      productUpdatesNoticeVersion: '1970-01-01',
+      marketingEmailNoticeVersion: '1970-01-01',
     });
 
     expect(response.status).toBe(409);
@@ -226,7 +286,7 @@ describe('product updates asked with the terms', () => {
     const response = await accept({
       surface: 'web-login',
       version: 'old-policy',
-      productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+      marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
     });
 
     expect(response.status).toBe(409);
@@ -240,7 +300,7 @@ describe('product updates asked with the terms', () => {
       {
         surface: 'web-signup',
         version: 'current-policy',
-        productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+        marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
       },
       { [GLOBAL_PRIVACY_CONTROL_HEADER]: '1' },
     );
@@ -249,14 +309,14 @@ describe('product updates asked with the terms', () => {
     expect(mocks.consent).toHaveBeenCalledTimes(1);
     expect(mocks.consent).toHaveBeenCalledWith(
       expect.objectContaining({
-        purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id,
         granted: false,
         surface: 'web-signup',
       }),
     );
   });
 
-  it('records nothing about product updates under the signal when the box was not ticked', async () => {
+  it('records nothing about marketing email under the signal when the box was not ticked', async () => {
     await accept(
       { surface: 'web-signup', version: 'current-policy' },
       { [GLOBAL_PRIVACY_CONTROL_HEADER]: '1' },
@@ -273,7 +333,7 @@ describe('product updates asked with the terms', () => {
     'appends nothing when the account already %s, so a repeated request cannot override it',
     async (_case, granted, surface) => {
       mocks.latestConsent.mockResolvedValue({
-        purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id,
         granted,
         noticeVersion: NOTICE_ON_SCREEN,
         surface,
@@ -283,13 +343,13 @@ describe('product updates asked with the terms', () => {
       const response = await accept({
         surface: 'web-signup',
         version: 'current-policy',
-        productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+        marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
       });
 
       expect(response.status).toBe(200);
       expect(mocks.latestConsent).toHaveBeenCalledWith(
         'person-a',
-        PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        MARKETING_EMAIL_CONSENT_PURPOSE.id,
       );
       expect(mocks.record).toHaveBeenCalledWith('person-a', 'web-signup');
       expect(mocks.consent).not.toHaveBeenCalled();
@@ -306,7 +366,7 @@ describe('product updates asked with the terms', () => {
     const request = {
       surface: 'web-signup',
       version: 'current-policy',
-      productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+      marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
     };
 
     await accept(request);
@@ -334,7 +394,7 @@ describe('product updates asked with the terms', () => {
       accept({
         surface: 'web-signup',
         version: 'current-policy',
-        productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+        marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
       }),
     ).rejects.toMatchObject({ code: 'INTERNAL_ERROR', statusCode: 500 });
 
@@ -351,7 +411,7 @@ describe('product updates asked with the terms', () => {
       accept({
         surface: 'web-signup',
         version: 'current-policy',
-        productUpdatesNoticeVersion: NOTICE_ON_SCREEN,
+        marketingEmailNoticeVersion: NOTICE_ON_SCREEN,
       }),
     ).rejects.toMatchObject({ code: 'INTERNAL_ERROR', statusCode: 500 });
 

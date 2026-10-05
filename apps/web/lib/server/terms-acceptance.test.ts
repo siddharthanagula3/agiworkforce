@@ -48,7 +48,7 @@ vi.mock('@/lib/rate-limit', () => ({
   getClientIpForRateLimit: () => '203.0.113.7',
 }));
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms, recordTermsAcceptance } from './terms';
 import { POST as acceptTerms } from '@/app/api/terms/accept/route';
@@ -261,7 +261,7 @@ describe('POST /api/terms/accept', () => {
   });
 
   it.each(['web-signup', 'web-login'] as const)(
-    'appends the product updates grant to the ledger against %s, after the acceptance',
+    'appends the marketing email grant to the ledger against %s, after the acceptance',
     async (surface) => {
       mocks.auth.mockResolvedValue({ userId: 'user_abc' });
       mocks.query
@@ -275,7 +275,7 @@ describe('POST /api/terms/accept', () => {
         ])
         .mockResolvedValueOnce([
           {
-            purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+            purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id,
             granted: true,
             notice_version: POLICY_LAST_UPDATED.privacy,
             surface,
@@ -287,7 +287,7 @@ describe('POST /api/terms/accept', () => {
         acceptRequest({
           surface,
           version: POLICY_LAST_UPDATED.terms,
-          productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+          marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
         }),
       );
 
@@ -296,7 +296,7 @@ describe('POST /api/terms/accept', () => {
         expect.stringMatching(
           /from public\.consent_records\s+where user_id = \$1 and purpose = \$2/,
         ),
-        ['user_abc', PRODUCT_UPDATES_CONSENT_PURPOSE.id],
+        ['user_abc', MARKETING_EMAIL_CONSENT_PURPOSE.id],
       ]);
       expect(writes().map(([sql]) => sql.match(/insert into public\.(\w+)/i)?.[1])).toEqual([
         'profiles',
@@ -305,7 +305,7 @@ describe('POST /api/terms/accept', () => {
       expect(writes()[1]?.[1]).toEqual([
         'user_abc',
         null,
-        PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+        MARKETING_EMAIL_CONSENT_PURPOSE.id,
         true,
         POLICY_LAST_UPDATED.privacy,
         surface,
@@ -313,7 +313,63 @@ describe('POST /api/terms/accept', () => {
     },
   );
 
-  it('touches only the profile when the product updates box was left unticked', async () => {
+  it('writes the grant as marketing_email, and still writes it for an account that agreed to waitlist product updates', async () => {
+    mocks.auth.mockResolvedValue({ userId: 'user_abc' });
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (/from public\.consent_records/.test(sql)) {
+        return params[1] === 'product_updates'
+          ? [
+              {
+                purpose: 'product_updates',
+                granted: true,
+                notice_version: POLICY_LAST_UPDATED.privacy,
+                surface: 'web-waitlist-inline',
+                recorded_at: '2026-10-01T10:00:00.000Z',
+              },
+            ]
+          : [];
+      }
+      if (/insert into public\.profiles/i.test(sql)) {
+        return [
+          {
+            terms_version: CURRENT_TERMS_VERSION,
+            terms_accepted_at: '2026-10-04T10:00:00.000Z',
+            terms_accepted_surface: 'web-signup',
+          },
+        ];
+      }
+      return [
+        {
+          purpose: params[2],
+          granted: params[3],
+          notice_version: params[4],
+          surface: params[5],
+          recorded_at: '2026-10-04T10:00:00.000Z',
+        },
+      ];
+    });
+
+    const response = await acceptTerms(
+      acceptRequest({
+        surface: 'web-signup',
+        version: POLICY_LAST_UPDATED.terms,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual(['user_abc', 'marketing_email']);
+    expect(writes().find(([sql]) => /insert into public\.consent_records/i.test(sql))?.[1]).toEqual(
+      ['user_abc', null, 'marketing_email', true, POLICY_LAST_UPDATED.privacy, 'web-signup'],
+    );
+    expect(
+      mocks.query.mock.calls.some(([, params]) =>
+        (params as unknown[]).includes('product_updates'),
+      ),
+    ).toBe(false);
+  });
+
+  it('touches only the profile when the marketing email box was left unticked', async () => {
     mocks.auth.mockResolvedValue({ userId: 'user_abc' });
     mocks.query.mockResolvedValueOnce([
       {
@@ -331,14 +387,14 @@ describe('POST /api/terms/accept', () => {
     ]);
   });
 
-  it('answers 400 to a product updates choice from a surface that never asks it', async () => {
+  it('answers 400 to a marketing email choice from a surface that never asks it', async () => {
     mocks.auth.mockResolvedValue({ userId: 'user_abc' });
 
     const response = await acceptTerms(
       acceptRequest({
         surface: 'mobile-auth',
         version: POLICY_LAST_UPDATED.terms,
-        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
       }),
     );
 
@@ -353,7 +409,7 @@ describe('POST /api/terms/accept', () => {
       acceptRequest({
         surface: 'web-signup',
         version: POLICY_LAST_UPDATED.terms,
-        productUpdatesNoticeVersion: '1970-01-01',
+        marketingEmailNoticeVersion: '1970-01-01',
       }),
     );
 
@@ -375,7 +431,7 @@ describe('POST /api/terms/accept', () => {
       mocks.query
         .mockResolvedValueOnce([
           {
-            purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id,
+            purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id,
             granted,
             notice_version: POLICY_LAST_UPDATED.privacy,
             surface: decidedOn,
@@ -394,7 +450,7 @@ describe('POST /api/terms/accept', () => {
         acceptRequest({
           surface: 'web-signup',
           version: POLICY_LAST_UPDATED.terms,
-          productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+          marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
         }),
       );
 
@@ -413,7 +469,7 @@ describe('POST /api/terms/accept', () => {
       acceptRequest({
         surface: 'web-signup',
         version: POLICY_LAST_UPDATED.terms,
-        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
       }),
     );
 
@@ -438,7 +494,7 @@ describe('POST /api/terms/accept', () => {
       acceptRequest({
         surface: 'web-signup',
         version: POLICY_LAST_UPDATED.terms,
-        productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
       }),
     );
 

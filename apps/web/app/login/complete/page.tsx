@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 import { logger } from '@/lib/logger';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
@@ -25,11 +25,11 @@ const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkfo
 
 // An account that granted, refused or withdrew is never asked again, and a
 // ledger that cannot be read is not taken to mean nobody asked.
-async function neverAskedAboutProductUpdates(userId: string): Promise<boolean> {
+async function neverAskedAboutMarketingEmail(userId: string): Promise<boolean> {
   try {
-    return (await readLatestConsent(userId, PRODUCT_UPDATES_CONSENT_PURPOSE.id)) === null;
+    return (await readLatestConsent(userId, MARKETING_EMAIL_CONSENT_PURPOSE.id)) === null;
   } catch (error) {
-    logger.error({ error, userId }, 'Could not read the product updates decision at sign-in');
+    logger.error({ error, userId }, 'Could not read the marketing email decision at sign-in');
     return false;
   }
 }
@@ -96,8 +96,8 @@ export default async function LoginCompletePage({
     return <ContinueWithCurrentTerms redirectTo={redirectTo} />;
   }
   const firstAcceptance = !(await hasAcceptedAnyTerms(userId));
-  const offerProductUpdates = firstAcceptance && (await neverAskedAboutProductUpdates(userId));
-  const optedOutBySignal = offerProductUpdates && readGlobalPrivacyControlHeader(await headers());
+  const offerMarketingEmail = firstAcceptance && (await neverAskedAboutMarketingEmail(userId));
+  const optedOutBySignal = offerMarketingEmail && readGlobalPrivacyControlHeader(await headers());
 
   return (
     <AuthLayout embedded={isDesktopSurface} scene>
@@ -110,7 +110,7 @@ export default async function LoginCompletePage({
           restorePreAuthMarker={false}
           confirmationLabel="Continue"
           confirmAge={firstAcceptance}
-          offerProductUpdates={offerProductUpdates}
+          offerMarketingEmail={offerMarketingEmail}
           optedOutBySignal={optedOutBySignal}
         >
           <RecordTermsAcceptance redirectTo={redirectTo} surface="web-login" />

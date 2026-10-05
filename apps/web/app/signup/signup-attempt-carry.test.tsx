@@ -74,10 +74,14 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 }));
 
 import { AuthFlow } from '@/features/auth/AuthFlow';
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { RecordTermsAcceptance } from './complete/RecordTermsAcceptance';
-import { PRODUCT_UPDATES_CHOICE_STORAGE_KEY, TERMS_GATE_STORAGE_KEY } from './signupAttemptMarkers';
+import {
+  MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+  MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+  TERMS_GATE_STORAGE_KEY,
+} from './signupAttemptMarkers';
 
 const REDIRECTS = {
   completeUrl: '/signup/complete?redirectTo=%2Fchat',
@@ -87,18 +91,18 @@ const REDIRECTS = {
 const PROVIDERS = [{ id: 'google' as const, label: 'Google' }];
 const REQUIRED_BOX = new RegExp(`^${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use`);
 const TERMS_ONLY = { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms };
-const TERMS_AND_GRANT = { ...TERMS_ONLY, productUpdatesNoticeVersion: POLICY_LAST_UPDATED.privacy };
+const TERMS_AND_GRANT = { ...TERMS_ONLY, marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy };
 
 function openSignup(): RenderResult {
   return render(<AuthFlow mode="signup" providers={PROVIDERS} redirects={REDIRECTS} />);
 }
 
-async function admitByEmail(tab: RenderResult, { productUpdates }: { productUpdates: boolean }) {
+async function admitByEmail(tab: RenderResult, { marketingEmail }: { marketingEmail: boolean }) {
   const screen = within(tab.container);
   await userEvent.click(screen.getByRole('checkbox', { name: REQUIRED_BOX }));
-  if (productUpdates) {
+  if (marketingEmail) {
     await userEvent.click(
-      screen.getByRole('checkbox', { name: PRODUCT_UPDATES_CONSENT_PURPOSE.label }),
+      screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
     );
   }
   await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
@@ -110,12 +114,12 @@ async function admitByEmail(tab: RenderResult, { productUpdates }: { productUpda
   );
 }
 
-async function admitByProvider(tab: RenderResult, { productUpdates }: { productUpdates: boolean }) {
+async function admitByProvider(tab: RenderResult, { marketingEmail }: { marketingEmail: boolean }) {
   const screen = within(tab.container);
   await userEvent.click(screen.getByRole('checkbox', { name: REQUIRED_BOX }));
-  if (productUpdates) {
+  if (marketingEmail) {
     await userEvent.click(
-      screen.getByRole('checkbox', { name: PRODUCT_UPDATES_CONSENT_PURPOSE.label }),
+      screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
     );
   }
   const admitted = signUpState.sso.mock.calls.length;
@@ -123,7 +127,11 @@ async function admitByProvider(tab: RenderResult, { productUpdates }: { productU
   await waitFor(() => expect(signUpState.sso.mock.calls.length).toBe(admitted + 1));
 }
 
-async function landOnSignupCompleteWithTheNewAccount(): Promise<Record<string, unknown>[]> {
+const ASKED_AGAIN_AT = '/login/complete?redirectTo=%2Fchat';
+
+async function landOnSignupCompleteWithTheNewAccount(
+  sentOnTo = '/chat',
+): Promise<Record<string, unknown>[]> {
   signUpState.status = 'complete';
   signUpState.createdUserId = 'new-user';
   signUpState.createdSessionId = 'new-session';
@@ -134,15 +142,43 @@ async function landOnSignupCompleteWithTheNewAccount(): Promise<Record<string, u
     sessionId: 'new-session',
   };
   render(<RecordTermsAcceptance redirectTo="/chat" />);
-  await waitFor(() => expect(session.replace).toHaveBeenCalledWith('/chat'));
+  await waitFor(() => expect(session.replace).toHaveBeenCalledWith(sentOnTo));
+  expect(session.replace).toHaveBeenCalledTimes(1);
   return (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
     ([, init]) => JSON.parse((init as RequestInit).body as string) as Record<string, unknown>,
   );
 }
 
+type TabSession = Record<string, string>;
+
+function switchAwayFromTab(): TabSession {
+  const held: TabSession = {};
+  for (let index = 0; index < window.sessionStorage.length; index += 1) {
+    const key = window.sessionStorage.key(index);
+    if (key !== null) held[key] = window.sessionStorage.getItem(key) ?? '';
+  }
+  window.sessionStorage.clear();
+  return held;
+}
+
+function switchBackToTab(held: TabSession): void {
+  window.sessionStorage.clear();
+  for (const [key, value] of Object.entries(held)) window.sessionStorage.setItem(key, value);
+}
+
+function everyMarker(): (string | null)[] {
+  return [
+    window.localStorage.getItem(TERMS_GATE_STORAGE_KEY),
+    window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY),
+    window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
+    window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
+  ];
+}
+
 describe('a sign-up attempt carried from the sign-up screen to the account', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     session.replace.mockReset();
     signUpState.status = 'missing_requirements';
     signUpState.createdUserId = null;
@@ -164,12 +200,11 @@ describe('a sign-up attempt carried from the sign-up screen to the account', () 
     'sends a choice ticked before %s in the request that records the terms, then forgets it',
     async (_path, admit) => {
       const tab = openSignup();
-      await admit(tab, { productUpdates: true });
+      await admit(tab, { marketingEmail: true });
       tab.unmount();
 
       expect(await landOnSignupCompleteWithTheNewAccount()).toEqual([TERMS_AND_GRANT]);
-      expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
-      expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+      expect(everyMarker()).toEqual([null, null, null, null]);
     },
   );
 
@@ -178,7 +213,7 @@ describe('a sign-up attempt carried from the sign-up screen to the account', () 
     ['a provider round trip', admitByProvider],
   ])('sends the terms alone when the box was left empty before %s', async (_path, admit) => {
     const tab = openSignup();
-    await admit(tab, { productUpdates: false });
+    await admit(tab, { marketingEmail: false });
     tab.unmount();
 
     expect(await landOnSignupCompleteWithTheNewAccount()).toEqual([TERMS_ONLY]);
@@ -186,26 +221,97 @@ describe('a sign-up attempt carried from the sign-up screen to the account', () 
 
   it('sends nothing ticked by a person who then started again with the box empty', async () => {
     const first = openSignup();
-    await admitByEmail(first, { productUpdates: true });
+    await admitByEmail(first, { marketingEmail: true });
     first.unmount();
 
     const second = openSignup();
-    await admitByProvider(second, { productUpdates: false });
+    await admitByProvider(second, { marketingEmail: false });
     second.unmount();
 
     expect(await landOnSignupCompleteWithTheNewAccount()).toEqual([TERMS_ONLY]);
   });
+});
 
-  // Pins the browser-wide marker. Whether the older attempt can still finish
-  // is the identity provider's decision, not this code's.
-  it('carries the choice of the attempt admitted last when two are open in one browser', async () => {
-    const olderTab = openSignup();
-    await admitByEmail(olderTab, { productUpdates: false });
-    const newerTab = openSignup();
-    await admitByProvider(newerTab, { productUpdates: true });
-    newerTab.unmount();
-    olderTab.unmount();
+describe('two sign-up attempts open in one browser', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    session.replace.mockReset();
+    signUpState.status = 'missing_requirements';
+    signUpState.createdUserId = null;
+    signUpState.createdSessionId = null;
+    signUpState.create.mockReset().mockResolvedValue({ error: null });
+    signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });
+    signUpState.sso.mockReset().mockResolvedValue({ error: null });
+    session.auth = { isLoaded: true, isSignedIn: false, userId: null, sessionId: null };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 200 })),
+    );
+  });
+
+  async function admitInItsOwnTab(
+    admit: typeof admitByEmail,
+    choice: { marketingEmail: boolean },
+  ): Promise<TabSession> {
+    const tab = openSignup();
+    await admit(tab, choice);
+    tab.unmount();
+    return switchAwayFromTab();
+  }
+
+  it('records nothing for the older attempt when only the newer tab ticked the box, and asks again', async () => {
+    const olderTab = await admitInItsOwnTab(admitByEmail, { marketingEmail: false });
+    await admitInItsOwnTab(admitByProvider, { marketingEmail: true });
+
+    switchBackToTab(olderTab);
+
+    expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
+    expect(everyMarker()).toEqual([null, null, null, null]);
+  });
+
+  it('records the choice for the newer attempt, in the tab that ticked it', async () => {
+    await admitInItsOwnTab(admitByEmail, { marketingEmail: false });
+    const newerTab = await admitInItsOwnTab(admitByProvider, { marketingEmail: true });
+
+    switchBackToTab(newerTab);
 
     expect(await landOnSignupCompleteWithTheNewAccount()).toEqual([TERMS_AND_GRANT]);
+  });
+
+  it('records nothing for the older attempt when both tabs ticked the box, and asks again', async () => {
+    const olderTab = await admitInItsOwnTab(admitByEmail, { marketingEmail: true });
+    await admitInItsOwnTab(admitByProvider, { marketingEmail: true });
+
+    switchBackToTab(olderTab);
+
+    expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
+    expect(everyMarker()).toEqual([null, null, null, null]);
+  });
+
+  it('records nothing for the older attempt whose ticked choice the newer tab removed, and asks again', async () => {
+    const olderTab = await admitInItsOwnTab(admitByEmail, { marketingEmail: true });
+    await admitInItsOwnTab(admitByProvider, { marketingEmail: false });
+
+    switchBackToTab(olderTab);
+
+    expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
+    expect(everyMarker()).toEqual([null, null, null, null]);
+  });
+
+  it('records the terms alone for the newer attempt that left the box empty', async () => {
+    await admitInItsOwnTab(admitByEmail, { marketingEmail: true });
+    const newerTab = await admitInItsOwnTab(admitByProvider, { marketingEmail: false });
+
+    switchBackToTab(newerTab);
+
+    expect(await landOnSignupCompleteWithTheNewAccount()).toEqual([TERMS_ONLY]);
+  });
+
+  it('records nothing in a tab that never held the attempt, such as a link opened elsewhere', async () => {
+    await admitInItsOwnTab(admitByEmail, { marketingEmail: true });
+
+    expect(await landOnSignupCompleteWithTheNewAccount(ASKED_AGAIN_AT)).toEqual([]);
+    expect(everyMarker()).toEqual([null, null, null, null]);
   });
 });

@@ -10,8 +10,8 @@ vi.mock('../../components/UsOnlyRoutingPanel', () => ({
 vi.mock('../../components/ProductAnalyticsConsentRow', () => ({
   ProductAnalyticsConsentRow: () => null,
 }));
-vi.mock('../../components/ProductUpdatesConsentRow', () => ({
-  ProductUpdatesConsentRow: () => null,
+vi.mock('../../components/MarketingEmailConsentRow', () => ({
+  MarketingEmailConsentRow: () => null,
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
