@@ -778,6 +778,77 @@ describe('Free section in the composer', () => {
     }
   });
 
+  it('marks free image models Limited with the plain line while the limited offer covers the account', () => {
+    const offered = {
+      ...catalogue([
+        model(familyA[0]!),
+        { ...model(imageKey), expiresOn: '2026-10-21' },
+        { ...model(imageKeys[1]!), expiresOn: '2026-11-26' },
+      ]),
+      limitedOffer: [
+        {
+          category: 'image' as const,
+          dailyCap: 5,
+          remainingToday: 4,
+          resetsAt: '2026-10-05T00:00:00.000Z',
+        },
+      ],
+    };
+    renderSection(sources(source('ready', offered)));
+    const line = `Free while our free capacity lasts, until ${calendarDay('2026-11-25')} (UTC) at the latest.`;
+
+    expect(screen.queryByText('Limited')).not.toBeInTheDocument();
+    expect(screen.queryByText(line)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Free model category' }), {
+      target: { value: 'image' },
+    });
+
+    const row = screen.getByRole('button', { name: name(imageKey) });
+    expect(row).toHaveTextContent('Limited');
+    expect(row).toHaveAccessibleDescription(new RegExp(literal(line)));
+    expect(screen.getByText(line)).toBeVisible();
+  });
+
+  it('keeps the Limited mark and the image end date off a selected free chat model shown above the image list', () => {
+    const chatKey = familyA[0]!;
+    const offered = {
+      ...catalogue([model(chatKey), { ...model(imageKey), expiresOn: '2026-10-21' }]),
+      limitedOffer: [
+        {
+          category: 'image' as const,
+          dailyCap: 5,
+          remainingToday: 4,
+          resetsAt: '2026-10-05T00:00:00.000Z',
+        },
+      ],
+    };
+    renderSection(sources(source('ready', offered)), { selectedId: chatKey });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Free model category' }), {
+      target: { value: 'image' },
+    });
+
+    const note = screen.getByText(/^Free while our free capacity lasts/);
+    const chatRow = screen.getByRole('button', { name: name(chatKey) });
+    expect(chatRow).toHaveAttribute('aria-pressed', 'true');
+    expect(chatRow).not.toHaveTextContent('Limited');
+    expect(chatRow.getAttribute('aria-describedby')!.split(' ')).not.toContain(note.id);
+
+    const imageRow = screen.getByRole('button', { name: name(imageKey) });
+    expect(imageRow).toHaveTextContent('Limited');
+    expect(imageRow.getAttribute('aria-describedby')!.split(' ')).toContain(note.id);
+  });
+
+  it('adds no Limited mark to free media a plan already includes', () => {
+    renderSection(
+      sources(source('ready', catalogue([{ ...model(imageKey), expiresOn: '2026-10-21' }]))),
+    );
+
+    expect(screen.getByRole('button', { name: name(imageKey) })).not.toHaveTextContent('Limited');
+    expect(screen.queryByText(/Free while our free capacity lasts/)).not.toBeInTheDocument();
+  });
+
   it('renders nothing for an account offered no free models', () => {
     const { container } = render(
       <FreeQuotaModelSection

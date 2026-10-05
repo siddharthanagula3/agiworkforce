@@ -160,6 +160,30 @@ describe('provider refusals on a free model', () => {
       'exhausted',
     ],
     [{ status: 402, message: 'Payment required' }, 'billing'],
+    [{ message: 'Payment required' }, 'failed'],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'Input text cannot be used: payment required',
+      },
+      'failed',
+    ],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'Input text cannot be used: check your plan and billing details',
+      },
+      'failed',
+    ],
+    [
+      {
+        status: 429,
+        message: 'You exceeded your current quota, please check your plan and billing details.',
+      },
+      'busy',
+    ],
     [
       {
         status: 429,
@@ -187,6 +211,64 @@ describe('provider refusals on a free model', () => {
     [
       { status: 429, code: 'insufficient_quota', message: 'Free allocated quota exceeded.' },
       'exhausted',
+    ],
+    [
+      { code: 'Throttling.AllocationQuota', message: 'Free allocated quota exceeded.' },
+      'exhausted',
+    ],
+    [
+      {
+        status: 429,
+        code: 'Throttling.AllocationQuota',
+        message: 'Your prompt "Free allocated quota exceeded." was throttled.',
+      },
+      'busy',
+    ],
+    [
+      { status: 429, code: 'Throttling.RateQuota', message: 'Free allocated quota exceeded.' },
+      'busy',
+    ],
+    [{ status: 429, message: 'Free allocated quota exceeded.' }, 'busy'],
+    [
+      {
+        status: 429,
+        code: 'SomethingNew',
+        message: 'Allocated quota exceeded, please increase your quota limit.',
+      },
+      'busy',
+    ],
+    [{ status: 429, code: 'Throttling.User', message: 'Free allocated quota exceeded.' }, 'busy'],
+    [
+      {
+        status: 429,
+        code: 'SomethingNew',
+        message: 'Your prompt "quota exceeded" was refused.',
+      },
+      'busy',
+    ],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'Input text cannot be used: Free allocated quota exceeded.',
+      },
+      'failed',
+    ],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'Input text cannot be used: The free tier of the model has been exhausted.',
+      },
+      'failed',
+    ],
+    [
+      {
+        status: 400,
+        code: 'InvalidParameter',
+        message: 'Input text cannot be used: AllocationQuota.FreeTierOnly',
+      },
+      'failed',
     ],
     [
       { status: 429, code: 'limit_requests', message: 'You have exceeded your request limit.' },

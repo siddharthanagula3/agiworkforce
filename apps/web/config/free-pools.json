@@ -113,11 +113,11 @@
   ],
   "notes": "Alibaba Model Studio entries are promotional allocations: independent per model id, 1,000,000 tokens each, expiring on the console date recorded in expiresAtMs (read from the Benefits page on 2026-09-06). hardStopsBeforePaid mirrors the console's Free quota only switch, which was off for every listed model on that date; the lane refuses a pool that can bill past its allowance, so these rows stay ineligible until the founder turns the switch on per model and records the review. Exhaustion is signalled by AllocationQuota.FreeTierOnly, which the runtime classifies as quota_exhausted and marks the pool spent until its expiry.",
   "inventory": {
-    "observedOn": "2026-09-19",
+    "observedOn": "2026-10-04",
     "issuer": "QwenCloud",
     "source": "QwenCloud Benefits screenshots supplied by the account owner",
     "evidenceUrl": "https://docs.qwencloud.com/resources/free-quota",
-    "reportedEligible": 270,
+    "reportedEligible": 277,
     "reportedUnavailable": 2,
     "termsReview": {
       "terms": {
@@ -397,9 +397,9 @@
       ]
     },
     "sources": [
-      "screencapture-home-qwencloud-benefits-2026-09-19-21_06_43.png",
-      "screencapture-home-qwencloud-benefits-2026-09-19-21_07_02.png",
-      "screencapture-home-qwencloud-benefits-2026-09-19-21_07_14.png"
+      "screencapture-home-qwencloud-benefits-2026-10-04-18_13_33.png",
+      "screencapture-home-qwencloud-benefits-2026-10-04-18_13_52.png",
+      "screencapture-home-qwencloud-benefits-2026-10-04-18_14_07.png"
     ],
     "entries": [
       {
@@ -408,7 +408,7 @@
         "sourceRow": 1,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 2000,
         "expiresOn": "2026-11-01",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -452,7 +452,7 @@
         "sourceRow": 5,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 83,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -474,7 +474,7 @@
         "sourceRow": 7,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 373,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -496,7 +496,7 @@
         "sourceRow": 9,
         "limit": 50,
         "unit": "seconds",
-        "consumedApproximate": 0,
+        "consumedApproximate": 6,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -793,7 +793,7 @@
         "sourceRow": 36,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 2200,
+        "consumedApproximate": 10400,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -903,7 +903,7 @@
         "sourceRow": 46,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 17100,
+        "consumedApproximate": 17400,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1178,7 +1178,7 @@
         "sourceRow": 71,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 974,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1288,7 +1288,7 @@
         "sourceRow": 81,
         "limit": 36000,
         "unit": "seconds",
-        "consumedApproximate": 0,
+        "consumedApproximate": 14,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1365,7 +1365,7 @@
         "sourceRow": 88,
         "limit": 100,
         "unit": "images",
-        "consumedApproximate": 0,
+        "consumedApproximate": 1,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1497,7 +1497,7 @@
         "sourceRow": 100,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 62,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1508,7 +1508,7 @@
         "sourceRow": 1,
         "limit": 100,
         "unit": "images",
-        "consumedApproximate": 0,
+        "consumedApproximate": 2,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1805,7 +1805,7 @@
         "sourceRow": 28,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 912,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1827,7 +1827,7 @@
         "sourceRow": 30,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 1300,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -1893,7 +1893,7 @@
         "sourceRow": 36,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 1100,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -2069,7 +2069,7 @@
         "sourceRow": 52,
         "limit": 10000,
         "unit": "chars",
-        "consumedApproximate": 0,
+        "consumedApproximate": 70,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -2674,7 +2674,7 @@
         "sourceRow": 7,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 35,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -2784,7 +2784,7 @@
         "sourceRow": 17,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 92,
         "expiresOn": "2026-10-21",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -3111,54 +3111,54 @@
       {
         "offeringKey": "qwen-quota-247",
         "sourcePage": 3,
-        "sourceRow": 47,
+        "sourceRow": 55,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
         "expiresOn": "2026-12-17",
         "providerStatus": "active",
-        "quotaOnlyObserved": false
+        "quotaOnlyObserved": true
       },
       {
         "offeringKey": "qwen-quota-248",
-        "sourcePage": 3,
-        "sourceRow": 48,
-        "limit": 10000,
-        "unit": "chars",
-        "consumedApproximate": 0,
-        "expiresOn": "2026-12-16",
-        "providerStatus": "active",
-        "quotaOnlyObserved": false
-      },
-      {
-        "offeringKey": "qwen-quota-249",
         "sourcePage": 3,
         "sourceRow": 49,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
+        "expiresOn": "2026-12-21",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-249",
+        "sourcePage": 3,
+        "sourceRow": 56,
+        "limit": 1000000,
+        "unit": "tokens",
+        "consumedApproximate": 0,
         "expiresOn": "2026-12-16",
         "providerStatus": "active",
-        "quotaOnlyObserved": false
+        "quotaOnlyObserved": true
       },
       {
         "offeringKey": "qwen-quota-250",
         "sourcePage": 3,
-        "sourceRow": 50,
+        "sourceRow": 57,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
         "expiresOn": "2026-12-13",
         "providerStatus": "active",
-        "quotaOnlyObserved": false
+        "quotaOnlyObserved": true
       },
       {
         "offeringKey": "qwen-quota-251",
         "sourcePage": 3,
-        "sourceRow": 51,
+        "sourceRow": 58,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 718,
         "expiresOn": "2026-12-01",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -3166,7 +3166,7 @@
       {
         "offeringKey": "qwen-quota-252",
         "sourcePage": 3,
-        "sourceRow": 52,
+        "sourceRow": 59,
         "limit": 100,
         "unit": "images",
         "consumedApproximate": 0,
@@ -3177,10 +3177,10 @@
       {
         "offeringKey": "qwen-quota-253",
         "sourcePage": 3,
-        "sourceRow": 53,
+        "sourceRow": 60,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 3300,
+        "consumedApproximate": 9300,
         "expiresOn": "2026-11-25",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -3188,10 +3188,10 @@
       {
         "offeringKey": "qwen-quota-254",
         "sourcePage": 3,
-        "sourceRow": 54,
+        "sourceRow": 61,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 276,
         "expiresOn": "2026-11-23",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -3199,7 +3199,7 @@
       {
         "offeringKey": "qwen-quota-255",
         "sourcePage": 3,
-        "sourceRow": 55,
+        "sourceRow": 62,
         "limit": 30,
         "unit": "seconds",
         "consumedApproximate": 0,
@@ -3210,10 +3210,10 @@
       {
         "offeringKey": "qwen-quota-256",
         "sourcePage": 3,
-        "sourceRow": 56,
+        "sourceRow": 63,
         "limit": 1000000,
         "unit": "tokens",
-        "consumedApproximate": 0,
+        "consumedApproximate": 192,
         "expiresOn": "2026-11-18",
         "providerStatus": "active",
         "quotaOnlyObserved": true
@@ -3221,7 +3221,7 @@
       {
         "offeringKey": "qwen-quota-257",
         "sourcePage": 3,
-        "sourceRow": 57,
+        "sourceRow": 64,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
@@ -3232,7 +3232,7 @@
       {
         "offeringKey": "qwen-quota-258",
         "sourcePage": 3,
-        "sourceRow": 58,
+        "sourceRow": 65,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
@@ -3243,7 +3243,7 @@
       {
         "offeringKey": "qwen-quota-259",
         "sourcePage": 3,
-        "sourceRow": 59,
+        "sourceRow": 66,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
@@ -3254,7 +3254,7 @@
       {
         "offeringKey": "qwen-quota-260",
         "sourcePage": 3,
-        "sourceRow": 60,
+        "sourceRow": 67,
         "limit": 30,
         "unit": "seconds",
         "consumedApproximate": 0,
@@ -3265,7 +3265,7 @@
       {
         "offeringKey": "qwen-quota-261",
         "sourcePage": 3,
-        "sourceRow": 61,
+        "sourceRow": 68,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
@@ -3276,7 +3276,7 @@
       {
         "offeringKey": "qwen-quota-262",
         "sourcePage": 3,
-        "sourceRow": 62,
+        "sourceRow": 69,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
@@ -3287,7 +3287,7 @@
       {
         "offeringKey": "qwen-quota-263",
         "sourcePage": 3,
-        "sourceRow": 63,
+        "sourceRow": 70,
         "limit": 10,
         "unit": "images",
         "consumedApproximate": 0,
@@ -3298,7 +3298,7 @@
       {
         "offeringKey": "qwen-quota-264",
         "sourcePage": 3,
-        "sourceRow": 64,
+        "sourceRow": 71,
         "limit": 10,
         "unit": "images",
         "consumedApproximate": 0,
@@ -3309,7 +3309,7 @@
       {
         "offeringKey": "qwen-quota-265",
         "sourcePage": 3,
-        "sourceRow": 65,
+        "sourceRow": 72,
         "limit": 1000000,
         "unit": "tokens",
         "consumedApproximate": 0,
@@ -3320,7 +3320,7 @@
       {
         "offeringKey": "qwen-quota-266",
         "sourcePage": 3,
-        "sourceRow": 66,
+        "sourceRow": 73,
         "limit": 36000,
         "unit": "seconds",
         "consumedApproximate": 0,
@@ -3331,7 +3331,7 @@
       {
         "offeringKey": "qwen-quota-267",
         "sourcePage": 3,
-        "sourceRow": 67,
+        "sourceRow": 74,
         "limit": 36000,
         "unit": "seconds",
         "consumedApproximate": 0,
@@ -3342,7 +3342,7 @@
       {
         "offeringKey": "qwen-quota-268",
         "sourcePage": 3,
-        "sourceRow": 68,
+        "sourceRow": 75,
         "limit": 36000,
         "unit": "seconds",
         "consumedApproximate": 0,
@@ -3353,7 +3353,7 @@
       {
         "offeringKey": "qwen-quota-269",
         "sourcePage": 3,
-        "sourceRow": 69,
+        "sourceRow": 76,
         "limit": 10000,
         "unit": "chars",
         "consumedApproximate": 0,
@@ -3364,7 +3364,7 @@
       {
         "offeringKey": "qwen-quota-270",
         "sourcePage": 3,
-        "sourceRow": 70,
+        "sourceRow": 77,
         "limit": 10000,
         "unit": "chars",
         "consumedApproximate": 0,
@@ -3375,7 +3375,7 @@
       {
         "offeringKey": "qwen-quota-271",
         "sourcePage": 3,
-        "sourceRow": 71,
+        "sourceRow": 78,
         "limit": 50,
         "unit": "seconds",
         "consumedApproximate": 0,
@@ -3386,11 +3386,88 @@
       {
         "offeringKey": "qwen-quota-272",
         "sourcePage": 3,
-        "sourceRow": 72,
+        "sourceRow": 79,
         "limit": 50,
         "unit": "seconds",
         "consumedApproximate": 0,
         "expiresOn": "2026-10-21",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-273",
+        "sourcePage": 3,
+        "sourceRow": 47,
+        "limit": 10,
+        "unit": "images",
+        "consumedApproximate": 0,
+        "expiresOn": "2027-01-01",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-274",
+        "sourcePage": 3,
+        "sourceRow": 48,
+        "limit": 1000000,
+        "unit": "tokens",
+        "consumedApproximate": 0,
+        "expiresOn": "2026-12-21",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-275",
+        "sourcePage": 3,
+        "sourceRow": 50,
+        "limit": 1000000,
+        "unit": "tokens",
+        "consumedApproximate": 0,
+        "expiresOn": "2026-12-21",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-276",
+        "sourcePage": 3,
+        "sourceRow": 51,
+        "limit": 1000000,
+        "unit": "tokens",
+        "consumedApproximate": 0,
+        "expiresOn": "2026-12-21",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-277",
+        "sourcePage": 3,
+        "sourceRow": 52,
+        "limit": 1000000,
+        "unit": "tokens",
+        "consumedApproximate": 0,
+        "expiresOn": "2026-12-21",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-278",
+        "sourcePage": 3,
+        "sourceRow": 53,
+        "limit": 1000000,
+        "unit": "tokens",
+        "consumedApproximate": 0,
+        "expiresOn": "2026-12-21",
+        "providerStatus": "active",
+        "quotaOnlyObserved": true
+      },
+      {
+        "offeringKey": "qwen-quota-279",
+        "sourcePage": 3,
+        "sourceRow": 54,
+        "limit": 1000000,
+        "unit": "tokens",
+        "consumedApproximate": 0,
+        "expiresOn": "2026-12-18",
         "providerStatus": "active",
         "quotaOnlyObserved": true
       }
@@ -3413,16 +3490,20 @@
       "spendOnCapacityShortage": false
     }
   },
+  "limitedMediaOffer": {
+    "dailyCapPerUser": {
+      "image": 5,
+      "video": 1
+    }
+  },
   "quotaExperimentPolicy": {
     "verificationMaxAgeMs": 3600000,
     "maxOutputTokens": 128,
     "minimumChatQuota": 512,
-    "imageSize": "1024*1024",
-    "videoSize": "1280*720",
     "videoSeconds": 2,
     "requestTimeoutMs": 60000,
-    "pollIntervalMs": 5000,
-    "maxPolls": 24,
+    "pollIntervalMs": 10000,
+    "maxPolls": 22,
     "attestationMaxAgeMs": 2592000000,
     "attestationReminderLeadMs": 259200000,
     "termsReviewReminderLeadMs": 1209600000,

@@ -1,6 +1,9 @@
 import 'server-only';
 
-import type { FreeQuotaTermsReviewStanding } from '@agiworkforce/cloud-contracts';
+import type {
+  FreeQuotaMediaCategory,
+  FreeQuotaTermsReviewStanding,
+} from '@agiworkforce/cloud-contracts';
 import { isFreeEligibilityValid, type FreeEligibility } from '@agiworkforce/routing';
 import { z } from 'zod';
 import { getProviderOffering } from '@agiworkforce/types';
@@ -173,12 +176,29 @@ export function reviewedQuotaOfferingKeys(
   return new Set(review.approvedOfferingKeys);
 }
 
+const DailyCapSchema = z.number().int().nonnegative();
+
+export const LimitedMediaOfferSchema = z.strictObject({
+  dailyCapPerUser: z.strictObject({ image: DailyCapSchema, video: DailyCapSchema }),
+});
+
+export type LimitedMediaOffer = z.infer<typeof LimitedMediaOfferSchema>;
+
+export function limitedMediaDailyCap(
+  offer: LimitedMediaOffer | undefined,
+  category: FreeQuotaMediaCategory,
+): number | null {
+  const cap = offer?.dailyCapPerUser[category] ?? 0;
+  return cap > 0 ? cap : null;
+}
+
 export const FreePoolsDocumentSchema = z.object({
   schemaVersion: z.number().int().min(MIN_SCHEMA_VERSION),
   workbook: z.string().min(MIN_IDENTIFIER_LENGTH),
   notes: z.string().optional(),
   entries: z.array(FreePoolEntrySchema),
   inventory: FreeQuotaInventorySchema.optional(),
+  limitedMediaOffer: LimitedMediaOfferSchema.optional(),
 });
 
 export type FreePoolTerms = z.infer<typeof FreePoolTermsSchema>;

@@ -1,4 +1,9 @@
-import { FREE_QUOTA_EXHAUSTED_CODE, FREE_QUOTA_EXPIRED_CODE } from '@agiworkforce/cloud-contracts';
+import {
+  FREE_QUOTA_DAILY_LIMIT_CODE,
+  FREE_QUOTA_EXHAUSTED_CODE,
+  FREE_QUOTA_EXPIRED_CODE,
+  type FreeQuotaMediaCategory,
+} from '@agiworkforce/cloud-contracts';
 
 export type FreeQuotaFailure =
   | 'exhausted'
@@ -12,13 +17,21 @@ export type FreeQuotaFailure =
   | 'plan'
   | 'unsupported_prompt'
   | 'duplicate'
-  | 'workspace_restricted';
+  | 'workspace_restricted'
+  | 'daily_limit';
+
+export interface FreeQuotaDailyLimit {
+  category: FreeQuotaMediaCategory;
+  cap: number;
+  resetsAtMs: number;
+}
 
 export interface FreeQuotaFailureContext {
   issuer: string;
   modelName: string;
   alternativeName: string | null;
   expiresOn: string | null;
+  dailyLimit?: FreeQuotaDailyLimit;
 }
 
 export interface FreeQuotaFailureBody {
@@ -40,6 +53,7 @@ const FAILURE_STATUS: Readonly<Record<FreeQuotaFailure, number>> = {
   unsupported_prompt: 400,
   duplicate: 409,
   workspace_restricted: 403,
+  daily_limit: 429,
 };
 
 export const FREE_QUOTA_FAILURE_CODES: Readonly<Record<FreeQuotaFailure, string>> = {
@@ -55,7 +69,23 @@ export const FREE_QUOTA_FAILURE_CODES: Readonly<Record<FreeQuotaFailure, string>
   unsupported_prompt: 'free_quota_prompt_unsupported',
   duplicate: 'free_quota_duplicate',
   workspace_restricted: 'organization_policy',
+  daily_limit: FREE_QUOTA_DAILY_LIMIT_CODE,
 };
+
+const UTC_CLOCK_START = 11;
+const UTC_CLOCK_END = 16;
+
+function dailyLimitMessage(context: FreeQuotaFailureContext): string {
+  const { issuer, modelName, dailyLimit } = context;
+  if (!dailyLimit) {
+    return `You have used today's free requests for ${modelName}, each account's daily share of ${issuer}'s free capacity. Try again tomorrow, or upgrade to a plan that includes it.`;
+  }
+  const { category, cap, resetsAtMs } = dailyLimit;
+  const used =
+    cap === 1 ? `today's free ${category} request` : `today's ${cap} free ${category} requests`;
+  const resetsAt = new Date(resetsAtMs).toISOString().slice(UTC_CLOCK_START, UTC_CLOCK_END);
+  return `You have used ${used}. That is each account's daily share of ${issuer}'s free capacity, and it resets at ${resetsAt} UTC. Plans that include ${category} generation are not held to this limit.`;
+}
 
 function nextStep(context: FreeQuotaFailureContext): string {
   return context.alternativeName
@@ -92,6 +122,8 @@ function failureMessage(failure: FreeQuotaFailure, context: FreeQuotaFailureCont
       return `This message was already sent to ${issuer}, so it was not sent a second time.`;
     case 'workspace_restricted':
       return `${issuer} free models do not meet your workspace's data region or retention policy. Choose another model.`;
+    case 'daily_limit':
+      return dailyLimitMessage(context);
   }
 }
 

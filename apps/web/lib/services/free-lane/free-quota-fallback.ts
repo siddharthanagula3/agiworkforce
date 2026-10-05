@@ -156,7 +156,6 @@ export async function serveFreeQuotaFallback(input: {
   const choice = {
     inventory,
     category: 'chat',
-    protocol: 'chat',
     needsImageInput: readsImages(turn),
   } as const;
   const decline = async (triedModel?: string): Promise<Response | null> => {

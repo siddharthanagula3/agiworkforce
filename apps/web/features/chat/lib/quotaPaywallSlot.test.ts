@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  canUseBillingPlanCapability,
   getDefaultModelFor,
   getModelMetadataById,
   getProviderOfferings,
@@ -243,5 +245,77 @@ describe('resolveQuotaPaywallSlot · a reached free limit', () => {
     });
 
     expect(isAccountWideUsageBlock(slot!)).toBe(false);
+  });
+});
+
+describe('resolveQuotaPaywallSlot · a reached daily free limit', () => {
+  const offeringOf = (category: 'image' | 'video') =>
+    Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.category === category && offering.quotaProbeProtocol,
+    )![0];
+  const planIncluding = (capability: 'image_generation' | 'video_generation') =>
+    SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((tier) =>
+      canUseBillingPlanCapability(tier, capability),
+    )!;
+  const resetsAt = '2026-10-05T00:00:00.000Z';
+  const message = "You have used today's 5 free image requests.";
+
+  function slotFor(planTier: string, category: 'image' | 'video') {
+    return resolveQuotaPaywallSlot({
+      code: 'free_quota_daily_limit',
+      message,
+      planTier,
+      subscriptionSource: null,
+      freeLimit: {
+        model: offeringOf(category),
+        reason: 'daily_limit_reached',
+        resets_at: resetsAt,
+      },
+    });
+  }
+
+  it('states the reset and offers the first plan that includes the capability', () => {
+    const image = slotFor('free', 'image');
+    expect(image).toMatchObject({
+      reason: message,
+      recoveryAction: 'upgrade',
+      requiredTier: planIncluding('image_generation'),
+      showUpgradeCta: true,
+      showResetTime: true,
+      resetAt: resetsAt,
+      suggestStandardModel: false,
+      freeLimit: { modelId: offeringOf('image'), reason: 'daily_limit_reached' },
+    });
+    expect(image?.freeLimit?.alternativeModel).toBeUndefined();
+    expect(isAccountWideUsageBlock(image!)).toBe(false);
+  });
+
+  it('offers a paid plan without the capability the plan that has it, not just the next one', () => {
+    for (const planTier of ['basic', 'pro', 'max']) {
+      const video = slotFor(planTier, 'video');
+      expect(video?.showUpgradeCta, planTier).toBe(true);
+      expect(video?.requiredTier, planTier).toBe(planIncluding('video_generation'));
+      expect(video?.suggestStandardModel, planTier).toBe(false);
+    }
+    expect(slotFor('basic', 'image')?.requiredTier).toBe(planIncluding('image_generation'));
+  });
+
+  it('sells no self-serve plan to a seat on a team plan', () => {
+    const video = slotFor('team', 'video');
+    expect(video?.showUpgradeCta).toBe(false);
+    expect(video?.showResetTime).toBe(true);
+  });
+
+  it('still builds the card from the code alone when the typed limit is missing', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_quota_daily_limit',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      requestedModel: offeringOf('image'),
+    });
+
+    expect(slot?.freeLimit?.reason).toBe('daily_limit_reached');
+    expect(slot?.requiredTier).toBe(planIncluding('image_generation'));
   });
 });

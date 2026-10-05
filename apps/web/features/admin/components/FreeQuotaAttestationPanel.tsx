@@ -63,6 +63,7 @@ const OUTCOME_LABEL: Record<FreeQuotaBlockedOutcome, string> = {
   attestation_excludes_offering: 'Not covered by the console check',
   managed_route_shares_allowance: 'Allowance shared with a paid route',
   provider_withdrawn: 'Withdrawn by the provider',
+  provider_refused: 'Refused by the provider for this account',
   exhausted: 'Free allowance used up',
   expired: 'Free allowance ended',
 };
@@ -78,6 +79,7 @@ const WITHDRAWN_CAUSE: Record<FreeQuotaWithdrawalCause, string> = {
   exhausted: 'the provider reported its free quota spent',
   billing: 'the provider refused it with a billing code',
   withdrawn: 'the provider no longer offers it to this account',
+  refused: 'the provider denied this account access to it or did not recognise it',
 };
 
 type ConfiguredStatus = Extract<FreeQuotaAttestationStatus, { configured: true }>;
