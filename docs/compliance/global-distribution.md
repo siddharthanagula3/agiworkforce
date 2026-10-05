@@ -134,8 +134,10 @@ missing fact or work owner; no row has a green compliance status.
    unknown routes unknown. Current NON_US must not become a Singapore-only or
    US-exclusion guarantee (E07, [FRESH-06](../research/global-distribution-research-2026-10-05.md#fresh-06)).
 4. **MAIL-01, account draft only.** Minimum accurate addition: optional, unticked
-   product updates/launch-news choice, account record and account withdrawal
-   (E03-E04, [FRESH-05](../research/global-distribution-research-2026-10-05.md#fresh-05)). Wider tips/offers awaits the lead's label/version change.
+   product news, tips and offers choice, account record and account withdrawal
+   (E03-E04, [FRESH-05](../research/global-distribution-research-2026-10-05.md#fresh-05)). The committed account purpose is `marketing_email`;
+   `product_updates` remains the separate waitlist purpose. The lead still
+   publishes the policy draft and its version record.
    No sender, delivery or emailed unsubscribe promise is added. Lead must prove
    consent audience selection and accessible sender-side opt-out before sending.
 5. **REP-01, owner/counsel and lead.** Review present/legacy EEA scope and UK
@@ -154,6 +156,21 @@ missing fact or work owner; no row has a green compliance status.
    duties apply ([INDIA-19](../research/global-distribution-research-2026-10-05.md#india-19),`23`-`28`,`32`, omissions). Named-officer, translation,
    verified parental consent and residency facts are distinct. Do not assert that
    every displayed gap is an immediately binding requirement.
+8. **ERASURE-01, lead implementation and publication review.** The current
+   [account-erasure producer](../../apps/web/lib/server/account-erasure.ts):1038–1045
+   tests primary-media failures but omits the separately returned backup-object
+   failure count. Both [scheduled erasure branches](../../apps/web/lib/server/scheduled-account-erasure.ts):103,158
+   reject an incomplete report; a controlled positive backup failure alone does
+   not make that producer report incomplete. Two bounded evaluations of the
+   actual source predicate reproduced that distinction. They establish a code
+   gap, not a production deletion incident or failure of a particular legal duty.
+   The lead must correct the canonical completion predicate and verify actual
+   producer and consumer behavior, including retry/reconciliation after primary
+   rows are removed. No backend, account, database or vendor workflow ran in this
+   review. The [Security draft](../../apps/web/app/security/page.tsx):299–317 now
+   scopes its primary-object, returned-outcome and scheduled-stop statements to
+   inspected behavior; it does not promise every backup was removed. Public
+   publication, policy dates/archive and operational proof remain with the lead.
 
 ## Current public document inventory and topic gaps
 
@@ -206,5 +223,6 @@ No forms, product paths, private provider settings, production country gate,
 archive digest or legal sufficiency were tested. Scoped formatting and link/ledger
 checks can establish document integrity, not operational or legal compliance.
 This document remains a working draft. The lead reviews and publishes any public
-policy changes; no policy, legal constant, effective date, archive, manifest,
-provider configuration or country availability was changed by this work.
+policy changes. This ledger does not publish or authorize changes to policies,
+legal constants, effective dates, archives, manifests, provider configuration or
+country availability.
