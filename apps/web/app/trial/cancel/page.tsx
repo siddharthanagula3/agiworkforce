@@ -71,7 +71,7 @@ export default async function TrialCancelPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const token = firstValue((await searchParams)['token']);
-  const trial = await readTrialCancellation(getNeonDb(), token);
+  const trial = await readTrialCancellation(getNeonDb, token);
 
   return (
     <div data-design="agi" className="agi-ds-page">

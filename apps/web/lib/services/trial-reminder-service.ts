@@ -223,12 +223,12 @@ async function readLinkedTrial(
 }
 
 export async function readTrialCancellation(
-  db: DatabaseAdapter,
+  openDb: () => DatabaseAdapter,
   token: string | null,
 ): Promise<TrialCancellation> {
   const link = readTrialCancelToken(token);
   if (!token || !link) return { state: 'invalid' };
-  const trial = await readLinkedTrial(db, link);
+  const trial = await readLinkedTrial(openDb(), link);
   if (!trial) return { state: 'invalid' };
   if (trial.status !== 'trialing') return { state: 'ended' };
   const plan = getBillingPlanPricing(trial.plan_tier).label;
