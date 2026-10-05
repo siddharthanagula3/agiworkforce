@@ -73,6 +73,57 @@ describe('csrf token fetching', () => {
   });
 });
 
+describe('a token the caller already holds', () => {
+  const MINTED = 'anon-token-minted-by-the-route-it-is-for';
+  const identityBoundFetch = () =>
+    vi.fn(
+      async () =>
+        ({
+          ok: true,
+          json: async () => ({ token: TOKEN, expiresIn: EXPIRES_IN_MS }),
+        }) as unknown as Response,
+    );
+
+  beforeEach(() => {
+    clearCsrfToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearCsrfToken();
+  });
+
+  it('is sent as given, without asking /api/csrf for the identity-bound one', async () => {
+    const fetchMock = identityBoundFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const headers = (await addCsrfHeaders(
+      { 'Content-Type': 'application/json' },
+      MINTED,
+    )) as Record<string, string>;
+
+    expect(headers['x-csrf-token']).toBe(MINTED);
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(headers[API_VERSION_REQUEST_HEADER]).toBe(API_CONTRACT_VERSION);
+    expect(isWellFormedRequestId(headers[REQUEST_ID_HEADER])).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('replaces a cached identity-bound token for that one request only', async () => {
+    const fetchMock = identityBoundFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    await getCsrfToken();
+
+    const minted = (await addCsrfHeaders({}, MINTED)) as Record<string, string>;
+    const next = (await addCsrfHeaders({})) as Record<string, string>;
+
+    expect(minted['x-csrf-token']).toBe(MINTED);
+    expect(next['x-csrf-token']).toBe(TOKEN);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/csrf', expect.anything());
+  });
+});
+
 describe('what every browser request tells the platform', () => {
   beforeEach(() => {
     clearCsrfToken();

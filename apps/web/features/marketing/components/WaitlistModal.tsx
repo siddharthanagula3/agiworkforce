@@ -10,12 +10,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { EnterpriseWaitlistSource } from '@/lib/consent-purposes';
 
 const WaitlistDialog = lazy(() =>
   import('./WaitlistDialog').then(({ WaitlistDialog: Component }) => ({ default: Component })),
 );
 
-export type WaitlistModalSource = 'website' | 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
+export type WaitlistModalSource = EnterpriseWaitlistSource;
 
 interface WaitlistModalContextValue {
   open: (source?: WaitlistModalSource) => void;
