@@ -4,6 +4,11 @@
       "file": "packages/contracts/types/src/suite-contracts.ts",
       "key": "provider.changed",
       "reason": "A developer-session event name, not a flag. It collides with the reserved provider. prefix because both vocabularies use dotted names; renaming either is a wire change, so the collision is recorded rather than papered over."
+    },
+    {
+      "file": "packages/ai/provider-runtime/src/errors.ts",
+      "key": "model.accessdenied",
+      "reason": "A provider error code in lower case (the provider answers Model.AccessDenied), not a flag. It collides with the reserved model. prefix because both vocabularies use dotted names; the classifier compares codes in lower case, so the literal cannot be spelled another way without changing how every code in that file is matched."
     }
   ],
   "resolvedElsewhere": {
