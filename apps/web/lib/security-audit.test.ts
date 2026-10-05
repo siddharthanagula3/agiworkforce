@@ -89,6 +89,41 @@ describe('logSecurityEvent activity marker', () => {
   });
 });
 
+describe('logSecurityEvent when the audit row is required', () => {
+  const insertFailed = new Error('insert failed');
+
+  it('rejects with the write failure, so the caller serves nothing', async () => {
+    mocks.execute.mockRejectedValue(insertFailed);
+
+    await expect(logSecurityEvent({ eventType: 'admin_action' }, { required: true })).rejects.toBe(
+      insertFailed,
+    );
+  });
+
+  it('resolves once the row is written', async () => {
+    await expect(
+      logSecurityEvent({ eventType: 'admin_action' }, { required: true }),
+    ).resolves.toBeUndefined();
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('still swallows the write failure for a caller that did not require the row', async () => {
+    mocks.execute.mockRejectedValue(insertFailed);
+
+    await expect(logSecurityEvent({ eventType: 'admin_action' })).resolves.toBeUndefined();
+  });
+
+  it('does not reject over the activity marker, which is not the audit row', async () => {
+    mocks.getKeyValueStore.mockImplementation(() => {
+      throw new Error('redis down');
+    });
+
+    await expect(
+      logSecurityEvent({ eventType: 'admin_action' }, { required: true }),
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe('consumePendingSecurityAnomalyCheck', () => {
   it('returns true and resets the counter when activity is pending', async () => {
     const redis = fakeRedis();

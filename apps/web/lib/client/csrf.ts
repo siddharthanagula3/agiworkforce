@@ -70,8 +70,11 @@ export async function getCsrfToken(): Promise<string> {
  * const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
  * fetch('/api/checkout', { method: 'POST', headers, body: ... });
  */
-export async function addCsrfHeaders(headers: HeadersInit = {}): Promise<HeadersInit> {
-  const token = await getCsrfToken();
+export async function addCsrfHeaders(
+  headers: HeadersInit = {},
+  mintedToken?: string,
+): Promise<HeadersInit> {
+  const token = mintedToken ?? (await getCsrfToken());
   const build = process.env['NEXT_PUBLIC_APP_VERSION']?.trim();
 
   return {

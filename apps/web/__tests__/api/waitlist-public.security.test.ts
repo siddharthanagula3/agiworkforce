@@ -75,26 +75,30 @@ vi.mock('@/lib/api-auth', () => ({
 
 import { POST, OPTIONS } from '@/app/api/waitlist/public/route';
 import {
-  PLATFORM_AVAILABILITY_CONSENT_PURPOSES,
-  WAITLIST_CONSENT_PURPOSES,
+  WAITLIST_SOURCES,
+  consentPurposesForWaitlistSource,
+  type WaitlistSource,
 } from '@/lib/consent-purposes';
-
-const PLATFORM_AVAILABILITY_SOURCE = 'other';
 
 const CONSENTED = [
   { purpose: 'enterprise_waitlist', granted: true },
   { purpose: 'product_updates', granted: false },
 ];
 
-function consentFor(source: string) {
-  const purposes =
-    source === PLATFORM_AVAILABILITY_SOURCE
-      ? PLATFORM_AVAILABILITY_CONSENT_PURPOSES
-      : WAITLIST_CONSENT_PURPOSES;
-  return purposes.map((purpose) => ({
+function consentFor(source: WaitlistSource) {
+  return consentPurposesForWaitlistSource(source).map((purpose) => ({
     purpose: purpose.id,
     granted: purpose.necessaryForRequest,
   }));
+}
+
+function recordedConsent() {
+  return mockQuery.mock.calls
+    .filter(([sql]) => String(sql).includes('consent_records'))
+    .map(([, params]) => {
+      const p = params as unknown[];
+      return { purpose: p[2], granted: p[3] };
+    });
 }
 
 function makePostRequest(
@@ -300,7 +304,7 @@ describe('POST /api/waitlist/public, security tests', () => {
     });
 
     it('accepts every allow-listed source verbatim', async () => {
-      for (const source of ['website', 'byok', 'sync', 'billing', 'mobile', 'other']) {
+      for (const source of WAITLIST_SOURCES) {
         mockExecute.mockClear();
         const request = makePostRequest({
           email: 'test@example.com',
@@ -482,6 +486,74 @@ describe('POST /api/waitlist/public, security tests', () => {
         expect(p[0]).toBe('user_abc');
         expect(p[1]).toBeNull();
       }
+    });
+
+    it('refuses a mobile launch signup that carries only the Enterprise consent', async () => {
+      const request = makePostRequest({
+        email: 'test@example.com',
+        source: 'mobile',
+        consent: consentFor('website'),
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(400);
+
+      const data = (await response.json()) as { error?: { message?: string } };
+      expect(data.error?.message).toContain('platform_availability_waitlist');
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(recordedConsent()).toEqual([]);
+    });
+
+    it('refuses a mobile launch signup when the platform purpose is declined', async () => {
+      const request = makePostRequest({
+        email: 'test@example.com',
+        source: 'mobile',
+        consent: [
+          { purpose: 'platform_availability_waitlist', granted: false },
+          { purpose: 'product_updates', granted: true },
+        ],
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(400);
+
+      const data = (await response.json()) as { error?: { code?: string } };
+      expect(data.error?.code).toBe('CONSENT_REQUIRED');
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(recordedConsent()).toEqual([]);
+    });
+
+    it('stores a mobile launch signup under the platform purpose only', async () => {
+      const request = makePostRequest({
+        email: 'test@example.com',
+        source: 'mobile',
+        consent: consentFor('mobile'),
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+
+      const [, params] = mockExecute.mock.calls[0] as [string, unknown[]];
+      expect(params[2]).toBe('mobile');
+
+      const recorded = recordedConsent();
+      expect(recorded).toHaveLength(2);
+      expect(recorded).toContainEqual({ purpose: 'platform_availability_waitlist', granted: true });
+      expect(recorded).toContainEqual({ purpose: 'product_updates', granted: false });
+      expect(recorded.map((entry) => entry.purpose)).not.toContain('enterprise_waitlist');
+    });
+
+    it('refuses an Enterprise source that carries only the platform consent', async () => {
+      const request = makePostRequest({
+        email: 'test@example.com',
+        source: 'website',
+        consent: consentFor('mobile'),
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(400);
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(recordedConsent()).toEqual([]);
     });
 
     it('ignores an invented purpose rather than writing a row nobody can describe', async () => {

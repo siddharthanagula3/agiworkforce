@@ -2,29 +2,39 @@
 
 import { useId, useState, type FormEvent } from 'react';
 import { joinPublicWaitlist } from '@/lib/services/waitlistServiceClient';
-import { WAITLIST_CONSENT_PURPOSES, type ConsentPurpose } from '@/lib/consent-purposes';
+import {
+  consentPurposesForWaitlistSource,
+  isEnterpriseWaitlistSource,
+  type WaitlistSource,
+} from '@/lib/consent-purposes';
 import {
   ConsentCheckboxes,
   missingRequiredConsents,
   toConsentDecisions,
 } from './ConsentCheckboxes';
-import type { WaitlistModalSource } from './WaitlistModal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const ENTERPRISE_SUCCESS_MESSAGE =
+  "You're on the list. A person will contact you to discuss contract-scoped Enterprise access for your requirements.";
+
+const PLATFORM_AVAILABILITY_SUCCESS_MESSAGE =
+  "You're on the list. We'll email you when a platform has a verified installer to download.";
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
 export function PublicWaitlistForm({
   source = 'website',
   ctaLabel = 'Join Waitlist',
-  successMessage = "You're on the list. A person will contact you to discuss contract-scoped Enterprise access for your requirements.",
-  purposes = WAITLIST_CONSENT_PURPOSES,
+  successMessage = isEnterpriseWaitlistSource(source)
+    ? ENTERPRISE_SUCCESS_MESSAGE
+    : PLATFORM_AVAILABILITY_SUCCESS_MESSAGE,
 }: {
-  source?: WaitlistModalSource;
+  source?: WaitlistSource;
   ctaLabel?: string;
   successMessage?: string;
-  purposes?: readonly ConsentPurpose[];
 }) {
+  const purposes = consentPurposesForWaitlistSource(source);
   const emailId = useId();
   const errorId = useId();
   const [email, setEmail] = useState('');

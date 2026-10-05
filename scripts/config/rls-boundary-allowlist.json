@@ -154,6 +154,10 @@
       "reason": "reached only from the platform-admin operator route, deliberately platform-wide aggregate reads across every tenant"
     },
     {
+      "path": "apps/web/features/admin/services/operator-waitlist.ts",
+      "reason": "reached only from the platform-admin waitlist list and export routes gated by requirePlatformAdmin, waitlist rows are captured before any account exists so there is no owner to constrain by, and each read is written to the security audit log with its row count"
+    },
+    {
       "path": "apps/web/features/admin/services/product-metrics.ts",
       "reason": "reached from the platform-admin product-metrics route gated by requirePlatformAdmin and from the scheduler-credentialled daily rollup cron; the subscriptions and profiles reads are deliberately cross-tenant aggregates that return counts, cohort sizes and summed microUSD, never a row or a user id"
     },
