@@ -4,16 +4,16 @@ import userEvent from '@testing-library/user-event';
 
 import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
 
-import { useProductUpdatesGrant } from '@/features/auth/productUpdatesChoice';
+import { useMarketingEmailGrant } from '@/features/auth/marketingEmailChoice';
 import { FREE_PLAN_TRAINING_SIGNUP_STATEMENT } from '@/lib/compliance/free-plan-training-disclosure';
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE } from '@/lib/consent-signals';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { PRODUCT_UPDATES_CHOICE_STORAGE_KEY } from './signupAttemptMarkers';
+import { MARKETING_EMAIL_CHOICE_STORAGE_KEY } from './signupAttemptMarkers';
 import { TERMS_GATE_STORAGE_KEY, TermsGate } from './TermsGate';
 
 function GrantProbe() {
-  const grant = useProductUpdatesGrant();
+  const grant = useMarketingEmailGrant();
   return <p data-testid="grant-probe">{grant ?? 'no grant'}</p>;
 }
 
@@ -21,11 +21,11 @@ function termsBox(): HTMLElement {
   return screen.getByRole('checkbox', { name: /I agree to the Terms of Service/ });
 }
 
-function productUpdatesBox(): HTMLElement {
-  return screen.getByRole('checkbox', { name: PRODUCT_UPDATES_CONSENT_PURPOSE.label });
+function marketingEmailBox(): HTMLElement {
+  return screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label });
 }
 
-function renderReview(props: { offerProductUpdates?: boolean; optedOutBySignal?: boolean } = {}) {
+function renderReview(props: { offerMarketingEmail?: boolean; optedOutBySignal?: boolean } = {}) {
   return render(
     <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue" confirmAge {...props}>
       <GrantProbe />
@@ -127,7 +127,7 @@ describe('terms confirmation', () => {
   });
 });
 
-describe('product updates on the terms review screen', () => {
+describe('marketing email on the terms review screen', () => {
   beforeEach(() => window.localStorage.clear());
   afterEach(() => {
     Reflect.deleteProperty(navigator, 'globalPrivacyControl');
@@ -137,15 +137,15 @@ describe('product updates on the terms review screen', () => {
     renderReview();
 
     expect(
-      screen.queryByRole('checkbox', { name: PRODUCT_UPDATES_CONSENT_PURPOSE.label }),
+      screen.queryByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
     ).toBeNull();
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 
   it('offers one optional unticked box under the terms, which Continue never waits for', async () => {
     const user = userEvent.setup();
-    renderReview({ offerProductUpdates: true });
-    const optional = productUpdatesBox();
+    renderReview({ offerMarketingEmail: true });
+    const optional = marketingEmailBox();
     const age = screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL });
 
     expect(optional).not.toBeChecked();
@@ -166,18 +166,18 @@ describe('product updates on the terms review screen', () => {
 
   it('hands a ticked choice to the recorder with the notice version on screen, and then holds it', async () => {
     const user = userEvent.setup();
-    renderReview({ offerProductUpdates: true });
+    renderReview({ offerMarketingEmail: true });
 
     await user.click(termsBox());
     await user.click(screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }));
-    await user.click(productUpdatesBox());
+    await user.click(marketingEmailBox());
     expect(screen.queryByTestId('grant-probe')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.getByTestId('grant-probe')).toHaveTextContent(POLICY_LAST_UPDATED.privacy);
-    expect(productUpdatesBox()).toBeChecked();
-    expect(productUpdatesBox()).toBeDisabled();
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(marketingEmailBox()).toBeChecked();
+    expect(marketingEmailBox()).toBeDisabled();
+    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
   });
 
   it('never hands over a grant the page did not ask for', async () => {
@@ -195,13 +195,13 @@ describe('product updates on the terms review screen', () => {
   });
 
   it('drops a choice an abandoned sign-up left in the browser when the terms box is ticked', async () => {
-    window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
-    renderReview({ offerProductUpdates: true });
+    window.localStorage.setItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+    renderReview({ offerMarketingEmail: true });
 
     await userEvent.click(termsBox());
 
-    expect(window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY)).toBeNull();
-    expect(productUpdatesBox()).not.toBeChecked();
+    expect(window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY)).toBeNull();
+    expect(marketingEmailBox()).not.toBeChecked();
   });
 
   it.each([
@@ -217,8 +217,8 @@ describe('product updates on the terms review screen', () => {
         });
       }
       const user = userEvent.setup();
-      renderReview({ offerProductUpdates: true, ...props });
-      const optional = productUpdatesBox();
+      renderReview({ offerMarketingEmail: true, ...props });
+      const optional = marketingEmailBox();
 
       expect(optional).toHaveAttribute('aria-disabled', 'true');
       expect(optional).toHaveAccessibleDescription(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE);

@@ -2,7 +2,7 @@
 
 import { useId } from 'react';
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE } from '@/lib/consent-signals';
 
 import { useAuthCopy } from './authCopy';
@@ -12,14 +12,14 @@ import {
   AUTH_OPTIONAL_CHECK_NOTE_CLASS,
   AUTH_OPTIONAL_CHECK_ROW_CLASS,
 } from './authStyles';
-import type { ProductUpdatesChoice } from './productUpdatesChoice';
+import type { MarketingEmailChoice } from './marketingEmailChoice';
 
-export function AuthProductUpdatesConsent({
+export function AuthMarketingEmailConsent({
   choice,
   disabled,
   className,
 }: {
-  choice: ProductUpdatesChoice;
+  choice: MarketingEmailChoice;
   disabled: boolean;
   className?: string;
 }) {
@@ -29,7 +29,7 @@ export function AuthProductUpdatesConsent({
   const held = choice.refusedBySignal;
 
   return (
-    <div className={className} data-testid="auth-product-updates-consent">
+    <div className={className} data-testid="auth-marketing-email-consent">
       <label
         htmlFor={checkboxId}
         className={held ? AUTH_HELD_CHECK_ROW_CLASS : AUTH_OPTIONAL_CHECK_ROW_CLASS}
@@ -46,7 +46,7 @@ export function AuthProductUpdatesConsent({
           className={AUTH_CHECKBOX_CLASS}
         />
         <span>
-          {copy.text('flow.consent.productUpdates', PRODUCT_UPDATES_CONSENT_PURPOSE.label)}
+          {copy.text('flow.consent.marketingEmail', MARKETING_EMAIL_CONSENT_PURPOSE.label)}
         </span>
       </label>
       {held ? (

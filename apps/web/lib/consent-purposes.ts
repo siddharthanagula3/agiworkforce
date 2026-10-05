@@ -34,6 +34,13 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
       'Aggregated page views on this site via Google Analytics 4, and product usage events from the AGI apps on web, desktop, mobile, Chrome, VS Code and the command line, recorded against your account: that a response was stopped or regenerated, or that a suggested edit was accepted or dismissed, with fixed labels such as your plan or the model provider. Never your messages, code, files or file names. Used to understand which parts of the product work. Off unless you turn it on, and a workspace administrator can turn it off for every member. This is the same choice as the analytics switch in the cookie banner.',
     necessaryForRequest: false,
   },
+  {
+    id: 'marketing_email',
+    label: 'Email me product news, tips and offers.',
+    description:
+      'Email about new features, ways to get more from AGI, and offers such as discounts or free allowances. Off unless you turn it on. You can turn it off at any time in Settings or on the privacy requests page.',
+    necessaryForRequest: false,
+  },
 ] as const;
 
 export const WAITLIST_CONSENT_PURPOSE_IDS = ['enterprise_waitlist', 'product_updates'] as const;
@@ -99,8 +106,8 @@ function requireConsentPurpose(id: string): ConsentPurpose {
   return purpose;
 }
 
-export const PRODUCT_UPDATES_CONSENT_PURPOSE: ConsentPurpose =
-  requireConsentPurpose('product_updates');
+export const MARKETING_EMAIL_CONSENT_PURPOSE: ConsentPurpose =
+  requireConsentPurpose('marketing_email');
 
 export const CONSENT_SURFACES = [
   'web-waitlist-inline',

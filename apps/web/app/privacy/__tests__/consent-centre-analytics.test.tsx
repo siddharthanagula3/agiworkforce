@@ -27,12 +27,13 @@ import {
   readCookiePreferences,
   type CookiePreferences,
 } from '@shared/lib/cookie-consent';
-import { CONSENT_PURPOSES, PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { CONSENT_PURPOSES, findConsentPurpose } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { ConsentCentre } from '../requests/ConsentCentre';
 
 const TRACKING_ID = 'G-TESTID0000';
 const ANALYTICS_PURPOSE = 'product_analytics';
+const PRODUCT_UPDATES_PURPOSE = 'product_updates';
 
 function gaScripts(): HTMLScriptElement[] {
   return Array.from(document.querySelectorAll<HTMLScriptElement>('[data-testid="ga-script"]'));
@@ -113,7 +114,7 @@ function stubConsentApi(initial: StoredConsent[]) {
 
 function productUpdatesRow(): HTMLElement {
   const row = screen
-    .getByText(PRODUCT_UPDATES_CONSENT_PURPOSE.description)
+    .getByText(findConsentPurpose(PRODUCT_UPDATES_PURPOSE)?.description ?? '')
     .closest<HTMLElement>('td, li, div');
   if (!row) throw new Error('product updates consent row not found');
   return row;
@@ -291,10 +292,10 @@ describe('consent centre under a browser opt-out signal', () => {
   });
 });
 
-describe('product updates agreed at sign-up, seen from the consent centre', () => {
+describe('product updates agreed on a waitlist form, seen from the consent centre', () => {
   it('shows the grant and withdraws it as a new refusal against the current notice', async () => {
     const { posted, fetchMock } = stubConsentApi([
-      { purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id, granted: true },
+      { purpose: PRODUCT_UPDATES_PURPOSE, granted: true },
     ]);
 
     render(<ConsentCentre optedOutBySignal={false} />);
@@ -309,10 +310,10 @@ describe('product updates agreed at sign-up, seen from the consent centre', () =
     });
 
     await waitFor(() => expect(productUpdatesButton()).toHaveTextContent('Give consent'));
-    expect(posted).toEqual([{ purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id, granted: false }]);
+    expect(posted).toEqual([{ purpose: PRODUCT_UPDATES_PURPOSE, granted: false }]);
     const write = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(JSON.parse(String(write?.[1]?.body))).toEqual({
-      decisions: [{ purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id, granted: false }],
+      decisions: [{ purpose: PRODUCT_UPDATES_PURPOSE, granted: false }],
       surface: 'web-consent-centre',
       noticeVersion: POLICY_LAST_UPDATED.privacy,
     });

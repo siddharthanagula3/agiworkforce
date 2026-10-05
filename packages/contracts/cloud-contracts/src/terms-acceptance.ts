@@ -9,7 +9,7 @@ const POLICY_VERSION = z.string().min(1).max(32);
 export const TermsAcceptanceRequestSchema = z.object({
   surface: z.enum(TERMS_ACCEPTANCE_SURFACES),
   version: POLICY_VERSION,
-  productUpdatesNoticeVersion: POLICY_VERSION.optional(),
+  marketingEmailNoticeVersion: POLICY_VERSION.optional(),
 });
 
 export type TermsAcceptanceRequest = z.infer<typeof TermsAcceptanceRequestSchema>;

@@ -6,6 +6,8 @@ import {
   MOCK_SHORT_PASSWORD_REFUSAL,
   MOCK_SIGNUP_CODE_ONLY_ACCOUNT,
   MOCK_SIGNUP_PASSWORD_ACCOUNT,
+  holdMockDevBrowser,
+  isMockedProviderScript,
   mockAuthProvider,
   mockAuthProviderCalls,
   mockAuthProviderProgress,
@@ -13,6 +15,7 @@ import {
 } from './lib/mock-auth-provider';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { FREE_PLAN_TRAINING_SIGNUP_STATEMENT } from '../lib/compliance/free-plan-training-disclosure';
+import { POLICY_LAST_UPDATED } from '../lib/legal-constants';
 
 // Vendor-response states are covered in features/auth/__tests__/AuthFlow.states.test.tsx.
 // Here is what only a browser answers: real focus order, real event order, real
@@ -33,13 +36,18 @@ const GENERIC_FAILURE = /something went wrong/i;
 const WRONG_PASSWORD = 'not the password this account has';
 const PASSWORD_REFUSED = /email and password do not match/i;
 const PASSWORDLESS_REASON = /does not use a password, so we emailed a code/i;
+const LAPTOP = { width: 1366, height: 768 };
+const NEW_ACCOUNT_DESTINATION = '/chat';
+const TERMS_REVIEW_PATH = '/login/complete';
+const NOTHING_CARRIED = { terms: null, choice: null, attempt: null, attemptInThisTab: null };
+const NEXT_DOCUMENT_TIMEOUT_MS = 30_000;
 
 function consentBox(page: Page) {
   return page.getByTestId('auth-signup-consent').getByRole('checkbox');
 }
 
-function productUpdatesBox(page: Page) {
-  return page.getByTestId('auth-product-updates-consent').getByRole('checkbox');
+function marketingEmailBox(page: Page) {
+  return page.getByTestId('auth-marketing-email-consent').getByRole('checkbox');
 }
 
 function passwordField(page: Page) {
@@ -55,6 +63,7 @@ async function openAuth(
   route: string,
   provider: Parameters<typeof mockAuthProvider>[1] = {},
 ): Promise<void> {
+  await holdMockDevBrowser(page, String(test.info().project.use.baseURL));
   await mockAuthProvider(page, provider);
   await page.goto(route, { waitUntil: 'load' });
   await expect(page.getByTestId('auth-layout')).toBeVisible();
@@ -113,6 +122,85 @@ async function openSignUpCodeStep(page: Page, email: string): Promise<Locator> {
   await consentBox(page).check();
   await page.getByLabel('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+  const code = page.getByLabel('Code', { exact: true });
+  await expect(code).toBeEditable();
+  return code;
+}
+
+/**
+ * Lists, and refuses where a route can, every request that would leave this
+ * machine or reach an identity API path. The provider scripts the harness
+ * answers are not among them; a redirect hop is, because it is listed even
+ * though no route sees it.
+ */
+async function keepEveryRequestOnThisMachine(page: Page): Promise<string[]> {
+  const leaving: string[] = [];
+  const leaves = (url: URL): boolean => {
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    if (isMockedProviderScript(url)) return false;
+    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    return !local || url.pathname.startsWith('/v1/');
+  };
+  page.on('request', (request) => {
+    if (leaves(new URL(request.url()))) leaving.push(request.url());
+  });
+  await page.route(leaves, (route) => route.abort());
+  return leaving;
+}
+
+/** Answers the terms request in the browser, where the mocked sign-up has no server session. */
+async function answerTermsRequests(page: Page): Promise<Record<string, unknown>[]> {
+  const sent: Record<string, unknown>[] = [];
+  await page.route('**/api/terms/accept', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    sent.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        version: POLICY_LAST_UPDATED.terms,
+        acceptedAt: '2026-10-05T00:00:00.000Z',
+      }),
+    });
+  });
+  return sent;
+}
+
+async function stopWhereTheFlowHandsOn(page: Page, path: string): Promise<Locator> {
+  await page.route(
+    (url) => url.pathname === path,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: `<!doctype html><title>Handed on</title><main data-testid="handed-on">${path}</main>`,
+      }),
+  );
+  return page.getByTestId('handed-on');
+}
+
+function carriedMarkers(page: Page) {
+  return page.evaluate(() => ({
+    terms: window.localStorage.getItem('agi.terms-accepted-version'),
+    choice: window.localStorage.getItem('agi.marketing-email-notice-version'),
+    attempt: window.localStorage.getItem('agi.marketing-email-attempt-id'),
+    attemptInThisTab: window.sessionStorage.getItem('agi.marketing-email-attempt-id'),
+  }));
+}
+
+async function admitSignUpToItsCodeStep(
+  page: Page,
+  { email, marketingEmail }: { email: string; marketingEmail: boolean },
+): Promise<Locator> {
+  await openAuth(page, '/signup', { signUpOpensSession: true });
+  await consentBox(page).check();
+  if (marketingEmail) await marketingEmailBox(page).check();
+  await page.getByLabel('Email address').fill(email);
+  await submitButton(page).click();
   await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
   const code = page.getByLabel('Code', { exact: true });
   await expect(code).toBeEditable();
@@ -258,11 +346,11 @@ test.describe('auth flow states', () => {
     await expect(summary).toBeFocused();
   });
 
-  test('/signup asks about product updates in a separate optional box that starts unticked', async ({
+  test('/signup asks about marketing email in a separate optional box that starts unticked', async ({
     page,
   }) => {
     await openAuth(page, '/signup');
-    const optional = productUpdatesBox(page);
+    const optional = marketingEmailBox(page);
     await expect(optional).not.toBeChecked();
     await expect(optional).toBeEnabled();
 
@@ -286,7 +374,7 @@ test.describe('auth flow states', () => {
     expect(
       await page.evaluate(() => [
         window.localStorage.getItem('agi.terms-accepted-version'),
-        window.localStorage.getItem('agi.product-updates-notice-version'),
+        window.localStorage.getItem('agi.marketing-email-notice-version'),
       ]),
       'ticking the box alone carries nothing',
     ).toEqual([null, null]);
@@ -298,21 +386,32 @@ test.describe('auth flow states', () => {
 
     await page.reload({ waitUntil: 'load' });
     await expect(page.getByTestId('auth-layout')).toBeVisible();
-    await expect(productUpdatesBox(page)).not.toBeChecked();
+    await expect(marketingEmailBox(page)).not.toBeChecked();
   });
 
-  test('/signup holds the product updates box off under Global Privacy Control and says why', async ({
+  test('/signup holds the marketing email box off under Global Privacy Control and says why', async ({
     page,
   }) => {
+    await page.setViewportSize(LAPTOP);
     await page.setExtraHTTPHeaders({ 'Sec-GPC': '1' });
     await openAuth(page, '/signup');
-    const optional = productUpdatesBox(page);
+    const optional = marketingEmailBox(page);
 
     await expect(optional).toBeDisabled();
     await expect(optional).not.toBeChecked();
     const describedBy = await optional.getAttribute('aria-describedby');
     expect(describedBy, 'the box points at the reason it is held').toBeTruthy();
-    await expect(page.locator(`[id="${describedBy}"]`)).toContainText('Global Privacy Control');
+    const reason = page.locator(`[id="${describedBy}"]`);
+    await expect(reason).toContainText('Global Privacy Control');
+    await page.evaluate(() => document.fonts.ready);
+    expect(
+      await reason.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return new Set([...range.getClientRects()].map((line) => Math.round(line.top))).size;
+      }),
+      'the reason fits one line at 1366 wide',
+    ).toBe(1);
     await expect(consentBox(page)).toBeEnabled();
 
     await consentBox(page).focus();
@@ -324,7 +423,7 @@ test.describe('auth flow states', () => {
     await expect(optional, 'a keyboard reaches the held box and hears its reason').toBeFocused();
     await page.keyboard.press('Space');
     await expect(optional).not.toBeChecked();
-    await page.getByTestId('auth-product-updates-consent').locator('label').click({ force: true });
+    await page.getByTestId('auth-marketing-email-consent').locator('label').click({ force: true });
     await expect(optional).not.toBeChecked();
   });
 
@@ -718,6 +817,154 @@ test.describe('auth flow states', () => {
       signUpPasswords: 2,
       signUpFinalizes: 1,
     });
+  });
+
+  test('a sign-up with both boxes ticked sends the marketing email choice with the terms it records', async ({
+    page,
+  }) => {
+    const leaving = await keepEveryRequestOnThisMachine(page);
+    const termsRequests = await answerTermsRequests(page);
+    const handedOn = await stopWhereTheFlowHandsOn(page, NEW_ACCOUNT_DESTINATION);
+    const code = await admitSignUpToItsCodeStep(page, {
+      email: MOCK_SIGNUP_CODE_ONLY_ACCOUNT,
+      marketingEmail: true,
+    });
+
+    const carried = await carriedMarkers(page);
+    expect(carried.terms).toBe(POLICY_LAST_UPDATED.terms);
+    expect(carried.choice).toBe(POLICY_LAST_UPDATED.privacy);
+    expect(carried.attempt, 'the choice is tied to an attempt').toBeTruthy();
+    expect(carried.attemptInThisTab, 'this tab holds the same attempt').toBe(carried.attempt);
+
+    await code.pressSequentially(MOCK_CODE);
+
+    await expect(handedOn).toHaveText(NEW_ACCOUNT_DESTINATION, {
+      timeout: NEXT_DOCUMENT_TIMEOUT_MS,
+    });
+    expect(termsRequests).toEqual([
+      {
+        surface: 'web-signup',
+        version: POLICY_LAST_UPDATED.terms,
+        marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy,
+      },
+    ]);
+    expect(await carriedMarkers(page), 'nothing outlives the recorded attempt').toEqual(
+      NOTHING_CARRIED,
+    );
+    expect(leaving, 'nothing left this machine and no identity API was called').toEqual([]);
+  });
+
+  test('a sign-up with the marketing email box left empty sends the terms alone', async ({
+    page,
+  }) => {
+    const leaving = await keepEveryRequestOnThisMachine(page);
+    const termsRequests = await answerTermsRequests(page);
+    const handedOn = await stopWhereTheFlowHandsOn(page, NEW_ACCOUNT_DESTINATION);
+    const code = await admitSignUpToItsCodeStep(page, {
+      email: MOCK_SIGNUP_CODE_ONLY_ACCOUNT,
+      marketingEmail: false,
+    });
+
+    expect(await carriedMarkers(page)).toEqual({
+      ...NOTHING_CARRIED,
+      terms: POLICY_LAST_UPDATED.terms,
+    });
+
+    await code.pressSequentially(MOCK_CODE);
+
+    await expect(handedOn).toHaveText(NEW_ACCOUNT_DESTINATION, {
+      timeout: NEXT_DOCUMENT_TIMEOUT_MS,
+    });
+    expect(termsRequests).toEqual([{ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms }]);
+    expect(Object.keys(termsRequests[0] ?? {})).not.toContain('marketingEmailNoticeVersion');
+    expect(await carriedMarkers(page)).toEqual(NOTHING_CARRIED);
+    expect(leaving, 'nothing left this machine and no identity API was called').toEqual([]);
+  });
+
+  test('a marketing email choice ticked in a second tab is never recorded for the sign-up an older tab finishes', async ({
+    page: olderTab,
+    context,
+  }) => {
+    const newerTab = await context.newPage();
+    const leaving = [
+      await keepEveryRequestOnThisMachine(olderTab),
+      await keepEveryRequestOnThisMachine(newerTab),
+    ];
+    const termsRequests = await answerTermsRequests(olderTab);
+    const askedAgain = await stopWhereTheFlowHandsOn(olderTab, TERMS_REVIEW_PATH);
+    const olderCode = await admitSignUpToItsCodeStep(olderTab, {
+      email: MOCK_SIGNUP_CODE_ONLY_ACCOUNT,
+      marketingEmail: false,
+    });
+    await admitSignUpToItsCodeStep(newerTab, {
+      email: MOCK_SIGNUP_PASSWORD_ACCOUNT,
+      marketingEmail: true,
+    });
+
+    const seenFromOlderTab = await carriedMarkers(olderTab);
+    expect(seenFromOlderTab.choice, 'the newer tab left its choice for the whole browser').toBe(
+      POLICY_LAST_UPDATED.privacy,
+    );
+    expect(seenFromOlderTab.attempt).toBeTruthy();
+    expect(seenFromOlderTab.attemptInThisTab, 'the older tab never held that attempt').toBeNull();
+
+    await olderCode.pressSequentially(MOCK_CODE);
+
+    await expect(askedAgain).toHaveText(TERMS_REVIEW_PATH, {
+      timeout: NEXT_DOCUMENT_TIMEOUT_MS,
+    });
+    expect(termsRequests, 'nothing is recorded for the attempt the choice was not made in').toEqual(
+      [],
+    );
+    expect(await carriedMarkers(olderTab)).toEqual(NOTHING_CARRIED);
+    expect(leaving.flat(), 'nothing left this machine and no identity API was called').toEqual([]);
+  });
+
+  test('a marketing email choice an older tab ticked is asked again when a second tab is admitted with the box empty', async ({
+    page: olderTab,
+    context,
+  }) => {
+    const newerTab = await context.newPage();
+    const leaving = [
+      await keepEveryRequestOnThisMachine(olderTab),
+      await keepEveryRequestOnThisMachine(newerTab),
+    ];
+    const termsRequests = await answerTermsRequests(olderTab);
+    const askedAgain = await stopWhereTheFlowHandsOn(olderTab, TERMS_REVIEW_PATH);
+    const olderCode = await admitSignUpToItsCodeStep(olderTab, {
+      email: MOCK_SIGNUP_CODE_ONLY_ACCOUNT,
+      marketingEmail: true,
+    });
+    const ticked = await carriedMarkers(olderTab);
+    expect(ticked.choice).toBe(POLICY_LAST_UPDATED.privacy);
+    expect(ticked.attempt, 'the choice is tied to an attempt').toBeTruthy();
+    expect(ticked.attemptInThisTab, 'the older tab holds that attempt').toBe(ticked.attempt);
+
+    await admitSignUpToItsCodeStep(newerTab, {
+      email: MOCK_SIGNUP_PASSWORD_ACCOUNT,
+      marketingEmail: false,
+    });
+
+    expect(
+      await carriedMarkers(olderTab),
+      'the newer tab removed the choice and the older tab still holds its attempt',
+    ).toEqual({
+      terms: POLICY_LAST_UPDATED.terms,
+      choice: null,
+      attempt: null,
+      attemptInThisTab: ticked.attempt,
+    });
+
+    await olderCode.pressSequentially(MOCK_CODE);
+
+    await expect(askedAgain).toHaveText(TERMS_REVIEW_PATH, {
+      timeout: NEXT_DOCUMENT_TIMEOUT_MS,
+    });
+    expect(termsRequests, 'the terms are not recorded without the choice that was ticked').toEqual(
+      [],
+    );
+    expect(await carriedMarkers(olderTab)).toEqual(NOTHING_CARRIED);
+    expect(leaving.flat(), 'nothing left this machine and no identity API was called').toEqual([]);
   });
 
   test('Try again starts nothing on /signup once the box is unticked again', async ({ page }) => {

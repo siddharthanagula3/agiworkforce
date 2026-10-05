@@ -8,6 +8,11 @@ export const MOCK_ACCOUNT_PASSWORD = 'the one password this fixture accepts';
 export const MOCK_SIGNUP_CODE_ONLY_ACCOUNT = 'new-code-only@example.invalid';
 export const MOCK_SIGNUP_PASSWORD_ACCOUNT = 'new-needs-password@example.invalid';
 export const MOCK_EMAILED_CODE = '123456';
+export const MOCK_SIGNED_UP_USER_ID = 'user_mock_signed_up';
+export const MOCK_SIGNED_UP_SESSION_ID = 'sess_mock_signed_up';
+const MOCK_SIGNED_UP_FLAG = 'mock-auth-provider.signed-up';
+const MOCK_DEV_BROWSER_COOKIE = '__clerk_db_jwt';
+const MOCKED_PROVIDER_SCRIPTS = ['clerk.browser.js', 'ui.browser.js'] as const;
 export const MOCK_SHORT_PASSWORD_REFUSAL = `Passwords must be ${AUTH_PASSWORD_MIN_LENGTH} characters or more.`;
 const MOCK_CODE_CHECK_MS = 300;
 
@@ -70,25 +75,47 @@ export async function mockAuthProviderSignIn(page: Page): Promise<MockAuthProvid
   );
 }
 
+/** Whether a request is for one of the provider scripts this fixture answers with an empty file. */
+export function isMockedProviderScript(url: URL): boolean {
+  return MOCKED_PROVIDER_SCRIPTS.some((script) => url.pathname.endsWith(`/${script}`));
+}
+
+// A development instance sends a browser that holds no dev-browser token
+// through the provider's handshake before its first page. Holding a
+// placeholder keeps that first navigation on this machine as well.
+export async function holdMockDevBrowser(page: Page, origin: string): Promise<void> {
+  await page
+    .context()
+    .addCookies([{ name: MOCK_DEV_BROWSER_COOKIE, value: 'mock-dev-browser', url: origin }]);
+}
+
 // This fixture exercises our auth UI against a signed-out provider boundary.
 // It cannot create a session or authorize an application API request.
+// With signUpOpensSession a finished sign-up navigates on, and the documents
+// that follow in the same tab see that sign-up and a session for it in the
+// browser only: the server still has no session, so the spec answers any
+// application request it wants to observe.
 export async function mockAuthProvider(
   page: Page,
   {
     loadDelayMs = 100,
     signUpNetworkFailures = 0,
-  }: { loadDelayMs?: number; signUpNetworkFailures?: number } = {},
+    signUpOpensSession = false,
+  }: { loadDelayMs?: number; signUpNetworkFailures?: number; signUpOpensSession?: boolean } = {},
 ): Promise<void> {
-  await page.route('**/clerk.browser.js*', (route) =>
-    route.fulfill({ contentType: 'application/javascript', body: '' }),
-  );
-  await page.route('**/ui.browser.js*', (route) =>
-    route.fulfill({ contentType: 'application/javascript', body: '' }),
-  );
+  for (const script of MOCKED_PROVIDER_SCRIPTS) {
+    await page.route(`**/${script}*`, (route) =>
+      route.fulfill({ contentType: 'application/javascript', body: '' }),
+    );
+  }
   await page.addInitScript(
     ({
       loadDelayMs,
       signUpNetworkFailures,
+      signUpOpensSession,
+      signedUpFlag,
+      signedUpUserId,
+      signedUpSessionId,
       codeAccount,
       passwordAccount,
       accountPassword,
@@ -100,6 +127,14 @@ export async function mockAuthProvider(
       shortPasswordRefusal,
     }) => {
       const wrongCode = { code: 'form_code_incorrect', meta: { paramName: 'code' } };
+      const signedUpInThisTab = (() => {
+        if (!signUpOpensSession) return false;
+        try {
+          return window.sessionStorage.getItem(signedUpFlag) === '1';
+        } catch {
+          return false;
+        }
+      })();
       let signUpNetworkFailuresLeft = signUpNetworkFailures;
       const calls = { signInCreate: 0, signUpCreate: 0, signUpSso: 0 };
       window.__agiMockAuthProviderCalls = calls;
@@ -186,10 +221,11 @@ export async function mockAuthProvider(
         },
       };
       const signUp = {
-        status: 'missing_requirements',
+        status: signedUpInThisTab ? 'complete' : 'missing_requirements',
         emailAddress: null as string | null,
         missingFields: [] as string[],
-        createdSessionId: null as string | null,
+        createdUserId: signedUpInThisTab ? signedUpUserId : null,
+        createdSessionId: signedUpInThisTab ? signedUpSessionId : null,
         verifications: {
           emailAddress: { status: null as string | null },
           async sendEmailCode() {
@@ -248,8 +284,14 @@ export async function mockAuthProvider(
           if (addressProven && signUp.missingFields.length === 0) signUp.status = 'complete';
           return { error: null };
         },
-        async finalize() {
+        async finalize(options?: {
+          navigate?: (context: { decorateUrl: (url: string) => string }) => void | Promise<void>;
+        }) {
           progress.signUpFinalizes += 1;
+          if (signUpOpensSession) {
+            window.sessionStorage.setItem(signedUpFlag, '1');
+            await options?.navigate?.({ decorateUrl: (url) => url });
+          }
           return { error: null };
         },
         async reset() {
@@ -266,7 +308,28 @@ export async function mockAuthProvider(
       };
       const signInSnapshot = { signIn, errors: {}, fetchStatus: 'idle' };
       const signUpSnapshot = { signUp, errors: {}, fetchStatus: 'idle' };
-      const resources = { client: { sessions: [] }, session: null, user: null, organization: null };
+      const user = signedUpInThisTab ? { id: signedUpUserId } : null;
+      const session = signedUpInThisTab
+        ? {
+            id: signedUpSessionId,
+            status: 'active',
+            user,
+            lastActiveToken: {
+              jwt: { claims: { sub: signedUpUserId, sid: signedUpSessionId } },
+            },
+            factorVerificationAge: null,
+            actor: null,
+            async getToken() {
+              return null;
+            },
+          }
+        : null;
+      const resources = {
+        client: { sessions: session ? [session] : [] },
+        session,
+        user,
+        organization: null,
+      };
       const listeners = new Set<(status: string) => void>();
       Object.defineProperty(window, '__internal_ClerkUICtor', { value: class {} });
       Object.defineProperty(window, 'Clerk', {
@@ -306,6 +369,10 @@ export async function mockAuthProvider(
     {
       loadDelayMs,
       signUpNetworkFailures,
+      signUpOpensSession,
+      signedUpFlag: MOCK_SIGNED_UP_FLAG,
+      signedUpUserId: MOCK_SIGNED_UP_USER_ID,
+      signedUpSessionId: MOCK_SIGNED_UP_SESSION_ID,
       codeAccount: MOCK_CODE_ACCOUNT,
       passwordAccount: MOCK_PASSWORD_ACCOUNT,
       accountPassword: MOCK_ACCOUNT_PASSWORD,

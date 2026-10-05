@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CONSENT_PURPOSES } from './consent-purposes';
 import {
+  GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE,
   GLOBAL_PRIVACY_CONTROL_HEADER,
   NON_ESSENTIAL_CONSENT_PURPOSE_IDS,
   grantedUnderGlobalPrivacyControl,
@@ -75,6 +76,7 @@ describe('which purposes the signal covers', () => {
     expect([...NON_ESSENTIAL_CONSENT_PURPOSE_IDS].sort()).toEqual([...expected].sort());
     expect(NON_ESSENTIAL_CONSENT_PURPOSE_IDS).toContain('product_analytics');
     expect(NON_ESSENTIAL_CONSENT_PURPOSE_IDS).toContain('product_updates');
+    expect(NON_ESSENTIAL_CONSENT_PURPOSE_IDS).toContain('marketing_email');
   });
 
   it('never covers a purpose the request itself depends on', () => {
@@ -120,5 +122,17 @@ describe('what the signal does to a decision', () => {
         false,
       );
     }
+  });
+});
+
+describe('the sentence shown beside a choice the signal holds off', () => {
+  it('says the choice is off and that Global Privacy Control in this browser is why', () => {
+    expect(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE).toMatch(/\boff\b/);
+    expect(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE).toMatch(/this browser/);
+    expect(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE).toMatch(/Global Privacy Control/);
+  });
+
+  it('is one plain sentence', () => {
+    expect(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE).toMatch(/^[A-Z][^.!?]*\.$/);
   });
 });

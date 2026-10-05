@@ -7,9 +7,13 @@ import {
   ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
 } from '@agiworkforce/types';
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { PRODUCT_UPDATES_CHOICE_STORAGE_KEY } from './signupAttemptMarkers';
+import {
+  MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+  MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+  writeSignupAttemptMarkers,
+} from './signupAttemptMarkers';
 import { TERMS_GATE_STORAGE_KEY } from './TermsGate';
 
 const signUpState = vi.hoisted(() => ({
@@ -84,16 +88,26 @@ async function renderConfirmedSignup() {
   await userEvent.click(screen.getByRole('checkbox', { name: CONSENT_BOX }));
 }
 
-function productUpdatesBox(): HTMLElement {
-  return screen.getByRole('checkbox', { name: PRODUCT_UPDATES_CONSENT_PURPOSE.label });
+function marketingEmailBox(): HTMLElement {
+  return screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label });
 }
 
+const NO_CHOICE = { choice: null, attempt: null, attemptInThisTab: null };
+
 function carriedChoice(): string | null {
-  return window.localStorage.getItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY);
+  return window.localStorage.getItem(MARKETING_EMAIL_CHOICE_STORAGE_KEY);
+}
+
+function carried() {
+  return {
+    choice: carriedChoice(),
+    attempt: window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
+    attemptInThisTab: window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
+  };
 }
 
 function leaveChoiceFromAnEarlierAttempt(): void {
-  window.localStorage.setItem(PRODUCT_UPDATES_CHOICE_STORAGE_KEY, POLICY_LAST_UPDATED.privacy);
+  writeSignupAttemptMarkers({ marketingEmail: true });
 }
 
 /**
@@ -117,9 +131,9 @@ describe('/signup agreement', () => {
     expect(within(screen.getByTestId('auth-signup-consent')).getAllByRole('checkbox')).toEqual([
       box,
     ]);
-    expect(screen.getAllByRole('checkbox')).toEqual([box, productUpdatesBox()]);
+    expect(screen.getAllByRole('checkbox')).toEqual([box, marketingEmailBox()]);
     expect(box).not.toBeChecked();
-    expect(productUpdatesBox()).not.toBeChecked();
+    expect(marketingEmailBox()).not.toBeChecked();
     expect(screen.queryByText(/By signing up/)).toBeNull();
   });
 
@@ -256,14 +270,16 @@ describe('/signup agreement', () => {
 });
 
 /**
- * Founder request 2026-10-04: product-update email is agreed at sign-up, in a
+ * Founder request 2026-10-04: marketing email is agreed at sign-up, in a
  * separate optional box. The choice is carried beside the terms marker, with
- * the privacy notice version that was on screen, and written by
- * /signup/complete in the request that records the terms.
+ * the privacy notice version that was on screen and the id of the attempt it
+ * was made in, and written by /signup/complete in the request that records
+ * the terms.
  */
-describe('/signup product updates choice', () => {
+describe('/signup marketing email choice', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     signUpState.create.mockReset().mockResolvedValue({ error: null });
     signUpState.verifications.sendEmailCode.mockReset().mockResolvedValue({ error: null });
     signUpState.sso.mockReset().mockResolvedValue({ error: null });
@@ -273,31 +289,33 @@ describe('/signup product updates choice', () => {
     leaveChoiceFromAnEarlierAttempt();
     renderSignup();
 
-    expect(productUpdatesBox()).not.toBeChecked();
+    expect(marketingEmailBox()).not.toBeChecked();
   });
 
   it('writes nothing when the optional box is ticked but no attempt is admitted', async () => {
     renderSignup();
 
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
 
     expect(signUpState.sso).not.toHaveBeenCalled();
     expect(signUpState.create).not.toHaveBeenCalled();
-    expect(carriedChoice()).toBeNull();
+    expect(carried()).toEqual(NO_CHOICE);
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
   });
 
   it('carries a ticked choice past the email step with the notice version on screen', async () => {
     await renderConfirmedSignup();
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() => expect(carriedChoice()).toBe(POLICY_LAST_UPDATED.privacy));
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
+    expect(carried().attempt).toBeTruthy();
+    expect(carried().attemptInThisTab).toBe(carried().attempt);
     expect(signUpState.create).toHaveBeenCalledWith({
       emailAddress: 'person@example.com',
       legalAccepted: true,
@@ -306,13 +324,29 @@ describe('/signup product updates choice', () => {
 
   it('carries a ticked choice into a provider round trip', async () => {
     await renderConfirmedSignup();
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
     await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
     expect(carriedChoice()).toBe(POLICY_LAST_UPDATED.privacy);
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
+    expect(carried().attempt).toBeTruthy();
+    expect(carried().attemptInThisTab).toBe(carried().attempt);
+  });
+
+  it('never hands a later attempt the id of the one before it', async () => {
+    leaveChoiceFromAnEarlierAttempt();
+    const earlier = carried().attempt;
+    await renderConfirmedSignup();
+    await userEvent.click(marketingEmailBox());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
+    expect(carried().attempt).toBeTruthy();
+    expect(carried().attempt).not.toBe(earlier);
+    expect(carried().attemptInThisTab).toBe(carried().attempt);
   });
 
   it('admits an email sign-up with the box unticked and removes a choice an earlier attempt left', async () => {
@@ -326,7 +360,7 @@ describe('/signup product updates choice', () => {
       expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms),
     );
     expect(signUpState.create).toHaveBeenCalledTimes(1);
-    expect(carriedChoice()).toBeNull();
+    expect(carried()).toEqual(NO_CHOICE);
   });
 
   it('admits a provider sign-up with the box unticked and removes a choice an earlier attempt left', async () => {
@@ -337,7 +371,7 @@ describe('/signup product updates choice', () => {
 
     await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
-    expect(carriedChoice()).toBeNull();
+    expect(carried()).toEqual(NO_CHOICE);
   });
 
   it('drops a ticked choice with the terms marker when the email sign-up is refused', async () => {
@@ -345,14 +379,14 @@ describe('/signup product updates choice', () => {
       error: { errors: [{ code: 'form_identifier_exists' }] },
     });
     await renderConfirmedSignup();
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
 
     await userEvent.type(screen.getByLabelText('Email address'), 'existing@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() => expect(signUpState.create).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled());
-    expect(carriedChoice()).toBeNull();
+    expect(carried()).toEqual(NO_CHOICE);
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
   });
 
@@ -361,35 +395,35 @@ describe('/signup product updates choice', () => {
       error: { errors: [{ code: 'oauth_access_denied' }] },
     });
     await renderConfirmedSignup();
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
     await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
     await waitFor(() => expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull());
-    expect(carriedChoice()).toBeNull();
+    expect(carried()).toEqual(NO_CHOICE);
   });
 
   it('carries the choice as it stands when Try again is pressed, not as it stood at the failed attempt', async () => {
     signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
     await renderConfirmedSignup();
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     const retry = await screen.findByRole('button', { name: 'Try again' });
-    expect(carriedChoice()).toBeNull();
+    expect(carried()).toEqual(NO_CHOICE);
 
     signUpState.create.mockResolvedValue({ error: null });
-    await userEvent.click(productUpdatesBox());
-    expect(productUpdatesBox()).not.toBeChecked();
+    await userEvent.click(marketingEmailBox());
+    expect(marketingEmailBox()).not.toBeChecked();
     await userEvent.click(retry);
 
     await waitFor(() =>
       expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms),
     );
     expect(signUpState.create).toHaveBeenCalledTimes(2);
-    expect(carriedChoice()).toBeNull();
+    expect(carried()).toEqual(NO_CHOICE);
   });
 });
 
@@ -406,6 +440,7 @@ describe('/login and a marker the sign-up page left behind', () => {
 
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
     signInState.create.mockReset().mockResolvedValue({ error: null });
     signInState.emailCode.sendCode.mockReset().mockResolvedValue({ error: null });
@@ -446,7 +481,7 @@ describe('/login and a marker the sign-up page left behind', () => {
       () => signInState.create,
     ],
   ])(
-    'drops a product updates choice an abandoned sign-up left, so %s never inherits it',
+    'drops a marketing email choice an abandoned sign-up left, so %s never inherits it',
     async (_case, start, reached) => {
       leaveChoiceFromAnEarlierAttempt();
       renderLogin();
@@ -454,7 +489,7 @@ describe('/login and a marker the sign-up page left behind', () => {
       await start();
 
       await waitFor(() => expect(reached()).toHaveBeenCalled());
-      expect(carriedChoice()).toBeNull();
+      expect(carried()).toEqual(NO_CHOICE);
       expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
     },
   );

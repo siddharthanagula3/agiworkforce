@@ -3,7 +3,7 @@ import { CONSENT_PURPOSES } from '@/lib/consent-purposes';
 export const GLOBAL_PRIVACY_CONTROL_HEADER = 'sec-gpc';
 
 export const GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE =
-  'This browser is sending Global Privacy Control, so this cannot be turned on from this browser.';
+  "Held off by this browser's Global Privacy Control.";
 
 export const NON_ESSENTIAL_CONSENT_PURPOSE_IDS: readonly string[] = Object.freeze(
   CONSENT_PURPOSES.filter((purpose) => !purpose.necessaryForRequest).map((purpose) => purpose.id),

@@ -8,11 +8,12 @@ import { Spinner } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
-import { useProductUpdatesGrant } from '@/features/auth/productUpdatesChoice';
+import { useMarketingEmailGrant } from '@/features/auth/marketingEmailChoice';
 import {
+  carriedChoiceMustBeAskedAgain,
   clearSignupAttemptMarkers,
   hasCurrentTermsGateMarker,
-  readCarriedProductUpdatesChoice,
+  readCarriedMarketingEmailChoice,
 } from '../signupAttemptMarkers';
 
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
@@ -38,12 +39,12 @@ export function RecordTermsAcceptance({
   const router = useRouter();
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
   const attempted = useRef(false);
-  const grantedOnThisScreen = useProductUpdatesGrant();
+  const grantedOnThisScreen = useMarketingEmailGrant();
   const carriedGrant = useRef<string | null>(null);
 
   const record = useCallback(async () => {
     setFailure('none');
-    const productUpdatesNoticeVersion =
+    const marketingEmailNoticeVersion =
       surface === 'web-signup' ? carriedGrant.current : grantedOnThisScreen;
     try {
       const response = await fetch('/api/terms/accept', {
@@ -53,7 +54,7 @@ export function RecordTermsAcceptance({
         body: JSON.stringify({
           surface,
           version: POLICY_LAST_UPDATED.terms,
-          ...(productUpdatesNoticeVersion ? { productUpdatesNoticeVersion } : {}),
+          ...(marketingEmailNoticeVersion ? { marketingEmailNoticeVersion } : {}),
         }),
       });
       if (response.status === 409) {
@@ -77,11 +78,11 @@ export function RecordTermsAcceptance({
       return;
     }
     if (surface === 'web-signup') {
-      const carried = readCarriedProductUpdatesChoice();
+      const carried = readCarriedMarketingEmailChoice();
       if (
         !hasCurrentTermsGateMarker() ||
         !completedSignUp.createdThisSession ||
-        carried.kind === 'stale'
+        carriedChoiceMustBeAskedAgain(carried)
       ) {
         clearSignupAttemptMarkers();
         router.replace(

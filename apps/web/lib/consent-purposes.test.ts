@@ -6,9 +6,11 @@ import { describe, expect, it } from 'vitest';
 import {
   CONSENT_PURPOSES,
   CONSENT_SURFACES,
+  MARKETING_EMAIL_CONSENT_PURPOSE,
   PLATFORM_AVAILABILITY_CONSENT_PURPOSES,
-  PRODUCT_UPDATES_CONSENT_PURPOSE,
+  PLATFORM_AVAILABILITY_CONSENT_PURPOSE_IDS,
   WAITLIST_CONSENT_PURPOSES,
+  WAITLIST_CONSENT_PURPOSE_IDS,
   WAITLIST_SOURCES,
   consentPurposesForWaitlistSource,
   findConsentPurpose,
@@ -30,19 +32,95 @@ describe('enterprise waitlist consent purpose', () => {
   });
 });
 
-describe('product updates consent purpose', () => {
+describe('marketing email consent purpose', () => {
   it('is the catalogue entry itself, so every screen states it in the same words', () => {
-    expect(PRODUCT_UPDATES_CONSENT_PURPOSE).toBe(findConsentPurpose('product_updates'));
-    expect(CONSENT_PURPOSES).toContain(PRODUCT_UPDATES_CONSENT_PURPOSE);
+    expect(MARKETING_EMAIL_CONSENT_PURPOSE).toBe(findConsentPurpose('marketing_email'));
+    expect(CONSENT_PURPOSES).toContain(MARKETING_EMAIL_CONSENT_PURPOSE);
   });
 
   it('is optional wherever it is asked', () => {
-    expect(PRODUCT_UPDATES_CONSENT_PURPOSE.necessaryForRequest).toBe(false);
+    expect(MARKETING_EMAIL_CONSENT_PURPOSE.necessaryForRequest).toBe(false);
+  });
+
+  it('says what the email is, that it starts off, and where to turn it off', () => {
+    expect(MARKETING_EMAIL_CONSENT_PURPOSE).toEqual({
+      id: 'marketing_email',
+      label: 'Email me product news, tips and offers.',
+      description:
+        'Email about new features, ways to get more from AGI, and offers such as discounts or free allowances. Off unless you turn it on. You can turn it off at any time in Settings or on the privacy requests page.',
+      necessaryForRequest: false,
+    });
+  });
+
+  it('is a different purpose from the waitlist product updates, so neither grant stands in for the other', () => {
+    const productUpdates = findConsentPurpose('product_updates');
+
+    expect(productUpdates).toBeDefined();
+    expect(MARKETING_EMAIL_CONSENT_PURPOSE).not.toBe(productUpdates);
+    expect(MARKETING_EMAIL_CONSENT_PURPOSE.id).not.toBe(productUpdates?.id);
+    expect(MARKETING_EMAIL_CONSENT_PURPOSE.label).not.toBe(productUpdates?.label);
+  });
+});
+
+describe('the purposes people have already agreed to', () => {
+  it('keeps every earlier purpose first and in its published order, with the account purpose after them', () => {
+    expect(CONSENT_PURPOSES.map((purpose) => purpose.id)).toEqual([
+      'enterprise_waitlist',
+      'platform_availability_waitlist',
+      'product_updates',
+      'product_analytics',
+      'marketing_email',
+    ]);
+  });
+
+  it('keeps the wording of the three waitlist purposes exactly as it was published', () => {
+    expect(findConsentPurpose('enterprise_waitlist')).toEqual({
+      id: 'enterprise_waitlist',
+      label: 'Store my email address so AGI can discuss contract-scoped Enterprise access with me.',
+      description:
+        'Your address is stored so a person can discuss contract-scoped Enterprise access and contact you as additional Enterprise capabilities become available. Organisation, SSO, SCIM, audit export, and retention controls are already live for entitled workspaces. It is used for this Enterprise conversation and nothing else; nothing in the product mails this list automatically.',
+      necessaryForRequest: true,
+    });
+    expect(findConsentPurpose('platform_availability_waitlist')).toEqual({
+      id: 'platform_availability_waitlist',
+      label: 'Store my email address so we can tell you when this platform ships.',
+      description:
+        'Your address is stored so we can email you once AGI Mobile, AGI in Chrome or AGI in VS Code has a verified installer to download. It is used for that and nothing else, and is unrelated to the Enterprise contract-access contact list.',
+      necessaryForRequest: true,
+    });
+    expect(findConsentPurpose('product_updates')).toEqual({
+      id: 'product_updates',
+      label: 'Also email me product updates and launch news.',
+      description:
+        'Occasional email about new releases and capabilities, sent by a person rather than an automated system. Separate from the early-access list, so you can withdraw it without leaving that list.',
+      necessaryForRequest: false,
+    });
+  });
+
+  it('asks the waitlist forms for the same purposes as before, never the account one', () => {
+    expect([...WAITLIST_CONSENT_PURPOSE_IDS]).toEqual(['enterprise_waitlist', 'product_updates']);
+    expect([...PLATFORM_AVAILABILITY_CONSENT_PURPOSE_IDS]).toEqual([
+      'platform_availability_waitlist',
+      'product_updates',
+    ]);
+    expect(WAITLIST_CONSENT_PURPOSES.map((purpose) => purpose.id)).toEqual([
+      'enterprise_waitlist',
+      'product_updates',
+    ]);
+    expect(PLATFORM_AVAILABILITY_CONSENT_PURPOSES.map((purpose) => purpose.id)).toEqual([
+      'platform_availability_waitlist',
+      'product_updates',
+    ]);
+    for (const source of WAITLIST_SOURCES) {
+      expect(consentPurposesForWaitlistSource(source)).not.toContain(
+        MARKETING_EMAIL_CONSENT_PURPOSE,
+      );
+    }
   });
 });
 
 describe('consent surfaces', () => {
-  it('names the two account screens that ask about product updates with the terms', () => {
+  it('names the two account screens that ask about marketing email with the terms', () => {
     expect(CONSENT_SURFACES).toContain('web-signup');
     expect(CONSENT_SURFACES).toContain('web-login');
     expect(isConsentSurface('web-signup')).toBe(true);

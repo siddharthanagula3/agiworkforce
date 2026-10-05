@@ -14,7 +14,7 @@ import { AuthField } from './AuthField';
 import { AuthLegalFooter } from './AuthLegalFooter';
 import { AuthPasswordField } from './AuthPasswordField';
 import { AuthPhaseStatus } from './AuthPhaseStatus';
-import { AuthProductUpdatesConsent } from './AuthProductUpdatesConsent';
+import { AuthMarketingEmailConsent } from './AuthMarketingEmailConsent';
 import { AuthProviderButtons } from './AuthProviderButtons';
 import { AuthSignupConsent } from './AuthSignupConsent';
 import { AuthStepFrame } from './AuthStepFrame';
@@ -37,7 +37,7 @@ import {
   AUTH_QUIET_BUTTON_CLASS,
   AUTH_STEP_LINKS_CLASS,
 } from './authStyles';
-import { useProductUpdatesChoice } from './productUpdatesChoice';
+import { useMarketingEmailChoice } from './marketingEmailChoice';
 import { useSignupConsentGate } from './useSignupConsentGate';
 import type { AuthMode, AuthPhase, AuthProvider, AuthProviderId } from './authContract';
 
@@ -113,11 +113,11 @@ export function AuthEmailStep({
   const [lastUsed, setLastUsed] = useState<AuthLastUsed | null>(null);
   const isSignup = mode === 'signup';
   const consent = useSignupConsentGate(isSignup);
-  const productUpdates = useProductUpdatesChoice(optedOutBySignal);
+  const marketingEmail = useMarketingEmailChoice(optedOutBySignal);
   if (passwordMode !== mode) {
     setPasswordMode(mode);
     setPassword('');
-    productUpdates.choose(false);
+    marketingEmail.choose(false);
   }
   useEffect(() => {
     setPasskeysSupported(browserSupportsPasskeys());
@@ -152,7 +152,7 @@ export function AuthEmailStep({
   const attempt = (action: () => void) => {
     const admitted = consent.admit(() => {
       setAttempted({ email, password });
-      if (isSignup) onSignupAdmitted?.({ productUpdates: productUpdates.wanted });
+      if (isSignup) onSignupAdmitted?.({ marketingEmail: marketingEmail.wanted });
       action();
     });
     if (!admitted) scene.setMood('error');
@@ -308,8 +308,8 @@ export function AuthEmailStep({
       {isSignup ? (
         <>
           <AuthSignupConsent gate={{ ...consent, confirm: onConsentChange }} disabled={busy} />
-          <AuthProductUpdatesConsent
-            choice={productUpdates}
+          <AuthMarketingEmailConsent
+            choice={marketingEmail}
             disabled={busy}
             className={AUTH_OPTIONAL_CONSENT_CLASS}
           />

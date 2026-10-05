@@ -9,7 +9,7 @@ import {
   ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
 } from '@agiworkforce/types';
 
-import { PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE } from '@/lib/consent-signals';
 
 import { AuthEmailStep } from '../AuthEmailStep';
@@ -45,9 +45,9 @@ function consentBox(): HTMLInputElement {
   return screen.getByRole('checkbox', { name: CONSENT_SENTENCE }) as HTMLInputElement;
 }
 
-function productUpdatesBox(): HTMLInputElement {
+function marketingEmailBox(): HTMLInputElement {
   return screen.getByRole('checkbox', {
-    name: PRODUCT_UPDATES_CONSENT_PURPOSE.label,
+    name: MARKETING_EMAIL_CONSENT_PURPOSE.label,
   }) as HTMLInputElement;
 }
 
@@ -99,7 +99,7 @@ describe('AuthEmailStep', () => {
     expect(
       screen.getByText('Get started with AGI Workforce and put AI to work for you.'),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('checkbox')).toEqual([consentBox(), productUpdatesBox()]);
+    expect(screen.getAllByRole('checkbox')).toEqual([consentBox(), marketingEmailBox()]);
     expect(within(screen.getByTestId('auth-signup-consent')).getAllByRole('checkbox')).toEqual([
       consentBox(),
     ]);
@@ -653,25 +653,25 @@ describe('AuthEmailStep', () => {
   });
 });
 
-describe('the optional product updates box on sign up', () => {
+describe('the optional marketing email box on sign up', () => {
   afterEach(() => {
     Reflect.deleteProperty(navigator, 'globalPrivacyControl');
   });
 
   it('sits directly under the required box as a real label, unticked and never required', () => {
     renderStep({ mode: 'signup' });
-    const box = productUpdatesBox();
+    const box = marketingEmailBox();
 
     expect(box).not.toBeChecked();
     expect(box).not.toBeRequired();
     expect(box).not.toHaveAttribute('aria-required');
     expect(box).not.toHaveAttribute('aria-invalid');
     expect(box).not.toHaveAccessibleDescription();
-    expect(box.closest('label')).toHaveTextContent(PRODUCT_UPDATES_CONSENT_PURPOSE.label);
+    expect(box.closest('label')).toHaveTextContent(MARKETING_EMAIL_CONSENT_PURPOSE.label);
     expect(box.closest('label')).toHaveAttribute('for', box.id);
 
     const required = screen.getByTestId('auth-signup-consent');
-    const optional = screen.getByTestId('auth-product-updates-consent');
+    const optional = screen.getByTestId('auth-marketing-email-consent');
     expect(required.nextElementSibling).toBe(optional);
     expect(optional.nextElementSibling).toBe(screen.getByTestId('auth-data-use-notice'));
   });
@@ -686,16 +686,16 @@ describe('the optional product updates box on sign up', () => {
     expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveFocus();
     await userEvent.tab();
 
-    expect(productUpdatesBox()).toHaveFocus();
+    expect(marketingEmailBox()).toHaveFocus();
     await userEvent.keyboard(' ');
-    expect(productUpdatesBox()).toBeChecked();
+    expect(marketingEmailBox()).toBeChecked();
     expect(consentBox()).not.toBeChecked();
   });
 
   it('is not on the sign-in screen', () => {
     renderStep();
 
-    expect(screen.queryByTestId('auth-product-updates-consent')).toBeNull();
+    expect(screen.queryByTestId('auth-marketing-email-consent')).toBeNull();
   });
 
   it('starts unticked on every mount, whatever the last visit chose', async () => {
@@ -714,13 +714,13 @@ describe('the optional product updates box on sign up', () => {
         onStartProvider={vi.fn()}
       />,
     );
-    await userEvent.click(productUpdatesBox());
-    expect(productUpdatesBox()).toBeChecked();
+    await userEvent.click(marketingEmailBox());
+    expect(marketingEmailBox()).toBeChecked();
     first.unmount();
 
     renderStep({ mode: 'signup' });
 
-    expect(productUpdatesBox()).not.toBeChecked();
+    expect(marketingEmailBox()).not.toBeChecked();
   });
 
   it.each([
@@ -732,12 +732,12 @@ describe('the optional product updates box on sign up', () => {
     renderStep({ mode: 'signup', onSignupAdmitted, onStartProvider });
 
     await userEvent.click(consentBox());
-    if (ticked) await userEvent.click(productUpdatesBox());
+    if (ticked) await userEvent.click(marketingEmailBox());
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
     expect(onStartProvider).toHaveBeenCalledWith('google');
     expect(onSignupAdmitted).toHaveBeenCalledTimes(1);
-    expect(onSignupAdmitted).toHaveBeenCalledWith({ productUpdates: ticked });
+    expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: ticked });
     expect(onSignupAdmitted.mock.invocationCallOrder[0] ?? Number.NaN).toBeLessThan(
       onStartProvider.mock.invocationCallOrder[0] ?? Number.NaN,
     );
@@ -747,7 +747,7 @@ describe('the optional product updates box on sign up', () => {
     const onSignupAdmitted = vi.fn();
     const props = renderStep({ mode: 'signup', onSignupAdmitted });
 
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -755,16 +755,16 @@ describe('the optional product updates box on sign up', () => {
     expect(props.onStartProvider).not.toHaveBeenCalled();
     expect(onSignupAdmitted).not.toHaveBeenCalled();
     expectRefused();
-    expect(productUpdatesBox()).toBeChecked();
-    expect(productUpdatesBox()).not.toHaveAttribute('aria-invalid');
+    expect(marketingEmailBox()).toBeChecked();
+    expect(marketingEmailBox()).not.toHaveAttribute('aria-invalid');
 
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
 
     expect(within(screen.getByTestId('auth-signup-consent')).getByRole('alert')).toHaveTextContent(
       ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
     );
     expect(consentBox()).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.queryByTestId('auth-product-updates-consent')).not.toContainElement(
+    expect(screen.queryByTestId('auth-marketing-email-consent')).not.toContainElement(
       screen.getByRole('alert'),
     );
   });
@@ -781,15 +781,15 @@ describe('the optional product updates box on sign up', () => {
     });
 
     await userEvent.click(consentBox());
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await userEvent.click(productUpdatesBox());
+    await userEvent.click(marketingEmailBox());
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
     expect(onRetry).toHaveBeenCalledTimes(2);
     expect(onSignupAdmitted.mock.calls).toEqual([
-      [{ productUpdates: true }],
-      [{ productUpdates: false }],
+      [{ marketingEmail: true }],
+      [{ marketingEmail: false }],
     ]);
   });
 
@@ -797,7 +797,7 @@ describe('the optional product updates box on sign up', () => {
     renderStep({ mode: 'signup', phase: 'checking_account' });
 
     expect(consentBox()).toBeDisabled();
-    expect(productUpdatesBox()).toBeDisabled();
+    expect(marketingEmailBox()).toBeDisabled();
   });
 
   it.each([
@@ -809,7 +809,7 @@ describe('the optional product updates box on sign up', () => {
       signal();
       const onSignupAdmitted = vi.fn();
       const props = renderStep({ mode: 'signup', onSignupAdmitted, ...overrides });
-      const box = productUpdatesBox();
+      const box = marketingEmailBox();
 
       expect(box).toHaveAttribute('aria-disabled', 'true');
       expect(box).not.toBeChecked();
@@ -817,13 +817,13 @@ describe('the optional product updates box on sign up', () => {
       expect(screen.getByText(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE)).toBeVisible();
 
       await userEvent.click(box);
-      await userEvent.click(screen.getByText(PRODUCT_UPDATES_CONSENT_PURPOSE.label));
+      await userEvent.click(screen.getByText(MARKETING_EMAIL_CONSENT_PURPOSE.label));
       await userEvent.click(consentBox());
       await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
       expect(box).not.toBeChecked();
       expect(props.onStartProvider).toHaveBeenCalledWith('google');
-      expect(onSignupAdmitted).toHaveBeenCalledWith({ productUpdates: false });
+      expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: false });
     },
   );
 
@@ -835,14 +835,14 @@ describe('the optional product updates box on sign up', () => {
     await userEvent.tab();
     await userEvent.tab();
 
-    expect(productUpdatesBox()).toHaveFocus();
-    expect(productUpdatesBox()).toHaveAccessibleDescription(
+    expect(marketingEmailBox()).toHaveFocus();
+    expect(marketingEmailBox()).toHaveAccessibleDescription(
       GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE,
     );
     await userEvent.keyboard(' ');
-    expect(productUpdatesBox()).not.toBeChecked();
-    expect(productUpdatesBox().closest('label')).toHaveClass('cursor-not-allowed');
-    expect(productUpdatesBox().closest('label')).not.toHaveClass('cursor-pointer');
+    expect(marketingEmailBox()).not.toBeChecked();
+    expect(marketingEmailBox().closest('label')).toHaveClass('cursor-not-allowed');
+    expect(marketingEmailBox().closest('label')).not.toHaveClass('cursor-pointer');
   });
 
   it('comes back unticked when the screen returns to sign up without remounting', async () => {
@@ -860,23 +860,23 @@ describe('the optional product updates box on sign up', () => {
       onSignupAdmitted,
     };
     const { rerender } = render(<AuthEmailStep {...props} mode="signup" switchUrl="/login" />);
-    await userEvent.click(productUpdatesBox());
-    expect(productUpdatesBox()).toBeChecked();
+    await userEvent.click(marketingEmailBox());
+    expect(marketingEmailBox()).toBeChecked();
 
     rerender(<AuthEmailStep {...props} mode="login" switchUrl="/signup" />);
     rerender(<AuthEmailStep {...props} mode="signup" switchUrl="/login" />);
 
-    expect(productUpdatesBox()).not.toBeChecked();
+    expect(marketingEmailBox()).not.toBeChecked();
     await userEvent.click(consentBox());
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    expect(onSignupAdmitted).toHaveBeenCalledWith({ productUpdates: false });
+    expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: false });
   });
 
   it('says nothing about the signal when the browser sends none', () => {
     renderStep({ mode: 'signup' });
 
-    expect(productUpdatesBox()).toBeEnabled();
-    expect(productUpdatesBox()).not.toHaveAttribute('aria-disabled');
+    expect(marketingEmailBox()).toBeEnabled();
+    expect(marketingEmailBox()).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByText(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE)).toBeNull();
   });
 });

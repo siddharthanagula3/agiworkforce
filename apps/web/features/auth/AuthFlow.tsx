@@ -49,7 +49,7 @@ function providerCheckedThePassword(result: AuthResult): boolean {
   );
 }
 
-const NO_OPTIONAL_CHOICES: SignupAttemptChoices = { productUpdates: false };
+const NO_OPTIONAL_CHOICES: SignupAttemptChoices = { marketingEmail: false };
 
 export function AuthFlow({
   mode,
@@ -155,6 +155,7 @@ export function AuthFlow({
   }, [run]);
 
   const onEditEmail = useCallback(() => {
+    clearSignupAttemptMarkers();
     clearMessages();
     setStep(INITIAL_STEP);
     lastAction.current = null;
@@ -196,6 +197,7 @@ export function AuthFlow({
 
   const onStartPasskey = useCallback(() => {
     void run(() => {
+      clearSignupAttemptMarkers();
       rememberAuthMethod({ kind: 'method', method: 'passkey' });
       return client.signInWithPasskey();
     }, 'passkey_requested');
