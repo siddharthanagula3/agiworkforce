@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
+import { resolveAnonymousSession } from '@/lib/anonymous-session';
 import { deploymentEnvironment, isProductionRuntime } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 
@@ -60,31 +61,6 @@ export function resetCsrfCache(): void {
 }
 
 const CSRF_HEADER = 'x-csrf-token';
-
-/**
- * Read a single cookie value by name from a Cookie header string.
- *
- * SECURITY (web-HIGH-1, audit 2026-05-05): the previous implementation called
- * `cookies.match(/<name>=([^;]+)/)` with no leading anchor. That regex matches
- * any cookie whose name *ends with* the target · so `x-anon-session-id=evil;
- * anon-session-id=real` returned `evil` (the leftmost match), and an attacker
- * who could plant `crafted-anon-session-id=<known>` via subdomain cookie
- * injection could forge any user's CSRF binding by pre-seeding the value.
- * The fix anchors the match to a cookie-name boundary `(?:^|; )` so the
- * pattern only matches a true cookie name. The cookie-name argument is
- * regex-escaped before interpolation so a caller passing a name with `.`
- * or `*` does not accidentally widen the match.
- *
- * Exported for unit-test access. Treat as internal · production code in this
- * file should be the only consumer.
- *
- * @internal
- */
-export function readCookie(cookieHeader: string, name: string): string | null {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = cookieHeader.match(new RegExp(`(?:^|; )${escaped}=([^;]+)`));
-  return match?.[1] ?? null;
-}
 
 export function generateCsrfToken(sessionId: string): string {
   const timestamp = Date.now().toString();
@@ -153,25 +129,7 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     // Reading the request identity fails outside a route handler; fall through
   }
 
-  const cookies = _request.headers.get('cookie') || '';
-
-  const hostPrefixed = readAnonSessionCookie(cookies);
-  if (hostPrefixed) {
-    return hostPrefixed;
-  }
-
-  return `anon-${crypto.randomUUID()}`;
-}
-
-const ANON_SESSION_COOKIE = '__Host-anon-session-id';
-const ANON_SESSION_ID_PATTERN =
-  /^anon-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
-// Only the id shape this server mints is honoured, so a client cannot present a provider user id
-// (or any other principal) as its anonymous identity.
-function readAnonSessionCookie(cookies: string): string | null {
-  const value = readCookie(cookies, ANON_SESSION_COOKIE);
-  return value && ANON_SESSION_ID_PATTERN.test(value) ? value : null;
+  return resolveAnonymousSession(_request).id;
 }
 
 export async function getOrCreateAnonSession(
@@ -187,18 +145,7 @@ export async function getOrCreateAnonSession(
     // Reading the request identity fails outside a route handler; fall through
   }
 
-  const cookies = request.headers.get('cookie') || '';
-
-  const hostPrefixed = readAnonSessionCookie(cookies);
-  if (hostPrefixed) {
-    return { id: hostPrefixed };
-  }
-
-  const anonId = `anon-${crypto.randomUUID()}`;
-  return {
-    id: anonId,
-    newCookie: `${ANON_SESSION_COOKIE}=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
-  };
+  return resolveAnonymousSession(request);
 }
 
 async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
@@ -309,4 +256,5 @@ export async function requireCsrfToken(
   return null;
 }
 
+export { readCookie } from '@/lib/anonymous-session';
 export { isBearerTokenValid };

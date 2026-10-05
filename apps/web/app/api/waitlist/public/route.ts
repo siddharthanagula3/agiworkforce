@@ -1,13 +1,19 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type {
+  PublicWaitlistJoinResponse,
+  PublicWaitlistTokenResponse,
+} from '@agiworkforce/cloud-contracts/waitlist';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { normalizeWaitlistEmail } from '@/lib/server/waitlist-email';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { requireCsrfToken } from '@/lib/csrf';
+import { resolveAnonymousSession } from '@/lib/anonymous-session';
+import { generateCsrfToken, requireCsrfToken } from '@/lib/csrf';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import {
   isConsentPurpose,
   recordConsentBatch,
@@ -20,6 +26,8 @@ import {
   type WaitlistSource,
 } from '@/lib/consent-purposes';
 import { getOptionalAuthUser } from '@/lib/api-auth';
+
+export const dynamic = 'force-dynamic';
 
 function isValidEmail(value: unknown): value is string {
   return (
@@ -62,8 +70,24 @@ async function getOptionalUserId(request: NextRequest): Promise<string | null> {
   }
 }
 
+// The proxy serves this route without identity, so the token is bound to the anonymous session
+// cookie on both the mint and the check. Binding either side to the caller's identity refuses
+// every signed-in visitor, and makes joining depend on the identity provider being reachable.
+async function handleGetToken(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const session = resolveAnonymousSession(request);
+  const body: PublicWaitlistTokenResponse = { token: generateCsrfToken(session.id) };
+  const response = NextResponse.json(body);
+  if (session.newCookie) {
+    response.headers.set('Set-Cookie', session.newCookie);
+  }
+  return response;
+}
+
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const csrfError = await requireCsrfToken(request);
+  const csrfError = await requireCsrfToken(request, resolveAnonymousSession(request).id);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'waitlist');
@@ -148,7 +172,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
          updated_at = excluded.updated_at`,
       [userId, email, source, now, now],
     );
-    return NextResponse.json({ ok: true, joined: true });
+    const stored: PublicWaitlistJoinResponse = { ok: true, joined: true };
+    return NextResponse.json(stored);
   } catch (err) {
     const pgErr = err as { code?: string };
     if (pgErr?.code === '42P01') {
@@ -161,6 +186,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+export const GET = withPrivateNoStore(withErrorHandler(handleGetToken));
 export const POST = withErrorHandler(handlePost);
 
 export async function OPTIONS(request: NextRequest) {
