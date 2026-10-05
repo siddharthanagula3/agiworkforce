@@ -11,6 +11,8 @@ export const COOKIE_CONSENT_UPDATED_EVENT = 'cookie-consent-updated';
 
 export const COOKIE_CONSENT_OPEN_EVENT = 'cookie-consent-open';
 
+export const COOKIE_PREFERENCES_LABEL = 'Cookie preferences';
+
 // The banner answers for both notices, so either one moving must re-ask. The
 // server ledger stamps the privacy revision alone and rejects anything else,
 // which is why the posted version is not this composite.
