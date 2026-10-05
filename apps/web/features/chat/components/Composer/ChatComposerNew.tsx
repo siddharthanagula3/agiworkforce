@@ -6070,151 +6070,95 @@ const ChatComposerNewComponent = ({
         />
       </div>
 
-      {/* Scope surface under the card. In AGI Work it is the attached bar the
-          leaders use: project, files, the connected plugins, and the desktop
-          app in one strip. Free has no work-mode axis, so it keeps the single
-          project pill that is its only scope control. */}
       {projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && !imageMode && (
         <div className="relative" ref={projectPickerRef}>
-          {workScopeBarVisible ? (
-            <div
-              data-testid="composer-work-bar"
-              className="-mt-3 ms-6 flex w-fit max-w-[calc(100%-3rem)] flex-wrap items-center gap-0.5 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-1 pb-1.5 pt-4"
+          <div
+            data-testid={workScopeBarVisible ? 'composer-work-bar' : 'composer-project-tab'}
+            className="-mt-3 ms-6 flex w-fit max-w-[calc(100%-3rem)] flex-wrap items-center gap-0.5 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-1 pb-1.5 pt-4"
+          >
+            <button
+              ref={projectPickerTriggerRef}
+              type="button"
+              onClick={() => {
+                setShowProjectPicker((prev) => !prev);
+                setProjectQuery('');
+              }}
+              disabled={isTurnActive || composerDisabled}
+              className={cn(WORK_BAR_ITEM_CLASS, pickerHasSelection && WORK_BAR_ITEM_ACTIVE_CLASS)}
+              aria-label={pickerHasSelection ? `${pickerPlaceholder}: ${pickerLabel}` : pickerLabel}
+              aria-expanded={showProjectPicker}
+              title={pickerHasSelection ? pickerLabel : undefined}
             >
-              <button
-                ref={projectPickerTriggerRef}
-                type="button"
-                onClick={() => {
-                  setShowProjectPicker((prev) => !prev);
-                  setProjectQuery('');
-                }}
-                disabled={isTurnActive || composerDisabled}
-                className={cn(
-                  WORK_BAR_ITEM_CLASS,
-                  pickerHasSelection && WORK_BAR_ITEM_ACTIVE_CLASS,
-                )}
-                aria-label={
-                  pickerHasSelection ? `${pickerPlaceholder}: ${pickerLabel}` : pickerLabel
-                }
-                aria-expanded={showProjectPicker}
-                title={pickerHasSelection ? pickerLabel : undefined}
-              >
-                {pickerFolderName ? (
-                  <FolderOpen className={WORK_BAR_GLYPH_CLASS} />
-                ) : (
-                  <Folder className={WORK_BAR_GLYPH_CLASS} />
-                )}
-                <span className="max-w-[180px] truncate">
-                  {pickerHasSelection ? pickerLabel : WORK_BAR_LABELS.project}
-                </span>
-              </button>
-
-              {pickerHasSelection && (
-                <button
-                  type="button"
-                  onClick={handleClearPickerSelection}
-                  className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                  aria-label="Clear project or folder selection"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+              {pickerFolderName ? (
+                <FolderOpen className={WORK_BAR_GLYPH_CLASS} />
+              ) : (
+                <Folder className={WORK_BAR_GLYPH_CLASS} />
               )}
+              <span className="max-w-[180px] truncate">
+                {pickerHasSelection ? pickerLabel : WORK_BAR_LABELS.project}
+              </span>
+            </button>
 
-              <ComposerFilesMenu
-                disabled={isTurnActive || composerDisabled}
-                onAttach={(file) => handleFileDrop([file])}
-                onUploadFromDevice={() => fileInputRef.current?.click()}
+            {pickerHasSelection && (
+              <button
+                type="button"
+                onClick={handleClearPickerSelection}
+                className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                aria-label="Clear project or folder selection"
               >
-                <button
-                  type="button"
-                  disabled={isTurnActive || composerDisabled}
-                  className={WORK_BAR_ITEM_CLASS}
-                >
-                  <LibraryBig className={WORK_BAR_GLYPH_CLASS} />
-                  {WORK_BAR_LABELS.files}
-                </button>
-              </ComposerFilesMenu>
+                <X className="h-4 w-4" />
+              </button>
+            )}
 
-              <ComposerPluginsMenu
-                connectors={connectedConnectorOptions}
-                loading={connectorsLoading}
-                disabledConnectorIds={disabledConnectorIds}
-                onSetConnectorEnabled={setConnectorEnabled}
-              >
-                <button type="button" className={WORK_BAR_ITEM_CLASS}>
-                  {connectedConnectorOptions.length > 0 && (
-                    <span className="flex shrink-0 items-center" aria-hidden="true">
-                      {connectedConnectorOptions
-                        .slice(0, WORK_BAR_CONNECTOR_MARKS)
-                        .map((connector, index) => (
-                          <OfficialConnectorLogo
-                            key={connector.id}
-                            connector={connector}
-                            className={cn(
-                              'h-4 w-4 rounded-full border-[var(--chat-input-bg)] shadow-none',
-                              index > 0 && '-ms-1.5',
-                            )}
-                          />
-                        ))}
-                    </span>
-                  )}
-                  {!connectedConnectorOptions.length && (
-                    <PluginsGlyph className={WORK_BAR_GLYPH_CLASS} />
-                  )}
-                  {WORK_BAR_LABELS.plugins}
-                </button>
-              </ComposerPluginsMenu>
-            </div>
-          ) : (
-            <div className="mt-2 flex items-center gap-2">
-              <div
-                className={cn(
-                  'flex h-8 min-w-0 items-center rounded-full border transition-all',
-                  pickerHasSelection
-                    ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
-                    : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                )}
-              >
-                <button
-                  ref={projectPickerTriggerRef}
-                  type="button"
-                  onClick={() => {
-                    setShowProjectPicker((prev) => !prev);
-                    setProjectQuery('');
-                  }}
+            {workScopeBarVisible && (
+              <>
+                <ComposerFilesMenu
                   disabled={isTurnActive || composerDisabled}
-                  className={cn(
-                    'flex h-full min-w-0 items-center gap-1.5 ps-2.5 text-xs font-medium',
-                    pickerHasSelection ? 'pe-1' : 'pe-2.5',
-                    (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
-                  )}
-                  aria-label={
-                    pickerHasSelection ? `${pickerPlaceholder}: ${pickerLabel}` : pickerLabel
-                  }
-                  aria-expanded={showProjectPicker}
-                  title={pickerHasSelection ? pickerLabel : undefined}
+                  onAttach={(file) => handleFileDrop([file])}
+                  onUploadFromDevice={() => fileInputRef.current?.click()}
                 >
-                  {pickerFolderName ? (
-                    <FolderOpen className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <Folder className="h-4 w-4 shrink-0" />
-                  )}
-                  <span className="max-w-[220px] truncate">{pickerLabel}</span>
-                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
-                </button>
-                {pickerHasSelection && (
                   <button
                     type="button"
-                    onClick={handleClearPickerSelection}
-                    className="me-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
-                    aria-label="Clear project or folder selection"
+                    disabled={isTurnActive || composerDisabled}
+                    className={WORK_BAR_ITEM_CLASS}
                   >
-                    <X className="h-4 w-4" />
+                    <LibraryBig className={WORK_BAR_GLYPH_CLASS} />
+                    {WORK_BAR_LABELS.files}
                   </button>
-                )}
-              </div>
-            </div>
-          )}
+                </ComposerFilesMenu>
+
+                <ComposerPluginsMenu
+                  connectors={connectedConnectorOptions}
+                  loading={connectorsLoading}
+                  disabledConnectorIds={disabledConnectorIds}
+                  onSetConnectorEnabled={setConnectorEnabled}
+                >
+                  <button type="button" className={WORK_BAR_ITEM_CLASS}>
+                    {connectedConnectorOptions.length > 0 && (
+                      <span className="flex shrink-0 items-center" aria-hidden="true">
+                        {connectedConnectorOptions
+                          .slice(0, WORK_BAR_CONNECTOR_MARKS)
+                          .map((connector, index) => (
+                            <OfficialConnectorLogo
+                              key={connector.id}
+                              connector={connector}
+                              className={cn(
+                                'h-4 w-4 rounded-full border-[var(--chat-input-bg)] shadow-none',
+                                index > 0 && '-ms-1.5',
+                              )}
+                            />
+                          ))}
+                      </span>
+                    )}
+                    {!connectedConnectorOptions.length && (
+                      <PluginsGlyph className={WORK_BAR_GLYPH_CLASS} />
+                    )}
+                    {WORK_BAR_LABELS.plugins}
+                  </button>
+                </ComposerPluginsMenu>
+              </>
+            )}
+          </div>
 
           <AnchoredComposerMenu
             anchorRef={projectPickerTriggerRef}

@@ -103,7 +103,7 @@ afterEach(() => {
 async function openPicker() {
   const user = userEvent.setup();
   render(<ComposerFooter inline showModelSelector />);
-  await user.click(screen.getByRole('button', { name: 'Change model' }));
+  await user.click(screen.getByRole('button', { name: /, change model$/ }));
   return user;
 }
 
@@ -196,7 +196,7 @@ describe('the model picker on the desktop shell', () => {
     );
 
     expect(useLocalModelSelection.getState().selected?.id).toBe(LOCAL_MODEL.id);
-    const trigger = screen.getByRole('button', { name: 'Change model' });
+    const trigger = screen.getByRole('button', { name: /, change model$/ });
     expect(trigger.textContent).toContain('tiny-chat:1b');
     expect(trigger.textContent).toContain('Local');
   });

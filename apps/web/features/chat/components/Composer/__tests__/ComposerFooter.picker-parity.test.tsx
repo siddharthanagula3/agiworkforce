@@ -217,7 +217,7 @@ const useRoster = (models: Record<string, unknown>[]) => {
 };
 
 const openPicker = () => {
-  fireEvent.click(screen.getByRole('button', { name: 'Change model' }));
+  fireEvent.click(screen.getByRole('button', { name: /, change model$/ }));
   return screen.getByRole('dialog', { name: 'Models' });
 };
 
@@ -413,7 +413,7 @@ describe('ComposerFooter · picker keyboard', () => {
 
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Models' })).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Change model' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /, change model$/ }));
   });
 
   it('keeps a coming soon row non-selectable in the catalogue', () => {

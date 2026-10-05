@@ -37,12 +37,8 @@ export function SidebarPlanBadge({
   tierLabel: string | null;
   isFreeTier: boolean;
 }) {
-  if (!tierLabel) return null;
-  return isFreeTier ? (
-    <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-primary hover:bg-primary/20">
-      Upgrade
-    </span>
-  ) : (
+  if (!tierLabel || isFreeTier) return null;
+  return (
     <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
       {tierLabel}
     </span>

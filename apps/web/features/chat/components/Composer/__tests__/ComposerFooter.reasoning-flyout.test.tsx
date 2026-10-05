@@ -389,7 +389,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     expect(effortSlider()).toHaveAttribute('min', '0');
     expect(effortSlider()).toHaveAttribute('max', '5');
     expect(effortLevel()).toBe(EFFORT_LABEL.medium);
-    expect(screen.getByRole('button', { name: 'Change model' })).not.toHaveTextContent(
+    expect(screen.getByRole('button', { name: /, change model$/ })).not.toHaveTextContent(
       EFFORT_LABEL.medium,
     );
   });
@@ -441,7 +441,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     thinking.effort = 'medium';
     render(<ComposerFooter />);
 
-    const modelTrigger = screen.getByRole('button', { name: 'Change model' });
+    const modelTrigger = screen.getByRole('button', { name: /, change model$/ });
     expect(
       modelTrigger.compareDocumentPosition(effortTrigger()) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

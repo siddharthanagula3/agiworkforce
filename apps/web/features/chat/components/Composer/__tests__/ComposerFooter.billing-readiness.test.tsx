@@ -6,7 +6,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
   useSearchParams: () => new URLSearchParams(),
 }));
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
 
 interface BillingState {
@@ -238,7 +238,9 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
     render(<ComposerFooter />);
 
     expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: /Free Router/i })).toBeVisible();
+    expect(
+      within(screen.getByTestId('popover-content')).getByRole('button', { name: /Free Router/i }),
+    ).toBeVisible();
     expect(premiumRowLabel()).toBe('Premium Model - Upgrade to use, Pro');
   });
 
@@ -248,7 +250,9 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
     render(<ComposerFooter />);
 
     expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: /Free Router/i })).toBeVisible();
+    expect(
+      within(screen.getByTestId('popover-content')).getByRole('button', { name: /Free Router/i }),
+    ).toBeVisible();
     expect(premiumRowLabel()).toBe('Premium Model - Upgrade to use, Pro');
   });
 });

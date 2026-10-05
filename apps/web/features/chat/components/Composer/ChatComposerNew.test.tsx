@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -888,6 +889,14 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('button', { name: 'Project: Free Project' })).toHaveTextContent(
       'Free Project',
     );
+    const tab = screen.getByTestId('composer-project-tab');
+    expect(within(tab).getByRole('button', { name: 'Project: Free Project' })).toBeInTheDocument();
+    expect(
+      within(tab).getByRole('button', { name: 'Clear project or folder selection' }),
+    ).toBeInTheDocument();
+    expect(within(tab).queryByRole('button', { name: 'Files' })).not.toBeInTheDocument();
+    expect(within(tab).queryByRole('button', { name: 'Connectors' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composer-work-bar')).not.toBeInTheDocument();
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'Project chat');
@@ -901,6 +910,82 @@ describe('ChatComposerNew', () => {
         expect.objectContaining({ workMode: 'chat', projectId: 'proj-free' }),
       ),
     );
+  });
+
+  it('names the free project tab "Project" when nothing is selected', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        freeTrial={{ enabled: true, limitReached: false }}
+        projectPicker={{
+          projects: [{ id: 'proj-free', name: 'Free Project' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    const tab = screen.getByTestId('composer-project-tab');
+    expect(within(tab).getAllByRole('button')).toHaveLength(1);
+    expect(within(tab).getByRole('button', { name: 'Project' })).toHaveTextContent('Project');
+  });
+
+  it('keeps the draft when a free project is cleared from the tab', async () => {
+    const onSelectProject = vi.fn();
+    function FreeComposerWithProjectState() {
+      const [activeProjectId, setActiveProjectId] = useState<string | null>('proj-free');
+      return (
+        <ChatComposerNew
+          onSend={vi.fn()}
+          freeTrial={{ enabled: true, limitReached: false }}
+          projectPicker={{
+            projects: [{ id: 'proj-free', name: 'Free Project' }],
+            activeProjectId,
+            onSelectProject: (projectId) => {
+              onSelectProject(projectId);
+              setActiveProjectId(projectId);
+            },
+            onCreateProject: vi.fn(),
+          }}
+        />
+      );
+    }
+    render(<FreeComposerWithProjectState />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'Keep this draft');
+
+    const tab = screen.getByTestId('composer-project-tab');
+    fireEvent.click(within(tab).getByRole('button', { name: 'Clear project or folder selection' }));
+
+    expect(onSelectProject).toHaveBeenCalledWith(null);
+    expect(within(tab).getByRole('button', { name: 'Project' })).toBeInTheDocument();
+    expect(
+      within(tab).queryByRole('button', { name: 'Clear project or folder selection' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue('Keep this draft');
+  });
+
+  it('shows the empty project list from the free project tab', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        freeTrial={{ enabled: true, limitReached: false }}
+        projectPicker={{
+          projects: [],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    const tab = screen.getByTestId('composer-project-tab');
+    fireEvent.click(within(tab).getByRole('button', { name: 'Project' }));
+
+    expect(screen.getByRole('textbox', { name: /search projects/i })).toBeInTheDocument();
+    expect(screen.getByText('No projects yet')).toBeInTheDocument();
   });
 
   it('does not erase paid composer modes while account billing is still hydrating', async () => {
@@ -1502,6 +1587,7 @@ describe('ChatComposerNew', () => {
     );
 
     expect(screen.queryByTestId('composer-work-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composer-project-tab')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
 
