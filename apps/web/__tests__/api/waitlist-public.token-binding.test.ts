@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type IdentityModule = typeof import('@/lib/server/identity');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/csrf', async () => ({
-  ...(await vi.importActual<typeof import('@/lib/csrf')>('@/lib/csrf')),
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
 }));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -18,7 +24,7 @@ const rateLimit = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: async (_request: unknown, key: string) => {
     rateLimit.keys.push(key);
     return rateLimit.refuse === key
@@ -35,7 +41,7 @@ const identity = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/identity')>()),
+  ...(await importOriginal<IdentityModule>()),
   getRequestIdentity: async () => {
     identity.reads += 1;
     if (!identity.context.proxied) {
@@ -49,7 +55,7 @@ vi.mock('@/lib/server/identity', async (importOriginal) => ({
 const optionalAuth = vi.hoisted(() => ({ real: false }));
 
 vi.mock('@/lib/api-auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/api-auth')>();
+  const actual = await importOriginal<ApiAuthModule>();
   return {
     isAccountUnavailableError: vi.fn(),
     assertAccountActive: vi.fn(),

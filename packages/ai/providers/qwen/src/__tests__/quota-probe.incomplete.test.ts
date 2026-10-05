@@ -3,10 +3,12 @@ import { getProviderOfferings, type ProviderOffering } from '@agiworkforce/types
 
 import { runQwenQuotaProbe, type QwenQuotaProbePolicy } from '../quota-probe';
 
+type TypesModule = typeof import('@agiworkforce/types');
+
 const catalogue = vi.hoisted(() => ({ replacements: new Map<string, unknown>() }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<TypesModule>();
   return {
     ...actual,
     getProviderOffering: (key: string) =>

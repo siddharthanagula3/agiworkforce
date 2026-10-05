@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type ErrorsModule = typeof import('@/lib/errors');
+
 vi.mock('server-only', () => ({}));
 
 const logged = vi.hoisted(() => ({ calls: [] as unknown[][] }));
@@ -9,7 +14,7 @@ vi.mock('@/lib/logger', async (importOriginal) => {
     logged.calls.push(args);
   };
   return {
-    ...(await importOriginal<typeof import('@/lib/logger')>()),
+    ...(await importOriginal<LoggerModule>()),
     logger: { info: record, warn: record, error: record, debug: record },
   };
 });
@@ -17,7 +22,7 @@ vi.mock('@/lib/logger', async (importOriginal) => {
 const rateLimit = vi.hoisted(() => ({ keys: [] as string[] }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: async (_request: unknown, key: string) => {
     rateLimit.keys.push(key);
     return null;
@@ -30,7 +35,7 @@ const audit = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   logSecurityEvent: async (event: Record<string, unknown>, options?: { required?: boolean }) => {
     if (audit.storeFailure) {
       if (options?.required) throw audit.storeFailure;
@@ -44,7 +49,7 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
 const auth = vi.hoisted(() => ({ user: null as { userId: string } | null }));
 
 vi.mock('@/lib/api-auth', async () => {
-  const { createError } = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  const { createError } = await vi.importActual<ErrorsModule>('@/lib/errors');
   return {
     isAccountUnavailableError: vi.fn(),
     assertAccountActive: async () => undefined,
