@@ -77,3 +77,15 @@
   --ease-spring: var(--curve-spring);
   --ease-reveal: var(--curve-reveal);
 }
+
+[data-design='agi'] {
+  --agi-section-y-inner: 4.5rem;
+  --agi-section-y-inner-compact: 3rem;
+  --agi-pagehead-y-top: 4rem;
+  --agi-pagehead-y-bottom: 3rem;
+  --agi-pagehead-y-top-compact: 2.5rem;
+  --agi-pagehead-y-bottom-compact: 2rem;
+  --agi-reading-width: 42rem;
+  --agi-header-height: 4rem;
+  --agi-header-height-compact: 3rem;
+}
