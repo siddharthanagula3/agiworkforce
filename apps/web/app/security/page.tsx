@@ -304,17 +304,17 @@ const DELETION: { label: string; value: string }[] = [
   {
     label: 'Bytes before rows',
     value:
-      'Stored media objects are deleted from object storage first, and only then are their catalogue rows removed. If an object delete fails, its row is kept so a later run can retry, deleting the row first would destroy the only pointer to a live object and leave it orphaned forever.',
+      'For media with a stored pathname, primary-object deletion runs before removal of its catalogue row. If deletion fails, the row is kept so deletion can be retried.',
   },
   {
-    label: 'It refuses to claim success it did not achieve',
+    label: 'Deletion outcomes',
     value:
-      'The erasure result carries a completeness flag that is true only when every table and every stored object was disposed of. A table that does not exist on a deployment is reported as skipped; a table that errored is reported with its error. Partial erasure does not report as done.',
+      'Returned erasure reports include stored-object deletion failure counts and table outcomes. Table outcomes distinguish deletions, skipped tables and recorded errors.',
   },
   {
     label: 'Data before identity',
     value:
-      'The scheduled purge erases account data BEFORE deleting the identity record. If erasure fails, you still have a recoverable account rather than orphaned rows with no owner to attach them to.',
+      'The scheduled purge runs account-data erasure before deleting the sign-in identity. It stops if the erasure result is marked incomplete.',
   },
   {
     label: 'It actually runs',
