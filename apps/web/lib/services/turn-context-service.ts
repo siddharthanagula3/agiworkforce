@@ -19,6 +19,10 @@ import {
 
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
+import {
+  instructionLayerForContextClass,
+  type InstructionBlock,
+} from '@/lib/prompts/instruction-precedence';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
@@ -206,7 +210,7 @@ interface PersonalContextParts {
 }
 
 export interface FreeOfferingPersonalContext {
-  readonly blocks: readonly string[];
+  readonly blocks: readonly InstructionBlock[];
   readonly memoryCitations: readonly ManagedMemoryCitation[];
 }
 
@@ -292,12 +296,15 @@ export async function resolveFreeOfferingPersonalContext(
 ): Promise<FreeOfferingPersonalContext> {
   if (input.personalization === false) return { blocks: [], memoryCitations: [] };
   const parts = await resolvePersonalContextParts(db, input);
-  return {
-    blocks: [parts.instructions, parts.memory, parts.pastChats].filter(
-      (block): block is string => block !== null,
-    ),
-    memoryCitations: parts.memoryCitations,
-  };
+  const blocks: InstructionBlock[] = [];
+  if (parts.instructions !== null) blocks.push({ layer: 'personalized', text: parts.instructions });
+  if (parts.memory !== null) {
+    blocks.push({ layer: instructionLayerForContextClass('account_memory'), text: parts.memory });
+  }
+  if (parts.pastChats !== null) {
+    blocks.push({ layer: instructionLayerForContextClass('past_chat'), text: parts.pastChats });
+  }
+  return { blocks, memoryCitations: parts.memoryCitations };
 }
 
 export async function resolveLocalTurnPersonalContext(
