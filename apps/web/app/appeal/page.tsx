@@ -17,7 +17,7 @@ export default function AppealPage() {
       <AuthStepFrame
         heading="Appeal a suspension"
         detail={
-          <p className="text-center">
+          <p>
             Accounts are suspended for a breach of our Terms of Service or Acceptable Use Policy. If
             you can still sign in, sign in to appeal and follow the replies there.
           </p>

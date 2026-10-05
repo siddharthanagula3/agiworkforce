@@ -44,6 +44,20 @@ describe('AuthPasswordStep', () => {
     expect(props.onSubmit).toHaveBeenCalledWith('correct horse');
   });
 
+  it('names the account the password belongs to, for a password manager', () => {
+    renderStep();
+
+    const password = screen.getByLabelText('Password');
+    const username = password
+      .closest('form')
+      ?.querySelector<HTMLInputElement>('input[autocomplete="username"]');
+
+    expect(username).toHaveValue(EMAIL);
+    expect(username).toHaveAttribute('readonly');
+    expect(username).not.toBeVisible();
+    expect(username!.compareDocumentPosition(password)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   it('reveals the password on request', async () => {
     renderStep();
 
@@ -83,5 +97,14 @@ describe('AuthPasswordStep', () => {
     const button = screen.getByRole('button', { name: /working/i });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('holds the address where it is while the password is being checked', async () => {
+    const props = renderStep({ phase: 'verifying' });
+
+    const edit = screen.getByRole('button', { name: 'Edit' });
+    expect(edit).toBeDisabled();
+    await userEvent.click(edit);
+    expect(props.onEditEmail).not.toHaveBeenCalled();
   });
 });

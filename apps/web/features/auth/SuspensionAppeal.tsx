@@ -19,7 +19,6 @@ import {
   AUTH_INPUT_CLASS,
   AUTH_LABEL_CLASS,
   AUTH_PRIMARY_BUTTON_CLASS,
-  AUTH_STATUS_CLASS,
 } from './authStyles';
 
 const TEXTAREA_CLASS =
@@ -176,7 +175,7 @@ export function SuspensionAppeal({ signedIn }: { signedIn: boolean }) {
             {error}
           </p>
         ) : (
-          <p className={AUTH_STATUS_CLASS}>A person reviews every appeal.</p>
+          <p className={AUTH_HINT_CLASS}>A person reviews every appeal.</p>
         )}
         <button
           type="submit"

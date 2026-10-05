@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
 
 const client = vi.hoisted(() => ({
   isReady: true,
@@ -26,7 +27,14 @@ vi.mock('../identityAuthAdapter', () => ({
 import { AuthCodeStep } from '../AuthCodeStep';
 import { AuthFlow } from '../AuthFlow';
 import { AUTH_CODE_LENGTH, AUTH_RESEND_COOLDOWN_SECONDS } from '../authContract';
-import type { AuthMode, AuthProvider, AuthResult, AuthStep } from '../authContract';
+import type {
+  AuthCodePurpose,
+  AuthMode,
+  AuthPasswordPurpose,
+  AuthProvider,
+  AuthResult,
+  AuthStep,
+} from '../authContract';
 
 const PROVIDERS: readonly AuthProvider[] = [{ id: 'google', label: 'Google' }];
 const EMAIL = 'person@example.com';
@@ -36,29 +44,107 @@ const REDIRECTS = {
   ssoCallbackUrl: '/auth/sso-callback',
 };
 
+type StepVariant =
+  | Exclude<AuthStep['kind'], 'code' | 'new_password'>
+  | `code:${AuthCodePurpose}`
+  | `new_password:${AuthPasswordPurpose}`;
+
 /**
- * Typed by step kind, so a step added to the contract cannot skip these checks.
+ * Typed by step kind and purpose, so a step or purpose added to the contract cannot skip these checks.
  */
-const STEPS: Readonly<Record<AuthStep['kind'], AuthStep>> = {
-  email: { kind: 'email' },
-  password: { kind: 'password', email: EMAIL, methods: ['email_code'] },
-  code: { kind: 'code', email: EMAIL, purpose: 'sign_in', methods: ['password'] },
-  second_factor: {
-    kind: 'second_factor',
-    factor: { kind: 'authenticator', label: 'Authenticator app', hint: null },
-    alternatives: [{ kind: 'backup_code', label: 'Backup code', hint: null }],
+const STEPS: Readonly<
+  Record<
+    StepVariant,
+    {
+      mode: AuthMode;
+      step: AuthStep;
+      heading: string;
+      field: string | null;
+      back: string | null;
+    }
+  >
+> = {
+  email: {
+    mode: 'login',
+    step: { kind: 'email' },
+    heading: 'Welcome back',
+    field: 'Email address',
+    back: null,
   },
-  new_password: { kind: 'new_password', email: EMAIL },
-  notice: { kind: 'notice', notice: 'link_expired', retryAfterSeconds: null },
+  password: {
+    mode: 'login',
+    step: { kind: 'password', email: EMAIL, methods: ['email_code'] },
+    heading: 'Enter your password',
+    field: 'Password',
+    back: 'Edit',
+  },
+  'code:sign_in': {
+    mode: 'login',
+    step: { kind: 'code', email: EMAIL, purpose: 'sign_in', methods: ['password'] },
+    heading: 'Check your inbox',
+    field: 'Code',
+    back: 'Edit',
+  },
+  'code:sign_up': {
+    mode: 'signup',
+    step: { kind: 'code', email: EMAIL, purpose: 'sign_up', methods: [] },
+    heading: 'Check your inbox',
+    field: 'Code',
+    back: 'Edit',
+  },
+  'code:reset': {
+    mode: 'login',
+    step: { kind: 'code', email: EMAIL, purpose: 'reset', methods: ['password'] },
+    heading: 'Check your inbox',
+    field: 'Code',
+    back: 'Edit',
+  },
+  'code:device': {
+    mode: 'login',
+    step: { kind: 'code', email: EMAIL, purpose: 'device', methods: [] },
+    heading: 'Verify this device',
+    field: 'Code',
+    back: 'Edit',
+  },
+  second_factor: {
+    mode: 'login',
+    step: {
+      kind: 'second_factor',
+      factor: { kind: 'authenticator', label: 'Authenticator app', hint: null },
+      alternatives: [{ kind: 'backup_code', label: 'Backup code', hint: null }],
+    },
+    heading: 'Confirm it is you',
+    field: 'Authenticator app',
+    back: 'Use a different email',
+  },
+  'new_password:reset': {
+    mode: 'login',
+    step: { kind: 'new_password', email: EMAIL, purpose: 'reset' },
+    heading: 'Set a new password',
+    field: 'New password',
+    back: null,
+  },
+  'new_password:sign_up': {
+    mode: 'signup',
+    step: { kind: 'new_password', email: EMAIL, purpose: 'sign_up' },
+    heading: 'Create a password',
+    field: 'Password',
+    back: 'Edit',
+  },
+  notice: {
+    mode: 'login',
+    step: { kind: 'notice', notice: 'link_expired', retryAfterSeconds: null },
+    heading: 'This link expired',
+    field: null,
+    back: 'Start again',
+  },
 };
 
-const STEPS_WITH_A_FIELD_ERROR: readonly AuthStep['kind'][] = [
-  'email',
-  'password',
-  'code',
-  'second_factor',
-  'new_password',
-];
+const VARIANTS = Object.keys(STEPS) as StepVariant[];
+
+const VARIANTS_WITH_A_FIELD: readonly StepVariant[] = VARIANTS.filter(
+  (variant) => STEPS[variant].field !== null,
+);
 
 function renderFlow(mode: AuthMode = 'login') {
   return render(
@@ -66,16 +152,22 @@ function renderFlow(mode: AuthMode = 'login') {
   );
 }
 
+const CONSENT_BOX = new RegExp(`^${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use`);
+
 async function submitEmail() {
   await userEvent.type(screen.getByLabelText('Email address'), EMAIL);
   await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
 }
 
-async function openStep(kind: AuthStep['kind']) {
-  const container = renderFlow();
-  if (kind === 'email') return container;
+async function openStep(variant: StepVariant) {
+  const { mode, step } = STEPS[variant];
+  const container = renderFlow(mode);
+  if (step.kind === 'email') return container;
 
-  client.startWithEmail.mockResolvedValue({ status: 'next', step: STEPS[kind] } as AuthResult);
+  if (mode === 'signup') {
+    await userEvent.click(screen.getByRole('checkbox', { name: CONSENT_BOX }));
+  }
+  client.startWithEmail.mockResolvedValue({ status: 'next', step } as AuthResult);
   await submitEmail();
   await waitFor(() => expect(client.startWithEmail).toHaveBeenCalled());
   return container;
@@ -87,6 +179,7 @@ function focusableIn(root: HTMLElement): HTMLElement[] {
   );
   return [...candidates].filter(
     (element) =>
+      !element.closest('[hidden]') &&
       !element.hasAttribute('disabled') &&
       element.getAttribute('tabindex') !== '-1' &&
       element.getAttribute('aria-hidden') !== 'true',
@@ -123,7 +216,27 @@ beforeEach(() => {
 });
 
 describe('every authentication step', () => {
-  for (const kind of Object.keys(STEPS) as AuthStep['kind'][]) {
+  for (const kind of VARIANTS) {
+    it(`${kind}: opens under its own heading, which names the step`, async () => {
+      const { container } = await openStep(kind);
+      const { heading } = STEPS[kind];
+
+      expect(within(container).getByRole('heading', { level: 1, name: heading })).toBeVisible();
+      expect(within(container).getByRole('region', { name: heading })).toBeInTheDocument();
+    });
+
+    const back = STEPS[kind].back;
+    if (back) {
+      it(`${kind}: offers a named way back to the address`, async () => {
+        const { container } = await openStep(kind);
+
+        await userEvent.click(within(container).getByRole('button', { name: back }));
+
+        expect(client.restart).toHaveBeenCalledTimes(1);
+        expect(await within(container).findByLabelText('Email address')).toBeInTheDocument();
+      });
+    }
+
     it(`${kind}: names every control it offers`, async () => {
       const { container } = await openStep(kind);
 
@@ -155,19 +268,43 @@ describe('every authentication step', () => {
   }
 });
 
+describe('a step that owns a field', () => {
+  for (const kind of VARIANTS_WITH_A_FIELD) {
+    it(`${kind}: labels its field`, async () => {
+      const { container } = await openStep(kind);
+
+      expect(within(container).getByLabelText(STEPS[kind].field ?? '')).toBeEnabled();
+    });
+
+    it(`${kind}: keeps one polite status region mounted for the wait it may start`, async () => {
+      const { container } = await openStep(kind);
+
+      const regions = within(container).getAllByTestId('auth-phase');
+      expect(regions).toHaveLength(1);
+      expect(regions[0]).toHaveAttribute('role', 'status');
+      expect(regions[0]).toHaveAttribute('aria-live', 'polite');
+    });
+  }
+});
+
 describe('a failure on a step that owns a field', () => {
-  for (const kind of STEPS_WITH_A_FIELD_ERROR) {
+  for (const kind of VARIANTS_WITH_A_FIELD) {
     it(`${kind}: ties the message to the field and moves focus to it`, async () => {
       await openStep(kind);
 
-      const input = document.querySelector('input');
+      const input = document.querySelector('input:not([hidden])');
       expect(input).not.toBeNull();
 
       const failure: AuthResult = {
         status: 'failed',
         kind: 'credentials_invalid',
         message: 'That did not work.',
-        field: kind === 'email' ? 'email' : kind === 'password' ? 'password' : 'code',
+        field:
+          kind === 'email'
+            ? 'email'
+            : kind === 'password' || kind.startsWith('new_password')
+              ? 'password'
+              : 'code',
       };
       for (const fn of [
         client.startWithEmail,
@@ -188,9 +325,12 @@ describe('a failure on a step that owns a field', () => {
         return candidate as HTMLInputElement;
       });
 
-      const describedBy = errored.getAttribute('aria-describedby');
-      expect(describedBy).toBeTruthy();
-      expect(document.getElementById(describedBy ?? '')).toHaveTextContent('That did not work.');
+      const describedBy = errored.getAttribute('aria-describedby') ?? '';
+      const descriptions = describedBy
+        .split(' ')
+        .filter(Boolean)
+        .map((id) => document.getElementById(id)?.textContent ?? '');
+      expect(descriptions.join(' | ')).toContain('That did not work.');
       await waitFor(() => expect(document.activeElement).toBe(errored));
     });
   }
@@ -198,7 +338,7 @@ describe('a failure on a step that owns a field', () => {
 
 describe('the code step', () => {
   it('takes the whole code in one labelled field the browser can autofill', async () => {
-    await openStep('code');
+    await openStep('code:sign_in');
 
     const field = screen.getByLabelText('Code') as HTMLInputElement;
     expect(field.getAttribute('autocomplete')).toBe('one-time-code');
@@ -208,7 +348,7 @@ describe('the code step', () => {
   });
 
   it('holds the resend control only while its own cooldown runs', async () => {
-    await openStep('code');
+    await openStep('code:sign_in');
 
     const resend = screen.getByRole('button', { name: /resend/i });
     expect(resend).toBeDisabled();

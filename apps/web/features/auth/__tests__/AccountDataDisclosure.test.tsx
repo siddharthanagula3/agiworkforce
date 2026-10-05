@@ -2,18 +2,39 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import { TermsGate } from '@/app/signup/TermsGate';
 import {
   FREE_PLAN_TRAINING_DATA_DISCLOSURE,
+  FREE_PLAN_TRAINING_SIGNUP_NOTICE,
   FREE_PLAN_TRAINING_SIGNUP_STATEMENT,
 } from '@/lib/compliance/free-plan-training-disclosure';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
+import { AuthEmailStep } from '../AuthEmailStep';
 import { AuthLegalFooter } from '../AuthLegalFooter';
 
-function expectPolicyDisclosure() {
-  expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).toBeInTheDocument();
+function renderSignupScreen() {
+  render(
+    <AuthEmailStep
+      mode="signup"
+      providers={[{ id: 'google', label: 'Google' }]}
+      switchUrl="/login"
+      ready
+      phase="idle"
+      error={null}
+      fieldError={null}
+      switchOffered={false}
+      providerPending={null}
+      onSubmit={() => undefined}
+      onStartProvider={() => undefined}
+    />,
+  );
+}
+
+function expectFullDisclosure() {
+  expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).toBeVisible();
   expect(screen.getByRole('link', { name: 'Data Use Guidelines' })).toHaveAttribute(
     'href',
     CANONICAL_POLICY_ROUTES.dataUse,
@@ -25,40 +46,77 @@ function expectPolicyDisclosure() {
 }
 
 describe('account policy disclosure', () => {
-  it('shows provider data handling alongside the signup agreement before signup begins', () => {
-    render(<AuthLegalFooter variant="signup" />);
+  it('keeps the primary notice short and reveals the full provider-training explanation nearby', async () => {
+    renderSignupScreen();
 
-    expect(screen.getByTestId('auth-legal-footer')).toHaveTextContent('By signing up, you agree');
-    expectPolicyDisclosure();
+    const notice = screen.getByTestId('auth-data-use-notice');
+    expect(notice).toHaveTextContent(FREE_PLAN_TRAINING_SIGNUP_NOTICE);
+    const details = notice.querySelector('details');
+    const summary = screen.getByText('Data use details');
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(details).not.toHaveAttribute('open');
+    expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).not.toBeVisible();
+
+    await userEvent.click(summary);
+
+    expect(details).toHaveAttribute('open');
+    expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Data Use Guidelines' })).toHaveAttribute(
+      'href',
+      CANONICAL_POLICY_ROUTES.dataUse,
+    );
+    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
+    expect(screen.queryByRole('link', { name: 'Acceptable Use Policy' })).toBeNull();
+
+    await userEvent.click(summary);
+
+    expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).not.toBeVisible();
   });
 
-  it('shows the same disclosure before accepting current terms without bypassing the gate', () => {
+  it('places the notice with the consent box, before the account-switch link', () => {
+    renderSignupScreen();
+
+    const consent = screen.getByTestId('auth-signup-consent');
+    const notice = screen.getByTestId('auth-data-use-notice');
+    const switchLink = screen.getByRole('link', { name: 'Log in' });
+    expect(consent.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      notice.compareDocumentPosition(switchLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('shows the full disclosure before accepting current terms without bypassing the gate', () => {
     render(
       <TermsGate confirmationLabel="Agree and continue">
         <div>Record agreement</div>
       </TermsGate>,
     );
 
-    expectPolicyDisclosure();
+    expectFullDisclosure();
     expect(screen.getByRole('button', { name: 'Agree and continue' })).toBeInTheDocument();
     expect(screen.queryByText('Record agreement')).not.toBeInTheDocument();
   });
 
-  it('keeps routine sign-in limited to policy links without repeating the signup disclosure', () => {
+  it('keeps routine sign-in limited to policy links without repeating any disclosure', () => {
     render(<AuthLegalFooter />);
 
     expect(screen.queryByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toBeInTheDocument();
+    expect(screen.queryByText(FREE_PLAN_TRAINING_SIGNUP_NOTICE)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute(
+      'href',
+      CANONICAL_POLICY_ROUTES.privacy,
+    );
+    expect(screen.getByRole('link', { name: 'Terms' })).toHaveAttribute(
+      'href',
+      CANONICAL_POLICY_ROUTES.terms,
+    );
   });
 
-  it('states training, the providers and the opt-out without needing the pricing table', () => {
-    render(<AuthLegalFooter variant="signup" />);
-
-    const paragraph = screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT);
-    expect(paragraph.textContent).not.toBe(FREE_PLAN_TRAINING_DATA_DISCLOSURE);
-    expect(paragraph).toHaveTextContent('train');
-    expect(paragraph).toHaveTextContent('AGI-owned');
-    expect(paragraph).toHaveTextContent('Settings > Privacy');
+  it('keeps the full statement about training, the providers and the opt-out', () => {
+    expect(FREE_PLAN_TRAINING_SIGNUP_STATEMENT).not.toBe(FREE_PLAN_TRAINING_DATA_DISCLOSURE);
+    expect(FREE_PLAN_TRAINING_SIGNUP_STATEMENT).toContain('train');
+    expect(FREE_PLAN_TRAINING_SIGNUP_STATEMENT).toContain('AGI-owned');
+    expect(FREE_PLAN_TRAINING_SIGNUP_STATEMENT).toContain('Settings > Privacy');
   });
 
   it('names the privacy toggle by the label the settings section renders', () => {
@@ -72,14 +130,13 @@ describe('account policy disclosure', () => {
     expect(FREE_PLAN_TRAINING_SIGNUP_STATEMENT).toContain(`turn on ${label} in`);
   });
 
-  it('imports the statement from the barrel and restates no training copy', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'features/auth/AccountDataDisclosure.tsx'),
-      'utf8',
-    );
+  for (const file of ['AccountDataDisclosure.tsx', 'AuthDataUseNotice.tsx']) {
+    it(`${file} imports its sentence from the barrel and restates no training copy`, () => {
+      const source = readFileSync(join(process.cwd(), 'features/auth', file), 'utf8');
 
-    expect(source).toContain("from '@/lib/compliance/free-plan-training-disclosure'");
-    const withoutImports = source.replace(/^import[\s\S]*?;$/gm, '');
-    expect(withoutImports.match(/'[^']*train[^']*'|"[^"]*train[^"]*"/g)).toBeNull();
-  });
+      expect(source).toContain("from '@/lib/compliance/free-plan-training-disclosure'");
+      const withoutImports = source.replace(/^import[\s\S]*?;$/gm, '');
+      expect(withoutImports.match(/'[^']*train[^']*'|"[^"]*train[^"]*"/g)).toBeNull();
+    });
+  }
 });

@@ -50,7 +50,7 @@ export default async function LoginPage({
   }
 
   return (
-    <AuthLayout embedded={context.desktopSurface}>
+    <AuthLayout embedded={context.desktopSurface} scene>
       <AuthFlow
         mode="login"
         providers={configuredAuthProviders()}

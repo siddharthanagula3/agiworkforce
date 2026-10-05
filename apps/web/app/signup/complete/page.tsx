@@ -1,3 +1,8 @@
+import { redirect } from 'next/navigation';
+
+import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
+import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
+import { getRequestIdentity } from '@/lib/server/identity';
 import { getSafeRedirectUrl } from '../../../lib/safe-redirect';
 import { RecordTermsAcceptance } from './RecordTermsAcceptance';
 
@@ -10,6 +15,10 @@ export default async function SignupCompletePage({
 }) {
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/welcome');
+  const { subject: userId } = await getRequestIdentity();
+  if (userId && !(await readPrimaryEmailState(userId)).confirmed) {
+    redirect(buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }));
+  }
 
   return (
     <main

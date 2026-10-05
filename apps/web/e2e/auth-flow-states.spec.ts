@@ -1,27 +1,128 @@
-import { mockAuthProvider } from './lib/mock-auth-provider';
-import { test, expect, type Page } from '@playwright/test';
+import {
+  MOCK_ACCOUNT_PASSWORD,
+  MOCK_CODE_ACCOUNT,
+  MOCK_EMAILED_CODE,
+  MOCK_PASSWORD_ACCOUNT,
+  MOCK_SHORT_PASSWORD_REFUSAL,
+  MOCK_SIGNUP_CODE_ONLY_ACCOUNT,
+  MOCK_SIGNUP_PASSWORD_ACCOUNT,
+  mockAuthProvider,
+  mockAuthProviderCalls,
+  mockAuthProviderProgress,
+  mockAuthProviderSignIn,
+} from './lib/mock-auth-provider';
+import { test, expect, type Locator, type Page } from '@playwright/test';
+import { FREE_PLAN_TRAINING_SIGNUP_STATEMENT } from '../lib/compliance/free-plan-training-disclosure';
 
 // Vendor-response states are covered in features/auth/__tests__/AuthFlow.states.test.tsx.
-// Here is what only a browser answers: real focus order and real layout at real widths.
+// Here is what only a browser answers: real focus order, real event order, real
+// layout at real widths, and that a refused sign-up attempt sends nothing anywhere.
 const ROUTES = ['/login', '/signup'] as const;
 
 const PHONE = { width: 390, height: 844 };
 const ZOOMED = { width: 640, height: 512 };
+const UNTICKED_ATTEMPT_EMAIL = 'unticked-attempt@example.invalid';
+const CONSENT_REFUSED = /tick the box to confirm you are at least \d+ and accept the terms/i;
+const MOCK_CODE = MOCK_EMAILED_CODE;
+const WRONG_CODE = '000000';
+const CODE_REFUSED = /check the last code we emailed you/i;
+const MOCK_PASSWORD = 'a long passphrase nobody reuses';
+const TOO_SHORT_PASSWORD = 'short';
+const PASSWORD_RULE = /use at least \d+ characters/i;
+const GENERIC_FAILURE = /something went wrong/i;
+const WRONG_PASSWORD = 'not the password this account has';
+const PASSWORD_REFUSED = /email and password do not match/i;
+const PASSWORDLESS_REASON = /does not use a password, so we emailed a code/i;
 
-async function openAuth(page: Page, route: string): Promise<void> {
-  await mockAuthProvider(page);
+function consentBox(page: Page) {
+  return page.getByTestId('auth-signup-consent').getByRole('checkbox');
+}
+
+function productUpdatesBox(page: Page) {
+  return page.getByTestId('auth-product-updates-consent').getByRole('checkbox');
+}
+
+function passwordField(page: Page) {
+  return page.getByLabel('Password', { exact: true });
+}
+
+function submitButton(page: Page) {
+  return page.getByRole('button', { name: 'Continue', exact: true });
+}
+
+async function openAuth(
+  page: Page,
+  route: string,
+  provider: Parameters<typeof mockAuthProvider>[1] = {},
+): Promise<void> {
+  await mockAuthProvider(page, provider);
   await page.goto(route, { waitUntil: 'load' });
   await expect(page.getByTestId('auth-layout')).toBeVisible();
   const submit = page.getByRole('button', { name: 'Continue', exact: true });
+  await expect(submit).toBeEnabled();
   if (route === '/signup') {
-    await expect(page.getByTestId('auth-age-confirmation').getByRole('checkbox')).not.toBeChecked();
-    await expect(submit).toBeDisabled();
+    await expect(consentBox(page)).not.toBeChecked();
     for (const provider of await page.getByTestId('auth-layout').getByRole('button').all()) {
-      await expect(provider).toBeDisabled();
+      await expect(provider).toBeEnabled();
     }
-  } else {
-    await expect(submit).toBeEnabled();
   }
+}
+
+/** Every request that leaves the dev server, plus any identity API path on it. */
+function watchOutboundRequests(page: Page): string[] {
+  const outbound: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    if (!local || url.pathname.startsWith('/v1/')) outbound.push(request.url());
+  });
+  return outbound;
+}
+
+async function expectRefused(page: Page): Promise<void> {
+  const box = consentBox(page);
+  const alert = page.getByTestId('auth-signup-consent').getByRole('alert');
+  await expect(alert).toHaveText(CONSENT_REFUSED);
+  await expect(box).toBeFocused();
+  await expect(box).toHaveAttribute('aria-invalid', 'true');
+  const describedBy = (await box.getAttribute('aria-describedby')) ?? '';
+  expect(describedBy.split(' ')).toContain(await alert.getAttribute('id'));
+  await expect(page).toHaveURL(/\/signup(?:\?|$)/);
+}
+
+async function openCodeStep(page: Page): Promise<Locator> {
+  await openAuth(page, '/login');
+  await page.getByLabel('Email address').fill(MOCK_CODE_ACCOUNT);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  const code = page.getByLabel('Code', { exact: true });
+  await expect(code).toBeEditable();
+  return code;
+}
+
+async function expectCheckedOnce(page: Page, code: Locator): Promise<void> {
+  await expect(page.getByTestId('auth-layout').getByRole('alert')).toBeVisible();
+  await expect(code).toBeEditable();
+  expect(
+    (await mockAuthProviderProgress(page)).signInCodeChecks,
+    'the code reached the identity provider once',
+  ).toBe(1);
+}
+
+async function openSignUpCodeStep(page: Page, email: string): Promise<Locator> {
+  await openAuth(page, '/signup');
+  await consentBox(page).check();
+  await page.getByLabel('Email address').fill(email);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+  const code = page.getByLabel('Code', { exact: true });
+  await expect(code).toBeEditable();
+  return code;
+}
+
+async function expectSessionOpening(page: Page): Promise<void> {
+  await expect(page.getByTestId('auth-phase')).toHaveText('Signing you in');
+  await expect(page.getByTestId('auth-layout').getByRole('alert')).toHaveCount(0);
+  await expect(page.getByTestId('auth-layout').getByText(GENERIC_FAILURE)).toHaveCount(0);
 }
 
 test.describe('auth flow states', () => {
@@ -33,14 +134,16 @@ test.describe('auth flow states', () => {
       await expect(email).toBeVisible();
       if (route === '/signup') {
         await expect(email).not.toBeFocused();
-        const confirmation = page.getByTestId('auth-age-confirmation').getByRole('checkbox');
-        await confirmation.check();
-        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
-        await confirmation.uncheck();
-        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+        await expect(consentBox(page)).not.toBeChecked();
+        await expect(page.getByTestId('auth-signup-consent').getByRole('alert')).toHaveCount(0);
+        await expect(passwordField(page)).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Forgot password?' })).toHaveCount(0);
       } else {
         await expect(email).toBeFocused();
-        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+        await expect(page.getByTestId('auth-signup-consent')).toHaveCount(0);
+        await expect(passwordField(page)).toBeVisible();
+        await expect(passwordField(page)).toHaveAttribute('type', 'password');
+        await expect(page.getByRole('button', { name: 'Forgot password?' })).toBeVisible();
       }
     });
 
@@ -58,8 +161,8 @@ test.describe('auth flow states', () => {
       await openAuth(page, route);
 
       if (route === '/signup') {
-        const confirmation = page.getByTestId('auth-age-confirmation').getByRole('checkbox');
-        const maximumTabs = (await page.locator('button, input, a[href]').count()) * 2;
+        const confirmation = consentBox(page);
+        const maximumTabs = (await page.locator('button, input, a[href], summary').count()) * 2;
         for (let step = 0; step < maximumTabs; step += 1) {
           if (await confirmation.evaluate((element) => element === document.activeElement)) break;
           await page.keyboard.press('Tab');
@@ -67,11 +170,13 @@ test.describe('auth flow states', () => {
         await expect(confirmation).toBeFocused();
         await page.keyboard.press('Space');
         await expect(confirmation).toBeChecked();
-        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+        await expect(page.getByTestId('auth-signup-consent').getByRole('alert')).toHaveCount(0);
+        await page.keyboard.press('Space');
+        await expect(confirmation).not.toBeChecked();
       }
       const controls = await page
         .getByTestId('auth-layout')
-        .locator('button, input, a[href]')
+        .locator('button, input, a[href], summary')
         .all();
       const targets = [];
       for (const control of controls) {
@@ -116,6 +221,155 @@ test.describe('auth flow states', () => {
     });
   }
 
+  test('/signup opens nearby data-use details from the keyboard without accepting consent', async ({
+    page,
+  }) => {
+    await page.setViewportSize(PHONE);
+    await openAuth(page, '/signup');
+
+    const notice = page.getByTestId('auth-data-use-notice');
+    const summary = notice.locator('summary');
+    const fullStatement = notice.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT);
+    await expect(fullStatement).not.toBeVisible();
+
+    await summary.focus();
+    await summary.press('Enter');
+
+    await expect(fullStatement).toBeVisible();
+    await expect(notice.getByRole('link', { name: 'Data Use Guidelines' })).toHaveAttribute(
+      'href',
+      '/data-use',
+    );
+    await expect(consentBox(page)).not.toBeChecked();
+    expect(await mockAuthProviderCalls(page)).toEqual({
+      signInCreate: 0,
+      signUpCreate: 0,
+      signUpSso: 0,
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+
+    await summary.press('Space');
+
+    await expect(fullStatement).not.toBeVisible();
+    await expect(summary).toBeFocused();
+  });
+
+  test('/signup asks about product updates in a separate optional box that starts unticked', async ({
+    page,
+  }) => {
+    await openAuth(page, '/signup');
+    const optional = productUpdatesBox(page);
+    await expect(optional).not.toBeChecked();
+    await expect(optional).toBeEnabled();
+
+    await consentBox(page).focus();
+    const maximumTabs = (await page.locator('button, input, a[href], summary').count()) * 2;
+    const passed: string[] = [];
+    for (let step = 0; step < maximumTabs; step += 1) {
+      await page.keyboard.press('Tab');
+      if (await optional.evaluate((element) => element === document.activeElement)) break;
+      passed.push(await page.evaluate(() => document.activeElement?.tagName ?? ''));
+    }
+    await expect(optional).toBeFocused();
+    expect(passed, 'only the policy links of the required box sit between the two boxes').toEqual(
+      passed.filter((tag) => tag === 'A'),
+    );
+
+    await page.keyboard.press('Space');
+    await expect(optional).toBeChecked();
+    await expect(consentBox(page)).not.toBeChecked();
+    await expect(page.getByTestId('auth-layout').getByRole('alert')).toHaveCount(0);
+    expect(
+      await page.evaluate(() => [
+        window.localStorage.getItem('agi.terms-accepted-version'),
+        window.localStorage.getItem('agi.product-updates-notice-version'),
+      ]),
+      'ticking the box alone carries nothing',
+    ).toEqual([null, null]);
+    expect(await mockAuthProviderCalls(page)).toEqual({
+      signInCreate: 0,
+      signUpCreate: 0,
+      signUpSso: 0,
+    });
+
+    await page.reload({ waitUntil: 'load' });
+    await expect(page.getByTestId('auth-layout')).toBeVisible();
+    await expect(productUpdatesBox(page)).not.toBeChecked();
+  });
+
+  test('/signup holds the product updates box off under Global Privacy Control and says why', async ({
+    page,
+  }) => {
+    await page.setExtraHTTPHeaders({ 'Sec-GPC': '1' });
+    await openAuth(page, '/signup');
+    const optional = productUpdatesBox(page);
+
+    await expect(optional).toBeDisabled();
+    await expect(optional).not.toBeChecked();
+    const describedBy = await optional.getAttribute('aria-describedby');
+    expect(describedBy, 'the box points at the reason it is held').toBeTruthy();
+    await expect(page.locator(`[id="${describedBy}"]`)).toContainText('Global Privacy Control');
+    await expect(consentBox(page)).toBeEnabled();
+
+    await consentBox(page).focus();
+    const maximumTabs = (await page.locator('button, input, a[href], summary').count()) * 2;
+    for (let step = 0; step < maximumTabs; step += 1) {
+      await page.keyboard.press('Tab');
+      if (await optional.evaluate((element) => element === document.activeElement)) break;
+    }
+    await expect(optional, 'a keyboard reaches the held box and hears its reason').toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(optional).not.toBeChecked();
+    await page.getByTestId('auth-product-updates-consent').locator('label').click({ force: true });
+    await expect(optional).not.toBeChecked();
+  });
+
+  test('/signup refuses every sign-up method until the box is ticked and reaches no provider', async ({
+    page,
+  }) => {
+    await openAuth(page, '/signup');
+    const outbound = watchOutboundRequests(page);
+
+    await page.getByLabel('Email address').fill(UNTICKED_ATTEMPT_EMAIL);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expectRefused(page);
+
+    await page.getByLabel('Email address').press('Enter');
+    await expectRefused(page);
+
+    for (const provider of await page
+      .getByTestId('auth-layout')
+      .getByRole('button', { name: /^Continue with / })
+      .all()) {
+      await provider.click();
+      await expectRefused(page);
+    }
+
+    await expect(page.getByTestId('auth-phase')).toHaveText('');
+    await expect(page.getByLabel('Email address')).toHaveValue(UNTICKED_ATTEMPT_EMAIL);
+    expect(await mockAuthProviderCalls(page)).toEqual({
+      signInCreate: 0,
+      signUpCreate: 0,
+      signUpSso: 0,
+    });
+    expect(
+      await page.evaluate(() => [
+        window.localStorage.getItem('agi.terms-accepted-version'),
+        window.localStorage.getItem('agiworkforce-auth-last-method'),
+      ]),
+    ).toEqual([null, null]);
+    expect(outbound, 'a refused attempt sends nothing to the identity provider').toEqual([]);
+
+    await consentBox(page).check();
+    await expect(page.getByTestId('auth-signup-consent').getByRole('alert')).toHaveCount(0);
+    await expect(consentBox(page)).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+  });
+
   test('an email with no account names the way over to sign-up', async ({ page }) => {
     await openAuth(page, '/login');
 
@@ -124,5 +378,372 @@ test.describe('auth flow states', () => {
 
     await expect(page.getByTestId('auth-layout').getByRole('alert')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sign up instead.' })).toBeVisible();
+  });
+
+  test('an address and its password typed on one screen open the session', async ({ page }) => {
+    await openAuth(page, '/login');
+
+    await page.getByLabel('Email address').fill(MOCK_PASSWORD_ACCOUNT);
+    await passwordField(page).fill(MOCK_ACCOUNT_PASSWORD);
+    await submitButton(page).click();
+
+    await expectSessionOpening(page);
+    await expect(page.getByRole('heading', { name: 'Enter your password' })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+    expect((await mockAuthProviderCalls(page)).signInCreate).toBe(1);
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 1,
+      sessionsOpened: 1,
+      resetCodesSent: 0,
+    });
+    expect(
+      await page.evaluate(() => window.localStorage.getItem('agiworkforce-auth-last-method')),
+    ).toBe('method:password');
+  });
+
+  test('a wrong password is refused on the same screen, against the password field', async ({
+    page,
+  }) => {
+    await openAuth(page, '/login');
+    const email = page.getByLabel('Email address');
+    const password = passwordField(page);
+
+    await email.fill(MOCK_PASSWORD_ACCOUNT);
+    await password.fill(WRONG_PASSWORD);
+    await password.press('Enter');
+
+    const alert = page.getByTestId('auth-layout').getByRole('alert');
+    await expect(alert).toHaveText(PASSWORD_REFUSED);
+    await expect(password).toHaveAttribute('aria-invalid', 'true');
+    const describedBy = (await password.getAttribute('aria-describedby')) ?? '';
+    expect(describedBy.split(' ')).toContain(await alert.getAttribute('id'));
+    await expect(password).toBeFocused();
+    await expect(password).toHaveValue(WRONG_PASSWORD);
+    await expect(email).toHaveValue(MOCK_PASSWORD_ACCOUNT);
+    await expect(email).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Enter your password' })).toHaveCount(0);
+    await expect(page.getByTestId('auth-phase')).toHaveText('');
+    await expect(page.locator('svg.auth-scene')).toHaveAttribute('data-mood', 'error');
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+    expect(new URL(page.url()).search).not.toContain(encodeURIComponent(WRONG_PASSWORD));
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 1,
+      sessionsOpened: 0,
+      resetCodesSent: 0,
+    });
+
+    await password.fill(MOCK_ACCOUNT_PASSWORD);
+    await submitButton(page).click();
+
+    await expectSessionOpening(page);
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 2,
+      sessionsOpened: 1,
+      resetCodesSent: 0,
+    });
+  });
+
+  test('a password typed for an account that has none is sent nowhere, and its code step says why', async ({
+    page,
+  }) => {
+    await openAuth(page, '/login');
+
+    await page.getByLabel('Email address').fill(MOCK_CODE_ACCOUNT);
+    await passwordField(page).fill(MOCK_ACCOUNT_PASSWORD);
+    await submitButton(page).click();
+
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    await expect(page.getByTestId('auth-layout').getByText(PASSWORDLESS_REASON)).toBeVisible();
+    await expect(page.getByLabel('Code', { exact: true })).toBeFocused();
+    await expect(passwordField(page)).toHaveCount(0);
+    await expect(page.getByTestId('auth-layout').getByRole('alert')).toHaveCount(0);
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 0,
+      sessionsOpened: 0,
+      resetCodesSent: 0,
+    });
+  });
+
+  test('an empty password keeps the email-first path, and the password step still opens the session', async ({
+    page,
+  }) => {
+    await openAuth(page, '/login');
+
+    await page.getByLabel('Email address').fill(MOCK_PASSWORD_ACCOUNT);
+    await submitButton(page).click();
+
+    await expect(page.getByRole('heading', { name: 'Enter your password' })).toBeVisible();
+    await expect(passwordField(page)).toBeFocused();
+    await expect(page.getByLabel('Email address')).toHaveCount(0);
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 0,
+      sessionsOpened: 0,
+      resetCodesSent: 0,
+    });
+
+    await passwordField(page).fill(MOCK_ACCOUNT_PASSWORD);
+    await submitButton(page).click();
+
+    await expectSessionOpening(page);
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 1,
+      sessionsOpened: 1,
+      resetCodesSent: 0,
+    });
+  });
+
+  test('an empty password for a code account keeps its plain code step', async ({ page }) => {
+    await openCodeStep(page);
+
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    await expect(
+      page.getByTestId('auth-layout').getByText(`We sent a code to ${MOCK_CODE_ACCOUNT}`),
+    ).toBeVisible();
+    await expect(page.getByTestId('auth-layout').getByText(PASSWORDLESS_REASON)).toHaveCount(0);
+  });
+
+  test('the recovery link asks for the address first, then emails that address a reset code', async ({
+    page,
+  }) => {
+    await openAuth(page, '/login');
+    const email = page.getByLabel('Email address');
+    const recover = page.getByRole('button', { name: 'Forgot password?' });
+
+    await passwordField(page).focus();
+    await recover.click();
+
+    await expect(email).toBeFocused();
+    expect(await email.evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(
+      true,
+    );
+    await expect(page.getByTestId('auth-phase')).toHaveText('');
+    expect((await mockAuthProviderCalls(page)).signInCreate).toBe(0);
+
+    await email.fill(MOCK_PASSWORD_ACCOUNT);
+    await recover.click();
+
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    await expect(
+      page.getByTestId('auth-layout').getByText(`We sent a code to ${MOCK_PASSWORD_ACCOUNT}`),
+    ).toBeVisible();
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 0,
+      sessionsOpened: 0,
+      resetCodesSent: 1,
+    });
+  });
+
+  test('a sign-in the browser filled in before the page hydrated is kept and opens the session', async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ([address, secret]: readonly [string, string]) => {
+        const observer = new MutationObserver(() => {
+          const email = document.querySelector<HTMLInputElement>('input[name="email"]');
+          const password = document.querySelector<HTMLInputElement>('input[name="password"]');
+          if (!email || !password) return;
+          observer.disconnect();
+          email.value = address;
+          password.value = secret;
+        });
+        observer.observe(document, { childList: true, subtree: true });
+      },
+      [MOCK_PASSWORD_ACCOUNT, MOCK_ACCOUNT_PASSWORD] as const,
+    );
+    await openAuth(page, '/login');
+
+    await expect(page.getByLabel('Email address')).toHaveValue(MOCK_PASSWORD_ACCOUNT);
+    await expect(passwordField(page)).toHaveValue(MOCK_ACCOUNT_PASSWORD);
+    await submitButton(page).click();
+
+    await expectSessionOpening(page);
+    expect(await mockAuthProviderSignIn(page)).toEqual({
+      passwordChecks: 1,
+      sessionsOpened: 1,
+      resetCodesSent: 0,
+    });
+  });
+
+  test('a code typed in full and followed at once by Enter is checked once', async ({ page }) => {
+    const code = await openCodeStep(page);
+
+    await code.pressSequentially(MOCK_CODE);
+    await page.keyboard.press('Enter');
+
+    await expectCheckedOnce(page, code);
+  });
+
+  test('a filled code confirmed with Continue is checked once when the step after it fails', async ({
+    page,
+  }) => {
+    const code = await openCodeStep(page);
+
+    await code.fill(MOCK_CODE);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+    await expectCheckedOnce(page, code);
+    await expect(page.getByRole('heading', { name: 'This link was already used' })).toHaveCount(0);
+  });
+
+  test('an autofilled code that submits in the same task is checked once', async ({ page }) => {
+    const code = await openCodeStep(page);
+
+    await code.evaluate((input: HTMLInputElement, value: string) => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setValue?.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.form?.requestSubmit();
+    }, MOCK_CODE);
+
+    await expectCheckedOnce(page, code);
+  });
+
+  test('a sign-up the provider asks nothing more of opens its session once the code is accepted', async ({
+    page,
+  }) => {
+    const code = await openSignUpCodeStep(page, MOCK_SIGNUP_CODE_ONLY_ACCOUNT);
+
+    await code.pressSequentially(MOCK_CODE);
+
+    await expectSessionOpening(page);
+    await expect(page.getByRole('heading', { name: 'Create a password' })).toHaveCount(0);
+    expect(await mockAuthProviderProgress(page)).toEqual({
+      signInCodeChecks: 0,
+      signUpCodeChecks: 1,
+      signUpPasswords: 0,
+      signUpFinalizes: 1,
+    });
+  });
+
+  test('a sign-up that still needs a password asks for one after the code, then opens its session', async ({
+    page,
+  }) => {
+    const code = await openSignUpCodeStep(page, MOCK_SIGNUP_PASSWORD_ACCOUNT);
+
+    await code.pressSequentially(MOCK_CODE);
+
+    await expect(page.getByRole('heading', { name: 'Create a password' })).toBeVisible();
+    const password = page.getByLabel('Password', { exact: true });
+    await expect(password).toBeFocused();
+    await expect(page.getByText(PASSWORD_RULE)).toBeVisible();
+    await expect(page.getByTestId('auth-layout').getByText(GENERIC_FAILURE)).toHaveCount(0);
+    expect(await mockAuthProviderProgress(page)).toEqual({
+      signInCodeChecks: 0,
+      signUpCodeChecks: 1,
+      signUpPasswords: 0,
+      signUpFinalizes: 0,
+    });
+
+    await password.fill(MOCK_PASSWORD);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+    await expectSessionOpening(page);
+    expect(await mockAuthProviderProgress(page)).toEqual({
+      signInCodeChecks: 0,
+      signUpCodeChecks: 1,
+      signUpPasswords: 1,
+      signUpFinalizes: 1,
+    });
+  });
+
+  test('a wrong sign-up code is refused against the code field, and the right one still opens the session', async ({
+    page,
+  }) => {
+    const code = await openSignUpCodeStep(page, MOCK_SIGNUP_CODE_ONLY_ACCOUNT);
+
+    await code.pressSequentially(WRONG_CODE);
+
+    const alert = page.getByTestId('auth-layout').getByRole('alert');
+    await expect(alert).toHaveText(CODE_REFUSED);
+    await expect(code).toHaveAttribute('aria-invalid', 'true');
+    const describedBy = (await code.getAttribute('aria-describedby')) ?? '';
+    expect(describedBy.split(' ')).toContain(await alert.getAttribute('id'));
+    await expect(code).toBeEditable();
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    await expect(page.getByTestId('auth-phase')).toHaveText('');
+    expect(await mockAuthProviderProgress(page)).toEqual({
+      signInCodeChecks: 0,
+      signUpCodeChecks: 1,
+      signUpPasswords: 0,
+      signUpFinalizes: 0,
+    });
+
+    await code.fill('');
+    await code.pressSequentially(MOCK_CODE);
+
+    await expectSessionOpening(page);
+    expect(await mockAuthProviderProgress(page)).toEqual({
+      signInCodeChecks: 0,
+      signUpCodeChecks: 2,
+      signUpPasswords: 0,
+      signUpFinalizes: 1,
+    });
+  });
+
+  test('a new password the provider refuses is refused against the password field, and a longer one is accepted', async ({
+    page,
+  }) => {
+    const code = await openSignUpCodeStep(page, MOCK_SIGNUP_PASSWORD_ACCOUNT);
+    await code.pressSequentially(MOCK_CODE);
+    await expect(page.getByRole('heading', { name: 'Create a password' })).toBeVisible();
+    const password = page.getByLabel('Password', { exact: true });
+
+    await password.fill(TOO_SHORT_PASSWORD);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+    const alert = page.getByTestId('auth-layout').getByRole('alert');
+    await expect(alert).toHaveText(MOCK_SHORT_PASSWORD_REFUSAL);
+    await expect(password).toHaveAttribute('aria-invalid', 'true');
+    const describedBy = (await password.getAttribute('aria-describedby')) ?? '';
+    expect(describedBy.split(' ')).toContain(await alert.getAttribute('id'));
+    await expect(password).toBeFocused();
+    await expect(password).toHaveValue(TOO_SHORT_PASSWORD);
+    await expect(page.getByRole('heading', { name: 'Create a password' })).toBeVisible();
+    await expect(page.locator('svg.auth-scene')).toHaveAttribute('data-mood', 'error');
+    expect(await mockAuthProviderProgress(page)).toEqual({
+      signInCodeChecks: 0,
+      signUpCodeChecks: 1,
+      signUpPasswords: 1,
+      signUpFinalizes: 0,
+    });
+
+    await password.fill(MOCK_PASSWORD);
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+    await expectSessionOpening(page);
+    expect(await mockAuthProviderProgress(page)).toEqual({
+      signInCodeChecks: 0,
+      signUpCodeChecks: 1,
+      signUpPasswords: 2,
+      signUpFinalizes: 1,
+    });
+  });
+
+  test('Try again starts nothing on /signup once the box is unticked again', async ({ page }) => {
+    await openAuth(page, '/signup', { signUpNetworkFailures: 1 });
+    await consentBox(page).check();
+    await page.getByLabel('Email address').fill(MOCK_SIGNUP_CODE_ONLY_ACCOUNT);
+    await submitButton(page).click();
+    const retry = page.getByRole('button', { name: 'Try again' });
+    await expect(retry).toBeVisible();
+    expect((await mockAuthProviderCalls(page)).signUpCreate).toBe(1);
+    const outbound = watchOutboundRequests(page);
+
+    await consentBox(page).uncheck();
+    await retry.click();
+
+    await expectRefused(page);
+    expect((await mockAuthProviderCalls(page)).signUpCreate).toBe(1);
+    expect(
+      await page.evaluate(() => window.localStorage.getItem('agi.terms-accepted-version')),
+    ).toBeNull();
+    expect(outbound, 'a refused retry sends nothing to the identity provider').toEqual([]);
+
+    await consentBox(page).check();
+    await retry.click();
+
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    expect((await mockAuthProviderCalls(page)).signUpCreate).toBe(2);
   });
 });

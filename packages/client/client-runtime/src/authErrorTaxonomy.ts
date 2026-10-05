@@ -46,7 +46,11 @@ export interface VendorAuthError {
   longMessage?: string;
   status?: number;
   retryAfter?: number;
-  meta?: { paramName?: string; retryAfter?: number };
+  meta?: {
+    paramName?: string;
+    retryAfter?: number;
+    zxcvbn?: { suggestions?: readonly { code?: string; message?: string }[] };
+  };
   errors?: VendorAuthError[];
 }
 
@@ -112,6 +116,12 @@ function kindFromCode(code: string): AuthErrorKind | null {
   return null;
 }
 
+function strengthSuggestionsOf(vendor: VendorAuthError): string[] {
+  return (vendor.meta?.zxcvbn?.suggestions ?? [])
+    .map((suggestion) => suggestion.message?.trim() ?? '')
+    .filter((message) => message.length > 0);
+}
+
 function retryAfterOf(vendor: VendorAuthError): number | undefined {
   const seconds = vendor.retryAfter ?? vendor.meta?.retryAfter;
   return typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0
@@ -136,7 +146,12 @@ export function classifyAuthError(error: unknown): AuthErrorDescriptor {
   const param = vendor.meta?.paramName;
   const field = param ? FIELD_BY_PARAM[param] : undefined;
   const retryAfterSeconds = retryAfterOf(vendor);
-  const message = (vendor.longMessage ?? vendor.message ?? '').trim();
+  const message = [
+    (vendor.longMessage ?? vendor.message ?? '').trim(),
+    ...strengthSuggestionsOf(vendor),
+  ]
+    .filter((sentence) => sentence.length > 0)
+    .join(' ');
 
   return {
     kind,

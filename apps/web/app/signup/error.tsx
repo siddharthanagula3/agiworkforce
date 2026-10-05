@@ -29,7 +29,7 @@ export default function Error({
           </a>
         </div>
         {error.digest && (
-          <p className="mt-4 text-xs text-muted-foreground">Error ID: {error.digest}</p>
+          <p className="mt-4 text-sm text-muted-foreground">Error ID: {error.digest}</p>
         )}
       </div>
     </div>

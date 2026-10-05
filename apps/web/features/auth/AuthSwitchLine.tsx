@@ -3,7 +3,7 @@
 import Link from 'next/link';
 
 import { useAuthCopy } from './authCopy';
-import { AUTH_LINK_CLASS, AUTH_SWITCH_CLASS } from './authStyles';
+import { AUTH_RULE_CLASS, AUTH_STANDALONE_LINK_CLASS, AUTH_SWITCH_CLASS } from './authStyles';
 import type { AuthMode } from './authContract';
 
 const PROMPTS: Readonly<
@@ -32,11 +32,14 @@ export function AuthSwitchLine({ mode, href }: { mode: AuthMode; href: string })
   const copy = useAuthCopy();
   const prompt = PROMPTS[mode];
   return (
-    <p className={AUTH_SWITCH_CLASS}>
-      {copy.text(prompt.questionKey, prompt.question)}{' '}
-      <Link href={href} className={AUTH_LINK_CLASS}>
-        {copy.text(prompt.actionKey, prompt.action)}
-      </Link>
-    </p>
+    <>
+      <hr aria-hidden="true" className={`${AUTH_RULE_CLASS} border-0`} />
+      <p className={AUTH_SWITCH_CLASS}>
+        {copy.text(prompt.questionKey, prompt.question)}{' '}
+        <Link href={href} className={AUTH_STANDALONE_LINK_CLASS}>
+          {copy.text(prompt.actionKey, prompt.action)}
+        </Link>
+      </p>
+    </>
   );
 }

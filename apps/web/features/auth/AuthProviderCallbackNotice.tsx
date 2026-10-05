@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-import { clearTermsGateMarker } from '@/app/signup/TermsGate';
+import { clearSignupAttemptMarkers } from '@/app/signup/signupAttemptMarkers';
 import type { AuthNoticeKind } from '@/lib/auth/error-taxonomy';
 import { AuthNoticeStep } from './AuthNoticeStep';
 
@@ -14,7 +14,7 @@ export function AuthProviderCallbackNotice({
   retryHref: string;
 }) {
   useEffect(() => {
-    clearTermsGateMarker();
+    clearSignupAttemptMarkers();
   }, []);
 
   return <AuthNoticeStep notice={notice} retryAfterSeconds={null} restartHref={retryHref} />;

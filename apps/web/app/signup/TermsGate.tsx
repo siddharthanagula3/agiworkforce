@@ -5,54 +5,49 @@ import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
+import { AUTH_OPTIONAL_CONSENT_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 import { AccountDataDisclosure } from '@/features/auth/AccountDataDisclosure';
+import { AuthAgeConfirmation } from '@/features/auth/AuthAgeConfirmation';
+import { AuthProductUpdatesConsent } from '@/features/auth/AuthProductUpdatesConsent';
+import {
+  ProductUpdatesGrantProvider,
+  useProductUpdatesChoice,
+} from '@/features/auth/productUpdatesChoice';
 
-/**
- * localStorage, not sessionStorage.
- *
- * The marker has to survive the OAuth round trip, which sessionStorage does,
- * but it also has to survive the user closing the tab, which it does not. The
- * gate therefore reappeared on every new browser session for people who had
- * already accepted, including on /login, while the panel told them "Your
- * agreement is recorded with your account". It is: /login/complete checks
- * hasAcceptedCurrentTerms(userId) server-side and skips the prompt. This marker
- * only decides whether the pre-auth clickwrap is already satisfied, and keying
- * it to the policy version means a genuine terms update still re-prompts.
- */
-export const TERMS_GATE_STORAGE_KEY = 'agi.terms-accepted-version';
+import {
+  clearSignupAttemptMarkers,
+  hasCurrentTermsGateMarker,
+  writeSignupAttemptMarkers,
+} from './signupAttemptMarkers';
 
-export function clearTermsGateMarker(): void {
-  try {
-    window.localStorage.removeItem(TERMS_GATE_STORAGE_KEY);
-  } catch {
-    // Non-fatal: storage may be disabled.
-  }
-}
-
-export function hasCurrentTermsGateMarker(): boolean {
-  try {
-    return window.localStorage.getItem(TERMS_GATE_STORAGE_KEY) === POLICY_LAST_UPDATED.terms;
-  } catch {
-    return false;
-  }
-}
+export { TERMS_GATE_STORAGE_KEY } from './signupAttemptMarkers';
 
 export function TermsGate({
   children,
   blockedMessage = 'Accept the terms above to create an account. Local Mode stays free and needs no account.',
   restorePreAuthMarker = true,
   confirmationLabel,
+  confirmAge = false,
+  offerProductUpdates = false,
+  optedOutBySignal = false,
 }: {
   children: ReactNode;
   blockedMessage?: ReactNode;
   restorePreAuthMarker?: boolean;
   confirmationLabel?: string;
+  confirmAge?: boolean;
+  offerProductUpdates?: boolean;
+  optedOutBySignal?: boolean;
 }) {
   const [accepted, setAccepted] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const productUpdates = useProductUpdatesChoice(optedOutBySignal);
   const checkboxId = useId();
+  const ready = accepted && (!confirmAge || ageConfirmed);
+  const productUpdatesGrant =
+    offerProductUpdates && productUpdates.wanted ? POLICY_LAST_UPDATED.privacy : null;
 
   useEffect(() => {
     if (restorePreAuthMarker && hasCurrentTermsGateMarker()) setAccepted(true);
@@ -61,16 +56,20 @@ export function TermsGate({
 
   const onToggle = (next: boolean) => {
     setAccepted(next);
-    try {
-      if (next) window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
-      else window.localStorage.removeItem(TERMS_GATE_STORAGE_KEY);
-    } catch {
-      // Non-fatal: see above.
-    }
+    if (next) writeSignupAttemptMarkers({ productUpdates: false });
+    else clearSignupAttemptMarkers();
   };
 
   return (
     <div className={confirmationLabel ? 'flex flex-col' : 'flex flex-col gap-5'}>
+      {confirmAge ? (
+        <AuthAgeConfirmation
+          confirmed={ageConfirmed}
+          disabled={!hydrated || confirmed}
+          onChange={setAgeConfirmed}
+        />
+      ) : null}
+
       <div className="rounded-xl border border-border bg-muted/30 p-4">
         <label
           htmlFor={checkboxId}
@@ -106,10 +105,18 @@ export function TermsGate({
             .
           </span>
         </label>
-        <p className="mt-3 ps-7 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-3 ps-7 text-sm leading-relaxed text-muted-foreground">
           Version dated {POLICY_LAST_UPDATED.terms}. Your agreement is recorded with your account.
         </p>
       </div>
+
+      {offerProductUpdates ? (
+        <AuthProductUpdatesConsent
+          choice={productUpdates}
+          disabled={!hydrated || confirmed}
+          className={`mt-2 ${AUTH_OPTIONAL_CONSENT_CLASS}`}
+        />
+      ) : null}
 
       <AccountDataDisclosure />
 
@@ -117,13 +124,17 @@ export function TermsGate({
         <button
           type="button"
           className={AUTH_PRIMARY_BUTTON_CLASS}
-          disabled={!hydrated || !accepted}
+          disabled={!hydrated || !ready}
           onClick={() => setConfirmed(true)}
         >
           {confirmationLabel}
         </button>
-      ) : accepted ? (
-        <div className={confirmationLabel ? 'mt-8' : undefined}>{children}</div>
+      ) : ready ? (
+        <div className={confirmationLabel ? 'mt-8' : undefined}>
+          <ProductUpdatesGrantProvider value={productUpdatesGrant}>
+            {children}
+          </ProductUpdatesGrantProvider>
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="terms-gate-blocked" role="status">
           {blockedMessage}

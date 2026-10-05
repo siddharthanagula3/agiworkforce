@@ -8,7 +8,11 @@ import type { AuthNoticeKind } from '@/lib/auth/error-taxonomy';
 import { useAuthCopy } from './authCopy';
 import { AuthLegalFooter } from './AuthLegalFooter';
 import { AuthStepFrame } from './AuthStepFrame';
-import { AUTH_LINK_CLASS, AUTH_PRIMARY_BUTTON_CLASS, AUTH_STEP_LINKS_CLASS } from './authStyles';
+import {
+  AUTH_PRIMARY_BUTTON_CLASS,
+  AUTH_STANDALONE_LINK_CLASS,
+  AUTH_STEP_LINKS_CLASS,
+} from './authStyles';
 import { useCountdown } from './useCountdown';
 
 export function AuthNoticeStep({
@@ -31,7 +35,7 @@ export function AuthNoticeStep({
     <AuthStepFrame
       heading={title}
       detail={
-        <p className="text-center" role="status" data-testid="auth-notice">
+        <p role="status" data-testid="auth-notice">
           {message}
         </p>
       }
@@ -57,14 +61,17 @@ export function AuthNoticeStep({
 
       {notice === 'account_suspended' ? (
         <div className={AUTH_STEP_LINKS_CLASS}>
-          <Link href={SUSPENSION_APPEAL_PATH} className={AUTH_LINK_CLASS}>
+          <Link href={SUSPENSION_APPEAL_PATH} className={AUTH_STANDALONE_LINK_CLASS}>
             {copy.text('flow.notice.appeal', 'Appeal this suspension')}
           </Link>
         </div>
       ) : null}
       {notice === 'account_locked' ? (
         <div className={AUTH_STEP_LINKS_CLASS}>
-          <Link href={contactMailto(CONTACT_SUBJECTS.appeal)} className={AUTH_LINK_CLASS}>
+          <Link
+            href={contactMailto(CONTACT_SUBJECTS.appeal)}
+            className={AUTH_STANDALONE_LINK_CLASS}
+          >
             {copy.text('flow.notice.contactSupport', 'Contact support')}
           </Link>
         </div>

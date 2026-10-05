@@ -7,6 +7,7 @@ import { ProviderMark } from './ProviderMark';
 import {
   AUTH_BADGE_CLASS,
   AUTH_PROVIDER_BUTTON_CLASS,
+  AUTH_PROVIDER_LABEL_CLASS,
   AUTH_PROVIDER_STACK_CLASS,
 } from './authStyles';
 import type { AuthProvider, AuthProviderId } from './authContract';
@@ -45,7 +46,7 @@ export function AuthProviderButtons({
           ) : (
             <ProviderMark provider={provider.id} />
           )}
-          <span>
+          <span className={AUTH_PROVIDER_LABEL_CLASS}>
             {copy.text('flow.method.provider', 'Continue with {{provider}}', {
               provider: provider.label,
             })}

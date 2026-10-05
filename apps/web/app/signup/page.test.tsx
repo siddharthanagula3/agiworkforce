@@ -6,6 +6,7 @@ const flowProps = vi.hoisted(() => vi.fn());
 const mocks = vi.hoisted(() => ({
   identity: vi.fn(async (): Promise<{ subject: string | null }> => ({ subject: null })),
   redirect: vi.fn(),
+  headers: vi.fn(async () => new Headers()),
 }));
 
 vi.mock('@/lib/server/identity', () => ({ getRequestIdentity: () => mocks.identity() }));
@@ -14,6 +15,10 @@ vi.mock('next/navigation', () => ({
     mocks.redirect(url);
     throw new Error(`redirect:${url}`);
   },
+}));
+vi.mock('next/headers', async (importOriginal) => ({
+  ...(await importOriginal()),
+  headers: () => mocks.headers(),
 }));
 
 vi.mock('@/features/auth/AuthFlow', () => ({
@@ -31,6 +36,7 @@ vi.mock('@/features/auth/AuthLayout', () => ({
   ),
 }));
 
+import { GLOBAL_PRIVACY_CONTROL_HEADER } from '@/lib/consent-signals';
 import SignupPage from './page';
 
 function lastRedirects(): Record<string, string> {
@@ -43,7 +49,24 @@ describe('/signup', () => {
     flowProps.mockClear();
     mocks.redirect.mockClear();
     mocks.identity.mockResolvedValue({ subject: null });
+    mocks.headers.mockResolvedValue(new Headers());
   });
+
+  it.each([
+    ['sends', '1', true],
+    ['does not send', null, false],
+  ])(
+    'tells the flow that the request %s Global Privacy Control',
+    async (_case, value, optedOutBySignal) => {
+      mocks.headers.mockResolvedValue(
+        new Headers(value === null ? {} : { [GLOBAL_PRIVACY_CONTROL_HEADER]: value }),
+      );
+
+      render(await SignupPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+      expect(flowProps).toHaveBeenCalledWith(expect.objectContaining({ optedOutBySignal }));
+    },
+  );
 
   it('sends an already-signed-in visitor through the existing terms-aware login gate', async () => {
     mocks.identity.mockResolvedValue({ subject: 'user_1' });

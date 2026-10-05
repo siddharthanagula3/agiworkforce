@@ -8,7 +8,9 @@ import {
   buildSsoCallbackUrl,
   readAuthRouteContext,
 } from '@/features/auth/authRoutes';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 import { getRequestIdentity } from '@/lib/server/identity';
 
@@ -39,12 +41,14 @@ export default async function SignupPage({
   if (await hasVerifiedSession()) {
     redirect(buildLoginCompleteUrl(context));
   }
+  const optedOutBySignal = readGlobalPrivacyControlHeader(await headers());
 
   return (
-    <AuthLayout embedded={context.desktopSurface}>
+    <AuthLayout embedded={context.desktopSurface} scene>
       <AuthFlow
         mode="signup"
         providers={configuredAuthProviders()}
+        optedOutBySignal={optedOutBySignal}
         redirects={{
           completeUrl: buildSignUpCompleteUrl(context),
           switchUrl: buildLoginUrl(context),

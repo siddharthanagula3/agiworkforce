@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useSignOut } from '@/lib/identity/client';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { clearTermsGateMarker } from '@/app/signup/TermsGate';
+import { clearSignupAttemptMarkers } from '@/app/signup/signupAttemptMarkers';
 import { AUTH_FOOTER_LINK_CLASS } from '@/features/auth/authStyles';
 
 export function TermsReviewSignOut() {
@@ -16,7 +16,7 @@ export function TermsReviewSignOut() {
     setPending(true);
     setFailed(false);
     try {
-      clearTermsGateMarker();
+      clearSignupAttemptMarkers();
       await logout();
       await signOut({ redirectUrl: '/login' });
     } catch {

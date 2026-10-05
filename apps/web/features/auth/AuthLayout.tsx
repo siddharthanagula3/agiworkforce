@@ -1,27 +1,19 @@
 import type { ReactNode } from 'react';
 
-import './auth.css';
-import { AuthBrand } from './AuthBrand';
-import { AUTH_COLUMN_CLASS, AUTH_PAGE_CLASS } from './authStyles';
+import { AuthShell } from './AuthShell';
 
 export function AuthLayout({
   children,
   embedded = false,
+  scene = false,
 }: {
   children: ReactNode;
   embedded?: boolean;
+  scene?: boolean;
 }) {
   return (
-    <div
-      className={AUTH_PAGE_CLASS}
-      data-auth-column=""
-      data-testid="auth-layout"
-      data-embedded={String(embedded)}
-    >
-      <AuthBrand />
-      <main id="main-content" className={AUTH_COLUMN_CLASS}>
-        {children}
-      </main>
-    </div>
+    <AuthShell embedded={embedded} scene={scene}>
+      {children}
+    </AuthShell>
   );
 }

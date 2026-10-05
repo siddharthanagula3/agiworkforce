@@ -192,8 +192,12 @@ function colorToken(block: string, name: string): string {
   const bare = value.match(/^var\((--[a-z0-9-]+)\)$/);
   if (bare) {
     const primitive = PRIMITIVES[bare[1]!];
-    if (!primitive) throw new Error(`Unknown primitive ${bare[1]}`);
-    return tripleToHex(primitive);
+    if (primitive) return tripleToHex(primitive);
+    const neutralStep = foundationLight.match(
+      new RegExp(`^\\s*${bare[1]}:\\s*(#[0-9a-f]{3,8});`, 'm'),
+    );
+    if (neutralStep?.[1]) return neutralStep[1];
+    throw new Error(`Unknown primitive ${bare[1]}`);
   }
 
   return tripleToHex(value);
@@ -338,6 +342,138 @@ describe('artifact change highlights pair a text role with its own fill', () => 
       const added = colorToken(block, '--diff-added-fill');
       const removed = colorToken(block, '--diff-removed-fill');
       expect(new Set([added, removed, bg]).size).toBe(3);
+    });
+  }
+});
+
+describe('the sign-in scene draws four bodies on its own panel', () => {
+  const BODIES = ['purple', 'black', 'orange', 'yellow'] as const;
+  const SHAPE_VISIBLE = 1.3;
+
+  for (const [theme, block] of [
+    ['light', web.light],
+    ['dark', web.dark],
+  ] as const) {
+    const panel = colorToken(block, '--auth-scene-panel');
+    const face = colorToken(block, '--auth-scene-face');
+    const eye = colorToken(block, '--auth-scene-eye');
+
+    it(`${theme}: the panel is its own surface, not the page behind the form`, () => {
+      expect(panel).not.toBe(colorToken(block, '--surface-elevated'));
+    });
+
+    for (const body of BODIES) {
+      it(`${theme}: the ${body} body reads as a shape on the panel (>= ${SHAPE_VISIBLE}:1)`, () => {
+        expect(
+          contrastRatio(colorToken(block, `--auth-scene-${body}`), panel),
+        ).toBeGreaterThanOrEqual(SHAPE_VISIBLE);
+      });
+    }
+
+    for (const body of ['orange', 'yellow'] as const) {
+      it(`${theme}: a dark feature on the ${body} body >= 4.5:1`, () => {
+        expect(
+          contrastRatio(face, colorToken(block, `--auth-scene-${body}`)),
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+    }
+
+    for (const body of ['purple', 'black'] as const) {
+      it(`${theme}: an eye white on the ${body} body >= 3:1`, () => {
+        expect(
+          contrastRatio(eye, colorToken(block, `--auth-scene-${body}`)),
+        ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+      });
+    }
+
+    it(`${theme}: a pupil on an eye white >= 4.5:1`, () => {
+      expect(contrastRatio(face, eye)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${theme}: the purple mouth and closed lids, drawn in the face colour, >= 3:1 on the body`, () => {
+      expect(contrastRatio(face, colorToken(block, '--auth-scene-purple'))).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+    });
+
+    it(`${theme}: the brand wordmark sits on the panel at >= 4.5:1`, () => {
+      expect(contrastRatio(colorToken(block, '--text-primary'), panel)).toBeGreaterThanOrEqual(
+        WCAG_AA_NORMAL,
+      );
+    });
+  }
+});
+
+describe('the sign-in form draws on the elevated panel', () => {
+  // One dark action carrying the inverse label, quiet provider pills carrying
+  // the primary text, an underline beneath each field, and the small text the
+  // lifted labels and footer are set in.
+  const QUIET_SURFACE = 1.08;
+  const SMALL_TEXT = 7;
+
+  for (const [theme, block] of [
+    ['light', web.light],
+    ['dark', web.dark],
+  ] as const) {
+    const panel = colorToken(block, '--surface-elevated');
+    const onPrimary = colorToken(block, '--auth-primary-on-fill');
+    const text = colorToken(block, '--text-primary');
+
+    for (const fill of ['--auth-primary-fill', '--auth-primary-fill-hover'] as const) {
+      it(`${theme}: --auth-primary-on-fill on ${fill} >= 4.5:1`, () => {
+        expect(contrastRatio(onPrimary, colorToken(block, fill))).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      });
+
+      it(`${theme}: ${fill} reads as a control on the form panel (>= 3:1)`, () => {
+        expect(contrastRatio(colorToken(block, fill), panel)).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+      });
+    }
+
+    for (const fill of ['--auth-provider-fill', '--auth-provider-fill-hover'] as const) {
+      it(`${theme}: --text-primary on ${fill} >= 4.5:1`, () => {
+        expect(contrastRatio(text, colorToken(block, fill))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+    }
+
+    it(`${theme}: the provider fill is its own quiet surface, distinct from the panel`, () => {
+      const fill = colorToken(block, '--auth-provider-fill');
+      expect(fill).not.toBe(panel);
+      expect(contrastRatio(fill, panel)).toBeGreaterThanOrEqual(QUIET_SURFACE);
+      expect(contrastRatio(fill, panel)).toBeLessThan(WCAG_AA_LARGE);
+    });
+
+    it(`${theme}: the field underline reads as a boundary on the panel (>= 3:1)`, () => {
+      expect(contrastRatio(colorToken(block, '--auth-field-line'), panel)).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+    });
+
+    it(`${theme}: the scene ground and the form panel read as two surfaces`, () => {
+      const ground = colorToken(block, '--auth-scene-panel');
+      expect(ground).not.toBe(panel);
+      expect(contrastRatio(ground, panel)).toBeGreaterThanOrEqual(QUIET_SURFACE);
+    });
+
+    for (const token of ['--text-primary', '--accent-text', '--danger-text'] as const) {
+      it(`${theme}: ${token} on the form panel >= 4.5:1`, () => {
+        expect(contrastRatio(colorToken(block, token), panel)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      });
+    }
+
+    it(`${theme}: --text-secondary, set under 16px for lifted labels and the footer, >= 7:1 on the panel`, () => {
+      expect(contrastRatio(colorToken(block, '--text-secondary'), panel)).toBeGreaterThanOrEqual(
+        SMALL_TEXT,
+      );
+    });
+
+    it(`${theme}: a tick on the primary fill reads at >= 4.5:1`, () => {
+      expect(
+        contrastRatio(onPrimary, colorToken(block, '--auth-primary-fill')),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
     });
   }
 });
