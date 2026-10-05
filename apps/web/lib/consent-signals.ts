@@ -2,6 +2,9 @@ import { CONSENT_PURPOSES } from '@/lib/consent-purposes';
 
 export const GLOBAL_PRIVACY_CONTROL_HEADER = 'sec-gpc';
 
+export const GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE =
+  'This browser is sending Global Privacy Control, so this cannot be turned on from this browser.';
+
 export const NON_ESSENTIAL_CONSENT_PURPOSE_IDS: readonly string[] = Object.freeze(
   CONSENT_PURPOSES.filter((purpose) => !purpose.necessaryForRequest).map((purpose) => purpose.id),
 );
@@ -10,6 +13,15 @@ const NON_ESSENTIAL_IDS: ReadonlySet<string> = new Set(NON_ESSENTIAL_CONSENT_PUR
 
 export function isNonEssentialConsentPurpose(purpose: string): boolean {
   return NON_ESSENTIAL_IDS.has(purpose);
+}
+
+// A browser sending Global Privacy Control has refused every purpose that is
+// not needed to serve it, so a grant for one is recorded as the refusal it is.
+export function grantedUnderGlobalPrivacyControl(
+  decision: { purpose: string; granted: boolean },
+  optedOut: boolean,
+): boolean {
+  return optedOut && isNonEssentialConsentPurpose(decision.purpose) ? false : decision.granted;
 }
 
 export function isGlobalPrivacyControlValue(value: string | null | undefined): boolean {

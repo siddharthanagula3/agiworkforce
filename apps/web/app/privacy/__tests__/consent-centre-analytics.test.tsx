@@ -27,7 +27,7 @@ import {
   readCookiePreferences,
   type CookiePreferences,
 } from '@shared/lib/cookie-consent';
-import { CONSENT_PURPOSES } from '@/lib/consent-purposes';
+import { CONSENT_PURPOSES, PRODUCT_UPDATES_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { ConsentCentre } from '../requests/ConsentCentre';
 
@@ -108,7 +108,21 @@ function stubConsentApi(initial: StoredConsent[]) {
   });
 
   vi.stubGlobal('fetch', fetchMock);
-  return { posted };
+  return { posted, fetchMock };
+}
+
+function productUpdatesRow(): HTMLElement {
+  const row = screen
+    .getByText(PRODUCT_UPDATES_CONSENT_PURPOSE.description)
+    .closest<HTMLElement>('td, li, div');
+  if (!row) throw new Error('product updates consent row not found');
+  return row;
+}
+
+function productUpdatesButton(): HTMLButtonElement {
+  const button = productUpdatesRow().querySelector('button');
+  if (!button) throw new Error('product updates consent button not found');
+  return button;
 }
 
 function analyticsButton(): HTMLElement {
@@ -274,6 +288,47 @@ describe('consent centre under a browser opt-out signal', () => {
     await waitFor(() => expect(analyticsButton()).toBeTruthy());
     expect(analyticsButton()).toHaveProperty('disabled', false);
     expect(screen.queryByText(/sending Global Privacy Control/i)).toBeNull();
+  });
+});
+
+describe('product updates agreed at sign-up, seen from the consent centre', () => {
+  it('shows the grant and withdraws it as a new refusal against the current notice', async () => {
+    const { posted, fetchMock } = stubConsentApi([
+      { purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id, granted: true },
+    ]);
+
+    render(<ConsentCentre optedOutBySignal={false} />);
+
+    await waitFor(() => expect(productUpdatesButton()).toHaveTextContent('Withdraw consent'));
+    expect(productUpdatesRow()).toHaveTextContent(
+      `Consent given on 2026-09-01, against notice revision ${POLICY_LAST_UPDATED.privacy}.`,
+    );
+
+    await act(async () => {
+      fireEvent.click(productUpdatesButton());
+    });
+
+    await waitFor(() => expect(productUpdatesButton()).toHaveTextContent('Give consent'));
+    expect(posted).toEqual([{ purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id, granted: false }]);
+    const write = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(write?.[1]?.body))).toEqual({
+      decisions: [{ purpose: PRODUCT_UPDATES_CONSENT_PURPOSE.id, granted: false }],
+      surface: 'web-consent-centre',
+      noticeVersion: POLICY_LAST_UPDATED.privacy,
+    });
+    expect(productUpdatesRow()).toHaveTextContent('Withdrawn on 2026-09-01');
+    expect(screen.getByRole('status')).toHaveTextContent('Withdrawal recorded.');
+  });
+
+  it('tells an account that was never asked apart from one that refused', async () => {
+    stubConsentApi([]);
+
+    render(<ConsentCentre optedOutBySignal={false} />);
+
+    await waitFor(() => expect(productUpdatesButton()).toHaveTextContent('Give consent'));
+    expect(productUpdatesRow()).toHaveTextContent(
+      'Never asked. No decision is on record, which is not the same as a refusal.',
+    );
   });
 });
 

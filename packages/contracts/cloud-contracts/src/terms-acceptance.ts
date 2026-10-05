@@ -4,9 +4,12 @@ export const TERMS_ACCEPTANCE_PATH = '/api/terms/accept';
 
 export const TERMS_ACCEPTANCE_SURFACES = ['web-signup', 'web-login', 'mobile-auth'] as const;
 
+const POLICY_VERSION = z.string().min(1).max(32);
+
 export const TermsAcceptanceRequestSchema = z.object({
   surface: z.enum(TERMS_ACCEPTANCE_SURFACES),
-  version: z.string().min(1).max(32),
+  version: POLICY_VERSION,
+  productUpdatesNoticeVersion: POLICY_VERSION.optional(),
 });
 
 export type TermsAcceptanceRequest = z.infer<typeof TermsAcceptanceRequestSchema>;

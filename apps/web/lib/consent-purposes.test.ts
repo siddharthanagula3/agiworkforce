@@ -4,11 +4,15 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  CONSENT_PURPOSES,
+  CONSENT_SURFACES,
   PLATFORM_AVAILABILITY_CONSENT_PURPOSES,
+  PRODUCT_UPDATES_CONSENT_PURPOSE,
   WAITLIST_CONSENT_PURPOSES,
   WAITLIST_SOURCES,
   consentPurposesForWaitlistSource,
   findConsentPurpose,
+  isConsentSurface,
   isEnterpriseWaitlistSource,
   isWaitlistSource,
   type WaitlistSource,
@@ -23,6 +27,34 @@ describe('enterprise waitlist consent purpose', () => {
     expect(purpose?.description).not.toMatch(/when enterprise organisation and SSO features open/i);
     expect(purpose?.label).toMatch(/contract-scoped Enterprise access/i);
     expect(purpose?.label).not.toMatch(/early-access/i);
+  });
+});
+
+describe('product updates consent purpose', () => {
+  it('is the catalogue entry itself, so every screen states it in the same words', () => {
+    expect(PRODUCT_UPDATES_CONSENT_PURPOSE).toBe(findConsentPurpose('product_updates'));
+    expect(CONSENT_PURPOSES).toContain(PRODUCT_UPDATES_CONSENT_PURPOSE);
+  });
+
+  it('is optional wherever it is asked', () => {
+    expect(PRODUCT_UPDATES_CONSENT_PURPOSE.necessaryForRequest).toBe(false);
+  });
+});
+
+describe('consent surfaces', () => {
+  it('names the two account screens that ask about product updates with the terms', () => {
+    expect(CONSENT_SURFACES).toContain('web-signup');
+    expect(CONSENT_SURFACES).toContain('web-login');
+    expect(isConsentSurface('web-signup')).toBe(true);
+    expect(isConsentSurface('web-login')).toBe(true);
+  });
+
+  it('does not read the native terms surface as a place consent is collected', () => {
+    expect(isConsentSurface('mobile-auth')).toBe(false);
+  });
+
+  it('lists each surface once', () => {
+    expect(new Set(CONSENT_SURFACES).size).toBe(CONSENT_SURFACES.length);
   });
 });
 
