@@ -21,6 +21,10 @@
 import modelsCatalogJson from './models.json' with { type: 'json' };
 
 export type ProviderOfferingCategory = 'chat' | 'image' | 'video' | 'audio' | 'embedding';
+export type ProviderOfferingQuotaProtocol = 'chat' | 'image-sync' | 'image-async' | 'video-async';
+export type ProviderOfferingQuotaUnit = 'tokens' | 'images' | 'seconds';
+export type ProviderOfferingVideoResolution = '480P' | '720P' | '1080P';
+export type ProviderOfferingVideoShotType = 'single' | 'multi';
 
 export interface ProviderOffering {
   provider: string;
@@ -28,12 +32,33 @@ export interface ProviderOffering {
   displayName: string;
   category: ProviderOfferingCategory;
   identityStatus: 'exact' | 'unresolved';
-  quotaProbeProtocol?: 'chat' | 'image-sync' | 'video-async';
+  quotaProbeProtocol?: ProviderOfferingQuotaProtocol;
   quotaChatImageInput?: boolean;
   quotaImageSize?: string;
   quotaThinkingRequired?: boolean;
+  quotaPromptExtendUnsupported?: boolean;
+  quotaPromptMaxChars?: number;
+  quotaVideoSize?: string;
+  quotaVideoResolution?: ProviderOfferingVideoResolution;
+  quotaVideoRatio?: string;
+  quotaVideoSeconds?: number;
+  quotaVideoDurationFixed?: boolean;
+  quotaVideoShotType?: ProviderOfferingVideoShotType;
+  quotaVideoWatermark?: boolean;
   retiresAt?: string;
 }
+
+export interface ProviderOfferingMediaOutput {
+  outputSize: string;
+  durationSeconds?: number;
+}
+
+const PROVIDER_OFFERING_QUOTA_UNITS = {
+  chat: 'tokens',
+  'image-sync': 'images',
+  'image-async': 'images',
+  'video-async': 'seconds',
+} as const satisfies Record<ProviderOfferingQuotaProtocol, ProviderOfferingQuotaUnit>;
 
 export function getProviderOfferings(): Readonly<Record<string, ProviderOffering>> {
   return modelsCatalogJson.providerOfferings as Readonly<Record<string, ProviderOffering>>;
@@ -41,6 +66,42 @@ export function getProviderOfferings(): Readonly<Record<string, ProviderOffering
 
 export function getProviderOffering(key: string): ProviderOffering | null {
   return getProviderOfferings()[key] ?? null;
+}
+
+export function getProviderOfferingQuotaUnit(
+  offering: ProviderOffering,
+): ProviderOfferingQuotaUnit | null {
+  return offering.quotaProbeProtocol
+    ? PROVIDER_OFFERING_QUOTA_UNITS[offering.quotaProbeProtocol]
+    : null;
+}
+
+export function getProviderOfferingMediaRequestUnits(
+  offering: ProviderOffering,
+  fallbackVideoSeconds: number,
+): number | null {
+  const unit = getProviderOfferingQuotaUnit(offering);
+  if (unit === 'images') return 1;
+  if (unit === 'seconds') return offering.quotaVideoSeconds ?? fallbackVideoSeconds;
+  return null;
+}
+
+export function getProviderOfferingMediaOutput(
+  offering: ProviderOffering,
+  fallbackVideoSeconds: number,
+): ProviderOfferingMediaOutput | null {
+  const unit = getProviderOfferingQuotaUnit(offering);
+  if (unit === 'images') {
+    return offering.quotaImageSize ? { outputSize: offering.quotaImageSize } : null;
+  }
+  if (unit !== 'seconds') return null;
+  const outputSize =
+    offering.quotaVideoSize ??
+    (offering.quotaVideoResolution && offering.quotaVideoRatio
+      ? `${offering.quotaVideoResolution} ${offering.quotaVideoRatio}`
+      : undefined);
+  if (!outputSize) return null;
+  return { outputSize, durationSeconds: offering.quotaVideoSeconds ?? fallbackVideoSeconds };
 }
 import type { SourceSurface } from './suite-contracts';
 import {
