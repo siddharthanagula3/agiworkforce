@@ -686,21 +686,21 @@
   border-bottom: 1px solid var(--agi-rule);
 }
 [data-design='agi'] .agi-page-h1 {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font);
   font-optical-sizing: auto;
   font-weight: 600;
-  font-size: clamp(2.2rem, 5.2vw, 4rem);
-  line-height: 1.04;
+  font-size: var(--agi-text-2xl);
+  line-height: var(--agi-leading-display);
   letter-spacing: -0.025em;
   color: var(--agi-ink);
   margin: 0;
-  max-width: 22ch;
-  text-wrap: balance;
+  max-width: none;
+  text-wrap: wrap;
 }
 [data-design='agi'] .agi-page-h1 em {
-  font-family: var(--agi-font-display);
-  font-style: italic;
-  font-weight: 500;
+  font-family: inherit;
+  font-style: normal;
+  font-weight: inherit;
   color: var(--agi-amber);
 }
 [data-design='agi'] .agi-page-lede {
@@ -731,21 +731,21 @@
   justify-content: center;
 }
 [data-design='agi'] .agi-campaign-title {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font);
   font-optical-sizing: auto;
-  font-size: clamp(2.55rem, 6.6vw, 5.6rem);
-  line-height: 1.02;
+  font-size: var(--agi-text-2xl);
+  line-height: var(--agi-leading-display);
   letter-spacing: -0.025em;
   font-weight: 600;
   margin: 0;
-  max-width: 12ch;
+  max-width: none;
   color: var(--agi-ink);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 [data-design='agi'] .agi-campaign-title em {
-  font-family: var(--agi-font-display);
-  font-style: italic;
-  font-weight: 500;
+  font-family: inherit;
+  font-style: normal;
+  font-weight: inherit;
   color: var(--agi-amber);
 }
 [data-design='agi'] .agi-campaign-lede {
@@ -1116,10 +1116,6 @@
   [data-design='agi'] .agi-trust-mode-card {
     min-height: auto;
   }
-  [data-design='agi'] .agi-campaign-title {
-    font-size: clamp(2.3rem, 13vw, 3.6rem);
-    max-width: 11ch;
-  }
   [data-design='agi'] .agi-campaign-console {
     min-height: auto;
   }
@@ -1169,20 +1165,20 @@
   color: var(--agi-ink-faint);
 }
 [data-design='agi'] .agi-section-h2 {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font);
   font-optical-sizing: auto;
-  font-size: clamp(1.65rem, 3.4vw, 2.5rem);
+  font-size: var(--agi-text-xl);
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.08;
+  line-height: var(--agi-leading-display);
   margin: 0 0 24px;
   color: var(--agi-ink);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 [data-design='agi'] .agi-section-h2 em {
-  font-family: var(--agi-font-display);
-  font-style: italic;
-  font-weight: 500;
+  font-family: inherit;
+  font-style: normal;
+  font-weight: inherit;
   color: var(--agi-amber);
 }
 
@@ -1779,8 +1775,8 @@
 }
 [data-design='agi'] .agi-about-principle-title {
   margin: 0 0 12px;
-  font-family: var(--agi-font-display);
-  font-size: 1.32rem;
+  font-family: var(--agi-font);
+  font-size: var(--agi-text-lg);
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.15;
@@ -1815,9 +1811,6 @@
   color: var(--agi-amber);
   background:
     radial-gradient(120% 120% at 30% 20%, var(--agi-glow-soft), transparent 70%), var(--agi-card);
-}
-[data-design='agi'] .agi-about-founder-copy .agi-fl-h2 {
-  max-width: 20ch;
 }
 [data-design='agi'] .agi-about-founder-name {
   display: flex;
@@ -2330,12 +2323,6 @@
    only --agi-* tokens plus the loaded font variables, so the existing
    dark default and [data-theme='light'] override both apply untouched.
 
-   Type voices:
-   · display , Newsreader variable serif (--font-newsreader), optical
-     sizing on, used ONLY by .agi-fl-h1/.agi-fl-h2/.agi-fl-final-title
-   · body/ui , Geist (--agi-font)
-   · meter   , JetBrains Mono (--agi-font-mono) for eyebrows, numerals,
-     statuses, frame chrome
    ══════════════════════════════════════════════════════════════════════ */
 
 [data-design='agi'] {
@@ -2366,15 +2353,15 @@
 
 [data-design='agi'] .agi-fl-h2 {
   margin: 0;
-  max-width: 24ch;
-  font-family: var(--agi-font-display);
+  max-width: none;
+  font-family: var(--agi-font);
   font-optical-sizing: auto;
-  font-size: clamp(2rem, 4.6vw, 3.4rem);
+  font-size: var(--agi-text-xl);
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.06;
+  line-height: var(--agi-leading-display);
   color: var(--agi-ink);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'] .agi-fl-section-lede {
@@ -2550,14 +2537,15 @@
 
 [data-design='agi'] .agi-fl-h1 {
   margin: 0;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font);
   font-optical-sizing: auto;
-  font-size: clamp(2.6rem, 6.5vw, 5.2rem);
+  font-size: var(--agi-text-2xl);
   font-weight: 600;
   letter-spacing: -0.025em;
-  line-height: 1.02;
+  line-height: var(--agi-leading-display);
   color: var(--agi-ink);
-  max-width: 16ch;
+  max-width: none;
+  text-wrap: wrap;
   animation: hero-fade-up 0.7s var(--agi-ease-out) 0.05s both;
 }
 
@@ -2617,14 +2605,14 @@
 }
 
 [data-design='agi'] .agi-fl-h1-line {
-  display: block;
-  text-wrap: balance;
+  display: inline;
+  text-wrap: wrap;
 }
 
 [data-design='agi'] .agi-fl-h1-em {
-  font-family: var(--agi-font-display);
-  font-style: italic;
-  font-weight: 500;
+  font-family: inherit;
+  font-style: normal;
+  font-weight: inherit;
   color: var(--agi-amber);
 }
 
@@ -2948,9 +2936,9 @@
 
 [data-design='agi'] .agi-fl-surface-name {
   margin: 0;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font);
   font-optical-sizing: auto;
-  font-size: clamp(1.7rem, 3.2vw, 2.4rem);
+  font-size: var(--agi-text-lg);
   font-weight: 600;
   letter-spacing: -0.012em;
   line-height: 1.08;
@@ -3162,8 +3150,8 @@
 
 [data-design='agi'] .agi-fl-trust-title {
   margin: 14px 0 0;
-  font-family: var(--agi-font-display);
-  font-size: 1.45rem;
+  font-family: var(--agi-font);
+  font-size: var(--agi-text-lg);
   font-weight: 600;
   letter-spacing: -0.008em;
   line-height: 1.18;
@@ -3293,7 +3281,7 @@
 
 @media (max-width: 860px) {
   [data-design='agi'] .agi-fl-devband {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -3321,15 +3309,22 @@
 
 [data-design='agi'] .agi-fl-final-title {
   margin: 0 auto;
-  max-width: 20ch;
-  font-family: var(--agi-font-display);
+  max-width: none;
+  font-family: var(--agi-font);
   font-optical-sizing: auto;
-  font-size: clamp(2.2rem, 5.4vw, 4rem);
+  font-size: var(--agi-text-xl);
   font-weight: 600;
   letter-spacing: -0.022em;
-  line-height: 1.05;
+  line-height: var(--agi-leading-display);
   color: var(--agi-ink);
-  text-wrap: balance;
+  text-wrap: wrap;
+}
+
+[data-design='agi'] .agi-fl-h2 em,
+[data-design='agi'] .agi-fl-final-title em {
+  font-family: inherit;
+  font-style: normal;
+  font-weight: inherit;
 }
 
 [data-design='agi'] .agi-fl-final-lede {
@@ -6009,6 +6004,9 @@
 
 [data-design='agi'] .agi-dw,
 [data-design='agi'] .agi-ap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   border: 1px solid var(--agi-rule-strong);
   border-radius: var(--corner-panel);
@@ -6021,6 +6019,7 @@
 [data-design='agi'] .agi-dw-chrome,
 [data-design='agi'] .agi-ap-chrome {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -6096,9 +6095,20 @@
   border-radius: var(--corner-compact);
 }
 
+[data-design='agi'] .agi-dw-line--del .agi-dw-hl,
+[data-design='agi'] .agi-dw-line--add .agi-dw-hl {
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-dw-line--del .agi-dw-num,
+[data-design='agi'] .agi-dw-line--add .agi-dw-num {
+  color: var(--agi-ink-2);
+}
+
 [data-design='agi'] .agi-dw-foot,
 [data-design='agi'] .agi-ap-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
@@ -6111,6 +6121,7 @@
 [data-design='agi'] .agi-dw-actions {
   margin-left: auto;
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -6221,8 +6232,13 @@
 }
 
 /* devband collage: terminal + scene stack */
+[data-design='agi'] .agi-fl-devband-term {
+  min-width: 0;
+}
+
 [data-design='agi'] .agi-fl-devband-visual {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -6236,6 +6252,33 @@
    ══════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 640px) {
+  [data-design='agi'] .agi-fl-devband-visual > :nth-child(2) {
+    margin-inline: 0;
+  }
+
+  [data-design='agi'] .agi-dw-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-design='agi'] .agi-dw-pane {
+    overflow-x: auto;
+  }
+
+  [data-design='agi'] .agi-dw-pane + .agi-dw-pane {
+    border-left: 0;
+    border-top: 1px solid var(--agi-rule);
+  }
+
+  [data-design='agi'] .agi-dw-line {
+    min-width: max-content;
+    overflow: visible;
+  }
+
+  [data-design='agi'] .agi-ap-cmd {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   /* Shell padding */
   [data-design='agi'] .agi-shell {
     padding: 0 16px;
@@ -6293,19 +6336,8 @@
     gap: 32px;
   }
 
-  /* Surface list: ensure visuals are hidden on small screens */
-  [data-design='agi'] .agi-fl-surface-visual {
-    display: none;
-  }
-
   [data-design='agi'] .agi-fl-surface-row {
     grid-template-columns: 1fr;
-  }
-
-  /* Hero h1: ensure it doesn't overflow */
-  [data-design='agi'] .agi-fl-h1 {
-    font-size: clamp(2rem, 8vw, 3.2rem);
-    max-width: none;
   }
 
   /* Final CTA: stack */
@@ -6325,21 +6357,21 @@
    inside `@layer components` loses to unlayered rules regardless of specificity. */
 
 [data-design='agi'] .agi-surface .agi-fl-hero-visual.agi-fl-hero-frame--main {
-  justify-content: stretch;
+  justify-content: center;
 }
 
 [data-design='agi'] .agi-surface .agi-fl-hero-frame--main .agi-dev {
   width: 100%;
-  max-width: 100%;
+  max-width: calc(var(--dev-w) * 1px);
   min-width: 0;
-}
-
-[data-design='agi'] .agi-surface .agi-fl-hero .agi-fl-cta-row {
-  flex-wrap: wrap;
+  margin-inline: auto;
 }
 
 [data-design='agi'] .agi-surface .agi-fl-cta {
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
 }
 
 @media (max-width: 1279px) {
