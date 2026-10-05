@@ -174,6 +174,14 @@ const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   // stranger. The route stays public, so a signed-out visitor still reaches it
   // and is refused by the read rather than by a redirect.
   '/share/(.*)',
+  // Public pages that decide on the server between the signed-out explanation
+  // and the signed-in settings section, from the session on the request.
+  // Without this the read fails on every request and a signed-in account is
+  // served the signed-out page. Exact paths: nothing beneath them reads
+  // identity, and /connectors/mcp-directory stays a plain public page.
+  '/apps',
+  '/connectors',
+  '/skills',
   AGI_WORK_PATH,
   AGI_CODE_PATH,
   '/api/(.*)',

@@ -10,8 +10,8 @@ const mocks = vi.hoisted(() => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const SIGNED_OUT = { subject: null, isSignedIn: false };
-const SIGNED_IN = { subject: 'user_1', isSignedIn: true };
+const HEADING = 'Connectors bring your own tools into a thread';
+const SIGN_IN_HREF = '/login?redirectTo=%2Fconnectors';
 
 vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }) }));
 
@@ -37,11 +37,11 @@ vi.mock('@/features/settings/components/SettingsModalRedirect', () => ({
   ),
 }));
 
-import AppsPage from './page';
+import ConnectorsPage from './page';
 
 async function firstResponse(): Promise<HTMLElement> {
   const body = document.createElement('div');
-  body.innerHTML = renderToString(await AppsPage());
+  body.innerHTML = renderToString(await ConnectorsPage());
   return body;
 }
 
@@ -50,53 +50,32 @@ beforeEach(() => {
   mocks.logger.error.mockReset();
 });
 
-describe('/apps is decided on the server', () => {
+describe('/connectors is decided on the server', () => {
   it('puts the signed-out explanation and the sign-in link in the first response, before any identity script has loaded', async () => {
-    mocks.identity.mockResolvedValue(SIGNED_OUT);
+    mocks.identity.mockResolvedValue({ subject: null, isSignedIn: false });
 
     const body = await firstResponse();
 
-    expect(body.querySelector('h1')?.textContent).toBe(
-      'Apps connect AGI to the tools you already use',
+    expect(body.querySelector('h1')?.textContent).toBe(HEADING);
+    expect(body.textContent).toContain('a scoped way to read from and act in a service');
+    expect(body.querySelector(`a[href="${SIGN_IN_HREF}"]`)?.textContent).toBe(
+      'Sign in to add a connector',
     );
-    expect(body.textContent).toContain('bundles the commands, skills and connections');
-    expect(body.querySelector('a[href="/login?redirectTo=%2Fapps"]')?.textContent).toBe(
-      'Sign in to browse apps',
-    );
-    expect(body.querySelector('main a[href="/features/plugins"]')?.textContent).toBe(
-      'How apps and plugins work',
+    expect(body.querySelector('main a[href="/connectors/mcp-directory"]')?.textContent).toBe(
+      'Browse the MCP directory',
     );
     expect(body.querySelector('[data-testid="settings-modal-redirect"]')).toBeNull();
     expect(mocks.logger.error).not.toHaveBeenCalled();
   });
 
-  it('never sends a signed-out visitor back to /integrations, whose hero now opens the public directory', async () => {
-    mocks.identity.mockResolvedValue(SIGNED_OUT);
-
-    const body = await firstResponse();
-
-    const integrationsSource = readFileSync(
-      join(__dirname, '..', 'integrations', 'page.tsx'),
-      'utf8',
-    );
-    expect(integrationsSource).toContain("href: '/connectors/mcp-directory'");
-    expect(integrationsSource).not.toContain("href: '/apps'");
-
-    const pageLinks = [...body.querySelectorAll('main a')];
-    expect(pageLinks.length).toBeGreaterThan(0);
-    for (const link of pageLinks) {
-      expect(link.getAttribute('href')?.startsWith('/integrations')).toBeFalsy();
-    }
-  });
-
-  it('opens the plugins section of the settings modal for a signed-in account, and none of the signed-out page', async () => {
-    mocks.identity.mockResolvedValue(SIGNED_IN);
+  it('opens the connectors section of the settings modal for a signed-in account, and none of the signed-out page', async () => {
+    mocks.identity.mockResolvedValue({ subject: 'user_1', isSignedIn: true });
 
     const body = await firstResponse();
 
     expect(
       body.querySelector('[data-testid="settings-modal-redirect"]')?.getAttribute('data-section'),
-    ).toBe('plugins');
+    ).toBe('connectors');
     expect(body.querySelector('h1')).toBeNull();
     expect(body.querySelector('a[href^="/login"]')).toBeNull();
   });
@@ -118,13 +97,11 @@ describe('/apps is decided on the server', () => {
 
       const body = await firstResponse();
 
-      expect(body.querySelector('h1')?.textContent).toBe(
-        'Apps connect AGI to the tools you already use',
-      );
-      expect(body.querySelector('a[href="/login?redirectTo=%2Fapps"]')).not.toBeNull();
+      expect(body.querySelector('h1')?.textContent).toBe(HEADING);
+      expect(body.querySelector(`a[href="${SIGN_IN_HREF}"]`)).not.toBeNull();
       expect(mocks.logger.error).toHaveBeenCalledTimes(1);
       expect(mocks.logger.error).toHaveBeenCalledWith(
-        { error: failure, route: '/apps' },
+        { error: failure, route: '/connectors' },
         expect.stringContaining('Identity could not be read'),
       );
     },

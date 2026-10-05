@@ -32,10 +32,18 @@ const APP = join(process.cwd(), 'app');
  * this test about a page that should not be.
  */
 const PUBLIC_BY_DESIGN: Record<string, string> = {
+  '/apps':
+    'A public, indexed page that renders its signed-out explanation in the first response and reads the identity only to open the plugins settings section for a signed-in account; isIdentitySessionRoute matches it so the read resolves, and isProtectedAppRoute must not, or a signed-out visitor and every crawler would be redirected to sign in.',
+  '/connectors':
+    'A public, indexed page that renders its signed-out explanation in the first response and reads the identity only to open the connectors settings section for a signed-in account; isIdentitySessionRoute matches it so the read resolves, and isProtectedAppRoute must not, or a signed-out visitor and every crawler would be redirected to sign in.',
+  '/skills':
+    'A public, indexed page that renders its signed-out explanation in the first response and reads the identity only to open the skills settings section for a signed-in account; isIdentitySessionRoute matches it so the read resolves, and isProtectedAppRoute must not, or a signed-out visitor and every crawler would be redirected to sign in.',
   '/login':
     'The sign-in page itself. It reads the identity only to send an already-verified session on to its completion URL and treats a missing session as signed out; isIdentitySessionRoute matches it so the proxy never gates it.',
   '/signup':
     'The sign-up page itself. It reads the identity only to send an already-verified session on to its completion URL and treats a missing session as signed out; isIdentitySessionRoute matches it so the proxy never gates it.',
+  '/signup/complete':
+    'The sign-up landing itself, reached straight after the identity provider creates the account. It reads the identity only to send an account whose email address is still unconfirmed on to the sign-in completion step, and leaves a missing session to its recorder, which sends the visitor on; isIdentitySessionRoute matches it through /signup, and gating it would send a new account to sign in before its terms acceptance is recorded.',
   '/login/complete':
     'The sign-in landing itself. It is matched by isIdentitySessionRoute rather than isProtectedAppRoute, since gating it would make signing in impossible.',
   '/login/verify':
@@ -141,14 +149,15 @@ describe('proxy covers every page that calls getRequestIdentity()', () => {
     });
   }
 
-  it('keeps the session matcher at least as wide as the protected matcher', () => {
+  it('hands an identity session to every page that reads the identity, public by design or not', () => {
     // A route the proxy protects but does not hand an identity session to would
-    // redirect every visitor, signed in or not.
+    // redirect every visitor, signed in or not. A public one fails its read on
+    // every request and serves a signed-in account the signed-out page, so a
+    // stated reason above never stands in for the session.
     for (const route of routes) {
-      if (PUBLIC_BY_DESIGN[route]) continue;
       expect(
         covers(sessionPatterns, route),
-        `${route} is protected but gets no identity session`,
+        `${route} reads the identity but gets no identity session`,
       ).toBe(true);
     }
   });
