@@ -26,6 +26,7 @@ type ScanModule6 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-h
 type ScanModule7 = typeof import('@/lib/server/free-pools');
 type ScanModule8 =
   typeof import('@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence');
+type ScanModule9 = typeof import('@/lib/server/free-quota-catalogue-cache');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -40,6 +41,10 @@ const mocks = vi.hoisted(() => ({
   spendOnCapacityShortage: null as boolean | null,
 }));
 
+vi.mock('@/lib/server/free-quota-catalogue-cache', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule9>()),
+  expireFreeQuotaCatalogue: vi.fn(),
+}));
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   getKeyValueStore: () => mocks.store,

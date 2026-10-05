@@ -284,6 +284,7 @@ const FREE_LIMIT_HEADLINE: Readonly<Record<FreeLimitReason, (modelName: string) 
   allowance_used: freeLimitReached,
   allowance_ended: (modelName) => `The free offer for ${modelName} has ended`,
   shared_pool_used: freeLimitReached,
+  daily_limit_reached: () => "Today's free limit reached",
 };
 
 function freeLimitHeadline({ reason, modelName }: FreeLimitRecovery): string {

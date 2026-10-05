@@ -12,6 +12,13 @@ import {
   FREE_QUOTA_CATEGORIES,
   FREE_QUOTA_STATUS_LABELS,
 } from '@/features/models/lib/free-quota-types';
+import {
+  freeMediaAccess,
+  freeMediaOfferNote,
+  freeQuotaCalendarDay,
+  isFreeMediaCategory,
+  limitedFreeMedia,
+} from '@/features/models/lib/free-media-offer';
 import type {
   FreeModelSource,
   FreeModelSources,
@@ -28,6 +35,7 @@ import {
   freeQuotaSelection,
   isExperientialFreeOffering,
 } from '@features/chat/lib/free-quota-selection';
+import { LimitedBadge } from './LimitedBadge';
 
 const PICKER_ROW = { 'data-picker-row': '' };
 const FOCUS_RING_CLASS =
@@ -40,14 +48,9 @@ const GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const POOL_HEADING_CLASS = 'px-3 pb-1 pt-3 text-xs font-medium text-foreground';
 const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
+const LIMITED_NOTE_CLASS = 'px-3 py-2 text-sm leading-5 text-muted-foreground';
 const PROMOTIONAL_DATA_USE =
   'These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
-const CALENDAR_DAY: Intl.DateTimeFormatOptions = {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-};
 
 type PendingAvailability = 'loading' | 'error' | 'unlisted';
 type RowScope = 'list' | 'search';
@@ -80,11 +83,6 @@ function joinIssuers(issuers: readonly string[]): string {
     : (issuers[0] ?? '');
 }
 
-function calendarDay(isoDate: string): string {
-  const date = new Date(`${isoDate}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? isoDate : date.toLocaleDateString(undefined, CALENDAR_DAY);
-}
-
 function readyGuidance(entry: FreeModelEntry, promotional: boolean): string {
   if (promotional) return 'Free promotion · text chat · provider quota applies';
   const { model, label } = entry;
@@ -92,7 +90,7 @@ function readyGuidance(entry: FreeModelEntry, promotional: boolean): string {
     ? 'image chat'
     : FREE_QUOTA_CATEGORIES[model.category].toLowerCase();
   const allocation = model.expiresOn
-    ? `expires ${calendarDay(model.expiresOn)}`
+    ? `expires ${freeQuotaCalendarDay(model.expiresOn)}`
     : 'limited allocation';
   return [label.version, 'Free quota', use, allocation].filter(Boolean).join(' · ');
 }
@@ -106,7 +104,7 @@ function unavailableReason(entry: FreeModelEntry): string {
   const reason = FREE_QUOTA_STATUS_LABELS[status];
   return withVersion(
     entry.label,
-    status === 'expired' && expiresOn ? `${reason} ${calendarDay(expiresOn)}` : reason,
+    status === 'expired' && expiresOn ? `${reason} ${freeQuotaCalendarDay(expiresOn)}` : reason,
   );
 }
 
@@ -143,7 +141,7 @@ function unavailableExplanation(entry: FreeModelEntry, fallbackModelName: string
     return `${issuer}'s free allowance for ${label.displayName} is used up. It is the provider's allowance, not a limit on your account. ${nextStep}`;
   }
   if (model.status === 'expired') {
-    return `${issuer}'s free offer for ${label.displayName} ended${model.expiresOn ? ` on ${calendarDay(model.expiresOn)}` : ''}. ${nextStep}`;
+    return `${issuer}'s free offer for ${label.displayName} ended${model.expiresOn ? ` on ${freeQuotaCalendarDay(model.expiresOn)}` : ''}. ${nextStep}`;
   }
   return `${label.displayName} from ${issuer} is not available right now. ${nextStep}`;
 }
@@ -176,12 +174,14 @@ function ReadyRow({
   entry,
   promotional,
   noteId,
+  limited,
   selected,
   onSelect,
 }: {
   entry: FreeModelEntry;
   promotional: boolean;
   noteId: string | null;
+  limited: boolean;
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
@@ -204,6 +204,7 @@ function ReadyRow({
           {readyGuidance(entry, promotional)}
         </span>
       </span>
+      {limited && <LimitedBadge />}
       {selected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
     </button>
   );
@@ -327,6 +328,7 @@ export function FreeQuotaModelSection({
   const unavailableId = useId();
   const featuredNoteId = useId();
   const moreNoteId = useId();
+  const limitedNoteId = useId();
   const { quota, experiential } = sources;
   if (!fallback && quota.status === 'hidden' && experiential.status === 'hidden') return null;
 
@@ -335,6 +337,12 @@ export function FreeQuotaModelSection({
     (catalogue) => catalogue !== null,
   );
   const view = presentFreeModels(catalogues, { category, selectedId });
+  const limitedMedia =
+    view.category && isFreeMediaCategory(view.category)
+      ? limitedFreeMedia(quota.catalogue, view.category)
+      : null;
+  const limitedOffer =
+    freeMediaAccess({ planIncludes: false, offer: limitedMedia }).label === 'limited';
   const promotionalIssuer = experiential.catalogue?.issuer ?? null;
   const loading = quota.status === 'loading' || experiential.status === 'loading';
   const settled = !loading && quota.status !== 'error' && experiential.status !== 'error';
@@ -394,12 +402,17 @@ export function FreeQuotaModelSection({
 
   const renderEntry = (entry: FreeModelEntry, scope: RowScope, noteId: string | null) => {
     const row = `${scope}:${entry.model.key}`;
+    const limited =
+      limitedOffer &&
+      entry.issuer === quota.catalogue?.issuer &&
+      entry.model.category === view.category;
     return entry.model.status === 'ready' ? (
       <ReadyRow
         key={entry.model.key}
         entry={entry}
         promotional={entry.issuer === promotionalIssuer}
-        noteId={entry.issuer === promotionalIssuer ? noteId : null}
+        noteId={entry.issuer === promotionalIssuer ? noteId : limited ? limitedNoteId : null}
+        limited={limited}
         selected={entry.model.key === selectedId}
         onSelect={onSelect}
       />
@@ -469,6 +482,11 @@ export function FreeQuotaModelSection({
                 ))}
               </select>
             </div>
+          )}
+          {limitedOffer && limitedMedia && (
+            <p id={limitedNoteId} className={LIMITED_NOTE_CLASS}>
+              {freeMediaOfferNote(limitedMedia)}
+            </p>
           )}
           {renderPending('list')}
           {view.pinned && renderEntry(view.pinned, 'list', pinnedNoteId)}

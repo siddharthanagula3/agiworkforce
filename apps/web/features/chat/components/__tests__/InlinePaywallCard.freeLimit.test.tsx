@@ -114,6 +114,28 @@ describe('InlinePaywallCard · free limit variant', () => {
     );
   });
 
+  it('says the daily free limit is reached, when it resets, and which plan lifts it', () => {
+    const props = {
+      ...makeProps(
+        { reason: 'daily_limit_reached', alternativeModel: undefined, onSwitchModel: undefined },
+        'Resets in 3 hr',
+      ),
+      requiredTier: 'pro' as RequiredTier,
+    };
+    render(<InlinePaywallCard {...props} />);
+
+    expect(screen.getByRole('heading')).toHaveTextContent("Today's free limit reached");
+    expect(screen.getByText('Resets in 3 hr')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Switch to/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try later' })).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: new RegExp(`^Upgrade to ${getBillingPlanPricing('pro').label}`),
+      }),
+    );
+    expect(props.onUpgrade).toHaveBeenCalledOnce();
+  });
+
   it('still renders a saved card whose reason this build does not know', () => {
     const reason = 'account_window_used' as FreeLimitRecovery['reason'];
     render(<InlinePaywallCard {...makeProps({ reason })} />);

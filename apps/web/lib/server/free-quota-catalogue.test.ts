@@ -1,9 +1,16 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryKeyValueStore, type KeyValueStore } from '@agiworkforce/key-value';
-import { getProviderOfferings } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_CAPABILITY_TIERS,
+  BILLING_PLAN_PRICING,
+  getProviderOfferings,
+  isFreeBillingPlanTier,
+  type BillingPlanCapability,
+} from '@agiworkforce/types';
 import {
   credentialSha256,
+  minimumTurnUnits,
   recordFreeQuotaHold,
   recordFreeQuotaSuspension,
   reserveFreeQuotaAllowance,
@@ -13,9 +20,13 @@ import {
 } from '@/lib/free-quota-authorization';
 import {
   buildFreeQuotaCatalogue,
+  freeMediaOfferFor,
   freeQuotaContextFor,
+  freeQuotaMediaUseOrder,
+  freeQuotaPlanAdmission,
   isLocalQuotaRequest,
   loadFreeQuotaPolicy,
+  resolveFreeQuotaAlternative,
   resolveFreeQuotaDecisions,
   type FreeQuotaContext,
 } from './free-quota-catalogue';
@@ -109,14 +120,14 @@ function readyKeys(result: Awaited<ReturnType<typeof statuses>>): string[] {
 
 describe('account quota observations', () => {
   it('accounts for every screenshot row without making observations routable', () => {
-    expect(inventory.entries).toHaveLength(272);
+    expect(inventory.entries).toHaveLength(279);
     expect(inventory.entries.filter((entry) => entry.providerStatus === 'active')).toHaveLength(
-      270,
+      277,
     );
     expect(inventory.entries.filter((entry) => entry.providerStatus === 'expired')).toHaveLength(2);
     expect(eligibleFreeEligibility(NOW)).toEqual({});
     const identities = Object.values(getProviderOfferings());
-    expect(identities.filter((entry) => entry.identityStatus === 'unresolved')).toHaveLength(0);
+    expect(identities.filter((entry) => entry.identityStatus === 'unresolved')).toHaveLength(5);
   });
 
   it('rejects incomplete accounting, unknown identities, duplicate rows and invalid quota units', () => {
@@ -483,4 +494,344 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     mocks.storageConfigured.mockReturnValue(true);
     expect(freeQuotaContextFor({ url, userId: 'fixture-user', nowMs: NOW }).mediaServed).toBe(true);
   });
+});
+
+describe('which plan may use a free quota offering, and on which terms', () => {
+  const PLANS = Object.keys(BILLING_PLAN_PRICING);
+  const offer = { dailyCapPerUser: { image: 5, video: 1 } };
+  const planHas = (plan: string, capability: BillingPlanCapability) =>
+    (BILLING_PLAN_CAPABILITY_TIERS[capability] as readonly string[]).includes(plan);
+
+  it('keeps every plan exactly where it was while the limited offer is not configured', () => {
+    for (const plan of PLANS) {
+      expect(freeQuotaPlanAdmission(plan, 'chat', undefined), plan).toEqual(
+        isFreeBillingPlanTier(plan) ? { terms: 'included' } : null,
+      );
+      expect(freeQuotaPlanAdmission(plan, 'image', undefined), plan).toEqual(
+        planHas(plan, 'image_generation') ? { terms: 'included' } : null,
+      );
+      expect(freeQuotaPlanAdmission(plan, 'video', undefined), plan).toEqual(
+        planHas(plan, 'video_generation') ? { terms: 'included' } : null,
+      );
+    }
+  });
+
+  it('admits a managed cloud plan without the paid capability on limited terms, and no other', () => {
+    const limited: string[] = [];
+    for (const plan of PLANS) {
+      const withoutOffer = {
+        image: freeQuotaPlanAdmission(plan, 'image', undefined),
+        video: freeQuotaPlanAdmission(plan, 'video', undefined),
+      };
+      for (const category of ['image', 'video'] as const) {
+        const admission = freeQuotaPlanAdmission(plan, category, offer);
+        if (withoutOffer[category]) {
+          expect(admission, `${plan} ${category}`).toEqual({ terms: 'included' });
+        } else if (!planHas(plan, 'managed_chat')) {
+          expect(admission, `${plan} ${category}`).toBeNull();
+        } else {
+          limited.push(`${plan} ${category}`);
+          expect(admission, `${plan} ${category}`).toEqual({
+            terms: 'limited',
+            category,
+            dailyCap: offer.dailyCapPerUser[category],
+          });
+        }
+      }
+      expect(freeQuotaPlanAdmission(plan, 'chat', offer), plan).toEqual(
+        freeQuotaPlanAdmission(plan, 'chat', undefined),
+      );
+      expect(freeQuotaPlanAdmission(plan, 'audio', offer), plan).toBeNull();
+    }
+    expect(limited).toContain('free image');
+    expect(limited).toContain('free video');
+    expect(PLANS.filter((plan) => !planHas(plan, 'managed_chat')).length).toBeGreaterThan(0);
+    expect(freeQuotaPlanAdmission(null, 'image', offer)).toBeNull();
+    expect(freeQuotaPlanAdmission('not-a-plan', 'video', offer)).toBeNull();
+  });
+
+  it('treats a cap of zero as no offer for that kind', () => {
+    const imagesOnly = { dailyCapPerUser: { image: 5, video: 0 } };
+    expect(freeQuotaPlanAdmission('free', 'image', imagesOnly)?.terms).toBe('limited');
+    expect(freeQuotaPlanAdmission('free', 'video', imagesOnly)).toBeNull();
+  });
+});
+
+describe('which free media offering is used first', () => {
+  const CATEGORIES = ['image', 'video'] as const;
+  const ENDS_SOONER = '2026-10-01';
+  const ENDS_LATER = '2026-10-10';
+  const LAST_DAY_SERVED = '2026-10-09';
+  const ENDS_LATEST_FIRST = [ENDS_LATER, '2026-10-05', ENDS_SOONER];
+  type Row = (typeof inventory.entries)[number];
+
+  async function mediaDecisions(
+    options: { rows?: readonly Row[]; store?: KeyValueStore; nowMs?: number } = {},
+  ) {
+    const nowMs = options.nowMs ?? NOW;
+    const store = await attested(options.store ?? createMemoryKeyValueStore(), {
+      checkedAtMs: nowMs - 60_000,
+    });
+    const decisions = await resolveFreeQuotaDecisions(
+      context({ store, mediaServed: true, nowMs }),
+      {
+        inventory: options.rows
+          ? { ...reviewedInventory, entries: [...options.rows] }
+          : reviewedInventory,
+      },
+    );
+    return decisions!;
+  }
+
+  async function interchangeableRows(category: (typeof CATEGORIES)[number]): Promise<Row[]> {
+    const ready = (await mediaDecisions()).offerings.filter(
+      ({ offering, decision }) =>
+        decision.status === 'ready' && offering.category === category && !offering.retiresAt,
+    );
+    const rows = ready
+      .filter(
+        ({ offering }) => offering.quotaProbeProtocol === ready[0]!.offering.quotaProbeProtocol,
+      )
+      .map(({ entry }) => entry)
+      .slice(0, 3);
+    expect(rows.length, category).toBeGreaterThan(1);
+    return rows;
+  }
+
+  function allowanceFor(row: Row, turns: number): Row {
+    const perTurn = minimumTurnUnits(getProviderOfferings()[row.offeringKey]!, policy);
+    return { ...row, limit: perTurn * turns, consumedApproximate: 0 };
+  }
+
+  function endsOn(key: string): string {
+    const offering = getProviderOfferings()[key]!;
+    const allocationEnds = inventory.entries.find((row) => row.offeringKey === key)!.expiresOn!;
+    const retiresOn = offering.retiresAt?.slice(0, 10);
+    return retiresOn && retiresOn < allocationEnds ? retiresOn : allocationEnds;
+  }
+
+  it('orders ready image and video offerings by the allowance that expires soonest', async () => {
+    const decisions = await mediaDecisions();
+    const order = freeQuotaMediaUseOrder(decisions);
+    const ready = decisions.offerings.filter(
+      ({ offering, decision }) =>
+        decision.status === 'ready' && ['image', 'video'].includes(offering.category),
+    );
+
+    expect(order.length).toBeGreaterThan(1);
+    expect([...order].sort()).toEqual(ready.map(({ entry }) => entry.offeringKey).sort());
+    const ends = order.map(endsOn);
+    expect(ends).toEqual([...ends].sort());
+    expect(buildFreeQuotaCatalogue(decisions).mediaUseOrder).toEqual(order);
+  });
+
+  it.each(CATEGORIES)(
+    'puts the %s offering that ends sooner first, however much allowance a later one has',
+    async (category) => {
+      const [first, second] = await interchangeableRows(category);
+      const rows = [
+        { ...allowanceFor(first!, 200), expiresOn: ENDS_LATER },
+        { ...allowanceFor(second!, 100), expiresOn: ENDS_SOONER },
+      ];
+
+      expect(freeQuotaMediaUseOrder(await mediaDecisions({ rows }))).toEqual([
+        second!.offeringKey,
+        first!.offeringKey,
+      ]);
+    },
+  );
+
+  it.each(CATEGORIES)(
+    'breaks a tie on the %s expiry date by the most allowance left',
+    async (category) => {
+      const [first, second] = await interchangeableRows(category);
+      const rows = [
+        { ...allowanceFor(first!, 100), expiresOn: ENDS_LATER },
+        { ...allowanceFor(second!, 200), expiresOn: ENDS_LATER },
+      ];
+      const store = createMemoryKeyValueStore();
+      const before = await mediaDecisions({ rows, store });
+      const left = new Map(
+        before.offerings.map(
+          ({ entry, decision }) =>
+            [
+              entry.offeringKey,
+              decision.status === 'ready' ? decision.usable - decision.used : 0,
+            ] as const,
+        ),
+      );
+
+      expect(freeQuotaMediaUseOrder(before)).toEqual([second!.offeringKey, first!.offeringKey]);
+
+      const perTurn = minimumTurnUnits(getProviderOfferings()[second!.offeringKey]!, policy);
+      await reserveFreeQuotaAllowance(store, {
+        apiKey: API_KEY,
+        observedOn: inventory.observedOn,
+        offeringKey: second!.offeringKey,
+        expiresOn: ENDS_LATER,
+        units: left.get(second!.offeringKey)! - left.get(first!.offeringKey)! + perTurn,
+        usable: left.get(second!.offeringKey)!,
+        nowMs: NOW,
+      });
+
+      expect(freeQuotaMediaUseOrder(await mediaDecisions({ rows, store }))).toEqual([
+        first!.offeringKey,
+        second!.offeringKey,
+      ]);
+    },
+  );
+
+  it.each(CATEGORIES)(
+    'offers the soonest-ending ready %s offering left as the alternative',
+    async (category) => {
+      const listed = await interchangeableRows(category);
+      const rows = listed.map((row, index) => ({
+        ...allowanceFor(row, 100),
+        expiresOn: ENDS_LATEST_FIRST[index]!,
+      }));
+      const soonestFirst = [...listed].reverse().map((row) => row.offeringKey);
+      const store = await attested(createMemoryKeyValueStore());
+
+      expect(freeQuotaMediaUseOrder(await mediaDecisions({ rows, store }))).toEqual(soonestFirst);
+      const alternative = await resolveFreeQuotaAlternative(context({ store, mediaServed: true }), {
+        inventory: { ...reviewedInventory, entries: rows },
+        refusedKey: soonestFirst[0]!,
+        needsImageInput: false,
+      });
+      expect(alternative).toBe(soonestFirst[1]);
+    },
+  );
+
+  it.each(CATEGORIES)(
+    'reports the limited %s offer only while it is configured and an offering is ready, with the last UTC day one is served',
+    async (category) => {
+      const [first, second] = await interchangeableRows(category);
+      const rows = [
+        { ...allowanceFor(first!, 100), expiresOn: ENDS_LATER },
+        { ...allowanceFor(second!, 100), expiresOn: ENDS_SOONER },
+      ];
+      const catalogue = buildFreeQuotaCatalogue(await mediaDecisions({ rows }));
+      const offer = { dailyCapPerUser: { image: 5, video: 1 } };
+
+      expect(freeMediaOfferFor(catalogue, offer, category)).toEqual({ lastDay: LAST_DAY_SERVED });
+      const endOfLastDay = Date.parse(`${LAST_DAY_SERVED}T23:59:59.999Z`);
+      const statusAt = async (nowMs: number) =>
+        (await mediaDecisions({ rows, nowMs })).offerings.find(
+          ({ entry }) => entry.offeringKey === first!.offeringKey,
+        )!.decision.status;
+      expect(await statusAt(endOfLastDay)).toBe('ready');
+      expect(await statusAt(endOfLastDay + 1)).toBe('expired');
+
+      expect(freeMediaOfferFor(catalogue, undefined, category)).toBeNull();
+      expect(
+        freeMediaOfferFor(catalogue, { dailyCapPerUser: { image: 0, video: 0 } }, category),
+      ).toBeNull();
+      expect(freeMediaOfferFor(null, offer, category)).toBeNull();
+
+      const unattested = buildFreeQuotaCatalogue(
+        (await resolveFreeQuotaDecisions(context({ mediaServed: true }), {
+          inventory: { ...reviewedInventory, entries: rows },
+        }))!,
+      );
+      expect(freeMediaOfferFor(unattested, offer, category)).toBeNull();
+    },
+  );
+});
+
+describe('how a free image or video offering is described and matched', () => {
+  type Row = (typeof inventory.entries)[number];
+  type Protocol = NonNullable<ReturnType<typeof protocolOf>>;
+
+  function protocolOf(key: string) {
+    return getProviderOfferings()[key]!.quotaProbeProtocol;
+  }
+
+  async function served(rows?: readonly Row[]) {
+    const decisions = await resolveFreeQuotaDecisions(
+      context({ store: await attested(createMemoryKeyValueStore()), mediaServed: true }),
+      { inventory: rows ? { ...reviewedInventory, entries: [...rows] } : reviewedInventory },
+    );
+    return decisions!;
+  }
+
+  async function readyRows(protocol: Protocol): Promise<Row[]> {
+    const rows = (await served()).offerings
+      .filter(
+        ({ entry, decision }) =>
+          decision.status === 'ready' && protocolOf(entry.offeringKey) === protocol,
+      )
+      .map(({ entry }) => entry);
+    expect(rows.length, protocol).toBeGreaterThan(0);
+    return rows;
+  }
+
+  it('gives each video its own size and clip length and each image its own size', async () => {
+    const { models } = buildFreeQuotaCatalogue(await served());
+    const described = new Map<Protocol, number>();
+    const clipLengths = new Set<number>();
+
+    for (const model of models) {
+      const offering = getProviderOfferings()[model.key]!;
+      const protocol = offering.quotaProbeProtocol;
+      if (protocol === 'video-async') {
+        expect(model.outputSize, model.key).toBe(
+          offering.quotaVideoSize ?? `${offering.quotaVideoResolution} ${offering.quotaVideoRatio}`,
+        );
+        expect(model.durationSeconds, model.key).toBe(offering.quotaVideoSeconds);
+        clipLengths.add(model.durationSeconds!);
+      } else if (protocol === 'image-sync' || protocol === 'image-async') {
+        expect(model.outputSize, model.key).toBe(offering.quotaImageSize);
+        expect(model, model.key).not.toHaveProperty('durationSeconds');
+      } else {
+        expect(model, model.key).not.toHaveProperty('outputSize');
+        expect(model, model.key).not.toHaveProperty('durationSeconds');
+      }
+      if (protocol) described.set(protocol, (described.get(protocol) ?? 0) + 1);
+    }
+
+    expect(described.get('video-async')).toBeGreaterThan(0);
+    expect(described.get('image-sync')).toBeGreaterThan(0);
+    expect(described.get('image-async')).toBeGreaterThan(0);
+    expect(clipLengths.size).toBeGreaterThan(1);
+    expect([...clipLengths]).not.toContain(policy.videoSeconds);
+  });
+
+  it('lists an image offering the provider answers through a polled task as a ready image', async () => {
+    const rows = await readyRows('image-async');
+    const decisions = await served(rows);
+    const catalogue = buildFreeQuotaCatalogue(decisions);
+
+    for (const model of catalogue.models) {
+      expect(model, model.key).toMatchObject({
+        category: 'image',
+        unit: 'images',
+        status: 'ready',
+        outputSize: getProviderOfferings()[model.key]!.quotaImageSize,
+      });
+    }
+    expect([...catalogue.mediaUseOrder!].sort()).toEqual(rows.map((row) => row.offeringKey).sort());
+    expect(
+      freeMediaOfferFor(catalogue, { dailyCapPerUser: { image: 5, video: 1 } }, 'image'),
+    ).not.toBeNull();
+  });
+
+  it.each([
+    ['image-sync', 'image-async'],
+    ['image-async', 'image-sync'],
+  ] as const)(
+    'offers a ready %s image as the alternative to a refused %s one',
+    async (offered, refused) => {
+      const [alternative] = await readyRows(offered);
+      const [refusedRow] = await readyRows(refused);
+      const store = await attested(createMemoryKeyValueStore());
+
+      expect(
+        await resolveFreeQuotaAlternative(context({ store, mediaServed: true }), {
+          inventory: { ...reviewedInventory, entries: [refusedRow!, alternative!] },
+          refusedKey: refusedRow!.offeringKey,
+          needsImageInput: false,
+        }),
+      ).toBe(alternative!.offeringKey);
+    },
+  );
 });

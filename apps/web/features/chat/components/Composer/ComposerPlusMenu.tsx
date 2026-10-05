@@ -11,7 +11,7 @@
  * reaches the skill, folder and plugin catalogs the account already has.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Brain,
@@ -62,7 +62,13 @@ import {
   CHAT_OUTPUT_FORMAT_LABEL,
   type ChatOutputFormat,
 } from '@/lib/chat-output-format';
+import {
+  FREE_MEDIA_LIMITED_LABEL,
+  freeMediaAccess,
+  type FreeMediaAccess,
+} from '@/features/models/lib/free-media-offer';
 import { ConnectorToggleRow } from './ConnectorToggleRow';
+import { LimitedBadge } from './LimitedBadge';
 import {
   COMPOSER_FILES_ATTACH_FAILED_COPY,
   COMPOSER_FILES_ATTACH_LABEL_PREFIX,
@@ -170,6 +176,7 @@ const BADGE_MUTED_CLASS = 'bg-muted text-muted-foreground';
 const BADGE_UPGRADE_CLASS = 'bg-primary/10 text-primary';
 const DIVIDER_CLASS = 'my-1 border-t border-border/30';
 const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 ps-10 text-caption text-muted-foreground';
+const MEDIA_OFFER_NOTE_CLASS = 'px-3 pb-1 ps-10 text-sm text-muted-foreground';
 const SECTION_HEADING_CLASS =
   'px-3 pb-1 pt-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =
@@ -225,7 +232,8 @@ interface MediaGate {
   billingPolicyError: boolean;
   availabilityStatus: MediaAvailabilityStatus;
   modelsAvailable: boolean;
-  entitled: boolean;
+  access: FreeMediaAccess;
+  offerChecking: boolean;
   noun: string;
   entitlementHint: string;
 }
@@ -233,6 +241,11 @@ interface MediaGate {
 interface MediaBadge {
   label: string;
   upgrade: boolean;
+  limited?: boolean;
+}
+
+function mediaAccess(access: FreeMediaAccess | undefined, planIncludes: boolean): FreeMediaAccess {
+  return access ?? freeMediaAccess({ planIncludes, offer: null });
 }
 
 function titleCase(value: string): string {
@@ -248,8 +261,10 @@ function mediaGateTitle(gate: MediaGate): string | undefined {
     return `${titleCase(gate.noun)} provider availability could not be checked. Click to retry.`;
   }
   if (!gate.modelsAvailable) return `This deployment is not ready for ${gate.noun} generation.`;
-  if (!gate.entitled) return gate.entitlementHint;
-  return undefined;
+  if (gate.access.label !== 'upgrade') return undefined;
+  return gate.offerChecking
+    ? `Checking ${gate.noun} generation for your plan.`
+    : gate.entitlementHint;
 }
 
 function mediaGateBadge(gate: MediaGate): MediaBadge | null {
@@ -262,11 +277,19 @@ function mediaGateBadge(gate: MediaGate): MediaBadge | null {
       upgrade: false,
     };
   }
-  if (!gate.entitled) return { label: BADGE_UPGRADE, upgrade: true };
+  if (gate.access.label === 'limited') {
+    return { label: FREE_MEDIA_LIMITED_LABEL, upgrade: false, limited: true };
+  }
+  if (gate.access.label === 'upgrade') {
+    return gate.offerChecking
+      ? { label: BADGE_CHECKING, upgrade: false }
+      : { label: BADGE_UPGRADE, upgrade: true };
+  }
   return null;
 }
 
 function RowBadge({ badge }: { badge: MediaBadge }) {
+  if (badge.limited) return <LimitedBadge />;
   return (
     <span className={cn(BADGE_BASE_CLASS, badge.upgrade ? BADGE_UPGRADE_CLASS : BADGE_MUTED_CLASS)}>
       {badge.label}
@@ -528,12 +551,17 @@ export interface ComposerPlusMenuProps {
   hostCanGenerateImage: boolean;
   imageModelsAvailable: boolean;
   canUseImageGeneration: boolean;
+  imageAccess?: FreeMediaAccess;
+  imageOfferNote?: string | null;
+  freeMediaOfferChecking?: boolean;
   imageMode: boolean;
   onCreateImage: () => void;
 
   hostCanGenerateVideo: boolean;
   videoModelsAvailable: boolean;
   canUseVideoGeneration: boolean;
+  videoAccess?: FreeMediaAccess;
+  videoOfferNote?: string | null;
   videoMode: boolean;
   onCreateVideo: () => void;
 
@@ -635,25 +663,36 @@ function ImageRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
     billingPolicyError: props.billingPolicyError,
     availabilityStatus: props.mediaAvailabilityStatus,
     modelsAvailable: props.imageModelsAvailable,
-    entitled: props.canUseImageGeneration,
+    access: mediaAccess(props.imageAccess, props.canUseImageGeneration),
+    offerChecking: props.freeMediaOfferChecking === true,
     noun: 'image',
     entitlementHint: IMAGE_ENTITLEMENT_HINT,
   };
   const badge = mediaGateBadge(gate);
+  const note = badge?.limited ? (props.imageOfferNote ?? null) : null;
+  const noteId = useId();
   return (
-    <button
-      type="button"
-      role={role}
-      onClick={props.onCreateImage}
-      title={mediaGateTitle(gate)}
-      className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.imageMode && 'text-primary')}
-    >
-      <ImagePlus
-        className={cn(GLYPH_CLASS, props.imageMode ? 'text-primary' : 'text-muted-foreground')}
-      />
-      <span className="flex-1 text-start">{ROW_LABEL_IMAGE}</span>
-      {badge && <RowBadge badge={badge} />}
-    </button>
+    <>
+      <button
+        type="button"
+        role={role}
+        onClick={props.onCreateImage}
+        title={mediaGateTitle(gate)}
+        aria-describedby={note ? noteId : undefined}
+        className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.imageMode && 'text-primary')}
+      >
+        <ImagePlus
+          className={cn(GLYPH_CLASS, props.imageMode ? 'text-primary' : 'text-muted-foreground')}
+        />
+        <span className="flex-1 text-start">{ROW_LABEL_IMAGE}</span>
+        {badge && <RowBadge badge={badge} />}
+      </button>
+      {note && (
+        <p id={noteId} className={MEDIA_OFFER_NOTE_CLASS}>
+          {note}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -663,25 +702,36 @@ function VideoRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
     billingPolicyError: props.billingPolicyError,
     availabilityStatus: props.mediaAvailabilityStatus,
     modelsAvailable: props.videoModelsAvailable,
-    entitled: props.canUseVideoGeneration,
+    access: mediaAccess(props.videoAccess, props.canUseVideoGeneration),
+    offerChecking: props.freeMediaOfferChecking === true,
     noun: 'video',
     entitlementHint: VIDEO_ENTITLEMENT_HINT,
   };
   const badge = mediaGateBadge(gate);
+  const note = badge?.limited ? (props.videoOfferNote ?? null) : null;
+  const noteId = useId();
   return (
-    <button
-      type="button"
-      role={role}
-      onClick={props.onCreateVideo}
-      title={mediaGateTitle(gate)}
-      className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.videoMode && 'text-primary')}
-    >
-      <Video
-        className={cn(GLYPH_CLASS, props.videoMode ? 'text-primary' : 'text-muted-foreground')}
-      />
-      <span className="flex-1 text-start">{ROW_LABEL_VIDEO}</span>
-      {badge && <RowBadge badge={badge} />}
-    </button>
+    <>
+      <button
+        type="button"
+        role={role}
+        onClick={props.onCreateVideo}
+        title={mediaGateTitle(gate)}
+        aria-describedby={note ? noteId : undefined}
+        className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.videoMode && 'text-primary')}
+      >
+        <Video
+          className={cn(GLYPH_CLASS, props.videoMode ? 'text-primary' : 'text-muted-foreground')}
+        />
+        <span className="flex-1 text-start">{ROW_LABEL_VIDEO}</span>
+        {badge && <RowBadge badge={badge} />}
+      </button>
+      {note && (
+        <p id={noteId} className={MEDIA_OFFER_NOTE_CLASS}>
+          {note}
+        </p>
+      )}
+    </>
   );
 }
 

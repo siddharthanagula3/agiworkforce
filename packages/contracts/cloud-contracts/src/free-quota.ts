@@ -10,12 +10,14 @@ export const FREE_QUOTA_COMPLETIONS_PATH = '/api/models/free-quota/completions';
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_QUOTA_EXPIRED_CODE = 'free_quota_expired';
 export const FREE_ALLOWANCE_EXHAUSTED_CODE = 'free_allowance_exhausted';
+export const FREE_QUOTA_DAILY_LIMIT_CODE = 'free_quota_daily_limit';
 export const FREE_QUOTA_FALLBACK_REQUEST_KEY = 'x_free_quota_fallback' as const;
 
 export const FREE_LIMIT_REASONS = [
   'allowance_used',
   'allowance_ended',
   'shared_pool_used',
+  'daily_limit_reached',
 ] as const;
 
 export const FreeLimitSchema = z.object({
@@ -141,6 +143,15 @@ export const FreeQuotaModelSchema = z.object({
   durationSeconds: z.number().optional(),
 });
 
+export const FREE_QUOTA_MEDIA_CATEGORIES = ['image', 'video'] as const;
+
+export const FreeQuotaLimitedOfferSchema = z.object({
+  category: z.enum(FREE_QUOTA_MEDIA_CATEGORIES),
+  dailyCap: z.number().int().positive(),
+  remainingToday: z.number().int().nonnegative(),
+  resetsAt: z.string().datetime({ offset: true }),
+});
+
 export const FreeQuotaCatalogueSchema = z.object({
   issuer: z.string().min(1),
   observedOn: z.string().min(1),
@@ -148,11 +159,23 @@ export const FreeQuotaCatalogueSchema = z.object({
   reportedEligible: z.number().int().nonnegative(),
   reportedUnavailable: z.number().int().nonnegative(),
   models: z.array(FreeQuotaModelSchema),
+  mediaUseOrder: z.array(z.string().min(1)).optional(),
+  limitedOffer: z.array(FreeQuotaLimitedOfferSchema).optional(),
+});
+
+export const FREE_QUOTA_MEDIA_OFFER_PATH = '/api/models/free-quota/media-offer';
+
+export const FreeQuotaMediaOfferSchema = z.object({
+  image: z.object({ lastDay: z.string().date().nullable() }).nullable(),
+  video: z.object({ lastDay: z.string().date().nullable() }).nullable(),
 });
 
 export type FreeQuotaStatus = z.infer<typeof FreeQuotaModelSchema>['status'];
 export type FreeQuotaModel = z.infer<typeof FreeQuotaModelSchema>;
 export type FreeQuotaCatalogue = z.infer<typeof FreeQuotaCatalogueSchema>;
+export type FreeQuotaMediaCategory = (typeof FREE_QUOTA_MEDIA_CATEGORIES)[number];
+export type FreeQuotaLimitedOffer = z.infer<typeof FreeQuotaLimitedOfferSchema>;
+export type FreeQuotaMediaOffer = z.infer<typeof FreeQuotaMediaOfferSchema>;
 
 export const FREE_QUOTA_ATTESTATION_PATH = '/api/models/free-quota/attestation';
 
@@ -171,6 +194,7 @@ export const FREE_QUOTA_UNAVAILABLE_REASONS = [
   'attestation_excludes_offering',
   'managed_route_shares_allowance',
   'provider_withdrawn',
+  'provider_refused',
 ] as const;
 
 export const FREE_QUOTA_BLOCKED_OUTCOMES = [
@@ -188,7 +212,12 @@ export const FREE_QUOTA_ATTESTATION_STANDINGS = [
   'billing_signal',
 ] as const;
 
-export const FREE_QUOTA_WITHDRAWAL_CAUSES = ['exhausted', 'billing', 'withdrawn'] as const;
+export const FREE_QUOTA_WITHDRAWAL_CAUSES = [
+  'exhausted',
+  'billing',
+  'withdrawn',
+  'refused',
+] as const;
 
 export const FREE_QUOTA_TERMS_REVIEW_STANDINGS = [
   'current',

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, after, type NextRequest } from 'next/server';
 import type { KeyValueStore } from '@agiworkforce/key-value';
 import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 import { runQwenQuotaProbe, streamQwenQuotaChat } from '@agiworkforce/providers-factory';
@@ -15,6 +15,8 @@ import {
 import {
   getModelMetadataById,
   getProviderOffering,
+  getProviderOfferingMediaRequestUnits,
+  getProviderOfferingQuotaUnit,
   MANAGED_MEMORY_CITATIONS_HEADER,
   type ProviderOffering,
 } from '@agiworkforce/types';
@@ -47,25 +49,35 @@ import {
 import { loadFreePools, type FreeQuotaInventory } from '@/lib/server/free-pools';
 import {
   freeQuotaContextFor,
-  freeQuotaPlanAllowsOffering,
+  freeQuotaPlanAdmission,
   resolveFreeQuotaAlternative,
   resolveFreeQuotaDecisions,
 } from '@/lib/server/free-quota-catalogue';
+import { expireFreeQuotaCatalogue } from '@/lib/server/free-quota-catalogue-cache';
 import {
   classifyFreeQuotaRefusal,
   claimFreeQuotaTurn,
+  freeQuotaDayResetsAtMs,
   freeQuotaEndsOn,
+  readFreeQuotaDailyUse,
   recordFreeQuotaHold,
   recordFreeQuotaSuspension,
+  releaseFreeQuotaDailyUse,
   reserveFreeQuotaAllowance,
+  reserveFreeQuotaDailyUse,
   settleFreeQuotaAllowance,
   type AllowanceReservation,
+  type DailyUseReservation,
   type FreeQuotaDecision,
   type FreeQuotaHoldCause,
   type FreeQuotaPolicy,
   type FreeQuotaRefusal,
 } from '@/lib/free-quota-authorization';
-import { freeQuotaFailure, type FreeQuotaFailure } from '@/features/models/lib/free-quota-copy';
+import {
+  freeQuotaFailure,
+  type FreeQuotaFailure,
+  type FreeQuotaFailureContext,
+} from '@/features/models/lib/free-quota-copy';
 import { bytesFromUrl } from '@/lib/server/media-storage';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
@@ -138,12 +150,15 @@ const FREE_LIMIT_REASON: Readonly<Partial<Record<FreeQuotaFailure, FreeLimitReas
   expired: 'allowance_ended',
 };
 
-interface CopyContext {
-  issuer: string;
-  modelName: string;
-  alternativeName: string | null;
-  expiresOn: string | null;
+function withdrawsOffering(kind: FreeQuotaRefusal): boolean {
+  return HOLD_BY_REFUSAL[kind] !== undefined || kind === 'account_billing';
 }
+
+function generatedNothing(kind: FreeQuotaRefusal): boolean {
+  return withdrawsOffering(kind) || kind === 'busy';
+}
+
+type CopyContext = FreeQuotaFailureContext;
 
 function refuse(failure: FreeQuotaFailure, context: CopyContext, freeLimit?: FreeLimit) {
   const body = freeQuotaFailure(failure, context);
@@ -235,10 +250,54 @@ interface TurnLedger {
   apiKey: string;
   offeringKey: string;
   allowance: AllowanceReservation;
+  expireCatalogue: () => void;
+}
+
+function expireCatalogueNow(): void {
+  try {
+    expireFreeQuotaCatalogue();
+  } catch (error) {
+    logger.warn(
+      { error },
+      '[free-quota] the cached catalogue could not be expired; a held model stays listed until the cache ages',
+    );
+  }
+}
+
+interface DeferredCatalogueExpiry {
+  expireCatalogue: () => void;
+  turnSettled: () => void;
+}
+
+// Next applies a tag expiry once, when the route handler returns. One requested
+// while the response body streams is queued and never applied, so it waits for
+// after(), which runs its own revalidation pass once the response has closed. A
+// reader who leaves closes the response before the stream has settled, so the
+// task waits for the settlement that decides whether an expiry is due.
+function expireCatalogueAfterResponse(): DeferredCatalogueExpiry {
+  let due = false;
+  let turnSettled = (): void => undefined;
+  const settlement = new Promise<void>((resolve) => {
+    turnSettled = resolve;
+  });
+  try {
+    after(async () => {
+      await settlement;
+      if (due) expireCatalogueNow();
+    });
+  } catch {
+    return { expireCatalogue: expireCatalogueNow, turnSettled };
+  }
+  return {
+    expireCatalogue: () => {
+      due = true;
+    },
+    turnSettled,
+  };
 }
 
 async function recordRefusal(
-  ledger: Pick<TurnLedger, 'store' | 'apiKey' | 'offeringKey'>,
+  ledger: Omit<TurnLedger, 'allowance'>,
   refusal: { kind: FreeQuotaRefusal; signal: string },
 ): Promise<void> {
   const nowMs = Date.now();
@@ -250,6 +309,7 @@ async function recordRefusal(
       cause,
       nowMs,
     });
+    ledger.expireCatalogue();
     if (refusal.kind === 'billing') {
       logger.error(
         { offering: ledger.offeringKey, signal: refusal.signal },
@@ -263,6 +323,7 @@ async function recordRefusal(
       signal: refusal.signal,
       nowMs,
     });
+    ledger.expireCatalogue();
     logger.error(
       { offering: ledger.offeringKey, signal: refusal.signal },
       '[free-quota] provider reported an account billing state; every free model is withdrawn until a newer attestation',
@@ -298,6 +359,7 @@ function meteredChatStream(
   source: ReadableStream<Uint8Array>,
   ledger: TurnLedger,
   copy: CopyContext,
+  turnSettled: () => void,
 ): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -311,12 +373,16 @@ function meteredChatStream(
   const settle = async (outcome: TurnSettlement['outcome']) => {
     if (settled) return;
     settled = true;
-    await settleTurn(ledger, {
-      outcome,
-      consumedUnits: usage ? usage.totalTokens : null,
-      usage,
-      refusal,
-    });
+    try {
+      await settleTurn(ledger, {
+        outcome,
+        consumedUnits: usage ? usage.totalTokens : null,
+        usage,
+        refusal,
+      });
+    } finally {
+      turnSettled();
+    }
   };
 
   const rewrite = (line: string): string => {
@@ -481,8 +547,8 @@ function turnUnits(
   messages: PreparedChatMessage[],
   replyTokens: number,
 ): number {
-  if (offering.quotaProbeProtocol === 'image-sync') return 1;
-  if (offering.quotaProbeProtocol === 'video-async') return policy.videoSeconds;
+  const mediaUnits = getProviderOfferingMediaRequestUnits(offering, policy.videoSeconds);
+  if (mediaUnits !== null) return mediaUnits;
   const multiplier = offering.quotaThinkingRequired ? THINKING_BUDGET_MULTIPLIER : 1;
   const imageCount = messages.reduce(
     (total, message) =>
@@ -531,7 +597,7 @@ export async function serveFreeQuotaTurn(
   body: FreeOfferingRequest,
   fallbackFor?: FreeQuotaFallbackTurn,
 ): Promise<Response> {
-  const inventory = loadFreePools().inventory;
+  const { inventory, limitedMediaOffer } = loadFreePools();
   const baseCopy = baseCopyFor(inventory);
   if (!inventory) return refuse('unavailable', baseCopy);
   if (freeOfferingRequiresWebAccess(body)) {
@@ -561,7 +627,8 @@ export async function serveFreeQuotaTurn(
   const resolved = decisions?.offerings[0];
   if (!resolved) return refuse('unavailable', baseCopy);
   const { entry, offering, decision } = resolved;
-  if (!freeQuotaPlanAllowsOffering(planTier, offering.category)) return refuse('plan', baseCopy);
+  const admission = freeQuotaPlanAdmission(planTier, offering.category, limitedMediaOffer);
+  if (!admission) return refuse('plan', baseCopy);
   const latestUserIndex = body.messages.findLastIndex((message) => message.role === 'user');
   const hasAttachmentReferences = body.messages.some(
     (message) =>
@@ -627,6 +694,37 @@ export async function serveFreeQuotaTurn(
   }
   const store = context.store;
   if (!store) return refuse('unavailable', copy);
+
+  const dailyLimit =
+    admission.terms === 'limited'
+      ? { userId: scoped.userId, category: admission.category, cap: admission.dailyCap }
+      : null;
+  const refuseDailyLimit = ({ category, cap }: NonNullable<typeof dailyLimit>) => {
+    const resetsAtMs = freeQuotaDayResetsAtMs(context.nowMs);
+    logger.info(
+      { userId: scoped.userId, offering: entry.offeringKey, category },
+      '[free-quota] daily free limit reached; refused before any provider request',
+    );
+    return refuse(
+      'daily_limit',
+      { ...copy, alternativeName: null, dailyLimit: { category, cap, resetsAtMs } },
+      {
+        model: entry.offeringKey,
+        reason: 'daily_limit_reached',
+        resets_at: new Date(resetsAtMs).toISOString(),
+      },
+    );
+  };
+  if (dailyLimit) {
+    let usedToday: number;
+    try {
+      usedToday = await readFreeQuotaDailyUse(store, { ...dailyLimit, nowMs: context.nowMs });
+    } catch (error) {
+      logger.error({ error, offering: entry.offeringKey }, '[free-quota] daily use unreadable');
+      return refuse('unavailable', copy);
+    }
+    if (usedToday >= dailyLimit.cap) return refuseDailyLimit(dailyLimit);
+  }
 
   const [conversation] = await scoped.db.query<{
     id: string;
@@ -812,6 +910,28 @@ export async function serveFreeQuotaTurn(
   if (claimed === null) return refuse('unavailable', copy);
   if (!claimed) return refuse('duplicate', copy);
 
+  let dailyUse: DailyUseReservation | null = null;
+  if (dailyLimit) {
+    try {
+      dailyUse = await reserveFreeQuotaDailyUse(store, { ...dailyLimit, nowMs: context.nowMs });
+    } catch (error) {
+      logger.error({ error, offering: entry.offeringKey }, '[free-quota] daily use unwritable');
+      return refuse('unavailable', copy);
+    }
+    if (!dailyUse) return refuseDailyLimit(dailyLimit);
+  }
+  const releaseDailyUse = async () => {
+    if (!dailyUse) return;
+    try {
+      await releaseFreeQuotaDailyUse(store, dailyUse);
+    } catch (error) {
+      logger.error(
+        { error, offering: entry.offeringKey },
+        '[free-quota] daily use could not be given back; the count stands',
+      );
+    }
+  };
+
   const { policy } = context;
   const multiplier = offering.quotaThinkingRequired ? THINKING_BUDGET_MULTIPLIER : 1;
   const inputUnits = turnUnits(entry.offeringKey, offering, policy, messages, 0);
@@ -822,6 +942,7 @@ export async function serveFreeQuotaTurn(
     Math.floor((remainingUnits - inputUnits) / multiplier),
   );
   if (offering.quotaProbeProtocol === 'chat' && replyTokens < MINIMUM_REPLY_TOKENS) {
+    await releaseDailyUse();
     return refuse('too_long', copy);
   }
   let allowance: AllowanceReservation | null;
@@ -837,9 +958,11 @@ export async function serveFreeQuotaTurn(
     });
   } catch (error) {
     logger.error({ error, offering: entry.offeringKey }, '[free-quota] allowance meter unwritable');
+    await releaseDailyUse();
     return refuse('unavailable', copy);
   }
   if (!allowance) {
+    await releaseDailyUse();
     return refuseTurn('exhausted');
   }
 
@@ -848,6 +971,7 @@ export async function serveFreeQuotaTurn(
     apiKey: context.apiKey,
     offeringKey: entry.offeringKey,
     allowance,
+    expireCatalogue: expireCatalogueNow,
   };
   const headers = {
     ...SSE_RESPONSE_HEADERS,
@@ -903,11 +1027,20 @@ export async function serveFreeQuotaTurn(
       });
       return refuseTurn(REFUSAL_FAILURE[kind]);
     }
-    const answer = validatePromotionalChatStream(meteredChatStream(upstream.body, ledger, copy), {
-      trustedErrorFrames: true,
-      onFailure: (reason) =>
-        logger.warn({ offering: entry.offeringKey, reason }, '[free-quota] invalid chat stream'),
-    });
+    const expiry = expireCatalogueAfterResponse();
+    const answer = validatePromotionalChatStream(
+      meteredChatStream(
+        upstream.body,
+        { ...ledger, expireCatalogue: expiry.expireCatalogue },
+        copy,
+        expiry.turnSettled,
+      ),
+      {
+        trustedErrorFrames: true,
+        onFailure: (reason) =>
+          logger.warn({ offering: entry.offeringKey, reason }, '[free-quota] invalid chat stream'),
+      },
+    );
     return new Response(
       fallbackFor && conversation.is_temporary !== true
         ? recordedAnswerStream(answer, ({ content, usage, complete }) =>
@@ -964,6 +1097,7 @@ export async function serveFreeQuotaTurn(
         result.status === 'quota_exhausted'
           ? 'exhausted'
           : classifyFreeQuotaRefusal({
+              ...(result.providerStatus === undefined ? {} : { status: result.providerStatus }),
               ...(result.providerCode ? { code: result.providerCode } : {}),
               ...(result.providerMessage ? { message: result.providerMessage } : {}),
             });
@@ -973,6 +1107,7 @@ export async function serveFreeQuotaTurn(
         usage: null,
         refusal: { kind, signal: result.providerCode ?? 'generation_failed' },
       });
+      if (generatedNothing(kind)) await releaseDailyUse();
       return refuseTurn(REFUSAL_FAILURE[kind]);
     }
     const artifact = result.artifactUrl ? new URL(result.artifactUrl) : null;
@@ -983,16 +1118,37 @@ export async function serveFreeQuotaTurn(
         usage: null,
         refusal: null,
       });
+      logger.warn(
+        {
+          offering: entry.offeringKey,
+          status: result.status,
+          ...(result.providerCode ? { signal: result.providerCode } : {}),
+        },
+        '[free-quota] media generation returned no usable artifact; the reservation stands',
+      );
       return refuse(result.status === 'submitted' ? 'interrupted' : 'provider_failed', copy);
     }
-    consumedMediaUnits = allowance.units;
+    const reportedSeconds =
+      getProviderOfferingQuotaUnit(offering) === 'seconds' ? result.consumedSeconds : undefined;
+    consumedMediaUnits =
+      reportedSeconds === undefined ? allowance.units : Math.ceil(reportedSeconds);
+    if (consumedMediaUnits > allowance.units) {
+      logger.warn(
+        {
+          offering: entry.offeringKey,
+          consumedSeconds: reportedSeconds,
+          clipSeconds: allowance.units,
+        },
+        '[free-quota] the provider consumed more seconds than the catalogued clip length',
+      );
+    }
     const generated = await bytesFromUrl(artifact.href);
     const mimeType = normalizedMediaType(generated.contentType);
     const mediaKind = offering.category === 'image' ? 'image' : 'video';
     if (!mimeType.startsWith(`${mediaKind}/`)) {
       await settleTurn(ledger, {
         outcome: 'failed',
-        consumedUnits: allowance.units,
+        consumedUnits: consumedMediaUnits,
         usage: null,
         refusal: null,
       });
@@ -1010,7 +1166,7 @@ export async function serveFreeQuotaTurn(
     if (!moderation.allowed) {
       await settleTurn(ledger, {
         outcome: 'failed',
-        consumedUnits: allowance.units,
+        consumedUnits: consumedMediaUnits,
         usage: null,
         refusal: null,
       });
@@ -1028,7 +1184,7 @@ export async function serveFreeQuotaTurn(
     if (!extension) {
       await settleTurn(ledger, {
         outcome: 'failed',
-        consumedUnits: allowance.units,
+        consumedUnits: consumedMediaUnits,
         usage: null,
         refusal: null,
       });
@@ -1057,7 +1213,7 @@ export async function serveFreeQuotaTurn(
     if (!persisted.ok) {
       await settleTurn(ledger, {
         outcome: 'failed',
-        consumedUnits: allowance.units,
+        consumedUnits: consumedMediaUnits,
         usage: null,
         refusal: null,
       });
@@ -1065,7 +1221,7 @@ export async function serveFreeQuotaTurn(
     }
     await settleTurn(ledger, {
       outcome: 'completed',
-      consumedUnits: allowance.units,
+      consumedUnits: consumedMediaUnits,
       usage: null,
       refusal: null,
     });

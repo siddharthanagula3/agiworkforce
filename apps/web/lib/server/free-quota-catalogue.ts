@@ -1,12 +1,19 @@
 import 'server-only';
 
 import type { KeyValueStore } from '@agiworkforce/key-value';
+import type { FreeQuotaMediaCategory } from '@agiworkforce/cloud-contracts';
 import {
-  canUseBillingPlanCapability,
   getProviderOffering,
+  getProviderOfferingMediaOutput,
   type ProviderOffering,
   type ProviderOfferingCategory,
 } from '@agiworkforce/types';
+import {
+  freeMediaPlanStanding,
+  isFreeMediaCategory,
+  readyFreeMediaOffer,
+  type FreeMediaCategoryOffer,
+} from '@/features/models/lib/free-media-offer';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 import {
   PolicySchema,
@@ -26,10 +33,12 @@ import { isFreePlanTier } from '@/lib/services/free-trial-service';
 import { isGeneratedMediaStorageConfigured } from '@/lib/server/media-storage';
 import freePoolsDocument from '@/config/free-pools.json';
 import {
+  limitedMediaDailyCap,
   loadFreePools,
   reviewedQuotaOfferingKeys,
   type FreeQuotaInventory,
   type FreeQuotaObservation,
+  type LimitedMediaOffer,
 } from './free-pools';
 
 const SHARED_STORE_PROVIDERS: ReadonlySet<string> = new Set(['upstash', 'redis']);
@@ -67,14 +76,21 @@ export function freeQuotaPlanAllows(planTier: string | null | undefined): boolea
   return isFreePlanTier(planTier);
 }
 
-export function freeQuotaPlanAllowsOffering(
+export type FreeQuotaAdmission =
+  { terms: 'included' } | { terms: 'limited'; category: FreeQuotaMediaCategory; dailyCap: number };
+
+export function freeQuotaPlanAdmission(
   planTier: string | null | undefined,
   category: ProviderOfferingCategory,
-): boolean {
-  if (category === 'chat') return freeQuotaPlanAllows(planTier);
-  if (category === 'image') return canUseBillingPlanCapability(planTier, 'image_generation');
-  if (category === 'video') return canUseBillingPlanCapability(planTier, 'video_generation');
-  return false;
+  offer: LimitedMediaOffer | undefined,
+): FreeQuotaAdmission | null {
+  if (category === 'chat') return freeQuotaPlanAllows(planTier) ? { terms: 'included' } : null;
+  if (!isFreeMediaCategory(category)) return null;
+  const standing = freeMediaPlanStanding(planTier, category);
+  if (standing === 'included') return { terms: 'included' };
+  const dailyCap = limitedMediaDailyCap(offer, category);
+  if (dailyCap === null || standing !== 'offer_eligible') return null;
+  return { terms: 'limited', category, dailyCap };
 }
 
 export function sharedFreeQuotaStore(nodeEnv: string | undefined): KeyValueStore | null {
@@ -115,6 +131,16 @@ export function freeQuotaContextFor(request: {
           },
         }
       : {}),
+  };
+}
+
+export function sharedFreeQuotaContext(nowMs: number = Date.now()): FreeQuotaContext {
+  return {
+    store: sharedFreeQuotaStore(process.env.NODE_ENV),
+    apiKey: process.env['QWEN_API_KEY'] ?? '',
+    policy: loadFreeQuotaPolicy(),
+    nowMs,
+    mediaServed: isGeneratedMediaStorageConfigured(),
   };
 }
 
@@ -182,12 +208,51 @@ export async function resolveFreeQuotaDecisions(
   };
 }
 
+function allowanceLeft(decision: FreeQuotaDecision): number {
+  return decision.status === 'ready' ? decision.usable - decision.used : 0;
+}
+
+function expiringCapacityFirst(
+  left: FreeQuotaOfferingDecision,
+  right: FreeQuotaOfferingDecision,
+): number {
+  const leftEnds = freeQuotaEndsOn(left.entry, left.offering);
+  const rightEnds = freeQuotaEndsOn(right.entry, right.offering);
+  if (leftEnds !== rightEnds) {
+    if (leftEnds === null) return 1;
+    if (rightEnds === null) return -1;
+    return leftEnds < rightEnds ? -1 : 1;
+  }
+  return (
+    allowanceLeft(right.decision) - allowanceLeft(left.decision) ||
+    left.entry.offeringKey.localeCompare(right.entry.offeringKey)
+  );
+}
+
+export function freeQuotaMediaUseOrder(decisions: Pick<FreeQuotaDecisions, 'offerings'>): string[] {
+  return decisions.offerings
+    .filter(
+      ({ offering, decision }) =>
+        decision.status === 'ready' && isFreeMediaCategory(offering.category),
+    )
+    .sort(expiringCapacityFirst)
+    .map(({ entry }) => entry.offeringKey);
+}
+
+export function freeMediaOfferFor(
+  catalogue: Pick<FreeQuotaCatalogue, 'models'> | null,
+  offer: LimitedMediaOffer | undefined,
+  category: FreeQuotaMediaCategory,
+): FreeMediaCategoryOffer | null {
+  if (!catalogue || limitedMediaDailyCap(offer, category) === null) return null;
+  return readyFreeMediaOffer(catalogue.models, category);
+}
+
 export async function resolveReadyFreeQuotaOffering(
   context: FreeQuotaContext,
   input: {
     inventory: FreeQuotaInventory;
     category: ProviderOfferingCategory;
-    protocol: ProviderOffering['quotaProbeProtocol'];
     needsImageInput: boolean;
     excludeKey?: string;
     ranking?: readonly string[];
@@ -199,13 +264,14 @@ export async function resolveReadyFreeQuotaOffering(
     ? input.ranking.flatMap((key) =>
         decisions.offerings.filter(({ entry }) => entry.offeringKey === key),
       )
-    : decisions.offerings;
+    : isFreeMediaCategory(input.category)
+      ? [...decisions.offerings].sort(expiringCapacityFirst)
+      : decisions.offerings;
   const ready = candidates.find(
     ({ entry, offering, decision }) =>
       entry.offeringKey !== input.excludeKey &&
       decision.status === 'ready' &&
       offering.category === input.category &&
-      offering.quotaProbeProtocol === input.protocol &&
       (!input.needsImageInput || offering.quotaChatImageInput === true),
   );
   return ready?.entry.offeringKey ?? null;
@@ -220,7 +286,6 @@ export async function resolveFreeQuotaAlternative(
   return resolveReadyFreeQuotaOffering(context, {
     inventory: input.inventory,
     category: refused.category,
-    protocol: refused.quotaProbeProtocol,
     needsImageInput: input.needsImageInput,
     excludeKey: input.refusedKey,
   });
@@ -245,12 +310,8 @@ export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuot
       consumedApproximate: entry.consumedApproximate,
       expiresOn: freeQuotaEndsOn(entry, offering),
       status: decision.status,
-      ...(offering.quotaProbeProtocol === 'image-sync'
-        ? { outputSize: offering.quotaImageSize ?? policy.imageSize }
-        : {}),
-      ...(offering.quotaProbeProtocol === 'video-async'
-        ? { outputSize: policy.videoSize, durationSeconds: policy.videoSeconds }
-        : {}),
+      ...(getProviderOfferingMediaOutput(offering, policy.videoSeconds) ?? {}),
     })),
+    mediaUseOrder: freeQuotaMediaUseOrder(decisions),
   };
 }

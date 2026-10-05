@@ -40,6 +40,27 @@ describe('free quota failure copy', () => {
     expect(undated).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
+  it('states the daily limit as a number of requests, whose it is and when it resets', () => {
+    const resetsAtMs = Date.UTC(2026, 9, 5);
+    const images = freeQuotaFailure('daily_limit', {
+      ...context,
+      dailyLimit: { category: 'image', cap: 5, resetsAtMs },
+    });
+    const video = freeQuotaFailure('daily_limit', {
+      ...context,
+      dailyLimit: { category: 'video', cap: 1, resetsAtMs },
+    });
+
+    expect(images.status).toBe(429);
+    expect(images.code).toBe('free_quota_daily_limit');
+    expect(images.message).toContain("You have used today's 5 free image requests.");
+    expect(images.message).toContain("each account's daily share of Fixture Cloud's free capacity");
+    expect(images.message).toContain('resets at 00:00 UTC');
+    expect(images.message).toContain('Plans that include image generation');
+    expect(video.message).toContain("You have used today's free video request.");
+    expect(video.message).toContain('Plans that include video generation');
+  });
+
   it('still names a way forward when the plan has no free model to suggest', () => {
     const { message } = freeQuotaFailure('unavailable', { ...context, alternativeName: null });
     expect(message).toContain('Choose another free model');

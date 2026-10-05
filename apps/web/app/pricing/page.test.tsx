@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
+import { freeMediaLastDayLabel } from '@/features/models/lib/free-media-offer';
 
 const testState = vi.hoisted(() => ({
   auth: { user: null as null | { id: string; email: string }, initialized: true },
@@ -73,6 +74,9 @@ vi.mock('react-i18next', () => ({
       }
       if (key === 'compareTeamPriceYearly') {
         return `${String(values?.['yearly'])}/seat/mo billed yearly, ${String(values?.['monthly'])} billed monthly`;
+      }
+      if (key.startsWith('freeMediaLine') && values?.['date']) {
+        return `${key} ${String(values['date'])}`;
       }
       return key;
     },
@@ -547,6 +551,88 @@ describe('PricingPage', () => {
     // close to the 5s default even before machine load. Raising it here keeps
     // the failure mode "assertion failed", not "flaky timeout".
   }, 30_000);
+
+  describe('the limited free image and video preview', () => {
+    function mockFreeMediaOffer(offer: unknown) {
+      const read = vi.fn(async () => offer);
+      vi.mocked(global.fetch).mockImplementation(async (input) => {
+        if (String(input).includes('/api/models/free-quota/media-offer')) {
+          return { ok: true, json: read } as unknown as Response;
+        }
+        return new Promise<Response>(() => undefined);
+      });
+      return async () => {
+        await waitFor(() => expect(read).toHaveBeenCalled());
+        await act(async () => undefined);
+      };
+    }
+
+    function mediaCells(plan: RegExp): string[] {
+      const comparison = screen.getByRole('table', { name: 'Plan capabilities' });
+      const headers = within(comparison)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent);
+      const row = [...comparison.querySelectorAll('tbody tr')].find((candidate) =>
+        plan.test(candidate.textContent ?? ''),
+      )!;
+      const cells = [...row.querySelectorAll('th, td')].map((cell) => cell.textContent ?? '');
+      return ['Image generation', 'Video generation'].map(
+        (column) => cells[headers.indexOf(column)]!,
+      );
+    }
+
+    it('keeps every plan at Yes or No when the offer is not running', async () => {
+      const offerRead = mockFreeMediaOffer({ image: null, video: null });
+      render(<PricingPage />);
+
+      await offerRead();
+      expect(mediaCells(/^Free/)).toEqual(['No', 'No']);
+      expect(mediaCells(/^Basic/)).toEqual(['No', 'No']);
+      expect(mediaCells(/^Pro/)).toEqual(['Yes', 'No']);
+      expect(mediaCells(/^Max 20x/)).toEqual(['Yes', 'Yes']);
+      expect(screen.queryByText(/^freeMedia/)).toBeNull();
+    });
+
+    it('says Limited preview for plans without the capability, with the latest last day and its zone, while it runs', async () => {
+      mockFreeMediaOffer({ image: { lastDay: '2026-10-20' }, video: { lastDay: '2026-11-04' } });
+      render(<PricingPage />);
+
+      await waitFor(() =>
+        expect(mediaCells(/^Free/)).toEqual(['Limited preview', 'Limited preview']),
+      );
+      expect(mediaCells(/^Basic/)).toEqual(['Limited preview', 'Limited preview']);
+      expect(mediaCells(/^Pro/)).toEqual(['Yes', 'Limited preview']);
+      expect(mediaCells(/^Team/)).toEqual(['Yes', 'Limited preview']);
+      expect(mediaCells(/^Max 20x/)).toEqual(['Yes', 'Yes']);
+      expect(
+        screen.getByText(`freeMediaLineBoth ${freeMediaLastDayLabel('2026-11-04')}`),
+      ).toBeVisible();
+      expect(screen.getByText(/^freeMediaLineBoth /)).toHaveTextContent(/ \(UTC\)$/);
+      const freeCard = within(screen.getByRole('heading', { name: 'Free' }).closest('article')!);
+      expect(freeCard.getByText('freeMediaFeatureBoth')).toBeVisible();
+    });
+
+    it('names only the kind that is ready', async () => {
+      mockFreeMediaOffer({ image: { lastDay: '2026-10-20' }, video: null });
+      render(<PricingPage />);
+
+      await waitFor(() => expect(mediaCells(/^Free/)).toEqual(['Limited preview', 'No']));
+      expect(mediaCells(/^Pro/)).toEqual(['Yes', 'No']);
+      expect(
+        screen.getByText(`freeMediaLineImage ${freeMediaLastDayLabel('2026-10-20')}`),
+      ).toBeVisible();
+      expect(screen.getByText('freeMediaFeatureImage')).toBeVisible();
+    });
+
+    it('promises nothing when the answer is not the offer it expects', async () => {
+      const offerRead = mockFreeMediaOffer({ image: { lastDay: 'soon' }, video: true });
+      render(<PricingPage />);
+
+      await offerRead();
+      expect(mediaCells(/^Free/)).toEqual(['No', 'No']);
+      expect(screen.queryByText(/^freeMedia/)).toBeNull();
+    });
+  });
 
   it('states each plan card’s usage relative to the plan below it, never as credit counts', async () => {
     render(<PricingPage />);
