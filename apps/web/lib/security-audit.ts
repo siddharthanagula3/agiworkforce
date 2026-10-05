@@ -72,7 +72,12 @@ export interface SecurityAuditEvent {
   details?: Record<string, unknown>;
 }
 
-export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void> {
+// `required` is for a response that must not be served unless its audit row exists: the write
+// failure is rethrown instead of swallowed, so the caller refuses.
+export async function logSecurityEvent(
+  event: SecurityAuditEvent,
+  options: { required?: boolean } = {},
+): Promise<void> {
   const {
     userId,
     eventType,
@@ -102,6 +107,7 @@ export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void>
     await markSecurityEventActivity();
   } catch (err) {
     logger.error({ error: err, eventType }, 'Exception while logging security event');
+    if (options.required) throw err;
   }
 }
 

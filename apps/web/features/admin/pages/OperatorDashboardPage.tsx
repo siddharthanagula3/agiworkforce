@@ -25,6 +25,7 @@ import ModelRolloutPanel from '../components/ModelRolloutPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
 import ServiceHealthPanel from '../components/ServiceHealthPanel';
 import SupportTicketQueuePanel from '../components/SupportTicketQueuePanel';
+import WaitlistPanel from '../components/WaitlistPanel';
 import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
 import { formatCreditAmount, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 import { helpHref } from '@/lib/support/help-entry-points';
@@ -33,6 +34,7 @@ const TABS = [
   'overview',
   'feedback',
   'users',
+  'waitlist',
   'product',
   'costs',
   'routing',
@@ -441,6 +443,8 @@ export function OperatorDashboardPage() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         )
       ) : null}
+
+      {tab === 'waitlist' ? <WaitlistPanel /> : null}
 
       {tab === 'product' ? <ProductMetricsPanel /> : null}
 
