@@ -1,6 +1,13 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+
+import {
+  MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+  MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+  TERMS_GATE_STORAGE_KEY,
+} from '@/app/signup/signupAttemptMarkers';
 
 const webRoot = resolve(__dirname, '../..');
 const SKIP_DIRS = new Set([
@@ -88,6 +95,34 @@ function writtenKeys(
 
 const PREFIXED = /^(agi|agiworkforce)[-_.:]/;
 
+function storageEntries(): Map<string, string>[] {
+  const source = readFileSync(join(webRoot, 'app/cookies/page.tsx'), 'utf8');
+  const parsed = ts.createSourceFile(
+    'page.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const declarations = parsed.statements.flatMap((statement) =>
+    ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [],
+  );
+  const table = declarations.find((declaration) => declaration.name.getText(parsed) === 'STORAGE');
+  if (!table?.initializer || !ts.isArrayLiteralExpression(table.initializer)) {
+    throw new Error('The rendered device-storage table is unavailable');
+  }
+  expect(source).toContain('rows={storageRows(STORAGE)}');
+  return table.initializer.elements.map((row) => {
+    if (!ts.isObjectLiteralExpression(row)) throw new Error('Unmeasured storage row');
+    return new Map(
+      row.properties.map((property) => {
+        if (!ts.isPropertyAssignment(property)) throw new Error('Unmeasured storage field');
+        return [property.name.getText(parsed), property.initializer.getText(parsed)] as const;
+      }),
+    );
+  });
+}
+
 describe('the device-storage table on /cookies', () => {
   const files = sourceFiles();
   const values = constantValues(files);
@@ -118,5 +153,50 @@ describe('the device-storage table on /cookies', () => {
         `${entry.key} written by ${entry.file}`,
       ).toBe(true);
     }
+  });
+
+  it('discloses the canonical signup markers in local storage instead of treating tab closure as cleanup', () => {
+    const entries = storageEntries();
+    const local = entries.filter(
+      (entry) =>
+        entry.get('key')?.includes('TERMS_GATE_STORAGE_KEY') ||
+        entry.get('key') === `'${TERMS_GATE_STORAGE_KEY}'`,
+    );
+    expect(local).toHaveLength(1);
+    expect(local[0]?.get('store')).toBe("'Local storage'");
+    expect(local[0]?.get('key')).toContain('MARKETING_EMAIL_CHOICE_STORAGE_KEY');
+    expect(local[0]?.get('key')).toContain('MARKETING_EMAIL_ATTEMPT_STORAGE_KEY');
+    expect(local[0]?.get('clearedBy')).not.toMatch(/closing the tab/i);
+
+    const markers = readFileSync(join(webRoot, 'app/signup/signupAttemptMarkers.ts'), 'utf8');
+    for (const name of [
+      'TERMS_GATE_STORAGE_KEY',
+      'MARKETING_EMAIL_CHOICE_STORAGE_KEY',
+      'MARKETING_EMAIL_ATTEMPT_STORAGE_KEY',
+    ]) {
+      expect(markers).toContain(`window.localStorage.setItem(${name},`);
+    }
+    for (const key of [
+      TERMS_GATE_STORAGE_KEY,
+      MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+      MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+    ]) {
+      expect(PREFIXED.test(key)).toBe(true);
+    }
+  });
+
+  it('separately discloses the canonical per-tab marketing attempt identifier', () => {
+    const entries = storageEntries();
+    const session = entries.filter(
+      (entry) => entry.get('key') === 'MARKETING_EMAIL_ATTEMPT_STORAGE_KEY',
+    );
+    expect(session).toHaveLength(1);
+    expect(session[0]?.get('store')).toBe("'Session storage'");
+    expect(session[0]?.get('holds')).toMatch(/this tab only/i);
+    expect(session[0]?.get('holds')).toMatch(/another tab removed is asked again/i);
+    const markers = readFileSync(join(webRoot, 'app/signup/signupAttemptMarkers.ts'), 'utf8');
+    expect(markers).toContain(
+      'window.sessionStorage.setItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY, attemptId)',
+    );
   });
 });

@@ -15,12 +15,14 @@ import {
 } from '@/features/marketing/components/system';
 import {
   CONTACT_EMAIL,
+  CANONICAL_POLICY_ROUTES,
   CONTACT_SUBJECTS,
   LEGAL_ENTITY,
   NOTICE_ADDRESS,
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import {
   METERING_EVIDENCE_RETENTION_DAYS,
   STATUTORY_RECORD_RETENTION_DAYS,
@@ -250,8 +252,9 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <strong>Examples:</strong> email, account ID, authentication metadata held by our identity
         provider.
         <br />
-        <strong>Why, and how it is protected:</strong> authentication. We do not store your password
-        ourselves.
+        <strong>Why, and how it is protected:</strong> authentication, and optional marketing email
+        only if you choose &ldquo;{MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; separately. We do
+        not store your password ourselves.
       </>
     ),
   },
@@ -651,6 +654,25 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
         <br />
         <strong>Basis:</strong> <strong>your consent</strong>, recorded per purpose against the
         revision of this notice you were shown, before the address is stored.
+      </>
+    ),
+  },
+  {
+    label: 'Marketing email',
+    value: (
+      <>
+        <strong>Data used:</strong> your account email.
+        <br />
+        <strong>Purpose:</strong> {MARKETING_EMAIL_CONSENT_PURPOSE.label}
+        <br />
+        <strong>Basis:</strong> <strong>your consent</strong>, asked in a separate unticked box at
+        sign-up or when you first accept the terms after signing in, if no decision is on record for
+        this purpose. You can also choose in Settings, Privacy, or withdraw on the{' '}
+        <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+          data rights page
+        </Link>
+        . Your decision is recorded against the revision of the privacy notice you were shown. No
+        marketing email is sent by the product yet.
       </>
     ),
   },

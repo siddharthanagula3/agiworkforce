@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 
 import sitemap from '@/app/sitemap';
 import { GET as securityTxt } from '@/app/.well-known/security.txt/route';
@@ -24,6 +25,36 @@ function readPublishedCopy(...segments: string[]): string {
     .split('\n')
     .filter((line) => !/^\s*(\/\/|\*)/.test(line))
     .join('\n');
+}
+
+function ledgerCopy(file: string[], tableName: string, label: string): string {
+  const source = readAppFile(...file);
+  const parsed = ts.createSourceFile(
+    'page.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const declarations = parsed.statements.flatMap((statement) =>
+    ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [],
+  );
+  const table = declarations.find((declaration) => declaration.name.getText(parsed) === tableName);
+  if (!table?.initializer || !ts.isArrayLiteralExpression(table.initializer)) {
+    throw new Error(`Unmeasured policy ledger ${tableName}`);
+  }
+  const rows = table.initializer.elements.filter((row) => {
+    if (!ts.isObjectLiteralExpression(row)) throw new Error('Unmeasured policy row');
+    return row.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        property.name.getText(parsed) === 'label' &&
+        ts.isStringLiteral(property.initializer) &&
+        property.initializer.text === label,
+    );
+  });
+  expect(rows, `${tableName} must contain exactly one ${label} row`).toHaveLength(1);
+  return rows[0]?.getText(parsed).replace(/\s+/g, ' ') ?? '';
 }
 
 describe('legal policy set, one canonical page per policy', () => {
@@ -293,6 +324,70 @@ describe('legal policy set, entity facts come from one place', () => {
     for (const file of ['terms/page.tsx', 'privacy/page.tsx']) {
       expect(/Austin, Texas/i.test(readAppFile(...file.split('/'))), file).toBe(false);
     }
+  });
+});
+
+describe('legal policy set, account marketing email consent', () => {
+  it('discloses the canonical optional account purpose in both account-data rows', () => {
+    const account = ledgerCopy(['privacy', 'page.tsx'], 'COLLECT_LEDGER', 'Account');
+    const india = ledgerCopy(
+      ['privacy', 'india', 'page.tsx'],
+      'PROCESSING',
+      'Email address, account identifier, authentication metadata',
+    );
+    for (const row of [account, india]) {
+      expect(row).toContain('MARKETING_EMAIL_CONSENT_PURPOSE.label');
+      expect(row).toMatch(/only if you choose.*separately|separate box/i);
+      expect(row).toContain('We do not store your password');
+    }
+    expect(account).not.toMatch(/only if you tick.*sign-up.*or turn it on in Settings/i);
+  });
+
+  it('separates account marketing from waitlist updates and states the bounded first-acceptance choice', () => {
+    const marketing = ledgerCopy(['privacy', 'page.tsx'], 'BASIS_LEDGER', 'Marketing email');
+    expect(marketing).toContain('your account email');
+    expect(marketing).toContain('MARKETING_EMAIL_CONSENT_PURPOSE.label');
+    expect(marketing).toMatch(/separate unticked box/i);
+    expect(marketing).toMatch(/first accept.*terms.*no decision/i);
+    expect(marketing).toContain('Settings, Privacy');
+    expect(marketing).toContain('CANONICAL_POLICY_ROUTES.dataRights');
+    expect(marketing).toMatch(/revision of (?:this|the privacy) notice/i);
+    expect(marketing).not.toMatch(/unsubscribe link|will (?:send|email)|emailed notice/i);
+
+    const waitlist = ledgerCopy(
+      ['privacy', 'page.tsx'],
+      'COLLECT_LEDGER',
+      'Enterprise contact list',
+    );
+    expect(waitlist).toContain(
+      'product updates separately and decline that without leaving the list',
+    );
+    const indiaWaitlist = ledgerCopy(
+      ['privacy', 'india', 'page.tsx'],
+      'PROCESSING',
+      'Email address given for Enterprise access',
+    );
+    expect(indiaWaitlist).toContain('Optionally, product updates: a separate box');
+  });
+
+  it('does not claim an unticked signup marketing box records a refusal or that every stored choice starts unticked', () => {
+    const india = readPublishedCopy('privacy', 'india', 'page.tsx').replace(/\s+/g, ' ');
+    expect(india).not.toMatch(/every box is unticked when you meet it/i);
+    expect(india).not.toMatch(/every decision \(including the boxes you leave unticked\)/i);
+    expect(india).toMatch(/early-access forms.*includes the boxes you leave unticked/i);
+    expect(india).toMatch(/sign-up.*marketing email box you leave unticked records no decision/i);
+    expect(india).toContain('CONSENT_PURPOSES.map');
+  });
+
+  it('describes GPC grant refusals without promising to erase a previously stored Settings grant', () => {
+    const cookies = readPublishedCopy('cookies', 'page.tsx').replace(/\s+/g, ' ');
+    expect(cookies).not.toMatch(/does not overrule a form you fill in yourself/i);
+    expect(cookies).not.toMatch(/that tick is your instruction and we act on it/i);
+    expect(cookies).toMatch(/Sec-GPC.*new.*optional.*grants.*refusals/i);
+    expect(cookies).toContain('MARKETING_EMAIL_CONSENT_PURPOSE.label');
+    expect(cookies).toMatch(/waitlist.*product updates/i);
+    expect(cookies).toMatch(/existing.*Settings.*not.*erased/i);
+    expect(cookies).toContain('GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE');
   });
 });
 

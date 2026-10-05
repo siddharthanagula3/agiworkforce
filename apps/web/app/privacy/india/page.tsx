@@ -24,7 +24,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
-import { CONSENT_PURPOSES } from '@/lib/consent-purposes';
+import { CONSENT_PURPOSES, MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
@@ -92,8 +92,14 @@ const MODES: readonly LedgerRow[] = [
 const PROCESSING: readonly LedgerRow[] = [
   {
     label: 'Email address, account identifier, authentication metadata',
-    value:
-      'Purpose: creating and securing your account. Held by our identity provider; we do not store your password. Basis: your request, the account cannot exist without it.',
+    value: (
+      <>
+        Purpose: creating and securing your account. Optionally, the account choice &ldquo;
+        {MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; is a separate box at sign-up that you can
+        leave unticked or turn off on its own. Held by our identity provider. We do not store your
+        password. Basis: your request for the account; your consent for marketing email.
+      </>
+    ),
   },
   {
     label: 'Billing identifiers, plan, invoice metadata',
@@ -336,10 +342,11 @@ export default function IndiaDpdpNoticePage() {
                     </h2>
                     <Prose>
                       Consent under this Act has to be specific, unbundled, and given by a clear
-                      affirmative action. So every box is unticked when you meet it, an optional
-                      purpose never blocks a necessary one, and every decision (including the boxes
-                      you leave unticked) is recorded against the revision of this notice that was
-                      on screen. These are the purposes we ask about:
+                      affirmative action. New optional choices start unticked, and an optional
+                      purpose never blocks a necessary one. Decisions are recorded against the
+                      revision of the privacy notice that was on screen. On the early-access forms
+                      this includes the boxes you leave unticked; at sign-up a marketing email box
+                      you leave unticked records no decision. These are the purposes we ask about:
                     </Prose>
                   </div>
                   <Ledger caption="Consent purposes" rows={consentRows()} />
