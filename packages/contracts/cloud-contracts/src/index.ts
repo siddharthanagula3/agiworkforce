@@ -73,3 +73,4 @@ export * from './notifications';
 export * from './mobile-push';
 export * from './mobile-intent';
 export * from './bank-accounts';
+export * from './waitlist';

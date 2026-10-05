@@ -4,7 +4,7 @@
     {
       "file": "apps/web/lib/services/waitlistServiceClient.ts",
       "calls": 3,
-      "reason": "a browser module that posts to this deployment's own routes; the tab bounds it, and the founder has frozen the waitlist path so no change is made here",
+      "reason": "a browser module whose three posts go to this deployment's own routes; the tab bounds each of them",
       "fix": "none needed while it stays a browser module; if it is ever called from the server, give each call a deadline"
     },
     {
