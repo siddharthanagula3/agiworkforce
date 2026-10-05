@@ -1180,6 +1180,7 @@ jobs:
           pnpm exec playwright test \
             auth-accessibility.spec.ts \
             auth-flow-states.spec.ts \
+            auth-scene-privacy.spec.ts \
             changelog-touch-targets.spec.ts \
             checkout.spec.ts \
             enterprise-surface.spec.ts \
@@ -1190,6 +1191,10 @@ jobs:
             marketing-stage-contrast.spec.ts \
             policy-version-history.spec.ts \
             pricing-public.spec.ts \
+            public-first-viewport.spec.ts \
+            public-page-header.spec.ts \
+            public-header-scroll.spec.ts \
+            home-surface-explorer.spec.ts \
             public-account-pages.spec.ts \
             public-auth-clean.spec.ts \
             public-entry-points.spec.ts \
