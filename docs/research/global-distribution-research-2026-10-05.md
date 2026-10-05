@@ -3914,20 +3914,23 @@ or consumer-law amendments is made.
 
 ### FRESH-05: Product email facts and bounded draft
 
-Current `apps/web/lib/consent-purposes.ts:24` defines optional product updates and
-launch news. The inspected signup choice starts false
-(`apps/web/features/auth/productUpdatesChoice.ts:15`); authenticated acceptance
-records optional grants (`apps/web/app/api/terms/accept/route.ts:84`,
+Current `apps/web/lib/consent-purposes.ts:38` defines optional `marketing_email`
+with the label "Email me product news, tips and offers." It is separate from the
+waitlist's `product_updates` purpose. The inspected signup choice starts false
+(`apps/web/features/auth/marketingEmailChoice.ts:14`); authenticated acceptance
+records an optional grant only when no account decision exists
+(`apps/web/app/api/terms/accept/route.ts:94`,
 `apps/web/lib/server/consent-records.ts:98`). Settings and the rights page provide
 account withdrawal (`apps/web/features/settings/sections/PrivacySection.tsx:615`,
-`apps/web/app/privacy/requests/ConsentCentre.tsx:88`). The current label was reread
-October 5; the wider news/tips/offers label remains a planned lead change.
-A product-mail sender and sender-side unsubscribe handling were not verified.
+`apps/web/app/privacy/requests/ConsentCentre.tsx:88`). The final label and the
+unticked source state were reread October 5 after the lead's rename.
+A marketing-mail sender and sender-side unsubscribe handling were not verified.
 
 Small account-holder addition for lead review: separately opt in to product
-updates and launch news at account creation; the optional box starts unticked,
-consent is recorded with the account, and account withdrawal is available in
-Settings > Privacy or the signed-in rights page. This is a draft, not published
+news, tips and offers by email at signup, first provider sign-in when no decision
+exists, or in Settings. The optional signup box starts unticked, consent is
+recorded with the account, and account withdrawal is available in Settings >
+Privacy or the signed-in rights page. This is a draft, not published
 policy or a delivery promise. [ICO email
 marketing guidance](https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guidance-on-direct-marketing-using-electronic-mail/how-do-we-comply-with-the-pecr-electronic-mail-marketing-rules/)
 and [FTC CAN-SPAM
