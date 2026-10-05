@@ -159,7 +159,7 @@ const EMPTY_FREE_CATALOGUE = {
 };
 
 const openPicker = () => {
-  fireEvent.click(screen.getByRole('button', { name: 'Change model' }));
+  fireEvent.click(screen.getByRole('button', { name: /, change model$/ }));
   return screen.getByRole('dialog', { name: 'Models' });
 };
 
@@ -209,7 +209,7 @@ describe('ComposerFooter · picker keyboard contract', () => {
 
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Models' })).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Change model' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /, change model$/ }));
   });
 
   it('catalogue: Escape closes the catalogue first and leaves the short list open', () => {
@@ -243,7 +243,7 @@ describe('ComposerFooter · picker keyboard contract', () => {
     fireEvent.keyDown(screen.getByRole('dialog', { name: 'Models' }), { key: 'Escape' });
 
     expect(screen.queryByRole('dialog', { name: 'Models' })).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Change model' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /, change model$/ }));
   });
 
   it('catalogue: Tab does not close it, and focus stays inside', () => {

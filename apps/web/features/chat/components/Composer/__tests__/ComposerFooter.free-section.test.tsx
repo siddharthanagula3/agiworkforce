@@ -136,7 +136,7 @@ function stubFreeCatalogue(quota: Promise<Response>) {
 
 const openPicker = () => {
   render(<ComposerFooter />);
-  fireEvent.click(screen.getByRole('button', { name: 'Change model' }));
+  fireEvent.click(screen.getByRole('button', { name: /, change model$/ }));
   return screen.getByRole('dialog', { name: 'Models' });
 };
 
@@ -208,7 +208,7 @@ describe('ComposerFooter · free section', () => {
 
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Models' })).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Change model' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /, change model$/ }));
   });
 
   it('lets a paid account type in the free model search without opening the full catalogue', async () => {

@@ -888,6 +888,7 @@ describe('WebAppShell responsive navigation', () => {
     );
 
     expect(screen.getByText('Free plan')).toBeInTheDocument();
+    expect(screen.getAllByText('Upgrade')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
     expect(settingsModalState.openSettings).toHaveBeenCalledWith('billing');
   });

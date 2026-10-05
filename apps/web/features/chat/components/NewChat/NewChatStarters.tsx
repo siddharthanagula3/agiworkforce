@@ -46,6 +46,7 @@ export interface NewChatStartersProps {
   workMode: CloudWorkMode;
   onPrompt: (prompt: string) => void;
   onFocusComposer: () => void;
+  showConnectorHint: boolean;
 }
 
 function useAgiWorkAvailable(): boolean {
@@ -54,7 +55,12 @@ function useAgiWorkAvailable(): boolean {
   return billingPolicyReady && agiWorkCapability;
 }
 
-export function NewChatStarters({ workMode, onPrompt, onFocusComposer }: NewChatStartersProps) {
+export function NewChatStarters({
+  workMode,
+  onPrompt,
+  onFocusComposer,
+  showConnectorHint,
+}: NewChatStartersProps) {
   const { t } = useTranslation('common');
   const headingId = useId();
   const agiWorkAvailable = useAgiWorkAvailable();
@@ -192,7 +198,7 @@ export function NewChatStarters({ workMode, onPrompt, onFocusComposer }: NewChat
           ) : null}
         </div>
       )}
-      <NewChatConnectorSuggestions />
+      <NewChatConnectorSuggestions show={showConnectorHint} />
     </div>
   );
 }

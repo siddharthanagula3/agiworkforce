@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   type ButtonHTMLAttributes,
 } from 'react';
 import {
@@ -171,6 +172,7 @@ const CAPABILITY_GLYPHS: Readonly<
 
 const LOCAL_SECTION_LABEL = 'On this device';
 const LOCAL_BADGE_LABEL = 'Local';
+const FREE_QUOTA_BADGE_LABEL = 'Free';
 const LOCAL_GRANT_LABEL = 'Use models on this device';
 const LOCAL_GRANT_GUIDANCE = 'Asks once, then lists what Ollama and LM Studio have loaded';
 const LOCAL_EMPTY_TEXT = 'No models loaded on this device yet.';
@@ -758,6 +760,8 @@ export function ComposerFooter({
   fastModeDisabledByWorkspace = false,
 }: ComposerFooterProps) {
   const effortPanelId = useId();
+  const triggerReceiptId = useId();
+  const [nameTipOpen, setNameTipOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [catalogueOpen, setCatalogueOpen] = useState(false);
@@ -1288,15 +1292,30 @@ export function ComposerFooter({
               onClick={onUpgradeRequest}
               className={MODEL_LOCKED_TRIGGER_CLASS}
               aria-label={lockedSlotLabel}
+              title={lockedSlotLabel}
             >
               <ProviderLogo providerKey={selectedProviderKey} size={PICKER_TRIGGER_ICON_SIZE} />
               <span className="max-w-[150px] truncate">{lockedSlotText}</span>
             </button>
           )}
 
+          {showModelSelector && !lockModelSelector && triggerReceipt && (
+            <span id={triggerReceiptId} className="sr-only">
+              {triggerReceipt}
+            </span>
+          )}
+
           {showModelSelector &&
             !lockModelSelector &&
             (() => {
+              const triggerLabel =
+                localSelection?.name ?? routingProfileLabel ?? selectedModel.name;
+              const triggerBadge = localSelection
+                ? LOCAL_BADGE_LABEL
+                : freeQuotaSelection(selectedModelId)
+                  ? FREE_QUOTA_BADGE_LABEL
+                  : null;
+              const triggerName = `${triggerLabel}${triggerBadge ? ` ${triggerBadge}` : ''}, change model`;
               const trigger = (extra: ButtonHTMLAttributes<HTMLButtonElement> = {}) => (
                 <button
                   {...extra}
@@ -1304,8 +1323,8 @@ export function ComposerFooter({
                   id={MODEL_SELECTOR_TRIGGER_ID}
                   disabled={modelChangePending}
                   className={MODEL_TRIGGER_CLASS}
-                  aria-label={modelChangePending ? 'Saving model selection' : 'Change model'}
-                  title={triggerReceipt ?? undefined}
+                  aria-label={modelChangePending ? 'Saving model selection' : triggerName}
+                  aria-describedby={triggerReceipt ? triggerReceiptId : undefined}
                 >
                   {localSelection ? (
                     <Monitor
@@ -1318,29 +1337,39 @@ export function ComposerFooter({
                       size={PICKER_TRIGGER_ICON_SIZE}
                     />
                   )}
-                  {/* truncate lets the model name shrink so the composer bottom row
-                      stays a single line at narrow widths, while min-w-[3.5rem] gives it
-                      a GUARANTEED floor (~56px) so the label can never collapse to 0px
-                      (which previously left only the ~12px provider icon, overflowing
-                      UNDER the Send button at 375px). max-w-[140px] caps it on wide
-                      layouts. Floor + the narrow-width control trims in ChatComposerNew
-                      keep this selector visible, tappable, and clear of Send down to
-                      ~320px. */}
-                  <span className="min-w-[3.5rem] max-w-[6rem] shrink truncate font-medium sm:max-w-[140px]">
-                    {modelChangePending
-                      ? 'Saving…'
-                      : (localSelection?.name ?? routingProfileLabel ?? selectedModel.name)}
+                  <span className="min-w-[3.5rem] max-w-[8.5rem] shrink truncate font-medium sm:max-w-[11rem]">
+                    {modelChangePending ? 'Saving…' : triggerLabel}
                   </span>
-                  {freeQuotaSelection(selectedModelId) && !localSelection && (
-                    <span className={PICKER_BADGE_CLASS}>Free</span>
-                  )}
-                  {localSelection && (
-                    <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
-                      {LOCAL_BADGE_LABEL}
+                  {triggerBadge && (
+                    <span
+                      className={
+                        localSelection
+                          ? `${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`
+                          : PICKER_BADGE_CLASS
+                      }
+                    >
+                      {triggerBadge}
                     </span>
                   )}
                   <ChevronDown className="h-4 w-4 shrink-0" />
                 </button>
+              );
+              const withNameTip = (triggerNode: ReactNode) => (
+                <TooltipProvider>
+                  <Tooltip open={nameTipOpen && !open} onOpenChange={setNameTipOpen}>
+                    <TooltipTrigger asChild>{triggerNode}</TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <span className="block font-medium">
+                        {localSelection?.name ?? selectedModel.name}
+                      </span>
+                      {triggerReceipt && (
+                        <span className="block text-xs text-muted-foreground">
+                          {triggerReceipt}
+                        </span>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               );
               const body = (
                 <TooltipProvider>
@@ -1593,11 +1622,13 @@ export function ComposerFooter({
                       else closeModelPopover();
                     }}
                   >
-                    {trigger({
-                      onClick: () => setOpen(true),
-                      'aria-expanded': open,
-                      'aria-haspopup': 'dialog',
-                    })}
+                    {withNameTip(
+                      trigger({
+                        onClick: () => setOpen(true),
+                        'aria-expanded': open,
+                        'aria-haspopup': 'dialog',
+                      }),
+                    )}
                     <DrawerContent
                       ref={pickerPanelRef}
                       aria-label={PICKER_TITLE}
@@ -1628,7 +1659,7 @@ export function ComposerFooter({
                     else closeModelPopover();
                   }}
                 >
-                  <PopoverTrigger asChild>{trigger()}</PopoverTrigger>
+                  {withNameTip(<PopoverTrigger asChild>{trigger()}</PopoverTrigger>)}
                   <PopoverContent
                     ref={pickerPanelRef}
                     side="bottom"

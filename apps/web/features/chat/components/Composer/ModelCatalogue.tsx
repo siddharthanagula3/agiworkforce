@@ -33,7 +33,6 @@ const EMPTY_LIST_TEXT = 'No models match';
 const LOADING_TEXT = 'Loading models…';
 const LOAD_FAILED_TEXT = 'The model list could not be loaded.';
 const RETRY_LABEL = 'Try again';
-const NOT_PUBLISHED_TEXT = 'Not published';
 
 const COMING_SOON_TAG_LABEL = 'Coming soon';
 const ENVIRONMENT_TAG_LABEL = 'Beta';
@@ -171,10 +170,10 @@ function isNewRelease(entry: ModelCatalogueEntry, now: number): boolean {
   return days >= 0 && days <= NEW_TAG_WINDOW_DAYS;
 }
 
-function formatReleasedOn(releasedOn: string | null): string {
-  if (!releasedOn) return NOT_PUBLISHED_TEXT;
+function formatReleasedOn(releasedOn: string | null): string | null {
+  if (!releasedOn) return null;
   const releasedAt = Date.parse(releasedOn);
-  if (Number.isNaN(releasedAt)) return NOT_PUBLISHED_TEXT;
+  if (Number.isNaN(releasedAt)) return null;
   return new Date(releasedAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
@@ -182,8 +181,8 @@ function formatReleasedOn(releasedOn: string | null): string {
   });
 }
 
-function formatTokens(tokens: number | null): string {
-  if (tokens === null || tokens <= 0) return NOT_PUBLISHED_TEXT;
+function formatTokens(tokens: number | null): string | null {
+  if (tokens === null || tokens <= 0) return null;
   if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`;
   if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
   return String(tokens);
@@ -240,8 +239,29 @@ function ModelCard({
   onBack: () => void;
 }) {
   const capabilities = CAPABILITY_CHIPS.filter((chip) => chip.matches(entry));
-  const messageCredits = entry.freePool ? null : estimateMessageCredits(entry.id);
-  const rates = entry.freePool ? null : creditsPerMillionTokens(entry.id);
+  const showsCreditFigures = !entry.freePool && !entry.eventAccess;
+  const messageCredits = showsCreditFigures ? estimateMessageCredits(entry.id) : null;
+  const rates = showsCreditFigures ? creditsPerMillionTokens(entry.id) : null;
+  const priceFact = (published: string | null): string | null => {
+    if (entry.eventAccess) return null;
+    return entry.freePool ? FREE_POOL_COST_TEXT : published;
+  };
+  const facts = [
+    { label: 'Family', value: lineLabel },
+    {
+      label: 'Typical message',
+      value: priceFact(messageCredits === null ? null : formatMessageCredits(messageCredits)),
+    },
+    {
+      label: 'Credits per 1M tokens',
+      value: priceFact(
+        rates ? `${rates.input.toLocaleString()} in · ${rates.output.toLocaleString()} out` : null,
+      ),
+    },
+    { label: 'Context ceiling', value: formatTokens(entry.contextTokens) },
+    { label: 'Output ceiling', value: formatTokens(entry.maxOutputTokens) },
+    { label: 'Released', value: formatReleasedOn(entry.releasedOn) },
+  ].filter((fact): fact is { label: string; value: string } => fact.value !== null);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
       <button
@@ -261,47 +281,13 @@ function ModelCard({
         </div>
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
-        <div>
-          <dt className={CARD_LABEL_CLASS}>Family</dt>
-          <dd className={CARD_VALUE_CLASS}>{lineLabel}</dd>
-        </div>
-        <div>
-          <dt className={CARD_LABEL_CLASS}>Typical message</dt>
-          <dd className={CARD_VALUE_CLASS}>
-            {entry.freePool
-              ? FREE_POOL_COST_TEXT
-              : messageCredits === null
-                ? NOT_PUBLISHED_TEXT
-                : formatMessageCredits(messageCredits)}
-          </dd>
-        </div>
-        <div>
-          <dt className={CARD_LABEL_CLASS}>Credits per 1M tokens</dt>
-          <dd className={CARD_VALUE_CLASS}>
-            {entry.freePool
-              ? FREE_POOL_COST_TEXT
-              : rates
-                ? `${rates.input.toLocaleString()} in · ${rates.output.toLocaleString()} out`
-                : NOT_PUBLISHED_TEXT}
-          </dd>
-        </div>
-        <div>
-          <dt className={CARD_LABEL_CLASS}>Context ceiling</dt>
-          <dd className={CARD_VALUE_CLASS}>{formatTokens(entry.contextTokens)}</dd>
-        </div>
-        <div>
-          <dt className={CARD_LABEL_CLASS}>Output ceiling</dt>
-          <dd className={CARD_VALUE_CLASS}>{formatTokens(entry.maxOutputTokens)}</dd>
-        </div>
-        <div>
-          <dt className={CARD_LABEL_CLASS}>Lifecycle stage</dt>
-          <dd className={CARD_VALUE_CLASS}>{entry.stage ?? NOT_PUBLISHED_TEXT}</dd>
-        </div>
-        <div>
-          <dt className={CARD_LABEL_CLASS}>Released</dt>
-          <dd className={CARD_VALUE_CLASS}>{formatReleasedOn(entry.releasedOn)}</dd>
-        </div>
+      <dl className={facts.length > 1 ? 'mt-3 grid grid-cols-2 gap-x-3 gap-y-2' : 'mt-3'}>
+        {facts.map((fact) => (
+          <div key={fact.label}>
+            <dt className={CARD_LABEL_CLASS}>{fact.label}</dt>
+            <dd className={CARD_VALUE_CLASS}>{fact.value}</dd>
+          </div>
+        ))}
       </dl>
 
       {messageCredits !== null ? (

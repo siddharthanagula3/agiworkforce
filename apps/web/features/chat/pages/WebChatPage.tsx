@@ -6451,6 +6451,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         workMode={composerToggles.workMode}
                         onPrompt={setComposerPrefill}
                         onFocusComposer={handleFocusComposer}
+                        showConnectorHint={
+                          !isConversationSidebarPending &&
+                          conversations.length === 0 &&
+                          !conversationListError
+                        }
                       />
                     )}
                   </div>

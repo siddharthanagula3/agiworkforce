@@ -49,7 +49,7 @@ function renderFooter() {
 }
 
 async function openPicker(user: ReturnType<typeof userEvent.setup>): Promise<void> {
-  await user.click(screen.getByRole('button', { name: 'Change model' }));
+  await user.click(screen.getByRole('button', { name: /, change model$/ }));
   await screen.findByRole('button', { name: /All models/ });
 }
 
