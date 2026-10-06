@@ -240,6 +240,7 @@ export type PublicViewportStrip = {
 export type PublicViewportCaptureEvidence = {
   target: PublicCaptureRect;
   bounds: 'frame' | 'union';
+  scrollPolicy: 'strips' | 'preserve';
   before: PublicViewportCaptureState;
   after?: PublicViewportCaptureState;
   strips: PublicViewportStrip[];
@@ -322,6 +323,8 @@ function enclosingRect(box: PublicCaptureRect): PublicCaptureRect {
 
 export function assertPublicViewportStripCoverage(evidence: PublicViewportCaptureEvidence) {
   const { target, strips } = evidence;
+  if (evidence.scrollPolicy !== 'strips' && evidence.scrollPolicy !== 'preserve')
+    throw new Error('Viewport strip capture has an unsupported scroll policy');
   if (
     !evidence.readiness.settled ||
     !Number.isFinite(evidence.readiness.elapsedMs) ||
@@ -340,6 +343,12 @@ export function assertPublicViewportStripCoverage(evidence: PublicViewportCaptur
   if (JSON.stringify(target) !== JSON.stringify(enclosingRect(original)))
     throw new Error('Viewport strip target differs from the original frame bounds');
   if (!strips.length) throw new Error('Viewport strip coverage has no images');
+  if (evidence.scrollPolicy === 'preserve') {
+    if (strips.length !== 1)
+      throw new Error('Retained viewport capture requires exactly one original strip');
+    assertPublicViewportCaptureStateEqual(evidence.before, strips[0]!.before);
+    assertPublicViewportCaptureStateEqual(evidence.before, strips[0]!.after);
+  }
   let end = target.y;
   for (const strip of strips) {
     assertPublicViewportCaptureStateEqual(strip.before, strip.after);
@@ -442,6 +451,7 @@ export async function capturePublicViewportStrips(
   options: {
     stickyHeader?: Locator;
     bounds?: 'frame' | 'union';
+    preserveScroll?: boolean;
     sourceFiles?: readonly string[];
     outputPath?: (index: number) => string;
     overlap?: number;
@@ -454,6 +464,9 @@ export async function capturePublicViewportStrips(
   const overlap = options.overlap ?? 32;
   const maxStrips = options.maxStrips ?? 32;
   const timeout = options.timeout ?? 30_000;
+  if (options.preserveScroll !== undefined && typeof options.preserveScroll !== 'boolean')
+    throw new Error('Capture needs a boolean retained-scroll option');
+  const preserveScroll = options.preserveScroll ?? false;
   if (
     ![overlap, maxStrips, timeout].every((value) => Number.isInteger(value) && value > 0) ||
     maxStrips > 64
@@ -500,6 +513,7 @@ export async function capturePublicViewportStrips(
     evidence = {
       target,
       bounds: options.bounds ?? 'frame',
+      scrollPolicy: preserveScroll ? 'preserve' : 'strips',
       before,
       strips: [],
       sourceStart,
@@ -605,6 +619,27 @@ export async function capturePublicViewportStrips(
     const maxX = Math.max(0, before.document.width - viewport.width);
     const maxY = Math.max(0, before.document.height - viewport.height);
     const x = Math.min(target.x, maxX);
+    if (preserveScroll) {
+      const safeTop = Math.max(
+        0,
+        Math.ceil((before.header?.y ?? 0) + (before.header?.height ?? 0)),
+      );
+      const clip = {
+        x: target.x - before.scroll.x,
+        y: target.y - before.scroll.y,
+        width: target.width,
+        height: target.height,
+      };
+      if (
+        clip.x < 0 ||
+        clip.y < safeTop ||
+        clip.x + clip.width > viewport.width ||
+        clip.y + clip.height > viewport.height
+      )
+        throw new Error(
+          'Retained viewport capture needs the entire original target below the header',
+        );
+    }
     let cursor = target.y;
     let state = before;
     while (cursor < target.y + target.height) {
@@ -612,11 +647,12 @@ export async function capturePublicViewportStrips(
         throw new Error('Capture exceeded its strip or time bound');
       let safeTop = Math.max(0, Math.ceil((state.header?.y ?? 0) + (state.header?.height ?? 0)));
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        await scroll(x, Math.max(0, Math.min(cursor - safeTop, maxY)));
+        if (!preserveScroll) await scroll(x, Math.max(0, Math.min(cursor - safeTop, maxY)));
         state = await bounded(readState(handle, header), remaining(), 'Strip capture state');
         safeTop = Math.max(0, Math.ceil((state.header?.y ?? 0) + (state.header?.height ?? 0)));
         if (cursor - state.scroll.y >= safeTop) break;
       }
+      if (preserveScroll) assertPublicViewportCaptureStateEqual(before, state);
       if (JSON.stringify(invariant(state)) !== JSON.stringify(invariant(before)))
         throw new Error('Viewport strip frame changed across scrolling');
       const clip = {
@@ -682,7 +718,8 @@ export async function capturePublicViewportStrips(
     if (evidence && handle) {
       try {
         const restoreDeadline = performance.now() + 5_000;
-        await scroll(evidence.before.scroll.x, evidence.before.scroll.y, 5_000);
+        if (!preserveScroll)
+          await scroll(evidence.before.scroll.x, evidence.before.scroll.y, 5_000);
         evidence.after = await bounded(
           readState(handle, header),
           Math.max(1, Math.ceil(restoreDeadline - performance.now())),
