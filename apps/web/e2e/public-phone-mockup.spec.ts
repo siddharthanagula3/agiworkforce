@@ -8,7 +8,6 @@ const mobileStories = [
   'Your data stays on the phone',
   'A complete workspace, not a companion app',
 ];
-const homeOwner = `main .agi-fl-surface-panel[data-state="active"] ${phone}`;
 const reply =
   'From your memory: the demo runs from the CLI in Local mode, the deck lives in the Investor project, and the dry run is Thursday at 4pm. Want a reminder?';
 const widths = [320, 360, 390, 768, 1024, 1366, 1440, 1920];
@@ -111,30 +110,39 @@ for (const path of ['/mobile', '/'] as const) {
             scheme: theme,
             prefersDark: theme === 'dark',
           });
-          if (path === '/') {
-            const tab = page.getByRole('tab', { name: 'AGI Mobile', exact: true });
-            await expect(tab).toHaveCount(1);
-            await tab.click();
-            await expect(tab).toHaveAttribute('aria-selected', 'true');
-            await expect(
-              page.getByRole('tabpanel', { name: 'AGI Mobile', exact: true }),
-            ).toBeVisible();
+          let frames: Locator[];
+          let expectedFrameCount: number;
+          if (path === '/mobile') {
+            frames = [
+              page.locator(`main .agi-fl-hero-frame--main ${phone}`),
+              ...mobileStories.map((name) =>
+                page
+                  .getByRole('listitem')
+                  .filter({
+                    has: page.getByRole('heading', { name, exact: true }),
+                  })
+                  .locator(phone),
+              ),
+            ];
+            expectedFrameCount = frames.length;
+          } else {
+            const deck = page.getByRole('group', { name: 'The six surfaces', exact: true });
+            await expect(deck).toHaveCount(1);
+            const step = deck.getByRole('listitem').filter({
+              has: page.getByRole('link', { name: 'AGI Mobile', exact: true }),
+            });
+            await expect(step).toHaveCount(1);
+            await step.scrollIntoViewIfNeeded();
+            const pinned = (await deck.getAttribute('data-pinned')) === 'true';
+            if (pinned) await expect(step).toHaveAttribute('data-active', 'true');
+            const owner = pinned
+              ? deck.locator('.agi-mx-deck-stage .agi-mx-deck-card[data-active="true"]')
+              : step.locator('.agi-mx-deck-inline');
+            await expect(owner).toHaveCount(1);
+            frames = [owner.locator(phone)];
+            expectedFrameCount = pinned ? 1 : 2;
           }
-          const frames =
-            path === '/mobile'
-              ? [
-                  page.locator(`main .agi-fl-hero-frame--main ${phone}`),
-                  ...mobileStories.map((name) =>
-                    page
-                      .getByRole('listitem')
-                      .filter({
-                        has: page.getByRole('heading', { name, exact: true }),
-                      })
-                      .locator(phone),
-                  ),
-                ]
-              : [page.locator(homeOwner)];
-          await expect(page.locator(`main ${phone}`)).toHaveCount(frames.length);
+          await expect(page.locator(`main ${phone}`)).toHaveCount(expectedFrameCount);
           for (const [index, frame] of frames.entries()) {
             await expect(frame).toHaveCount(1);
             const scope = `phone-${index}`;
