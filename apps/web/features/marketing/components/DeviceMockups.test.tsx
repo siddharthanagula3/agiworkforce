@@ -1,228 +1,179 @@
 import { describe, expect, it } from 'vitest';
-import { render, within } from '@testing-library/react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  PRIVACY_MODE_DISPLAY,
-  PRIVACY_MODE_USAGE_IMPLICATION,
-  TOOL_STATUS_PRESENTATION,
-} from '@agiworkforce/types';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 import {
   ChromeWindow,
   DesktopWindow,
-  DEVICE_GEOMETRY,
   EditorWindow,
   PhoneDevice,
   SidePanelCard,
   TerminalWindow,
-  ToolRow,
   WebWindow,
-  type DeviceType,
 } from './DeviceMockups';
+import {
+  DesktopAppPreview,
+  PhoneAppPreview,
+  PREVIEW_GEOMETRY,
+  type PreviewKind,
+} from './app-preview/AppPreviews';
 import { ProductFrame, type ProductFrameVariant } from './ProductFrame';
 import { HeroAppWindow } from './HeroAppWindow';
 import { ChromeMockup, MobileMockup, VSCodeMockup } from './SurfaceMockups';
 
-const LOCAL_RUNTIME_LABEL = `${(CLI_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
+const repoRoot = resolve(__dirname, '../../../../..');
+const readSource = (path: string) => readFileSync(resolve(repoRoot, path), 'utf8');
 
-describe('terminal approval example', () => {
-  it('includes an approval-pending edit in its initial server markup', () => {
-    const source = readFileSync(
-      resolve(__dirname, '../../../../../apps/cli/src/features/exec/tools/file_ops/mod.rs'),
-      'utf8',
-    );
-    expect(source).toContain('"Allow this edit?"');
-    expect(source).toContain('vec![format!("- {}", old_preview), format!("+ {}", new_preview)]');
-    expect(source).toContain('edit_args.insert("old_string".to_string(), "alpha".to_string())');
-    expect(source).toContain('edit_args.insert("new_string".to_string(), "beta".to_string())');
-    const documentFragment = document.createElement('div');
-    documentFragment.innerHTML = renderToStaticMarkup(<TerminalWindow />);
-    const text = documentFragment.textContent ?? '';
-    expect(text).toContain(TOOL_STATUS_PRESENTATION['awaiting-approval'].label);
-    expect(text).toContain('Allow this edit?');
-    expect(text).toContain('- alpha');
-    expect(text).toContain('+ beta');
-    expect(documentFragment.querySelectorAll('button,a,input,[tabindex]')).toHaveLength(0);
-    expect(documentFragment.querySelector('.agi-dev-body')).toHaveAttribute('aria-hidden', 'true');
+const previews: Array<[PreviewKind, () => React.ReactElement]> = [
+  ['desktop', () => <DesktopWindow />],
+  ['web', () => <WebWindow />],
+  ['chrome', () => <ChromeWindow />],
+  ['panel', () => <SidePanelCard />],
+  ['editor', () => <EditorWindow />],
+  ['terminal', () => <TerminalWindow />],
+  ['phone', () => <PhoneDevice />],
+];
+
+function previewRoot(container: HTMLElement): HTMLElement {
+  const root = container.querySelector<HTMLElement>('figure.agi-app');
+  if (!root) throw new Error('preview root not rendered');
+  return root;
+}
+
+describe('every device preview is a scaled, passive picture of the product', () => {
+  it.each(previews)('%s carries its design geometry and a label', (kind, make) => {
+    const root = previewRoot(render(make()).container);
+    const geometry = PREVIEW_GEOMETRY[kind];
+    expect(root).toHaveClass('agi-dev', `agi-dev--${kind}`, `agi-app--${kind}`);
+    expect(root).toHaveAttribute('data-device', kind);
+    expect(root).toHaveAttribute('data-geometry', `${geometry.width}x${geometry.height}`);
+    expect(root.getAttribute('aria-label')).toMatch(/^Authored example of /u);
+    expect(root.style.getPropertyValue('--dev-w')).toBe(String(geometry.frame));
+    expect(root.style.getPropertyValue('--app-w')).toBe(String(geometry.width));
+    expect(root.style.getPropertyValue('--app-h')).toBe(String(geometry.height));
   });
 
-  it.each(['local', 'byok', 'managed'] as const)(
-    'keeps the %s example free of invented usage, results and platform guarantees',
-    (routeMode) => {
-      const markup = document.createElement('div');
-      markup.innerHTML = renderToStaticMarkup(<TerminalWindow routeMode={routeMode} />);
-      const text = markup.textContent ?? '';
-      expect(text).toContain(PRIVACY_MODE_DISPLAY[routeMode].label);
-      expect(text).toContain(PRIVACY_MODE_USAGE_IMPLICATION[routeMode]);
-      expect(text).not.toMatch(
-        /\$\d|\d+(?:\.\d+)?k|ctx \d|\d+ (?:failed|passed)|effort:|seatbelt/i,
-      );
-      expect(text).not.toContain('sandboxed');
-      expect(text).not.toContain('commit as fix(routing)');
-    },
-  );
-});
-
-function deviceRoot(container: HTMLElement): HTMLElement {
-  const root = container.querySelector<HTMLElement>('.agi-dev');
-  expect(root).not.toBeNull();
-  return root as HTMLElement;
-}
-
-function expectGeometry(root: HTMLElement, type: DeviceType) {
-  const { width, height } = DEVICE_GEOMETRY[type];
-  expect(root.dataset['device']).toBe(type);
-  expect(root.dataset['geometry']).toBe(`${width}x${height}`);
-  expect(root.style.getPropertyValue('--dev-w')).toBe(String(width));
-  expect(root.style.getPropertyValue('--dev-h')).toBe(String(height));
-  expect(root.className).toContain(`agi-dev--${type}`);
-}
-
-describe('DeviceMockups geometry contract', () => {
-  const cases: Array<[DeviceType, () => React.ReactElement]> = [
-    ['desktop', () => <DesktopWindow />],
-    ['web', () => <WebWindow />],
-    ['chrome', () => <ChromeWindow />],
-    ['editor', () => <EditorWindow />],
-    ['terminal', () => <TerminalWindow />],
-    ['panel', () => <SidePanelCard />],
-    ['phone', () => <PhoneDevice />],
-  ];
-
-  it.each(cases)('%s renders its canonical geometry', (type, make) => {
+  it.each(previews)('%s exposes no control a visitor could try to use', (_kind, make) => {
     const { container } = render(make());
-    expectGeometry(deviceRoot(container), type);
+    const root = previewRoot(container);
+    expect(root.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+    expect(
+      container.querySelectorAll(
+        'button,a,input,textarea,select,[tabindex],[contenteditable],[role="button"]',
+      ),
+    ).toHaveLength(0);
   });
 
-  it('every device type has device-true, non-degenerate proportions', () => {
-    for (const [type, { width, height }] of Object.entries(DEVICE_GEOMETRY)) {
-      const ratio = width / height;
-      if (type === 'phone') {
-        expect(height / width).toBeCloseTo(19.5 / 9, 3);
-      } else if (type === 'panel') {
-        expect(ratio).toBeLessThan(1);
-      } else {
-        expect(ratio).toBeGreaterThanOrEqual(4 / 3);
-        expect(ratio).toBeLessThanOrEqual(16 / 9);
-      }
+  it('keeps every design frame non-degenerate and no wider than its design', () => {
+    for (const geometry of Object.values(PREVIEW_GEOMETRY)) {
+      expect(geometry.frame).toBeGreaterThan(0);
+      expect(geometry.frame).toBeLessThanOrEqual(geometry.width);
+      expect(geometry.height).toBeGreaterThan(0);
     }
   });
 
-  it.each(cases.filter(([type]) => type !== 'phone'))(
-    '%s shares the window-chrome DNA (lights + badge)',
-    (_type, make) => {
-      const { container } = render(make());
-      expect(container.querySelectorAll('.agi-dev-lights i')).toHaveLength(3);
-      expect(container.querySelector('.agi-dev-badge')).not.toBeNull();
-    },
-  );
-});
-
-describe('ProductFrame façade', () => {
-  const variants: Array<[ProductFrameVariant, DeviceType]> = [
-    ['desktop', 'desktop'],
-    ['web', 'web'],
-    ['terminal', 'terminal'],
-    ['phone', 'phone'],
-    ['browser', 'panel'],
-    ['editor', 'editor'],
-  ];
-
-  it.each(variants)('variant %s renders canonical device %s', (variant, type) => {
-    const { container } = render(<ProductFrame variant={variant} title="T" badge="B" />);
-    expectGeometry(deviceRoot(container), type);
-  });
-
-  it('renders a real screenshot inside the shared chrome when image is provided', () => {
-    const { container } = render(
-      <ProductFrame
-        variant="terminal"
-        title="agi · zsh"
-        image={{ src: '/logo-512.png', width: 2940, height: 1414, alt: 'CLI' }}
-      />,
-    );
-    const root = deviceRoot(container);
-    expect(root.className).toContain('agi-dev--image');
-    expect(container.querySelector('img.agi-dev-image')).not.toBeNull();
-    expect(container.querySelector('.agi-dev-title')?.textContent).toBe('agi · zsh');
-  });
-
-  it('keeps trust-route copy consistent with BYOK terminal badges', () => {
-    const terminal = render(
-      <ProductFrame variant="terminal" title="agi · zsh" badge="BYOK" routeMode="byok" />,
-    );
-    expect(terminal.container.textContent).toContain(PRIVACY_MODE_DISPLAY.byok.label);
-    expect(terminal.container.textContent).toContain(PRIVACY_MODE_USAGE_IMPLICATION.byok);
-    expect(terminal.container.textContent).not.toContain(PRIVACY_MODE_USAGE_IMPLICATION.local);
-    expect(terminal.container.textContent).not.toContain('local · on-device');
+  it('owner-supplied class names reach the root', () => {
+    for (const element of [
+      <WebWindow key="w" className="owner-slot" />,
+      <PhoneDevice key="p" className="owner-slot" />,
+      <TerminalWindow key="t" className="owner-slot" />,
+    ]) {
+      expect(previewRoot(render(element).container)).toHaveClass('owner-slot');
+    }
   });
 });
 
-describe('cloud-only surfaces never render a Local or BYOK route', () => {
-  const forbidden = [
-    'Served by Local',
-    'Served by BYOK',
-    LOCAL_RUNTIME_LABEL,
-    'Local ∨',
-    '◆ Local',
-    'Auto · Local',
-  ];
+describe('Web and Desktop share the real app shell', () => {
+  const destinations = APP_NAV_DESTINATIONS.filter(
+    (item) => !item.adminOnly && !item.requiresHealthSpace && !item.feature,
+  ).map((item) => item.label);
+
+  it.each([
+    ['web', <WebWindow key="web" />],
+    ['desktop', <DesktopWindow key="desktop" />],
+  ] as const)('%s lists the navigation the signed-in app defines', (_name, element) => {
+    const { container } = render(element);
+    expect(destinations.length).toBeGreaterThan(3);
+    expect(
+      Array.from(container.querySelectorAll('.agi-app-navrow'), (row) => row.textContent),
+    ).toEqual(destinations);
+    expect(container.querySelector('.agi-app-wordmark')?.textContent).toBe('AGI Workforce');
+    expect(container.querySelector('.agi-app-newchat')?.textContent).toBe('New Chat');
+    expect(container.querySelectorAll('.agi-app-navrow[data-active]')).toHaveLength(1);
+  });
+
+  it.each([
+    ['web', <WebWindow key="web" />],
+    ['desktop', <DesktopWindow key="desktop" />],
+  ] as const)('%s composer matches the real control order and wording', (_name, element) => {
+    const { container } = render(element);
+    const composer = container.querySelector('.agi-app-composer');
+    expect(composer?.querySelector('.agi-app-placeholder')?.textContent).toBe(
+      'Ask anything. Type / for commands',
+    );
+    expect(
+      Array.from(composer?.querySelectorAll('.agi-app-seg span') ?? [], (item) => item.textContent),
+    ).toEqual(['Chat', 'AGI Work']);
+    expect(composer?.querySelector('.agi-app-style')?.textContent).toBe('Style');
+    expect(composer?.querySelector('.agi-app-model')?.textContent).toBe('Auto');
+    expect(composer?.querySelector('.agi-app-model svg')).not.toBeNull();
+    expect(composer?.lastElementChild?.lastElementChild).toHaveClass('agi-app-send');
+    expect(container.textContent).not.toMatch(/Enter to send|Best \(auto\)|Served by/u);
+  });
+
+  it('the real composer still carries the placeholder the preview shows', () => {
+    expect(readSource('apps/web/features/chat/components/Composer/ChatComposerNew.tsx')).toContain(
+      'Ask anything. Type / for commands',
+    );
+  });
+
+  it('Web sits in a browser window and Desktop in a Mac window', () => {
+    const web = render(<WebWindow />).container;
+    const desktop = render(<DesktopWindow />).container;
+    expect(web.querySelector('.agi-app-url')?.textContent).toBe('agiworkforce.com/chat');
+    expect(desktop.querySelector('.agi-app-url')).toBeNull();
+    expect(desktop.querySelector('.agi-app-side > .agi-app-lights')).not.toBeNull();
+  });
+
+  it('HeroAppWindow and ProductFrame web render identical markup', () => {
+    const hero = render(<HeroAppWindow />).container.innerHTML;
+    const frame = render(<ProductFrame variant="web" title="agiworkforce.com/chat" badge="Web" />)
+      .container.innerHTML;
+    expect(hero).toBe(frame);
+  });
+});
+
+describe('cloud-only surfaces never show a Local or own-key route', () => {
   const cloudSurfaces: Array<[string, () => React.ReactElement]> = [
     ['DesktopWindow', () => <DesktopWindow />],
     ['ProductFrame desktop', () => <ProductFrame variant="desktop" title="AGI Desktop" />],
     ['WebWindow', () => <WebWindow />],
     ['ChromeWindow', () => <ChromeWindow />],
     ['SidePanelCard', () => <SidePanelCard />],
+    ['EditorWindow', () => <EditorWindow />],
   ];
 
-  it.each(cloudSurfaces)('%s contains no Local or BYOK route text', (_name, make) => {
+  it.each(cloudSurfaces)('%s contains no Local, BYOK or own-key wording', (_name, make) => {
     const text = render(make()).container.textContent ?? '';
-    for (const literal of forbidden) expect(text).not.toContain(literal);
+    expect(text).not.toMatch(/\bLocal\b|BYOK|Your key|Ollama/u);
   });
 
-  it('desktop example and composer name the managed route without a fabricated receipt', () => {
-    const { container } = render(<DesktopWindow />);
-    expect(container.querySelector('.agi-desk-foot')?.textContent).toBe(
-      PRIVACY_MODE_DISPLAY.managed.label,
-    );
-    expect(container.querySelector('.agi-mk-chip--model')?.textContent?.trim()).toBe(
-      'Auto · ' + PRIVACY_MODE_DISPLAY.managed.label,
-    );
-    expect(container.querySelector('.agi-dev-badge')?.textContent).toBe('Cloud');
-    expect(container.querySelector('.agi-mk-receipt')).toBeNull();
+  it('the Local and Cloud switch is drawn only when a caller asks for it', () => {
+    expect(render(<DesktopWindow />).container.querySelector('.agi-app-modeswitch')).toBeNull();
+    const withSwitch = render(<DesktopAppPreview modeSwitch />).container;
+    expect(
+      Array.from(withSwitch.querySelectorAll('.agi-app-modeswitch > span'), (item) => [
+        item.textContent,
+        item.hasAttribute('data-on'),
+      ]),
+    ).toEqual([
+      ['Local', false],
+      ['Cloud', true],
+    ]);
   });
-
-  it('chrome panel pill and composer foot carry the managed label', () => {
-    const chrome = render(<ChromeWindow />).container;
-    expect(chrome.querySelector('.agi-cr-panel-mode')?.textContent?.trim()).toBe(
-      PRIVACY_MODE_DISPLAY.managed.label,
-    );
-    expect(chrome.querySelector('.agi-cr-panel-mode svg.lucide-cloud')).not.toBeNull();
-    expect(chrome.querySelector('.agi-dev-panelcomposer-foot')?.textContent).toContain(
-      PRIVACY_MODE_DISPLAY.managed.label,
-    );
-  });
-
-  it('terminal and phone still show Local', () => {
-    expect(render(<TerminalWindow />).container.textContent).toContain(
-      PRIVACY_MODE_DISPLAY.local.label,
-    );
-    expect(render(<PhoneDevice />).container.textContent).toContain('Local');
-  });
-
-  it('rejects routeMode on non-terminal frames at the type level', () => {
-    // @ts-expect-error routeMode is only valid for the terminal variant
-    const frame = <ProductFrame variant="desktop" title="T" routeMode="local" />;
-    expect(frame).toBeTruthy();
-  });
-});
-
-describe('enforcement anchors for the cloud-only claim', () => {
-  const root = resolve(__dirname, '../../../../..');
-  const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
   it.each([
     ['apps/desktop/electron/config.ts', 'This shell has no Local mode'],
@@ -233,387 +184,225 @@ describe('enforcement anchors for the cloud-only claim', () => {
     ],
     ['apps/extension/src/background.ts', 'executeChromeManagedChat'],
   ])('%s still contains %s', (path, needle) => {
-    expect(read(path)).toContain(needle);
+    expect(readSource(path)).toContain(needle);
+  });
+
+  it('rejects routeMode on non-terminal frames at the type level', () => {
+    // @ts-expect-error routeMode is only valid for the terminal variant
+    const frame = <ProductFrame variant="desktop" title="T" routeMode="local" />;
+    expect(frame).toBeTruthy();
   });
 });
 
-describe('one canonical look per surface, everywhere', () => {
-  it('HeroAppWindow and ProductFrame web render identical markup', () => {
-    const hero = render(<HeroAppWindow />).container.innerHTML;
-    const frame = render(<ProductFrame variant="web" title="agiworkforce.com/chat" badge="Web" />)
-      .container.innerHTML;
-    expect(hero).toBe(frame);
-  });
-
-  it('MobileMockup and ProductFrame phone render the same full phone', () => {
-    const mockup = render(<MobileMockup />);
-    const frame = render(<ProductFrame variant="phone" title="AGI Mobile" badge="Local" />);
-    for (const target of [mockup, frame]) {
-      const html = target.container.innerHTML;
-      expect(html).toContain('From your memory');
-      expect(html).toContain('Message AGI…');
-      expect(html).toContain('AGI Standard');
-      expect(target.container.querySelector('[data-geometry="270x585"]')).not.toBeNull();
-    }
-  });
-
-  it('binds every phone facade to its responsive owner and preserves the passive illustration', () => {
-    const examples = [
-      <PhoneDevice key="direct" />,
-      <PhoneDevice key="custom" className="phone-owner-slot" />,
-      <MobileMockup key="mockup" />,
-      <ProductFrame key="frame" variant="phone" title="AGI Mobile" badge="Local" />,
-    ];
-    for (const example of examples) {
-      const { container } = render(example);
-      const phone = deviceRoot(container);
-      expectGeometry(phone, 'phone');
-      expect(phone).toHaveClass('agi-phone-responsive');
-      expect(phone).not.toHaveClass('agi-web-responsive');
-      const body = phone.querySelector('.agi-dev-body.agi-ph');
-      expect(body).toHaveAttribute('aria-hidden', 'true');
-      expect(body?.querySelector('.agi-mk-user')?.textContent).toBe(
-        'What did we decide for the launch demo?',
-      );
-      expect(
-        body?.querySelector('.agi-mk-agi > p:not(.agi-mk-tool):not(.agi-mk-receipt)')?.textContent,
-      ).toBe(
-        'From your memory: the demo runs from the CLI in Local mode, the deck lives in the Investor project, and the dry run is Thursday at 4pm. Want a reminder?',
-      );
-      expect(body?.querySelector('.agi-mk-tool')).toHaveAttribute('data-state', 'done');
-      expect(body?.querySelector('.agi-mk-tool-meta')?.textContent).toBe('3 facts');
-      expect(body?.querySelector('.agi-mk-receipt')?.textContent).toBe(
-        `Local · ${LOCAL_RUNTIME_LABEL} · 1.1 s`,
-      );
-      expect(body?.querySelector('.agi-ph-ghost')?.textContent).toBe('Message AGI…');
-      expect(body?.querySelector('.agi-ph-model')?.textContent).toBe('AGI Standard');
-      expect(body?.querySelectorAll('svg.agi-phone-icon')).toHaveLength(10);
-      expect(body?.querySelector('svg[aria-label="Memory found"]')).not.toBeNull();
-      expect(body?.querySelector('svg[aria-label="Send"]')).not.toBeNull();
-      expect(body?.querySelectorAll('button,a,input,textarea,[tabindex]')).toHaveLength(0);
-      expect(body?.querySelectorAll('[hidden]')).toHaveLength(0);
-    }
-    const custom = render(<PhoneDevice className="phone-owner-slot" />);
-    expect(deviceRoot(custom.container)).toHaveClass('phone-owner-slot', 'agi-phone-responsive');
-  });
-
-  it('binds editor facades to the responsive owner without introducing active controls', () => {
-    for (const example of [
-      <EditorWindow key="direct" />,
-      <EditorWindow key="custom" className="editor-owner-slot" />,
-      <VSCodeMockup key="mockup" />,
-      <ProductFrame key="frame" variant="editor" title="AGI · VS Code" badge="@agi" />,
-    ]) {
-      const { container } = render(example);
-      const editor = deviceRoot(container);
-      expectGeometry(editor, 'editor');
-      expect(editor).toHaveClass('agi-editor-responsive');
-      expect(editor).not.toHaveClass('agi-web-responsive', 'agi-phone-responsive');
-      const body = editor.querySelector('.agi-dev-body.agi-ed');
-      expect(body).toHaveAttribute('aria-hidden', 'true');
-      expect(body?.querySelector('.agi-ed-code')).not.toBeNull();
-      expect(body?.querySelector('.agi-ed-chat')).not.toBeNull();
-      expect(body?.querySelector('.agi-mk-receipt')).toBeNull();
-      expect(body?.textContent).toContain('Example request: add a fallback for an empty name.');
-      expect(body?.textContent).toContain('Proposed example: trim the name');
-      expect(body?.querySelector('.agi-mk-actions')?.textContent).toBe('AcceptReject');
-      expect(body?.textContent).not.toMatch(
-        /@agi\/sdk|ProviderError|processChat|tokens|passed|completed/,
-      );
-      expect(body?.querySelectorAll('button,a,input,textarea,[tabindex],[hidden]')).toHaveLength(0);
-    }
-    const custom = render(<EditorWindow className="editor-owner-slot" />);
-    expect(deviceRoot(custom.container)).toHaveClass('editor-owner-slot', 'agi-editor-responsive');
-  });
-
-  it('landing SurfaceMockups map to canonical devices', () => {
-    expectGeometry(deviceRoot(render(<ChromeMockup />).container), 'chrome');
-    expectGeometry(deviceRoot(render(<VSCodeMockup />).container), 'editor');
-    expectGeometry(deviceRoot(render(<MobileMockup />).container), 'phone');
-  });
-});
-
-describe('previously clipped strings render in full', () => {
-  it('Chrome side panel composer carries the complete example prompt', () => {
-    const { container } = render(<ChromeWindow />);
-    const ghost = container.querySelector('.agi-dev-panelcomposer-ghost');
-    expect(ghost?.textContent).toBe('Summarise this page into a short checklist.');
-  });
-
-  it('panel card and chrome keep their context and distinct composer state', () => {
-    for (const [el, status] of [
-      [<SidePanelCard key="p" />, 'Paired · Desktop bridge'],
-      [<ChromeWindow key="c" />, 'Desktop optional'],
-    ] as const) {
-      const { container } = render(el);
-      expect(container.querySelector('.agi-dev-pagestrip-title')?.textContent).toBe(
-        'Q3 Strategy Doc',
-      );
-      expect(container.querySelector('.agi-dev-pagestrip-meta')?.textContent).toBe(
-        'docs.google.com',
-      );
-      expect(container.querySelector('.agi-dev-panelcomposer-foot')?.textContent).toContain(status);
-      expect(container.querySelector('.agi-dev-panelcomposer-foot')?.textContent).toContain(
-        PRIVACY_MODE_DISPLAY.managed.label,
-      );
-    }
-  });
-
-  it('web window renders the composer strings without a keyboard hint the product does not show', () => {
-    const { container } = render(<WebWindow />);
-    const html = container.innerHTML;
-    expect(html).toContain('Ask a follow-up…');
-    expect(html).toContain('Searched the web');
-    expect(html).not.toContain('Enter to send');
-    expect(container.querySelector('.agi-mk-composer-meta')).toBeNull();
-    expect(html).not.toContain('128,000');
-    expect(html).not.toContain('$0.00');
-  });
+describe('Chrome side panel', () => {
+  const suggestions = [
+    'Summarize this page',
+    'Explain this page in simple terms',
+    'Pull out the names, dates and numbers',
+    'Translate this page',
+  ];
 
   it.each([
-    ['web', <WebWindow key="web" />],
-    ['desktop', <DesktopWindow key="desktop" />],
-  ] as const)('%s composer keeps send at the end of the control row', (_name, example) => {
-    const { container } = render(example);
-    const rows = container.querySelectorAll('.agi-mk-composer > .agi-mk-composer-row');
-    expect(rows).toHaveLength(2);
-    expect(rows[0]?.querySelector('.agi-mk-ghost')).not.toBeNull();
-    expect(rows[0]?.querySelector('.agi-dev-send')).toBeNull();
-    expect(rows[1]).toHaveClass('agi-mk-composer-foot');
-    expect(Array.from(rows[1]?.children ?? [], (child) => child.className)).toEqual([
-      'agi-mk-seg',
-      'agi-mk-chip agi-mk-chip--model',
-      'agi-dev-send',
-    ]);
+    ['in the browser window', <ChromeWindow key="c" />],
+    ['alone', <SidePanelCard key="p" />],
+    ['through the landing facade', <ChromeMockup key="m" />],
+  ] as const)('%s shows the real empty state and composer', (_name, element) => {
+    const { container } = render(element);
+    const panel = container.querySelector('.agi-app-panel');
+    expect(panel?.querySelectorAll('.agi-app-panel-head svg')).toHaveLength(3);
+    expect(
+      Array.from(panel?.querySelectorAll('.agi-app-panel-suggestion') ?? [], (i) => i.textContent),
+    ).toEqual(suggestions);
+    expect(panel?.querySelector('.agi-app-panel-placeholder')?.textContent).toBe(
+      'How can I help you today?',
+    );
+    expect(panel?.querySelector('.agi-app-panel-chip')?.textContent).toBe('Ask first');
+    expect(panel?.querySelector('.agi-app-panel-model')?.textContent).toBe('Auto');
+    expect(panel?.textContent).not.toMatch(/Managed Cloud|Paired|This page|\/tldr/u);
   });
 
-  it('keeps every receipt segment unbreakable while the sentence stays intact', () => {
-    const { container } = render(<WebWindow />);
-    const receipt = container.querySelector('.agi-mk-receipt');
+  it('the extension still ships the strings the preview shows', () => {
+    const messages = readSource('apps/extension/_locales/en/messages.json');
+    for (const text of [...suggestions, 'How can I help you today?', 'Ask first'])
+      expect(messages).toContain(text);
+  });
+});
+
+describe('VS Code view', () => {
+  it.each([
+    ['direct', <EditorWindow key="e" />],
+    ['through the landing facade', <VSCodeMockup key="m" />],
+  ] as const)('%s shows the real header, approval card and composer', (_name, element) => {
+    const { container } = render(element);
+    expect(container.querySelector('.agi-app-view-title')?.textContent).toBe('AGI');
+    expect(container.querySelector('.agi-app-view-head .agi-app-pill')?.textContent).toBe(
+      'Managed',
+    );
+    expect(container.querySelector('.agi-app-approval-title')?.textContent).toBe('Approval needed');
     expect(
       Array.from(
-        receipt?.querySelectorAll('.agi-mk-receipt-part') ?? [],
-        (part) => part.textContent,
+        container.querySelectorAll('.agi-app-approval-actions span'),
+        (i) => i.textContent,
       ),
     ).toEqual([
-      'Served by AGI Cloud',
-      'Auto route',
-      '3.1k in',
-      '640 out',
-      'metered in credits',
-      '6.2 s',
+      'Review change',
+      `${TOOL_APPROVAL_ACTION_LABELS.approve} once`,
+      `${TOOL_APPROVAL_ACTION_LABELS.approve} for session`,
+      TOOL_APPROVAL_ACTION_LABELS.deny,
     ]);
-    expect(receipt?.textContent).toBe(
-      'Served by AGI Cloud · Auto route · 3.1k in · 640 out · metered in credits · 6.2 s',
+    expect(container.querySelector('.agi-app-view-placeholder')?.textContent).toBe(
+      'Ask AGI to do anything…',
     );
+    expect(container.querySelectorAll('.agi-app-code-row[data-change="add"]')).toHaveLength(2);
+    expect(container.querySelectorAll('.agi-app-code-row[data-change="remove"]')).toHaveLength(1);
+    expect(container.querySelector('.agi-app-diffstat')?.textContent).toBe('+2-1');
+    expect(container.textContent).not.toMatch(/Accept|Reject/u);
+  });
+
+  it('the extension still ships the strings the preview shows', () => {
+    const webview = readSource(
+      'apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts',
+    );
+    for (const text of [
+      'Approval needed',
+      'Review change',
+      "label: APPROVE_VERB + ' once'",
+      "label: APPROVE_VERB + ' for session'",
+      'label: DENY_VERB',
+      'JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.approve)',
+      'Ask AGI to do anything…',
+    ])
+      expect(webview).toContain(text);
   });
 });
 
-describe('page-chat panel example', () => {
-  it('keeps page chat separate from Desktop handoff and persistent browser grants', () => {
-    const { container } = render(<SidePanelCard />);
-    expect(container.textContent).toContain('Browser page added');
-    expect(container.textContent).toContain('Page text included with your question');
-    expect(container.textContent).not.toContain('sent to Desktop');
-    expect(container.textContent).not.toContain('permissions scoped to this task');
-    expect(container.textContent).not.toContain('words selected');
-    expect(container.textContent).toContain(PRIVACY_MODE_DISPLAY.managed.label);
-  });
-
-  it('uses vector icons instead of unsupported page, completion and send glyphs', () => {
-    const { container } = render(<SidePanelCard />);
-    expect(container.textContent).not.toMatch(/[\u25a4\u2713\u27a4]/u);
-    expect(container.querySelectorAll('svg[aria-label="Page context"]')).toHaveLength(2);
-    expect(container.querySelector('svg[aria-label="Context attached"]')).not.toBeNull();
-    expect(container.querySelector('svg[aria-label="Send message"]')).not.toBeNull();
-    expect(container.querySelectorAll('button, input, textarea')).toHaveLength(0);
-  });
-});
-
-describe('readable Web example', () => {
-  it('replaces unsupported Web symbol glyphs with named or decorative SVG icons', () => {
-    const { container, getByRole } = render(<WebWindow />);
-    expect(container.textContent).not.toMatch(/[\u2318\u2713\u2315\u25a4\u25c7\u27a4\u25be]/u);
-    expect(container.querySelectorAll('svg.agi-web-icon')).toHaveLength(7);
-    for (const name of ['search', 'folder', 'library', 'chevron-down']) {
-      const icon = container.querySelector(`svg.lucide-${name}`);
-      expect(icon).toHaveAttribute('aria-hidden', 'true');
-      expect(icon).toHaveAttribute('focusable', 'false');
-    }
-    for (const name of ['Command', 'Completed', 'Send']) {
-      const icon = getByRole('img', { name });
-      expect(icon.tagName.toLowerCase()).toBe('svg');
-      expect(icon).toHaveClass('agi-web-icon');
-      expect(icon).toHaveAttribute('focusable', 'false');
-      expect(icon).not.toHaveAttribute('aria-hidden', 'true');
-    }
-    expect(container.querySelector('.agi-desk-kbd')?.textContent).toBe('K');
-    expect(container.querySelector('.agi-mk-chip--model')?.textContent).toBe('Auto ');
-    expect(container.querySelector('.agi-mk-tool')).toHaveAttribute('data-state', 'done');
-  });
-
+describe('CLI terminal', () => {
   it.each([
-    ['done', '\u2713'],
-    ['wait', '\u25cf'],
-  ] as const)('preserves the default %s tool illustration for other callers', (state, symbol) => {
-    const { container } = render(<ToolRow state={state} label="Source label" meta="Source meta" />);
-    expect(container.querySelector('i')?.textContent).toBe(symbol);
-    expect(container.querySelector('.agi-mk-tool')?.textContent).toBe(
-      `${symbol}Source labelSource meta`,
-    );
-    expect(container.querySelector('.agi-mk-tool')).toHaveAttribute('data-state', state);
-    expect(container.querySelector('svg')).toBeNull();
+    ['local', 'Local', true],
+    ['byok', 'Your key', false],
+    ['managed', 'Managed', false],
+  ] as const)('%s sessions show the access label the CLI prints', (routeMode, label, local) => {
+    const { container } = render(<TerminalWindow routeMode={routeMode} />);
+    expect(container.querySelector('.agi-app-tui')).toHaveAttribute('data-access', routeMode);
+    expect(container.querySelector('.agi-app-tui-status em')?.textContent).toBe(`◉ ${label}`);
+    const head = container.querySelector('.agi-app-tui-head')?.textContent ?? '';
+    const runtime = CLI_LOCAL_RUNTIMES.names[0] ?? '';
+    expect(runtime).not.toBe('');
+    expect(head.includes(runtime)).toBe(local);
   });
 
-  it('uses registered vector icons in the passive desktop composer', () => {
-    const { container } = render(<DesktopWindow />);
-    expect(container.querySelector('.agi-dev-send')?.textContent).toBe('');
-    expect(container.querySelector('.agi-dev-send svg.lucide-arrow-up')).not.toBeNull();
-    expect(container.querySelector('.agi-mk-chip--model')?.textContent?.trim()).toBe(
-      'Auto · ' + PRIVACY_MODE_DISPLAY.managed.label,
-    );
-    expect(container.querySelector('.agi-mk-chip--model svg.lucide-chevron-down')).not.toBeNull();
-    expect(container.querySelectorAll('.agi-mk-composer svg')).toHaveLength(2);
-    expect(container.querySelector('.agi-web-icon')).toBeNull();
+  it('shows the approval box with the choices the CLI offers', () => {
+    const { container } = render(<TerminalWindow />);
+    const box = container.querySelector('.agi-app-tui-box');
+    expect(box).toHaveAttribute('data-title', 'Tool Approval');
+    expect(box?.textContent).toContain('Allow write_file to modify:');
+    expect(
+      Array.from(box?.querySelectorAll('.agi-app-tui-choices span') ?? [], (i) => i.textContent),
+    ).toEqual(['[ Yes ]', '[ No ]', '[ Allow Session ]', '[ Always Allow ]']);
+    expect(box?.querySelectorAll('.agi-app-tui-choices span[data-on]')).toHaveLength(1);
   });
 
-  it('keeps the comparison accessible in its own keyboard scroll region', () => {
-    const { container, getByRole } = render(<WebWindow />);
-    const region = getByRole('region', { name: 'Example comparison of EU AI Act duties' });
-    expect(region).toHaveAttribute('tabindex', '0');
-    expect(region.closest('[aria-hidden="true"]')).toBeNull();
-    const table = within(region).getByRole('table', { name: 'EU AI Act duties' });
+  it('the CLI still prints the strings the preview shows', () => {
+    const overlay = readSource('apps/cli/src/tui/widgets/approval_overlay.rs');
+    for (const text of [
+      'Tool Approval',
+      'Allow write_file to modify:',
+      ' Allow Session ',
+      ' Always Allow ',
+    ])
+      expect(overlay).toContain(text);
+    expect(readSource('apps/cli/src/tui/tui_app.rs')).toContain(
+      'Message AGI...  Enter sends · Ctrl-J newline · / commands · @ files',
+    );
+    const design = readSource('apps/cli/src/design_system.rs');
+    for (const text of ['"Local"', '"Your key"', '"Managed"']) expect(design).toContain(text);
+  });
+
+  it('ProductFrame passes the terminal route through', () => {
+    const terminal = render(<ProductFrame variant="terminal" title="agi" routeMode="byok" />);
+    expect(terminal.container.textContent).toContain('Your key');
+    expect(terminal.container.textContent).not.toContain('◉ Local');
+  });
+});
+
+describe('Mobile', () => {
+  it.each([
+    ['direct', <PhoneDevice key="p" />],
+    ['through the landing facade', <MobileMockup key="m" />],
+    ['through ProductFrame', <ProductFrame key="f" variant="phone" title="AGI Mobile" />],
+  ] as const)('%s shows the home screen only', (_name, element) => {
+    const { container } = render(element);
+    expect(container.querySelector('.agi-app-phone-title')?.textContent).toBe('AGI');
     expect(
-      within(table)
-        .getAllByRole('columnheader')
-        .map((header) => header.textContent),
-    ).toEqual(['Duty', 'Provider', 'Deployer']);
-    expect(
-      within(table)
-        .getAllByRole('row')
-        .slice(1)
-        .map((row) =>
-          within(row)
-            .getAllByRole('cell')
-            .map((cell) => cell.textContent),
-        ),
+      Array.from(container.querySelectorAll('.agi-app-phone-mode > span'), (item) => [
+        item.textContent,
+        item.hasAttribute('data-on'),
+      ]),
     ).toEqual([
-      ['Risk management', 'Required', 'Not required'],
-      ['Human oversight', 'Design for it', 'Operate it'],
-      ['Logging', 'Enable it', 'Keep six months'],
+      ['Local', true],
+      ['Cloud', false],
     ]);
-    expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    expect(container.querySelector('.agi-app-phone-heading')?.textContent).toBe(
+      'How can I help you tonight?',
+    );
+    expect(container.querySelector('.agi-app-phone-placeholder')?.textContent).toBe(
+      "What's on your mind?",
+    );
+    expect(container.querySelector('.agi-app-phone-model')?.textContent).toBe('Auto');
+    expect(container.querySelector('.agi-app-drawer')).toBeNull();
+    expect(container.textContent).not.toMatch(/No project|space|return/u);
   });
 
-  it('retains the sidebar, sources, receipt and illustrated composer without dead controls', () => {
-    const { container, queryAllByRole } = render(<WebWindow className="owner-slot" />);
-    const root = deviceRoot(container);
-    expect(root).toHaveClass('agi-web-responsive', 'owner-slot');
-    expectGeometry(root, 'web');
-    expect(container.querySelector('.agi-web-navigation')?.textContent).toContain('+ New chat');
-    expect(container.querySelector('.agi-web-navigation')?.textContent).toContain('Search');
-    expect(container.querySelector('.agi-web-navigation')?.textContent).toContain('Projects');
-    expect(container.querySelector('.agi-web-navigation')?.textContent).toContain('Library');
-    expect(
-      Array.from(container.querySelectorAll('.agi-web-recents p'), (item) => item.textContent),
-    ).toEqual([
-      'Recents',
-      'EU AI Act duties',
-      'Onboarding email',
-      'Pricing page copy',
-      'Retention query',
-    ]);
-    expect(container.querySelector('.agi-mk-chips')?.textContent).toBe(
-      'eur-lex.europa.eudigital-strategy.ec.europa.eu+3 sources',
+  it('draws the real drawer rows when the side panel is open', () => {
+    const { container } = render(<PhoneAppPreview drawerOpen />);
+    const drawer = container.querySelector('.agi-app-drawer');
+    expect(drawer?.querySelector('.agi-app-drawer-brand')?.textContent).toBe('AGI');
+    expect(drawer?.querySelectorAll('.agi-app-drawer-btn')).toHaveLength(3);
+    const rows = Array.from(
+      drawer?.querySelectorAll('.agi-app-drawer-row') ?? [],
+      (row) => row.textContent,
     );
-    expect(container.querySelector('.agi-mk-receipt')?.textContent).toBe(
-      'Served by AGI Cloud · Auto route · 3.1k in · 640 out · metered in credits · 6.2 s',
-    );
-    expect(container.querySelector('.agi-mk-composer')?.textContent).toContain('Ask a follow-up…');
-    expect(container.querySelector('.agi-mk-composer')?.textContent).toContain('Chat');
-    expect(container.querySelector('.agi-mk-composer')?.textContent).toContain('AGI Work');
-    expect(container.querySelector('.agi-mk-composer')?.textContent).toContain('Auto');
-    expect(queryAllByRole('button')).toHaveLength(0);
-    expect(queryAllByRole('textbox')).toHaveLength(0);
+    expect(rows.slice(0, 4)).toEqual(['Chats', 'Projects', 'Library', 'Remote']);
+    expect(rows.slice(-3)).toEqual(['Settings', 'Notifications', 'Help & About']);
+    expect(rows).toContain('See all chats');
+    expect(container.querySelector('.agi-app-phone-scrim')).not.toBeNull();
   });
 
-  it.each([
-    ['desktop', <DesktopWindow key="desktop" />],
-    ['chrome', <ChromeWindow key="chrome" />],
-    ['editor', <EditorWindow key="editor" />],
-    ['terminal', <TerminalWindow key="terminal" />],
-    ['panel', <SidePanelCard key="panel" />],
-    ['phone', <PhoneDevice key="phone" />],
-  ] as const)('leaves the %s illustration outside the Web reflow scope', (_name, example) => {
-    const { container } = render(example);
-    expect(deviceRoot(container)).not.toHaveClass('agi-web-responsive');
-    expect(container.querySelector('.agi-web-table-region')).toBeNull();
+  it('the mobile app still ships the strings the preview shows', () => {
+    expect(readSource('apps/mobile/app/(app)/(tabs)/chat.tsx')).toContain(
+      'How can I help you tonight?',
+    );
+    expect(readSource('apps/mobile/src/features/chat/components/ChatInput.tsx')).toContain(
+      "What's on your mind?",
+    );
   });
 });
 
-describe('authored Desktop and Chrome prompts', () => {
-  it.each([
-    ['desktop', <DesktopWindow className="owner-slot" key="d" />],
-    ['chrome', <ChromeWindow className="owner-slot" key="c" />],
-  ] as const)(
-    'keeps the %s sample explicit, passive and free of fabricated run results',
-    (kind, example) => {
-      const { container } = render(example);
-      const root = deviceRoot(container);
-      expectGeometry(root, kind);
-      expect(root).toHaveClass('owner-slot', 'agi-' + kind + '-responsive');
-      expect(root).not.toHaveClass('agi-web-responsive');
-      expect(container.querySelector('.agi-device-example-label')?.textContent).toBe(
-        'Example prompt',
-      );
-      expect(container.querySelector('.agi-dev-body')).toHaveAttribute('aria-hidden', 'true');
-      expect(
-        container.querySelectorAll(
-          'button,a,input,textarea,select,[tabindex],[contenteditable],[role="button"],[hidden],[inert]',
-        ),
-      ).toHaveLength(0);
-      expect(
-        container.querySelectorAll(
-          '.agi-mk-tool,.agi-mk-approval,.agi-mk-receipt,.agi-mk-cite,.agi-cr-msg--agi,.agi-mk-actions',
-        ),
-      ).toHaveLength(0);
-      expect(container.textContent).not.toMatch(
-        /Always|Insert as comment|¶|\d+(?:\.\d+)?\s+s\b|\d+\s+lines added/u,
-      );
-      expect(container.textContent).not.toMatch(/[\u25a4\u25c6\u2713\u27a4\u25be]/u);
-    },
-  );
+describe('ProductFrame facade', () => {
+  const variants: Array<[ProductFrameVariant, PreviewKind]> = [
+    ['desktop', 'desktop'],
+    ['web', 'web'],
+    ['terminal', 'terminal'],
+    ['phone', 'phone'],
+    ['browser', 'panel'],
+    ['editor', 'editor'],
+  ];
 
-  it('binds the Desktop subset to actual navigation labels and retains the example draft', () => {
-    const { container } = render(<DesktopWindow />);
-    const selected = APP_NAV_DESTINATIONS.filter(({ id }) => id === 'projects' || id === 'library');
-    expect(selected.map(({ id }) => id)).toEqual(['projects', 'library']);
-    expect(
-      Array.from(container.querySelectorAll('.agi-desk-item'), (item) => item.textContent?.trim()),
-    ).toEqual(['Search', ...selected.map(({ label }) => label)]);
-    expect(container.querySelectorAll('.agi-desk-count,.agi-desk-beta')).toHaveLength(0);
-    expect(container.querySelector('.agi-mk-ghost')?.textContent).toBe(
-      'Draft a release note from these notes.',
-    );
-    expect(container.querySelector('.agi-device-example-title')?.textContent).toBe('Release notes');
-    expect(container.querySelectorAll('svg.agi-device-icon')).toHaveLength(6);
+  it.each(variants)('variant %s renders the %s preview', (variant, kind) => {
+    const { container } = render(<ProductFrame variant={variant} title="T" badge="B" />);
+    expect(previewRoot(container)).toHaveAttribute('data-device', kind);
   });
 
-  it('keeps the Chrome authored document and draft without a fabricated document id or answer', () => {
-    const { container } = render(<ChromeWindow />);
-    expect(container.querySelector('.agi-cr-url')?.textContent?.trim()).toBe('docs.google.com');
-    expect(container.querySelector('.agi-cr-doc-title')?.textContent).toBe('Q3 Strategy Document');
-    expect(
-      container.querySelector('.agi-cr-doc-copy')?.textContent?.replace(/\s+/gu, ' ').trim(),
-    ).toBe(
-      'Review the launch checklist and record the open questions before the next team meeting.',
+  it('renders a real screenshot inside the shared chrome when image is provided', () => {
+    const { container } = render(
+      <ProductFrame
+        variant="terminal"
+        title="agi · zsh"
+        image={{ src: '/logo-512.png', width: 2940, height: 1414, alt: 'CLI' }}
+      />,
     );
-    expect(container.querySelector('.agi-dev-type')?.textContent).toBe(
-      'Summarise this page into a short checklist.',
-    );
-    expect(container.querySelector('.agi-dev-panelcomposer-foot')?.textContent).not.toContain(
-      'Paired',
-    );
-    expect(container.querySelectorAll('svg.agi-device-icon')).toHaveLength(12);
+    expect(container.querySelector('figure.agi-dev')?.className).toContain('agi-dev--image');
+    expect(container.querySelector('img.agi-dev-image')).not.toBeNull();
+    expect(container.querySelector('.agi-dev-title')?.textContent).toBe('agi · zsh');
   });
 });

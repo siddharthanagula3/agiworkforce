@@ -1,0 +1,1230 @@
+[data-design='agi'] figure.agi-dev.agi-app[data-device][data-geometry] {
+  color-scheme: dark;
+  inline-size: 100%;
+  max-inline-size: calc(var(--dev-w) * 1px);
+  margin-block: 0;
+  margin-inline: auto;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  color: var(--chat-text-primary);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device][data-geometry] {
+  color-scheme: light;
+}
+
+[data-design='agi'] .agi-app-window {
+  --u: calc(100cqw / var(--app-w));
+  display: flex;
+  flex-direction: column;
+  block-size: calc(var(--u) * var(--app-h));
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 14);
+  background: var(--chat-bg);
+  box-shadow: 0 calc(var(--u) * 24) calc(var(--u) * 64) var(--agi-shadow);
+  font-size: calc(var(--u) * 14);
+  line-height: 1.3;
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-app-window p {
+  margin: 0;
+}
+
+[data-design='agi'] .agi-app-end {
+  margin-inline-start: auto;
+}
+
+[data-design='agi'] .agi-app-quiet {
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-icon {
+  flex: none;
+  inline-size: calc(var(--u) * 16);
+  block-size: calc(var(--u) * 16);
+  stroke-width: 1.75;
+}
+
+[data-design='agi'] .agi-app-icon--sm {
+  inline-size: calc(var(--u) * 13);
+  block-size: calc(var(--u) * 13);
+}
+
+[data-design='agi'] .agi-app-icon--lg {
+  inline-size: calc(var(--u) * 20);
+  block-size: calc(var(--u) * 20);
+}
+
+[data-design='agi'] .agi-app-icon--xl {
+  inline-size: calc(var(--u) * 24);
+  block-size: calc(var(--u) * 24);
+}
+
+[data-design='agi'] .agi-app-mark {
+  flex: none;
+  inline-size: calc(var(--u) * 20);
+  block-size: calc(var(--u) * 20);
+}
+
+[data-design='agi'] .agi-app-mark--sm {
+  inline-size: calc(var(--u) * 15);
+  block-size: calc(var(--u) * 15);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-lights {
+  display: inline-flex;
+  flex: none;
+  gap: calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-app-lights i {
+  inline-size: calc(var(--u) * 12);
+  block-size: calc(var(--u) * 12);
+  border-radius: var(--corner-pill);
+  background: var(--chat-border-strong);
+}
+
+[data-design='agi'] .agi-app-chrome,
+[data-design='agi'] .agi-app-titlebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 14);
+  block-size: calc(var(--u) * 40);
+  padding-inline: calc(var(--u) * 16);
+  border-block-end: 1px solid var(--chat-border);
+  background: var(--chat-sidebar-bg);
+}
+
+[data-design='agi'] .agi-app--desktop .agi-app-titlebar {
+  display: none;
+}
+
+[data-design='agi'] .agi-app-url {
+  flex: 0 1 calc(var(--u) * 380);
+  margin-inline: auto;
+  padding-block: calc(var(--u) * 5);
+  border-radius: calc(var(--u) * 8);
+  background: var(--chat-surface-hover);
+  font-size: calc(var(--u) * 12);
+  color: var(--chat-text-secondary);
+  text-align: center;
+}
+
+[data-design='agi'] .agi-app-titletext {
+  margin-inline: auto;
+  font-size: calc(var(--u) * 12);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-shell {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: calc(var(--u) * 260) minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+[data-design='agi'] .agi-app-side {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 10);
+  min-block-size: 0;
+  padding: calc(var(--u) * 14) calc(var(--u) * 12);
+  border-inline-end: 1px solid var(--chat-border);
+  background: var(--chat-sidebar-bg);
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-app-side > .agi-app-lights {
+  padding: calc(var(--u) * 4) calc(var(--u) * 4) calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-app-brand {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding-inline: calc(var(--u) * 4);
+}
+
+[data-design='agi'] .agi-app-wordmark {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: calc(var(--u) * 15);
+  font-weight: 500;
+}
+
+[data-design='agi'] .agi-app-controls {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+}
+
+[data-design='agi'] .agi-app-iconbtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--u) * 32);
+  block-size: calc(var(--u) * 32);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-newchat {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 7) calc(var(--u) * 12);
+  border-radius: calc(var(--u) * 8);
+  background: var(--chat-surface-hover);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-app-search {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 8) calc(var(--u) * 12);
+  border-radius: calc(var(--u) * 8);
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-search kbd {
+  margin-inline-start: auto;
+  font-family: inherit;
+  font-size: calc(var(--u) * 11);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-nav {
+  display: grid;
+  gap: calc(var(--u) * 2);
+  padding-block: calc(var(--u) * 8);
+  border-block: 1px solid var(--chat-border);
+}
+
+[data-design='agi'] .agi-app-navrow {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 6) calc(var(--u) * 8);
+  border-radius: calc(var(--u) * 6);
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-navrow[data-active],
+[data-design='agi'] .agi-app-session[data-active] {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-chats {
+  display: grid;
+  gap: calc(var(--u) * 2);
+}
+
+[data-design='agi'] .agi-app-section {
+  padding: calc(var(--u) * 4) calc(var(--u) * 8);
+  font-size: calc(var(--u) * 13);
+  font-weight: 600;
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-group {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 4) calc(var(--u) * 8);
+  font-size: calc(var(--u) * 12);
+  font-weight: 500;
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-session {
+  display: block;
+  padding: calc(var(--u) * 8) calc(var(--u) * 12);
+  border-radius: calc(var(--u) * 6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-design='agi'] .agi-app-modeswitch {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block-start: auto;
+  padding: calc(var(--u) * 3);
+  border: 1px solid var(--chat-border);
+  border-radius: calc(var(--u) * 10);
+  background: var(--chat-surface-hover);
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-modeswitch span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 7) calc(var(--u) * 10);
+  border-radius: calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-app-modeswitch span[data-on] {
+  background: var(--chat-input-bg);
+  box-shadow: 0 0 0 1px var(--chat-border);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 16);
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: calc(var(--u) * 28) calc(var(--u) * 32) calc(var(--u) * 20);
+}
+
+[data-design='agi'] .agi-app-thread {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: calc(var(--u) * 18);
+  inline-size: 100%;
+  max-inline-size: calc(var(--u) * 768);
+  min-block-size: 0;
+  font-size: calc(var(--u) * 16);
+  line-height: 1.625;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    currentColor calc(100% - var(--u) * 28),
+    transparent
+  );
+  mask-image: linear-gradient(to bottom, currentColor calc(100% - var(--u) * 28), transparent);
+}
+
+[data-design='agi'] .agi-app-user {
+  align-self: flex-end;
+  max-inline-size: 75%;
+  padding: calc(var(--u) * 10) calc(var(--u) * 16);
+  border-radius: calc(var(--u) * 16);
+  background: var(--chat-user-bubble-bg);
+}
+
+[data-design='agi'] .agi-app-reply {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 12);
+}
+
+[data-design='agi'] .agi-app-heading {
+  font-size: calc(var(--u) * 18);
+  font-weight: 600;
+}
+
+[data-design='agi'] .agi-app-list {
+  display: grid;
+  gap: calc(var(--u) * 6);
+  margin: 0;
+  padding-inline-start: calc(var(--u) * 24);
+  list-style: disc;
+}
+
+[data-design='agi'] .agi-app-toolline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: calc(var(--u) * 14);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-table {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--chat-border);
+  border-radius: calc(var(--u) * 10);
+  font-size: calc(var(--u) * 14);
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-app-table span {
+  padding: calc(var(--u) * 9) calc(var(--u) * 14);
+  border-block-start: 1px solid var(--chat-border);
+}
+
+[data-design='agi'] .agi-app-table .agi-app-th {
+  border-block-start: 0;
+  background: var(--chat-surface-hover);
+  font-weight: 600;
+}
+
+[data-design='agi'] .agi-app-actions {
+  display: flex;
+  gap: calc(var(--u) * 16);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-composer {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: calc(var(--u) * 14);
+  inline-size: 100%;
+  max-inline-size: calc(var(--u) * 768);
+  padding: calc(var(--u) * 16) calc(var(--u) * 16) calc(var(--u) * 12);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 24);
+  background: var(--chat-input-bg);
+}
+
+[data-design='agi'] .agi-app-placeholder {
+  padding-inline: calc(var(--u) * 4);
+  font-size: calc(var(--u) * 16);
+  color: var(--chat-text-placeholder);
+}
+
+[data-design='agi'] .agi-app-composer-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-seg,
+[data-design='agi'] .agi-app-phone-mode {
+  display: inline-flex;
+  padding: calc(var(--u) * 3);
+  border: 1px solid var(--chat-border);
+  border-radius: var(--corner-pill);
+  background: var(--chat-surface-hover);
+  font-weight: 500;
+}
+
+[data-design='agi'] .agi-app-seg span {
+  padding: calc(var(--u) * 5) calc(var(--u) * 14);
+  border-radius: var(--corner-pill);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-app-seg span[data-on] {
+  background: var(--chat-input-bg);
+  box-shadow: 0 0 0 1px var(--chat-border);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-style,
+[data-design='agi'] .agi-app-model {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-app-send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--u) * 36);
+  block-size: calc(var(--u) * 36);
+  border-radius: var(--corner-pill);
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-tabstrip,
+[data-design='agi'] .agi-app-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+  padding-inline: calc(var(--u) * 16);
+  background: var(--chat-sidebar-bg);
+}
+
+[data-design='agi'] .agi-app-tabstrip {
+  block-size: calc(var(--u) * 42);
+}
+
+[data-design='agi'] .agi-app-tab {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: calc(var(--u) * 8);
+  inline-size: calc(var(--u) * 220);
+  padding: calc(var(--u) * 9) calc(var(--u) * 14);
+  border-radius: calc(var(--u) * 10) calc(var(--u) * 10) 0 0;
+  background: var(--chat-input-bg);
+  font-size: calc(var(--u) * 12);
+}
+
+[data-design='agi'] .agi-app-toolbar {
+  block-size: calc(var(--u) * 44);
+  border-block-end: 1px solid var(--chat-border);
+  background: var(--chat-input-bg);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-omnibox {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 7) calc(var(--u) * 14);
+  border-radius: var(--corner-pill);
+  background: var(--chat-surface-hover);
+  font-size: calc(var(--u) * 13);
+}
+
+[data-design='agi'] .agi-app-browser {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr) calc(var(--u) * 380);
+  min-block-size: 0;
+}
+
+[data-design='agi'] .agi-app-page {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 48) calc(var(--u) * 72);
+  background: var(--chat-bg);
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-app-page-title {
+  margin-block-end: calc(var(--u) * 8);
+  font-size: calc(var(--u) * 28);
+  font-weight: 600;
+}
+
+[data-design='agi'] .agi-app-page i {
+  flex: none;
+  block-size: calc(var(--u) * 9);
+  border-radius: var(--corner-pill);
+  background: var(--chat-surface-hover);
+}
+
+[data-design='agi'] .agi-app-page b {
+  flex: none;
+  block-size: calc(var(--u) * 10);
+}
+
+[data-design='agi'] .agi-app-panel {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  block-size: 100%;
+  border-inline-start: 1px solid var(--chat-border-strong);
+  background: var(--chat-sidebar-bg);
+  font-size: calc(var(--u) * 13);
+  line-height: 1.5;
+}
+
+[data-design='agi'] .agi-app--panel .agi-app-panel {
+  border-inline-start: 0;
+}
+
+[data-design='agi'] .agi-app-panel-head {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: calc(var(--u) * 16);
+  padding: calc(var(--u) * 12) calc(var(--u) * 14);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-panel-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 28);
+  min-block-size: 0;
+  padding-inline: calc(var(--u) * 16);
+}
+
+[data-design='agi'] .agi-app-panel-mark {
+  inline-size: calc(var(--u) * 110);
+  block-size: calc(var(--u) * 110);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-panel-suggestions {
+  display: grid;
+  gap: calc(var(--u) * 6);
+  inline-size: 100%;
+}
+
+[data-design='agi'] .agi-app-panel-suggestion {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 10) calc(var(--u) * 12);
+  border: 1px solid var(--chat-border);
+  border-radius: calc(var(--u) * 10);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-panel-composer {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: space-between;
+  min-block-size: calc(var(--u) * 104);
+  margin: calc(var(--u) * 12);
+  padding: calc(var(--u) * 12);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 16);
+  background: var(--chat-input-bg);
+}
+
+[data-design='agi'] .agi-app-panel-placeholder {
+  font-size: calc(var(--u) * 14);
+  color: var(--chat-text-placeholder);
+}
+
+[data-design='agi'] .agi-app-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-panel-chip,
+[data-design='agi'] .agi-app-panel-model {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-app-panel-chip {
+  padding: calc(var(--u) * 3) calc(var(--u) * 9);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: var(--corner-pill);
+}
+
+[data-design='agi'] .agi-app--editor .agi-app-window {
+  font-size: calc(var(--u) * 13);
+}
+
+[data-design='agi'] .agi-app-command {
+  display: inline-flex;
+  flex: 0 1 calc(var(--u) * 420);
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 8);
+  margin-inline: auto;
+  padding-block: calc(var(--u) * 5);
+  border: 1px solid var(--chat-border);
+  border-radius: calc(var(--u) * 8);
+  background: var(--chat-surface-hover);
+  font-size: calc(var(--u) * 12);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-editor {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: calc(var(--u) * 52) calc(var(--u) * 380) minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+[data-design='agi'] .agi-app-activity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 22);
+  padding-block: calc(var(--u) * 16);
+  border-inline-end: 1px solid var(--chat-border);
+  background: var(--chat-sidebar-bg);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-activity-on {
+  display: inline-flex;
+  align-self: stretch;
+  justify-content: center;
+  padding-block: calc(var(--u) * 6);
+  border-inline-start: calc(var(--u) * 2) solid var(--chat-text-primary);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-view {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  border-inline-end: 1px solid var(--chat-border);
+  background: var(--chat-sidebar-bg);
+}
+
+[data-design='agi'] .agi-app-view-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 12) calc(var(--u) * 14);
+  border-block-end: 1px solid var(--chat-border);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-view-head .agi-app-mark,
+[data-design='agi'] .agi-app-view-title {
+  font-weight: 600;
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+  padding: calc(var(--u) * 2) calc(var(--u) * 9);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: var(--corner-pill);
+  font-size: calc(var(--u) * 11.5);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-view-thread {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: calc(var(--u) * 14);
+  min-block-size: 0;
+  padding: calc(var(--u) * 16) calc(var(--u) * 14);
+  line-height: 1.55;
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-app-view-user {
+  align-self: flex-end;
+  max-inline-size: 85%;
+  padding: calc(var(--u) * 8) calc(var(--u) * 12);
+  border-radius: calc(var(--u) * 12);
+  background: var(--chat-user-bubble-bg);
+}
+
+[data-design='agi'] .agi-app-approval {
+  display: grid;
+  gap: calc(var(--u) * 10);
+  padding: calc(var(--u) * 12);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 10);
+  background: var(--chat-input-bg);
+}
+
+[data-design='agi'] .agi-app-approval-title {
+  font-weight: 600;
+}
+
+[data-design='agi'] .agi-app-approval-file {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-app-approval code,
+[data-design='agi'] .agi-app-code-lines,
+[data-design='agi'] .agi-app-diffstat {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+[data-design='agi'] .agi-app-approval code {
+  padding: calc(var(--u) * 1) calc(var(--u) * 6);
+  border-radius: calc(var(--u) * 4);
+  background: var(--chat-surface-hover);
+  font-size: calc(var(--u) * 12);
+}
+
+[data-design='agi'] .agi-app-diffstat {
+  display: inline-flex;
+  gap: calc(var(--u) * 6);
+  margin-inline-start: auto;
+  font-size: calc(var(--u) * 12);
+}
+
+[data-design='agi'] .agi-app-diffstat b {
+  font-weight: 500;
+  color: var(--chat-success-text);
+}
+
+[data-design='agi'] .agi-app-diffstat i {
+  font-style: normal;
+  color: var(--chat-destructive-text);
+}
+
+[data-design='agi'] .agi-app-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 6);
+}
+
+[data-design='agi'] .agi-app-approval-actions span {
+  padding: calc(var(--u) * 5) calc(var(--u) * 10);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 12);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-app-approval-actions span[data-primary],
+[data-design='agi'] .agi-app-view-send {
+  border-color: var(--chat-text-primary);
+  background: var(--chat-text-primary);
+  color: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-app-view-composer {
+  display: grid;
+  flex: none;
+  gap: calc(var(--u) * 16);
+  margin: calc(var(--u) * 12);
+  padding: calc(var(--u) * 12);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 14);
+  background: var(--chat-input-bg);
+}
+
+[data-design='agi'] .agi-app-view-placeholder {
+  color: var(--chat-text-placeholder);
+}
+
+[data-design='agi'] .agi-app-view-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-view-send {
+  display: inline-flex;
+  padding: calc(var(--u) * 6);
+  border-radius: var(--corner-pill);
+}
+
+[data-design='agi'] .agi-app-code {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  background: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-app-code-tabs {
+  display: flex;
+  flex: none;
+  border-block-end: 1px solid var(--chat-border);
+  background: var(--chat-sidebar-bg);
+}
+
+[data-design='agi'] .agi-app-code-tabs span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 9) calc(var(--u) * 18);
+  border-block-start: calc(var(--u) * 2) solid var(--chat-text-primary);
+  border-inline-end: 1px solid var(--chat-border);
+  background: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-app-crumbs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 7) calc(var(--u) * 18);
+  font-size: calc(var(--u) * 12);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-code-lines {
+  display: flex;
+  flex-direction: column;
+  padding-block-start: calc(var(--u) * 6);
+  font-size: calc(var(--u) * 13);
+  line-height: 1.7;
+  color: var(--chat-code-text);
+}
+
+[data-design='agi'] .agi-app-code-row {
+  display: flex;
+  white-space: pre;
+}
+
+[data-design='agi'] .agi-app-code-row i,
+[data-design='agi'] .agi-app-code-row b {
+  flex: none;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-code-row i {
+  inline-size: calc(var(--u) * 46);
+  padding-inline-end: calc(var(--u) * 12);
+  text-align: end;
+}
+
+[data-design='agi'] .agi-app-code-row b {
+  inline-size: calc(var(--u) * 22);
+}
+
+[data-design='agi'] .agi-app-code-row[data-change='add'] {
+  background: color-mix(in srgb, var(--chat-success) 16%, transparent);
+}
+
+[data-design='agi'] .agi-app-code-row[data-change='remove'] {
+  background: color-mix(in srgb, var(--chat-destructive) 16%, transparent);
+}
+
+[data-design='agi'] .agi-app-code-row [data-token='keyword'] {
+  color: var(--chat-code-syntax-keyword);
+}
+
+[data-design='agi'] .agi-app-code-row [data-token='function'] {
+  color: var(--chat-code-syntax-function);
+}
+
+[data-design='agi'] .agi-app-code-row [data-token='type'] {
+  color: var(--chat-code-syntax-type);
+}
+
+[data-design='agi'] .agi-app-code-row [data-token='string'] {
+  color: var(--chat-code-syntax-string);
+}
+
+[data-design='agi'] .agi-app-statusbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 18);
+  block-size: calc(var(--u) * 26);
+  padding-inline: calc(var(--u) * 14);
+  border-block-start: 1px solid var(--chat-border);
+  background: var(--chat-sidebar-bg);
+  font-size: calc(var(--u) * 11.5);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-statusbar span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+}
+
+[data-design='agi'] .agi-app-tui {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: calc(var(--u) * 16);
+  min-block-size: 0;
+  padding: calc(var(--u) * 16) calc(var(--u) * 18);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: calc(var(--u) * 14);
+  line-height: 1.55;
+}
+
+[data-design='agi'] .agi-app-tui i,
+[data-design='agi'] .agi-app-tui em,
+[data-design='agi'] .agi-app-tui u {
+  font-style: normal;
+  text-decoration: none;
+}
+
+[data-design='agi'] .agi-app-tui i {
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-tui-head {
+  display: flex;
+  align-items: center;
+  padding: calc(var(--u) * 8) calc(var(--u) * 14);
+  border: 1px solid var(--chat-border-strong);
+}
+
+[data-design='agi'] .agi-app-tui-head > * + * {
+  margin-inline-start: calc(var(--u) * 14);
+  padding-inline-start: calc(var(--u) * 14);
+  border-inline-start: 1px solid var(--chat-border-strong);
+}
+
+[data-design='agi'] .agi-app-tui-head b,
+[data-design='agi'] .agi-app-tui-head em,
+[data-design='agi'] .agi-app-tui-input b {
+  color: var(--chat-accent);
+}
+
+[data-design='agi'] .agi-app-tui-box {
+  position: relative;
+  display: grid;
+  gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 16) calc(var(--u) * 14) calc(var(--u) * 12);
+  border: 1px solid var(--chat-border-strong);
+}
+
+[data-design='agi'] .agi-app-tui-box::before {
+  content: attr(data-title);
+  position: absolute;
+  inset-block-start: calc(var(--u) * -11);
+  inset-inline-start: calc(var(--u) * 12);
+  padding-inline: calc(var(--u) * 6);
+  background: var(--chat-bg);
+  font-weight: 600;
+}
+
+[data-design='agi'] .agi-app-tui [data-diff='remove'] {
+  color: var(--chat-destructive-text);
+}
+
+[data-design='agi'] .agi-app-tui [data-diff='add'],
+[data-design='agi'] .agi-app-tui-status em,
+[data-design='agi'] .agi-app-tui-status u {
+  color: var(--chat-success-text);
+}
+
+[data-design='agi'] .agi-app-tui-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 14);
+  padding-block: calc(var(--u) * 8) calc(var(--u) * 4);
+}
+
+[data-design='agi'] .agi-app-tui-choices span[data-on] {
+  background: var(--chat-accent);
+  color: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-app-tui-input {
+  margin-block-start: auto;
+}
+
+[data-design='agi'] .agi-app-tui-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--u) * 6) calc(var(--u) * 18);
+}
+
+[data-design='agi'] .agi-app-tui:not([data-access='local']) .agi-app-tui-status em {
+  color: var(--chat-accent);
+}
+
+[data-design='agi'] .agi-app--phone .agi-app-window {
+  position: relative;
+  border-radius: calc(var(--u) * 52);
+  font-size: calc(var(--u) * 16);
+}
+
+[data-design='agi'] .agi-app-phone-scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, black 45%, transparent);
+}
+
+[data-design='agi'] .agi-app-drawer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 18);
+  inline-size: calc(var(--u) * 300);
+  padding: calc(var(--u) * 62) calc(var(--u) * 14) calc(var(--u) * 30);
+  border-inline-end: 1px solid var(--chat-border);
+  background: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-app-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding-inline: calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-app-drawer-brand {
+  margin-inline-end: auto;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: calc(var(--u) * 24);
+  font-weight: 600;
+}
+
+[data-design='agi'] .agi-app-drawer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--u) * 34);
+  block-size: calc(var(--u) * 34);
+  border: 1px solid var(--chat-border);
+  border-radius: var(--corner-pill);
+  background: var(--chat-input-bg);
+}
+
+[data-design='agi'] .agi-app-drawer-rows {
+  display: grid;
+  gap: calc(var(--u) * 2);
+}
+
+[data-design='agi'] .agi-app-drawer-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+  padding: calc(var(--u) * 11) calc(var(--u) * 12);
+  border-radius: calc(var(--u) * 12);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-drawer-row[data-active] {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-drawer-section {
+  padding: calc(var(--u) * 4) calc(var(--u) * 12);
+  font-size: calc(var(--u) * 13);
+  font-weight: 600;
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-drawer-foot {
+  margin-block-start: auto;
+  padding-block-start: calc(var(--u) * 10);
+  border-block-start: 1px solid var(--chat-border);
+}
+
+[data-design='agi'] .agi-app-phone-status,
+[data-design='agi'] .agi-app-phone-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: calc(var(--u) * 28);
+}
+
+[data-design='agi'] .agi-app-phone-status {
+  position: relative;
+  z-index: 1;
+  padding-block: calc(var(--u) * 16) calc(var(--u) * 10);
+  font-weight: 600;
+}
+
+[data-design='agi'] .agi-app-phone-island {
+  inline-size: calc(var(--u) * 116);
+  block-size: calc(var(--u) * 34);
+  border-radius: var(--corner-pill);
+  background: black;
+}
+
+[data-design='agi'] .agi-app-phone-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 5);
+}
+
+[data-design='agi'] .agi-app-phone-head {
+  gap: calc(var(--u) * 14);
+  padding: calc(var(--u) * 10) calc(var(--u) * 20);
+}
+
+[data-design='agi'] .agi-app-phone-title {
+  font-size: calc(var(--u) * 17);
+  font-weight: 500;
+}
+
+[data-design='agi'] .agi-app-phone-compose,
+[data-design='agi'] .agi-app-phone-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--u) * 38);
+  block-size: calc(var(--u) * 38);
+  border-radius: calc(var(--u) * 12);
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-phone-mode {
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-phone-mode span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 7) calc(var(--u) * 22);
+  border-radius: var(--corner-pill);
+}
+
+[data-design='agi'] .agi-app-phone-mode span[data-on] {
+  background: var(--chat-input-bg);
+  box-shadow: 0 0 0 1px var(--chat-border);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-phone-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 16);
+  min-block-size: 0;
+  padding-inline: calc(var(--u) * 28);
+  text-align: center;
+}
+
+[data-design='agi'] .agi-app-phone-heading {
+  margin-block-start: calc(var(--u) * 8);
+  font-size: calc(var(--u) * 28);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+[data-design='agi'] .agi-app-phone-sub {
+  font-size: calc(var(--u) * 15);
+  line-height: 1.4;
+  color: var(--chat-text-muted);
+  text-wrap: balance;
+}
+
+[data-design='agi'] .agi-app-phone-composer {
+  display: grid;
+  flex: none;
+  gap: calc(var(--u) * 16);
+  margin: calc(var(--u) * 10) calc(var(--u) * 14) calc(var(--u) * 34);
+  padding: calc(var(--u) * 18) calc(var(--u) * 14) calc(var(--u) * 12) calc(var(--u) * 18);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 24);
+  background: var(--chat-input-bg);
+}
+
+[data-design='agi'] .agi-app-phone-placeholder {
+  font-size: calc(var(--u) * 16);
+  color: var(--chat-text-placeholder);
+}
+
+[data-design='agi'] .agi-app-phone-composer-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 14);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-phone-model {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 7);
+  font-weight: 500;
+  color: var(--chat-text-primary);
+}

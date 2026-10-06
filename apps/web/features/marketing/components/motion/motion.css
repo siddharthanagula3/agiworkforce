@@ -150,25 +150,6 @@
   .agi-mx-deck-step[data-active='true'] {
     opacity: 1;
   }
-
-  .agi-mx-deck-card figure.agi-dev:not(.agi-dev--phone) .agi-dev-shell {
-    block-size: min(var(--public-mockup-deck-block), calc(100svh - 14rem));
-    overflow: hidden;
-  }
-
-  .agi-mx-deck-card figure.agi-dev:not(.agi-dev--phone) .agi-dev-body {
-    flex: 1 1 auto;
-    min-block-size: 0;
-  }
-
-  .agi-mx-deck-card figure.agi-dev .agi-mk-thread {
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      currentColor calc(100% - var(--space-5)),
-      transparent
-    );
-    mask-image: linear-gradient(to bottom, currentColor calc(100% - var(--space-5)), transparent);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
