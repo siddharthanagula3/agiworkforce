@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { publicMaskPaintHandle } from './lib/public-mask-paint';
 import { scanPublicTypography, type PublicTypographyOptions } from './lib/public-typography';
 import { evaluatePublicTextContrast } from './lib/public-text-contrast';
 
@@ -851,3 +852,94 @@ test('empty and hidden scopes cannot borrow painted text from outside', async ({
   expect(result.excluded.map((item) => item.text)).toEqual(['Hidden label']);
   expect(result.unmeasured.map((item) => item.kind)).toContain('no-painted-text');
 });
+
+const fadeMarkup =
+  '<div id="fade"><span id="opaque">Opaque label</span><span id="faded">Faded label</span></div>';
+const fadeCss = (mask: string) =>
+  `#fade { position:relative; width:320px; height:400px; ${mask} } #fade span { position:absolute; left:0; font-size:16px; line-height:24px; } #opaque { top:40px; } #faded { top:300px; }`;
+const publicFade = 'mask-image:linear-gradient(to bottom, currentColor 58%, transparent 100%);';
+
+async function scanWithMaskRule(page: Page, markup: string, css: string) {
+  await page.setContent(
+    `<html lang="en"><head><style>${STYLE}${css}</style></head><body>${markup}</body></html>`,
+  );
+  await page.evaluate(() => document.fonts.ready);
+  const maskPaint = await publicMaskPaintHandle(page);
+  return page
+    .evaluate(scanPublicTypography, {
+      pageType: 'marketing' as const,
+      pathname: '/fixture',
+      maskPaint,
+    })
+    .finally(() => maskPaint.dispose());
+}
+
+test('every mask stays unmeasured paint when no mask rule is supplied', async ({ page }) => {
+  const result = await scan(page, fadeMarkup, fadeCss(publicFade));
+  expect(result.samples.map((sample) => [sample.text, sample.paintUnmeasured])).toEqual([
+    ['Opaque label', ['mask-image']],
+    ['Faded label', ['mask-image']],
+  ]);
+  if (!result.canvasColor) throw new Error('Missing canvas colour');
+  const contrast = evaluatePublicTextContrast(result.samples, result.canvasColor);
+  expect(contrast.coverage).toEqual({ eligible: 2, measured: 0 });
+});
+
+test('the shared mask rule measures the opaque band and reports the fading band as faded', async ({
+  page,
+}) => {
+  const result = await scanWithMaskRule(page, fadeMarkup, fadeCss(publicFade));
+  expect(result.samples.map((sample) => [sample.text, sample.paintUnmeasured])).toEqual([
+    ['Opaque label', []],
+    ['Faded label', ['mask-fade']],
+  ]);
+  expect(result.findings).toEqual([]);
+  expect(result.coverage.paintedTextNodes).toBe(2);
+  if (!result.canvasColor) throw new Error('Missing canvas colour');
+  const whole = evaluatePublicTextContrast(result.samples, result.canvasColor);
+  expect(whole.coverage).toEqual({ eligible: 2, measured: 1 });
+  expect(whole.unmeasured).toEqual([
+    { selector: '#faded', text: 'Faded label', reasons: ['mask-fade'] },
+  ]);
+  const opaque = evaluatePublicTextContrast(
+    result.samples.filter((sample) => !sample.paintUnmeasured.includes('mask-fade')),
+    result.canvasColor,
+  );
+  expect(opaque).toEqual({
+    findings: [],
+    unmeasured: [],
+    coverage: { eligible: 1, measured: 1 },
+  });
+});
+
+test('the shared mask rule keeps an unmasked page free of mask witnesses', async ({ page }) => {
+  const result = await scanWithMaskRule(page, fadeMarkup, fadeCss(''));
+  expect(result.samples.map((sample) => sample.paintUnmeasured)).toEqual([[], []]);
+});
+
+for (const unsupported of [
+  {
+    name: 'a radial gradient',
+    mask: 'mask-image:radial-gradient(circle, black 99%, transparent);',
+  },
+  {
+    name: 'a horizontal gradient',
+    mask: 'mask-image:linear-gradient(to right, black 99%, transparent 100%);',
+  },
+  {
+    name: 'a non-initial mask size',
+    mask: 'mask-image:linear-gradient(to bottom, black 99%, transparent 100%); mask-size:100% 40px;',
+  },
+  {
+    name: 'an upside-down owner',
+    mask: 'mask-image:linear-gradient(to bottom, black 99%, transparent 100%); rotate:180deg;',
+  },
+]) {
+  test(`the shared mask rule leaves ${unsupported.name} as unmeasured paint`, async ({ page }) => {
+    const result = await scanWithMaskRule(page, fadeMarkup, fadeCss(unsupported.mask));
+    expect(result.samples.map((sample) => [sample.text, sample.paintUnmeasured])).toEqual([
+      ['Opaque label', ['mask-image']],
+      ['Faded label', ['mask-image']],
+    ]);
+  });
+}

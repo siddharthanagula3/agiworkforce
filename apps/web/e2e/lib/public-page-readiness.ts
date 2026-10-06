@@ -1,5 +1,7 @@
 import { expect, type ElementHandle, type Locator, type Page } from '@playwright/test';
 
+import { publicMaskPaintHandle } from './public-mask-paint';
+
 export type PublicReadinessRoute = {
   path: string;
   expectedHttpStatuses: readonly number[] | null;
@@ -24,8 +26,9 @@ async function inspectReadiness(
   expectedFonts: PublicExpectedFont[],
   scope: ElementHandle<SVGElement | HTMLElement> | null = null,
 ) {
-  return page.evaluate(
-    ({ fontRequests, fontScope }) => {
+  const maskPaintHandle = await publicMaskPaintHandle(page);
+  const inspection = page.evaluate(
+    ({ fontRequests, fontScope, maskPaint }) => {
       if (fontScope && !fontScope.isConnected) throw new Error('Unmeasured font scope is detached');
       const normalize = (value: string) =>
         value
@@ -88,11 +91,18 @@ async function inspectReadiness(
         const colorAlpha = alpha(textCss.color);
         if (fillAlpha === null || fillAlpha <= 0 || colorAlpha === null || colorAlpha <= 0)
           return null;
+        let box = initial;
         for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
-          const css = getComputedStyle(ancestor);
-          if (css.maskImage !== 'none' || css.filter !== 'none') return null;
+          if (getComputedStyle(ancestor).filter !== 'none') return null;
+          const paint = maskPaint(ancestor);
+          if (paint.mask === 'unsupported') return null;
+          if (paint.mask === 'fade') {
+            const opaque = paint.clip(box);
+            if (!opaque) return null;
+            box = opaque;
+          }
         }
-        return paintBox(element, initial);
+        return paintBox(element, box);
       };
       const mains = [...document.querySelectorAll('main,[role="main"]')].filter((main) => {
         const rect = main.getBoundingClientRect();
@@ -414,8 +424,9 @@ async function inspectReadiness(
         }),
       };
     },
-    { fontRequests: expectedFonts, fontScope: scope },
+    { fontRequests: expectedFonts, fontScope: scope, maskPaint: maskPaintHandle },
   );
+  return inspection.finally(() => maskPaintHandle.dispose());
 }
 
 type FontPaintProbe = Awaited<ReturnType<typeof inspectReadiness>>;
@@ -825,7 +836,8 @@ export async function settlePublicPage(
       'The bounded sample window cannot prove content or styles will never change after it ends.',
       'Unmarked loading text, missing business content and semantic correctness require explicit state contracts or review.',
       'Paint evidence uses text geometry, ancestor styles and browser hit ownership; it is not a pixel screenshot or proof against pointer-transparent painted overlays.',
-      'Text under masks or filters and text with transparent or unparsed fill is conservatively excluded from paint evidence; closed shadow roots and embedded documents are not traversed.',
+      'Text under a filter and text with transparent or unparsed fill is conservatively excluded from paint evidence; closed shadow roots and embedded documents are not traversed.',
+      'Under a mask, paint evidence is proven only for one top-to-bottom two-stop linear gradient from an opaque colour to transparent with initial mask size, position, repeat, origin, clip, composite and mode on an upright axis-aligned block box: a text box counts where at least 2px of it lies above the first stop, where mask alpha is exactly 1. Text wholly inside the fading band and text under any other mask form is excluded.',
       'Font proof checks requested families used by rendered text, registered faces and matching load results, not glyph-level fallback or unused font downloads.',
       'Generic and installed system-family identity is not proven by FontFace registration; typography policy must judge their use.',
       ...(expectedFonts.length

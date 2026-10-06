@@ -147,7 +147,7 @@ function readNativeCaptureState(
   const geometry = elements.map((element, index) => {
     let rect = rawRects[index]!;
     let svg: Pick<(typeof svgGeometry)[number], 'local' | 'matrix'> | null = null;
-    if (element instanceof SVGGeometryElement) {
+    if (element instanceof SVGGeometryElement && hasCssBoxes[index]) {
       for (let parent: Element | null = element; parent; parent = parent.parentElement) {
         const css = getComputedStyle(parent);
         if (
