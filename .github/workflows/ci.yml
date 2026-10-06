@@ -1199,6 +1199,7 @@ jobs:
             public-auth-clean.spec.ts \
             public-entry-points.spec.ts \
             public-identity-pages.spec.ts \
+            public-mockup-restoration.spec.ts \
             qa-14-public-route-contrast.spec.ts \
             quick-ask-entry.spec.ts \
             release-notes.spec.ts \
