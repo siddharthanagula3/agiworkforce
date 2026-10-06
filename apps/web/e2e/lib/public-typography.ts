@@ -564,8 +564,11 @@ export function scanPublicTypography(
       containerKeys: [...containerKeys],
     };
   };
-  const blockOf = (element: Element) =>
-    element.closest('h1,h2,h3,h4,h5,h6,[role="heading"],p,li,dd,dt,blockquote');
+  const blockOf = (element: Element) => {
+    const block = element.closest('h1,h2,h3,h4,h5,h6,[role="heading"],p,li,dd,dt,blockquote');
+    const illustration = element.closest('figure,svg,pre,.agi-dev,[data-illustration]');
+    return block && illustration && !illustration.contains(block) ? null : block;
+  };
   const isHeading = (element: Element) => element.matches('h1,h2,h3,h4,h5,h6,[role="heading"]');
   const isRunning = (element: Element) =>
     !isHeading(element) &&

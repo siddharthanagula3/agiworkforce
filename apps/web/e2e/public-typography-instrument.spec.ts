@@ -53,6 +53,34 @@ test('rejects an arbitrary size and accepts the body fluid range', async ({ page
   expect(result.unmeasured).toEqual([]);
 });
 
+test('keeps figure labels separate from an enclosing marketing list item', async ({ page }) => {
+  const markup =
+    '<ul><li id="row"><span id="outside">Useful marketing copy.</span><figure id="frame"><span id="clock">11:10</span><p>Example chat reply.</p></figure></li></ul>';
+  const css = '#row { font-size:17px; line-height:1.65; } #clock { font-size:14px; }';
+  const options = { pageType: 'marketing' as const, pathname: '/fixture', scopeSelector: '#frame' };
+  let result = await scan(page, markup, css, options);
+  expect(result.findings).toEqual([]);
+  expect(result.unmeasured).toEqual([]);
+  expect(result.samples.find((sample) => sample.selector === '#clock')?.role).toBe('ui');
+  expect(result.coverage.paintedTextNodes).toBe(2);
+  result = await scan(page, markup, css);
+  expect(result.findings).toEqual([]);
+  expect(result.unmeasured).toEqual([]);
+  expect(result.samples.find((sample) => sample.selector === '#outside')?.role).toBe('body');
+  result = await scan(page, markup, css + '#clock { font-size:13px; }', options);
+  expect(result.findings).toContainEqual(
+    expect.objectContaining({ selector: '#clock', kind: 'rendered-size-floor' }),
+  );
+  result = await scan(page, markup, css + '#outside { font-size:14px; }');
+  expect(result.findings).toContainEqual(
+    expect.objectContaining({
+      selector: '#outside',
+      kind: 'rendered-size-floor',
+      expected: '>=17px',
+    }),
+  );
+});
+
 for (const transform of [
   '#outer { transform: scale(.5); }',
   '#outer { transform: scale(.75); } #label { transform: scale(.5); display: inline-block; }',

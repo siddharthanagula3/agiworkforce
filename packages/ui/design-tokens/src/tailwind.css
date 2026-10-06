@@ -234,7 +234,8 @@ html[data-theme='light'] body:has([data-design='agi'][data-public-reference]) {
 [data-design='agi'] .agi-artifact-responsive,
 [data-design='agi'] .agi-research-responsive,
 [data-design='agi'] .agi-memory-responsive,
-[data-design='agi'] .agi-project-responsive {
+[data-design='agi'] .agi-project-responsive,
+[data-design='agi'] .agi-phone-responsive {
   --public-mockup-font-text: var(--font-geist-sans), system-ui, sans-serif;
   --public-mockup-font-code: var(--font-geist-mono), ui-monospace, monospace;
   --public-mockup-text-meta: 0.875rem;

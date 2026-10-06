@@ -5,14 +5,21 @@ import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
 import {
   ArrowUp,
+  Blocks,
   Check,
   ChevronDown,
+  Cloud,
   Command,
   Folder,
   Globe,
   Library,
+  Menu,
+  Mic,
+  Monitor,
+  Plus,
   Search,
   Send,
+  SquarePen,
 } from 'lucide-react';
 import {
   PRIVACY_MODE_DISPLAY,
@@ -789,7 +796,11 @@ export function PhoneDevice({
   className?: string;
 }) {
   return (
-    <DeviceRoot type="phone" label={label} className={className}>
+    <DeviceRoot
+      type="phone"
+      label={label}
+      className={['agi-phone-responsive', className].filter(Boolean).join(' ')}
+    >
       <div className="agi-dev-body agi-ph" aria-hidden="true">
         <div className="agi-ph-status">
           <span className="agi-ph-time">11:10</span>
@@ -828,19 +839,46 @@ export function PhoneDevice({
           </span>
         </div>
         <div className="agi-ph-nav">
-          <span className="agi-ph-navbtn">☰</span>
+          <span className="agi-ph-navbtn">
+            <Menu className="agi-phone-icon" role="img" aria-label="Navigation" focusable="false" />
+          </span>
           <span className="agi-ph-name">AGI</span>
-          <span className="agi-ph-navbtn">✎</span>
+          <span className="agi-ph-navbtn">
+            <SquarePen
+              className="agi-phone-icon"
+              role="img"
+              aria-label="New chat"
+              focusable="false"
+            />
+          </span>
         </div>
         <div className="agi-ph-main agi-ph-main--thread">
           <div className="agi-ph-toggle">
-            <span className="agi-ph-toggle-btn agi-ph-toggle-btn--on">⊞ Local</span>
-            <span className="agi-ph-toggle-btn">☁ Cloud</span>
+            <span className="agi-ph-toggle-btn agi-ph-toggle-btn--on">
+              <Monitor className="agi-phone-icon" aria-hidden="true" focusable="false" />
+              Local
+            </span>
+            <span className="agi-ph-toggle-btn">
+              <Cloud className="agi-phone-icon" aria-hidden="true" focusable="false" />
+              Cloud
+            </span>
           </div>
           <div className="agi-mk-thread agi-mk-thread--phone">
             <p className="agi-mk-user">What did we decide for the launch demo?</p>
             <div className="agi-mk-agi">
-              <ToolRow state="done" label="Memory" meta="3 facts" />
+              <ToolRow
+                state="done"
+                label="Memory"
+                meta="3 facts"
+                icon={
+                  <Check
+                    className="agi-phone-icon"
+                    role="img"
+                    aria-label="Memory found"
+                    focusable="false"
+                  />
+                }
+              />
               <p>
                 From your memory: the demo runs from the CLI in Local mode, the deck lives in the
                 Investor project, and the dry run is Thursday at 4pm. Want a reminder?
@@ -859,10 +897,30 @@ export function PhoneDevice({
           <div className="agi-ph-composer">
             <p className="agi-ph-ghost">Message AGI…</p>
             <div className="agi-ph-composer-foot">
-              <span className="agi-ph-attach">+</span>
-              <span className="agi-ph-model">⊡ AGI Standard ∨</span>
-              <span className="agi-ph-mic">◉</span>
-              <span className="agi-dev-send">➤</span>
+              <span className="agi-ph-attach">
+                <Plus className="agi-phone-icon" role="img" aria-label="Attach" focusable="false" />
+              </span>
+              <span className="agi-ph-model">
+                <Blocks className="agi-phone-icon" aria-hidden="true" focusable="false" />
+                AGI Standard
+                <ChevronDown className="agi-phone-icon" aria-hidden="true" focusable="false" />
+              </span>
+              <span className="agi-ph-mic">
+                <Mic
+                  className="agi-phone-icon"
+                  role="img"
+                  aria-label="Microphone"
+                  focusable="false"
+                />
+              </span>
+              <span className="agi-dev-send">
+                <ArrowUp
+                  className="agi-phone-icon"
+                  role="img"
+                  aria-label="Send"
+                  focusable="false"
+                />
+              </span>
             </div>
           </div>
         </div>
