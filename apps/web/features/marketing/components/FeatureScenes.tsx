@@ -16,6 +16,7 @@ import './agent-mockup-responsive.css';
 import './artifact-mockup-responsive.css';
 import './research-mockup-responsive.css';
 import './memory-mockup-responsive.css';
+import './project-mockup-responsive.css';
 
 function Perm({ label, state }: { label: string; state: 'allowed' | 'ask' | 'denied' }) {
   return (
@@ -255,65 +256,53 @@ export function MemoryWindow() {
   );
 }
 
-const PROJECT_FILES = [
-  { name: 'deck-v7.pdf', meta: '2.1 MB · today' },
-  { name: 'metrics-q3.csv', meta: '48 KB · yesterday' },
-  { name: 'notes.md', meta: '6 KB · 2 Sep' },
-  { name: 'board-transcript.txt', meta: '31 KB · 1 Sep' },
-] as const;
-
-const PROJECT_THREADS = [
-  { name: 'Rewrite the traction slide', meta: 'today' },
-  { name: 'Sanity check the CAC math', meta: 'yesterday' },
-  { name: 'Draft the ask', meta: '2 Sep' },
-] as const;
+export const PROJECT_SETTINGS_DRAFT_EXAMPLE = {
+  name: 'Investor deck',
+  instructions:
+    'Keep answers concise. Ask for sources before stating metrics. Do not invent customer names.',
+} as const;
 
 export function ProjectWindow() {
   return (
     <AppWindow
-      title="agiworkforce.com/chat/projects/investor-deck"
+      title="Project settings"
       badge="Web"
-      label="An AGI project home with instructions, files and threads"
+      label="Authored example of a current Web project settings draft"
+      className="agi-project-responsive"
     >
-      <div className="agi-sc-page">
+      <div className="agi-sc-page" data-project-illustration="draft">
         <div className="agi-sc-page-head">
-          <span className="agi-sc-page-title">Investor deck</span>
-          <span className="agi-sc-meta">3 threads · 4 files</span>
+          <span className="agi-sc-page-title">Project settings</span>
+          <span className="agi-sc-meta" data-project-example-label>
+            Authored example
+          </span>
         </div>
+        <span className="agi-sc-meta" data-project-draft-caption>
+          Current draft
+        </span>
         <div className="agi-sc-card">
-          <span className="agi-sc-card-head">Instructions</span>
-          <p className="agi-sc-instructions">
-            Answer as the founder. Cite the metrics file for any number. Never invent a customer
-            name.
+          <span className="agi-sc-card-head" data-project-native-label="name">
+            Project name
+          </span>
+          <p className="agi-sc-instructions" data-project-draft-value="name">
+            {PROJECT_SETTINGS_DRAFT_EXAMPLE.name}
           </p>
         </div>
-        <div className="agi-sc-split" data-cols="1-1">
-          <div>
-            <span className="agi-sc-card-head">Files</span>
-            <ul className="agi-sc-list agi-sc-list--tight">
-              {PROJECT_FILES.map((file) => (
-                <li key={file.name}>
-                  <span>{file.name}</span>
-                  <span className="agi-sc-meta">{file.meta}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <span className="agi-sc-card-head">Threads</span>
-            <ul className="agi-sc-list agi-sc-list--tight">
-              {PROJECT_THREADS.map((thread) => (
-                <li key={thread.name}>
-                  <span>{thread.name}</span>
-                  <span className="agi-sc-meta">{thread.meta}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="agi-sc-card">
+          <span className="agi-sc-card-head" data-project-native-label="instructions">
+            Instructions
+          </span>
+          <p className="agi-sc-instructions" data-project-draft-value="instructions">
+            {PROJECT_SETTINGS_DRAFT_EXAMPLE.instructions}
+          </p>
         </div>
-        <p className="agi-mk-receipt">
-          <span className="agi-mk-dot" />
-          Every prompt here carries the instructions and 4 files · 9.2k tokens of context
+        <span className="agi-mk-actions">
+          <span className="agi-mk-btn agi-mk-btn--primary" data-project-native-label="action">
+            Save
+          </span>
+        </span>
+        <p className="agi-sc-note" data-project-draft-status>
+          No changes have been saved.
         </p>
       </div>
     </AppWindow>
