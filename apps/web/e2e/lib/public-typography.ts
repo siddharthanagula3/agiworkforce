@@ -1,7 +1,10 @@
+import type { PublicMaskPaintResolver } from './public-mask-paint';
+
 export type PublicTypographyOptions = {
   pageType: 'marketing' | 'docs' | 'legal';
   pathname?: string;
   scopeSelector?: string;
+  maskPaint?: PublicMaskPaintResolver;
 };
 
 export type PublicTypographyIssue = {
@@ -840,6 +843,8 @@ export function scanPublicTypography(
     const paintUnmeasured: string[] = [];
     if (generated) paintUnmeasured.push('generated-text-geometry');
     if (clipped.pendingScrolls.length) paintUnmeasured.push('unobserved-scroll-state');
+    let opaqueRectangles: { left: number; top: number; right: number; bottom: number }[] =
+      clipped.rectangles;
     for (const ancestor of ancestry(element)) {
       const paint = styleOf(ancestor);
       if (paint.filter !== 'none') paintUnmeasured.push('filter');
@@ -849,12 +854,23 @@ export function scanPublicTypography(
       )
         paintUnmeasured.push('backdrop-filter');
       if (paint.mixBlendMode !== 'normal') paintUnmeasured.push('blend-mode');
+      if (options.maskPaint) {
+        const masked = options.maskPaint(ancestor);
+        if (masked.mask === 'unsupported') paintUnmeasured.push('mask-image');
+        if (masked.mask === 'fade')
+          opaqueRectangles = opaqueRectangles.flatMap((rect) => {
+            const opaque = masked.clip(rect);
+            return opaque ? [opaque] : [];
+          });
+        continue;
+      }
       const mask =
         paint.getPropertyValue('mask-image') ||
         paint.getPropertyValue('-webkit-mask-image') ||
         'none';
       if (mask !== 'none') paintUnmeasured.push('mask-image');
     }
+    if (clipped.rectangles.length && !opaqueRectangles.length) paintUnmeasured.push('mask-fade');
     const color = style.getPropertyValue('-webkit-text-fill-color') || style.color;
     const foreground = rgba(color);
     if (!foreground) paintUnmeasured.push('foreground-color');

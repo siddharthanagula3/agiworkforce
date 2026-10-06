@@ -22,6 +22,7 @@ import {
   measurePublicFeatureBodyWords,
   type PublicFeatureBodyWordContract,
 } from './public-feature-body-words';
+import { PUBLIC_APPROVED_FADES, publicMaskPaintHandle } from './public-mask-paint';
 import { getPublicRouteInventory } from './public-route-inventory';
 import { evaluatePublicTextContrast } from './public-text-contrast';
 import { scanPublicTypography } from './public-typography';
@@ -49,6 +50,7 @@ const repositoryRoot = path.resolve(__dirname, '../../../..');
 const instrumentSources = [
   path.relative(repositoryRoot, __filename),
   'apps/web/e2e/lib/public-feature-body-words.ts',
+  'apps/web/e2e/lib/public-mask-paint.ts',
   'apps/web/e2e/lib/public-route-inventory.ts',
   'apps/web/e2e/lib/public-page-readiness.ts',
   'apps/web/e2e/lib/public-typography.ts',
@@ -56,6 +58,23 @@ const instrumentSources = [
   'apps/web/e2e/lib/public-viewport-strip-capture.ts',
   'apps/web/shared/lib/cookie-consent.ts',
 ];
+
+export function scopePublicFadedText<Sample extends { paintUnmeasured: readonly string[] }>(
+  samples: readonly Sample[],
+  masks: readonly { selector: string; mask: string; frame: boolean }[],
+) {
+  const faded = samples.filter((sample) => sample.paintUnmeasured.includes('mask-fade'));
+  return {
+    opaque: samples.filter((sample) => !sample.paintUnmeasured.includes('mask-fade')),
+    faded,
+    unapprovedMasks: masks.filter(
+      (element) =>
+        !element.frame ||
+        !Object.values(PUBLIC_APPROVED_FADES).some((fade) => fade.image.test(element.mask)),
+    ),
+    unexplainedFaded: masks.some((element) => element.frame) ? [] : faded,
+  };
+}
 
 function snapshot(files: string[]) {
   return Object.fromEntries(
@@ -276,6 +295,7 @@ export async function measurePublicFeatureMockup(
       'Reduced-motion geometry only; normal motion, interaction, accessibility and product truth are outside scope.',
       'Canonical font proof covers registered faces and Unicode coverage, not glyph fallback pixels.',
       'Typography includes every canonical text, control, pseudo and block witness in the validated figure scope.',
+      'Contrast is required for text with at least 2px inside the fully opaque band of an approved fade on the figure; text wholly in the fading band is listed under fadedText and keeps every typography, containment and body-word requirement.',
       'Internal scrolling is not swept; unobserved scroll states fail rather than count as complete coverage.',
       'Raw descendant border boxes must fit the frame; internal scroll content needs a later scroll and containment proof.',
       'Original viewport strips cover independent frame/text/descendant document bounds without changing pointer mode or enlarging the viewport; clipping or unresolved paint still fails.',
@@ -399,11 +419,15 @@ export async function measurePublicFeatureMockup(
     }
     const reading = await frameReading(frame);
     evidence['reading'] = reading;
-    const typography = await page.evaluate(scanPublicTypography, {
-      pageType: 'marketing' as const,
-      pathname: scene.pathname,
-      scopeSelector,
-    });
+    const maskPaint = await publicMaskPaintHandle(page);
+    const typography = await page
+      .evaluate(scanPublicTypography, {
+        pageType: 'marketing' as const,
+        pathname: scene.pathname,
+        scopeSelector,
+        maskPaint,
+      })
+      .finally(() => maskPaint.dispose());
     evidence['typography'] = typography;
     const bodyWordOptions = scene.bodyWords && {
       ...scene.bodyWords,
@@ -414,9 +438,23 @@ export async function measurePublicFeatureMockup(
       : null;
     if (bodyWords) evidence['bodyWords'] = bodyWords;
     const samples = typography.samples;
+    const masks = [
+      ...reading.ancestry.map((element, index) => ({ ...element, frame: index === 0 })),
+      ...reading.descendants.map((element) => ({ ...element, frame: false })),
+    ]
+      .filter((element) => element.mask !== 'none')
+      .map(({ selector, mask, frame }) => ({ selector, mask, frame }));
+    evidence['masks'] = masks;
+    const fadeScope = scopePublicFadedText(samples, masks);
+    const opaqueSamples = fadeScope.opaque;
+    evidence['fadedText'] = fadeScope.faded.map(({ sourceKey, selector, text }) => ({
+      sourceKey,
+      selector,
+      text,
+    }));
     const contrast =
-      typography.canvasColor && samples.length
-        ? evaluatePublicTextContrast(samples, typography.canvasColor)
+      typography.canvasColor && opaqueSamples.length
+        ? evaluatePublicTextContrast(opaqueSamples, typography.canvasColor)
         : null;
     evidence['contrast'] = contrast;
     const boxes = [
@@ -583,6 +621,18 @@ export async function measurePublicFeatureMockup(
       .toBe(samples.length);
     expect.soft(samples.length, 'Frame cannot pass without painted text').toBeGreaterThan(0);
     expect
+      .soft(
+        fadeScope.unapprovedMasks,
+        'Only an approved fade on the figure itself may mask frame text',
+      )
+      .toEqual([]);
+    expect
+      .soft(fadeScope.unexplainedFaded, 'Text cannot count as faded without a figure fade')
+      .toEqual([]);
+    expect
+      .soft(opaqueSamples.length, 'Frame cannot pass without text in its fully opaque band')
+      .toBeGreaterThan(0);
+    expect
       .soft(typography.findings, 'Scoped canonical text floors, scale, wrapping and clipping')
       .toEqual([]);
     expect.soft(typography.unmeasured, 'Scoped geometry must be measured').toEqual([]);
@@ -603,7 +653,7 @@ export async function measurePublicFeatureMockup(
     if (contrast) {
       expect.soft(contrast.findings).toEqual([]);
       expect.soft(contrast.unmeasured).toEqual([]);
-      expect.soft(contrast.coverage.measured).toBe(samples.length);
+      expect.soft(contrast.coverage.measured).toBe(opaqueSamples.length);
     }
     expect.soft(fontFailure, 'Scoped font proof failed').toBeUndefined();
     if (bodyWords) {

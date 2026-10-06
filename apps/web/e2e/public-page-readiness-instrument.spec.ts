@@ -415,6 +415,343 @@ for (const paint of [
   });
 }
 
+type MaskedGeometry = {
+  owner: { top: number; bottom: number; height: number };
+  text: { left: number; top: number; right: number; bottom: number };
+};
+const maskedFont = { expectedFonts: [{ cssVariable: '--fixture-font' }] };
+const maskedFontProof = {
+  family: 'fixturefont',
+  usedTextNodes: 1,
+  requests: 1,
+  matchedRequests: 1,
+};
+
+async function maskedFontFixture(
+  page: Page,
+  ownerCss: string,
+  wrap: readonly [string, string] = ['', ''],
+  ownerTag = 'div',
+  textCss = '',
+) {
+  await fontFixture(
+    page,
+    `<main style="font-family:sans-serif">Painted system content${wrap[0]}<${ownerTag} id="mask-owner"><span id="masked-font">ABC</span></${ownerTag}>${wrap[1]}</main>`,
+    `#mask-owner{position:relative;display:block;width:240px;height:400px;color:black;background:white;${ownerCss}}#masked-font{position:absolute;left:8px;top:100px;font-family:FixtureFont}#mask-owner #masked-font{${textCss}}`,
+  );
+}
+
+async function maskedGeometry(
+  page: Page,
+  wrap: readonly [string, string] = ['', ''],
+): Promise<MaskedGeometry> {
+  await maskedFontFixture(page, '', wrap);
+  await page.goto(route.path);
+  await page.evaluate(() => document.fonts.ready);
+  return page.evaluate(() => {
+    const owner = document.querySelector('#mask-owner')?.getBoundingClientRect();
+    const node = document.querySelector('#masked-font')?.firstChild;
+    if (!owner || !node) throw new Error('Missing mask fixture owner or text');
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const rects = [...range.getClientRects()];
+    if (rects.length !== 1) throw new Error('Mask fixture text needs exactly one box');
+    const text = rects[0]!;
+    return {
+      owner: { top: owner.top, bottom: owner.bottom, height: owner.height },
+      text: { left: text.left, top: text.top, right: text.right, bottom: text.bottom },
+    };
+  });
+}
+
+const maskPercent = (geometry: MaskedGeometry, y: number) =>
+  `${((y - geometry.owner.top) / geometry.owner.height) * 100}%`;
+
+async function maskedState(page: Page) {
+  return page.locator('#mask-owner').evaluate((owner) => {
+    const css = getComputedStyle(owner);
+    return {
+      image: css.maskImage,
+      size: css.maskSize,
+      position: css.maskPosition,
+      repeat: css.maskRepeat,
+      origin: css.maskOrigin,
+      clip: css.maskClip,
+      composite: css.maskComposite,
+      mode: css.maskMode,
+      border: css.getPropertyValue('-webkit-mask-box-image-source'),
+    };
+  });
+}
+
+async function maskedTextPixels(page: Page, geometry: MaskedGeometry) {
+  const clip = {
+    x: Math.floor(geometry.text.left),
+    y: Math.floor(geometry.text.top),
+    width: Math.ceil(geometry.text.right) - Math.floor(geometry.text.left),
+    height: Math.ceil(geometry.text.bottom) - Math.floor(geometry.text.top),
+  };
+  const masked = await page.screenshot({ type: 'png', clip });
+  await page.locator('#mask-owner').evaluate((owner) => {
+    (owner as HTMLElement).style.setProperty('mask-image', 'none');
+  });
+  const plain = await page.screenshot({ type: 'png', clip });
+  await page.locator('#masked-font').evaluate((text) => {
+    (text as HTMLElement).style.setProperty('visibility', 'hidden');
+  });
+  const blank = await page.screenshot({ type: 'png', clip });
+  return { masked, plain, blank };
+}
+
+for (const fade of [
+  { name: 'the public 58% fade', end: '100%' },
+  { name: 'the bento 50% to 96% fade', end: '96%' },
+  { name: 'a fade with an implicit final stop', end: '' },
+]) {
+  test(`text inside the fully opaque band of ${fade.name} proves painted font use`, async ({
+    page,
+  }, testInfo) => {
+    const geometry = await maskedGeometry(page);
+    const stop = maskPercent(geometry, geometry.text.bottom);
+    await maskedFontFixture(
+      page,
+      `mask-image:linear-gradient(to bottom, currentColor ${stop}, transparent ${fade.end})`,
+    );
+    const report = await settlePublicPage(page, route, { ...budgets, ...maskedFont });
+    expect(report.expectedFontProof).toContainEqual(maskedFontProof);
+    expect((await maskedState(page)).image).toMatch(
+      /^linear-gradient\(rgb\(0, 0, 0\) [\d.]+%, rgba\(0, 0, 0, 0\)(?: [\d.]+%)?\)$/,
+    );
+    expect(report.limits.join(' ')).toContain('where mask alpha is exactly 1');
+    const pixels = await maskedTextPixels(page, geometry);
+    expect(
+      pixels.masked.equals(pixels.plain),
+      'Glyphs inside the claimed opaque band must match their unmasked pixels',
+    ).toBe(true);
+    expect(pixels.plain.equals(pixels.blank), 'The pixel witness must contain glyphs').toBe(false);
+    await testInfo.attach('opaque-band-masked.png', {
+      body: pixels.masked,
+      contentType: 'image/png',
+    });
+  });
+}
+
+test('text wholly inside the fading band cannot prove painted font use', async ({
+  page,
+}, testInfo) => {
+  const geometry = await maskedGeometry(page);
+  await maskedFontFixture(
+    page,
+    `mask-image:linear-gradient(to bottom, currentColor ${maskPercent(geometry, geometry.text.top - 24)}, transparent 100%)`,
+  );
+  const failure: unknown = await settlePublicPage(page, route, {
+    ...budgets,
+    ...maskedFont,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(failure).toBeInstanceOf(PublicReadinessFontError);
+  if (!(failure instanceof PublicReadinessFontError)) throw new Error('Missing fade failure');
+  expect(failure.message).toContain('unused by painted text');
+  expect(failure.diagnostic.final.fontPaintCandidates).toContainEqual(
+    expect.objectContaining({ family: 'fixturefont', text: 'ABC', paintedBoxes: 0 }),
+  );
+  const pixels = await maskedTextPixels(page, geometry);
+  expect(
+    pixels.masked.equals(pixels.plain),
+    'Glyphs in the fading band must differ from their unmasked pixels',
+  ).toBe(false);
+  await testInfo.attach('fading-band-masked.png', {
+    body: pixels.masked,
+    contentType: 'image/png',
+  });
+  await testInfo.attach('fading-band-unmasked.png', {
+    body: pixels.plain,
+    contentType: 'image/png',
+  });
+});
+
+for (const form of [
+  {
+    name: 'a percentage stop',
+    stop: (geometry: MaskedGeometry, y: number) => maskPercent(geometry, y),
+    wrap: ['', ''] as const,
+  },
+  {
+    name: 'a calc() stop',
+    stop: (geometry: MaskedGeometry, y: number) =>
+      `calc(100% - ${((geometry.owner.bottom - y) * 400) / geometry.owner.height}px)`,
+    wrap: ['', ''] as const,
+  },
+  {
+    name: 'a calc() stop under an upright perspective projection',
+    stop: (geometry: MaskedGeometry, y: number) =>
+      `calc(100% - ${((geometry.owner.bottom - y) * 400) / geometry.owner.height}px)`,
+    wrap: [
+      '<div style="perspective:1400px"><div style="transform:translateZ(12px)">',
+      '</div></div>',
+    ] as const,
+  },
+]) {
+  test(`the opaque band boundary of ${form.name} is the 2px paint floor`, async ({ page }) => {
+    const geometry = await maskedGeometry(page, form.wrap);
+    if (form.wrap[0]) expect(geometry.owner.height).toBeGreaterThan(402);
+    else expect(geometry.owner.height).toBe(400);
+    await maskedFontFixture(
+      page,
+      `mask-image:linear-gradient(to bottom, currentColor ${form.stop(geometry, geometry.text.top + 2.25)}, transparent)`,
+      form.wrap,
+    );
+    const report = await settlePublicPage(page, route, { ...budgets, ...maskedFont });
+    expect(report.expectedFontProof).toContainEqual(maskedFontProof);
+    await maskedFontFixture(
+      page,
+      `mask-image:linear-gradient(to bottom, currentColor ${form.stop(geometry, geometry.text.top + 1.75)}, transparent)`,
+      form.wrap,
+    );
+    await expect(settlePublicPage(page, route, { ...budgets, ...maskedFont })).rejects.toThrow(
+      'unused by painted text',
+    );
+  });
+}
+
+const opaqueToEnd = 'linear-gradient(to bottom, black 99%, transparent 100%)';
+const supportedFadeImage = /^linear-gradient\(rgb\(0, 0, 0\) 99%, rgba\(0, 0, 0, 0\) 100%\)$/;
+for (const unsupported of [
+  {
+    name: 'an image mask',
+    css: `mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='400'%3E%3Crect width='240' height='400'/%3E%3C/svg%3E")`,
+    image: /^url\(/,
+  },
+  {
+    name: 'a radial gradient',
+    css: 'mask-image:radial-gradient(circle at 50% 30%, black 99%, transparent 100%)',
+    image: /^radial-gradient\(/,
+  },
+  {
+    name: 'two mask layers',
+    css: `mask-image:${opaqueToEnd},${opaqueToEnd}`,
+    image: /\), linear-gradient\(/,
+  },
+  {
+    name: 'a horizontal gradient',
+    css: 'mask-image:linear-gradient(to right, black 99%, transparent 100%)',
+    image: /^linear-gradient\(to right, /,
+  },
+  {
+    name: 'a bottom-to-top gradient',
+    css: 'mask-image:linear-gradient(to top, black 99%, transparent 100%)',
+    image: /^linear-gradient\(to top, /,
+  },
+  {
+    name: 'an angled gradient',
+    css: 'mask-image:linear-gradient(170deg, black 99%, transparent 100%)',
+    image: /^linear-gradient\(170deg, /,
+  },
+  {
+    name: 'a three-stop gradient',
+    css: 'mask-image:linear-gradient(to bottom, black 10%, transparent 20%, black 99%)',
+    image: /^linear-gradient\(rgb\(0, 0, 0\) 10%, rgba\(0, 0, 0, 0\) 20%, rgb\(0, 0, 0\) 99%\)$/,
+  },
+  {
+    name: 'a translucent first stop',
+    css: 'mask-image:linear-gradient(to bottom, rgba(0,0,0,0.5) 99%, transparent 100%)',
+    image: /^linear-gradient\(rgba\(0, 0, 0, 0\.5\) 99%, /,
+  },
+  {
+    name: 'a gradient with no first stop position',
+    css: 'mask-image:linear-gradient(to bottom, black, transparent)',
+    image: /^linear-gradient\(rgb\(0, 0, 0\), rgba\(0, 0, 0, 0\)\)$/,
+  },
+  {
+    name: 'a gradient whose opaque band is empty',
+    css: 'mask-image:linear-gradient(to bottom, black 0%, transparent 100%)',
+    image: /^linear-gradient\(rgb\(0, 0, 0\) 0%, rgba\(0, 0, 0, 0\) 100%\)$/,
+  },
+  { name: 'a non-initial mask size', css: `mask-image:${opaqueToEnd};mask-size:100% 40px` },
+  { name: 'a non-initial mask position', css: `mask-image:${opaqueToEnd};mask-position:0 300px` },
+  { name: 'a non-initial mask repeat', css: `mask-image:${opaqueToEnd};mask-repeat:no-repeat` },
+  {
+    name: 'a non-initial mask origin',
+    css: `mask-image:${opaqueToEnd};mask-origin:content-box;padding-top:300px;box-sizing:border-box`,
+  },
+  {
+    name: 'a non-initial mask clip',
+    css: `mask-image:${opaqueToEnd};mask-clip:content-box;padding-top:300px;box-sizing:border-box`,
+  },
+  { name: 'a non-initial mask composite', css: `mask-image:${opaqueToEnd};mask-composite:exclude` },
+  { name: 'a luminance mask mode', css: `mask-image:${opaqueToEnd};mask-mode:luminance` },
+  {
+    name: 'a mask border image',
+    css: `-webkit-mask-box-image-source:${opaqueToEnd}`,
+    image: /^none$/,
+  },
+  { name: 'a mask owner turned upside down', css: `mask-image:${opaqueToEnd};rotate:180deg` },
+  {
+    name: 'a mask owner mirrored vertically',
+    css: `mask-image:${opaqueToEnd};transform:scaleY(-1)`,
+  },
+  {
+    name: 'a mask owner under a rotated ancestor',
+    css: `mask-image:${opaqueToEnd}`,
+    wrap: ['<div style="transform:rotate(180deg)">', '</div>'],
+  },
+  {
+    name: 'a mask owner tilted in perspective',
+    css: `mask-image:${opaqueToEnd}`,
+    wrap: [
+      '<div style="perspective:1400px"><div style="transform:rotateX(8deg) translateZ(12px)">',
+      '</div></div>',
+    ],
+  },
+  { name: 'a zoomed mask owner', css: `mask-image:${opaqueToEnd};zoom:1.5` },
+  {
+    name: 'an inline mask owner',
+    css: `mask-image:${opaqueToEnd};display:inline;height:auto`,
+    tag: 'span',
+    textCss: 'position:static',
+  },
+  {
+    name: 'a mask owner whose declared box is not its rendered box',
+    css: `mask-image:${opaqueToEnd};display:inline`,
+    tag: 'span',
+    textCss: 'position:static',
+  },
+] as {
+  name: string;
+  css: string;
+  image?: RegExp;
+  wrap?: readonly [string, string];
+  tag?: string;
+  textCss?: string;
+}[]) {
+  test(`${unsupported.name} keeps masked text out of paint evidence`, async ({ page }) => {
+    await maskedFontFixture(
+      page,
+      unsupported.css,
+      unsupported.wrap,
+      unsupported.tag,
+      unsupported.textCss,
+    );
+    const failure: unknown = await settlePublicPage(page, route, {
+      ...budgets,
+      ...maskedFont,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(PublicReadinessFontError);
+    if (!(failure instanceof PublicReadinessFontError))
+      throw new Error('Missing unsupported mask failure');
+    expect(failure.message).toContain('unused by painted text');
+    expect(failure.diagnostic.final.fontPaintCandidates).toContainEqual(
+      expect.objectContaining({ family: 'fixturefont', text: 'ABC', paintedBoxes: 0 }),
+    );
+    expect((await maskedState(page)).image).toMatch(unsupported.image ?? supportedFadeImage);
+  });
+}
+
 test('registered loaded canonical font use is proved through its CSS variable', async ({
   page,
 }) => {

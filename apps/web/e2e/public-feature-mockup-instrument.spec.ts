@@ -6,6 +6,7 @@ import { expect, test } from '@playwright/test';
 import {
   locatePublicFeatureMockup,
   measurePublicFeatureMockup,
+  scopePublicFadedText,
   type PublicFeatureMockupScope,
 } from './lib/public-feature-mockup';
 
@@ -807,3 +808,75 @@ for (const mode of [
     else expect(liveEvidence?.['reportAttachError']).toBeUndefined();
   });
 }
+
+const fadeSamples = [
+  { text: 'Opaque', paintUnmeasured: [] as string[] },
+  { text: 'Faded', paintUnmeasured: ['mask-fade'] },
+  { text: 'Filtered', paintUnmeasured: ['filter'] },
+];
+const figureFade = 'linear-gradient(rgb(28, 21, 11) 58%, rgba(0, 0, 0, 0) 100%)';
+const bentoFade = 'linear-gradient(rgb(245, 240, 230) 50%, rgba(0, 0, 0, 0) 96%)';
+
+for (const mask of [figureFade, bentoFade]) {
+  test(`contrast scope excludes only faded text under the approved figure fade ${mask}`, () => {
+    expect(
+      scopePublicFadedText(fadeSamples, [{ selector: 'figure.agi-dev', mask, frame: true }]),
+    ).toEqual({
+      opaque: [fadeSamples[0], fadeSamples[2]],
+      faded: [fadeSamples[1]],
+      unapprovedMasks: [],
+      unexplainedFaded: [],
+    });
+  });
+}
+
+for (const rejected of [
+  {
+    name: 'a fade with unapproved stops on the figure',
+    masks: [
+      {
+        selector: 'figure.agi-dev',
+        mask: 'linear-gradient(rgb(28, 21, 11) 10%, rgba(0, 0, 0, 0) 20%)',
+        frame: true,
+      },
+    ],
+    unexplained: false,
+  },
+  {
+    name: 'a non-gradient mask on the figure',
+    masks: [
+      {
+        selector: 'figure.agi-dev',
+        mask: 'radial-gradient(rgb(28, 21, 11) 58%, rgba(0, 0, 0, 0) 100%)',
+        frame: true,
+      },
+    ],
+    unexplained: false,
+  },
+  {
+    name: 'the approved fade on a descendant',
+    masks: [{ selector: 'div.agi-dev-body', mask: figureFade, frame: false }],
+    unexplained: true,
+  },
+  {
+    name: 'the approved fade on the figure with a second mask inside it',
+    masks: [
+      { selector: 'figure.agi-dev', mask: figureFade, frame: true },
+      { selector: 'div.agi-mk-thread', mask: figureFade, frame: false },
+    ],
+    unexplained: false,
+  },
+]) {
+  test(`contrast scope rejects ${rejected.name}`, () => {
+    const scope = scopePublicFadedText(fadeSamples, rejected.masks);
+    expect(scope.unapprovedMasks).toEqual([rejected.masks.at(-1)]);
+    expect(scope.unexplainedFaded).toEqual(rejected.unexplained ? [fadeSamples[1]] : []);
+    expect(scope.faded).toEqual([fadeSamples[1]]);
+  });
+}
+
+test('contrast scope rejects faded text when nothing masks the figure', () => {
+  const scope = scopePublicFadedText(fadeSamples, []);
+  expect(scope.unapprovedMasks).toEqual([]);
+  expect(scope.unexplainedFaded).toEqual([fadeSamples[1]]);
+});

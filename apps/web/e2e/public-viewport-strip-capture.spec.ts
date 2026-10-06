@@ -771,6 +771,104 @@ for (const kind of ['path', 'circle', 'rect', 'html', 'text', 'layout'] as const
   );
 }
 
+const hiddenSvgFixture =
+  '<span data-testid="capture-hidden-owner" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path data-testid="capture-hidden-path" d="M5 12h14"/><circle data-testid="capture-hidden-circle" cx="12" cy="12" r="10"/></svg></span>';
+
+test('unrendered SVG geometry does not move a frame that is captured across scroll positions', async ({
+  browser,
+  browserName,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  expect(browserName).toBe('chromium');
+  await controlledContext(browser, testInfo, async (page, report, images) => {
+    const frame = page.getByRole('figure', { name: 'Viewport strip fixture' });
+    const header = page.getByRole('banner', { name: 'Capture header' });
+    await frame.evaluate(
+      (root, fixture) => root.insertAdjacentHTML('beforeend', fixture),
+      localSvgFixture + hiddenSvgFixture,
+    );
+    const hazard = async () =>
+      page.getByTestId('capture-hidden-path').evaluate((shape) => {
+        if (!(shape instanceof SVGGeometryElement)) throw new Error('Missing hidden SVG path');
+        return {
+          clientRects: shape.getClientRects().length,
+          screenY: shape.getScreenCTM()?.f ?? null,
+          scrollY,
+        };
+      });
+    const first = await hazard();
+    expect(first.clientRects).toBe(0);
+    expect(first.screenY).toBe(0);
+    const capture = await capturePublicViewportStrips(page, frame, {
+      stickyHeader: header,
+      bounds: 'union',
+      sourceFiles,
+    });
+    report['hiddenSvgCapture'] = capture.evidence;
+    for (const image of capture.images)
+      images.push({ name: `hidden-svg-strip-${image.index}`, bytes: image.bytes });
+    assertPublicViewportCapture(capture);
+    expect(
+      new Set(capture.evidence.strips.map((strip) => strip.before.scroll.y)).size,
+      'The control needs strips read at different scroll positions',
+    ).toBeGreaterThan(1);
+    expect(capture.evidence.before.svgGeometry).toHaveLength(3);
+    for (const strip of capture.evidence.strips) {
+      expect(strip.before.svgGeometry).toHaveLength(3);
+      expect(strip.before.fingerprints.geometry).toBe(
+        capture.evidence.before.fingerprints.geometry,
+      );
+    }
+    expect(capture.evidence.restored).toBe(true);
+  });
+});
+
+test('rendered SVG geometry beside unrendered geometry still fails when it really moves', async ({
+  browser,
+  browserName,
+}, testInfo) => {
+  test.setTimeout(30_000);
+  expect(browserName).toBe('chromium');
+  await controlledContext(browser, testInfo, async (page, report) => {
+    const frame = page.getByRole('figure', { name: 'Viewport strip fixture' });
+    const header = page.getByRole('banner', { name: 'Capture header' });
+    await frame.evaluate(
+      (root, fixture) => root.insertAdjacentHTML('beforeend', fixture),
+      localSvgFixture + hiddenSvgFixture,
+    );
+    const before = await readPublicViewportCaptureState(frame, header);
+    expect(before.svgGeometry).toHaveLength(3);
+    const shift = await page.getByTestId('capture-svg-path').evaluate((shape) => {
+      if (!(shape instanceof SVGGeometryElement)) throw new Error('Missing rendered SVG path');
+      const matrix = shape.getScreenCTM();
+      if (!matrix || !Number.isFinite(matrix.d) || matrix.d === 0)
+        throw new Error('Unmeasured mutation scale');
+      const local = 1 / devicePixelRatio / matrix.d;
+      shape.setAttribute('transform', 'translate(0 ' + local + ')');
+      return local;
+    });
+    const after = await readPublicViewportCaptureState(frame, header);
+    report['renderedSvgMove'] = { shift, before, after };
+    expect(after.svgGeometry).toHaveLength(3);
+    expect(after.svgGeometry[0]!.local).toEqual(before.svgGeometry[0]!.local);
+    expect(after.svgGeometry[0]!.matrix.f).not.toBe(before.svgGeometry[0]!.matrix.f);
+    expect(after.svgGeometry[0]!.rect.y).not.toBe(before.svgGeometry[0]!.rect.y);
+    expect(after.svgGeometry.slice(1)).toEqual(before.svgGeometry.slice(1));
+    expect(() => assertPublicViewportCaptureStateEqual(before, after)).toThrow(
+      'Viewport capture state changed',
+    );
+    await page.getByTestId('capture-hidden-owner').evaluate((owner) => {
+      if (!(owner instanceof HTMLElement)) throw new Error('Missing hidden SVG owner');
+      owner.style.display = 'inline';
+    });
+    const revealed = await readPublicViewportCaptureState(frame, header);
+    expect(revealed.svgGeometry).toHaveLength(5);
+    expect(() => assertPublicViewportCaptureStateEqual(after, revealed)).toThrow(
+      'Viewport capture state changed',
+    );
+  });
+});
+
 test('viewport SVG geometry refuses a degenerate native matrix', async ({
   browser,
   browserName,
