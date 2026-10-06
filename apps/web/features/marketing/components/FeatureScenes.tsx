@@ -1,7 +1,9 @@
 import {
   getToolDisplayLabel,
+  interactionMode,
   TOOL_APPROVAL_ACTION_LABELS,
   TOOL_STATUS_PRESENTATION,
+  type AdminPolicy,
   type ManagedMemoryCreateRequest,
   type ResearchStep,
 } from '@agiworkforce/types';
@@ -10,6 +12,7 @@ import {
   deriveArtifacts,
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
 } from '@agiworkforce/artifacts';
+import { ArrowUp, FileText, Image as ImageIcon, Mic } from 'lucide-react';
 import { WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
 import { AppWindow } from './DeviceMockups';
 import './agent-mockup-responsive.css';
@@ -17,6 +20,8 @@ import './artifact-mockup-responsive.css';
 import './research-mockup-responsive.css';
 import './memory-mockup-responsive.css';
 import './project-mockup-responsive.css';
+import './console-mockup-responsive.css';
+import './composer-mockup-responsive.css';
 
 function Perm({ label, state }: { label: string; state: 'allowed' | 'ask' | 'denied' }) {
   return (
@@ -310,18 +315,33 @@ export function ProjectWindow() {
 }
 
 const CONSOLE_MEMBERS = [
-  { name: 'A. Okafor', role: 'Owner', seat: 'SSO', last: 'today' },
-  { name: 'J. Lindqvist', role: 'Admin', seat: 'SSO', last: 'today' },
-  { name: 'M. Ferreira', role: 'Member', seat: 'SCIM', last: 'yesterday' },
-  { name: 'R. Nakamura', role: 'Member', seat: 'SCIM', last: '2 Sep' },
-  { name: 'S. Adeyemi', role: 'Viewer', seat: 'Invite', last: 'pending' },
+  { name: 'A. Okafor', role: 'Owner', email: 'a.okafor@example.com', status: 'active' },
+  { name: 'J. Lindqvist', role: 'Admin', email: 'j.lindqvist@example.com', status: 'active' },
+  { name: 'M. Ferreira', role: 'Member', email: 'm.ferreira@example.com', status: 'active' },
+  { name: 'R. Nakamura', role: 'Member', email: 'r.nakamura@example.com', status: 'active' },
+  { name: 'S. Adeyemi', role: 'Viewer', email: 's.adeyemi@example.com', status: 'active' },
 ] as const;
 
+const CONSOLE_POLICY_DRAFT: Pick<
+  AdminPolicy,
+  | 'allowedPrivacyModes'
+  | 'externalSharingEnabled'
+  | 'auditExportEnabled'
+  | 'chatSyncSurfaces'
+  | 'retentionEnforced'
+> = {
+  allowedPrivacyModes: ['local', 'byok', 'managed'],
+  externalSharingEnabled: false,
+  auditExportEnabled: false,
+  chatSyncSurfaces: ['web', 'desktop'],
+  retentionEnforced: false,
+};
+
 const CONSOLE_AUDIT = [
-  { time: '09:14', actor: 'A. Okafor', action: 'policy.changed', outcome: 'success' },
-  { time: '09:02', actor: 'system', action: 'scim.user_provisioned', outcome: 'success' },
-  { time: '08:41', actor: 'J. Lindqvist', action: 'data_exported', outcome: 'denied' },
-  { time: '08:40', actor: 'A. Okafor', action: 'admin_policy_changed', outcome: 'success' },
+  { time: 'Example', actor: 'example-owner', action: 'admin_policy_changed', outcome: 'success' },
+  { time: 'Example', actor: 'system', action: 'scim_user_provisioned', outcome: 'success' },
+  { time: 'Example', actor: 'example-admin', action: 'data_exported', outcome: 'denied' },
+  { time: 'Example', actor: 'example-owner', action: 'admin_policy_changed', outcome: 'failure' },
 ] as const;
 
 export function ConsoleWindow({
@@ -330,7 +350,15 @@ export function ConsoleWindow({
   view?: 'members' | 'policy' | 'audit' | 'usage';
 }) {
   return (
-    <AppWindow title="agiworkforce.com/workspace" badge="Console" label="The AGI workspace console">
+    <AppWindow
+      title="agiworkforce.com/workspace"
+      badge="Console"
+      label="The AGI workspace console"
+      className="agi-console-responsive"
+    >
+      <p className="agi-sc-note agi-console-example">
+        Authored example. This illustration is not connected to a workspace.
+      </p>
       <div className="agi-sc-split" data-cols="1-4">
         <aside className="agi-sc-rail agi-sc-rail--left agi-sc-rail--nav">
           {[
@@ -363,26 +391,24 @@ export function ConsoleWindow({
           <div className="agi-sc-page">
             <div className="agi-sc-page-head">
               <span className="agi-sc-page-title">Members</span>
-              <span className="agi-sc-meta">12 seats · 11 active · 1 invitation</span>
+              <span className="agi-sc-meta">Example members</span>
             </div>
             <div className="agi-mk-table agi-sc-table" data-cols="4">
               <span className="agi-mk-table-h">Name</span>
               <span className="agi-mk-table-h">Role</span>
-              <span className="agi-mk-table-h">Seat</span>
-              <span className="agi-mk-table-h">Last active</span>
+              <span className="agi-mk-table-h">Email</span>
+              <span className="agi-mk-table-h">Status</span>
               {CONSOLE_MEMBERS.map((member) => (
                 <span className="agi-sc-row" key={member.name}>
                   <span>{member.name}</span>
                   <span>{member.role}</span>
-                  <span>{member.seat}</span>
-                  <span>{member.last}</span>
+                  <span>{member.email}</span>
+                  <span>{member.status}</span>
                 </span>
               ))}
             </div>
             <p className="agi-mk-receipt">
-              <span className="agi-mk-dot" />
-              SSO: SAML connected · SCIM: on, last sync 09:02 · every change lands in the audit
-              trail
+              Sample names and addresses. No member has been invited or changed.
             </p>
           </div>
         ) : null}
@@ -390,20 +416,49 @@ export function ConsoleWindow({
           <div className="agi-sc-page">
             <div className="agi-sc-page-head">
               <span className="agi-sc-page-title">Policy</span>
-              <span className="agi-sc-meta">Enforced server side</span>
+              <span className="agi-sc-meta">Unsaved example</span>
             </div>
             <ul className="agi-sc-perms">
-              <Perm label="Local runs allowed" state="allowed" />
-              <Perm label="BYOK allowed" state="allowed" />
-              <Perm label="AGI Cloud allowed" state="allowed" />
-              <Perm label="Public share links" state="denied" />
-              <Perm label="Data export" state="ask" />
-              <Perm label="Client sync to phones" state="denied" />
+              <Perm
+                label="Local"
+                state={
+                  CONSOLE_POLICY_DRAFT.allowedPrivacyModes.includes('local') ? 'allowed' : 'denied'
+                }
+              />
+              <Perm
+                label="Your own keys"
+                state={
+                  CONSOLE_POLICY_DRAFT.allowedPrivacyModes.includes('byok') ? 'allowed' : 'denied'
+                }
+              />
+              <Perm
+                label="Managed Cloud"
+                state={
+                  CONSOLE_POLICY_DRAFT.allowedPrivacyModes.includes('managed')
+                    ? 'allowed'
+                    : 'denied'
+                }
+              />
+              <Perm
+                label="Public sharing"
+                state={CONSOLE_POLICY_DRAFT.externalSharingEnabled ? 'allowed' : 'denied'}
+              />
+              <Perm
+                label="Audit export"
+                state={CONSOLE_POLICY_DRAFT.auditExportEnabled ? 'allowed' : 'denied'}
+              />
+              <Perm
+                label="Mobile sync"
+                state={
+                  CONSOLE_POLICY_DRAFT.chatSyncSurfaces.includes('mobile') ? 'allowed' : 'denied'
+                }
+              />
             </ul>
             <div className="agi-sc-card">
-              <span className="agi-sc-card-head">Retention</span>
+              <span className="agi-sc-card-head">Enforce retention</span>
               <p className="agi-sc-instructions">
-                90 days, enforced. Legal holds exempt two conversations.
+                Enforce retention is {CONSOLE_POLICY_DRAFT.retentionEnforced ? 'on' : 'off'} in this
+                unsaved example. No policy has been saved.
               </p>
             </div>
           </div>
@@ -412,39 +467,38 @@ export function ConsoleWindow({
           <div className="agi-sc-page">
             <div className="agi-sc-page-head">
               <span className="agi-sc-page-title">Usage</span>
-              <span className="agi-sc-meta">This billing period · resets in 27 days</span>
+              <span className="agi-sc-meta">Example layout</span>
             </div>
             <ul className="agi-sc-usage">
               <li>
                 <span className="agi-sc-usage-row">
                   <span>Local</span>
-                  <span className="agi-sc-meta">312 runs · $0.00</span>
+                  <span className="agi-sc-meta">No usage data loaded</span>
                 </span>
                 <span className="agi-sc-bar" data-fill="0" />
               </li>
               <li>
                 <span className="agi-sc-usage-row">
-                  <span>BYOK</span>
-                  <span className="agi-sc-meta">1,048 runs · billed by your provider</span>
+                  <span>Your own keys</span>
+                  <span className="agi-sc-meta">No usage data loaded</span>
                 </span>
                 <span className="agi-sc-bar" data-fill="0" />
               </li>
               <li>
                 <span className="agi-sc-usage-row">
-                  <span>AGI Cloud</span>
-                  <span className="agi-sc-meta">$12.40 of the $25.00 seat cap</span>
+                  <span>Managed Cloud</span>
+                  <span className="agi-sc-meta">No usage data loaded</span>
                 </span>
-                <span className="agi-sc-bar" data-fill="50" />
+                <span className="agi-sc-bar" data-fill="0" />
               </li>
             </ul>
             <div className="agi-sc-card">
-              <span className="agi-sc-card-head">Spend ceiling</span>
+              <span className="agi-sc-card-head">Monthly spend limit</span>
               <p className="agi-sc-instructions">
-                Runs stop at the cap. Overage stays off until an owner turns it on.
+                No usage or billing data is loaded in this illustration.
               </p>
             </div>
             <div className="agi-sc-panel-foot">
-              <span>Export CSV</span>
               <span>By member</span>
               <span>By model</span>
             </div>
@@ -454,15 +508,15 @@ export function ConsoleWindow({
           <div className="agi-sc-page">
             <div className="agi-sc-page-head">
               <span className="agi-sc-page-title">Audit</span>
-              <span className="agi-sc-meta">Streaming to your SIEM · signed batches</span>
+              <span className="agi-sc-meta">Example event rows</span>
             </div>
             <div className="agi-mk-table agi-sc-table" data-cols="4">
-              <span className="agi-mk-table-h">Time</span>
+              <span className="agi-mk-table-h">When</span>
               <span className="agi-mk-table-h">Actor</span>
               <span className="agi-mk-table-h">Action</span>
               <span className="agi-mk-table-h">Outcome</span>
               {CONSOLE_AUDIT.map((event) => (
-                <span className="agi-sc-row" key={event.time + event.action}>
+                <span className="agi-sc-row" key={event.actor + event.action + event.outcome}>
                   <span>{event.time}</span>
                   <span>{event.actor}</span>
                   <span className="agi-sc-mono">{event.action}</span>
@@ -472,9 +526,10 @@ export function ConsoleWindow({
             </div>
             <div className="agi-sc-panel-foot">
               <span>Export JSONL</span>
-              <span>Filter</span>
-              <span>Legal hold</span>
+              <span>Filter by action</span>
+              <span>Filter by outcome</span>
             </div>
+            <p className="agi-sc-note">Illustrative events. No export or stream is running.</p>
           </div>
         ) : null}
       </div>
@@ -482,12 +537,7 @@ export function ConsoleWindow({
   );
 }
 
-const SLASH_COMMANDS = [
-  { name: '/research', hint: 'Plan searches, wait for approval, cite every claim' },
-  { name: '/code', hint: 'Run in the sandbox and return the output' },
-  { name: '/image', hint: 'Generate or edit an image' },
-  { name: '/summarise', hint: 'Condense the attached files' },
-] as const;
+const COMPOSER_SEARCH_EXAMPLE = interactionMode('search');
 
 export function ComposerWindow() {
   return (
@@ -495,41 +545,54 @@ export function ComposerWindow() {
       title="agiworkforce.com/chat"
       badge="Web"
       label="The AGI composer with a slash menu open"
+      className="agi-composer-responsive"
     >
       <div className="agi-sc-composer-stage">
+        <p className="agi-sc-note" data-composer-example="draft">
+          Example · Web composer draft
+        </p>
         <div className="agi-mk-composer agi-sc-composer">
           <div className="agi-mk-composer-row agi-sc-chips">
-            <span className="agi-mk-chip">▤ deck-v7.pdf</span>
-            <span className="agi-mk-chip">▣ screenshot.png</span>
-            <span className="agi-mk-chip">◉ 0:42 dictated</span>
+            <span className="agi-mk-chip" data-composer-attachment>
+              <FileText className="agi-composer-icon" aria-hidden="true" focusable="false" />
+              <span>deck-v7.pdf</span>
+            </span>
+            <span className="agi-mk-chip" data-composer-attachment>
+              <ImageIcon className="agi-composer-icon" aria-hidden="true" focusable="false" />
+              <span>screenshot.png</span>
+            </span>
           </div>
           <div className="agi-mk-composer-row">
             <span className="agi-mk-ghost agi-sc-typed">
-              /research the EU AI Act deployer duties
-              <span className="agi-dev-caret" />
+              <code>{COMPOSER_SEARCH_EXAMPLE.selector.label}</code>
             </span>
-            <span className="agi-dev-send">➤</span>
           </div>
           <div className="agi-mk-composer-row agi-mk-composer-foot">
             <span className="agi-mk-seg">
-              <span data-on="true">Chat</span>
-              <span>AGI Work</span>
+              <span data-on="true">{interactionMode('chat').selector.label}</span>
             </span>
-            <span className="agi-mk-chip agi-mk-chip--model">Auto ▾</span>
-            <span className="agi-mk-chip">Search · on</span>
-            <span className="agi-mk-composer-meta">
-              <span>Enter to send</span>
+            <span className="agi-sc-composer-tools">
+              <span className="agi-sc-icon-control">
+                <Mic className="agi-composer-icon" aria-hidden="true" focusable="false" />
+              </span>
+              <span className="agi-dev-send">
+                <ArrowUp className="agi-composer-icon" aria-hidden="true" focusable="false" />
+              </span>
             </span>
           </div>
         </div>
         <ul className="agi-sc-slash">
-          {SLASH_COMMANDS.map((command, index) => (
-            <li data-on={index === 0 ? 'true' : undefined} key={command.name}>
-              <span className="agi-sc-slash-name">{command.name}</span>
-              <span className="agi-sc-slash-hint">{command.hint}</span>
-            </li>
-          ))}
+          <li data-on="true">
+            <code className="agi-sc-slash-name">{COMPOSER_SEARCH_EXAMPLE.selector.label}</code>
+            <p className="agi-sc-slash-hint" data-composer-command-description>
+              {COMPOSER_SEARCH_EXAMPLE.description}
+            </p>
+          </li>
         </ul>
+        <p className="agi-sc-note" data-composer-availability>
+          Search availability depends on the selected model, tools and account. No message has been
+          sent.
+        </p>
       </div>
     </AppWindow>
   );

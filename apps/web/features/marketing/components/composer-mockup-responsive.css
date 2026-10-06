@@ -1,0 +1,244 @@
+[data-design='agi'] figure.agi-dev.agi-composer-responsive[data-geometry] {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: calc(var(--dev-w) * 1px);
+  margin-block: 0;
+  margin-inline: auto;
+  font-family: var(--public-mockup-font-text);
+  font-size: var(--public-mockup-text-body);
+  line-height: var(--public-mockup-leading-text);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-dev-shell {
+  block-size: auto;
+  min-block-size: 0;
+  min-inline-size: 0;
+  border-radius: var(--public-mockup-radius);
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-dev-bar {
+  flex-wrap: wrap;
+  block-size: auto;
+  min-block-size: var(--public-mockup-control-size);
+  gap: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap);
+  padding-inline: var(--public-mockup-padding);
+  border-start-start-radius: var(--public-mockup-radius);
+  border-start-end-radius: var(--public-mockup-radius);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-dev-lights {
+  gap: var(--public-mockup-gap-sm);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-dev-lights i {
+  inline-size: var(--public-mockup-light-size);
+  block-size: var(--public-mockup-light-size);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-dev-title {
+  flex: 1 1 var(--public-mockup-sidebar-basis);
+  min-inline-size: 0;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-dev-badge {
+  margin-inline: auto 0;
+  padding-block: var(--public-mockup-gap-sm);
+  padding-inline: var(--public-mockup-gap);
+}
+
+[data-design='agi'] .agi-composer-responsive :is(.agi-dev-title, .agi-dev-badge) {
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-code);
+  line-height: var(--public-mockup-leading-text);
+  letter-spacing: normal;
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc {
+  flex: none;
+  min-block-size: 0;
+  min-inline-size: 0;
+  font-family: var(--public-mockup-font-text);
+  font-size: var(--public-mockup-text-body);
+  line-height: var(--public-mockup-leading-text);
+  color: var(--agi-ink);
+  border-end-start-radius: var(--public-mockup-radius);
+  border-end-end-radius: var(--public-mockup-radius);
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-composer-stage {
+  flex: none;
+  align-items: stretch;
+  justify-content: normal;
+  min-block-size: 0;
+  min-inline-size: 0;
+  gap: var(--public-mockup-group-gap);
+  padding: var(--public-mockup-padding);
+  background: var(--agi-bg);
+  border-end-start-radius: var(--public-mockup-radius);
+  border-end-end-radius: var(--public-mockup-radius);
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-composer {
+  inline-size: 100%;
+  min-inline-size: 0;
+  margin: 0;
+  gap: var(--public-mockup-group-gap);
+  padding: var(--public-mockup-group-gap);
+  border: var(--public-mockup-border) solid var(--agi-rule-strong);
+  border-radius: var(--public-mockup-control-radius);
+  box-shadow: none;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-mk-composer-row {
+  flex-wrap: wrap;
+  min-inline-size: 0;
+  gap: var(--public-mockup-gap);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-mk-chip {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  min-block-size: var(--public-mockup-control-size);
+  gap: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
+  padding-inline: var(--public-mockup-gap);
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-code);
+  line-height: var(--public-mockup-leading-control);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-mk-ghost {
+  min-inline-size: 0;
+  min-block-size: var(--public-mockup-control-size);
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-code);
+  line-height: var(--public-mockup-leading-text);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-mk-ghost code {
+  font: inherit;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-mk-composer-foot {
+  font-family: var(--public-mockup-font-text);
+  font-size: var(--public-mockup-text-control);
+  line-height: var(--public-mockup-leading-control);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-mk-seg {
+  min-inline-size: 0;
+  padding: var(--public-mockup-gap-sm);
+  font: inherit;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-mk-seg span {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--public-mockup-control-size);
+  padding-block: var(--public-mockup-gap-sm);
+  padding-inline: var(--public-mockup-gap);
+  white-space: normal;
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-composer-tools {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--public-mockup-gap);
+  margin-inline: auto 0;
+}
+
+[data-design='agi'] .agi-composer-responsive :is(.agi-sc-icon-control, .agi-dev-send) {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--public-mockup-control-size);
+  block-size: var(--public-mockup-control-size);
+  border-radius: var(--corner-pill);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-icon-control {
+  border: var(--public-mockup-border) solid var(--agi-rule-strong);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-composer-icon {
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
+  flex: 0 0 var(--space-4);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-slash {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: var(--public-mockup-gap);
+  border: var(--public-mockup-border) solid var(--agi-rule-strong);
+  border-radius: var(--public-mockup-control-radius);
+  box-shadow: none;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-slash li {
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-inline-size: 0;
+  gap: var(--public-mockup-gap);
+  padding: var(--public-mockup-gap);
+  border-radius: var(--public-mockup-cell-radius);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-slash-name {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-code);
+  line-height: var(--public-mockup-leading-text);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-composer-responsive .agi-sc-slash-hint {
+  flex: 1 1 var(--public-mockup-sidebar-basis);
+  min-inline-size: 0;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+[data-design='agi'] .agi-composer-responsive :is(.agi-sc-note, .agi-sc-slash-hint) {
+  margin: 0;
+  font-family: var(--public-mockup-font-text);
+  font-size: var(--public-mockup-text-body);
+  line-height: var(--public-mockup-leading-text);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-wrap: pretty;
+}
