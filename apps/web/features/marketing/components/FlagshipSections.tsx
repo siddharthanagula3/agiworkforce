@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { ProductFrame, type ProductFrameImage, type ProductFrameVariant } from './ProductFrame';
 import { Reveal } from './Reveal';
-import { ScrollDeck } from './motion/ScrollDeck';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import { Stage } from './motion/Stage';
 
 const TICKER_REPEATS = 6;
@@ -44,10 +44,8 @@ export function LandingHero({
   brand,
   titleLines,
   em,
-  lede,
   ctas,
   ctas2,
-  modeRibbon,
   visual,
   announcement,
 }: {
@@ -88,7 +86,7 @@ export function LandingHero({
               {brand}
             </h1>
           ) : (
-            <h1 id="agi-fl-hero-title" className="agi-fl-h1">
+            <h1 id="agi-fl-hero-title" className="sr-only">
               {titleLines.map((line, index) => {
                 const emphasisIndex = line.indexOf(em);
                 return (
@@ -107,14 +105,6 @@ export function LandingHero({
                 );
               })}
             </h1>
-          )}
-          {lede ? <p className="agi-fl-lede">{lede}</p> : null}
-          {modeRibbon.length > 0 && (
-            <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
-              {modeRibbon.map((mode) => (
-                <li key={mode}>{mode}</li>
-              ))}
-            </ul>
           )}
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
@@ -201,21 +191,18 @@ export function LandingSurfaceIndex({
       </h2>
       <p className="agi-fl-section-lede">{lede}</p>
 
-      <ScrollDeck
-        label={SURFACE_DECK_LABEL}
-        items={items.map((item) => ({
-          id: item.index,
-          copy: (
+      <Tabs defaultValue={items[0]?.index} className="agi-fl-surface-explorer">
+        <TabsList className="agi-fl-surface-tabs" aria-label={SURFACE_DECK_LABEL}>
+          {items.map((item) => (
+            <TabsTrigger key={item.index} value={item.index} className="agi-fl-surface-tab">
+              {item.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {items.map((item) => (
+          <TabsContent key={item.index} value={item.index} className="agi-fl-surface-panel">
             <div className="agi-fl-surface-copy">
-              <span className="agi-fl-surface-num" aria-hidden="true">
-                {item.index}
-              </span>
-              <h3 className="agi-fl-surface-name">
-                <Link href={item.href} className="agi-fl-surface-link">
-                  {item.name}
-                </Link>
-              </h3>
-              <p className="agi-fl-surface-tagline">{item.tagline}</p>
+              <h3 className="agi-fl-surface-name">{item.tagline}</h3>
               <p className="agi-fl-surface-body">{item.body}</p>
               <ul className="agi-fl-surface-caps">
                 {item.capabilities.map((cap) => (
@@ -226,25 +213,24 @@ export function LandingSurfaceIndex({
                 <span>{item.platforms}</span>
                 <span className="agi-fl-surface-status">{item.status}</span>
               </p>
+              <Link href={item.href} className="agi-fl-surface-action">
+                Explore {item.name} <span aria-hidden="true">→</span>
+              </Link>
             </div>
-          ),
-          visual: (
-            <Stage depthPx={FRAME_DEPTH_PX}>
-              <div className="agi-fl-surface-visual">
-                {item.visual ??
-                  (item.frame ? (
-                    <ProductFrame
-                      variant={item.frame.variant}
-                      title={item.frame.title}
-                      badge={item.frame.badge}
-                      image={item.frame.image}
-                    />
-                  ) : null)}
-              </div>
-            </Stage>
-          ),
-        }))}
-      />
+            <div className="agi-fl-surface-visual">
+              {item.visual ??
+                (item.frame ? (
+                  <ProductFrame
+                    variant={item.frame.variant}
+                    title={item.frame.title}
+                    badge={item.frame.badge}
+                    image={item.frame.image}
+                  />
+                ) : null)}
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
     </section>
   );
 }

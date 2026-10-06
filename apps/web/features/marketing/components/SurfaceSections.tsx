@@ -30,10 +30,8 @@ export function FlagshipHero({
   brand,
   titleLines,
   em,
-  lede,
   ctas,
   ctas2,
-  modeRibbon,
   frame,
   visual,
 }: {
@@ -73,12 +71,13 @@ export function FlagshipHero({
             </p>
           )}
           {titleLines && titleLines.length > 0 && (
-            <h1 id={brand ? undefined : 'agi-fl-hero-title'} className="agi-fl-h1">
-              {titleLines.map((line) => {
+            <h1 id={brand ? undefined : 'agi-fl-hero-title'} className="sr-only">
+              {titleLines.map((line, index) => {
                 if (em && line.includes(em)) {
                   const [before, after] = line.split(em);
                   return (
                     <span key={line} className="agi-fl-h1-line">
+                      {index > 0 ? ' ' : null}
                       {before}
                       <em className="agi-fl-h1-em">{em}</em>
                       {after}
@@ -87,33 +86,12 @@ export function FlagshipHero({
                 }
                 return (
                   <span key={line} className="agi-fl-h1-line">
+                    {index > 0 ? ' ' : null}
                     {line}
                   </span>
                 );
               })}
             </h1>
-          )}
-          {lede && <p className="agi-fl-lede">{lede}</p>}
-          {modeRibbon.length > 0 && (
-            <ul
-              className={
-                modeRibbon.some((mode) => typeof mode !== 'string')
-                  ? 'agi-fl-mode-ribbon agi-fl-mode-ribbon--explained'
-                  : 'agi-fl-mode-ribbon'
-              }
-              aria-label="Trust modes"
-            >
-              {modeRibbon.map((mode) =>
-                typeof mode === 'string' ? (
-                  <li key={mode}>{mode}</li>
-                ) : (
-                  <li key={mode.label}>
-                    <span className="agi-fl-mode-label">{mode.label}</span>
-                    <span className="agi-fl-mode-note">{mode.note}</span>
-                  </li>
-                ),
-              )}
-            </ul>
           )}
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
@@ -459,7 +437,7 @@ export function DevBand({
         </div>
       </div>
       <Reveal className="agi-fl-devband-term">
-        {visual ?? <ProductFrame variant="terminal" title="agi · zsh" badge="sandboxed" />}
+        {visual ?? <ProductFrame variant="terminal" title="agi · zsh" />}
       </Reveal>
     </section>
   );

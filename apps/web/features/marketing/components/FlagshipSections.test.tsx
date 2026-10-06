@@ -12,7 +12,7 @@ describe('landing section ownership', () => {
     expect(sharedNames).toEqual([]);
   });
 
-  it('renders one headline with the signature emphasis and trust-mode ribbon', () => {
+  it('retains the accessible title, identity, action and product preview', () => {
     render(
       <LandingHero
         brand="AGI"
@@ -29,11 +29,11 @@ describe('landing section ownership', () => {
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
     expect(headings[0]).toHaveTextContent('One AI workspace. You choose where it runs.');
-    expect(headings[0]?.querySelector('em.agi-fl-h1-em')).toHaveTextContent(
-      'You choose where it runs.',
-    );
-    expect(screen.getByRole('list', { name: 'Trust modes' })).toHaveTextContent(
-      'Local · on-deviceBYOK · your keysCloud · public alpha',
-    );
+    expect(screen.getByText('AGI')).toBeInTheDocument();
+    expect(screen.getByText('the AI application suite')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Try AGI Web' })).toHaveAttribute('href', '/chat');
+    expect(screen.getByText('Product preview')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Trust modes' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Run each request where it belongs.')).not.toBeInTheDocument();
   });
 });
