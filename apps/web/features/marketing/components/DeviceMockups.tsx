@@ -1,9 +1,24 @@
 import './legacy-landing.css';
 import './motion/motion.css';
-import { Typewriter, type TypedLine, type TypedLineClasses } from './motion/Typewriter';
+import './mockup-responsive.css';
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
-import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+import {
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Command,
+  Folder,
+  Globe,
+  Library,
+  Search,
+  Send,
+} from 'lucide-react';
+import {
+  PRIVACY_MODE_DISPLAY,
+  PRIVACY_MODE_USAGE_IMPLICATION,
+  TOOL_STATUS_PRESENTATION,
+} from '@agiworkforce/types';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 const LOCAL_RUNTIME_LABEL = `${(CLI_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
@@ -116,21 +131,35 @@ export function ToolRow({
   state,
   label,
   meta,
+  icon,
 }: {
   state: 'done' | 'wait';
   label: string;
   meta: string;
+  icon?: ReactNode;
 }) {
   return (
     <p className="agi-mk-tool" data-state={state}>
-      <i>{state === 'done' ? '✓' : '●'}</i>
+      <i>{icon ?? (state === 'done' ? '✓' : '●')}</i>
       <span>{label}</span>
       <span className="agi-mk-tool-meta">{meta}</span>
     </p>
   );
 }
 
-function ComposerBar({ ghost, model, extra }: { ghost: string; model: string; extra?: ReactNode }) {
+function ComposerBar({
+  ghost,
+  model,
+  extra,
+  sendIcon,
+  modelIcon,
+}: {
+  ghost: string;
+  model: string;
+  extra?: ReactNode;
+  sendIcon?: ReactNode;
+  modelIcon?: ReactNode;
+}) {
   return (
     <div className="agi-mk-composer">
       <div className="agi-mk-composer-row">
@@ -138,42 +167,50 @@ function ComposerBar({ ghost, model, extra }: { ghost: string; model: string; ex
           {ghost}
           <span className="agi-dev-caret" />
         </span>
-        <span className="agi-dev-send">➤</span>
+        <span className="agi-dev-send">{sendIcon ?? '➤'}</span>
       </div>
       <div className="agi-mk-composer-row agi-mk-composer-foot">
         <span className="agi-mk-seg">
           <span data-on="true">Chat</span>
           <span>AGI Work</span>
         </span>
-        <span className="agi-mk-chip agi-mk-chip--model">{model} ▾</span>
+        <span className="agi-mk-chip agi-mk-chip--model">
+          {model} {modelIcon ?? '▾'}
+        </span>
         {extra}
       </div>
     </div>
   );
 }
 
-function PageContextStrip() {
+function PageContextStrip({ icon }: { icon?: ReactNode } = {}) {
   return (
     <div className="agi-dev-pagestrip">
-      <span className="agi-dev-pagestrip-icon">▤</span>
+      <span className="agi-dev-pagestrip-icon">{icon ?? '▤'}</span>
       <span className="agi-dev-pagestrip-text">
         <span className="agi-dev-pagestrip-title">Q3 Strategy Doc</span>
-        <span className="agi-dev-pagestrip-meta">docs.google.com · 4,200 words selected</span>
+        <span className="agi-dev-pagestrip-meta">docs.google.com</span>
       </span>
       <span className="agi-dev-pagestrip-badge">Context</span>
     </div>
   );
 }
 
-function PanelComposer() {
+function PanelComposer({
+  contextIcon,
+  sendIcon,
+}: {
+  contextIcon?: ReactNode;
+  sendIcon?: ReactNode;
+} = {}) {
   return (
     <div className="agi-dev-panelcomposer">
       <span className="agi-dev-panelcomposer-row">
-        <span className="agi-dev-panelcomposer-icon">▤</span>
+        <span className="agi-dev-panelcomposer-icon">{contextIcon ?? '▤'}</span>
         <span className="agi-dev-panelcomposer-ghost">
           <span className="agi-dev-type">Ask about this page…</span>
         </span>
-        <span className="agi-dev-send">➤</span>
+        <span className="agi-dev-send">{sendIcon ?? '➤'}</span>
       </span>
       <span className="agi-dev-panelcomposer-foot">
         <span>Paired · Desktop bridge</span>
@@ -253,22 +290,43 @@ export function WebWindow({
   className,
 }: DeviceWindowProps) {
   return (
-    <DeviceRoot type="web" label="The AGI Web chat interface" className={className}>
+    <DeviceRoot
+      type="web"
+      label="The AGI Web chat interface"
+      className={['agi-web-responsive', className].filter(Boolean).join(' ')}
+    >
       <WindowBar title={title} badge={badge} />
-      <div className="agi-dev-body agi-web" aria-hidden="true">
+      <div className="agi-dev-body agi-web">
         <div className="agi-desk-side">
-          <p className="agi-desk-brand">AGI</p>
-          <p className="agi-desk-new">+ New chat</p>
-          <p className="agi-desk-item">
-            ⌕ Search <span className="agi-desk-kbd">⌘K</span>
-          </p>
-          <p className="agi-desk-item">▤ Projects</p>
-          <p className="agi-desk-item">◇ Library</p>
-          <p className="agi-desk-group">Recents</p>
-          <p className="agi-desk-recent agi-desk-recent--on">EU AI Act duties</p>
-          <p className="agi-desk-recent">Onboarding email draft</p>
-          <p className="agi-desk-recent">Pricing page copy</p>
-          <p className="agi-desk-recent">Retention query</p>
+          <div className="agi-web-navigation">
+            <p className="agi-desk-brand">AGI</p>
+            <p className="agi-desk-new">+ New chat</p>
+            <p className="agi-desk-item">
+              <Search className="agi-web-icon" aria-hidden="true" focusable="false" /> Search{' '}
+              <span className="agi-desk-kbd">
+                <Command
+                  className="agi-web-icon"
+                  role="img"
+                  aria-label="Command"
+                  focusable="false"
+                />
+                K
+              </span>
+            </p>
+            <p className="agi-desk-item">
+              <Folder className="agi-web-icon" aria-hidden="true" focusable="false" /> Projects
+            </p>
+            <p className="agi-desk-item">
+              <Library className="agi-web-icon" aria-hidden="true" focusable="false" /> Library
+            </p>
+          </div>
+          <div className="agi-web-recents">
+            <p className="agi-desk-group">Recents</p>
+            <p className="agi-desk-recent agi-desk-recent--on">EU AI Act duties</p>
+            <p className="agi-desk-recent">Onboarding email draft</p>
+            <p className="agi-desk-recent">Pricing page copy</p>
+            <p className="agi-desk-recent">Retention query</p>
+          </div>
         </div>
         <div className="agi-mk-main">
           <div className="agi-mk-thread">
@@ -276,20 +334,57 @@ export function WebWindow({
               Compare the EU AI Act duties for providers versus deployers.
             </p>
             <div className="agi-mk-agi">
-              <ToolRow state="done" label="Searched the web" meta="5 sources · 1.4 s" />
-              <div className="agi-mk-table">
-                <span className="agi-mk-table-h">Duty</span>
-                <span className="agi-mk-table-h">Provider</span>
-                <span className="agi-mk-table-h">Deployer</span>
-                <span>Risk management</span>
-                <span>Required</span>
-                <span>Not required</span>
-                <span>Human oversight</span>
-                <span>Design for it</span>
-                <span>Operate it</span>
-                <span>Logging</span>
-                <span>Enable it</span>
-                <span>Keep six months</span>
+              <ToolRow
+                state="done"
+                label="Searched the web"
+                meta="5 sources · 1.4 s"
+                icon={
+                  <Check
+                    className="agi-web-icon"
+                    role="img"
+                    aria-label="Completed"
+                    focusable="false"
+                  />
+                }
+              />
+              <div
+                className="agi-web-table-region"
+                role="region"
+                aria-label="Example comparison of EU AI Act duties"
+                tabIndex={0}
+              >
+                <table className="agi-mk-table" aria-label="EU AI Act duties">
+                  <thead>
+                    <tr>
+                      <th className="agi-mk-table-h" scope="col">
+                        Duty
+                      </th>
+                      <th className="agi-mk-table-h" scope="col">
+                        Provider
+                      </th>
+                      <th className="agi-mk-table-h" scope="col">
+                        Deployer
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Risk management</td>
+                      <td>Required</td>
+                      <td>Not required</td>
+                    </tr>
+                    <tr>
+                      <td>Human oversight</td>
+                      <td>Design for it</td>
+                      <td>Operate it</td>
+                    </tr>
+                    <tr>
+                      <td>Logging</td>
+                      <td>Enable it</td>
+                      <td>Keep six months</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               <span className="agi-mk-chips">
                 <span className="agi-mk-chip">eur-lex.europa.eu</span>
@@ -307,6 +402,12 @@ export function WebWindow({
           <ComposerBar
             ghost="Ask a follow-up…"
             model="Auto"
+            sendIcon={
+              <Send className="agi-web-icon" role="img" aria-label="Send" focusable="false" />
+            }
+            modelIcon={
+              <ChevronDown className="agi-web-icon" aria-hidden="true" focusable="false" />
+            }
             extra={
               <span className="agi-mk-composer-meta">
                 <span>Enter to send · Shift+Enter for newline</span>
@@ -417,14 +518,27 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
 
 export function SidePanelCard({
   title = 'AGI · side panel',
-  badge = 'Scoped',
+  badge = 'Page context',
   className,
 }: DeviceWindowProps) {
   return (
-    <DeviceRoot type="panel" label={`${title} interface`} className={className}>
+    <DeviceRoot
+      type="panel"
+      label={`${title} interface`}
+      className={['agi-panel-responsive', className].filter(Boolean).join(' ')}
+    >
       <WindowBar title={title} badge={badge} />
       <div className="agi-dev-body agi-pn" aria-hidden="true">
-        <PageContextStrip />
+        <PageContextStrip
+          icon={
+            <Globe
+              className="agi-panel-icon"
+              role="img"
+              aria-label="Page context"
+              focusable="false"
+            />
+          }
+        />
         <div className="agi-pn-main">
           <div className="agi-pn-chips">
             <span className="agi-pn-chip--on">This page</span>
@@ -432,12 +546,35 @@ export function SidePanelCard({
             <span>/extract</span>
           </div>
           <p className="agi-pn-msg">Summarize this page</p>
-          <p className="agi-pn-line agi-pn-line--ok">✓ Context captured · sent to Desktop</p>
-          <p className="agi-pn-line agi-pn-line--dim">
-            Paired bridge · permissions scoped to this task
+          <p className="agi-pn-line agi-pn-line--ok">
+            <Check
+              className="agi-panel-icon"
+              role="img"
+              aria-label="Context attached"
+              focusable="false"
+            />
+            Browser page added
           </p>
+          <p className="agi-pn-line agi-pn-line--dim">Page text included with your question</p>
         </div>
-        <PanelComposer />
+        <PanelComposer
+          contextIcon={
+            <Globe
+              className="agi-panel-icon"
+              role="img"
+              aria-label="Page context"
+              focusable="false"
+            />
+          }
+          sendIcon={
+            <ArrowUp
+              className="agi-panel-icon"
+              role="img"
+              aria-label="Send message"
+              focusable="false"
+            />
+          }
+        />
       </div>
     </DeviceRoot>
   );
@@ -610,66 +747,35 @@ export function EditorWindow({
   );
 }
 
-const TERMINAL_TYPED_LABEL = 'AGI CLI session transcript';
-const TERMINAL_LINE_CLASSES: TypedLineClasses = {
-  line: 'agi-term-line',
-  kinds: { dim: 'agi-term-line--dim', ok: 'agi-term-ok', cmd: 'agi-term-cmd' },
-};
-
-function terminalLines(boundaryLabel: string): readonly TypedLine[] {
-  return [
-    { kind: 'ok', text: boundaryLabel },
-    { kind: 'cmd', text: '› fix the failing test in packages/ai/routing' },
-    { kind: 'dim', text: '  read   packages/ai/routing/src/auto.ts' },
-    { kind: 'dim', text: '  run    pnpm vitest auto.test.ts          1 failed' },
-    { kind: 'dim', text: '  edit   src/auto.ts                       +4 -1' },
-    { kind: 'dim', text: '  run    pnpm vitest auto.test.ts          12 passed' },
-    { kind: 'ok', text: '✓ fixed · the health scope read a stale snapshot' },
-    { kind: 'out', text: '  commit as fix(routing): read the live snapshot? [y/n]' },
-  ];
-}
-
 export function TerminalWindow({
   title = 'agi · zsh',
-  badge = 'sandboxed',
+  badge = TOOL_STATUS_PRESENTATION['awaiting-approval'].label,
   className,
   routeMode = 'local',
 }: TerminalWindowProps) {
-  const isByok = routeMode === 'byok';
-  const isManaged = routeMode === 'managed';
-  const routeLabel = isByok ? 'BYOK' : isManaged ? 'managed cloud' : 'local model';
-  const providerLabel = isByok ? 'your provider' : isManaged ? 'AGI managed' : LOCAL_RUNTIME_LABEL;
-  const boundaryLabel = isByok
-    ? '● BYOK · direct to your provider'
-    : isManaged
-      ? '● cloud · managed by AGI'
-      : '● local · on-device & private';
-  const footerMode = isByok ? 'BYOK' : isManaged ? 'cloud' : 'local';
-
   return (
-    <DeviceRoot type="terminal" label="AGI CLI interface" className={className}>
+    <DeviceRoot
+      type="terminal"
+      label="AGI CLI interface"
+      className={['agi-terminal-responsive', className].filter(Boolean).join(' ')}
+    >
       <WindowBar title={title} badge={badge} />
       <div className="agi-dev-body agi-term" aria-hidden="true">
-        <p className="agi-term-line agi-term-line--dim agi-term-strip">
-          <span>
-            AGI · <span className="agi-term-ok">{routeLabel}</span> · {providerLabel}
-          </span>
-          <span className="agi-term-hud">
-            in 8.4k · out 1.2k ·{' '}
-            <span className="agi-term-ok">{isByok ? 'provider billed' : '$0.0000'}</span> · ctx 12%
-          </span>
+        <p className="agi-term-line agi-term-strip">
+          <span>{PRIVACY_MODE_DISPLAY[routeMode].label}</span>
+          {routeMode === 'local' && CLI_LOCAL_RUNTIMES.names[0] ? (
+            <span>{CLI_LOCAL_RUNTIMES.names[0]}</span>
+          ) : null}
         </p>
-        <Typewriter
-          lines={terminalLines(boundaryLabel)}
-          label={TERMINAL_TYPED_LABEL}
-          classes={TERMINAL_LINE_CLASSES}
-        />
-        <p className="agi-term-line">
-          <span className="agi-term-prompt">›</span> y<span className="agi-term-caret" />
-        </p>
-        <p className="agi-term-line agi-term-line--dim">
-          Default · {footerMode} · effort:Medium · sandbox: seatbelt
-        </p>
+        <div className="agi-term-proposal">
+          <p className="agi-term-line agi-term-example">Example · file.txt</p>
+          <p className="agi-term-line agi-term-cmd">Allow this edit?</p>
+          <div className="agi-term-diff">
+            <p className="agi-term-line">- alpha</p>
+            <p className="agi-term-line">+ beta</p>
+          </div>
+        </div>
+        <p className="agi-term-line agi-term-usage">{PRIVACY_MODE_USAGE_IMPLICATION[routeMode]}</p>
       </div>
     </DeviceRoot>
   );
