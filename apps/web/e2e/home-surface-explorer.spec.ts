@@ -76,7 +76,7 @@ for (const theme of ['dark', 'light'] as const) {
             '1',
           );
           const windowHeights = await deck
-            .locator('.agi-mx-deck-card figure.agi-dev:not(.agi-dev--phone) .agi-dev-shell')
+            .locator('.agi-mx-deck-card figure.agi-app:not(.agi-app--phone) .agi-app-window')
             .evaluateAll((shells) => shells.map((shell) => (shell as HTMLElement).offsetHeight));
           expect(windowHeights).toHaveLength(surfaces.length - 1);
           expect(new Set(windowHeights).size).toBe(1);
