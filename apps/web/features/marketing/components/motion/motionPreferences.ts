@@ -1,7 +1,7 @@
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const FINE_POINTER_QUERY = '(pointer: fine)';
 
-const PINNABLE_WIDTH_QUERY = '(min-width: 901px)';
+const PINNABLE_WIDTH_QUERY = '(min-width: 901px) and (scripting: enabled)';
 
 const matches = (query: string): boolean =>
   typeof window !== 'undefined' &&
