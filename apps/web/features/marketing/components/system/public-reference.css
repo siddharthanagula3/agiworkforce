@@ -217,7 +217,7 @@ body:has([data-design='agi'][data-public-reference])
 }
 
 [data-design='agi'][data-public-reference] .agi-ds-navpanel-desc {
-  font-size: var(--public-text-meta);
+  font-size: var(--public-text-body);
   line-height: var(--public-leading-body);
 }
 
