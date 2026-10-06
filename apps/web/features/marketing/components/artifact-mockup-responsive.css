@@ -28,7 +28,7 @@
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
   padding-block: var(--public-mockup-gap);
-  padding-inline: var(--public-mockup-padding);
+  padding-inline: var(--public-mockup-gap);
   border-start-start-radius: var(--public-mockup-radius);
   border-start-end-radius: var(--public-mockup-radius);
 }
@@ -42,11 +42,14 @@
   block-size: var(--public-mockup-light-size);
 }
 
-[data-design='agi'] .agi-artifact-responsive .agi-dev-title {
-  flex: 1 1 auto;
+[data-design='agi'] .agi-artifact-responsive .agi-dev-bar > .agi-dev-title {
+  flex: 1 1 100%;
+  order: 1;
   min-inline-size: 0;
+  letter-spacing: var(--type-code-tracking);
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 [data-design='agi'] .agi-artifact-responsive .agi-dev-badge {
