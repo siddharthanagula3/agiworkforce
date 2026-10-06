@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@agiworkforce/ui/sheet';
+import { ActiveNavLink } from './ActiveNavLink';
 import { CHAT_ROOT_HREF, CONTACT_SALES_HREF, NAV_GROUPS, WEB_ENTRY_HREF } from './nav';
 
 const ICON_SIZE = 20;
@@ -31,18 +32,18 @@ export function MarketingMobileNav({ signedIn = false }: { signedIn?: boolean } 
                 <ul className="agi-ds-mobile-nav-sublist">
                   {group.items.map((item) => (
                     <li key={item.href}>
-                      <Link href={item.href} className="agi-ds-mobile-nav-link">
+                      <ActiveNavLink href={item.href} className="agi-ds-mobile-nav-link">
                         {item.label}
-                      </Link>
+                      </ActiveNavLink>
                     </li>
                   ))}
                 </ul>
               </li>
             ))}
             <li>
-              <Link href="/pricing" className="agi-ds-mobile-nav-link">
+              <ActiveNavLink href="/pricing" className="agi-ds-mobile-nav-link">
                 Pricing
-              </Link>
+              </ActiveNavLink>
             </li>
             <li>
               <Link href={CONTACT_SALES_HREF} className="agi-ds-mobile-nav-link">

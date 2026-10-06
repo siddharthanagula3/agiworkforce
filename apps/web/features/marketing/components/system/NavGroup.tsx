@@ -10,9 +10,9 @@ const CLOSE_DELAY_MS = 140;
 export function NavGroup({ group }: { group: NavGroupDefinition }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname() ?? '';
-  const current = group.items.some(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  );
+  const current =
+    group.items.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`)) ||
+    pathname === group.footer?.href;
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef<number | null>(null);
@@ -35,16 +35,7 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
     }
   };
 
-  /**
-   * Scrolling dismisses an open panel.
-   *
-   * The panel opens on click as well as on hover, and the click-opened case had
-   * no way to close except another click or moving the pointer out. Scrolling
-   * with one open left it floating over the content being scrolled past, which
-   * is what the leaders' navigation does not do. Listening on `window` sees
-   * page scrolling only: a scroll inside the panel's own list does not bubble
-   * there, so a long menu can still be scrolled without closing itself.
-   */
+  // Panel scrolling does not reach this non-capturing window listener.
   useEffect(() => {
     if (!open) return;
     const close = () => {
@@ -100,6 +91,11 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
               <Link
                 href={item.href}
                 className="agi-ds-navpanel-item"
+                aria-current={
+                  pathname === item.href || pathname.startsWith(`${item.href}/`)
+                    ? 'page'
+                    : undefined
+                }
                 onClick={() => setOpen(false)}
               >
                 <span className="agi-ds-navpanel-title">{item.label}</span>
@@ -114,6 +110,7 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
           <Link
             href={group.footer.href}
             className="agi-ds-navpanel-footer"
+            aria-current={pathname === group.footer.href ? 'page' : undefined}
             onClick={() => setOpen(false)}
           >
             {group.footer.label} →
