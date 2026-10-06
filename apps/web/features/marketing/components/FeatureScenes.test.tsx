@@ -26,7 +26,19 @@ describe('existing console scene rendering', () => {
     (view) => {
       const markup = document.createElement('div');
       markup.innerHTML = renderToStaticMarkup(<ConsoleWindow view={view} />);
+      expect(markup.querySelector('figure.agi-console-responsive')).not.toBeNull();
       expect(markup.querySelector('.agi-dev-body')).toHaveAttribute('aria-hidden', 'true');
+      expect(markup.querySelector('.agi-dev-body')).toHaveTextContent(
+        'Authored example. This illustration is not connected to a workspace.',
+      );
+      expect(
+        markup.querySelectorAll(
+          'a,button,input,select,textarea,[contenteditable],[tabindex],[hidden]',
+        ),
+      ).toHaveLength(0);
+      expect(markup.textContent).not.toMatch(
+        /12 seats|11 active|1 invitation|last sync|every change lands|Enforced server side|90 days|signed batches|resets in|seat cap|Runs stop at the cap|policy\.changed|scim\.user_provisioned/,
+      );
       expect(markup.querySelector('.agi-sc-page-title')?.textContent?.toLowerCase()).toBe(view);
       if (view === 'policy') {
         const permissions = [...markup.querySelectorAll('.agi-sc-perm')];
