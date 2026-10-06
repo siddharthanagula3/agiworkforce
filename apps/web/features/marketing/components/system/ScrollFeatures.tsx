@@ -52,13 +52,16 @@ export function ScrollFeatures({
             className="agi-ds-scrollfeature"
             data-active={index === active ? 'true' : undefined}
             id={feature.id}
+            aria-labelledby={`${feature.id}-title`}
             ref={(node) => {
               refs.current[index] = node;
             }}
             key={feature.id}
           >
             {feature.eyebrow ? <p className="agi-ds-eyebrow">{feature.eyebrow}</p> : null}
-            <h3 className="agi-ds-scrollfeature-title">{feature.title}</h3>
+            <h3 id={`${feature.id}-title`} className="agi-ds-scrollfeature-title">
+              {feature.title}
+            </h3>
             <p className="agi-ds-scrollfeature-body">{feature.body}</p>
             {feature.points ? <Checklist items={feature.points} /> : null}
             <Prose size="sm">
@@ -72,11 +75,15 @@ export function ScrollFeatures({
           </article>
         ))}
       </div>
-      <div className="agi-ds-scrollfeatures-stage" aria-hidden="true">
+      <div className="agi-ds-scrollfeatures-stage">
         {features.map((feature, index) => (
           <div
             className="agi-ds-scrollfeature-visual"
+            role="region"
+            aria-labelledby={`${feature.id}-title`}
             data-active={index === active ? 'true' : undefined}
+            aria-hidden={index !== active ? true : undefined}
+            inert={index !== active}
             key={feature.id}
           >
             {feature.visual}
