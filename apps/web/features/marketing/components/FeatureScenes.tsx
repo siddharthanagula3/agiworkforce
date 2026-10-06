@@ -2,6 +2,7 @@ import {
   getToolDisplayLabel,
   TOOL_APPROVAL_ACTION_LABELS,
   TOOL_STATUS_PRESENTATION,
+  type ResearchStep,
 } from '@agiworkforce/types';
 import {
   artifactInclusionForPolicy,
@@ -9,23 +10,10 @@ import {
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
 } from '@agiworkforce/artifacts';
 import { WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
-import { AppWindow, Receipt, ROUTE_RECEIPTS } from './DeviceMockups';
+import { AppWindow } from './DeviceMockups';
 import './agent-mockup-responsive.css';
 import './artifact-mockup-responsive.css';
-
-const STEP_GLYPH = { done: '✓', active: '●', pending: '○' } as const;
-
-type StepState = keyof typeof STEP_GLYPH;
-
-function Step({ state, label, meta }: { state: StepState; label: string; meta: string }) {
-  return (
-    <li className="agi-sc-step" data-state={state}>
-      <i>{STEP_GLYPH[state]}</i>
-      <span>{label}</span>
-      <span className="agi-sc-meta">{meta}</span>
-    </li>
-  );
-}
+import './research-mockup-responsive.css';
 
 function Perm({ label, state }: { label: string; state: 'allowed' | 'ask' | 'denied' }) {
   return (
@@ -173,49 +161,53 @@ export function ArtifactsWindow() {
   );
 }
 
+export const RESEARCH_PLAN_EXAMPLE = [
+  {
+    id: 'example-planning',
+    type: 'search',
+    description: 'Find tools for planning tasks and tracking progress.',
+    status: 'pending',
+  },
+  {
+    id: 'example-collaboration',
+    type: 'search',
+    description: 'Compare collaboration and sharing options.',
+    status: 'pending',
+  },
+  {
+    id: 'example-documentation',
+    type: 'search',
+    description: "Check each tool's published documentation.",
+    status: 'pending',
+  },
+] as const satisfies readonly ResearchStep[];
+
 export function ResearchWindow() {
   return (
     <AppWindow
-      title="agiworkforce.com/chat · deep research"
+      title="agiworkforce.com/chat · research plan example"
       badge="Web"
-      label="An AGI deep research run with its plan and report"
+      label="Example Web research plan awaiting approval"
+      className="agi-research-responsive"
     >
-      <div className="agi-sc-split" data-cols="2-3">
-        <aside className="agi-sc-rail agi-sc-rail--left">
-          <span className="agi-sc-card-head">Research plan · approved</span>
-          <ul className="agi-sc-steps">
-            <Step state="done" label="EU AI Act deployer obligations" meta="6 hits" />
-            <Step state="done" label="GPAI code of practice status" meta="4 hits" />
-            <Step state="done" label="National enforcement timelines" meta="5 hits" />
-            <Step state="done" label="SME exemptions, article 62" meta="3 hits" />
-            <Step state="done" label="Fines and thresholds" meta="4 hits" />
-          </ul>
-          <p className="agi-sc-note">12 sources read · 3 rejected (paywall, duplicate)</p>
-        </aside>
-        <div className="agi-sc-report">
-          <p className="agi-sc-doc-title">Deployer duties under the EU AI Act</p>
-          <p>
-            Deployers of high risk systems must run them under the provider's instructions, keep
-            human oversight in place, and retain logs for at least six months
-            <span className="agi-mk-cite">1</span>. Obligations phase in by risk class, with the
-            general purpose provisions already in force <span className="agi-mk-cite">2</span>.
-          </p>
-          <p>
-            Small deployers keep the same duties but gain simplified documentation and lower penalty
-            ceilings <span className="agi-mk-cite">3</span>.
-          </p>
-          <ul className="agi-sc-sources">
-            <li>
-              <span className="agi-mk-cite">1</span> eur-lex.europa.eu
-            </li>
-            <li>
-              <span className="agi-mk-cite">2</span> digital-strategy.ec.europa.eu
-            </li>
-            <li>
-              <span className="agi-mk-cite">3</span> europarl.europa.eu
-            </li>
-          </ul>
-          <Receipt route={ROUTE_RECEIPTS.managed} tokensIn="41k" tokensOut="2.3k" time="84 s" />
+      <div className="agi-sc-research-plan">
+        <p className="agi-sc-note">Example · Web research plan</p>
+        <p className="agi-mk-user">Compare project planning tools for a small team.</p>
+        <div className="agi-sc-card">
+          <span className="agi-sc-card-head">Research plan</span>
+          <p>Review the plan to start searching</p>
+          <p>Edit the steps and choose sources and report options before starting.</p>
+          <ol className="agi-sc-research-steps">
+            {RESEARCH_PLAN_EXAMPLE.map((step) => (
+              <li key={step.id} data-status={step.status}>
+                <span>{step.description}</span>
+              </li>
+            ))}
+          </ol>
+          <span className="agi-mk-actions">
+            <span className="agi-mk-btn agi-mk-btn--primary">Start research</span>
+            <span className="agi-mk-btn">Cancel</span>
+          </span>
         </div>
       </div>
     </AppWindow>
