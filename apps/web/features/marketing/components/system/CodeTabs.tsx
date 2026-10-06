@@ -2,6 +2,7 @@
 
 import { useTablistKeyboard } from '@agiworkforce/ui';
 import { useId, useState } from 'react';
+import '../code-example-responsive.css';
 
 export interface CodeTab {
   label: string;
@@ -40,7 +41,7 @@ export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: str
   };
 
   return (
-    <figure className="agi-ds-codetabs" aria-label={title}>
+    <figure className="agi-ds-codetabs agi-code-responsive" aria-label={title}>
       <div className="agi-ds-codetabs-bar">
         <div
           className="agi-ds-codetabs-tabs"
@@ -75,6 +76,7 @@ export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: str
         className="agi-ds-codetabs-code"
         id={`${id}-panel`}
         role="tabpanel"
+        tabIndex={0}
         aria-labelledby={`${id}-tab-${active}`}
         data-language={tab.language}
       >
