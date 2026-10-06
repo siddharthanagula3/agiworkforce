@@ -9,6 +9,7 @@ import {
   TOOL_STATUS_PRESENTATION,
 } from '@agiworkforce/types';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 import {
   ChromeWindow,
   DesktopWindow,
@@ -182,20 +183,24 @@ describe('cloud-only surfaces never render a Local or BYOK route', () => {
     for (const literal of forbidden) expect(text).not.toContain(literal);
   });
 
-  it('desktop receipt and composer chip name the managed route', () => {
-    const text = render(<DesktopWindow />).container.textContent ?? '';
-    expect(text).toContain('Served by AGI Cloud · Auto route');
-    expect(text).toContain('Auto · AGI Cloud');
-    expect(render(<DesktopWindow />).container.querySelector('.agi-dev-badge')?.textContent).toBe(
-      'Cloud',
+  it('desktop example and composer name the managed route without a fabricated receipt', () => {
+    const { container } = render(<DesktopWindow />);
+    expect(container.querySelector('.agi-desk-foot')?.textContent).toBe(
+      PRIVACY_MODE_DISPLAY.managed.label,
     );
+    expect(container.querySelector('.agi-mk-chip--model')?.textContent?.trim()).toBe(
+      'Auto · ' + PRIVACY_MODE_DISPLAY.managed.label,
+    );
+    expect(container.querySelector('.agi-dev-badge')?.textContent).toBe('Cloud');
+    expect(container.querySelector('.agi-mk-receipt')).toBeNull();
   });
 
   it('chrome panel pill and composer foot carry the managed label', () => {
     const chrome = render(<ChromeWindow />).container;
-    expect(chrome.querySelector('.agi-cr-panel-mode')?.textContent).toBe(
-      `◆ ${PRIVACY_MODE_DISPLAY.managed.label}`,
+    expect(chrome.querySelector('.agi-cr-panel-mode')?.textContent?.trim()).toBe(
+      PRIVACY_MODE_DISPLAY.managed.label,
     );
+    expect(chrome.querySelector('.agi-cr-panel-mode svg.lucide-cloud')).not.toBeNull();
     expect(chrome.querySelector('.agi-dev-panelcomposer-foot')?.textContent).toContain(
       PRIVACY_MODE_DISPLAY.managed.label,
     );
@@ -292,6 +297,35 @@ describe('one canonical look per surface, everywhere', () => {
     expect(deviceRoot(custom.container)).toHaveClass('phone-owner-slot', 'agi-phone-responsive');
   });
 
+  it('binds editor facades to the responsive owner without introducing active controls', () => {
+    for (const example of [
+      <EditorWindow key="direct" />,
+      <EditorWindow key="custom" className="editor-owner-slot" />,
+      <VSCodeMockup key="mockup" />,
+      <ProductFrame key="frame" variant="editor" title="AGI · VS Code" badge="@agi" />,
+    ]) {
+      const { container } = render(example);
+      const editor = deviceRoot(container);
+      expectGeometry(editor, 'editor');
+      expect(editor).toHaveClass('agi-editor-responsive');
+      expect(editor).not.toHaveClass('agi-web-responsive', 'agi-phone-responsive');
+      const body = editor.querySelector('.agi-dev-body.agi-ed');
+      expect(body).toHaveAttribute('aria-hidden', 'true');
+      expect(body?.querySelector('.agi-ed-code')).not.toBeNull();
+      expect(body?.querySelector('.agi-ed-chat')).not.toBeNull();
+      expect(body?.querySelector('.agi-mk-receipt')).toBeNull();
+      expect(body?.textContent).toContain('Example request: add a fallback for an empty name.');
+      expect(body?.textContent).toContain('Proposed example: trim the name');
+      expect(body?.querySelector('.agi-mk-actions')?.textContent).toBe('AcceptReject');
+      expect(body?.textContent).not.toMatch(
+        /@agi\/sdk|ProviderError|processChat|tokens|passed|completed/,
+      );
+      expect(body?.querySelectorAll('button,a,input,textarea,[tabindex],[hidden]')).toHaveLength(0);
+    }
+    const custom = render(<EditorWindow className="editor-owner-slot" />);
+    expect(deviceRoot(custom.container)).toHaveClass('editor-owner-slot', 'agi-editor-responsive');
+  });
+
   it('landing SurfaceMockups map to canonical devices', () => {
     expectGeometry(deviceRoot(render(<ChromeMockup />).container), 'chrome');
     expectGeometry(deviceRoot(render(<VSCodeMockup />).container), 'editor');
@@ -300,14 +334,17 @@ describe('one canonical look per surface, everywhere', () => {
 });
 
 describe('previously clipped strings render in full', () => {
-  it('Chrome side panel composer carries the full placeholder', () => {
+  it('Chrome side panel composer carries the complete example prompt', () => {
     const { container } = render(<ChromeWindow />);
     const ghost = container.querySelector('.agi-dev-panelcomposer-ghost');
-    expect(ghost?.textContent).toBe('Ask about this page…');
+    expect(ghost?.textContent).toBe('Summarise this page into a short checklist.');
   });
 
-  it('panel card and chrome window share the page-context strip and composer', () => {
-    for (const el of [<SidePanelCard key="p" />, <ChromeWindow key="c" />]) {
+  it('panel card and chrome keep their context and distinct composer state', () => {
+    for (const [el, status] of [
+      [<SidePanelCard key="p" />, 'Paired · Desktop bridge'],
+      [<ChromeWindow key="c" />, 'Desktop optional'],
+    ] as const) {
       const { container } = render(el);
       expect(container.querySelector('.agi-dev-pagestrip-title')?.textContent).toBe(
         'Q3 Strategy Doc',
@@ -315,8 +352,9 @@ describe('previously clipped strings render in full', () => {
       expect(container.querySelector('.agi-dev-pagestrip-meta')?.textContent).toBe(
         'docs.google.com',
       );
+      expect(container.querySelector('.agi-dev-panelcomposer-foot')?.textContent).toContain(status);
       expect(container.querySelector('.agi-dev-panelcomposer-foot')?.textContent).toContain(
-        'Paired · Desktop bridge',
+        PRIVACY_MODE_DISPLAY.managed.label,
       );
     }
   });
@@ -388,13 +426,15 @@ describe('readable Web example', () => {
     expect(container.querySelector('svg')).toBeNull();
   });
 
-  it('preserves the default desktop composer icon output', () => {
+  it('uses registered vector icons in the passive desktop composer', () => {
     const { container } = render(<DesktopWindow />);
-    expect(container.querySelector('.agi-dev-send')?.textContent).toBe('\u27a4');
-    expect(container.querySelector('.agi-mk-chip--model')?.textContent).toBe(
-      'Auto · AGI Cloud \u25be',
+    expect(container.querySelector('.agi-dev-send')?.textContent).toBe('');
+    expect(container.querySelector('.agi-dev-send svg.lucide-arrow-up')).not.toBeNull();
+    expect(container.querySelector('.agi-mk-chip--model')?.textContent?.trim()).toBe(
+      'Auto · ' + PRIVACY_MODE_DISPLAY.managed.label,
     );
-    expect(container.querySelector('.agi-mk-composer svg')).toBeNull();
+    expect(container.querySelector('.agi-mk-chip--model svg.lucide-chevron-down')).not.toBeNull();
+    expect(container.querySelectorAll('.agi-mk-composer svg')).toHaveLength(2);
     expect(container.querySelector('.agi-web-icon')).toBeNull();
   });
 
@@ -469,5 +509,72 @@ describe('readable Web example', () => {
     const { container } = render(example);
     expect(deviceRoot(container)).not.toHaveClass('agi-web-responsive');
     expect(container.querySelector('.agi-web-table-region')).toBeNull();
+  });
+});
+
+describe('authored Desktop and Chrome prompts', () => {
+  it.each([
+    ['desktop', <DesktopWindow className="owner-slot" key="d" />],
+    ['chrome', <ChromeWindow className="owner-slot" key="c" />],
+  ] as const)(
+    'keeps the %s sample explicit, passive and free of fabricated run results',
+    (kind, example) => {
+      const { container } = render(example);
+      const root = deviceRoot(container);
+      expectGeometry(root, kind);
+      expect(root).toHaveClass('owner-slot', 'agi-' + kind + '-responsive');
+      expect(root).not.toHaveClass('agi-web-responsive');
+      expect(container.querySelector('.agi-device-example-label')?.textContent).toBe(
+        'Example prompt',
+      );
+      expect(container.querySelector('.agi-dev-body')).toHaveAttribute('aria-hidden', 'true');
+      expect(
+        container.querySelectorAll(
+          'button,a,input,textarea,select,[tabindex],[contenteditable],[role="button"],[hidden],[inert]',
+        ),
+      ).toHaveLength(0);
+      expect(
+        container.querySelectorAll(
+          '.agi-mk-tool,.agi-mk-approval,.agi-mk-receipt,.agi-mk-cite,.agi-cr-msg--agi,.agi-mk-actions',
+        ),
+      ).toHaveLength(0);
+      expect(container.textContent).not.toMatch(
+        /Always|Insert as comment|¶|\d+(?:\.\d+)?\s+s\b|\d+\s+lines added/u,
+      );
+      expect(container.textContent).not.toMatch(/[\u25a4\u25c6\u2713\u27a4\u25be]/u);
+    },
+  );
+
+  it('binds the Desktop subset to actual navigation labels and retains the example draft', () => {
+    const { container } = render(<DesktopWindow />);
+    const selected = APP_NAV_DESTINATIONS.filter(({ id }) => id === 'projects' || id === 'library');
+    expect(selected.map(({ id }) => id)).toEqual(['projects', 'library']);
+    expect(
+      Array.from(container.querySelectorAll('.agi-desk-item'), (item) => item.textContent?.trim()),
+    ).toEqual(['Search', ...selected.map(({ label }) => label)]);
+    expect(container.querySelectorAll('.agi-desk-count,.agi-desk-beta')).toHaveLength(0);
+    expect(container.querySelector('.agi-mk-ghost')?.textContent).toBe(
+      'Draft a release note from these notes.',
+    );
+    expect(container.querySelector('.agi-device-example-title')?.textContent).toBe('Release notes');
+    expect(container.querySelectorAll('svg.agi-device-icon')).toHaveLength(6);
+  });
+
+  it('keeps the Chrome authored document and draft without a fabricated document id or answer', () => {
+    const { container } = render(<ChromeWindow />);
+    expect(container.querySelector('.agi-cr-url')?.textContent?.trim()).toBe('docs.google.com');
+    expect(container.querySelector('.agi-cr-doc-title')?.textContent).toBe('Q3 Strategy Document');
+    expect(
+      container.querySelector('.agi-cr-doc-copy')?.textContent?.replace(/\s+/gu, ' ').trim(),
+    ).toBe(
+      'Review the launch checklist and record the open questions before the next team meeting.',
+    );
+    expect(container.querySelector('.agi-dev-type')?.textContent).toBe(
+      'Summarise this page into a short checklist.',
+    );
+    expect(container.querySelector('.agi-dev-panelcomposer-foot')?.textContent).not.toContain(
+      'Paired',
+    );
+    expect(container.querySelectorAll('svg.agi-device-icon')).toHaveLength(12);
   });
 });

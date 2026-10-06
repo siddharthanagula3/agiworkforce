@@ -1,22 +1,32 @@
 import './legacy-landing.css';
 import './motion/motion.css';
 import './mockup-responsive.css';
+import './desktop-chrome-mockup-responsive.css';
+import './editor-mockup-responsive.css';
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
 import {
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Blocks,
+  Bot,
   Check,
   ChevronDown,
   Cloud,
   Command,
   Folder,
+  GitBranch,
   Globe,
   Library,
+  Lock,
   Menu,
   Mic,
   Monitor,
   Plus,
+  Play,
+  Puzzle,
+  RotateCw,
   Search,
   Send,
   SquarePen,
@@ -27,6 +37,7 @@ import {
   TOOL_STATUS_PRESENTATION,
 } from '@agiworkforce/types';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 
 const LOCAL_RUNTIME_LABEL = `${(CLI_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
 
@@ -206,21 +217,25 @@ function PageContextStrip({ icon }: { icon?: ReactNode } = {}) {
 function PanelComposer({
   contextIcon,
   sendIcon,
+  ghost = 'Ask about this page…',
+  status = 'Paired · Desktop bridge',
 }: {
   contextIcon?: ReactNode;
   sendIcon?: ReactNode;
+  ghost?: ReactNode;
+  status?: ReactNode;
 } = {}) {
   return (
     <div className="agi-dev-panelcomposer">
       <span className="agi-dev-panelcomposer-row">
         <span className="agi-dev-panelcomposer-icon">{contextIcon ?? '▤'}</span>
         <span className="agi-dev-panelcomposer-ghost">
-          <span className="agi-dev-type">Ask about this page…</span>
+          <span className="agi-dev-type">{ghost}</span>
         </span>
         <span className="agi-dev-send">{sendIcon ?? '➤'}</span>
       </span>
       <span className="agi-dev-panelcomposer-foot">
-        <span>Paired · Desktop bridge</span>
+        <span>{status}</span>
         <span>{PRIVACY_MODE_DISPLAY.managed.label}</span>
       </span>
     </div>
@@ -232,59 +247,57 @@ export function DesktopWindow({
   badge = 'Cloud',
   className,
 }: DeviceWindowProps) {
-  const route = ROUTE_RECEIPTS.managed;
   return (
-    <DeviceRoot type="desktop" label={`${title} desktop app interface`} className={className}>
+    <DeviceRoot
+      type="desktop"
+      label={title + ' desktop app authored example'}
+      className={['agi-desktop-responsive', className].filter(Boolean).join(' ')}
+    >
       <WindowBar title={title} badge={badge} />
       <div className="agi-dev-body agi-desk" aria-hidden="true">
         <div className="agi-desk-side">
-          <p className="agi-desk-brand">AGI</p>
-          <p className="agi-desk-new">+ New chat</p>
-          <p className="agi-desk-item">
-            ⌕ Search <span className="agi-desk-kbd">⌘K</span>
-          </p>
-          <p className="agi-desk-item">
-            ▤ Projects <span className="agi-desk-count">3</span>
-          </p>
-          <p className="agi-desk-item">
-            ◇ Artifacts <span className="agi-desk-count">12</span>
-          </p>
-          <p className="agi-desk-item">
-            ↻ Scheduled <span className="agi-desk-count">2</span>
-          </p>
-          <p className="agi-desk-item">
-            ⌁ Dispatch <span className="agi-desk-beta">Beta</span>
-          </p>
-          <p className="agi-desk-group">Recents</p>
-          <p className="agi-desk-recent agi-desk-recent--on">Release note for 0.0.1</p>
-          <p className="agi-desk-recent">Quarterly notes</p>
-          <p className="agi-desk-recent">Rust build fix</p>
-          <p className="agi-desk-recent">Audit export</p>
-          <p className="agi-desk-foot">→ Sign in · Cloud sync</p>
+          <div className="agi-desktop-navigation">
+            <p className="agi-desk-brand">AGI</p>
+            <p className="agi-desk-new">
+              <Plus className="agi-device-icon" aria-hidden="true" focusable="false" /> New chat
+            </p>
+            <p className="agi-desk-item">
+              <Search className="agi-device-icon" aria-hidden="true" focusable="false" /> Search
+            </p>
+            {APP_NAV_DESTINATIONS.filter(({ id }) => id === 'projects' || id === 'library').map(
+              ({ id, label, icon: Icon }) => (
+                <p className="agi-desk-item" key={id}>
+                  <Icon className="agi-device-icon" aria-hidden="true" /> {label}
+                </p>
+              ),
+            )}
+          </div>
+          <div className="agi-desktop-recents">
+            <p className="agi-desk-group">Example chats</p>
+            <p className="agi-desk-recent agi-desk-recent--on">Release notes</p>
+            <p className="agi-desk-recent">Quarterly notes</p>
+            <p className="agi-desk-recent">Project checklist</p>
+          </div>
+          <p className="agi-desk-foot">{PRIVACY_MODE_DISPLAY.managed.label}</p>
         </div>
         <div className="agi-mk-main">
           <div className="agi-mk-thread">
-            <p className="agi-mk-user">Summarise the three open PRs and draft the release note.</p>
+            <p className="agi-device-example-label">Example prompt</p>
             <div className="agi-mk-agi">
-              <ToolRow state="done" label="github · list pull requests" meta="3 results · 0.6 s" />
-              <ToolRow state="done" label="Read 3 diffs" meta="412 lines" />
+              <p className="agi-device-example-title">Release notes</p>
               <p>
-                Three PRs are ready: routing health scopes, the model catalogue, and the pre-push
-                worktree hook. The draft is below; writing it to the changelog needs your approval.
+                Review the launch checklist, record the open questions, and plan the next update.
               </p>
-              <div className="agi-mk-approval">
-                <span className="agi-mk-approval-head">Approval · write file</span>
-                <span className="agi-mk-approval-body">CHANGELOG.md · 14 lines added</span>
-                <span className="agi-mk-actions">
-                  <span className="agi-mk-btn agi-mk-btn--primary">Allow once</span>
-                  <span className="agi-mk-btn">Always</span>
-                  <span className="agi-mk-btn">Deny</span>
-                </span>
-              </div>
-              <Receipt route={route} tokensIn="2.1k" tokensOut="380" time="3.8 s" />
             </div>
           </div>
-          <ComposerBar ghost="Message AGI…" model={`Auto · ${route.lane}`} />
+          <ComposerBar
+            ghost="Draft a release note from these notes."
+            model={'Auto · ' + PRIVACY_MODE_DISPLAY.managed.label}
+            sendIcon={<ArrowUp className="agi-device-icon" aria-hidden="true" focusable="false" />}
+            modelIcon={
+              <ChevronDown className="agi-device-icon" aria-hidden="true" focusable="false" />
+            }
+          />
         </div>
       </div>
     </DeviceRoot>
@@ -429,7 +442,11 @@ export function WebWindow({
 
 export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps) {
   return (
-    <DeviceRoot type="chrome" label="AGI Chrome extension interface" className={className}>
+    <DeviceRoot
+      type="chrome"
+      label="AGI Chrome extension authored example"
+      className={['agi-chrome-responsive', className].filter(Boolean).join(' ')}
+    >
       <div className="agi-dev-bar agi-cr-tabbar" aria-hidden="true">
         <span className="agi-dev-lights">
           <i />
@@ -438,34 +455,54 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
         </span>
         <span className="agi-cr-tabs">
           <span className="agi-cr-tab agi-cr-tab--on">
-            <span className="agi-cr-tab-icon">▤</span>
+            <span className="agi-cr-tab-icon">
+              <Folder className="agi-device-icon" aria-hidden="true" focusable="false" />
+            </span>
             <span className="agi-cr-tab-label">Q3 Strategy · Google Docs</span>
           </span>
           <span className="agi-cr-tab">
-            <span className="agi-cr-tab-icon">✦</span>
+            <span className="agi-cr-tab-icon">
+              <Globe className="agi-device-icon" aria-hidden="true" focusable="false" />
+            </span>
             <span className="agi-cr-tab-label">New Tab</span>
           </span>
-          <span className="agi-cr-tab-add">+</span>
+          <span className="agi-cr-tab-add">
+            <Plus className="agi-device-icon" aria-hidden="true" focusable="false" />
+          </span>
         </span>
         <span className="agi-dev-badge">{badge}</span>
       </div>
       <div className="agi-cr-addressbar" aria-hidden="true">
-        <span className="agi-cr-nav">‹</span>
-        <span className="agi-cr-nav">›</span>
-        <span className="agi-cr-nav">↺</span>
+        <span className="agi-cr-nav">
+          <ArrowLeft className="agi-device-icon" aria-hidden="true" focusable="false" />
+        </span>
+        <span className="agi-cr-nav">
+          <ArrowRight className="agi-device-icon" aria-hidden="true" focusable="false" />
+        </span>
+        <span className="agi-cr-nav">
+          <RotateCw className="agi-device-icon" aria-hidden="true" focusable="false" />
+        </span>
         <span className="agi-cr-url">
-          <span className="agi-cr-lock">●</span>
-          docs.google.com/document/d/1xQ3Strategy…
+          <span className="agi-cr-lock">
+            <Lock className="agi-device-icon" aria-hidden="true" focusable="false" />
+          </span>
+          docs.google.com
         </span>
         <span className="agi-cr-ext">AGI</span>
       </div>
       <div className="agi-dev-body agi-cr-viewport" aria-hidden="true">
         <div className="agi-cr-page">
           <div className="agi-cr-doc-head">
-            <span className="agi-cr-doc-icon">▤</span>
+            <span className="agi-cr-doc-icon">
+              <Folder className="agi-device-icon" aria-hidden="true" focusable="false" />
+            </span>
             <span className="agi-cr-doc-title">Q3 Strategy Document</span>
           </div>
           <div className="agi-cr-doc">
+            <p className="agi-cr-doc-copy">
+              Review the launch checklist and record the open questions before the next team
+              meeting.
+            </p>
             <span className="agi-cr-line agi-cr-line--h1" />
             <span className="agi-cr-line" style={{ width: '94%' }} />
             <span className="agi-cr-line" style={{ width: '88%' }} />
@@ -490,33 +527,23 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
         <div className="agi-cr-panel">
           <div className="agi-cr-panel-head">
             <span className="agi-cr-panel-logo">AGI</span>
-            <span className="agi-cr-panel-mode">◆ {PRIVACY_MODE_DISPLAY.managed.label}</span>
+            <span className="agi-cr-panel-mode">
+              <Cloud className="agi-device-icon" aria-hidden="true" focusable="false" />{' '}
+              {PRIVACY_MODE_DISPLAY.managed.label}
+            </span>
           </div>
-          <PageContextStrip />
+          <PageContextStrip
+            icon={<Globe className="agi-device-icon" aria-hidden="true" focusable="false" />}
+          />
           <div className="agi-cr-chat">
-            <p className="agi-cr-msg agi-cr-msg--user">Summarise the key risks from this doc</p>
-            <div className="agi-cr-msg agi-cr-msg--agi">
-              <span className="agi-cr-agi-name">AGI</span>
-              <p>Three risks stand out in the selected section:</p>
-              <ul className="agi-mk-list">
-                <li>
-                  Market timing <span className="agi-mk-cite">¶ 4</span>
-                </li>
-                <li>
-                  One cloud provider for everything <span className="agi-mk-cite">¶ 9</span>
-                </li>
-                <li>
-                  EU regulatory uncertainty <span className="agi-mk-cite">¶ 12</span>
-                </li>
-              </ul>
-              <span className="agi-mk-actions">
-                <span className="agi-mk-btn">Insert as comment</span>
-                <span className="agi-mk-btn">Copy</span>
-              </span>
-              <p className="agi-cr-msg-fade">AGI Managed Cloud · 1.9 s</p>
-            </div>
+            <p className="agi-device-example-label">Example prompt</p>
           </div>
-          <PanelComposer />
+          <PanelComposer
+            ghost="Summarise this page into a short checklist."
+            status="Desktop optional"
+            contextIcon={<Globe className="agi-device-icon" aria-hidden="true" focusable="false" />}
+            sendIcon={<ArrowUp className="agi-device-icon" aria-hidden="true" focusable="false" />}
+          />
         </div>
       </div>
     </DeviceRoot>
@@ -592,122 +619,94 @@ const EDITOR_LINES: ReadonlyArray<{ n: number; add?: boolean; code: ReactNode }>
     n: 1,
     code: (
       <>
-        <em className="agi-ed-kw">import</em>{' '}
-        <span className="agi-ed-dim">
-          {'{'} processChat, ChatConfig {'}'}
-        </span>
+        <em className="agi-ed-kw">export function</em> <span className="agi-ed-fn">greet</span>(
       </>
     ),
   },
   {
     n: 2,
     code: (
-      <>
-        <em className="agi-ed-kw">from</em> <span className="agi-ed-fn">'@agi/sdk'</span>
-      </>
+      <span className="agi-ed-dim agi-ed-indent">
+        name<span className="agi-ed-punc">:</span> <span className="agi-ed-type">string</span>
+      </span>
     ),
   },
-  { n: 3, code: <span className="agi-ed-dim">&nbsp;</span> },
+  {
+    n: 3,
+    code: (
+      <span className="agi-ed-dim">
+        {')'} <span className="agi-ed-punc">:</span> <span className="agi-ed-type">string</span>{' '}
+        {'{'}
+      </span>
+    ),
+  },
   {
     n: 4,
+    add: true,
     code: (
-      <>
-        <em className="agi-ed-kw">export async function</em>{' '}
-        <span className="agi-ed-fn">runChat</span>
-        <span className="agi-ed-dim">(</span>
-      </>
+      <span className="agi-ed-dim agi-ed-indent">
+        <em className="agi-ed-kw">const</em> trimmed <span className="agi-ed-punc">=</span>{' '}
+        name.trim()
+      </span>
     ),
   },
   {
     n: 5,
-    code: (
-      <span className="agi-ed-dim agi-ed-indent">
-        config<span className="agi-ed-punc">:</span> <span className="agi-ed-type">ChatConfig</span>
-      </span>
-    ),
-  },
-  {
-    n: 6,
-    code: (
-      <span className="agi-ed-dim">
-        {')'} <span className="agi-ed-punc">:</span> <span className="agi-ed-type">Promise</span>
-        {'<string>'} {'{'}
-      </span>
-    ),
-  },
-  {
-    n: 7,
     add: true,
     code: (
       <span className="agi-ed-dim agi-ed-indent">
-        <em className="agi-ed-kw">try</em> {'{'}
+        <em className="agi-ed-kw">return</em> trimmed ?{' '}
+        <span className="agi-ed-fn">{'`Hello, ${trimmed}`'}</span> :{' '}
+        <span className="agi-ed-fn">'Hello'</span>
       </span>
     ),
   },
-  {
-    n: 8,
-    code: (
-      <span className="agi-ed-dim agi-ed-indent">
-        &nbsp;&nbsp;<em className="agi-ed-kw">const</em> stream{' '}
-        <span className="agi-ed-punc">=</span> <span className="agi-ed-kw">await</span>{' '}
-        <span className="agi-ed-fn">processChat</span>(config)
-      </span>
-    ),
-  },
-  {
-    n: 9,
-    code: (
-      <span className="agi-ed-dim agi-ed-indent">
-        &nbsp;&nbsp;<em className="agi-ed-kw">return</em> stream.text()
-      </span>
-    ),
-  },
-  {
-    n: 10,
-    add: true,
-    code: (
-      <span className="agi-ed-dim agi-ed-indent">
-        {'}'} <em className="agi-ed-kw">catch</em> (error) {'{'}
-      </span>
-    ),
-  },
-  {
-    n: 11,
-    add: true,
-    code: (
-      <span className="agi-ed-dim agi-ed-indent">
-        &nbsp;&nbsp;<em className="agi-ed-kw">throw new</em>{' '}
-        <span className="agi-ed-type">ProviderError</span>(error)
-      </span>
-    ),
-  },
-  { n: 12, add: true, code: <span className="agi-ed-dim agi-ed-indent">{'}'}</span> },
-  { n: 13, code: <span className="agi-ed-dim">{'}'}</span> },
+  { n: 6, code: <span className="agi-ed-dim">{'}'}</span> },
 ];
 
 export function EditorWindow({
-  title = 'workspace.ts · AGI in VS Code',
+  title = 'example.ts · AGI in VS Code',
   badge = 'VS Code',
   className,
 }: DeviceWindowProps) {
   return (
-    <DeviceRoot type="editor" label="AGI VS Code extension interface" className={className}>
+    <DeviceRoot
+      type="editor"
+      label="AGI VS Code extension interface"
+      className={['agi-editor-responsive', className].filter(Boolean).join(' ')}
+    >
       <WindowBar title={title} badge={badge} />
       <div className="agi-dev-body agi-ed" aria-hidden="true">
         <div className="agi-ed-activity">
-          <span>⊞</span>
-          <span>⊘</span>
-          <span className="agi-ed-act--on">◈</span>
-          <span>⊙</span>
-          <span>⊗</span>
-          <span>⊕</span>
+          <div className="agi-editor-tools">
+            <span>
+              <Folder className="agi-editor-icon" aria-hidden="true" focusable="false" />
+            </span>
+            <span>
+              <Search className="agi-editor-icon" aria-hidden="true" focusable="false" />
+            </span>
+            <span className="agi-ed-act--on">
+              <Bot className="agi-editor-icon" aria-hidden="true" focusable="false" />
+            </span>
+          </div>
+          <div className="agi-editor-tools">
+            <span>
+              <GitBranch className="agi-editor-icon" aria-hidden="true" focusable="false" />
+            </span>
+            <span>
+              <Play className="agi-editor-icon" aria-hidden="true" focusable="false" />
+            </span>
+            <span>
+              <Puzzle className="agi-editor-icon" aria-hidden="true" focusable="false" />
+            </span>
+          </div>
         </div>
         <div className="agi-ed-editor">
           <div className="agi-ed-code">
             {EDITOR_LINES.map((line) => (
               <span key={line.n} className={line.add ? 'agi-ed-row agi-ed-row--add' : 'agi-ed-row'}>
                 <span className="agi-ed-ln">{line.add ? '+' : line.n}</span>
-                <span>{line.code}</span>
+                <span className="agi-ed-source">{line.code}</span>
               </span>
             ))}
           </div>
@@ -720,27 +719,19 @@ export function EditorWindow({
           <div className="agi-ed-chat">
             <div className="agi-ed-msg">
               <span className="agi-ed-avatar">U</span>
-              <p>@agi explain runChat and add error handling</p>
+              <p>Example request: add a fallback for an empty name.</p>
             </div>
             <div className="agi-ed-msg">
               <span className="agi-ed-avatar agi-ed-avatar--agi">A</span>
               <div className="agi-mk-agi">
                 <p>
-                  Streams a chat response from <code>processChat</code>. I wrapped the stream in{' '}
-                  <code>try/catch</code> and rethrow as <code>ProviderError</code>, so the caller
-                  sees which provider failed.
+                  Proposed example: trim the name and use <code>'Hello'</code> when it is empty.
+                  Review these changes before applying them.
                 </p>
                 <span className="agi-mk-actions">
-                  <span className="agi-mk-btn agi-mk-btn--primary">Apply +4</span>
+                  <span className="agi-mk-btn agi-mk-btn--primary">Accept</span>
                   <span className="agi-mk-btn">Reject</span>
                 </span>
-                <Receipt
-                  route={ROUTE_RECEIPTS.local}
-                  tokensIn="1.4k"
-                  tokensOut="210"
-                  time="0.9 s"
-                  compact
-                />
               </div>
             </div>
           </div>
