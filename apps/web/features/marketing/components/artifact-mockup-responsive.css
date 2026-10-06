@@ -1,3 +1,7 @@
+[data-design='agi'] .agi-ds-bento-visual:has(> .agi-artifact-responsive) {
+  padding-inline: var(--space-2);
+}
+
 [data-design='agi'] figure.agi-dev.agi-artifact-responsive[data-geometry] {
   inline-size: 100%;
   min-inline-size: 0;
