@@ -65,6 +65,24 @@ for (const route of ROUTES) {
       await expect(trigger).toBeFocused();
     });
 
+    test('the close control stays visible while the long link list scrolls', async ({ page }) => {
+      const trigger = page.getByRole('button', { name: 'Menu', exact: true });
+      await trigger.click();
+      const sheet = page.getByRole('dialog');
+      const close = sheet.getByRole('button', { name: 'Close', exact: true });
+      const before = await close.boundingBox();
+      const body = sheet.locator('.agi-ds-mobile-nav-body');
+      await body.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      expect(await body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+      await expect(close).toBeInViewport();
+      expect((await close.boundingBox())?.y).toBe(before?.y);
+      await close.click();
+      await expect(sheet).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
+
     test('the page behind the sheet cannot scroll while it is open', async ({ page }) => {
       const overflowWhileClosed = await page.evaluate(
         () => getComputedStyle(document.body).overflow,

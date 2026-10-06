@@ -6,6 +6,8 @@ import { MarketingMobileNav } from './MarketingMobileNav';
 import { ThemeToggle } from './ThemeToggle';
 import { Container } from './Container';
 import { NavGroup } from './NavGroup';
+import { ActiveNavLink } from './ActiveNavLink';
+import { HeaderScrollState } from './HeaderScrollState';
 import { CHAT_ROOT_HREF, CONTACT_SALES_HREF, NAV_GROUPS, WEB_ENTRY_HREF } from './nav';
 
 const MARK_SIZE = 18;
@@ -26,7 +28,7 @@ export function MarketingHeader({
 
   if (minimal) {
     return (
-      <header className="agi-ds-header">
+      <HeaderScrollState>
         <Container>
           <div className="agi-ds-header-row">
             {wordmark}
@@ -35,12 +37,12 @@ export function MarketingHeader({
             </div>
           </div>
         </Container>
-      </header>
+      </HeaderScrollState>
     );
   }
 
   return (
-    <header className="agi-ds-header">
+    <HeaderScrollState>
       <Container>
         <div className="agi-ds-header-row">
           {wordmark}
@@ -48,9 +50,9 @@ export function MarketingHeader({
             {NAV_GROUPS.map((group) => (
               <NavGroup group={group} key={group.label} />
             ))}
-            <Link href="/pricing" className="agi-ds-navlink">
+            <ActiveNavLink href="/pricing" className="agi-ds-navlink">
               Pricing
-            </Link>
+            </ActiveNavLink>
           </nav>
           <div className="agi-ds-header-end">
             <ThemeToggle />
@@ -71,6 +73,6 @@ export function MarketingHeader({
           </div>
         </div>
       </Container>
-    </header>
+    </HeaderScrollState>
   );
 }

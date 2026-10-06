@@ -79,6 +79,14 @@
 }
 
 [data-design='agi'] {
+  --public-label-size: 0.9375rem;
+  --public-label-font: var(--font-geist-mono), ui-monospace, monospace;
+  --public-label-ink: var(--agi-amber);
+  --public-caption-ink: var(--agi-ink-2);
+  --public-body-size: 1.0625rem;
+  --public-lede-size: 1.3125rem;
+  --public-stat-size: 2.125rem;
+  --public-stat-note-size: 0.875rem;
   --public-page-title-size: clamp(2.125rem, 1.875rem + 1vw, 2.75rem);
   --agi-section-y-inner: 4.5rem;
   --agi-section-y-inner-compact: 3rem;
@@ -89,6 +97,12 @@
   --agi-reading-width: 42rem;
   --agi-header-height: 4rem;
   --agi-header-height-compact: 3rem;
+}
+
+[data-theme='light'] [data-design='agi'],
+[data-theme='light'][data-design='agi'] {
+  --public-label-ink: #6b3700;
+  --public-caption-ink: #4b4235;
 }
 
 [data-design='agi'].dx {
