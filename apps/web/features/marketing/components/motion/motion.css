@@ -195,7 +195,8 @@
   pointer-events: none;
 }
 
-.agi-mx-body:has(.agi-dev--phone)::before {
+.agi-mx-body:has(.agi-dev--phone)::before,
+.agi-mx-deck-inline .agi-mx-body::before {
   content: none;
 }
 
@@ -207,6 +208,24 @@
 
 .agi-mx-stage .agi-dev-badge {
   transform: translateZ(26px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agi-mx-stage {
+    perspective: none;
+  }
+
+  .agi-mx-body,
+  .agi-mx-body::before,
+  .agi-mx-stage .agi-dev-badge {
+    transform: none;
+  }
+
+  .agi-mx-stage .agi-dev,
+  .agi-mx-stage .agi-dev-shell,
+  .agi-mx-stage .agi-dev-bar {
+    transform-style: flat;
+  }
 }
 
 @container (max-width: 520px) {
