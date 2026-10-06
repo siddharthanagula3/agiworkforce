@@ -1,4 +1,11 @@
+import {
+  getToolDisplayLabel,
+  TOOL_APPROVAL_ACTION_LABELS,
+  TOOL_STATUS_PRESENTATION,
+} from '@agiworkforce/types';
+import { WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
 import { AppWindow, Receipt, ROUTE_RECEIPTS, ToolRow } from './DeviceMockups';
+import './agent-mockup-responsive.css';
 
 const STEP_GLYPH = { done: '✓', active: '●', pending: '○' } as const;
 
@@ -25,48 +32,68 @@ function Perm({ label, state }: { label: string; state: 'allowed' | 'ask' | 'den
   );
 }
 
+const AGENT_APPROVAL_EXAMPLE = {
+  path: 'report.txt',
+  content: 'Notes for the project report.',
+};
+
 export function AgentRunWindow() {
   return (
     <AppWindow
-      title="agiworkforce.com/chat · agent run"
+      title="agiworkforce.com/chat · approval example"
       badge="Web"
-      label="An AGI agent run paused on an approval"
+      label="Example Web file-write approval request"
+      className="agi-agent-responsive"
     >
       <div className="agi-sc-split" data-cols="3-2">
         <div className="agi-mk-thread agi-sc-pad">
-          <p className="agi-mk-user">Triage the failing nightly build and open a fix PR.</p>
+          <p className="agi-sc-note">Example · Web approval request</p>
+          <p className="agi-mk-user">Save these notes as report.txt.</p>
           <div className="agi-mk-agi">
             <div className="agi-sc-card">
-              <span className="agi-sc-card-head">Plan · 4 steps</span>
-              <ul className="agi-sc-steps">
-                <Step state="done" label="Read the failing job log" meta="3.1 s" />
-                <Step state="done" label="Reproduce in the sandbox" meta="41 s" />
-                <Step state="active" label="Edit packages/ai/routing/src/auto.ts" meta="waiting" />
-                <Step state="pending" label="Open a pull request" meta="after approval" />
-              </ul>
+              <span className="agi-sc-card-head">
+                {getToolDisplayLabel(WRITE_FILE_TOOL).displayName}
+              </span>
+              <pre className="agi-sc-example-code">
+                <code>{JSON.stringify(AGENT_APPROVAL_EXAMPLE, null, 2)}</code>
+              </pre>
             </div>
             <div className="agi-mk-approval">
-              <span className="agi-mk-approval-head">Approval · edit file</span>
-              <span className="agi-mk-approval-body">src/auto.ts · +4 −1</span>
+              <span className="agi-mk-approval-head">
+                {TOOL_STATUS_PRESENTATION['awaiting-approval'].label}
+              </span>
+              <span className="agi-mk-approval-body">{AGENT_APPROVAL_EXAMPLE.path}</span>
               <span className="agi-mk-actions">
-                <span className="agi-mk-btn agi-mk-btn--primary">Allow once</span>
-                <span className="agi-mk-btn">Always</span>
-                <span className="agi-mk-btn">Deny</span>
+                <span className="agi-mk-btn agi-mk-btn--primary">
+                  {TOOL_APPROVAL_ACTION_LABELS.allow}
+                </span>
+                <span className="agi-mk-btn">{TOOL_APPROVAL_ACTION_LABELS.deny}</span>
               </span>
             </div>
-            <Receipt route={ROUTE_RECEIPTS.managed} tokensIn="12k" tokensOut="1.1k" time="58 s" />
           </div>
         </div>
         <aside className="agi-sc-rail">
-          <span className="agi-sc-card-head">Permissions for this run</span>
-          <ul className="agi-sc-perms">
-            <Perm label="Read files" state="allowed" />
-            <Perm label="Run tests in the sandbox" state="allowed" />
-            <Perm label="Edit files" state="ask" />
-            <Perm label="Network" state="denied" />
-            <Perm label="git push" state="ask" />
-          </ul>
-          <p className="agi-sc-note">Nothing on this list runs without you.</p>
+          <span className="agi-sc-card-head">Request details</span>
+          <dl className="agi-sc-request-details">
+            <div>
+              <dt>Tool</dt>
+              <dd>
+                <code>{WRITE_FILE_TOOL}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>File</dt>
+              <dd>
+                <code>{AGENT_APPROVAL_EXAMPLE.path}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{TOOL_STATUS_PRESENTATION['awaiting-approval'].label}</dd>
+            </div>
+          </dl>
+          <p className="agi-sc-note">No file has been written.</p>
+          <p className="agi-sc-note">Sandbox tools must be enabled and available.</p>
         </aside>
       </div>
     </AppWindow>
