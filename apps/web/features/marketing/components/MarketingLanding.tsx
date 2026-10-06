@@ -124,7 +124,7 @@ export function MarketingLanding() {
               ],
               platforms: 'Any modern browser',
               status: SURFACE_STATUS.web,
-              href: WEB_CHAT_ENTRY_HREF,
+              href: '/web',
               visual: <HeroAppWindow />,
             },
             {
@@ -142,7 +142,7 @@ export function MarketingLanding() {
               platforms: 'macOS · Linux · Windows',
               status: SURFACE_STATUS.cli,
               href: '/cli',
-              frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
+              frame: { variant: 'terminal', title: 'agi · zsh' },
             },
             {
               index: '04',
@@ -183,7 +183,7 @@ export function MarketingLanding() {
               index: '06',
               name: 'AGI Mobile',
               tagline: 'Private by default.',
-              body: 'Local Mode out of the box. Conversations and memory stay on the phone until you say otherwise. Managed cloud is open by default.',
+              body: 'Local Mode is the planned default. Local chats and memory stay on the phone. AGI Cloud is an explicit choice after sign-in.',
               capabilities: [
                 'On-device Local chat',
                 'Local data stays local',
@@ -298,7 +298,7 @@ export function MarketingLanding() {
           ]}
           visual={
             <div className="agi-fl-devband-visual">
-              <ProductFrame variant="terminal" title="agi · zsh" badge="sandboxed" />
+              <ProductFrame variant="terminal" title="agi · zsh" />
               <DiffWindow />
             </div>
           }

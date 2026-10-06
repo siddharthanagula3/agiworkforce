@@ -3,6 +3,7 @@ import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import {
   AVAILABLE_NOW_LABEL,
   BYOK_SURFACES,
+  CLI_AVAILABILITY_NOTE,
   CLI_LOCAL_RUNTIMES,
   COMING_SOON_LABEL,
   LOCAL_RUNTIME_LABEL_SUFFIX,
@@ -104,7 +105,7 @@ const CLOUD_MODEL_ID = cheapestModelId(
   (model) => model.provider === CLOUD_PROVIDER_ID && model.qualityTier === BEST_QUALITY_TIER,
 );
 const BYOK_MODEL_ID = providerDefaultModelId(BYOK_PROVIDER_ID);
-const LOCAL_MODEL_ID = cheapestModelId((model) => model.openWeight === true);
+const LOCAL_MODEL_LABEL = 'Your local model';
 
 export type SurfaceState = 'live' | 'pending' | 'soon';
 
@@ -204,7 +205,8 @@ export type ReceiptKey = keyof typeof RECEIPT_LABELS;
 export type ConsoleLane = {
   lane: LaneId;
   name: string;
-  modelId: string;
+  providerId: string;
+  modelLabel: string;
   activity: string;
   modelLine: string;
   receipt: Record<ReceiptKey, string>;
@@ -217,12 +219,13 @@ export const CONSOLE_LANES: readonly ConsoleLane[] = [
   {
     lane: 'local',
     name: LANE_NAMES.local,
-    modelId: LOCAL_MODEL_ID,
+    providerId: LOCAL_RUNTIME_ID,
+    modelLabel: LOCAL_MODEL_LABEL,
     activity: `Read ${CONSOLE_FILE.name} on this machine, ${CONSOLE_FILE.pages} pages`,
-    modelLine: `${modelName(LOCAL_MODEL_ID)} via ${providerLabel(LOCAL_RUNTIME_ID)}`,
+    modelLine: `${LOCAL_MODEL_LABEL} via ${providerLabel(LOCAL_RUNTIME_ID)}`,
     receipt: {
       route: LANE_NAMES.local,
-      model: `${providerLabel(LOCAL_RUNTIME_ID)} · ${modelName(LOCAL_MODEL_ID)}`,
+      model: `${providerLabel(LOCAL_RUNTIME_ID)} · ${LOCAL_MODEL_LABEL}`,
       ranOn: 'This machine',
       left: 'Nothing',
       tokens: `${tokens(EXAMPLE_TURN.promptTokens)} in · ${tokens(EXAMPLE_TURN.completionTokens)} out`,
@@ -233,7 +236,8 @@ export const CONSOLE_LANES: readonly ConsoleLane[] = [
   {
     lane: 'byok',
     name: LANE_NAMES.byok,
-    modelId: BYOK_MODEL_ID,
+    providerId: BYOK_PROVIDER_ID,
+    modelLabel: modelName(BYOK_MODEL_ID),
     activity: fileActivity(`${providerLabel(BYOK_PROVIDER_ID)} on your key`),
     modelLine: `${modelName(BYOK_MODEL_ID)} on your ${providerLabel(BYOK_PROVIDER_ID)} account`,
     receipt: {
@@ -249,7 +253,8 @@ export const CONSOLE_LANES: readonly ConsoleLane[] = [
   {
     lane: 'cloud',
     name: LANE_NAMES.cloud,
-    modelId: CLOUD_MODEL_ID,
+    providerId: CLOUD_PROVIDER_ID,
+    modelLabel: modelName(CLOUD_MODEL_ID),
     activity: fileActivity(CLOUD_NAME),
     modelLine: `${modelName(CLOUD_MODEL_ID)} on ${CLOUD_NAME}`,
     receipt: {
@@ -412,12 +417,12 @@ export const CLI_VERSION = '0.0.1';
 export const CLI_TRANSCRIPT = [
   { kind: 'cmd', text: 'agi --version' },
   { kind: 'out', text: `agi ${CLI_VERSION}` },
-  { kind: 'cmd', text: `agi -p ${LOCAL_RUNTIME_ID} -m ${LOCAL_MODEL_ID} "${CONSOLE_PROMPT}"` },
+  { kind: 'cmd', text: `agi -p ${LOCAL_RUNTIME_ID} "${CONSOLE_PROMPT}"` },
   { kind: 'dim', text: `read ${CONSOLE_FILE.name} · ${CONSOLE_FILE.pages} pages · local` },
   { kind: 'out', text: 'Termination: 30 days for convenience, 10 days for breach with cure.' },
   {
     kind: 'dim',
-    text: `receipt  local · ${LOCAL_RUNTIME_ID} · ${LOCAL_MODEL_ID} · ${tokens(EXAMPLE_TURN.promptTokens)} in · ${tokens(EXAMPLE_TURN.completionTokens)} out · ${usd(0)}`,
+    text: `receipt  local · ${LOCAL_RUNTIME_ID} · ${tokens(EXAMPLE_TURN.promptTokens)} in · ${tokens(EXAMPLE_TURN.completionTokens)} out · ${usd(0)}`,
   },
 ] as const;
 
@@ -468,5 +473,11 @@ export const PRICING = {
 
 export const CLOSE = {
   title: 'Start on the web. Continue in the terminal.',
-  body: 'AGI Web needs no install. The CLI is signed and downloadable now. Whichever you open, the answer says where it ran.',
+  body: [
+    'AGI Web needs no install.',
+    CLI_AVAILABILITY_NOTE,
+    'Whichever you open, the answer says where it ran.',
+  ]
+    .filter(Boolean)
+    .join(' '),
 } as const;
