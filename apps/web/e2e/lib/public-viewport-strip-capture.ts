@@ -219,6 +219,7 @@ async function readState(handle: CaptureHandle, header: CaptureHandle | null) {
     ...state,
     frame,
     header: headerRect,
+    ancestorAttributes: ancestors.map(({ tag, attributes }) => ({ tag, attributes })),
     fingerprints: {
       identity: digest({ identity, text: text.map((entry) => entry.text) }),
       paint: digest({ paint, ancestors }),
@@ -254,6 +255,14 @@ export type PublicViewportCaptureEvidence = {
       fontsStatus: PublicViewportCaptureState['fonts']['status'];
       runningAnimations: number;
     }[];
+  };
+  rejectedStrip?: {
+    index: number;
+    cursor: number;
+    safeTop: number;
+    state: PublicViewportCaptureState;
+    changedInvariantFields: string[];
+    changedFingerprints: string[];
   };
   failures: string[];
   limits: string[];
@@ -323,6 +332,8 @@ function enclosingRect(box: PublicCaptureRect): PublicCaptureRect {
 
 export function assertPublicViewportStripCoverage(evidence: PublicViewportCaptureEvidence) {
   const { target, strips } = evidence;
+  if (evidence.rejectedStrip !== undefined)
+    throw new Error('Viewport strip capture retains a rejected state witness');
   if (evidence.scrollPolicy !== 'strips' && evidence.scrollPolicy !== 'preserve')
     throw new Error('Viewport strip capture has an unsupported scroll policy');
   if (
@@ -647,14 +658,35 @@ export async function capturePublicViewportStrips(
         throw new Error('Capture exceeded its strip or time bound');
       let safeTop = Math.max(0, Math.ceil((state.header?.y ?? 0) + (state.header?.height ?? 0)));
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (!preserveScroll) await scroll(x, Math.max(0, Math.min(cursor - safeTop, maxY)));
+        if (!preserveScroll) {
+          const upper = Math.max(0, Math.min(cursor - safeTop, maxY));
+          const lower = Math.max(0, Math.min(target.y + target.height - viewport.height, maxY));
+          const nextY = lower > upper ? upper : Math.min(upper, Math.max(state.scroll.y, lower));
+          await scroll(x, nextY);
+        }
         state = await bounded(readState(handle, header), remaining(), 'Strip capture state');
         safeTop = Math.max(0, Math.ceil((state.header?.y ?? 0) + (state.header?.height ?? 0)));
         if (cursor - state.scroll.y >= safeTop) break;
       }
       if (preserveScroll) assertPublicViewportCaptureStateEqual(before, state);
-      if (JSON.stringify(invariant(state)) !== JSON.stringify(invariant(before)))
+      if (JSON.stringify(invariant(state)) !== JSON.stringify(invariant(before))) {
+        const expected = invariant(before);
+        const actual = invariant(state);
+        const changed = (left: object, right: object) =>
+          Object.keys(left).filter(
+            (key) =>
+              JSON.stringify(Reflect.get(left, key)) !== JSON.stringify(Reflect.get(right, key)),
+          );
+        evidence.rejectedStrip = {
+          index: evidence.strips.length,
+          cursor,
+          safeTop,
+          state,
+          changedInvariantFields: changed(expected, actual),
+          changedFingerprints: changed(before.fingerprints, state.fingerprints),
+        };
         throw new Error('Viewport strip frame changed across scrolling');
+      }
       const clip = {
         x: target.x - state.scroll.x,
         y: cursor - state.scroll.y,

@@ -127,7 +127,7 @@ test('retained scroll captures the complete original sticky union without scroll
 test('the scroll-call witness reads actual default strip and restoration calls', async ({
   page,
 }) => {
-  const { frame, header } = await fixture(page);
+  const { frame, header } = await fixture(page, 900);
   await trackNativeScroll(page);
   const error = await expectRejected(
     capturePublicViewportStrips(page, frame, {
