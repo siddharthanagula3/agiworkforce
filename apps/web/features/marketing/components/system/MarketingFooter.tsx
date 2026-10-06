@@ -2,13 +2,7 @@ import Link from 'next/link';
 import { Fragment } from 'react';
 import './system.css';
 import './public-footer.css';
-import {
-  CANONICAL_POLICY_ROUTES,
-  CONTACT_EMAIL,
-  CONTACT_SUBJECTS,
-  GRIEVANCE_OFFICER_NAME,
-  contactMailto,
-} from '@/lib/legal-constants';
+import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { CookiePreferencesTrigger } from '@shared/components/CookiePreferencesTrigger';
 import { COOKIE_PREFERENCES_LABEL } from '@shared/lib/cookie-consent';
@@ -54,9 +48,6 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
                       <li key={link.href}>
                         <Link href={link.href} className="agi-ds-footer-link">
                           {link.label}
-                          {'status' in link && link.status ? (
-                            <span className="agi-ds-footer-link-status">{link.status}</span>
-                          ) : null}
                         </Link>
                       </li>
                     ))}
@@ -80,10 +71,6 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
               </Fragment>
             ))}
           </nav>
-          <span>
-            {GRIEVANCE_OFFICER_NAME}:{' '}
-            <a href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)}>{CONTACT_EMAIL}</a>
-          </span>
         </div>
       </Container>
     </footer>

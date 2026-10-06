@@ -886,10 +886,6 @@
   border-top: none;
 }
 
-[data-design='agi'] .agi-ds-footer-link-status {
-  color: var(--agi-ink-2);
-}
-
 [data-design='agi'] .agi-ds-footer-brand {
   display: grid;
   justify-items: start;
