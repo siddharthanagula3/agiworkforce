@@ -359,14 +359,53 @@ describe('previously clipped strings render in full', () => {
     }
   });
 
-  it('web window renders the full composer strings', () => {
+  it('web window renders the composer strings without a keyboard hint the product does not show', () => {
     const { container } = render(<WebWindow />);
     const html = container.innerHTML;
     expect(html).toContain('Ask a follow-up…');
     expect(html).toContain('Searched the web');
-    expect(html).toContain('Enter to send · Shift+Enter for newline');
+    expect(html).not.toContain('Enter to send');
+    expect(container.querySelector('.agi-mk-composer-meta')).toBeNull();
     expect(html).not.toContain('128,000');
     expect(html).not.toContain('$0.00');
+  });
+
+  it.each([
+    ['web', <WebWindow key="web" />],
+    ['desktop', <DesktopWindow key="desktop" />],
+  ] as const)('%s composer keeps send at the end of the control row', (_name, example) => {
+    const { container } = render(example);
+    const rows = container.querySelectorAll('.agi-mk-composer > .agi-mk-composer-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.querySelector('.agi-mk-ghost')).not.toBeNull();
+    expect(rows[0]?.querySelector('.agi-dev-send')).toBeNull();
+    expect(rows[1]).toHaveClass('agi-mk-composer-foot');
+    expect(Array.from(rows[1]?.children ?? [], (child) => child.className)).toEqual([
+      'agi-mk-seg',
+      'agi-mk-chip agi-mk-chip--model',
+      'agi-dev-send',
+    ]);
+  });
+
+  it('keeps every receipt segment unbreakable while the sentence stays intact', () => {
+    const { container } = render(<WebWindow />);
+    const receipt = container.querySelector('.agi-mk-receipt');
+    expect(
+      Array.from(
+        receipt?.querySelectorAll('.agi-mk-receipt-part') ?? [],
+        (part) => part.textContent,
+      ),
+    ).toEqual([
+      'Served by AGI Cloud',
+      'Auto route',
+      '3.1k in',
+      '640 out',
+      'metered in credits',
+      '6.2 s',
+    ]);
+    expect(receipt?.textContent).toBe(
+      'Served by AGI Cloud · Auto route · 3.1k in · 640 out · metered in credits · 6.2 s',
+    );
   });
 });
 
@@ -480,7 +519,7 @@ describe('readable Web example', () => {
     ).toEqual([
       'Recents',
       'EU AI Act duties',
-      'Onboarding email draft',
+      'Onboarding email',
       'Pricing page copy',
       'Retention query',
     ]);
