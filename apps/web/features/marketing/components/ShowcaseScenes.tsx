@@ -1,3 +1,5 @@
+import './showcase-mockup-responsive.css';
+
 type DiffRow = {
   n: number;
   kind?: 'del' | 'add';
@@ -20,9 +22,9 @@ const RIGHT: DiffRow[] = [
   { n: 10, parts: [{ t: '}' }] },
 ];
 
-function DiffPane({ rows }: { rows: DiffRow[] }) {
+function DiffPane({ rows, label }: { rows: DiffRow[]; label: string }) {
   return (
-    <div className="agi-dw-pane">
+    <div className="agi-dw-pane" role="region" aria-label={label} tabIndex={0}>
       {rows.map((row) => (
         <p key={row.n} className={`agi-dw-line${row.kind ? ` agi-dw-line--${row.kind}` : ''}`}>
           <span className="agi-dw-num">{String(row.n).padStart(2, '0')}</span>
@@ -39,20 +41,20 @@ function DiffPane({ rows }: { rows: DiffRow[] }) {
 
 export function DiffWindow() {
   return (
-    <figure className="agi-dw" aria-label="AGI reviewing a code diff">
+    <figure className="agi-dw agi-showcase-responsive" aria-label="AGI reviewing a code diff">
       <div className="agi-dw-chrome" aria-hidden="true">
-        <span className="agi-dw-file">src/chat/send.ts</span>
-        <span className="agi-dw-badge">agi review</span>
+        <span className="agi-dw-file">TypeScript example</span>
+        <span className="agi-dw-badge">Authored example</span>
       </div>
-      <div className="agi-dw-body" aria-hidden="true">
-        <DiffPane rows={LEFT} />
-        <DiffPane rows={RIGHT} />
+      <div className="agi-dw-body">
+        <DiffPane rows={LEFT} label="Before TypeScript example" />
+        <DiffPane rows={RIGHT} label="After TypeScript example" />
       </div>
       <div className="agi-dw-foot" aria-hidden="true">
-        <span>2 files · +14 −9</span>
+        <span>Illustrative diff</span>
         <span className="agi-dw-actions">
           <span className="agi-dw-allow">Approve</span>
-          <span className="agi-dw-deny">Request changes</span>
+          <span className="agi-dw-deny">Reject</span>
         </span>
       </div>
     </figure>
@@ -61,28 +63,26 @@ export function DiffWindow() {
 
 export function ApprovalWindow() {
   return (
-    <figure className="agi-ap" aria-label="AGI asking for tool approval">
+    <figure className="agi-ap agi-showcase-responsive" aria-label="AGI asking for tool approval">
       <div className="agi-ap-chrome" aria-hidden="true">
-        <span>Tool approval</span>
-        <span className="agi-ap-sandbox">sandbox: seatbelt</span>
+        <span>Tool Approval</span>
+        <span className="agi-ap-sandbox">CLI example</span>
       </div>
-      <div className="agi-ap-body" aria-hidden="true">
-        <p className="agi-ap-ask">AGI wants to run a shell command:</p>
-        <p className="agi-ap-cmd">
-          <span className="agi-ap-prompt">$</span> git commit -m &ldquo;fix: stream first
-          response&rdquo;
+      <div className="agi-ap-body">
+        <p className="agi-ap-ask">Allow this command?</p>
+        <p className="agi-ap-cmd" role="region" aria-label="Command example" tabIndex={0}>
+          <span className="agi-ap-prompt">$</span> git commit -m &quot;fix: stream first
+          response&quot;
         </p>
         <div className="agi-ap-actions">
-          <span className="agi-ap-btn agi-ap-btn--allow">Allow once</span>
-          <span className="agi-ap-btn">Always allow</span>
-          <span className="agi-ap-btn agi-ap-btn--deny">Deny</span>
+          <span className="agi-ap-btn agi-ap-btn--allow">Yes</span>
+          <span className="agi-ap-btn agi-ap-btn--deny">No</span>
+          <span className="agi-ap-btn">Allow Session</span>
         </div>
       </div>
       <div className="agi-ap-foot" aria-hidden="true">
-        <span className="agi-ap-mode agi-ap-mode--active">Suggest</span>
-        <span className="agi-ap-mode">Auto-edit</span>
-        <span className="agi-ap-mode">Full-auto</span>
-        <span className="agi-ap-hint">Shift+Tab cycles autonomy</span>
+        <span className="agi-ap-mode agi-ap-mode--active">Default</span>
+        <span className="agi-ap-hint">Left/Right selects · Enter confirms</span>
       </div>
     </figure>
   );

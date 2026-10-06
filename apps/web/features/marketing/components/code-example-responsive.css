@@ -1,0 +1,104 @@
+[data-design='agi'] .agi-ds-codetabs.agi-code-responsive,
+[data-design='agi'] .agi-lp-terminal.agi-code-responsive {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  block-size: auto;
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-code);
+  line-height: var(--public-mockup-leading-text);
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+[data-design='agi'] .agi-ds-codetabs.agi-code-responsive {
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-bar {
+  min-inline-size: 0;
+  gap: var(--public-mockup-gap);
+  padding: var(--public-mockup-gap);
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-tabs {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  gap: var(--public-mockup-gap-sm);
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-tab,
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-copy {
+  min-block-size: var(--public-mockup-control-size);
+  max-inline-size: 100%;
+  padding: var(--public-mockup-gap-sm) var(--public-mockup-gap);
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-control);
+  line-height: var(--public-mockup-leading-control);
+  letter-spacing: normal;
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-tab[aria-selected='true'] {
+  color: var(--agi-bg);
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-tab:focus-visible,
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-copy:focus-visible,
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-code:focus-visible,
+[data-design='agi'] .agi-lp-terminal.agi-code-responsive:focus-visible {
+  outline: var(--public-mockup-focus-width) solid var(--agi-accent-text);
+  outline-offset: var(--public-mockup-gap-sm);
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-code {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  block-size: auto;
+  padding: var(--public-mockup-padding);
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-code);
+  line-height: var(--public-mockup-leading-text);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-line {
+  min-inline-size: max-content;
+  white-space: pre;
+}
+
+[data-design='agi'] .agi-code-responsive .agi-ds-codetabs-note {
+  min-inline-size: 0;
+  padding: var(--public-mockup-gap) var(--public-mockup-padding);
+  font-family: var(--public-mockup-font-text);
+  font-size: var(--public-mockup-text-body);
+  line-height: var(--public-mockup-leading-text);
+  color: var(--agi-ink);
+  text-wrap: pretty;
+  overflow-wrap: normal;
+}
+
+[data-design='agi'] .agi-lp-terminal.agi-code-responsive {
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--public-mockup-gap);
+  overflow-x: auto;
+}
+
+[data-design='agi'] .agi-code-responsive .agi-lp-terminal-line {
+  min-inline-size: max-content;
+  white-space: pre;
+}
+
+[data-design='agi']
+  .agi-code-responsive
+  .agi-lp-terminal-line[data-kind='cmd']
+  + .agi-lp-terminal-line[data-kind='cmd'],
+[data-design='agi']
+  .agi-code-responsive
+  .agi-lp-terminal-line[data-kind='dim']
+  + .agi-lp-terminal-line[data-kind='cmd'] {
+  margin-block-start: var(--public-mockup-group-gap);
+}
