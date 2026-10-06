@@ -7,8 +7,6 @@
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-composer-responsive .agi-dev-shell {
@@ -24,7 +22,7 @@
   block-size: auto;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-padding);
   border-start-start-radius: var(--public-mockup-radius);
   border-start-end-radius: var(--public-mockup-radius);
@@ -81,7 +79,7 @@
   justify-content: normal;
   min-block-size: 0;
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-padding);
   background: var(--agi-bg);
   border-end-start-radius: var(--public-mockup-radius);
@@ -93,7 +91,7 @@
   inline-size: 100%;
   min-inline-size: 0;
   margin: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-group-gap);
   border: var(--public-mockup-border) solid var(--agi-rule-strong);
   border-radius: var(--public-mockup-control-radius);
@@ -207,7 +205,8 @@
   align-items: baseline;
   min-inline-size: 0;
   gap: var(--public-mockup-gap);
-  padding: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
+  padding-inline: var(--public-mockup-gap);
   border-radius: var(--public-mockup-cell-radius);
   white-space: normal;
   overflow: visible;
@@ -241,4 +240,19 @@
   overflow-wrap: normal;
   word-break: normal;
   text-wrap: pretty;
+}
+
+@media (min-width: 768px) {
+  [data-design='agi'] .agi-composer-responsive .agi-dev-title {
+    flex: 1 1 auto;
+  }
+
+  [data-design='agi'] .agi-composer-responsive .agi-sc-composer-stage {
+    align-items: center;
+    justify-content: center;
+  }
+
+  [data-design='agi'] .agi-composer-responsive :is(.agi-sc-composer, .agi-sc-slash) {
+    max-inline-size: var(--public-mockup-composer-max);
+  }
 }

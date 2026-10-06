@@ -3,6 +3,7 @@ import './motion/motion.css';
 import './mockup-responsive.css';
 import './desktop-chrome-mockup-responsive.css';
 import './editor-mockup-responsive.css';
+import './mockup-presentation.css';
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
 import {

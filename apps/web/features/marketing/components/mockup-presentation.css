@@ -1,0 +1,31 @@
+[data-design='agi'] figure.agi-dev[data-geometry],
+[data-design='agi'] .agi-showcase-responsive {
+  --public-mockup-control-size: var(--public-mockup-illustration-control-size);
+  --public-mockup-text-body: var(--public-mockup-text-control);
+  --public-mockup-sidebar-basis: var(--public-mockup-illustration-sidebar-basis);
+  --public-mockup-chat-basis: var(--public-mockup-illustration-chat-basis);
+}
+
+[data-design='agi'] figure.agi-dev .agi-mk-seg {
+  padding: var(--public-mockup-border);
+  line-height: var(--public-mockup-leading-control);
+}
+
+[data-design='agi'] figure.agi-dev .agi-mk-seg span {
+  min-block-size: 0;
+  padding-block: var(--public-mockup-gap-sm);
+  padding-inline: var(--public-mockup-gap);
+}
+
+[data-design='agi'] figure.agi-dev .agi-desk-new {
+  padding-block: var(--public-mockup-gap-sm);
+}
+
+[data-design='agi'] figure.agi-dev .agi-dev-send svg {
+  color: inherit;
+}
+
+[data-design='agi'] figure.agi-dev .agi-mk-composer-meta {
+  flex: 1 1 auto;
+  margin-inline-start: auto;
+}

@@ -11,8 +11,6 @@
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-artifact-responsive .agi-dev-shell {
@@ -27,7 +25,7 @@
   block-size: auto;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-gap);
   border-start-start-radius: var(--public-mockup-radius);
   border-start-end-radius: var(--public-mockup-radius);
@@ -92,7 +90,7 @@
   flex: 1 1 calc(var(--public-mockup-sidebar-basis) * 3 / 2);
   flex-direction: column;
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-padding);
   background: var(--agi-bg-2);
 }
@@ -117,7 +115,7 @@
   flex-wrap: wrap;
   min-inline-size: 0;
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-padding);
 }
 
@@ -128,7 +126,7 @@
 }
 
 [data-design='agi'] .agi-artifact-responsive .agi-sc-tabs > span {
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-gap);
   border-radius: var(--public-mockup-cell-radius);
   font-size: var(--public-mockup-text-control);
@@ -145,7 +143,7 @@
   display: grid;
   align-content: start;
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-padding);
   text-wrap: pretty;
 }
@@ -162,7 +160,7 @@
 [data-design='agi'] .agi-artifact-responsive .agi-sc-panel-foot {
   flex-wrap: wrap;
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-padding);
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-control);
@@ -200,4 +198,11 @@
 
 [data-design='agi'] .agi-artifact-responsive .agi-sc-tabs > span[data-on='true'] {
   color: var(--agi-bg);
+}
+
+@media (min-width: 768px) {
+  [data-design='agi'] .agi-artifact-responsive .agi-dev-bar > .agi-dev-title {
+    flex: 1 1 auto;
+    order: 0;
+  }
 }

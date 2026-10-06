@@ -259,6 +259,10 @@ html[data-theme='light'] body:has([data-design='agi'][data-public-reference]) {
   --public-mockup-border: 1px;
   --public-mockup-focus-width: 2px;
   --public-mockup-control-size: var(--space-7);
+  --public-mockup-illustration-control-size: var(--space-6);
+  --public-mockup-illustration-sidebar-basis: 10rem;
+  --public-mockup-illustration-chat-basis: 20rem;
+  --public-mockup-composer-max: 35rem;
   --public-mockup-gap-sm: var(--space-1);
   --public-mockup-gap: var(--space-2);
   --public-mockup-group-gap: var(--space-3);

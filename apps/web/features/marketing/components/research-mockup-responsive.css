@@ -17,8 +17,6 @@
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-research-responsive .agi-dev-shell {
@@ -33,7 +31,7 @@
   block-size: auto;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-padding);
   border-start-start-radius: var(--public-mockup-radius);
   border-start-end-radius: var(--public-mockup-radius);
@@ -74,7 +72,7 @@
 [data-design='agi'] .agi-research-responsive .agi-sc-research-plan {
   display: grid;
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-padding);
   overflow-wrap: normal;
 }
@@ -82,7 +80,7 @@
 [data-design='agi'] .agi-research-responsive .agi-mk-user {
   max-inline-size: 100%;
   margin-inline-start: auto;
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-group-gap);
   border-radius: var(--public-mockup-control-radius);
   font-size: var(--public-mockup-text-body);
@@ -93,7 +91,7 @@
 
 [data-design='agi'] .agi-research-responsive .agi-sc-card {
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-group-gap);
   border-radius: var(--public-mockup-control-radius);
   text-wrap: pretty;
@@ -102,7 +100,7 @@
 [data-design='agi'] .agi-research-responsive .agi-sc-research-steps {
   display: grid;
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   margin: 0;
   padding-inline-start: var(--public-mockup-padding);
 }
@@ -122,7 +120,7 @@
 }
 
 [data-design='agi'] .agi-research-responsive .agi-mk-btn {
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-group-gap);
   border-radius: var(--public-mockup-cell-radius);
   font-size: var(--public-mockup-text-control);
