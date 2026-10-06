@@ -5,7 +5,7 @@ import './desktop-chrome-mockup-responsive.css';
 import './editor-mockup-responsive.css';
 import './mockup-presentation.css';
 import Image from 'next/image';
-import type { CSSProperties, ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -40,6 +40,7 @@ import {
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 
+const RECEIPT_SEPARATOR = ' · ';
 const LOCAL_RUNTIME_LABEL = `${(CLI_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
 
 export type DeviceType = 'desktop' | 'web' | 'chrome' | 'editor' | 'terminal' | 'panel' | 'phone';
@@ -135,13 +136,25 @@ export function Receipt({
   time: string;
   compact?: boolean;
 }) {
-  const detail = compact
-    ? `${route.lane} · ${route.provider} · ${time}`
-    : `Served by ${route.lane} · ${route.provider} · ${tokensIn} in · ${tokensOut} out · ${route.cost} · ${time}`;
+  const parts = compact
+    ? [route.lane, route.provider, time]
+    : [
+        `Served by ${route.lane}`,
+        route.provider,
+        `${tokensIn} in`,
+        `${tokensOut} out`,
+        route.cost,
+        time,
+      ];
   return (
     <p className="agi-mk-receipt">
       <span className="agi-mk-dot" />
-      {detail}
+      {parts.map((part, index) => (
+        <Fragment key={part}>
+          {index > 0 ? RECEIPT_SEPARATOR : null}
+          <span className="agi-mk-receipt-part">{part}</span>
+        </Fragment>
+      ))}
     </p>
   );
 }
@@ -186,7 +199,6 @@ function ComposerBar({
           {ghost}
           <span className="agi-dev-caret" />
         </span>
-        <span className="agi-dev-send">{sendIcon ?? '➤'}</span>
       </div>
       <div className="agi-mk-composer-row agi-mk-composer-foot">
         <span className="agi-mk-seg">
@@ -197,6 +209,7 @@ function ComposerBar({
           {model} {modelIcon ?? '▾'}
         </span>
         {extra}
+        <span className="agi-dev-send">{sendIcon ?? '➤'}</span>
       </div>
     </div>
   );
@@ -344,7 +357,7 @@ export function WebWindow({
           <div className="agi-web-recents">
             <p className="agi-desk-group">Recents</p>
             <p className="agi-desk-recent agi-desk-recent--on">EU AI Act duties</p>
-            <p className="agi-desk-recent">Onboarding email draft</p>
+            <p className="agi-desk-recent">Onboarding email</p>
             <p className="agi-desk-recent">Pricing page copy</p>
             <p className="agi-desk-recent">Retention query</p>
           </div>
@@ -428,11 +441,6 @@ export function WebWindow({
             }
             modelIcon={
               <ChevronDown className="agi-web-icon" aria-hidden="true" focusable="false" />
-            }
-            extra={
-              <span className="agi-mk-composer-meta">
-                <span>Enter to send · Shift+Enter for newline</span>
-              </span>
             }
           />
         </div>
