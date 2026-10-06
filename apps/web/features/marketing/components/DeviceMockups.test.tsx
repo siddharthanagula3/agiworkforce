@@ -252,6 +252,46 @@ describe('one canonical look per surface, everywhere', () => {
     }
   });
 
+  it('binds every phone facade to its responsive owner and preserves the passive illustration', () => {
+    const examples = [
+      <PhoneDevice key="direct" />,
+      <PhoneDevice key="custom" className="phone-owner-slot" />,
+      <MobileMockup key="mockup" />,
+      <ProductFrame key="frame" variant="phone" title="AGI Mobile" badge="Local" />,
+    ];
+    for (const example of examples) {
+      const { container } = render(example);
+      const phone = deviceRoot(container);
+      expectGeometry(phone, 'phone');
+      expect(phone).toHaveClass('agi-phone-responsive');
+      expect(phone).not.toHaveClass('agi-web-responsive');
+      const body = phone.querySelector('.agi-dev-body.agi-ph');
+      expect(body).toHaveAttribute('aria-hidden', 'true');
+      expect(body?.querySelector('.agi-mk-user')?.textContent).toBe(
+        'What did we decide for the launch demo?',
+      );
+      expect(
+        body?.querySelector('.agi-mk-agi > p:not(.agi-mk-tool):not(.agi-mk-receipt)')?.textContent,
+      ).toBe(
+        'From your memory: the demo runs from the CLI in Local mode, the deck lives in the Investor project, and the dry run is Thursday at 4pm. Want a reminder?',
+      );
+      expect(body?.querySelector('.agi-mk-tool')).toHaveAttribute('data-state', 'done');
+      expect(body?.querySelector('.agi-mk-tool-meta')?.textContent).toBe('3 facts');
+      expect(body?.querySelector('.agi-mk-receipt')?.textContent).toBe(
+        `Local · ${LOCAL_RUNTIME_LABEL} · 1.1 s`,
+      );
+      expect(body?.querySelector('.agi-ph-ghost')?.textContent).toBe('Message AGI…');
+      expect(body?.querySelector('.agi-ph-model')?.textContent).toBe('AGI Standard');
+      expect(body?.querySelectorAll('svg.agi-phone-icon')).toHaveLength(10);
+      expect(body?.querySelector('svg[aria-label="Memory found"]')).not.toBeNull();
+      expect(body?.querySelector('svg[aria-label="Send"]')).not.toBeNull();
+      expect(body?.querySelectorAll('button,a,input,textarea,[tabindex]')).toHaveLength(0);
+      expect(body?.querySelectorAll('[hidden]')).toHaveLength(0);
+    }
+    const custom = render(<PhoneDevice className="phone-owner-slot" />);
+    expect(deviceRoot(custom.container)).toHaveClass('phone-owner-slot', 'agi-phone-responsive');
+  });
+
   it('landing SurfaceMockups map to canonical devices', () => {
     expectGeometry(deviceRoot(render(<ChromeMockup />).container), 'chrome');
     expectGeometry(deviceRoot(render(<VSCodeMockup />).container), 'editor');

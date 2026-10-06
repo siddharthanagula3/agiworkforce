@@ -625,3 +625,225 @@
   font-size: var(--public-mockup-text-code);
   line-height: var(--public-mockup-leading-text);
 }
+
+[data-design='agi'] figure.agi-dev.agi-phone-responsive[data-device='phone'][data-geometry] {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: calc(var(--dev-w) * 1px);
+  margin-block: 0;
+  margin-inline: auto;
+  font-family: var(--public-mockup-font-text);
+  font-size: var(--public-mockup-text-body);
+  line-height: var(--public-mockup-leading-text);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-dev-shell {
+  block-size: auto;
+  min-inline-size: 0;
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph {
+  flex: none;
+  min-inline-size: 0;
+  border-radius: inherit;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-status {
+  gap: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-group-gap) var(--public-mockup-gap-sm);
+  padding-inline: var(--public-mockup-padding);
+  font-size: var(--public-mockup-text-meta);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-nav {
+  gap: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap);
+  padding-inline: var(--public-mockup-padding);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-name {
+  min-inline-size: 0;
+  font-size: var(--public-mockup-text-control);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-navbtn {
+  inline-size: var(--public-mockup-control-size);
+  block-size: var(--public-mockup-control-size);
+  font-size: var(--public-mockup-text-control);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-main {
+  flex: none;
+  min-inline-size: 0;
+  min-block-size: 0;
+  align-items: stretch;
+  justify-content: start;
+  gap: var(--public-mockup-group-gap);
+  padding-block: var(--public-mockup-gap);
+  padding-inline: var(--public-mockup-padding);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-toggle {
+  flex-wrap: wrap;
+  align-self: center;
+  gap: var(--public-mockup-gap-sm);
+  padding: var(--public-mockup-gap-sm);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--public-mockup-gap-sm);
+  min-block-size: var(--public-mockup-control-size);
+  padding-block: var(--public-mockup-gap-sm);
+  padding-inline: var(--public-mockup-gap);
+  font-size: var(--public-mockup-text-control);
+  line-height: var(--public-mockup-leading-control);
+  color: var(--agi-ink);
+  white-space: normal;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-mk-thread--phone {
+  flex: none;
+  min-inline-size: 0;
+  min-block-size: 0;
+  gap: var(--public-mockup-group-gap);
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive :is(.agi-mk-user, .agi-mk-agi) {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  font-family: var(--public-mockup-font-text);
+  font-size: var(--public-mockup-text-body);
+  line-height: var(--public-mockup-leading-text);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow-wrap: normal;
+  text-wrap: pretty;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-mk-user {
+  padding-block: var(--public-mockup-gap);
+  padding-inline: var(--public-mockup-group-gap);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-mk-agi {
+  gap: var(--public-mockup-gap);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive :is(.agi-mk-tool, .agi-mk-receipt) {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  font-family: var(--public-mockup-font-code);
+  font-size: var(--public-mockup-text-code);
+  line-height: var(--public-mockup-leading-text);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow-wrap: normal;
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-mk-tool {
+  flex-wrap: wrap;
+  gap: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap);
+  padding-inline: var(--public-mockup-gap);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-mk-tool-meta {
+  margin-inline: auto 0;
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-mk-receipt {
+  display: block;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-mk-dot {
+  display: inline-block;
+  inline-size: var(--public-mockup-gap-sm);
+  block-size: var(--public-mockup-gap-sm);
+  margin-inline-end: var(--public-mockup-gap);
+  vertical-align: middle;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-composer-wrap {
+  min-inline-size: 0;
+  padding-block: var(--public-mockup-gap) var(--public-mockup-padding);
+  padding-inline: var(--public-mockup-padding);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-composer {
+  min-inline-size: 0;
+  overflow: visible;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-ghost {
+  min-inline-size: 0;
+  padding-block: var(--public-mockup-gap);
+  padding-inline: var(--public-mockup-group-gap);
+  font-size: var(--public-mockup-text-control);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-composer-foot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--public-mockup-gap);
+  min-inline-size: 0;
+  padding-block: var(--public-mockup-gap);
+  padding-inline: var(--public-mockup-group-gap);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-model {
+  display: flex;
+  align-items: center;
+  gap: var(--public-mockup-gap-sm);
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-inline-size: 0;
+  font-size: var(--public-mockup-text-control);
+  line-height: var(--public-mockup-leading-control);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive :is(.agi-ph-attach, .agi-ph-mic, .agi-dev-send) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  grid-row: 2;
+  inline-size: var(--public-mockup-control-size);
+  block-size: var(--public-mockup-control-size);
+  font-size: var(--public-mockup-text-control);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-attach {
+  justify-self: start;
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-ph-mic {
+  justify-self: center;
+  margin-inline: 0;
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-dev-send {
+  justify-self: end;
+}
+
+[data-design='agi'] .agi-dev.agi-phone-responsive .agi-phone-icon {
+  flex: none;
+  inline-size: var(--public-mockup-text-control);
+  block-size: var(--public-mockup-text-control);
+}
