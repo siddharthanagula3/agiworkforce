@@ -105,9 +105,11 @@ describe('web feature scenes never render a Local route', () => {
     expect(container.textContent).not.toContain('Served by');
   });
 
-  it('MemoryWindow says memory is saved to the account', () => {
+  it('MemoryWindow identifies an authored current draft', () => {
     const text = render(<MemoryWindow />).container.textContent ?? '';
-    expect(text).toContain('On · saved to your account');
+    expect(text).toContain('Authored example');
+    expect(text).toContain('Current draft');
+    expect(text).not.toContain('On · saved to your account');
   });
 });
 

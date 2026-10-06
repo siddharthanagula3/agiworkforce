@@ -2,6 +2,7 @@ import {
   getToolDisplayLabel,
   TOOL_APPROVAL_ACTION_LABELS,
   TOOL_STATUS_PRESENTATION,
+  type ManagedMemoryCreateRequest,
   type ResearchStep,
 } from '@agiworkforce/types';
 import {
@@ -14,6 +15,7 @@ import { AppWindow } from './DeviceMockups';
 import './agent-mockup-responsive.css';
 import './artifact-mockup-responsive.css';
 import './research-mockup-responsive.css';
+import './memory-mockup-responsive.css';
 
 function Perm({ label, state }: { label: string; state: 'allowed' | 'ask' | 'denied' }) {
   return (
@@ -214,47 +216,40 @@ export function ResearchWindow() {
   );
 }
 
-const MEMORY_FACTS = [
-  { text: 'Prefers answers in British English.', source: 'You · Settings' },
-  { text: 'The launch demo runs from the CLI in Local mode.', source: 'Chat · Launch plan' },
-  {
-    text: 'The weekly report goes out Friday at 4pm to the leadership list.',
-    source: 'Chat · Reporting',
-  },
-  { text: 'Uses pnpm, never npm, in the monorepo.', source: 'Chat · Rust build fix' },
-  { text: 'The investor deck lives in the Investor project.', source: 'Project · Investor deck' },
-] as const;
+export const MEMORY_DRAFT_REQUEST = {
+  content: 'I prefer concise answers.',
+  source: 'web',
+} as const satisfies ManagedMemoryCreateRequest;
 
 export function MemoryWindow() {
   return (
-    <AppWindow title="Settings · Memory" badge="Web" label="The AGI memory list in settings">
-      <div className="agi-sc-page">
+    <AppWindow
+      title="Settings · Memory"
+      badge="Web"
+      label="Authored example of a current Web memory draft"
+      className="agi-memory-responsive"
+    >
+      <div className="agi-sc-page" data-memory-illustration="draft">
         <div className="agi-sc-page-head">
           <span className="agi-sc-page-title">Memory</span>
-          <span className="agi-sc-toggle" data-on="true">
-            <i /> On · saved to your account
+          <span className="agi-sc-meta" data-memory-example-label>
+            Authored example
           </span>
         </div>
-        <div className="agi-sc-search">Search memory…</div>
-        <ul className="agi-sc-list">
-          {MEMORY_FACTS.map((fact) => (
-            <li className="agi-sc-fact" key={fact.text}>
-              <span className="agi-sc-fact-text">{fact.text}</span>
-              <span className="agi-sc-fact-row">
-                <span className="agi-sc-meta">{fact.source}</span>
-                <span className="agi-sc-links">
-                  <span>Edit</span>
-                  <span>Delete</span>
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <div className="agi-sc-panel-foot">
-          <span>{MEMORY_FACTS.length} facts</span>
-          <span>Export</span>
-          <span>Clear all</span>
+        <span className="agi-sc-meta" data-memory-draft-caption>
+          Current draft
+        </span>
+        <span className="agi-sc-fact-text" data-memory-native-label="field">
+          Add a new fact
+        </span>
+        <div className="agi-sc-fact" data-memory-draft-field>
+          <p className="agi-sc-fact-text" data-memory-draft-content>
+            {MEMORY_DRAFT_REQUEST.content}
+          </p>
         </div>
+        <span className="agi-sc-links" data-memory-native-label="action">
+          Add
+        </span>
       </div>
     </AppWindow>
   );
