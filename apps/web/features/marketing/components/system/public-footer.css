@@ -106,19 +106,6 @@
   column-gap: var(--space-1);
 }
 
-[data-design='agi']
-  footer.agi-ds-footer.agi-footer-responsive
-  .agi-ds-footer-link:has(.agi-ds-footer-link-status) {
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-[data-design='agi'] footer.agi-ds-footer.agi-footer-responsive .agi-ds-footer-link-status {
-  font-size: var(--public-footer-text-meta);
-  color: var(--agi-ink);
-}
-
 [data-design='agi'] footer.agi-ds-footer.agi-footer-responsive .agi-ds-footer-legal {
   display: flex;
   flex-wrap: wrap;

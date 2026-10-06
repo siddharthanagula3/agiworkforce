@@ -64,19 +64,18 @@ describe('MarketingFooter', () => {
     ).toEqual(FOOTER_LEGAL.map((link) => link.href));
   });
 
-  it('keeps availability labels separate from product names without a wrapping separator', () => {
+  it('lists surfaces by name only, with availability left to the release status page', () => {
     render(<MarketingFooter />);
     const footer = screen.getByRole('navigation', { name: 'Footer' });
     const surfaces = within(footer).getByRole('list', { name: 'Surfaces' });
-    const labels = [...surfaces.querySelectorAll('.agi-ds-footer-link-status')].map(
-      (element) => element.textContent,
-    );
-    expect(labels).toEqual(
-      FOOTER_COLUMNS.find((column) => column.title === 'Surfaces')!.links.flatMap((link) =>
-        'status' in link && link.status ? [link.status] : [],
-      ),
-    );
-    expect(labels.every((label) => label && !label.includes('·'))).toBe(true);
+    const column = FOOTER_COLUMNS.find((entry) => entry.title === 'Surfaces')!;
+    expect(
+      within(surfaces)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(column.links.map((link) => link.label));
+    expect(surfaces.querySelector('.agi-ds-footer-link-status')).toBeNull();
+    expect(column.links.at(-1)).toEqual({ href: '/download', label: 'Release status' });
   });
 
   it('opens the cookie manager from a real button placed after the Cookies link', () => {
