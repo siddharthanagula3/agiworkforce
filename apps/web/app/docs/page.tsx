@@ -1,20 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { Header } from '@shared/components/layout/Header';
-import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { DocsShell } from '@/features/docs/components/DocsShell';
 import { buildMetadata } from '@/lib/seo/metadata';
-import {
-  DOC_AUDIENCE_LABELS,
-  DOC_MATURITY_LABELS,
-  describePlans,
-  describePlatforms,
-  describeSegments,
-} from '@/lib/support/doc-metadata';
 import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
-import { documentationIndex, type DocIndexEntry } from './doc-index';
+import { helpArticlePath } from '@/lib/support/help-paths';
+import { documentationIndex } from './doc-index';
 
 export const metadata = buildMetadata({
   title: 'Documentation',
@@ -94,28 +85,37 @@ const REFERENCE_GUIDES = [
   },
 ] as const;
 
-function applicabilityLines(entry: DocIndexEntry): readonly string[] {
-  const metadata = entry.metadata;
-  if (!metadata) return [`Updated ${entry.updated}`];
-  const { platforms, plans, apiVersions } = metadata.applicability;
-  const first = [
-    DOC_MATURITY_LABELS[metadata.maturity],
-    DOC_AUDIENCE_LABELS[metadata.audience],
-    describePlatforms(platforms),
-    ...(apiVersions ? [`API ${apiVersions.join(', ')}`] : []),
-  ].join(' · ');
-  return [first, `${describePlans(plans)} · ${describeSegments(plans)} · Updated ${entry.updated}`];
-}
+const START_HERE = [
+  {
+    href: helpArticlePath('getting-started'),
+    title: 'Getting started',
+    body: 'Create an account, send a first message and find your way around.',
+  },
+  {
+    href: '/get-started',
+    title: 'Choose a route',
+    body: 'Sign in, pick where work runs, and see what follows your account.',
+  },
+  {
+    href: '/api-docs',
+    title: 'API reference',
+    body: 'OpenAI-compatible endpoints, authentication and response contracts.',
+  },
+] as const;
 
-function guideRows(guides: typeof SURFACE_GUIDES | typeof REFERENCE_GUIDES) {
-  return guides.map((guide) => ({
-    label: (
-      <Link href={guide.href} className="agi-ds-link">
-        {guide.title}
-      </Link>
-    ),
-    value: guide.body,
-  }));
+type Guide = { href: string; title: string; body: string };
+
+function GuideCards({ guides, columns }: { guides: readonly Guide[]; columns: 2 | 3 }) {
+  return (
+    <div className="dx-cards" data-cols={columns}>
+      {guides.map((guide) => (
+        <Link key={guide.href} href={guide.href} className="dx-card">
+          <span className="dx-card-title">{guide.title}</span>{' '}
+          <span className="dx-card-body">{guide.body}</span>
+        </Link>
+      ))}
+    </div>
+  );
 }
 
 export default async function DocsPage({
@@ -129,115 +129,86 @@ export default async function DocsPage({
   const { groups, documentCount, newestUpdate } = documentationIndex();
 
   return (
-    <div data-design="agi" className="agi-ds-page">
-      <Header />
-      <main id="main-content">
-        <PageHero
-          id="agi-docs-title"
-          eyebrow="Documentation"
-          title="Build with every AGI surface."
-          em="every AGI surface."
-          lede="One account connects the Cloud app surfaces. Desktop, CLI, and VS Code share a separate host-owned developer runtime. These guides state which data follows you, which tools are available, and where each trust boundary begins."
-          ctas={[
-            { href: '/get-started', label: 'Start here' },
-            { href: '/api-docs', label: 'API reference', variant: 'secondary' },
-          ]}
-        />
+    <DocsShell>
+      <h1 className="dx-title" id="agi-docs-title">
+        Documentation
+      </h1>
+      <p className="dx-desc">
+        Guides and reference for every AGI surface. Each guide states the surfaces and plans it
+        applies to.
+      </p>
 
-        {topic ? (
-          <Section id="topic" labelledBy="agi-docs-topic-title" rule>
-            <Stack gap="tight">
-              <h2 className="agi-ds-h3" id="agi-docs-topic-title">
-                {`No guide covers “${topic.replace(/-/g, ' ')}” yet.`}
-              </h2>
-              <Prose>
-                Every guide we have is listed below.{' '}
-                <Link
-                  href={`/help?q=${encodeURIComponent(topic.replace(/-/g, ' '))}`}
-                  className="agi-ds-link"
-                >
-                  Search the help centre for it
-                </Link>{' '}
-                to find the closest answer.
-              </Prose>
-            </Stack>
-          </Section>
-        ) : null}
+      {topic ? (
+        <section className="dx-section" aria-labelledby="agi-docs-topic-title">
+          <h2 className="dx-h2" id="agi-docs-topic-title">
+            {`No guide covers “${topic.replace(/-/g, ' ')}” yet.`}
+          </h2>
+          <p className="dx-section-note">
+            Every guide we have is listed below.{' '}
+            <Link href={`/help?q=${encodeURIComponent(topic.replace(/-/g, ' '))}`}>
+              Search the help centre for it
+            </Link>{' '}
+            to find the closest answer.
+          </p>
+        </section>
+      ) : null}
 
-        <Section id="surfaces" labelledBy="agi-docs-surfaces-title" rule>
-          <Stack gap="loose">
-            <div>
-              <p className="agi-ds-eyebrow">Surface guides</p>
-              <h2 className="agi-ds-h2" id="agi-docs-surfaces-title">
-                Start where you work.
-              </h2>
+      <section className="dx-section" aria-labelledby="agi-docs-start-title">
+        <h2 className="dx-h2" id="agi-docs-start-title">
+          Start here
+        </h2>
+        <GuideCards guides={START_HERE} columns={3} />
+      </section>
+
+      <section className="dx-section" aria-labelledby="agi-docs-surfaces-title">
+        <h2 className="dx-h2" id="agi-docs-surfaces-title">
+          Guides by surface
+        </h2>
+        <p className="dx-section-note">
+          The website is the active launch surface. The remaining guides describe the current
+          implementation and release state without presenting planned clients as published.
+        </p>
+        <GuideCards guides={SURFACE_GUIDES} columns={2} />
+      </section>
+
+      <section className="dx-section" aria-labelledby="agi-docs-reference-title">
+        <h2 className="dx-h2" id="agi-docs-reference-title">
+          Reference
+        </h2>
+        <GuideCards guides={REFERENCE_GUIDES} columns={2} />
+      </section>
+
+      <section className="dx-section" aria-labelledby="agi-docs-index-title">
+        <h2 className="dx-h2" id="agi-docs-index-title">
+          Browse by topic
+        </h2>
+        {groups.length > 0 ? (
+          <>
+            <p className="dx-section-note">
+              {`${documentCount} guides${newestUpdate ? `. Most recent update: ${newestUpdate}` : ''}.`}
+            </p>
+            <div className="dx-topics">
+              {groups.map((group) => (
+                <div key={group.id} className="dx-topic">
+                  <h3 className="dx-topic-title">{group.label}</h3>
+                  <ul className="dx-topic-list">
+                    {group.entries.map((entry) => (
+                      <li key={entry.docId}>
+                        <Link href={entry.href}>{entry.title}</Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
-            <Prose>
-              The website is the active launch surface. The remaining guides describe the current
-              implementation and release state without presenting planned clients as published.
-            </Prose>
-            <Ledger caption="AGI surface guides" rows={guideRows(SURFACE_GUIDES)} />
-          </Stack>
-        </Section>
-
-        <Section id="reference" labelledBy="agi-docs-reference-title" rule ground="2">
-          <Stack gap="loose">
-            <div>
-              <p className="agi-ds-eyebrow">Reference</p>
-              <h2 className="agi-ds-h2" id="agi-docs-reference-title">
-                Routes, models, tools, and trust.
-              </h2>
-            </div>
-            <Ledger caption="AGI reference guides" rows={guideRows(REFERENCE_GUIDES)} />
-          </Stack>
-        </Section>
-
-        <Section id="index" labelledBy="agi-docs-index-title" rule>
-          <Stack gap="loose">
-            <div>
-              <p className="agi-ds-eyebrow">Documentation index</p>
-              <h2 className="agi-ds-h2" id="agi-docs-index-title">
-                Every page, its scope, and its review date.
-              </h2>
-            </div>
-            {groups.length > 0 ? (
-              <>
-                <Prose>
-                  {`${documentCount} pages. Each row states its maturity, audience, supported surfaces and plans, and the date its claims were last checked${newestUpdate ? `. Newest: ${newestUpdate}` : ''}.`}
-                </Prose>
-                {groups.map((group) => (
-                  <Stack gap="tight" key={group.id}>
-                    <h3 className="agi-ds-h3">{group.label}</h3>
-                    <Ledger
-                      caption={`${group.label} documentation`}
-                      rows={group.entries.map((entry) => ({
-                        label: (
-                          <Link href={entry.href} className="agi-ds-link">
-                            {entry.title}
-                          </Link>
-                        ),
-                        value: (
-                          <Stack gap="tight">
-                            {applicabilityLines(entry).map((line) => (
-                              <span key={line}>{line}</span>
-                            ))}
-                          </Stack>
-                        ),
-                      }))}
-                    />
-                  </Stack>
-                ))}
-              </>
-            ) : (
-              <Prose>
-                The documentation index is not loading right now. The surface and reference guides
-                above still work, and the help centre reaches the same support material.
-              </Prose>
-            )}
-          </Stack>
-        </Section>
-      </main>
-      <MarketingFooter />
-    </div>
+          </>
+        ) : (
+          <p className="dx-section-note">
+            The documentation index is not loading right now. The surface and reference guides above
+            still work, and the help centre reaches the same support material.
+          </p>
+        )}
+      </section>
+    </DocsShell>
   );
 }
