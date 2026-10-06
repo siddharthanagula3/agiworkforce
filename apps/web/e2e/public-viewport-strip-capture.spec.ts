@@ -652,3 +652,218 @@ test('viewport capture keeps slow full snapshots outside the readiness budget', 
     ]);
   });
 });
+
+const localSvgFixture =
+  '<svg xmlns="http://www.w3.org/2000/svg" data-testid="capture-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:32px;top:147.125px"><path data-testid="capture-svg-path" d="m12 19-7-7 7-7"/><circle data-testid="capture-svg-circle" cx="12" cy="12" r="10"/><rect data-testid="capture-svg-rect" x="3" y="11" width="18" height="11" rx="2" ry="2"/></svg><span data-testid="capture-text" style="position:absolute;left:32px;top:220px">Stable text</span>';
+
+test('viewport SVG local geometry remains exact across native scroll positions', async ({
+  browser,
+  browserName,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  expect(browserName).toBe('chromium');
+  await controlledContext(browser, testInfo, async (page, report, images) => {
+    const frame = page.getByRole('figure', { name: 'Viewport strip fixture' });
+    const header = page.getByRole('banner', { name: 'Capture header' });
+    await frame.evaluate(
+      (root, fixture) => root.insertAdjacentHTML('beforeend', fixture),
+      localSvgFixture,
+    );
+    const capture = await capturePublicViewportStrips(page, frame, {
+      stickyHeader: header,
+      bounds: 'union',
+      sourceFiles,
+    });
+    report['svgCapture'] = capture.evidence;
+    for (const image of capture.images)
+      images.push({ name: `svg-local-strip-${image.index}`, bytes: image.bytes });
+    assertPublicViewportCapture(capture);
+    expect(capture.evidence.before.svgGeometry).toHaveLength(3);
+    const canonical = capture.evidence.before.svgGeometry.map(({ index, local, matrix, rect }) => ({
+      index,
+      local,
+      matrix,
+      rect,
+    }));
+    for (const strip of capture.evidence.strips) {
+      expect(
+        strip.before.svgGeometry.map(({ index, local, matrix, rect }) => ({
+          index,
+          local,
+          matrix,
+          rect,
+        })),
+      ).toEqual(canonical);
+      expect(strip.before.fingerprints.geometry).toBe(
+        capture.evidence.before.fingerprints.geometry,
+      );
+    }
+    expect(capture.evidence.restored).toBe(true);
+    const suffix = await documentRect(page, 'capture-suffix-sentinel');
+    expect(stripPixel(capture.evidence, capture.images, suffix.x + 20, suffix.y + 20)).toEqual([
+      0, 0, 255, 255,
+    ]);
+  });
+});
+
+for (const kind of ['path', 'circle', 'rect', 'html', 'text', 'layout'] as const) {
+  test(
+    'viewport geometry detects a genuine ' + kind + ' mutation',
+    async ({ browser, browserName }, testInfo) => {
+      test.setTimeout(30_000);
+      expect(browserName).toBe('chromium');
+      await controlledContext(browser, testInfo, async (page, report) => {
+        const frame = page.getByRole('figure', { name: 'Viewport strip fixture' });
+        const header = page.getByRole('banner', { name: 'Capture header' });
+        await frame.evaluate(
+          (root, fixture) => root.insertAdjacentHTML('beforeend', fixture),
+          localSvgFixture,
+        );
+        const before = await readPublicViewportCaptureState(frame, header);
+        report['mutationBefore'] = before;
+        expect(before.svgGeometry).toHaveLength(3);
+        const mutation = await frame.evaluate((root, kind) => {
+          if (['path', 'circle', 'rect'].includes(kind)) {
+            const shape = root.querySelector('[data-testid="capture-svg-' + kind + '"]');
+            if (!(shape instanceof SVGGeometryElement))
+              throw new Error('Missing native SVG mutation target');
+            const matrix = shape.getScreenCTM();
+            if (!matrix || !Number.isFinite(matrix.d) || matrix.d === 0)
+              throw new Error('Unmeasured mutation scale');
+            const shift = 1 / devicePixelRatio / matrix.d;
+            shape.setAttribute('transform', 'translate(0 ' + shift + ')');
+            return { kind, localShift: shift, cssPixelTarget: 1 / devicePixelRatio };
+          }
+          if (kind === 'html') {
+            const node = root.querySelector('[data-testid="capture-axis-sentinel"]');
+            if (!(node instanceof HTMLElement)) throw new Error('Missing HTML mutation target');
+            node.style.transform = 'translateY(' + 1 / devicePixelRatio + 'px)';
+          } else if (kind === 'text') {
+            const node = root.querySelector('[data-testid="capture-text"]');
+            if (!node) throw new Error('Missing text mutation target');
+            node.textContent = 'Changed text content';
+          } else if (kind === 'layout') {
+            if (!(root instanceof HTMLElement)) throw new Error('Missing native layout target');
+            root.style.width =
+              Number.parseFloat(getComputedStyle(root).width) + 1 / devicePixelRatio + 'px';
+          } else throw new Error('Unknown mutation control');
+          return { kind };
+        }, kind);
+        const after = await readPublicViewportCaptureState(frame, header);
+        report['mutation'] = mutation;
+        report['mutationAfter'] = after;
+        expect(after.fingerprints.geometry).not.toBe(before.fingerprints.geometry);
+        if (['path', 'circle', 'rect'].includes(kind)) {
+          expect(after.frame).toEqual(before.frame);
+          const index = ['path', 'circle', 'rect'].indexOf(kind);
+          expect(after.svgGeometry[index]!.local).toEqual(before.svgGeometry[index]!.local);
+          expect(after.svgGeometry[index]!.matrix.f).not.toBe(before.svgGeometry[index]!.matrix.f);
+          expect(after.svgGeometry[index]!.rect.y).not.toBe(before.svgGeometry[index]!.rect.y);
+        }
+        if (kind === 'text')
+          expect(after.fingerprints.identity).not.toBe(before.fingerprints.identity);
+        if (kind === 'layout') expect(after.frame.rect.width).not.toBe(before.frame.rect.width);
+        expect(() => assertPublicViewportCaptureStateEqual(before, after)).toThrow(
+          'Viewport capture state changed',
+        );
+      });
+    },
+  );
+}
+
+test('viewport SVG geometry refuses a degenerate native matrix', async ({
+  browser,
+  browserName,
+}, testInfo) => {
+  test.setTimeout(30_000);
+  expect(browserName).toBe('chromium');
+  await controlledContext(browser, testInfo, async (page, report) => {
+    const frame = page.getByRole('figure', { name: 'Viewport strip fixture' });
+    const header = page.getByRole('banner', { name: 'Capture header' });
+    await frame.evaluate(
+      (root, fixture) => root.insertAdjacentHTML('beforeend', fixture),
+      localSvgFixture,
+    );
+    report['beforeDegenerate'] = await readPublicViewportCaptureState(frame, header);
+    const native = await page.getByTestId('capture-svg-path').evaluate((shape) => {
+      if (!(shape instanceof SVGGeometryElement))
+        throw new Error('Missing degenerate native shape');
+      shape.setAttribute('transform', 'scale(0)');
+      const matrix = shape.getScreenCTM();
+      if (!matrix) throw new Error('Missing actual native matrix');
+      return { determinant: matrix.a * matrix.d - matrix.b * matrix.c, is2D: matrix.is2D };
+    });
+    report['degenerateNative'] = native;
+    expect(native.determinant).toBe(0);
+    await expect(readPublicViewportCaptureState(frame, header)).rejects.toThrow(
+      'unmeasured local box or affine matrix',
+    );
+  });
+});
+
+const boxFreeFixture =
+  '<div data-testid="capture-box-free" style="display:contents"><span data-testid="capture-box-free-child" style="position:absolute;left:32px;top:220px">Painted child</span></div>';
+
+test('viewport strips retain box-free wrappers and their painted children', async ({
+  browser,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await controlledContext(browser, testInfo, async (page, report, images) => {
+    const frame = page.getByRole('figure', { name: 'Viewport strip fixture' });
+    const header = page.getByRole('banner', { name: 'Capture header' });
+    await frame.evaluate(
+      (root, fixture) => root.insertAdjacentHTML('beforeend', fixture),
+      boxFreeFixture,
+    );
+    const native = await page.getByTestId('capture-box-free').evaluate((element) => ({
+      boxes: element.getClientRects().length,
+      rect: element.getBoundingClientRect().toJSON(),
+    }));
+    report['boxFreeNative'] = native;
+    expect(native.boxes).toBe(0);
+    expect(native.rect).toMatchObject({ x: 0, y: 0, width: 0, height: 0 });
+    const capture = await capturePublicViewportStrips(page, frame, {
+      stickyHeader: header,
+      bounds: 'union',
+      sourceFiles,
+    });
+    report['boxFreeCapture'] = capture.evidence;
+    for (const image of capture.images)
+      images.push({ name: `box-free-strip-${image.index}`, bytes: image.bytes });
+    assertPublicViewportCapture(capture);
+    for (const strip of capture.evidence.strips)
+      expect(strip.before.fingerprints).toEqual(capture.evidence.before.fingerprints);
+    expect(capture.evidence.restored).toBe(true);
+  });
+});
+
+test('viewport geometry detects a painted child moving inside a box-free wrapper', async ({
+  browser,
+}, testInfo) => {
+  test.setTimeout(30_000);
+  await controlledContext(browser, testInfo, async (page, report) => {
+    const frame = page.getByRole('figure', { name: 'Viewport strip fixture' });
+    const header = page.getByRole('banner', { name: 'Capture header' });
+    await frame.evaluate(
+      (root, fixture) => root.insertAdjacentHTML('beforeend', fixture),
+      boxFreeFixture,
+    );
+    const before = await readPublicViewportCaptureState(frame, header);
+    await page.evaluate(() => {
+      const style = document.createElement('style');
+      style.textContent =
+        '[data-testid="capture-box-free-child"] { transform: translateY(' +
+        1 / devicePixelRatio +
+        'px); }';
+      document.head.append(style);
+    });
+    const after = await readPublicViewportCaptureState(frame, header);
+    report['boxFreeMovement'] = { before, after };
+    expect(after.frame).toEqual(before.frame);
+    expect(after.fingerprints.identity).toBe(before.fingerprints.identity);
+    expect(after.fingerprints.geometry).not.toBe(before.fingerprints.geometry);
+    expect(() => assertPublicViewportCaptureStateEqual(before, after)).toThrow(
+      'Viewport capture state changed',
+    );
+  });
+});

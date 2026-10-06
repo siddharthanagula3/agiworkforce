@@ -130,11 +130,91 @@ function readNativeCaptureState(
     before: stylesOf(element, '::before'),
     after: stylesOf(element, '::after'),
   }));
-  const geometry = elements.map((element) => ({
-    rect: rectOf(element.getBoundingClientRect()),
-    client: [element.clientWidth, element.clientHeight],
-    scroll: [element.scrollLeft, element.scrollTop, element.scrollWidth, element.scrollHeight],
-  }));
+  const hasCssBoxes = elements.map((element) => element.getClientRects().length > 0);
+  const rawRects = elements.map((element, index) => {
+    const rect = element.getBoundingClientRect();
+    return hasCssBoxes[index]
+      ? rectOf(rect)
+      : { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  });
+  const svgGeometry: {
+    index: number;
+    rawRect: ReturnType<typeof rectOf>;
+    local: ReturnType<typeof rectOf>;
+    matrix: { a: number; b: number; c: number; d: number; e: number; f: number };
+    rect: ReturnType<typeof rectOf>;
+  }[] = [];
+  const geometry = elements.map((element, index) => {
+    let rect = rawRects[index]!;
+    let svg: Pick<(typeof svgGeometry)[number], 'local' | 'matrix'> | null = null;
+    if (element instanceof SVGGeometryElement) {
+      for (let parent: Element | null = element; parent; parent = parent.parentElement) {
+        const css = getComputedStyle(parent);
+        if (
+          css.perspective !== 'none' ||
+          (css.transform !== 'none' && !new DOMMatrixReadOnly(css.transform).is2D)
+        )
+          throw new Error('Capture SVG geometry has an unsupported non-affine transform');
+      }
+      const box = element.getBBox();
+      const native = element.getScreenCTM();
+      const determinant = native ? native.a * native.d - native.b * native.c : NaN;
+      if (
+        !native ||
+        ![
+          box.x,
+          box.y,
+          box.width,
+          box.height,
+          native.a,
+          native.b,
+          native.c,
+          native.d,
+          native.e,
+          native.f,
+        ].every(Number.isFinite) ||
+        box.width < 0 ||
+        box.height < 0 ||
+        !Number.isFinite(determinant) ||
+        determinant === 0
+      )
+        throw new Error('Capture SVG geometry has an unmeasured local box or affine matrix');
+      const local = { x: box.x, y: box.y, width: box.width, height: box.height };
+      const matrix = {
+        a: native.a,
+        b: native.b,
+        c: native.c,
+        d: native.d,
+        e: native.e + scrollX,
+        f: native.f + scrollY,
+      };
+      const corners = [
+        [box.x, box.y],
+        [box.x + box.width, box.y],
+        [box.x, box.y + box.height],
+        [box.x + box.width, box.y + box.height],
+      ].map(([x, y]) => ({
+        x: matrix.a * x! + matrix.c * y! + matrix.e,
+        y: matrix.b * x! + matrix.d * y! + matrix.f,
+      }));
+      const left = Math.min(...corners.map(({ x }) => x));
+      const top = Math.min(...corners.map(({ y }) => y));
+      const right = Math.max(...corners.map(({ x }) => x));
+      const bottom = Math.max(...corners.map(({ y }) => y));
+      rect = { x: left, y: top, width: right - left, height: bottom - top };
+      if (![...Object.values(matrix), ...Object.values(rect)].every(Number.isFinite))
+        throw new Error('Capture SVG geometry has non-finite document bounds');
+      svg = { local, matrix };
+      svgGeometry.push({ index, rawRect: rawRects[index]!, local, matrix, rect });
+    }
+    return {
+      rect,
+      svg,
+      hasCssBoxes: hasCssBoxes[index],
+      client: [element.clientWidth, element.clientHeight],
+      scroll: [element.scrollLeft, element.scrollTop, element.scrollWidth, element.scrollHeight],
+    };
+  });
   const text = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
@@ -145,11 +225,9 @@ function readNativeCaptureState(
     text.push({ text: node.data, rects: [...range.getClientRects()].map(rectOf) });
   }
   const rect = rectOf(root.getBoundingClientRect());
-  const boxes = [
-    rect,
-    ...geometry.map((entry) => entry.rect),
-    ...text.flatMap((entry) => entry.rects),
-  ].filter((box) => box.width > 0 && box.height > 0);
+  const boxes = [rect, ...rawRects, ...text.flatMap((entry) => entry.rects)].filter(
+    (box) => box.width > 0 && box.height > 0,
+  );
   const left = Math.min(...boxes.map((box) => box.x));
   const top = Math.min(...boxes.map((box) => box.y));
   const right = Math.max(...boxes.map((box) => box.x + box.width));
@@ -196,6 +274,7 @@ function readNativeCaptureState(
       identity,
       paint,
       geometry,
+      svgGeometry,
       text,
       ancestors,
     },
@@ -214,11 +293,21 @@ async function readState(handle: CaptureHandle, header: CaptureHandle | null) {
   if (!material) throw new Error('Capture has no complete snapshot');
   const digest = (value: unknown) =>
     createHash('sha256').update(JSON.stringify(value)).digest('hex');
-  const { identity, paint, geometry, text, ancestors, frame, header: headerRect } = material;
+  const {
+    identity,
+    paint,
+    geometry,
+    svgGeometry,
+    text,
+    ancestors,
+    frame,
+    header: headerRect,
+  } = material;
   return {
     ...state,
     frame,
     header: headerRect,
+    svgGeometry,
     ancestorAttributes: ancestors.map(({ tag, attributes }) => ({ tag, attributes })),
     fingerprints: {
       identity: digest({ identity, text: text.map((entry) => entry.text) }),
@@ -539,6 +628,7 @@ export async function capturePublicViewportStrips(
       failures: [],
       limits: [
         'Original viewport PNGs cover document bounds; they are not stitched or composited.',
+        'SVGGeometryElement fingerprints use native local boxes and affine document matrices; raw shape rectangles remain diagnostic and still determine the unrounded target union.',
         'Native controls, focusable and editable elements and live surfaces are rejected; only static frames are supported.',
         'Only the supplied header is excluded; other overlays, internal scroll contents and glyph fallback are not certified.',
         'Only listed source files and bounded state samples are proven stable; timed-out native work requires caller context cleanup.',
