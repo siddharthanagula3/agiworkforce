@@ -1,3 +1,30 @@
+[data-design='agi'] .agi-ds-bento-visual:has(> .agi-agent-responsive) {
+  padding-inline: var(--space-2);
+}
+
+[data-design='agi']
+  .agi-ds-scrollfeatures-stage:has(
+    > .agi-ds-scrollfeature-visual[data-active] > .agi-agent-responsive
+  ) {
+  min-block-size: 0;
+}
+
+[data-design='agi']
+  .agi-ds-scrollfeatures-stage:has(
+    > .agi-ds-scrollfeature-visual[data-active] > .agi-agent-responsive
+  )
+  > .agi-ds-scrollfeature-visual:not([data-active]) {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+}
+
+[data-design='agi']
+  .agi-ds-scrollfeatures-stage
+  .agi-ds-scrollfeature-visual[data-active]:has(> .agi-agent-responsive) {
+  pointer-events: auto;
+}
+
 [data-design='agi'] figure.agi-dev.agi-agent-responsive[data-geometry] {
   inline-size: 100%;
   min-inline-size: 0;
