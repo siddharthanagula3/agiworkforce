@@ -19,7 +19,7 @@ const callers = [
   {
     name: 'home',
     path: '/',
-    selector: `main .agi-fl-surface-panel[data-state="active"] ${figure}`,
+    selector: `main [role="group"][aria-label="The six surfaces"] ${figure}`,
     title: 'example.ts · AGI in VS Code',
     badge: 'VS Code',
     widths: [320, 390, 1440],
@@ -154,19 +154,32 @@ for (const caller of callers)
               dark: document.documentElement.classList.contains('dark'),
             })),
           ).toEqual({ theme, scheme: theme, light: theme === 'light', dark: theme === 'dark' });
+          let frameSelector = caller.selector;
+          let expectedFrameCount = 1;
           if (caller.name === 'home') {
-            const tab = page.getByRole('tab', { name: 'AGI in VS Code', exact: true });
-            await expect(tab).toHaveCount(1);
-            await tab.click();
-            await expect(tab).toBeFocused();
-            await expect(tab).toHaveAttribute('aria-selected', 'true');
-            await expect(
-              page.getByRole('tabpanel', { name: 'AGI in VS Code', exact: true }),
-            ).toBeVisible();
+            const deck = page.getByRole('group', { name: 'The six surfaces', exact: true });
+            await expect(deck).toHaveCount(1);
+            const step = deck.getByRole('listitem').filter({
+              has: page.getByRole('link', { name: 'AGI in VS Code', exact: true }),
+            });
+            await expect(step).toHaveCount(1);
+            await step.scrollIntoViewIfNeeded();
+            const pinned = (await deck.getAttribute('data-pinned')) === 'true';
+            if (pinned) await expect(step).toHaveAttribute('data-active', 'true');
+            const marker = await step.getAttribute('data-deck-marker');
+            expect(marker).toMatch(/^\d+$/u);
+            const ownerSelector = pinned
+              ? '.agi-mx-deck-stage .agi-mx-deck-card[data-active="true"]'
+              : `[data-deck-marker="${marker}"] .agi-mx-deck-inline`;
+            const owner = deck.locator(ownerSelector);
+            await expect(owner).toHaveCount(1);
+            frameSelector = `main [role="group"][aria-label="The six surfaces"] ${ownerSelector} ${figure}`;
+            expectedFrameCount = pinned ? 1 : 2;
+            evidence['homeSelection'] = { surface: 'AGI in VS Code', pinned, marker };
           }
-          const frame = page.locator(caller.selector);
+          const frame = page.locator(frameSelector);
           await expect(frame).toHaveCount(1);
-          await expect(page.locator(`main ${figure}`)).toHaveCount(1);
+          await expect(page.locator(`main ${figure}`)).toHaveCount(expectedFrameCount);
           await expect(frame).toHaveAttribute('aria-label', 'AGI VS Code extension interface');
           await frame.scrollIntoViewIfNeeded();
           await expect(frame).toBeVisible();
@@ -215,7 +228,7 @@ for (const caller of callers)
             const report = await page.evaluate(scanPublicTypography, {
               pageType: 'marketing' as const,
               pathname: caller.path,
-              scopeSelector: `${caller.selector} ${part}`,
+              scopeSelector: `${frameSelector} ${part}`,
             });
             partitions.push(report);
             assertText(report, before.box, minimum);
@@ -226,7 +239,7 @@ for (const caller of callers)
             ).toBeGreaterThanOrEqual(17);
           evidence['partitions'] = partitions;
           const code = frame.locator('.agi-ed-editor');
-          const codeSelector = `${caller.selector} .agi-ed-editor`;
+          const codeSelector = `${frameSelector} .agi-ed-editor`;
           const complete = await measurePublicTypographyWithScroll(page, {
             pageType: 'marketing',
             pathname: caller.path,
@@ -339,7 +352,7 @@ for (const caller of callers)
               await page.evaluate(scanPublicTypography, {
                 pageType: 'marketing' as const,
                 pathname: caller.path,
-                scopeSelector: `${caller.selector} ${part}`,
+                scopeSelector: `${frameSelector} ${part}`,
               }),
               after.box,
               minimum,

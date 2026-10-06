@@ -272,27 +272,30 @@ for (const example of examples) {
           });
           evidence['theme'] = themeReading;
           const selector = 'figure.agi-dev[data-device="' + example.kind + '"]';
+          let expectedFrameCount = 1;
           if (example.path === '/') {
-            if (example.kind === 'desktop') {
-              const other = page.getByRole('tab', { name: 'AGI in Chrome', exact: true });
-              await expect(other).toHaveCount(1);
-              await other.click();
-              await expect(other).toHaveAttribute('aria-selected', 'true');
-            }
-            const tab = page.getByRole('tab', { name: example.tab, exact: true });
-            await expect(tab).toHaveCount(1);
-            await tab.click();
-            await expect(tab).toHaveAttribute('aria-selected', 'true');
-            const panel = page.getByRole('tabpanel', { name: example.tab, exact: true });
-            await expect(panel).toHaveCount(1);
-            await expect(panel).toBeVisible();
-            frame = panel.locator(selector);
+            const deck = page.getByRole('group', { name: 'The six surfaces', exact: true });
+            await expect(deck).toHaveCount(1);
+            const step = deck.getByRole('listitem').filter({
+              has: page.getByRole('link', { name: example.tab, exact: true }),
+            });
+            await expect(step).toHaveCount(1);
+            await step.scrollIntoViewIfNeeded();
+            const pinned = (await deck.getAttribute('data-pinned')) === 'true';
+            if (pinned) await expect(step).toHaveAttribute('data-active', 'true');
+            const owner = pinned
+              ? deck.locator('.agi-mx-deck-stage .agi-mx-deck-card[data-active="true"]')
+              : step.locator('.agi-mx-deck-inline');
+            await expect(owner).toHaveCount(1);
+            frame = owner.locator(selector);
+            expectedFrameCount = pinned ? 1 : 2;
+            evidence['homeSelection'] = { surface: example.tab, pinned };
           } else {
             const hero = page.getByRole('region', { name: 'AGI Desktop', exact: true });
             await expect(hero).toHaveCount(1);
             frame = hero.locator(selector);
           }
-          await expect(page.getByRole('main').locator(selector)).toHaveCount(1);
+          await expect(page.getByRole('main').locator(selector)).toHaveCount(expectedFrameCount);
           await expect(frame).toHaveCount(1);
           await frame.scrollIntoViewIfNeeded();
           await expect(frame).toBeVisible();

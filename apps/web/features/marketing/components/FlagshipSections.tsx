@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { ProductFrame, type ProductFrameImage, type ProductFrameVariant } from './ProductFrame';
 import { Reveal } from './Reveal';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
+import { ScrollDeck } from './motion/ScrollDeck';
 import { Stage } from './motion/Stage';
 
 const TICKER_REPEATS = 6;
@@ -191,18 +191,21 @@ export function LandingSurfaceIndex({
       </h2>
       <p className="agi-fl-section-lede">{lede}</p>
 
-      <Tabs defaultValue={items[0]?.index} className="agi-fl-surface-explorer">
-        <TabsList className="agi-fl-surface-tabs" aria-label={SURFACE_DECK_LABEL}>
-          {items.map((item) => (
-            <TabsTrigger key={item.index} value={item.index} className="agi-fl-surface-tab">
-              {item.name}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {items.map((item) => (
-          <TabsContent key={item.index} value={item.index} className="agi-fl-surface-panel">
+      <ScrollDeck
+        label={SURFACE_DECK_LABEL}
+        items={items.map((item) => ({
+          id: item.index,
+          copy: (
             <div className="agi-fl-surface-copy">
-              <h3 className="agi-fl-surface-name">{item.tagline}</h3>
+              <span className="agi-fl-surface-num" aria-hidden="true">
+                {item.index}
+              </span>
+              <h3 className="agi-fl-surface-name">
+                <Link href={item.href} className="agi-fl-surface-link">
+                  {item.name}
+                </Link>
+              </h3>
+              <p className="agi-fl-surface-tagline">{item.tagline}</p>
               <p className="agi-fl-surface-body">{item.body}</p>
               <ul className="agi-fl-surface-caps">
                 {item.capabilities.map((cap) => (
@@ -213,24 +216,25 @@ export function LandingSurfaceIndex({
                 <span>{item.platforms}</span>
                 <span className="agi-fl-surface-status">{item.status}</span>
               </p>
-              <Link href={item.href} className="agi-fl-surface-action">
-                Explore {item.name} <span aria-hidden="true">→</span>
-              </Link>
             </div>
-            <div className="agi-fl-surface-visual">
-              {item.visual ??
-                (item.frame ? (
-                  <ProductFrame
-                    variant={item.frame.variant}
-                    title={item.frame.title}
-                    badge={item.frame.badge}
-                    image={item.frame.image}
-                  />
-                ) : null)}
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+          ),
+          visual: (
+            <Stage depthPx={FRAME_DEPTH_PX}>
+              <div className="agi-fl-surface-visual">
+                {item.visual ??
+                  (item.frame ? (
+                    <ProductFrame
+                      variant={item.frame.variant}
+                      title={item.frame.title}
+                      badge={item.frame.badge}
+                      image={item.frame.image}
+                    />
+                  ) : null)}
+              </div>
+            </Stage>
+          ),
+        }))}
+      />
     </section>
   );
 }
