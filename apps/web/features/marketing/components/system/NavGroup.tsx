@@ -1,14 +1,24 @@
 'use client';
 
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import type { NavGroupDefinition } from './nav';
 
 const CLOSE_DELAY_MS = 140;
 
 export function NavGroup({ group }: { group: NavGroupDefinition }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState<'hover' | 'activated' | null>(null);
+  const open = openState !== null;
   const pathname = usePathname() ?? '';
   const current =
     group.items.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`)) ||
@@ -26,12 +36,12 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
 
   const scheduleClose = () => {
     cancelClose();
-    closeTimer.current = window.setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
+    closeTimer.current = window.setTimeout(() => setOpenState(null), CLOSE_DELAY_MS);
   };
 
   const onBlur = (event: FocusEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      setOpen(false);
+      setOpenState(null);
     }
   };
 
@@ -40,7 +50,7 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
     if (!open) return;
     const close = () => {
       cancelClose();
-      setOpen(false);
+      setOpenState(null);
     };
     window.addEventListener('scroll', close, { passive: true });
     return () => window.removeEventListener('scroll', close);
@@ -49,9 +59,18 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && open) {
       event.preventDefault();
-      setOpen(false);
+      setOpenState(null);
       triggerRef.current?.focus();
     }
+  };
+
+  const onTriggerClick = (event: MouseEvent<HTMLButtonElement>) => {
+    cancelClose();
+    const pointer = event.detail > 0;
+    setOpenState((state) => {
+      if (pointer && state === 'hover') return 'activated';
+      return state === null ? 'activated' : null;
+    });
   };
 
   return (
@@ -61,7 +80,7 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
       data-current={current ? 'true' : undefined}
       onMouseEnter={() => {
         cancelClose();
-        setOpen(true);
+        setOpenState((state) => state ?? 'hover');
       }}
       onMouseLeave={scheduleClose}
       onFocus={cancelClose}
@@ -74,7 +93,7 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
         className="agi-ds-navlink agi-ds-navgroup-trigger"
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => setOpen((value) => !value)}
+        onClick={onTriggerClick}
       >
         {group.label}
         <span className="agi-ds-navgroup-chevron" aria-hidden="true" />
@@ -96,7 +115,7 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
                     ? 'page'
                     : undefined
                 }
-                onClick={() => setOpen(false)}
+                onClick={() => setOpenState(null)}
               >
                 <span className="agi-ds-navpanel-title">{item.label}</span>
                 {item.description ? (
@@ -111,9 +130,10 @@ export function NavGroup({ group }: { group: NavGroupDefinition }) {
             href={group.footer.href}
             className="agi-ds-navpanel-footer"
             aria-current={pathname === group.footer.href ? 'page' : undefined}
-            onClick={() => setOpen(false)}
+            onClick={() => setOpenState(null)}
           >
-            {group.footer.label} →
+            {group.footer.label}
+            <ArrowRight className="agi-ds-navpanel-arrow" aria-hidden="true" focusable="false" />
           </Link>
         ) : null}
       </div>

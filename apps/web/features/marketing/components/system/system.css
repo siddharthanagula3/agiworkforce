@@ -2536,29 +2536,37 @@
   background: var(--agi-ground-2, var(--agi-console-tint));
 }
 [data-design='agi'] .agi-ds-navpanel-title {
-  font-size: 0.9rem;
+  font-size: var(--public-body-size);
   font-weight: 600;
   color: var(--agi-ink);
 }
 [data-design='agi'] .agi-ds-navpanel-desc {
-  font-size: 0.8rem;
+  font-size: var(--public-body-size);
   line-height: 1.35;
-  color: var(--agi-ink-quiet, var(--agi-ink-3));
+  color: var(--public-caption-ink);
 }
 [data-design='agi'] .agi-ds-navpanel-footer {
   display: block;
   margin: 0.4rem 0 0;
   padding: 0.6rem 0.75rem 0.35rem;
   border-top: 1px solid var(--agi-rule);
-  font-family: var(--agi-font-mono);
-  font-size: 0.72rem;
+  font-family: var(--public-label-font);
+  font-size: var(--public-label-size);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--agi-accent-text);
+  color: var(--public-label-ink);
   text-decoration: none;
 }
 [data-design='agi'] .agi-ds-navlink--quiet {
   color: var(--agi-ink-quiet, var(--agi-ink-3));
+}
+
+[data-design='agi'] .agi-ds-navpanel-arrow {
+  display: inline;
+  inline-size: var(--public-label-size);
+  block-size: var(--public-label-size);
+  margin-inline-start: var(--space-2);
+  vertical-align: middle;
 }
 
 [data-design='agi'] .agi-ds-timeline {
