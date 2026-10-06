@@ -5,14 +5,11 @@
     0 var(--space-5) var(--space-8) var(--agi-shadow);
   inline-size: 100%;
   min-inline-size: 0;
-  max-inline-size: 100%;
   margin-block: 0;
   margin-inline: auto;
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-dev:is(.agi-desktop-responsive, .agi-chrome-responsive) .agi-dev-shell {
@@ -39,7 +36,7 @@
   block-size: auto;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-gap);
   border-start-start-radius: var(--public-mockup-radius);
   border-start-end-radius: var(--public-mockup-radius);
@@ -55,7 +52,7 @@
 }
 
 [data-design='agi'] .agi-desktop-responsive .agi-dev-title {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
   letter-spacing: var(--type-code-tracking);
 }
 
@@ -86,8 +83,8 @@
   flex-direction: row;
   flex-wrap: wrap;
   align-content: start;
-  gap: var(--public-mockup-group-gap);
-  padding: var(--public-mockup-padding);
+  gap: var(--public-mockup-gap);
+  padding: var(--public-mockup-group-gap);
   border: 0;
   overflow: visible;
 }
@@ -106,11 +103,12 @@
   gap: var(--public-mockup-gap);
   min-block-size: var(--public-mockup-control-size);
   font-size: var(--public-mockup-text-control);
+  line-height: var(--public-mockup-leading-control);
   color: var(--agi-ink);
 }
 
 [data-design='agi'] .agi-desktop-responsive .agi-desk-new {
-  padding: var(--public-mockup-gap);
+  padding: var(--public-mockup-gap-sm) var(--public-mockup-gap);
   border-radius: var(--public-mockup-control-radius);
 }
 
@@ -135,15 +133,15 @@
 [data-design='agi'] .agi-chrome-responsive .agi-cr-page {
   flex: 999 1 var(--public-mockup-chat-basis);
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
-  padding: var(--public-mockup-padding);
+  gap: var(--public-mockup-gap);
+  padding: var(--public-mockup-group-gap);
   border: 0;
   background: var(--agi-bg);
   overflow: visible;
 }
 
 [data-design='agi'] .agi-desktop-responsive :is(.agi-mk-thread, .agi-mk-agi) {
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   overflow: visible;
 }
 
@@ -160,9 +158,9 @@
 }
 
 [data-design='agi'] .agi-desktop-responsive .agi-mk-composer {
-  margin-block-start: var(--public-mockup-group-gap);
+  margin-block-start: var(--public-mockup-gap);
   gap: var(--public-mockup-gap);
-  padding: var(--public-mockup-group-gap);
+  padding: var(--public-mockup-gap);
   border-radius: var(--public-mockup-control-radius);
   box-shadow: none;
 }
@@ -173,7 +171,7 @@
     .agi-chrome-responsive .agi-dev-panelcomposer-row
   ) {
   gap: var(--public-mockup-gap);
-  align-items: start;
+  align-items: center;
 }
 
 [data-design='agi'] .agi-desktop-responsive .agi-mk-ghost {
@@ -188,7 +186,7 @@
 
 [data-design='agi'] .agi-desktop-responsive .agi-mk-seg {
   flex-wrap: wrap;
-  padding: var(--public-mockup-gap-sm);
+  padding: var(--public-mockup-border);
 }
 
 [data-design='agi'] .agi-desktop-responsive :is(.agi-mk-seg span, .agi-mk-chip--model) {
@@ -213,7 +211,7 @@
   flex-shrink: 0;
   inline-size: var(--public-mockup-control-size);
   block-size: var(--public-mockup-control-size);
-  border-radius: var(--public-mockup-control-radius);
+  border-radius: var(--corner-pill);
 }
 
 [data-design='agi'] :is(.agi-desktop-responsive, .agi-chrome-responsive) .agi-device-icon {
@@ -223,7 +221,7 @@
 }
 
 [data-design='agi'] .agi-chrome-responsive .agi-cr-tabs {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
   align-self: auto;
   flex-wrap: wrap;
   align-items: start;
@@ -232,10 +230,10 @@
 }
 
 [data-design='agi'] .agi-chrome-responsive .agi-cr-tab {
-  flex: 1 1 var(--public-mockup-summary-basis);
+  flex: 0 1 auto;
   min-inline-size: 0;
   min-block-size: var(--public-mockup-control-size);
-  padding: var(--public-mockup-gap);
+  padding: var(--public-mockup-gap-sm) var(--public-mockup-gap);
   gap: var(--public-mockup-gap-sm);
   border-radius: var(--public-mockup-cell-radius);
 }
@@ -260,7 +258,7 @@
   flex-wrap: wrap;
   block-size: auto;
   gap: var(--public-mockup-gap);
-  padding: var(--public-mockup-gap);
+  padding: var(--public-mockup-gap-sm) var(--public-mockup-gap);
 }
 
 [data-design='agi'] .agi-chrome-responsive .agi-cr-nav {
@@ -272,8 +270,9 @@
 }
 
 [data-design='agi'] .agi-chrome-responsive .agi-cr-url {
-  flex: 1 1 100%;
-  padding-block: var(--public-mockup-gap);
+  flex: 1 1 auto;
+  min-inline-size: min-content;
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-gap);
   gap: var(--public-mockup-gap-sm);
   overflow: visible;

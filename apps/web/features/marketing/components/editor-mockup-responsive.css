@@ -7,14 +7,11 @@
 [data-design='agi'] figure.agi-dev.agi-editor-responsive[data-geometry] {
   inline-size: 100%;
   min-inline-size: 0;
-  max-inline-size: calc(var(--dev-w) * 1px);
   margin-block: 0;
   margin-inline: auto;
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-editor-responsive .agi-dev-shell {
@@ -30,7 +27,7 @@
   block-size: auto;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-padding);
   border-start-start-radius: var(--public-mockup-radius);
   border-start-end-radius: var(--public-mockup-radius);
@@ -78,13 +75,13 @@
 }
 
 [data-design='agi'] .agi-editor-responsive .agi-ed-activity {
-  flex: 1 0 100%;
-  flex-flow: row wrap;
+  flex: 0 0 auto;
+  flex-direction: column;
   justify-content: flex-start;
   gap: var(--public-mockup-gap-sm);
   padding: var(--public-mockup-gap);
   border: 0;
-  border-block-end: var(--public-mockup-border) solid var(--agi-rule);
+  border-inline-end: var(--public-mockup-border) solid var(--agi-rule);
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
@@ -93,6 +90,7 @@
 
 [data-design='agi'] .agi-editor-responsive .agi-editor-tools {
   display: inline-flex;
+  flex-direction: column;
   flex-wrap: nowrap;
   gap: var(--public-mockup-gap-sm);
 }
@@ -106,7 +104,7 @@
 }
 
 [data-design='agi'] .agi-editor-responsive .agi-ed-editor {
-  flex: 2 1 var(--public-mockup-chat-basis);
+  flex: 2 1 var(--public-mockup-sidebar-basis);
   min-inline-size: 0;
   padding-block: var(--public-mockup-group-gap);
   padding-inline: 0;
@@ -133,7 +131,7 @@
 [data-design='agi'] .agi-editor-responsive .agi-ed-row {
   grid-template-columns: var(--public-mockup-control-size) max-content;
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap-sm);
+  padding-block: var(--public-mockup-border);
   padding-inline: 0;
 }
 
@@ -159,7 +157,7 @@
   block-size: auto;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-padding);
 }
 
@@ -179,7 +177,7 @@
   flex: none;
   min-block-size: 0;
   gap: var(--public-mockup-group-gap);
-  padding: var(--public-mockup-padding);
+  padding: var(--public-mockup-group-gap);
   overflow: visible;
 }
 
@@ -231,7 +229,7 @@
   display: inline-flex;
   align-items: center;
   min-block-size: var(--public-mockup-control-size);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-group-gap);
   border-radius: var(--public-mockup-control-radius);
   white-space: normal;
@@ -241,7 +239,7 @@
   flex-wrap: wrap;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-padding);
 }
 

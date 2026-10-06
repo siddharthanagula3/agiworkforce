@@ -13,8 +13,6 @@
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-console-responsive .agi-dev-shell {
@@ -30,7 +28,7 @@
   block-size: auto;
   min-block-size: var(--public-mockup-control-size);
   gap: var(--public-mockup-gap);
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-padding);
   border-start-start-radius: var(--public-mockup-radius);
   border-start-end-radius: var(--public-mockup-radius);
@@ -106,7 +104,7 @@
   flex: 3 1 var(--public-mockup-chat-basis);
   min-block-size: 0;
   min-inline-size: 0;
-  gap: var(--public-mockup-group-gap);
+  gap: var(--public-mockup-gap);
   padding: var(--public-mockup-padding);
   overflow: visible;
 }
@@ -216,7 +214,7 @@
 }
 
 [data-design='agi'] .agi-console-responsive .agi-sc-table span {
-  padding-block: var(--public-mockup-gap);
+  padding-block: var(--public-mockup-gap-sm);
   padding-inline: var(--public-mockup-gap);
   white-space: nowrap;
   overflow: visible;
@@ -281,4 +279,20 @@
 
 [data-design='agi'] .agi-console-responsive .agi-sc-bar {
   block-size: var(--public-mockup-gap-sm);
+}
+
+@media (min-width: 768px) {
+  [data-design='agi'] .agi-console-responsive .agi-dev-title {
+    order: 0;
+    flex: 1 1 auto;
+  }
+
+  [data-design='agi'] .agi-console-responsive .agi-sc-rail--nav {
+    flex-flow: column nowrap;
+    gap: var(--public-mockup-gap-sm);
+  }
+
+  [data-design='agi'] .agi-console-responsive .agi-sc-navitem {
+    flex: none;
+  }
 }

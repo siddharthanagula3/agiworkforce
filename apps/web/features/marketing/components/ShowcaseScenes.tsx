@@ -1,4 +1,5 @@
 import './showcase-mockup-responsive.css';
+import './mockup-presentation.css';
 
 type DiffRow = {
   n: number;

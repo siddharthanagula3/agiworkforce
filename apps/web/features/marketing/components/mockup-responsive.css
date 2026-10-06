@@ -1,14 +1,12 @@
 [data-design='agi'] figure.agi-dev.agi-terminal-responsive[data-device='terminal'][data-geometry] {
   inline-size: 100%;
   min-inline-size: 0;
-  max-inline-size: 100%;
+  max-inline-size: calc(var(--dev-w) * 1px);
   margin-block: 0;
   margin-inline: auto;
   font-family: var(--public-mockup-font-code);
   font-size: var(--public-mockup-text-code);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-terminal-responsive .agi-dev-shell {
@@ -103,8 +101,6 @@
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-panel-responsive .agi-dev-shell {
@@ -289,14 +285,12 @@
     0 var(--space-5) var(--space-8) var(--agi-shadow);
   inline-size: 100%;
   min-inline-size: 0;
-  max-inline-size: 100%;
+  max-inline-size: calc(var(--dev-w) * 1px);
   margin-block: 0;
   margin-inline: auto;
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-web-responsive .agi-dev-shell {
@@ -531,7 +525,7 @@
 }
 
 [data-design='agi'] .agi-web-responsive .agi-mk-composer {
-  margin-block-start: 0;
+  margin-block-start: var(--space-5);
   gap: var(--public-mockup-gap);
   padding: var(--public-mockup-group-gap);
   border-radius: var(--public-mockup-control-radius);
@@ -602,8 +596,8 @@
 }
 
 [data-design='agi'] .agi-web-responsive .agi-mk-composer-meta {
-  flex: 1 1 100%;
-  margin-inline-start: 0;
+  flex: 1 1 auto;
+  margin-inline-start: auto;
   white-space: normal;
   overflow: visible;
 }
@@ -635,8 +629,6 @@
   font-family: var(--public-mockup-font-text);
   font-size: var(--public-mockup-text-body);
   line-height: var(--public-mockup-leading-text);
-  -webkit-mask-image: none;
-  mask-image: none;
 }
 
 [data-design='agi'] .agi-dev.agi-phone-responsive .agi-dev-shell {
