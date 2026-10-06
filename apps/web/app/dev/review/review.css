@@ -1,0 +1,78 @@
+[data-public-reference='review'] .agi-review {
+  max-inline-size: var(--public-container-width);
+  margin-inline: auto;
+  padding: var(--public-pagehead-space) var(--space-5);
+}
+
+[data-public-reference='review'] .agi-review p {
+  max-inline-size: var(--public-reading-width);
+  margin-block: var(--space-4);
+  color: var(--public-ink-secondary);
+}
+
+[data-public-reference='review'] .agi-review-section {
+  margin-block-start: var(--public-section-space);
+}
+
+[data-public-reference='review'] .agi-review-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+[data-public-reference='review'] .agi-review-status {
+  font-size: var(--public-text-meta);
+  color: var(--public-ink-secondary);
+}
+
+[data-public-reference='review'] .agi-review-open {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--public-control-touch);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--corner-control);
+  background: var(--public-action-fill);
+  color: var(--public-action-ink);
+  font-size: var(--public-text-control);
+  text-decoration: none;
+  margin-block-end: var(--space-6);
+}
+
+[data-public-reference='review'] .agi-review-captures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  align-items: start;
+}
+
+[data-public-reference='review'] .agi-review-captures figure {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+[data-public-reference='review'] .agi-review-captures img {
+  display: block;
+  inline-size: auto;
+  max-inline-size: 100%;
+  block-size: auto;
+  border: var(--stroke-hairline) solid var(--public-rule);
+  border-radius: var(--corner-panel);
+}
+
+[data-public-reference='review'] .agi-review-captures figcaption {
+  margin-block-start: var(--space-2);
+  font-size: var(--public-text-meta);
+  color: var(--public-ink-secondary);
+}
+
+@media (max-width: 767px) {
+  [data-public-reference='review'] .agi-review {
+    padding-inline: var(--space-4);
+  }
+
+  [data-public-reference='review'] .agi-review-captures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
