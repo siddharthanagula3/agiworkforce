@@ -8,7 +8,6 @@ import {
   Prose,
   Section,
   Stack,
-  StatBand,
   SurfaceStatus,
 } from '@/features/marketing/components/system';
 import { FinalCta } from '@/features/marketing/components/SurfaceSections';
@@ -20,15 +19,7 @@ import {
   ProjectWindow,
   ResearchWindow,
 } from '@/features/marketing/components/FeatureScenes';
-import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
-import {
-  CLI_AVAILABILITY_NOTE,
-  RELEASED_SURFACES,
-  SURFACE_NAMES,
-  SURFACE_STATUS,
-  surfaceCta,
-} from '@/lib/marketing-constants';
-import { joinSurfaceNames } from '@/lib/surface-status';
+import { CLI_AVAILABILITY_NOTE, SURFACE_STATUS, surfaceCta } from '@/lib/marketing-constants';
 import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 
@@ -39,10 +30,6 @@ export const metadata = buildMetadata({
   path: '/web',
 });
 
-const RELEASED_SURFACE_NAMES = joinSurfaceNames(
-  RELEASED_SURFACES.map((surface) => SURFACE_NAMES[surface]),
-);
-const RELEASED_SURFACE_NOUN = RELEASED_SURFACES.length === 1 ? 'surface' : 'surfaces';
 const DESKTOP_CTA = surfaceCta('desktop');
 const FINAL_CTA_BODY = [
   'Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds approved folders, computer use, connectors and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
@@ -53,7 +40,6 @@ const FINAL_CTA_BODY = [
 
 const IDS = {
   hero: 'agi-web-title',
-  numbers: 'agi-web-numbers-title',
   status: 'agi-web-status-title',
   inside: 'agi-web-inside-title',
 } as const;
@@ -86,40 +72,7 @@ export default function WebSurfacePage() {
           </div>
         </section>
 
-        <Section id="numbers" labelledBy={IDS.numbers} size="sm" rule>
-          <h2 className="sr-only" id={IDS.numbers}>
-            AGI Web in numbers
-          </h2>
-          <Stack>
-            <StatBand
-              label="AGI Web in numbers"
-              stats={[
-                {
-                  value: String(CATALOG_SCOPES.managedRosterModels.value),
-                  label: 'models on the managed roster, by plan',
-                },
-                { value: '1', label: 'route: AGI managed cloud' },
-                {
-                  value: String(RELEASED_SURFACES.length),
-                  label: `${RELEASED_SURFACE_NOUN} released: ${RELEASED_SURFACE_NAMES}`,
-                },
-              ]}
-            />
-            <Prose size="sm">
-              Which of the {CATALOG_SCOPES.managedRosterModels.value} each plan includes is on{' '}
-              <Link href="/pricing" className="agi-ds-link">
-                the pricing page
-              </Link>
-              . The wider catalogue is on{' '}
-              <Link href="/providers#definitions" className="agi-ds-link">
-                the providers page
-              </Link>
-              , with what each count means.
-            </Prose>
-          </Stack>
-        </Section>
-
-        <Section id="status" labelledBy={IDS.status} rule>
+        <Section id="status" labelledBy={IDS.status}>
           <Stack gap="loose">
             <h2 className="agi-ds-h2" id={IDS.status}>
               What is live today.

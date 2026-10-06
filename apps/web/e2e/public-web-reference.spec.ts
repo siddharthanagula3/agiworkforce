@@ -620,7 +620,7 @@ for (const width of widths) {
         });
         expect(before.documentOverflow).toBeLessThanOrEqual(0);
         const prose = page
-          .getByRole('region', { name: 'AGI Web in numbers', exact: true })
+          .getByRole('region', { name: 'What is live today.', exact: true })
           .locator('.agi-ds-prose');
         evidence['beforeTypography'] = await typography(
           page,
@@ -798,7 +798,7 @@ for (const width of widths) {
         evidence['returnedTypographyBefore'] = await typography(
           page,
           page
-            .getByRole('region', { name: 'AGI Web in numbers', exact: true })
+            .getByRole('region', { name: 'What is live today.', exact: true })
             .locator('.agi-ds-prose'),
           'web-return-prose-' + width + '-' + theme,
           '/web',
@@ -809,7 +809,7 @@ for (const width of widths) {
         evidence['returnedTypographyAfter'] = await typography(
           page,
           page
-            .getByRole('region', { name: 'AGI Web in numbers', exact: true })
+            .getByRole('region', { name: 'What is live today.', exact: true })
             .locator('.agi-ds-prose'),
           'web-return-prose-after-' + width + '-' + theme,
           '/web',

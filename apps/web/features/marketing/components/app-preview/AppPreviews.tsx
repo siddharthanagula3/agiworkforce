@@ -75,15 +75,17 @@ export const PREVIEW_GEOMETRY: Record<PreviewKind, PreviewGeometry> = {
   phone: { frame: 270, width: 390, height: 844 },
 };
 
-function PreviewRoot({
+export function PreviewRoot({
   kind,
   label,
   className,
+  scene,
   children,
 }: {
   kind: PreviewKind;
   label: string;
   className?: string;
+  scene?: string;
   children: ReactNode;
 }) {
   const geometry = PREVIEW_GEOMETRY[kind];
@@ -100,6 +102,7 @@ function PreviewRoot({
         .join(' ')}
       style={style}
       data-device={kind}
+      data-scene={scene}
       data-geometry={`${geometry.width}x${geometry.height}`}
       aria-label={label}
     >
@@ -110,7 +113,7 @@ function PreviewRoot({
   );
 }
 
-function TrafficLights() {
+export function TrafficLights() {
   return (
     <span className="agi-app-lights">
       <i />
@@ -124,14 +127,16 @@ const SIDEBAR_DESTINATIONS = APP_NAV_DESTINATIONS.filter(
   (item) => !item.adminOnly && !item.requiresHealthSpace && !item.feature,
 );
 
-function AppSidebar({
+export function AppSidebar({
   chats,
-  macChrome,
-  modeSwitch,
+  macChrome = false,
+  modeSwitch = false,
+  activeId = SIDEBAR_DESTINATIONS[0]?.id,
 }: {
   chats: readonly string[];
-  macChrome: boolean;
-  modeSwitch: boolean;
+  macChrome?: boolean;
+  modeSwitch?: boolean;
+  activeId?: string;
 }) {
   return (
     <aside className="agi-app-side">
@@ -159,8 +164,8 @@ function AppSidebar({
         <kbd>⇧⌘F</kbd>
       </div>
       <nav className="agi-app-nav">
-        {SIDEBAR_DESTINATIONS.map(({ id, label, icon: Icon }, index) => (
-          <span key={id} className="agi-app-navrow" data-active={index === 0 || undefined}>
+        {SIDEBAR_DESTINATIONS.map(({ id, label, icon: Icon }) => (
+          <span key={id} className="agi-app-navrow" data-active={id === activeId || undefined}>
             <Icon className="agi-app-icon" />
             {label}
           </span>
@@ -175,7 +180,11 @@ function AppSidebar({
           <span className="agi-app-end">({chats.length})</span>
         </span>
         {chats.map((title, index) => (
-          <span key={title} className="agi-app-session" data-active={index === 0 || undefined}>
+          <span
+            key={title}
+            className="agi-app-session"
+            data-active={(index === 0 && activeId === SIDEBAR_DESTINATIONS[0]?.id) || undefined}
+          >
             {title}
           </span>
         ))}
@@ -196,7 +205,7 @@ function AppSidebar({
   );
 }
 
-function ReplyActions() {
+export function ReplyActions() {
   return (
     <span className="agi-app-actions">
       <Copy className="agi-app-icon" />
@@ -209,10 +218,23 @@ function ReplyActions() {
   );
 }
 
-function AppComposer() {
+export function AppComposer({
+  placeholder = 'Ask anything. Type / for commands',
+  draft,
+  children,
+}: {
+  placeholder?: string;
+  draft?: string;
+  children?: ReactNode;
+}) {
   return (
     <div className="agi-app-composer">
-      <span className="agi-app-placeholder">Ask anything. Type / for commands</span>
+      {children}
+      {draft ? (
+        <span className="agi-app-draft">{draft}</span>
+      ) : (
+        <span className="agi-app-placeholder">{placeholder}</span>
+      )}
       <div className="agi-app-composer-row">
         <Plus className="agi-app-icon agi-app-icon--lg" />
         <span className="agi-app-seg">

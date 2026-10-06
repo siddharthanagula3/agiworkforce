@@ -11,8 +11,6 @@
 .dx-shell {
   display: grid;
   grid-template-columns: var(--dx-side) minmax(0, 1fr);
-  max-width: 80rem;
-  margin-inline: auto;
   padding-inline: 1.5rem;
 }
 
