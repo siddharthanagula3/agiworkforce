@@ -30,7 +30,7 @@ export function ProviderGrid({ tiles, label }: { tiles: readonly ProviderTile[];
               : 'Lists its own models'}
           </span>
           {tile.defaultModel ? (
-            <span className="agi-ds-provider-default">{tile.defaultModel}</span>
+            <code className="agi-ds-provider-default">{tile.defaultModel}</code>
           ) : null}
           <span className="agi-ds-provider-foot">
             <span>{KIND_LABEL[tile.kind]}</span>

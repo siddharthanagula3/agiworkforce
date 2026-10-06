@@ -2980,8 +2980,9 @@
 
 [data-design='agi'] .agi-ds-providers {
   display: grid;
-  width: 100%;
-  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  inline-size: 100%;
+  min-inline-size: 0;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--public-provider-card-min)), 1fr));
   gap: var(--agi-space-2);
   margin: 0;
   padding: 0;
@@ -2990,10 +2991,10 @@
 [data-design='agi'] .agi-ds-provider {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  min-width: 0;
+  gap: var(--space-2);
+  min-inline-size: 0;
   padding: var(--agi-space-3);
-  border: 1px solid var(--agi-rule);
+  border: var(--stroke-hairline) solid var(--agi-rule);
   border-radius: var(--corner-surface);
   background: var(--agi-card, var(--agi-ground-2));
   transition: border-color var(--agi-dur-hover) var(--agi-ease-expo);
@@ -3005,13 +3006,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  margin-bottom: 0.5rem;
-  border: 1px solid var(--agi-rule-strong);
+  inline-size: var(--space-6);
+  block-size: var(--space-6);
+  margin-block-end: var(--space-2);
+  border: var(--stroke-hairline) solid var(--agi-rule-strong);
   border-radius: var(--corner-pill);
-  font-family: var(--agi-font-display);
-  font-size: 1rem;
+  font-family: var(--agi-font);
+  font-size: var(--public-body-size);
   font-weight: 600;
   color: var(--agi-ink);
 }
@@ -3021,34 +3022,40 @@
   color: var(--agi-accent-text);
 }
 [data-design='agi'] .agi-ds-provider-name {
-  font-size: 0.95rem;
+  font-family: var(--agi-font);
+  font-size: var(--public-body-size);
   font-weight: 600;
+  line-height: var(--type-body-height);
   color: var(--agi-ink);
+  text-wrap: balance;
 }
 [data-design='agi'] .agi-ds-provider-meta {
-  font-size: var(--agi-text-xs);
+  font-family: var(--agi-font);
+  font-size: var(--public-body-size);
+  line-height: var(--type-body-height);
   color: var(--agi-ink-2);
 }
 [data-design='agi'] .agi-ds-provider-default {
-  overflow: hidden;
-  font-family: var(--agi-font-mono);
-  font-size: 11px;
-  color: var(--agi-ink-quiet, var(--agi-ink-3));
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-family: var(--public-label-font);
+  font-size: var(--public-label-size);
+  line-height: var(--type-body-height);
+  color: var(--agi-ink);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 [data-design='agi'] .agi-ds-provider-foot {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  margin-top: auto;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--agi-rule);
-  font-family: var(--agi-font-mono);
-  font-size: var(--agi-text-xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--agi-ink-faint, var(--agi-ink-3));
+  gap: var(--space-1);
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+  border-block-start: var(--stroke-hairline) solid var(--agi-rule);
+  font-family: var(--agi-font);
+  font-size: var(--public-body-size);
+  line-height: var(--type-body-height);
+  color: var(--agi-ink-2);
+  text-wrap: pretty;
 }
 
 [data-design='agi'] .agi-ds-quote {
