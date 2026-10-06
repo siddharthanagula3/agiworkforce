@@ -113,6 +113,17 @@ export default function PublicPageReview() {
           </div>
         </section>
 
+        <section aria-labelledby="web-reference-title" className="agi-review-section">
+          <div className="agi-review-title-row">
+            <h2 id="web-reference-title">Web</h2>
+            <span className="agi-review-status">Awaiting visual review</span>
+          </div>
+          <p>Proposed neutral light and dark colours for the current Web page.</p>
+          <Link href="/dev/review/web" className="agi-review-open">
+            Open the Web palette reference
+          </Link>
+        </section>
+
         <section aria-labelledby="docs-reference-title" className="agi-review-section">
           <div className="agi-review-title-row">
             <h2 id="docs-reference-title">Documentation article</h2>

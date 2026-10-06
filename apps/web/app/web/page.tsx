@@ -29,6 +29,7 @@ import {
   surfaceCta,
 } from '@/lib/marketing-constants';
 import { joinSurfaceNames } from '@/lib/surface-status';
+import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 
 export const metadata = buildMetadata({
@@ -66,18 +67,10 @@ export default function WebSurfacePage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI Web · {SURFACE_STATUS.web}</p>
-              <h1 id={IDS.hero} className="agi-fl-h1">
-                <span className="agi-fl-h1-line">The whole workspace,</span>{' '}
-                <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">zero install.</em>
-                </span>
+              <div className="agi-fl-eyebrow">AGI Web · {SURFACE_STATUS.web}</div>
+              <h1 id={IDS.hero} className="sr-only">
+                AGI Web
               </h1>
-              <p className="agi-fl-lede">
-                Chat in the browser with every admitted model behind one selector. Projects,
-                artifacts, memory, deep research and agents open from the same composer, and each
-                reply names the model that answered it in its actions menu.
-              </p>
               <div className="agi-fl-cta-row">
                 <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
                   Try AGI Web
@@ -86,13 +79,8 @@ export default function WebSurfacePage() {
                   See every feature
                 </Link>
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
-                <li>Cloud · public alpha</li>
-                <li>Auto · route per message</li>
-                <li>Receipt · when Auto leaves your pin</li>
-              </ul>
             </div>
-            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main">
               <WebWindow />
             </div>
           </div>
@@ -142,6 +130,11 @@ export default function WebSurfacePage() {
               detail={`${SURFACE_STATUS.web}. Hosted chat with projects, artifacts, cited research, memory and account management, in any modern browser.`}
               action={{ label: 'Open AGI Web', href: WEB_ENTRY_HREF }}
             />
+            <Prose size="sm">
+              AGI Web uses managed cloud ({MANAGED_CLOUD_STATUS}). Choose a model; each reply names
+              the model that answered it in its actions menu. Auto shows an inline receipt when it
+              changes your pinned model.
+            </Prose>
           </Stack>
         </Section>
 
@@ -165,8 +158,8 @@ export default function WebSurfacePage() {
                 },
                 {
                   eyebrow: 'Projects',
-                  title: 'Instructions and files that follow every prompt',
-                  body: 'A project rebuilds its own context into each request.',
+                  title: 'Project instructions and selected references',
+                  body: 'Keep instructions and reference material with a project.',
                   href: '/features/projects',
                   visual: <ProjectWindow />,
                 },
