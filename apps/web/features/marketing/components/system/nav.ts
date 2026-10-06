@@ -161,7 +161,6 @@ export const FOOTER_COLUMNS = [
       { href: '/byok', label: 'Bring your own key' },
       { href: '/teams', label: 'Teams' },
       { href: '/enterprise', label: 'Enterprise' },
-      { href: '/changelog', label: 'Changelog' },
     ],
   },
   {
@@ -189,16 +188,22 @@ export const FOOTER_COLUMNS = [
     ],
   },
   {
-    title: 'Company',
+    title: 'Resources',
     links: [
-      { href: '/about', label: 'About' },
       { href: '/docs', label: 'Docs' },
       { href: '/help', label: 'Help' },
       { href: '/support', label: 'Support' },
       { href: '/faq', label: 'FAQ' },
+      { href: '/changelog', label: 'Changelog' },
+      { href: '/status', label: 'Status' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { href: '/about', label: 'About' },
       { href: '/blog', label: 'Blog' },
       { href: '/careers', label: 'Careers' },
-      { href: '/status', label: 'Status' },
       { href: '/contact', label: 'Contact' },
     ],
   },
