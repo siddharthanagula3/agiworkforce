@@ -3,9 +3,15 @@ import {
   TOOL_APPROVAL_ACTION_LABELS,
   TOOL_STATUS_PRESENTATION,
 } from '@agiworkforce/types';
+import {
+  artifactInclusionForPolicy,
+  deriveArtifacts,
+  EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+} from '@agiworkforce/artifacts';
 import { WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
-import { AppWindow, Receipt, ROUTE_RECEIPTS, ToolRow } from './DeviceMockups';
+import { AppWindow, Receipt, ROUTE_RECEIPTS } from './DeviceMockups';
 import './agent-mockup-responsive.css';
+import './artifact-mockup-responsive.css';
 
 const STEP_GLYPH = { done: '✓', active: '●', pending: '○' } as const;
 
@@ -100,66 +106,66 @@ export function AgentRunWindow() {
   );
 }
 
+const ARTIFACT_EXAMPLE_TEXT = {
+  title: 'Project notes',
+  body: 'Keep the next steps together.',
+};
+
+const [ARTIFACT_EXAMPLE] = deriveArtifacts(
+  [
+    '```html',
+    '<!-- @artifact -->',
+    '<!doctype html>',
+    '<html lang="en">',
+    `<head><title>${ARTIFACT_EXAMPLE_TEXT.title}</title></head>`,
+    '<body>',
+    `  <h1>${ARTIFACT_EXAMPLE_TEXT.title}</h1>`,
+    `  <p>${ARTIFACT_EXAMPLE_TEXT.body}</p>`,
+    '</body>',
+    '</html>',
+    '```',
+  ].join('\n'),
+  { include: artifactInclusionForPolicy(EXPLICIT_ARTIFACT_DERIVATION_POLICY) },
+);
+
 export function ArtifactsWindow() {
+  if (!ARTIFACT_EXAMPLE) throw new Error('The HTML illustration must derive an artifact');
   return (
     <AppWindow
-      title="agiworkforce.com/chat · artifact"
+      title="agiworkforce.com/chat · artifact example"
       badge="Web"
-      label="An AGI artifact open beside the chat"
+      label="Example Web HTML artifact preview and source"
+      className="agi-artifact-responsive"
     >
-      <div className="agi-sc-split" data-cols="2-3">
-        <div className="agi-mk-thread agi-sc-pad">
-          <p className="agi-mk-user">Turn the interview notes into a one-page brief.</p>
-          <div className="agi-mk-agi">
-            <ToolRow state="done" label="Read 3 files" meta="2,140 words" />
-            <p>
-              Drafted the brief as an artifact. Version 3 tightens the summary and adds the table.
-            </p>
-            <Receipt
-              route={ROUTE_RECEIPTS.managed}
-              tokensIn="4.8k"
-              tokensOut="900"
-              time="9.4 s"
-              compact
-            />
-          </div>
+      <div className="agi-sc-artifact-heading">
+        <p>Example · Web HTML artifact</p>
+        <span className="agi-sc-artifact-title">{ARTIFACT_EXAMPLE.title}</span>
+      </div>
+      <div className="agi-sc-artifact-layout">
+        <div className="agi-sc-artifact-source">
+          <span className="agi-sc-card-head">Illustration source</span>
+          <pre>
+            <code>{ARTIFACT_EXAMPLE.content}</code>
+          </pre>
         </div>
         <div className="agi-sc-panel">
           <div className="agi-sc-panel-head">
             <span className="agi-sc-tabs">
               <span data-on="true">Preview</span>
-              <span>Code</span>
+              <span>Source</span>
             </span>
             <span className="agi-sc-tabs agi-sc-tabs--versions">
-              <span>v1</span>
-              <span>v2</span>
-              <span data-on="true">v3</span>
+              <span data-on="true">v{ARTIFACT_EXAMPLE.version}/1</span>
             </span>
           </div>
-          <div className="agi-sc-doc">
-            <p className="agi-sc-doc-title">Customer interview brief</p>
-            <span className="agi-cr-line" style={{ width: '92%' }} />
-            <span className="agi-cr-line" style={{ width: '84%' }} />
-            <span className="agi-cr-line" style={{ width: '88%' }} />
-            <div className="agi-mk-table agi-sc-doc-table">
-              <span className="agi-mk-table-h">Theme</span>
-              <span className="agi-mk-table-h">Mentions</span>
-              <span className="agi-mk-table-h">Quote</span>
-              <span>Onboarding time</span>
-              <span>7 of 9</span>
-              <span>Two days lost to setup</span>
-              <span>Export formats</span>
-              <span>5 of 9</span>
-              <span>Give me the CSV</span>
-              <span>Pricing clarity</span>
-              <span>4 of 9</span>
-              <span>Which plan is mine</span>
-            </div>
+          <div className="agi-sc-artifact-preview">
+            <h2 className="agi-sc-doc-title">{ARTIFACT_EXAMPLE_TEXT.title}</h2>
+            <p>{ARTIFACT_EXAMPLE_TEXT.body}</p>
           </div>
           <div className="agi-sc-panel-foot">
             <span>Copy</span>
-            <span>Download .md</span>
-            <span>Open in Library</span>
+            <span>Download source (.{ARTIFACT_EXAMPLE.language})</span>
+            <span>Save to Library</span>
           </div>
         </div>
       </div>
