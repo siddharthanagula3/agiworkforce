@@ -243,3 +243,14 @@ html[data-theme='light'] body:has([data-design='agi'][data-public-reference]) {
   --public-mockup-light-size: var(--space-2);
   --public-mockup-caret-height: var(--space-4);
 }
+
+[data-design='agi'] footer.agi-footer-responsive {
+  --public-footer-text-meta: 0.875rem;
+  --public-footer-text-ui: 1rem;
+  --public-footer-text-body: 1.0625rem;
+  --public-footer-leading-ui: 1.4;
+  --public-footer-leading-body: 1.65;
+  --public-footer-weight-brand: 650;
+  --public-footer-brand-gap: 0.55rem;
+  --public-footer-statement-width: 26rem;
+}

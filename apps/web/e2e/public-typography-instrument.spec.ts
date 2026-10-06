@@ -429,6 +429,11 @@ test('navigation headings use UI sizes while content headings and the small-text
   const readable = evaluatePublicTextContrast(result.samples, result.canvasColor!);
   expect(readable.findings).toEqual([]);
   expect(readable.unmeasured).toEqual([]);
+  result = await scan(page, markup, '#footer { font-size:16px; }');
+  expect(result.samples.find((sample) => sample.selector === '#footer')?.role).toBe('ui');
+  expect(result.samples.find((sample) => sample.selector === '#footer')?.renderedSize).toBe(16);
+  expect(result.findings).toEqual([]);
+  expect(result.unmeasured).toEqual([]);
   result = await scan(
     page,
     markup,
