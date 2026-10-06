@@ -170,7 +170,7 @@ test('scrollable mockup text stays readable and requires every scroll state to b
     { elementIndex: container.elementIndex, x: container.maxX },
   );
   const end = await page.evaluate(scanPublicTypography, {
-    pageType: 'marketing',
+    pageType: 'marketing' as const,
     pathname: '/fixture',
   } satisfies PublicTypographyOptions);
   expect(end.findings).toEqual([]);
@@ -218,7 +218,7 @@ test('RTL scrollports expose negative horizontal positions for the state sweep',
     { elementIndex: container.elementIndex, x: container.minX },
   );
   const end = await page.evaluate(scanPublicTypography, {
-    pageType: 'marketing',
+    pageType: 'marketing' as const,
     pathname: '/fixture',
   } satisfies PublicTypographyOptions);
   expect(end.scrollContainers[0]?.x).toBe(-480);
@@ -611,4 +611,210 @@ test('empty pages and missing canonical fonts fail measurement', async ({ page }
   expect(result.unmeasured.map((item) => item.kind)).toContain('no-painted-text');
   result = await scan(page, '<span>Readable text</span>', ':root { --font-geist-sans:initial; }');
   expect(result.unmeasured.map((item) => item.kind)).toContain('missing-canonical-font');
+});
+
+test('scoped measurement preserves default reports and global text indexes', async ({ page }) => {
+  const options = { pageType: 'marketing', pathname: '/fixture' } as const;
+  const whole = await scan(
+    page,
+    '<span class="label">Same label</span><figure id="frame"><span class="label">Same label</span></figure>',
+    '.label { font-size:12px; } #frame .label { font-size:14px; }',
+    options,
+  );
+  const scoped = await page.evaluate(scanPublicTypography, { ...options, scopeSelector: '#frame' });
+  expect(scoped.scope).toMatchObject({ selector: '#frame', tag: 'figure', label: null });
+  expect(scoped.coverage.textNodes).toBe(1);
+  expect(scoped.samples).toHaveLength(1);
+  expect(scoped.samples[0]?.sourceKey).toBe(whole.samples[1]?.sourceKey);
+  expect(scoped.findings).toEqual([]);
+  expect(scoped.unmeasured).toEqual([]);
+  expect(whole.findings.map((item) => item.kind)).toContain('declared-size-floor');
+  expect(await page.evaluate(scanPublicTypography, options)).toEqual(whole);
+  await page.addStyleTag({ content: '#frame .label { font-size:12px; }' });
+  const changed = await page.evaluate(scanPublicTypography, {
+    ...options,
+    scopeSelector: '#frame',
+  });
+  expect(changed.findings.filter((item) => item.kind === 'declared-size-floor')).toHaveLength(1);
+});
+
+test('scoped whole-block findings survive split text nodes until corrected', async ({ page }) => {
+  const options = { pageType: 'marketing', scopeSelector: '#frame' } as const;
+  const result = await scan(
+    page,
+    `<section id="frame"><h2 id="title"><span>A useful heading</span><br><span>now</span></h2><p id="copy"><span>${'a'.repeat(100)}</span></p></section>`,
+    '#copy { white-space:nowrap; }',
+    options,
+  );
+  expect(
+    result.findings.some((item) => item.kind === 'heading-orphan' && item.selector === '#title'),
+  ).toBe(true);
+  expect(
+    result.findings.some(
+      (item) => item.kind === 'running-line-length' && item.selector === '#copy',
+    ),
+  ).toBe(true);
+  expect(result.findings.every((item) => item.sourceKey === undefined)).toBe(true);
+  const corrected = await scan(
+    page,
+    '<section id="frame"><h2>A useful heading now</h2><p>Readable body copy.</p></section>',
+    '',
+    options,
+  );
+  expect(corrected.findings).toEqual([]);
+  expect(corrected.unmeasured).toEqual([]);
+});
+
+test('scoped control samples retain global indexes and include the scope root', async ({
+  page,
+}) => {
+  const whole = await scan(
+    page,
+    '<input id="outside" placeholder="Outside"><input id="frame" placeholder="Scoped placeholder"><select id="choice"><option>Scoped choice</option></select>',
+    'input,select { font-family:Arial; font-size:16px; }',
+  );
+  const scoped = await page.evaluate(scanPublicTypography, {
+    pageType: 'marketing' as const,
+    scopeSelector: '#frame',
+  });
+  expect(scoped.samples).toHaveLength(1);
+  expect(scoped.samples[0]?.kind).toBe('placeholder');
+  expect(scoped.samples[0]?.sourceKey).toBe(
+    whole.samples.find((item) => item.selector === '#frame')?.sourceKey,
+  );
+  expect(scoped.findings).toEqual([]);
+  expect(scoped.unmeasured).toEqual([]);
+  const selected = await page.evaluate(scanPublicTypography, {
+    pageType: 'marketing' as const,
+    scopeSelector: '#choice',
+  });
+  expect(selected.samples.map((item) => [item.kind, item.text])).toEqual([
+    ['value', 'Scoped choice'],
+  ]);
+  expect(selected.findings).toEqual([]);
+  expect(selected.unmeasured).toEqual([]);
+  await page.locator('#frame').fill('Scoped value');
+  const filled = await page.evaluate(scanPublicTypography, {
+    pageType: 'marketing' as const,
+    scopeSelector: '#frame',
+  });
+  expect(filled.samples.map((item) => [item.kind, item.text])).toEqual([['value', 'Scoped value']]);
+  await page.addStyleTag({ content: '#frame { font-size:12px; }' });
+  const small = await page.evaluate(scanPublicTypography, {
+    pageType: 'marketing' as const,
+    scopeSelector: '#frame',
+  });
+  expect(small.findings.map((item) => item.kind)).toContain('declared-size-floor');
+});
+
+test('scoped generated text includes root pseudos and retains unknown geometry', async ({
+  page,
+}) => {
+  const result = await scan(
+    page,
+    '<span id="outside">Outside label</span><span id="frame">Scoped label</span>',
+    '#outside::before { content:"Outside generated"; font-size:12px; } #frame::before { content:"Scoped generated"; font-size:12px; }',
+    { pageType: 'marketing', scopeSelector: '#frame' },
+  );
+  expect(result.samples.map((item) => [item.kind, item.text])).toEqual([
+    ['text', 'Scoped label'],
+    ['pseudo-before', 'Scoped generated'],
+  ]);
+  expect(
+    result.findings.some(
+      (item) => item.kind === 'declared-size-floor' && item.text === 'Scoped generated',
+    ),
+  ).toBe(true);
+  expect(result.unmeasured.map((item) => item.kind)).toContain('generated-text-geometry');
+  expect(JSON.stringify(result)).not.toContain('Outside generated');
+  await page.addStyleTag({ content: '#frame::before { content:none; }' });
+  const corrected = await page.evaluate(scanPublicTypography, {
+    pageType: 'marketing' as const,
+    scopeSelector: '#frame',
+  });
+  expect(corrected.findings).toEqual([]);
+  expect(corrected.unmeasured).toEqual([]);
+});
+
+test('scope keeps ancestor clipping and fully clipped text until corrected', async ({ page }) => {
+  const markup =
+    '<div id="clip"><figure id="frame"><span id="label">Readable label</span><span id="later">Later label</span></figure></div>';
+  const result = await scan(
+    page,
+    markup,
+    '#clip { position:relative; width:200px; height:5px; overflow:hidden; } #frame { margin:0; } #later { position:absolute; top:60px; }',
+    { pageType: 'marketing', scopeSelector: '#frame' },
+  );
+  expect(result.coverage.textNodes).toBe(2);
+  expect(result.findings.map((item) => item.kind)).toContain('text-clipped');
+  expect(
+    result.excluded.some((item) => item.selector === '#later' && item.reason === 'fully-clipped'),
+  ).toBe(true);
+  const corrected = await scan(page, markup, '#clip { width:400px; } #frame { margin:0; }', {
+    pageType: 'marketing',
+    scopeSelector: '#frame',
+  });
+  expect(corrected.samples).toHaveLength(2);
+  expect(corrected.findings).toEqual([]);
+  expect(corrected.unmeasured).toEqual([]);
+  expect(corrected.excluded).toEqual([]);
+});
+
+test('scope crossing an enclosing typography block stays explicitly unmeasured', async ({
+  page,
+}) => {
+  const options = { pageType: 'marketing', scopeSelector: '#frame' } as const;
+  const result = await scan(
+    page,
+    '<p id="copy">Outside words <span id="frame">Scoped words</span></p>',
+    '',
+    options,
+  );
+  expect(result.samples.map((item) => item.text)).toEqual(['Scoped words']);
+  expect(result.unmeasured).toContainEqual({
+    kind: 'scope-enclosing-block',
+    selector: '#frame',
+    text: 'Scoped words',
+    expected: '#copy',
+    actual: undefined,
+  });
+  const corrected = await page.evaluate(scanPublicTypography, {
+    ...options,
+    scopeSelector: '#copy',
+  });
+  expect(corrected.findings).toEqual([]);
+  expect(corrected.unmeasured).toEqual([]);
+});
+
+for (const scopeSelector of ['', '#missing', '.duplicate', '[', 'head']) {
+  test(`invalid scope cannot produce a clean report: ${JSON.stringify(scopeSelector)}`, async ({
+    page,
+  }) => {
+    await scan(
+      page,
+      '<span class="duplicate">First label</span><span class="duplicate">Second label</span>',
+    );
+    await expect(
+      page.evaluate(scanPublicTypography, { pageType: 'marketing' as const, scopeSelector }),
+    ).rejects.toThrow();
+  });
+}
+
+test('empty and hidden scopes cannot borrow painted text from outside', async ({ page }) => {
+  let result = await scan(page, '<span>Outside label</span><figure id="frame"></figure>', '', {
+    pageType: 'marketing',
+    scopeSelector: '#frame',
+  });
+  expect(result.samples).toEqual([]);
+  expect(result.unmeasured.map((item) => item.kind)).toContain('no-painted-text');
+  result = await scan(
+    page,
+    '<span>Outside label</span><figure id="frame"><span>Hidden label</span></figure>',
+    '#frame { display:none; }',
+    { pageType: 'marketing', scopeSelector: '#frame' },
+  );
+  expect(result.coverage.textNodes).toBe(1);
+  expect(result.samples).toEqual([]);
+  expect(result.excluded.map((item) => item.text)).toEqual(['Hidden label']);
+  expect(result.unmeasured.map((item) => item.kind)).toContain('no-painted-text');
 });

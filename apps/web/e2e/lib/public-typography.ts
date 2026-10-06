@@ -1,6 +1,7 @@
 export type PublicTypographyOptions = {
   pageType: 'marketing' | 'docs' | 'legal';
   pathname?: string;
+  scopeSelector?: string;
 };
 
 export type PublicTypographyIssue = {
@@ -56,6 +57,7 @@ export type PublicTypographySample = {
 };
 
 export type PublicTypographyReport = {
+  scope?: { selector: string; elementIndex: number; tag: string; label: string | null };
   findings: PublicTypographyIssue[];
   unmeasured: PublicTypographyIssue[];
   excluded: { selector: string; text: string; reason: string }[];
@@ -119,6 +121,8 @@ export function scanPublicTypography(
   const canvasColorScheme = getComputedStyle(root).colorScheme;
   let canvasColor: PublicTypographyRgba | null = null;
   const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  let scope: PublicTypographyReport['scope'];
+  let scopeElement: Element | undefined;
   const finish = (): PublicTypographyReport => {
     coverage.textSamples = samples.length;
     coverage.excluded = excluded.length;
@@ -135,12 +139,31 @@ export function scanPublicTypography(
       canvasColorScheme,
       canvasColor,
       prefersDark,
+      ...(scope ? { scope } : {}),
     };
   };
   if (!document.body) {
     unmeasured.push({ kind: 'missing-body', selector: 'html', text: '' });
     return finish();
   }
+  if (options.scopeSelector !== undefined) {
+    if (typeof options.scopeSelector !== 'string' || !options.scopeSelector.trim())
+      throw new Error('Typography scopeSelector must be a non-empty selector');
+    const matches = document.querySelectorAll(options.scopeSelector);
+    if (matches.length !== 1)
+      throw new Error('Typography scopeSelector must resolve exactly one element');
+    const element = matches[0]!;
+    if (!element.isConnected || !document.body.contains(element))
+      throw new Error('Typography scopeSelector must resolve inside the connected body');
+    scopeElement = element;
+    scope = {
+      selector: options.scopeSelector,
+      elementIndex: [...document.querySelectorAll('*')].indexOf(element),
+      tag: element.localName,
+      label: element.getAttribute('aria-label'),
+    };
+  }
+  const owns = (element: Element) => !scopeElement || scopeElement.contains(element);
   if (document.fonts.status !== 'loaded') {
     unmeasured.push({ kind: 'fonts-not-settled', selector: 'html', text: '' });
   }
@@ -864,35 +887,35 @@ export function scanPublicTypography(
     if (kind === 'text') {
       coverage.paintedTextNodes += 1;
       const block = blockOf(element);
-      if (block && (isHeading(block) || isRunning(block)) && role !== 'wordmark') blocks.add(block);
+      if (block && (isHeading(block) || isRunning(block)) && role !== 'wordmark') {
+        if (!owns(block))
+          issue(unmeasured, 'scope-enclosing-block', element, text, undefined, selectorOf(block));
+        else blocks.add(block);
+      }
     } else coverage.generatedText += 1;
   };
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let sourceTextIndex = 0;
   while (walker.nextNode()) {
     const node = walker.currentNode as Text;
     const element = node.parentElement;
     if (!element || element.closest('script,style,noscript,textarea,option')) continue;
     const text = node.data.replace(/\s+/g, ' ').trim();
     if (!text) continue;
+    sourceTextIndex += 1;
+    if (!owns(element)) continue;
     coverage.textNodes += 1;
     const range = document.createRange();
     range.selectNodeContents(node);
     const rectangles = [...range.getClientRects()]
       .filter((rect) => rect.width > tolerance && rect.height > tolerance)
       .map(rectOf);
-    sampleFor(
-      element,
-      text,
-      'text',
-      styleOf(element),
-      rectangles,
-      `text:${coverage.textNodes}`,
-      node,
-    );
+    sampleFor(element, text, 'text', styleOf(element), rectangles, `text:${sourceTextIndex}`, node);
   }
   for (const element of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
     'input:not([type="hidden"]),textarea',
   )) {
+    if (!owns(element)) continue;
     const input = element instanceof HTMLInputElement ? element : null;
     if (input && /^(checkbox|radio|range|color)$/.test(input.type)) continue;
     if (input && /^(file|date|datetime-local|month|week|time)$/.test(input.type)) {
@@ -920,6 +943,7 @@ export function scanPublicTypography(
     );
   }
   for (const element of document.querySelectorAll<HTMLSelectElement>('select')) {
+    if (!owns(element)) continue;
     const text = [...element.selectedOptions]
       .map((option) => option.textContent ?? '')
       .join(' ')
@@ -934,7 +958,10 @@ export function scanPublicTypography(
         `control:${elementIndexes.get(element)}`,
       );
   }
-  for (const element of document.body.querySelectorAll('*')) {
+  const generatedElements = scopeElement
+    ? [scopeElement, ...scopeElement.querySelectorAll('*')]
+    : [...document.body.querySelectorAll('*')];
+  for (const element of generatedElements) {
     if (element.closest('script,style,noscript')) continue;
     for (const pseudo of ['before', 'after'] as const) {
       const style = getComputedStyle(element, `::${pseudo}`);
@@ -964,8 +991,11 @@ export function scanPublicTypography(
         `pseudo:${elementIndexes.get(element)}:${pseudo}`,
       );
       const block = blockOf(element);
-      if (block && (isHeading(block) || isRunning(block)))
-        issue(unmeasured, 'generated-prose-line-geometry', element, text);
+      if (block && (isHeading(block) || isRunning(block))) {
+        if (!owns(block))
+          issue(unmeasured, 'scope-enclosing-block', element, text, undefined, selectorOf(block));
+        else issue(unmeasured, 'generated-prose-line-geometry', element, text);
+      }
     }
   }
   for (const block of blocks) {
