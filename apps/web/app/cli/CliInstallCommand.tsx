@@ -49,7 +49,7 @@ export function CliInstallCommand() {
   }, [checkRelease]);
 
   if (release.state === 'loading') {
-    return <Spinner size="sm" aria-label="Checking for a signed CLI release" />;
+    return <Spinner size="sm" aria-label="Checking for a signed CLI release" aria-busy="true" />;
   }
 
   if (release.state === 'published') {
