@@ -13,9 +13,9 @@ import { ArtifactsWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 export const metadata = buildMetadata({
-  title: 'Artifacts: sandboxed previews, versions, and downloads',
+  title: 'Artifacts: previews, source, versions, and downloads',
   description:
-    'Artifacts in the AGI workspace: HTML, React, SVG, diagrams, code, and documents rendered in a sandboxed preview beside the chat. Versioned, with source view, copy, and download.',
+    'Preview supported artifacts beside the chat, inspect their source, browse saved versions, and copy or download supported formats.',
   path: '/features/artifacts',
 });
 
@@ -29,38 +29,31 @@ const IDS = {
   close: 'agi-features-artifacts-close-title',
 } as const;
 
-const ISOLATION_FACTS = [
-  'own origin, never the page around it',
-  'no fetch, XHR, or socket out',
-  'forms and plugins switched off',
-  "connect-src 'none' on every renderer",
-] as const;
-
 const EXPORT_CONTROLS = [
   {
     meta: 'Copy',
     title: 'Puts the version on the clipboard',
-    body: 'Copies exactly the version you are reading, not the newest one if you have stepped back.',
+    body: 'Copies the selected saved version, including an earlier version you are viewing.',
   },
   {
     meta: 'Download',
     title: 'The artifact as a standalone file',
-    body: 'A menu offers standalone HTML, the source under its own extension, or the whole thing as Markdown. A table adds CSV, and a generated file adds that file.',
+    body: 'Text artifacts offer HTML, source and Markdown downloads. Tables add CSV; images, binary documents and generated files have file downloads.',
   },
   {
     meta: 'Download all',
     title: 'Every artifact in the chat, zipped',
-    body: 'Once a conversation holds more than one artifact, the panel header zips them, each entry named from its title and language, collisions numbered.',
+    body: 'Download all exports the current artifacts in the conversation as a ZIP. Duplicate filenames are numbered.',
   },
   {
     meta: 'Publish',
-    title: 'A public page under its own link',
-    body: 'The page is not indexed, it is listed in Settings beside your shared links, and you revoke it from there whenever you want the link dead.',
+    title: 'A shareable page under its own link',
+    body: 'Published pages request no indexing. Public links open for anyone with the link; workspace-only pages require workspace membership. Manage and unpublish them in Settings, Shared links. Publication can be refused or detected secrets redacted.',
   },
   {
     meta: 'Local and BYOK',
     title: 'Publishing does not move data quietly',
-    body: 'An artifact made in Local or BYOK mode does not publish, because that would move it to AGI managed cloud. The panel refuses by name and points at the download instead.',
+    body: 'The Web panel refuses managed-cloud publication for Local, BYOK or unknown origins and points to Download instead.',
   },
 ] as const;
 
@@ -73,16 +66,11 @@ export default function ArtifactsFeaturePage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Artifacts</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">Run it,</span>
-                <span className="agi-lp-line">then decide.</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">Run it,</span>{' '}
+                <span className="agi-lp-line">then decide.</span>{' '}
                 <em className="agi-lp-accent">Not before.</em>
               </h1>
-              <p className="agi-lp-lede">
-                When a reply carries something buildable, it opens in a panel beside the chat. The
-                render sits on one tab and the source that produced it sits on the other, so the
-                thing you are judging is the thing you can read.
-              </p>
               <ButtonRow>
                 <Button href="/gallery">Browse the gallery</Button>
                 <Button href="/features/ai-chat" variant="secondary">
@@ -101,12 +89,12 @@ export default function ArtifactsFeaturePage() {
             <div>
               <Eyebrow>Rendering</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.renderers}>
-                How each kind reaches the frame.
+                Preview or inspect the source.
               </h2>
               <Prose>
-                Four types get a live frame: HTML, React, SVG, and Mermaid. Code opens against its
-                own source with copy and download, while a table, a slide deck, a PDF, or a
-                generated image each get their own reader inside the same panel.
+                HTML, React and SVG have framed previews. Mermaid diagrams render as sanitized SVG.
+                Code, tables, slide decks, documents and images use the appropriate source view or
+                reader.
               </Prose>
             </div>
             <Ledger
@@ -115,22 +103,22 @@ export default function ArtifactsFeaturePage() {
                 {
                   label: 'HTML',
                   value:
-                    'Rebuilt into a fresh document that carries the artifact policy, with a base tag dropped and any inner frame stripped of same-origin access.',
+                    'Rendered in a frame with the artifact content policy. Source remains available when the preview cannot start.',
                 },
                 {
                   label: 'React',
                   value:
-                    'The source reaches Babel inside the frame as source rather than escaped text, is compiled there, and whatever it names App or Component is mounted against React 18.',
+                    'React source is compiled inside its framed preview. Interactive scripts depend on the sandbox renderer.',
                 },
                 {
                   label: 'SVG',
                   value:
-                    'Sanitized before it is drawn: tags and attributes that could execute are stripped, and the panel says so under the artifact when something was.',
+                    'Sanitized before previewing. Detected unsafe patterns can trigger a notice.',
                 },
                 {
                   label: 'Mermaid',
                   value:
-                    'The definition is HTML-escaped on the way in, so markup written inside a diagram lays out as text, and mermaid draws the graph from what is left.',
+                    'Rendered as sanitized SVG in the panel. If it cannot be drawn, its source stays available.',
                 },
               ]}
             />
@@ -139,17 +127,17 @@ export default function ArtifactsFeaturePage() {
 
         <div className="agi-lp-factline">
           <div className="agi-ds-container">
-            <p className="agi-lp-eyebrow" style={{ marginBottom: '0.75rem' }}>
-              Isolation
-            </p>
-            <h2 className="agi-ds-h3" style={{ marginBottom: '1rem' }}>
-              Rendering an artifact means executing something a model wrote.
-            </h2>
-            <ul className="agi-lp-factline-list">
-              {ISOLATION_FACTS.map((fact) => (
-                <li key={fact}>{fact}</li>
-              ))}
-            </ul>
+            <Stack gap="loose">
+              <Eyebrow>Isolation</Eyebrow>
+              <h2 className="agi-ds-h3" id={IDS.isolation}>
+                Some previews run code in an isolated frame.
+              </h2>
+              <Prose>
+                Framed previews apply a separate content policy. Interactive script previews need
+                the sandbox renderer. If Web falls back to a layout-only preview, it displays a
+                notice and the Source tab remains available.
+              </Prose>
+            </Stack>
           </div>
         </div>
 
@@ -171,27 +159,26 @@ export default function ArtifactsFeaturePage() {
                 {
                   label: '01',
                   value:
-                    'A rewrite lands as the next version. The chip in the header counts up, so v2/2 means you are reading the newer of the two.',
+                    'Updating the same artifact ID with different content adds a version. The header shows the selected version and the history length.',
                 },
                 {
                   label: '02',
                   value:
-                    'An identical rewrite lands as nothing. Versions are keyed to the content, so the same bytes leave the history unmoved.',
+                    'Updating the same artifact ID with identical content does not add a version.',
                 },
                 {
                   label: '03',
-                  value:
-                    'Arrows either side of the chip step backwards through the history. The frame re-renders whichever version you land on.',
+                  value: 'Previous and Next move between version entries.',
                 },
                 {
                   label: '04',
                   value:
-                    'Restoring costs nothing. On any version but the newest, restore makes it current by adding it to the end of the history.',
+                    'When its content differs from the latest, Restore adds the selected content as a new latest version and keeps the intervening versions.',
                 },
                 {
                   label: '05',
                   value:
-                    'A stored text artifact at its newest version is editable in place, and saving stores the edit as the next version.',
+                    'The latest stored text version can be edited. Saving changed source adds a version; saving unchanged source leaves the history intact.',
                 },
               ]}
             />
@@ -206,8 +193,8 @@ export default function ArtifactsFeaturePage() {
                 What leaves the panel with you.
               </h2>
               <Prose>
-                Every control acts on the version currently on screen, so what you copy, save, or
-                publish is what you were looking at when you pressed it.
+                Copy and text-file downloads use the selected saved version. Available downloads
+                depend on the artifact type.
               </Prose>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -237,10 +224,9 @@ export default function ArtifactsFeaturePage() {
               plus a date window over your own.
             </Prose>
             <Prose>
-              Artifacts are held in browser storage on the device that rendered them. Signed in,
-              they also sync to your account, so one made on another device appears in the gallery;
-              opening a row this device has never rendered takes you to the conversation that
-              produced it, where it is rebuilt under the same identity.
+              Outside temporary chats, Web saves artifact records in browser storage when space is
+              available. Signed-in Web attempts account sync for eligible conversations. Gallery
+              entries without local content open their source conversation.
             </Prose>
           </Stack>
         </Section>
@@ -252,9 +238,8 @@ export default function ArtifactsFeaturePage() {
                 Ask for something <em className="agi-lp-accent">you can open.</em>
               </h2>
               <p className="agi-lp-lede">
-                A chart, a component, a page, a diagram: ask for it and the panel opens beside the
-                reply with the render on one tab and the source on the other. From there it is a
-                file you own.
+                When a reply produces a supported artifact, open it in the panel to preview it or
+                read its source. Copy the selected text version or download a supported format.
               </p>
               <ButtonRow>
                 <Button href="/login?redirectTo=%2Fchat">Open a chat</Button>
