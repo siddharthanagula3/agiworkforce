@@ -19,10 +19,7 @@ import {
   formatRecurringMoney,
   formatUsdAmount,
 } from '@/features/billing/lib/billing-format';
-import {
-  formatPlanCreditWindows,
-  planUsageComparisonLabel,
-} from '@/features/billing/lib/plan-display';
+import { planUsageComparisonLabel } from '@/features/billing/lib/plan-display';
 import {
   BillingPlanNotices,
   type OpenInvoiceLink,
@@ -545,7 +542,6 @@ export function BillingSection() {
   })();
 
   const usageComparison = planUsageComparisonLabel(tier);
-  const creditWindows = formatPlanCreditWindows(tier);
   const periodEndLabel = formatBillingDateFromSeconds(subscription?.current_period_end ?? null);
   const periodEndRowLabel =
     billingStatus === 'trialing'
@@ -676,22 +672,11 @@ export function BillingSection() {
               <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
                 {isFreeTier ? 'Free plan' : `${displayPlanLabel} plan`}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-                {isFreeTier
-                  ? 'Try AGI'
-                  : (usageComparison ?? humanizeStatus(subscription.status ?? 'none'))}
-              </div>
-              {creditWindows ? (
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: 'var(--text-3)',
-                    marginTop: 'calc(var(--space-1) / 2)',
-                  }}
-                >
-                  {creditWindows}
+              {isFreeTier ? null : (
+                <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+                  {usageComparison ?? humanizeStatus(subscription.status ?? 'none')}
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
           {canAdjustPlan ? (
