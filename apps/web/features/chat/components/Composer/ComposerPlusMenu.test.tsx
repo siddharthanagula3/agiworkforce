@@ -5,6 +5,7 @@ import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { baseInitOptions } from '@agiworkforce/i18n';
 
+import { freeMediaLimitedLine } from '@/features/models/lib/free-media-offer';
 import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
 
@@ -560,6 +561,82 @@ describe('ComposerPlusMenu, working folder row', () => {
     fireEvent.keyDown(document, { key: 'ArrowDown' });
 
     expect(document.activeElement).toBe(clear);
+  });
+});
+
+describe('ComposerPlusMenu, free image and video offer', () => {
+  const LAST_DAY = '2026-10-20';
+  const NOTE = freeMediaLimitedLine(LAST_DAY);
+  const mediaRows = {
+    hostCanGenerateVideo: true,
+    videoModelsAvailable: true,
+    canUseImageGeneration: false,
+    canUseVideoGeneration: false,
+  };
+
+  it('shows Limited with a clock and the plain line instead of Upgrade while the offer is ready', () => {
+    renderMenu({
+      ...mediaRows,
+      imageAccess: { label: 'limited', lastDay: LAST_DAY },
+      imageOfferNote: NOTE,
+      videoAccess: { label: 'upgrade' },
+      videoOfferNote: null,
+    });
+
+    const image = screen.getByText('Create image').closest('button')!;
+    expect(image).toHaveTextContent('Limited');
+    expect(image).not.toHaveTextContent(/upgrade/i);
+    expect(
+      image.querySelector('svg[aria-hidden="true"]:not(.text-muted-foreground)'),
+    ).not.toBeNull();
+    expect(image).not.toHaveAttribute('title');
+    expect(image).toHaveAccessibleDescription(NOTE);
+    expect(screen.getByText(NOTE)).toBeVisible();
+
+    const video = screen.getByText('Create video').closest('button')!;
+    expect(video).toHaveTextContent(/upgrade/i);
+    expect(video).not.toHaveTextContent('Limited');
+    expect(video).toHaveAttribute(
+      'title',
+      expect.stringMatching(/^Video generation is available on /),
+    );
+    expect(screen.getAllByText(NOTE)).toHaveLength(1);
+  });
+
+  it('says Upgrade by itself when the offer is not ready, and names no free capacity', () => {
+    renderMenu({
+      ...mediaRows,
+      imageAccess: { label: 'upgrade' },
+      imageOfferNote: NOTE,
+      videoAccess: { label: 'upgrade' },
+    });
+
+    const image = screen.getByText('Create image').closest('button')!;
+    expect(image).toHaveTextContent(/upgrade/i);
+    expect(image).toHaveAttribute('title', 'Image generation is available on Pro and above.');
+    expect(screen.queryByText('Limited')).not.toBeInTheDocument();
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  });
+
+  it('holds back both labels while the offer is still being checked', () => {
+    renderMenu({ ...mediaRows, imageAccess: { label: 'upgrade' }, freeMediaOfferChecking: true });
+
+    const image = screen.getByText('Create image').closest('button')!;
+    expect(image).toHaveTextContent('Checking');
+    expect(image).not.toHaveTextContent(/upgrade|limited/i);
+  });
+
+  it('adds no label to a plan that includes the capability', () => {
+    renderMenu({
+      ...mediaRows,
+      canUseImageGeneration: true,
+      imageAccess: { label: 'included' },
+      imageOfferNote: NOTE,
+    });
+
+    const image = screen.getByText('Create image').closest('button')!;
+    expect(image).not.toHaveTextContent(/upgrade|limited|checking/i);
+    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
   });
 });
 

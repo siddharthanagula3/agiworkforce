@@ -3,8 +3,10 @@ import {
   getNextUpgradeTier,
   isSelfServePaidPlanTier,
 } from '@agiworkforce/types';
+import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import type { PaywallSlot } from '@/features/chat/types/message-metadata';
 import { resolveFreeCapacityPaywallSlot } from './freeCapacityRecovery';
+import { resolveFreeLimitPaywallSlot } from './freeLimitRecovery';
 
 export interface ServerQuotaRecovery {
   action: string;
@@ -44,6 +46,8 @@ export function resolveQuotaPaywallSlot(input: {
   subscriptionSource: string | null | undefined;
   resetAt?: string | undefined;
   retryAt?: string | undefined;
+  freeLimit?: FreeLimit | undefined;
+  requestedModel?: string | undefined;
 }): PaywallSlot | null {
   const freeCapacity = resolveFreeCapacityPaywallSlot({
     code: input.code,
@@ -53,6 +57,17 @@ export function resolveQuotaPaywallSlot(input: {
     ...(input.retryAt ? { retryAt: input.retryAt } : {}),
   });
   if (freeCapacity) return freeCapacity;
+
+  const freeLimit = resolveFreeLimitPaywallSlot({
+    code: input.code,
+    message: input.message,
+    freeLimit: input.freeLimit,
+    requestedModel: input.requestedModel,
+    recovery: input.recovery,
+    planTier: input.planTier,
+    resetAt: input.resetAt,
+  });
+  if (freeLimit) return freeLimit;
 
   const block = classifyManagedQuotaErrorCode(input.code);
   if (!block) return null;

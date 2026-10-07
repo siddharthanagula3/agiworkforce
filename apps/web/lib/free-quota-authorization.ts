@@ -3,9 +3,18 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { KeyValueStore } from '@agiworkforce/key-value';
-import { classifyError } from '@agiworkforce/provider-runtime';
+import {
+  FREE_TIER_ONLY_PROVIDER_HINT,
+  MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+  MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
+  MODEL_STUDIO_MODEL_RETIRED_HINT,
+  classifyModelStudioError,
+} from '@agiworkforce/provider-runtime';
 import {
   getProviderOffering,
+  getProviderOfferingMediaRequestUnits,
+  getProviderOfferingQuotaUnit,
   listCanonicalModels,
   listManagedRoutesForModel,
   type ProviderOffering,
@@ -13,6 +22,7 @@ import {
 import {
   FreeQuotaAttestedOfferingsSchema,
   type FreeQuotaAttestationStanding,
+  type FreeQuotaMediaCategory,
 } from '@agiworkforce/cloud-contracts';
 import type { FreeQuotaStatus } from '@/features/models/lib/free-quota-types';
 import type { FreeQuotaObservation } from '@/lib/server/free-pools';
@@ -40,8 +50,6 @@ export const PolicySchema = z.object({
   verificationMaxAgeMs: z.number().int().positive(),
   maxOutputTokens: z.number().int().positive(),
   minimumChatQuota: z.number().int().positive(),
-  imageSize: z.string().regex(/^\d+\*\d+$/),
-  videoSize: z.string().regex(/^\d+\*\d+$/),
   videoSeconds: z.number().int().positive(),
   requestTimeoutMs: z.number().int().positive(),
   pollIntervalMs: z.number().int().positive(),
@@ -107,6 +115,7 @@ const SECONDS_PER_DAY = 24 * 60 * 60;
 const MS_PER_SECOND = 1_000;
 const HOLD_RETENTION_SECONDS = 120 * SECONDS_PER_DAY;
 const TURN_CLAIM_TTL_SECONDS = SECONDS_PER_DAY;
+const DAILY_USE_RETENTION_SLACK_SECONDS = 60 * 60;
 const PERCENT = 100;
 
 function credentialScope(apiKey: string): string {
@@ -130,8 +139,17 @@ function turnKey(userId: string, requestId: string): string {
   return `${STATE_PREFIX}:turn:${scope.slice(0, TURN_SCOPE_LENGTH)}`;
 }
 
+function utcDay(nowMs: number): string {
+  return new Date(nowMs).toISOString().slice(0, 10);
+}
+
+function dailyUseKey(userId: string, category: FreeQuotaMediaCategory, nowMs: number): string {
+  const scope = createHash('sha256').update(userId).digest('hex').slice(0, TURN_SCOPE_LENGTH);
+  return `${STATE_PREFIX}:daily:${category}:${scope}:${utcDay(nowMs)}`;
+}
+
 const HoldSchema = z.object({
-  cause: z.enum(['exhausted', 'billing']),
+  cause: z.enum(['exhausted', 'billing', 'withdrawn', 'refused']),
   atMs: z.number().int().positive(),
 });
 
@@ -160,6 +178,14 @@ export interface FreeQuotaState {
   used: ReadonlyMap<string, number>;
 }
 
+const ATTESTATION_LIFTED_HOLDS: ReadonlySet<FreeQuotaHoldCause> = new Set(['withdrawn', 'refused']);
+
+function holdInForce(hold: z.infer<typeof HoldSchema>, attestedAtMs: number | null): boolean {
+  return (
+    !ATTESTATION_LIFTED_HOLDS.has(hold.cause) || attestedAtMs === null || hold.atMs >= attestedAtMs
+  );
+}
+
 export async function readFreeQuotaState(
   store: KeyValueStore,
   input: { apiKey: string; observedOn: string; offeringKeys: readonly string[] },
@@ -175,10 +201,12 @@ export async function readFreeQuotaState(
   const [attestation, suspension, holds, ...used] = await batch.exec();
   const parsedAttestation = QuotaAttestationSchema.safeParse(decoded(attestation));
   const parsedSuspension = SuspensionSchema.safeParse(decoded(suspension));
+  const attestedAtMs = parsedAttestation.success ? parsedAttestation.data.checkedAtMs : null;
   const holdEntries = new Map<string, FreeQuotaHoldCause>();
   for (const [key, value] of Object.entries((holds ?? {}) as Record<string, unknown>)) {
     const hold = HoldSchema.safeParse(decoded(value));
-    holdEntries.set(key, hold.success ? hold.data.cause : 'billing');
+    if (!hold.success) holdEntries.set(key, 'billing');
+    else if (holdInForce(hold.data, attestedAtMs)) holdEntries.set(key, hold.data.cause);
   }
   const usedEntries = new Map<string, number>();
   input.offeringKeys.forEach((key, index) => {
@@ -237,12 +265,6 @@ export async function claimFreeQuotaTurn(
   );
 }
 
-const PROTOCOL_UNITS = {
-  chat: 'tokens',
-  'image-sync': 'images',
-  'video-async': 'seconds',
-} as const satisfies Record<NonNullable<ProviderOffering['quotaProbeProtocol']>, string>;
-
 export function usableAllowance(entry: FreeQuotaObservation, policy: FreeQuotaPolicy): number {
   if (entry.limit === null) return 0;
   const remaining = Math.max(0, entry.limit - (entry.consumedApproximate ?? 0));
@@ -250,9 +272,9 @@ export function usableAllowance(entry: FreeQuotaObservation, policy: FreeQuotaPo
 }
 
 export function minimumTurnUnits(offering: ProviderOffering, policy: FreeQuotaPolicy): number {
-  if (offering.quotaProbeProtocol === 'image-sync') return 1;
-  if (offering.quotaProbeProtocol === 'video-async') return policy.videoSeconds;
-  return policy.minimumChatQuota;
+  return (
+    getProviderOfferingMediaRequestUnits(offering, policy.videoSeconds) ?? policy.minimumChatQuota
+  );
 }
 
 let managedRouteModels: ReadonlySet<string> | null = null;
@@ -330,7 +352,8 @@ export type FreeQuotaUnavailableReason =
   | 'attestation_other_credential'
   | 'attestation_stale'
   | 'attestation_excludes_offering'
-  | 'managed_route_shares_allowance';
+  | 'managed_route_shares_allowance'
+  | 'provider_refused';
 
 export type FreeQuotaDecision =
   | { status: Extract<FreeQuotaStatus, 'ready'>; usable: number; used: number }
@@ -353,12 +376,22 @@ function unavailable(reason: FreeQuotaUnavailableReason): FreeQuotaDecision {
   return { status: 'unavailable', reason };
 }
 
+export function freeQuotaEndsOn(
+  entry: FreeQuotaObservation,
+  offering: ProviderOffering | null,
+): string | null {
+  const retiresOn = offering?.retiresAt?.slice(0, 10) ?? null;
+  if (retiresOn === null) return entry.expiresOn;
+  return entry.expiresOn === null || retiresOn < entry.expiresOn ? retiresOn : entry.expiresOn;
+}
+
 export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuotaDecision {
   const { entry, offering, policy, nowMs, apiKey, state } = input;
-  const today = new Date(nowMs).toISOString().slice(0, 10);
+  const today = utcDay(nowMs);
   if (
     entry.providerStatus === 'expired' ||
-    (entry.expiresOn !== null && entry.expiresOn <= today)
+    (entry.expiresOn !== null && entry.expiresOn <= today) ||
+    (offering?.retiresAt !== undefined && Date.parse(offering.retiresAt) <= nowMs)
   ) {
     return { status: 'expired' };
   }
@@ -375,13 +408,16 @@ export function decideFreeQuotaOffering(input: FreeQuotaDecisionInput): FreeQuot
   if (offering.quotaProbeProtocol !== 'chat' && !input.mediaServed) {
     return unavailable('media_not_served');
   }
-  if (entry.limit === null || entry.unit !== PROTOCOL_UNITS[offering.quotaProbeProtocol]) {
+  if (entry.limit === null || entry.unit !== getProviderOfferingQuotaUnit(offering)) {
     return unavailable('allowance_unknown');
   }
   if (sharesManagedRoute(offering)) return unavailable('managed_route_shares_allowance');
   if (!apiKey) return unavailable('credential_missing');
   if (!state) return unavailable('shared_state_unavailable');
-  if (state.holds.has(entry.offeringKey)) return { status: 'exhausted', cause: 'provider' };
+  const hold = state.holds.get(entry.offeringKey);
+  if (hold === 'withdrawn') return { status: 'expired' };
+  if (hold === 'refused') return unavailable('provider_refused');
+  if (hold) return { status: 'exhausted', cause: 'provider' };
   const usable = usableAllowance(entry, policy);
   const used = state.used.get(entry.offeringKey) ?? 0;
   if (used + minimumTurnUnits(offering, policy) > usable) {
@@ -442,37 +478,83 @@ export async function settleFreeQuotaAllowance(
   if (delta !== 0) await store.increment(reservation.key, delta);
 }
 
-export type FreeQuotaRefusal =
-  'exhausted' | 'billing' | 'account_billing' | 'busy' | 'interrupted' | 'too_long' | 'failed';
+export interface DailyUseReservation {
+  key: string;
+}
 
-// Model Studio's account-level billing refusals (error-code reference, read 2026-09-21): each
-// proves the account carries charges or arrears, so no free model on it can be trusted as free.
-const ACCOUNT_BILLING_SIGNALS: ReadonlySet<string> = new Set([
-  'arrearage',
-  'budgetlimitexceeded',
-  'prepaidbilloverdue',
-  'postpaidbilloverdue',
-  'commoditynotpurchased',
-]);
+export function freeQuotaDayResetsAtMs(nowMs: number): number {
+  return Date.parse(`${utcDay(nowMs)}T00:00:00Z`) + SECONDS_PER_DAY * MS_PER_SECOND;
+}
+
+export async function readFreeQuotaDailyUse(
+  store: KeyValueStore,
+  input: { userId: string; category: FreeQuotaMediaCategory; nowMs: number },
+): Promise<number> {
+  const stored = await store.get<unknown>(dailyUseKey(input.userId, input.category, input.nowMs));
+  const used = Number(stored ?? 0);
+  return Number.isFinite(used) ? Math.max(0, used) : Number.POSITIVE_INFINITY;
+}
+
+export async function reserveFreeQuotaDailyUse(
+  store: KeyValueStore,
+  input: { userId: string; category: FreeQuotaMediaCategory; cap: number; nowMs: number },
+): Promise<DailyUseReservation | null> {
+  const key = dailyUseKey(input.userId, input.category, input.nowMs);
+  const total = await store.increment(key, 1);
+  try {
+    await store.expire(
+      key,
+      Math.ceil((freeQuotaDayResetsAtMs(input.nowMs) - input.nowMs) / MS_PER_SECOND) +
+        DAILY_USE_RETENTION_SLACK_SECONDS,
+    );
+  } catch (error) {
+    await store.increment(key, -1).catch(() => undefined);
+    throw error;
+  }
+  if (total > input.cap) {
+    await store.increment(key, -1);
+    return null;
+  }
+  return { key };
+}
+
+export async function releaseFreeQuotaDailyUse(
+  store: KeyValueStore,
+  reservation: DailyUseReservation,
+): Promise<void> {
+  await store.increment(reservation.key, -1);
+}
+
+export type FreeQuotaRefusal =
+  | 'exhausted'
+  | 'billing'
+  | 'account_billing'
+  | 'busy'
+  | 'interrupted'
+  | 'too_long'
+  | 'unavailable'
+  | 'refused'
+  | 'withdrawn'
+  | 'blocked'
+  | 'failed';
 
 export function classifyFreeQuotaRefusal(failure: {
   status?: number;
   code?: string;
   message?: string;
 }): FreeQuotaRefusal {
-  if (failure.code && ACCOUNT_BILLING_SIGNALS.has(failure.code.trim().toLowerCase())) {
-    return 'account_billing';
-  }
-  const classified = classifyError({
+  const classified = classifyModelStudioError({
     ...(failure.status === undefined ? {} : { status: failure.status }),
     ...(failure.code === undefined ? {} : { code: failure.code }),
     message: failure.message ?? '',
   });
   switch (classified.category) {
     case 'quota_exhausted':
-      return 'exhausted';
+      return classified.providerHint === FREE_TIER_ONLY_PROVIDER_HINT ? 'exhausted' : 'busy';
     case 'billing_exhausted':
-      return 'billing';
+      return classified.providerHint === MODEL_STUDIO_ACCOUNT_BILLING_HINT
+        ? 'account_billing'
+        : 'billing';
     case 'rate_limit':
     case 'server_overload':
       return 'busy';
@@ -482,6 +564,19 @@ export function classifyFreeQuotaRefusal(failure: {
       return 'interrupted';
     case 'context_overflow':
       return 'too_long';
+    case 'invalid_model':
+      switch (classified.providerHint) {
+        case MODEL_STUDIO_MODEL_RETIRED_HINT:
+          return 'withdrawn';
+        case MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT:
+        case MODEL_STUDIO_MODEL_NOT_FOUND_HINT:
+          return 'refused';
+        default:
+          return 'unavailable';
+      }
+    case 'safety':
+    case 'content_blocked':
+      return 'blocked';
     default:
       return 'failed';
   }
@@ -512,17 +607,10 @@ export function validateQuotaProbeAuthorization(
   if (matches.length !== 1)
     throw new Error('One account verification record is required for this offering.');
   const match = matches[0]!;
-  const expectedUnit = PROTOCOL_UNITS[offering.quotaProbeProtocol];
-  if (match.unit !== expectedUnit)
+  if (match.unit !== getProviderOfferingQuotaUnit(offering))
     throw new Error('The verified quota unit does not match this experiment.');
-  const minimum =
-    offering.quotaProbeProtocol === 'chat'
-      ? policy.minimumChatQuota
-      : offering.quotaProbeProtocol === 'video-async'
-        ? policy.videoSeconds
-        : 1;
   if (
-    match.remaining < minimum ||
+    match.remaining < minimumTurnUnits(offering, policy) ||
     match.expiresAtMs <= nowMs + policy.requestTimeoutMs + policy.maxPolls * policy.pollIntervalMs
   ) {
     throw new Error(

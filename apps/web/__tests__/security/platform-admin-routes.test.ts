@@ -67,6 +67,8 @@ import {
   POST as contentReportsPost,
 } from '@/app/api/admin/content-reports/route';
 import { GET as takedownGet, POST as takedownPost } from '@/app/api/admin/takedown/route';
+import { GET as waitlistGet } from '@/app/api/admin/waitlist/route';
+import { GET as waitlistExportGet } from '@/app/api/admin/waitlist/export/route';
 
 const ORG_ADMIN_ID = 'user_org_owner_1';
 const OPERATOR_ID = 'user_platform_operator_1';
@@ -109,6 +111,14 @@ const CROSS_TENANT_ROUTES: RouteCall[] = [
   {
     name: 'GET /api/admin/privacy/requests',
     call: () => privacyRequestsGet(req('https://app.test/api/admin/privacy/requests', 'GET')),
+  },
+  {
+    name: 'GET /api/admin/waitlist',
+    call: () => waitlistGet(req('https://app.test/api/admin/waitlist', 'GET')),
+  },
+  {
+    name: 'GET /api/admin/waitlist/export',
+    call: () => waitlistExportGet(req('https://app.test/api/admin/waitlist/export', 'GET')),
   },
   {
     name: 'GET /api/admin/content-reports',

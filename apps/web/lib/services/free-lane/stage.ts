@@ -61,7 +61,7 @@ export function freeLanePreferredSlots(
   return [...slots];
 }
 
-const FREE_CAPACITY_UNAVAILABLE_CODE = 'free_capacity_unavailable';
+export const FREE_CAPACITY_UNAVAILABLE_CODE = 'free_capacity_unavailable';
 const FREE_CAPACITY_UNAVAILABLE_STATUS = 429;
 const FREE_CAPACITY_UNAVAILABLE_TYPE = 'insufficient_quota';
 const FREE_CAPACITY_UNAVAILABLE_MESSAGE =
@@ -77,7 +77,7 @@ export interface FreeLaneRecoveryOption {
   href: string;
 }
 
-const FREE_CAPACITY_RECOVERY: readonly FreeLaneRecoveryOption[] = Object.freeze([
+export const FREE_LANE_RECOVERY: readonly FreeLaneRecoveryOption[] = Object.freeze([
   { action: 'upgrade', href: UPGRADE_HREF },
   { action: 'byok', href: BYOK_HREF },
 ]);
@@ -230,7 +230,7 @@ export function buildFreeCapacityUnavailableResponse(
         type: FREE_CAPACITY_UNAVAILABLE_TYPE,
         code: FREE_CAPACITY_UNAVAILABLE_CODE,
         ...(retryAtMs !== undefined ? { retry_at: new Date(retryAtMs).toISOString() } : {}),
-        recovery: FREE_CAPACITY_RECOVERY,
+        recovery: FREE_LANE_RECOVERY,
       },
     },
     { status: FREE_CAPACITY_UNAVAILABLE_STATUS, headers },

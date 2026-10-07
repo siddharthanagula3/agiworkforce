@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-05
+Last updated: 2026-10-05
 
 The web app is deployed on Vercel. This drill proves it also boots and serves
 outside it, in a plain OCI container with no platform services at all, so that
@@ -97,6 +97,10 @@ install compiles native modules, installs the whole workspace with a frozen
 lockfile, and builds with `AGI_WEB_STANDALONE=1`. The runner is the slim image
 and carries only the standalone output, the static assets and `public`, owned by
 the unprivileged `node` user, with a `HEALTHCHECK` that polls `/api/health`.
+The runner stage installs Debian's pending security fixes at build time, because
+the Node tag is rebuilt less often than Debian publishes them and the container
+scan gate in `security-scanning.yml` fails on any fixed high-severity finding
+the image still carries.
 
 `AGI_WEB_STANDALONE=1` also adds `pg` to the traced files, because a container
 run uses the Postgres adapter rather than the serverless driver the platform

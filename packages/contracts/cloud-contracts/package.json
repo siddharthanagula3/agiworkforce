@@ -9,7 +9,8 @@
     "./account-security": "./src/account-security.ts",
     "./client-request": "./src/client-request.ts",
     "./me": "./src/me.ts",
-    "./support": "./src/support.ts"
+    "./support": "./src/support.ts",
+    "./waitlist": "./src/waitlist.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -26,6 +27,9 @@
       ],
       "support": [
         "./src/support.ts"
+      ],
+      "waitlist": [
+        "./src/waitlist.ts"
       ],
       "*": [
         "./src/index.ts"

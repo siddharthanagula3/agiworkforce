@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-27
+Last updated: 2026-10-04
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -295,6 +295,13 @@ Billing plan lock (founder decision, 2026-07-18):
 Basic, Pro, Max 5x and Max 20x are billed monthly only; Team is billed monthly
 or yearly (founder decision 2026-09-27, D-2026-09-27-01 in
 `docs/decisions/2026-09-27-founder-decisions.md`).
+
+The Image generation and Video generation columns state what each plan includes
+as a paid capability. Separately, and only while it is configured and free
+provider capacity remains, the limited free media offer (owner decision
+2026-10-04) lets managed cloud plans without the capability use the free quota
+image and video offerings within a daily cap per account. It adds no plan to
+either capability; see `docs/runbooks/free-quota-models.md`.
 
 Paid plan prices are configured on Web, but new paid subscriptions and upgrades
 remain waitlist/access-code gated. Existing paid entitlements resolve on Mobile

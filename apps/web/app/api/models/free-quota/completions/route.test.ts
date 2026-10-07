@@ -2,16 +2,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
-import { getProviderOfferings } from '@agiworkforce/types';
+import { FreeLimitSchema } from '@agiworkforce/cloud-contracts';
+import {
+  getDefaultModelFor,
+  getProviderOfferings,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 import {
   credentialSha256,
+  freeQuotaDayResetsAtMs,
+  freeQuotaEndsOn,
+  readFreeQuotaDailyUse,
   readFreeQuotaState,
+  recordFreeQuotaHold,
   reserveFreeQuotaAllowance,
-  sharesManagedRoute,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
-import { loadFreePools } from '@/lib/server/free-pools';
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+import { logger } from '@/lib/logger';
+import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
+import {
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  chatSystemPromptSection,
+  chatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
+import { readyFreeMediaOffer } from '@/features/models/lib/free-media-offer';
+import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/csrf');
 type ScanModule1 = typeof import('@/lib/api-auth');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -29,6 +46,7 @@ type ScanModule12 =
 type ScanModule13 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
 type ScanModule14 = typeof import('@/lib/services/free-trial-service');
 type ScanModule15 = typeof import('@/lib/server/free-pools');
+type ScanModule16 = typeof import('@/lib/server/free-quota-catalogue-cache');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -48,6 +66,7 @@ const mocks = vi.hoisted(() => ({
   persistUser: vi.fn(),
   moderateMedia: vi.fn(),
   hydrate: vi.fn(),
+  limitedOffer: undefined as LimitedMediaOffer | undefined,
 }));
 
 vi.mock('@/lib/csrf', async (importOriginal) => ({
@@ -128,6 +147,10 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
   beginFreeTrialRequest: mocks.begin,
   settleFreeTrialRequest: mocks.settle,
 }));
+vi.mock('@/lib/server/free-quota-catalogue-cache', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule16>()),
+  expireFreeQuotaCatalogue: vi.fn(),
+}));
 vi.mock('@/lib/server/free-pools', async (importOriginal) => {
   const actual = await importOriginal<ScanModule15>();
   return {
@@ -137,6 +160,7 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
       const inventory = document.inventory!;
       return {
         ...document,
+        limitedMediaOffer: mocks.limitedOffer,
         inventory: {
           ...inventory,
           termsReview: {
@@ -173,56 +197,27 @@ vi.mock('@agiworkforce/providers-factory', async (importOriginal) => {
   return { ...guarded, streamQwenQuotaChat: mocks.stream, runQwenQuotaProbe: mocks.media };
 });
 
-const { POST } = await import('./route');
+const { POST, maxDuration } = await import('./route');
 
 const API_KEY = 'fixture-provider-key';
 const inventory = loadFreePools().inventory!;
-const today = new Date().toISOString().slice(0, 10);
-const [model, second] = inventory.entries
-  .filter((entry) => {
-    const offering = getProviderOfferings()[entry.offeringKey]!;
-    return (
-      entry.quotaOnlyObserved &&
-      entry.providerStatus === 'active' &&
-      (entry.expiresOn ?? '9999') > today &&
-      offering.quotaProbeProtocol === 'chat' &&
-      !offering.quotaThinkingRequired &&
-      !sharesManagedRoute(offering)
-    );
-  })
-  .map((entry) => entry.offeringKey);
+const NOW = freeQuotaFixtureNow(inventory);
+const servable = servableFreeQuotaOfferings(inventory, { apiKey: API_KEY, nowMs: NOW });
+const [model, second] = servable
+  .filter(
+    ({ offering }) => offering.quotaProbeProtocol === 'chat' && !offering.quotaThinkingRequired,
+  )
+  .map(({ key }) => key);
 const modelName = getProviderOfferings()[model!]!.displayName;
-const visionModel = inventory.entries.find((entry) => {
-  const offering = getProviderOfferings()[entry.offeringKey]!;
-  return (
-    entry.quotaOnlyObserved &&
-    entry.providerStatus === 'active' &&
-    (entry.expiresOn ?? '9999') > today &&
-    offering.quotaProbeProtocol === 'chat' &&
-    offering.quotaChatImageInput === true &&
-    !sharesManagedRoute(offering)
-  );
-})!.offeringKey;
-const imageModel = inventory.entries.find((entry) => {
-  const offering = getProviderOfferings()[entry.offeringKey]!;
-  return (
-    entry.quotaOnlyObserved &&
-    entry.providerStatus === 'active' &&
-    (entry.expiresOn ?? '9999') > today &&
-    offering.quotaProbeProtocol === 'image-sync' &&
-    !sharesManagedRoute(offering)
-  );
-})!.offeringKey;
-const videoModel = inventory.entries.find((entry) => {
-  const offering = getProviderOfferings()[entry.offeringKey]!;
-  return (
-    entry.quotaOnlyObserved &&
-    entry.providerStatus === 'active' &&
-    (entry.expiresOn ?? '9999') > today &&
-    offering.quotaProbeProtocol === 'video-async' &&
-    !sharesManagedRoute(offering)
-  );
-})!.offeringKey;
+const visionModel = servable.find(
+  ({ offering }) => offering.quotaProbeProtocol === 'chat' && offering.quotaChatImageInput === true,
+)!.key;
+const imageModel = servable.find(
+  ({ offering }) => offering.quotaProbeProtocol === 'image-sync',
+)!.key;
+const videoModel = servable.find(
+  ({ offering }) => offering.quotaProbeProtocol === 'video-async',
+)!.key;
 const MEDIA_ASSET_ID = 'a2d14f7e-0b3d-40c7-952d-987e841033c5';
 const PROVIDER_ARTIFACT_URL = 'https://provider.example/generated/poster.png';
 
@@ -267,6 +262,7 @@ async function sharedState() {
 }
 
 beforeEach(async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   vi.stubGlobal('fetch', mocks.fetch);
@@ -318,15 +314,34 @@ beforeEach(async () => {
     reservation: { kind: 'free_trial', userId, requestId, reservedMicrousd: 25_000 },
   }));
   mocks.settle.mockResolvedValue(undefined);
+  mocks.limitedOffer = undefined;
   await attest();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
 describe('Qwen free quota turns on the Free plan', () => {
+  it('gives a free quota model the product system prompt for a turn without tools', async () => {
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    await (await post({ client_timezone: 'Europe/London' })).text();
+
+    const sections = chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION);
+    const [system, ...rest] = mocks.stream.mock.calls[0]![3].messages as {
+      role: string;
+      content: unknown;
+    }[];
+    expect(system!.role).toBe('system');
+    expect(system!.content).toContain(chatSystemPromptSection(sections, 'identity'));
+    expect(system!.content).toContain(chatSystemPromptSection(sections, 'no_tools'));
+    expect(system!.content).toContain('(Europe/London)');
+    expect(system!.content).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY.trim());
+    expect(rest.at(-1)).toEqual({ role: 'user', content: 'Hello' });
+  });
+
   it('persists a threaded user turn before requesting free inference', async () => {
     mocks.stream.mockResolvedValue(sse('[DONE]'));
     const response = await post({
@@ -489,7 +504,7 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('A small image');
     expect(mocks.hydrate).toHaveBeenCalledOnce();
-    expect(mocks.stream.mock.calls[0]![3].messages[0].content).toEqual([
+    expect(mocks.stream.mock.calls[0]![3].messages.at(-1).content).toEqual([
       { type: 'text', text: 'Describe this image' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=' } },
     ]);
@@ -660,10 +675,253 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(response.status).toBe(409);
     const { error } = await response.json();
     expect(error.code).toBe('free_quota_exhausted');
-    expect(error.message).toContain(`${inventory.issuer}'s free allowance for ${modelName}`);
+    expect(error.message).toContain(`${modelName} has reached its free limit`);
+    expect(error.message).toContain(`free allowance from ${inventory.issuer}`);
     expect(error.message).toContain('not a limit on your account');
     expect(error.message).not.toContain('raw provider sentence');
     expect((await sharedState()).holds.get(model!)).toBe('exhausted');
+  });
+
+  it('states the free limit as data the chat can act on, with another free model to switch to', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        { error: { code: 'AllocationQuota.FreeTierOnly', message: 'raw provider sentence' } },
+        { status: 403 },
+      ),
+    );
+    const { error } = await (await post()).json();
+    const freeLimit = FreeLimitSchema.parse(error.free_limit);
+    expect(freeLimit).toMatchObject({ model, reason: 'allowance_used' });
+    expect(freeLimit.alternative_model).toBeDefined();
+    expect(freeLimit.alternative_model).not.toBe(model);
+    expect(getProviderOfferings()[freeLimit.alternative_model!]!.quotaProbeProtocol).toBe('chat');
+    expect(error.message).toContain(
+      `Choose ${getProviderOfferings()[freeLimit.alternative_model!]!.displayName} or another free model`,
+    );
+    expect(freeLimit.resets_at).toBeUndefined();
+  });
+
+  it('offers the Free plan default when no other free quota model is ready', async () => {
+    mocks.store = createMemoryKeyValueStore();
+    await attest([model!]);
+    mocks.stream.mockResolvedValue(
+      Response.json({ error: { code: 'AllocationQuota.FreeTierOnly' } }, { status: 403 }),
+    );
+    const { error } = await (await post()).json();
+    expect(FreeLimitSchema.parse(error.free_limit)).toEqual({
+      model,
+      reason: 'allowance_used',
+      alternative_model: getDefaultModelFor(normalizeBillingPlanTier(null), 'chat'),
+    });
+  });
+
+  it('marks an ended free offer as ended before any provider request', async () => {
+    const ended = inventory.entries.find(
+      (entry) =>
+        entry.providerStatus === 'expired' &&
+        getProviderOfferings()[entry.offeringKey]!.quotaProbeProtocol === 'chat',
+    )!.offeringKey;
+    const response = await post({ model: ended });
+    expect(response.status).toBe(410);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_expired');
+    expect(FreeLimitSchema.parse(error.free_limit)).toMatchObject({
+      model: ended,
+      reason: 'allowance_ended',
+    });
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('sends no free limit for a refusal that is not a spent or ended allowance', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json({ error: { code: 'Throttling.RateQuota' } }, { status: 429 }),
+    );
+    const { error } = await (await post()).json();
+    expect(error.free_limit).toBeUndefined();
+  });
+
+  it('keeps a model on offer when the provider only throttles tokens per minute', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 'insufficient_quota',
+            type: 'insufficient_quota',
+            message: 'You exceeded your current quota, please check your plan and billing details.',
+          },
+        },
+        { status: 429 },
+      ),
+    );
+    const response = await post();
+    expect(response.status).toBe(429);
+    expect((await response.json()).error.code).toBe('provider_rate_limited');
+    expect((await sharedState()).holds.has(model!)).toBe(false);
+  });
+
+  it('reads a spent free allocation as the free limit, with another free model and a hold', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 'Throttling.AllocationQuota',
+            type: 'Throttling.AllocationQuota',
+            message: 'Free allocated quota exceeded.',
+          },
+        },
+        { status: 429 },
+      ),
+    );
+    const response = await post();
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_exhausted');
+    const freeLimit = FreeLimitSchema.parse(error.free_limit);
+    expect(freeLimit).toMatchObject({ model, reason: 'allowance_used' });
+    expect(freeLimit.alternative_model).toBeDefined();
+    expect(freeLimit.alternative_model).not.toBe(model);
+    expect((await sharedState()).holds.get(model!)).toBe('exhausted');
+  });
+
+  it.each([
+    [403, 'AccessDenied', 'current user api does not support synchronous calls.'],
+    [403, 'AccessDenied', 'Access denied.'],
+    [403, 'Model.AccessDenied', 'Model access denied.'],
+    [403, 'Workspace.AccessDenied', 'Workspace access denied.'],
+    [403, 'App.AccessDenied', 'App access denied.'],
+    [
+      404,
+      'ModelNotFound',
+      'The model qwen-fixture does not exist or you do not have access to it.',
+    ],
+    [404, 'model_not_supported', 'Unsupported model qwen-fixture for OpenAI compatibility mode.'],
+    [400, 'InvalidParameter', 'Model not exist.'],
+  ])(
+    'takes the model out of the ready set when the provider answers %i %s "%s", until a newer console check',
+    async (status, code, message) => {
+      mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status }));
+      const response = await post();
+      expect(response.status).toBe(503);
+      const { error } = await response.json();
+      expect(error.code).toBe('free_quota_unavailable');
+      expect(error.message).not.toContain('ended');
+      expect((await sharedState()).holds.get(model!)).toBe('refused');
+
+      const held = await post(
+        { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+        'while-held',
+      );
+      expect(held.status).toBe(503);
+      expect(mocks.stream).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(NOW + 120_000);
+      await attest();
+      mocks.stream.mockResolvedValue(sse('[DONE]'));
+      const again = await post(
+        { assistant_message_id: 'a2d14f7e-0b3d-40c7-952d-987e841033c6' },
+        'after-console-check',
+      );
+      expect(again.status).toBe(200);
+      expect(mocks.stream).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('refuses only the turn when the provider names the model in an error it gives no model code for', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 'InternalError.Algo',
+            message:
+              "An error occurred in model serving, error message is: [Cluster 'xxx' not found!]",
+          },
+        },
+        { status: 500 },
+      ),
+    );
+    const response = await post();
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('free_quota_unavailable');
+    expect((await sharedState()).holds.has(model!)).toBe(false);
+
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    const again = await post(
+      { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+      'after-serving-error',
+    );
+    expect(again.status).toBe(200);
+    expect(mocks.stream).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [404, 'model_not_supported', 'Unsupported model qwen-fixture for OpenAI compatibility mode.'],
+    [403, 'Workspace.AccessDenied', 'Workspace access denied.'],
+    [403, 'App.AccessDenied', 'App access denied.'],
+  ])(
+    'tells the operator which model the provider refused when it answers %i %s',
+    async (status, code, message) => {
+      const warn = vi.spyOn(logger, 'warn');
+      mocks.stream.mockResolvedValue(Response.json({ error: { code, message } }, { status }));
+
+      await post();
+
+      expect(warn).toHaveBeenCalledWith(
+        { offering: model, signal: code },
+        expect.stringContaining('withheld for every account'),
+      );
+    },
+  );
+
+  it.each([
+    ['The image url is invalid: model not exist in path', 503, 'free_quota_unavailable'],
+    ['Input text cannot be used: model not exist.', 502, 'provider_unreachable'],
+  ])(
+    'refuses only the turn when a validation message only quotes the not-found sentence: %s',
+    async (message, status, code) => {
+      mocks.stream.mockResolvedValue(
+        Response.json({ error: { code: 'InvalidParameter', message } }, { status: 400 }),
+      );
+      const response = await post();
+      expect(response.status).toBe(status);
+      expect((await response.json()).error.code).toBe(code);
+      expect((await sharedState()).holds.has(model!)).toBe(false);
+
+      mocks.stream.mockResolvedValue(sse('[DONE]'));
+      const again = await post(
+        { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+        'after-validation-error',
+      );
+      expect(again.status).toBe(200);
+      expect(mocks.stream).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('ends the free offer for every account when the provider retired the model endpoint', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        { error: { code: 'Endpoint.AccessDenied', message: 'Workspace endpoint access denied.' } },
+        { status: 403 },
+      ),
+    );
+    const response = await post();
+    expect(response.status).toBe(410);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_expired');
+    expect(error.message).toContain(`The free offer for ${modelName}`);
+    expect(error.message).toContain('has ended');
+    expect(error.message).not.toContain('ended on');
+    const freeLimit = FreeLimitSchema.parse(error.free_limit);
+    expect(freeLimit).toMatchObject({ model, reason: 'allowance_ended' });
+    expect(freeLimit.alternative_model).not.toBe(model);
+    expect((await sharedState()).holds.get(model!)).toBe('withdrawn');
+
+    const again = await post(
+      { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+      'after-retirement',
+    );
+    expect(again.status).toBe(410);
+    expect((await again.json()).error.code).toBe('free_quota_expired');
+    expect(mocks.stream).toHaveBeenCalledTimes(1);
   });
 
   it('withdraws a model for every account on a billing signal and never calls it again', async () => {
@@ -778,18 +1036,18 @@ describe('Qwen free quota turns on the Free plan', () => {
       observedOn: inventory.observedOn,
       offeringKey: model!,
       expiresOn: entry.expiresOn,
-      units: usable - 1_000,
+      units: usable - 3_000,
       usable,
       nowMs: Date.now(),
     });
-    const tooLong = await post({ messages: [{ role: 'user', content: 'x'.repeat(2_000) }] });
+    const tooLong = await post({ messages: [{ role: 'user', content: 'x'.repeat(4_000) }] });
     expect(tooLong.status).toBe(400);
     expect((await tooLong.json()).error.code).toBe('context_length_exceeded');
     expect(mocks.stream).not.toHaveBeenCalled();
 
     mocks.stream.mockResolvedValue(sse('[DONE]'));
     await (await post({}, 'short-turn')).text();
-    expect(mocks.stream.mock.calls[0]![2].maxOutputTokens).toBeLessThanOrEqual(1_000);
+    expect(mocks.stream.mock.calls[0]![2].maxOutputTokens).toBeLessThanOrEqual(3_000);
   });
 
   it('refuses tools and attachments before any provider call', async () => {
@@ -880,6 +1138,49 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(body).not.toContain(PROVIDER_ARTIFACT_URL);
   });
 
+  it('reads a spent free allocation on a promotional image from the provider’s own words', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'Throttling.AllocationQuota',
+      providerMessage: 'Free allocated quota exceeded.',
+    });
+
+    const response = await post({
+      model: imageModel,
+      messages: [{ role: 'user', content: 'A blue paper boat' }],
+    });
+
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_exhausted');
+    expect(FreeLimitSchema.parse(error.free_limit)).toMatchObject({
+      model: imageModel,
+      reason: 'allowance_used',
+    });
+    expect((await sharedState()).holds.get(imageModel)).toBe('exhausted');
+  });
+
+  it('takes a promotional image out of the ready set when the provider refuses the call shape', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'AccessDenied',
+      providerMessage: 'current user api does not support synchronous calls.',
+    });
+
+    const response = await post({
+      model: imageModel,
+      messages: [{ role: 'user', content: 'A blue paper boat' }],
+    });
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('free_quota_unavailable');
+    expect((await sharedState()).holds.get(imageModel)).toBe('refused');
+  });
+
   it('never exposes the provider URL when generated image persistence fails', async () => {
     mocks.plan.mockResolvedValue('pro');
     mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
@@ -913,6 +1214,376 @@ describe('Qwen free quota turns on the Free plan', () => {
   });
 });
 
+describe('the limited free media offer', () => {
+  type MediaKind = 'image' | 'video';
+  const MEDIA: Array<[MediaKind, string, string]> = [
+    ['image', imageModel, 'image/png'],
+    ['video', videoModel, 'video/mp4'],
+  ];
+  const INCLUDED: Array<[MediaKind, string, string, string]> = [
+    ['image', imageModel, 'pro', 'image/png'],
+    ['video', videoModel, 'max_15x', 'video/mp4'],
+  ];
+
+  function offer(image: number, video: number): LimitedMediaOffer {
+    return { dailyCapPerUser: { image, video } };
+  }
+
+  function generates(mimeType: string) {
+    mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
+    mocks.download.mockResolvedValue({ data: Buffer.from('generated'), contentType: mimeType });
+  }
+
+  function usedToday(category: MediaKind) {
+    return readFreeQuotaDailyUse(mocks.store, {
+      userId: 'fixture-user',
+      category,
+      nowMs: Date.now(),
+    });
+  }
+
+  it.each(MEDIA)(
+    'serves a free quota %s offering to plans without that paid capability, through the quota path only',
+    async (kind, selectedModel, mimeType) => {
+      mocks.limitedOffer = offer(2, 2);
+      generates(mimeType);
+
+      for (const plan of ['free', 'basic'] as const) {
+        mocks.plan.mockResolvedValue(plan);
+        const response = await post({ model: selectedModel }, `limited-${kind}-${plan}`);
+
+        expect(response.status, plan).toBe(200);
+        expect(await response.text()).toContain(`/api/files/${MEDIA_ASSET_ID}`);
+        expect(response.headers.get('X-AGI-Route-Lane')).toBe('free');
+        expect(response.headers.get('X-AGI-Resolved-Model')).toBe(selectedModel);
+      }
+      expect(mocks.media).toHaveBeenCalledTimes(2);
+      expect(mocks.media.mock.calls.every(([key]) => key === selectedModel)).toBe(true);
+      expect(mocks.otherProvider).not.toHaveBeenCalled();
+      expect(mocks.stream).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      expect(mocks.begin).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(MEDIA)(
+    'keeps a %s offering closed when the cap for it is zero',
+    async (kind, selectedModel) => {
+      mocks.limitedOffer = kind === 'image' ? offer(0, 1) : offer(1, 0);
+
+      const response = await post({ model: selectedModel }, `zero-${kind}`);
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.code).toBe('model_not_available');
+      expect(mocks.media).not.toHaveBeenCalled();
+    },
+  );
+
+  it('opens video on a plan that has paid images but not paid video, and holds it to the cap', async () => {
+    mocks.limitedOffer = offer(1, 1);
+    mocks.plan.mockResolvedValue('pro');
+    generates('video/mp4');
+
+    expect((await post({ model: videoModel }, 'pro-video-1')).status).toBe(200);
+    const refused = await post({ model: videoModel }, 'pro-video-2');
+
+    expect(refused.status).toBe(429);
+    expect((await refused.json()).error.code).toBe('free_quota_daily_limit');
+    expect(mocks.media).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['local-only', 'byok'])(
+    'does not move a %s account onto managed cloud media',
+    async (plan) => {
+      mocks.limitedOffer = offer(5, 5);
+      mocks.plan.mockResolvedValue(plan);
+
+      for (const [kind, selectedModel] of MEDIA) {
+        const response = await post({ model: selectedModel }, `${plan}-${kind}`);
+        expect(response.status).toBe(403);
+      }
+      expect(mocks.media).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps free quota chat to the Free plan while the offer runs', async () => {
+    mocks.limitedOffer = offer(5, 1);
+    mocks.plan.mockResolvedValue('basic');
+
+    const response = await post();
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('model_not_available');
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it.each(MEDIA)(
+    'refuses the %s request after the daily cap, before any provider request, and resets on the next UTC day',
+    async (kind, selectedModel, mimeType) => {
+      const cap = 2;
+      mocks.limitedOffer = offer(cap, cap);
+      generates(mimeType);
+
+      for (let turn = 1; turn <= cap; turn += 1) {
+        expect((await post({ model: selectedModel }, `cap-${kind}-${turn}`)).status).toBe(200);
+      }
+      mocks.persistUser.mockClear();
+      const refused = await post({ model: selectedModel }, `cap-${kind}-over`);
+
+      expect(refused.status).toBe(429);
+      const { error } = await refused.json();
+      expect(error.code).toBe('free_quota_daily_limit');
+      expect(FreeLimitSchema.parse(error.free_limit)).toEqual({
+        model: selectedModel,
+        reason: 'daily_limit_reached',
+        resets_at: new Date(freeQuotaDayResetsAtMs(NOW)).toISOString(),
+      });
+      expect(error.message).toContain(`today's ${cap} free ${kind} requests`);
+      expect(error.message).toContain(inventory.issuer);
+      expect(mocks.media).toHaveBeenCalledTimes(cap);
+      expect(mocks.persistUser).not.toHaveBeenCalled();
+      expect(await usedToday(kind)).toBe(cap);
+
+      vi.setSystemTime(freeQuotaDayResetsAtMs(NOW));
+      expect(await usedToday(kind)).toBe(0);
+      expect((await post({ model: selectedModel }, `cap-${kind}-next-day`)).status).toBe(200);
+      expect(mocks.media).toHaveBeenCalledTimes(cap + 1);
+    },
+  );
+
+  it('counts images and video apart, and one account apart from another', async () => {
+    mocks.limitedOffer = offer(1, 1);
+    generates('image/png');
+    expect((await post({ model: imageModel }, 'apart-image')).status).toBe(200);
+
+    expect(await usedToday('image')).toBe(1);
+    expect(await usedToday('video')).toBe(0);
+    expect(
+      await readFreeQuotaDailyUse(mocks.store, {
+        userId: 'another-user',
+        category: 'image',
+        nowMs: Date.now(),
+      }),
+    ).toBe(0);
+  });
+
+  it('gives the count back when the allowance meter cannot be written, so no provider request starts', async () => {
+    mocks.limitedOffer = offer(1, 1);
+    const increment = mocks.store.increment.bind(mocks.store);
+    const meter = vi
+      .spyOn(mocks.store, 'increment')
+      .mockImplementation(async (key: string, amount?: number) => {
+        if (key.includes(':used:')) throw new Error('store unreachable');
+        return increment(key, amount);
+      });
+
+    const refused = await post({ model: videoModel }, 'unwritable-video');
+
+    expect(refused.status).toBe(503);
+    expect(mocks.media).not.toHaveBeenCalled();
+    expect(await usedToday('video')).toBe(0);
+
+    meter.mockRestore();
+    generates('video/mp4');
+    expect((await post({ model: videoModel }, 'unwritable-video-retry')).status).toBe(200);
+  });
+
+  it('gives the count back when the provider withdraws the offering, and offers another one', async () => {
+    mocks.limitedOffer = offer(1, 1);
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'Throttling.AllocationQuota',
+      providerMessage: 'Free allocated quota exceeded.',
+    });
+
+    const refused = await post({ model: imageModel }, 'withdrawn-image');
+
+    expect(refused.status).toBe(409);
+    const alternative = FreeLimitSchema.parse(
+      (await refused.json()).error.free_limit,
+    ).alternative_model!;
+    expect(getProviderOfferings()[alternative]!.quotaProbeProtocol).toBe('image-sync');
+    expect(await usedToday('image')).toBe(0);
+
+    generates('image/png');
+    expect((await post({ model: alternative }, 'withdrawn-image-switch')).status).toBe(200);
+  });
+
+  it('gives the count back when the provider is too busy to start, as its refusal says to send again', async () => {
+    mocks.limitedOffer = offer(1, 1);
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'Throttling.RateQuota',
+      providerMessage: 'Requests rate limit exceeded, please try again later.',
+    });
+
+    const refused = await post({ model: videoModel }, 'busy-video');
+
+    expect(refused.status).toBe(429);
+    const { error } = await refused.json();
+    expect(error.code).toBe('provider_rate_limited');
+    expect(error.message).toContain('send again');
+    expect(await usedToday('video')).toBe(0);
+
+    generates('video/mp4');
+    expect((await post({ model: videoModel }, 'busy-video-again')).status).toBe(200);
+    expect(await usedToday('video')).toBe(1);
+  });
+
+  it('holds parallel requests at the cap to the cap', async () => {
+    const cap = 2;
+    mocks.limitedOffer = offer(cap, 1);
+    generates('image/png');
+
+    const responses = await Promise.all(
+      Array.from({ length: cap + 3 }, (_, turn) =>
+        post({ model: imageModel }, `parallel-image-${turn}`),
+      ),
+    );
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 200, 429, 429, 429]);
+    expect(mocks.media).toHaveBeenCalledTimes(cap);
+    expect(await usedToday('image')).toBe(cap);
+  });
+
+  it('keeps the count when the provider was asked and failed for this turn only', async () => {
+    mocks.limitedOffer = offer(1, 1);
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'InternalError',
+      providerMessage: 'Internal error.',
+    });
+
+    expect((await post({ model: imageModel }, 'failed-image')).status).toBe(502);
+    expect(await usedToday('image')).toBe(1);
+    expect((await post({ model: imageModel }, 'failed-image-again')).status).toBe(429);
+    expect(mocks.media).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(MEDIA)(
+    'still refuses a %s offering whose console check is missing, without spending the count',
+    async (kind, selectedModel) => {
+      mocks.limitedOffer = offer(5, 5);
+      mocks.store = createMemoryKeyValueStore();
+
+      const response = await post({ model: selectedModel }, `unattested-${kind}`);
+
+      expect(response.status).toBe(503);
+      expect((await response.json()).error.code).toBe('free_quota_unavailable');
+      expect(mocks.media).not.toHaveBeenCalled();
+      expect(await usedToday(kind)).toBe(0);
+    },
+  );
+
+  it.each(MEDIA)(
+    'still refuses a %s offering whose shared allowance is spent, without spending the count',
+    async (kind, selectedModel) => {
+      mocks.limitedOffer = offer(5, 5);
+      await recordFreeQuotaHold(mocks.store, {
+        apiKey: API_KEY,
+        offeringKey: selectedModel,
+        cause: 'exhausted',
+        nowMs: Date.now(),
+      });
+
+      const response = await post({ model: selectedModel }, `spent-${kind}`);
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).error.code).toBe('free_quota_exhausted');
+      expect(mocks.media).not.toHaveBeenCalled();
+      expect(await usedToday(kind)).toBe(0);
+    },
+  );
+
+  it.each(MEDIA)(
+    'serves a %s offering to the last instant of the day the Limited label names',
+    async (kind, selectedModel, mimeType) => {
+      mocks.limitedOffer = offer(5, 5);
+      generates(mimeType);
+      const expiresOn = freeQuotaEndsOn(
+        inventory.entries.find((entry) => entry.offeringKey === selectedModel)!,
+        getProviderOfferings()[selectedModel]!,
+      );
+      const { lastDay } = readyFreeMediaOffer(
+        [{ category: kind, status: 'ready', expiresOn }],
+        kind,
+      )!;
+      vi.setSystemTime(Date.parse(`${lastDay!}T23:59:59.999Z`));
+      await attest();
+
+      const response = await post({ model: selectedModel }, `last-day-${kind}`);
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain(`/api/files/${MEDIA_ASSET_ID}`);
+      expect(mocks.media).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(MEDIA)(
+    'still refuses a %s offering after its allowance expires',
+    async (kind, selectedModel) => {
+      mocks.limitedOffer = offer(5, 5);
+      const expiresOn = inventory.entries.find(
+        (entry) => entry.offeringKey === selectedModel,
+      )!.expiresOn!;
+      vi.setSystemTime(Date.parse(`${expiresOn}T00:00:00Z`));
+
+      const response = await post({ model: selectedModel }, `expired-${kind}`);
+
+      expect(response.status).toBe(410);
+      expect((await response.json()).error.code).toBe('free_quota_expired');
+      expect(mocks.media).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses every offering once an account billing signal is recorded', async () => {
+    mocks.limitedOffer = offer(5, 5);
+    mocks.media.mockResolvedValue({
+      status: 'failed',
+      elapsedMs: 1,
+      providerCode: 'Arrearage',
+      providerMessage: 'Access denied, please make sure your account is in good standing.',
+    });
+    expect((await post({ model: imageModel }, 'billing-signal')).status).toBe(503);
+    expect(await usedToday('image')).toBe(0);
+    mocks.media.mockClear();
+
+    for (const [kind, selectedModel] of MEDIA) {
+      const response = await post({ model: selectedModel }, `after-billing-${kind}`);
+      expect(response.status).toBe(503);
+    }
+    expect(mocks.media).not.toHaveBeenCalled();
+  });
+
+  it.each(INCLUDED)(
+    'does not hold a plan that includes %s generation to the daily cap',
+    async (kind, selectedModel, plan, mimeType) => {
+      mocks.limitedOffer = offer(1, 1);
+      mocks.plan.mockResolvedValue(plan);
+      generates(mimeType);
+
+      for (const turn of ['first', 'second', 'third']) {
+        expect((await post({ model: selectedModel }, `included-${kind}-${turn}`)).status).toBe(200);
+      }
+      expect(mocks.media).toHaveBeenCalledTimes(3);
+      expect(await usedToday(kind)).toBe(0);
+    },
+  );
+});
+
+describe('the time the route is allowed to run', () => {
+  it('covers the submit timeout and every wait between polls of a generation', () => {
+    const policy = loadFreeQuotaPolicy();
+
+    expect(policy.requestTimeoutMs + policy.maxPolls * policy.pollIntervalMs).toBeLessThan(
+      maxDuration * 1_000,
+    );
+  });
+});
+
 describe('no paid route is reachable from a free quota turn', () => {
   it.each([
     ['a spent allowance', 403, { error: { code: 'AllocationQuota.FreeTierOnly' } }],
@@ -930,6 +1601,34 @@ describe('no paid route is reachable from a free quota turn', () => {
     expect(mocks.otherProvider).not.toHaveBeenCalled();
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['image', imageModel],
+    ['video', videoModel],
+  ])(
+    'answers a failed limited %s request with a refusal and no paid or managed dispatch',
+    async (kind, selectedModel) => {
+      mocks.limitedOffer = { dailyCapPerUser: { image: 5, video: 5 } };
+      for (const [label, result] of [
+        ['spent', { status: 'quota_exhausted', elapsedMs: 1 }],
+        ['failed', { status: 'failed', elapsedMs: 1, providerCode: 'InternalError' }],
+        ['pending', { status: 'submitted', elapsedMs: 1 }],
+      ] as const) {
+        mocks.store = createMemoryKeyValueStore();
+        await attest();
+        mocks.media.mockReset().mockResolvedValue(result);
+        const response = await post({ model: selectedModel }, `no-paid-${kind}-${label}`);
+        expect(response.status, label).toBeGreaterThanOrEqual(400);
+        expect(mocks.media, label).toHaveBeenCalledTimes(1);
+      }
+      mocks.media.mockReset().mockRejectedValue(new TypeError('fetch failed'));
+      expect((await post({ model: selectedModel }, `no-paid-${kind}-network`)).status).toBe(502);
+      expect(mocks.otherProvider).not.toHaveBeenCalled();
+      expect(mocks.stream).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      expect(mocks.begin).not.toHaveBeenCalled();
+    },
+  );
 
   it('answers a network failure with a refusal and no second dispatch', async () => {
     mocks.stream.mockRejectedValue(new TypeError('fetch failed'));

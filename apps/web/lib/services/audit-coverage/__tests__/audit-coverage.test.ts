@@ -6,10 +6,16 @@ import { describe, expect, it } from 'vitest';
 import { buildAuditCoverageReport } from '../index';
 import {
   REQUIRED_ROUTE_AUDIT_EVENTS,
+  ROUTE_HANDLER_DELEGATES,
   SURFACE_AUDIT_COVERAGE,
   UNAUDITED_MUTATING_ROUTES,
 } from '../registry';
-import { isAudited, resolveAuditCoverageRoot, sweepRouteAuditCoverage } from '../sweep';
+import {
+  classifyRoute,
+  isAudited,
+  resolveAuditCoverageRoot,
+  sweepRouteAuditCoverage,
+} from '../sweep';
 
 function appRoot(): string {
   const direct = process.cwd();
@@ -68,6 +74,36 @@ describe('every mutating route has an audit decision', () => {
       }
       expect(entry.expectedEvent, `${entry.route} is a gap with no event named`).toBeTruthy();
     }
+  });
+});
+
+describe('a route that hands its request to a shared service', () => {
+  const routeFile = (route: string) => join(APP_ROOT, 'app/api', route);
+
+  for (const delegate of ROUTE_HANDLER_DELEGATES) {
+    it(`${delegate.route} is audited through ${delegate.handler} and only through it`, () => {
+      const specifier = `@/${delegate.handler.replace(/\.tsx?$/, '')}`;
+      expect(readFileSync(routeFile(delegate.route), 'utf8')).toContain(`'${specifier}'`);
+      expect(existsSync(join(APP_ROOT, delegate.handler))).toBe(true);
+
+      const followed = classifyRoute(APP_ROOT, routeFile(delegate.route));
+      const oneHop = classifyRoute(APP_ROOT, routeFile(delegate.route), []);
+
+      expect(isAudited(followed)).toBe(true);
+      expect(isAudited(oneHop), `${delegate.route} no longer needs its declared handler`).toBe(
+        false,
+      );
+    });
+  }
+
+  it('follows no second hop for a route the registry does not name', () => {
+    const declared = new Set(ROUTE_HANDLER_DELEGATES.map((delegate) => delegate.route));
+    const changed = COVERAGE.filter((coverage) => {
+      const oneHop = classifyRoute(APP_ROOT, routeFile(coverage.route), []);
+      return oneHop.emitters.join() !== coverage.emitters.join();
+    }).map((coverage) => coverage.route);
+
+    expect(changed).toEqual([...declared].sort());
   });
 });
 

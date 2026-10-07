@@ -138,3 +138,33 @@ describe('fallbackStepLabel', () => {
     expect(fallbackStepLabel('   ', 'Anything')).toBeNull();
   });
 });
+
+describe('a free limit Auto answered around', () => {
+  it('says the free limit was reached and who answered instead', () => {
+    expect(describeFallbackReason('free_limit_reached', 'Fixture Free Model')).toBe(
+      'Free Auto reached its free limit, so Fixture Free Model answered instead.',
+    );
+    expect(describeFallbackReason('free_limit_reached')).toMatch(/another free model/);
+    expect(fallbackStepLabel('free_limit_reached', 'Fixture Free Model')).toBe(
+      'Switched to Fixture Free Model',
+    );
+  });
+
+  it('says the shared free pool had no capacity, never that a limit was reached', () => {
+    expect(describeFallbackReason('free_capacity_unavailable', 'Fixture Free Model')).toBe(
+      'Free Auto had no free capacity right now, so Fixture Free Model answered instead.',
+    );
+    expect(describeFallbackReason('free_capacity_unavailable')).toBe(
+      'Free Auto had no free capacity right now, so another free model answered instead.',
+    );
+    expect(describeFallbackReason('free_capacity_unavailable', 'Fixture Free Model')).not.toMatch(
+      /limit/i,
+    );
+    expect(fallbackStepLabel('free_capacity_unavailable', 'Fixture Free Model')).toBe(
+      'Switched to Fixture Free Model',
+    );
+    expect(fallbackStepLabel('free_capacity_unavailable', null)).toBe(
+      'Switched to another free model',
+    );
+  });
+});

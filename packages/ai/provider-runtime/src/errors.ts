@@ -498,17 +498,59 @@ export const FREE_POOL_PROVIDER_HINT = 'free_pool_window';
 
 /**
  * Alibaba Model Studio answers an exhausted promotional allocation with
- * `AllocationQuota.FreeTierOnly` (HTTP 403 when "free quota only" is on) and an
- * exceeded paid allocation with `Throttling.AllocationQuota` (HTTP 429). Both
- * are quota facts about one model's pool, never credential facts: a 403 read as
+ * `AllocationQuota.FreeTierOnly` (HTTP 403 when "free quota only" is on). It is a
+ * quota fact about one model's pool, never a credential fact: a 403 read as
  * `auth` would park every route on the provider over one spent allocation.
  */
-const ALLOCATION_QUOTA_CODES: ReadonlySet<string> = new Set([
-  'allocationquota.freetieronly',
-  'throttling.allocationquota',
-]);
+const ALLOCATION_QUOTA_CODES: ReadonlySet<string> = new Set(['allocationquota.freetieronly']);
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_TIER_ONLY_PROVIDER_HINT = 'free_tier_only';
+export const MODEL_STUDIO_ACCOUNT_BILLING_HINT = 'account_billing';
+export const MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT = 'model_access_denied';
+export const MODEL_STUDIO_MODEL_NOT_FOUND_HINT = 'model_not_found';
+export const MODEL_STUDIO_MODEL_RETIRED_HINT = 'model_retired';
+
+// A spent free allocation on a model with no paid route shares its codes with
+// an ordinary throttle, so the whole documented message decides it.
+const MODEL_STUDIO_FREE_ALLOCATION_SPENT_CODES: ReadonlySet<string> = new Set([
+  'throttling.allocationquota',
+  'insufficient_quota',
+]);
+const MODEL_STUDIO_FREE_ALLOCATION_SPENT_MESSAGE = 'free allocated quota exceeded.';
+const MODEL_STUDIO_THROTTLING_CODES: ReadonlySet<string> = new Set([
+  'throttling',
+  'throttling.ratequota',
+  'throttling.burstrate',
+  'throttling.allocationquota',
+  'limit_requests',
+  'limit_burst_rate',
+  'insufficient_quota',
+]);
+const MODEL_STUDIO_ACCOUNT_BILLING_CODES: ReadonlySet<string> = new Set([
+  'arrearage',
+  'budgetlimitexceeded',
+  'prepaidbilloverdue',
+  'postpaidbilloverdue',
+  'commoditynotpurchased',
+]);
+const MODEL_STUDIO_MODEL_NOT_FOUND_CODES: ReadonlySet<string> = new Set([
+  'modelnotfound',
+  'model_not_found',
+  'model_not_supported',
+]);
+const MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE = 'model not exist.';
+const MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES: ReadonlySet<string> = new Set([
+  'model.accessdenied',
+  'workspace.accessdenied',
+  'app.accessdenied',
+  'accessdenied',
+  'access_denied',
+]);
+const MODEL_STUDIO_MODEL_RETIRED_CODES: ReadonlySet<string> = new Set(['endpoint.accessdenied']);
+const MODEL_STUDIO_CONTENT_INSPECTION_CODES: ReadonlySet<string> = new Set([
+  'datainspectionfailed',
+  'data_inspection_failed',
+]);
 
 /**
  * A discounted-capacity marketplace refuses a request whose required discount
@@ -546,9 +588,21 @@ function errorCodeFields(e: SDKErrorLike): string[] {
     .map((raw) => raw.trim().toLowerCase());
 }
 
-function matchesAllocationQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
+// What may prove an allowance or a balance spent. A consumer that withdraws a
+// model for every account on that proof must not take it from wording a
+// provider can echo back from the request.
+type ExhaustionEvidence = 'code_fields' | 'code_fields_or_message';
+
+function matchesAllocationQuotaExhausted(
+  e: SDKErrorLike,
+  lowerMessage: string,
+  evidence: ExhaustionEvidence,
+): boolean {
   if (errorCodeFields(e).some((code) => ALLOCATION_QUOTA_CODES.has(code))) return true;
-  return [...ALLOCATION_QUOTA_CODES].some((code) => lowerMessage.includes(code));
+  return (
+    evidence === 'code_fields_or_message' &&
+    [...ALLOCATION_QUOTA_CODES].some((code) => lowerMessage.includes(code))
+  );
 }
 
 function matchesMinimumDiscountUnavailable(e: SDKErrorLike, lowerMessage: string): boolean {
@@ -689,9 +743,11 @@ function matchesBillingExhausted(
   e: SDKErrorLike,
   status: number | undefined,
   lowerMessage: string,
+  evidence: ExhaustionEvidence,
 ): boolean {
   if (status === 402) return true;
   if (errorCodeFields(e).some((code) => BILLING_EXHAUSTED_CODES.has(code))) return true;
+  if (evidence === 'code_fields') return false;
   return (
     lowerMessage.includes('credit balance is too low') ||
     lowerMessage.includes('insufficient credit') ||
@@ -792,6 +848,13 @@ function matchesConnection(name: string | undefined, message: string): boolean {
  * @returns ClassifiedError with retry/fallback hints.
  */
 export function classifyError(err: unknown): ClassifiedError {
+  return classifyWithExhaustionEvidence(err, 'code_fields_or_message');
+}
+
+function classifyWithExhaustionEvidence(
+  err: unknown,
+  exhaustionEvidence: ExhaustionEvidence,
+): ClassifiedError {
   // First, and before any text is looked at. A classification that survived the
   // stream-chunk boundary was computed from structure the adapter could see and
   // this layer cannot; re-deriving it from the message would only discard a
@@ -859,7 +922,7 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  if (matchesAllocationQuotaExhausted(e, lower)) {
+  if (matchesAllocationQuotaExhausted(e, lower, exhaustionEvidence)) {
     return {
       category: 'quota_exhausted',
       code: FREE_QUOTA_EXHAUSTED_CODE,
@@ -920,7 +983,7 @@ export function classifyError(err: unknown): ClassifiedError {
     // help while a different pool is fine. A plain 429 is back-pressure and IS
     // worth waiting out. All three were previously collapsed into `rate_limit`,
     // and then the first two into `quota_exhausted`.
-    if (matchesBillingExhausted(e, status, lower)) {
+    if (matchesBillingExhausted(e, status, lower, exhaustionEvidence)) {
       return {
         category: 'billing_exhausted',
         code: 'credit_balance_low',
@@ -1039,7 +1102,7 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  if (matchesBillingExhausted(e, status, lower)) {
+  if (matchesBillingExhausted(e, status, lower, exhaustionEvidence)) {
     return {
       category: 'billing_exhausted',
       code: status === 402 ? 'payment_required_402' : 'credit_balance_low',
@@ -1124,6 +1187,100 @@ export function classifyError(err: unknown): ClassifiedError {
     fallbackable: false,
     message,
   };
+}
+
+export function classifyModelStudioError(err: unknown): ClassifiedError {
+  const carried = readCarriedClassification(err);
+  if (carried) return carried;
+  const e = asSDKError(err);
+  const codes = errorCodeFields(e);
+  const status = extractStatus(e);
+  const message = extractMessage(e);
+  const withStatus = typeof status === 'number' ? { status } : {};
+  const named = (set: ReadonlySet<string>) => codes.some((code) => set.has(code));
+  const statedMessage = (typeof e.error?.message === 'string' ? e.error.message : message)
+    .trim()
+    .toLowerCase();
+
+  if (
+    named(ALLOCATION_QUOTA_CODES) ||
+    (named(MODEL_STUDIO_FREE_ALLOCATION_SPENT_CODES) &&
+      statedMessage === MODEL_STUDIO_FREE_ALLOCATION_SPENT_MESSAGE)
+  ) {
+    return {
+      category: 'quota_exhausted',
+      code: FREE_QUOTA_EXHAUSTED_CODE,
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+      providerHint: FREE_TIER_ONLY_PROVIDER_HINT,
+    };
+  }
+  if (named(MODEL_STUDIO_ACCOUNT_BILLING_CODES)) {
+    return {
+      category: 'billing_exhausted',
+      code: 'provider_account_billing',
+      retryable: false,
+      fallbackable: false,
+      ...withStatus,
+      message,
+      providerHint: MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+    };
+  }
+  if (named(MODEL_STUDIO_THROTTLING_CODES)) {
+    const retryAfterSeconds = extractRetryAfterSeconds(e);
+    return {
+      category: 'rate_limit',
+      code: 'rate_limit_429',
+      retryable: true,
+      fallbackable: true,
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+      ...withStatus,
+      message,
+    };
+  }
+  if (named(MODEL_STUDIO_CONTENT_INSPECTION_CODES)) {
+    return {
+      category: 'safety',
+      code: 'safety_refusal',
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+    };
+  }
+  const modelRefusalHint = named(MODEL_STUDIO_MODEL_RETIRED_CODES)
+    ? MODEL_STUDIO_MODEL_RETIRED_HINT
+    : named(MODEL_STUDIO_MODEL_ACCESS_DENIED_CODES)
+      ? MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT
+      : null;
+  if (modelRefusalHint) {
+    return {
+      category: 'invalid_model',
+      code: 'model_tier_restricted',
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+      providerHint: modelRefusalHint,
+    };
+  }
+  if (
+    named(MODEL_STUDIO_MODEL_NOT_FOUND_CODES) ||
+    statedMessage === MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE
+  ) {
+    return {
+      category: 'invalid_model',
+      code: 'invalid_model',
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+      providerHint: MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
+    };
+  }
+  return classifyWithExhaustionEvidence(err, 'code_fields');
 }
 
 export function parseContextOverflow(

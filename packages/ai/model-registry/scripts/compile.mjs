@@ -415,55 +415,170 @@ function resolveSyncedFields(cur, up) {
 
 const FAMILY_RESOLVED_TOP_LEVEL_KEYS = ['providers', 'tierAllowedModels', 'providerDefaults'];
 
+const PROVIDER_OFFERING_CATEGORIES = ['chat', 'image', 'video', 'audio', 'embedding'];
+const PROVIDER_OFFERING_IDENTITY_STATUSES = ['exact', 'unresolved'];
+const PROVIDER_OFFERING_BASE_FIELDS = [
+  'provider',
+  'providerModelId',
+  'displayName',
+  'category',
+  'identityStatus',
+  'retiresAt',
+  'quotaProbeProtocol',
+];
+const QUOTA_PROTOCOL_CATEGORIES = {
+  chat: 'chat',
+  'image-sync': 'image',
+  'image-async': 'image',
+  'video-async': 'video',
+};
+const QUOTA_CHAT_PROTOCOLS = ['chat'];
+const QUOTA_IMAGE_PROTOCOLS = ['image-sync', 'image-async'];
+const QUOTA_VIDEO_PROTOCOLS = ['video-async'];
+const QUOTA_MEDIA_PROTOCOLS = [...QUOTA_IMAGE_PROTOCOLS, ...QUOTA_VIDEO_PROTOCOLS];
+const QUOTA_VIDEO_RESOLUTIONS = ['480P', '720P', '1080P'];
+const QUOTA_VIDEO_SHOT_TYPES = ['single', 'multi'];
+const PIXEL_SIZE_PATTERN = /^[1-9]\d*\*[1-9]\d*$/;
+const ASPECT_RATIO_PATTERN = /^[1-9]\d*:[1-9]\d*$/;
+const UTC_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+function isOwnKey(record, value) {
+  return typeof value === 'string' && Object.hasOwn(record, value);
+}
+
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
+function isPixelSize(value) {
+  return typeof value === 'string' && PIXEL_SIZE_PATTERN.test(value);
+}
+
+function isAspectRatio(value) {
+  return typeof value === 'string' && ASPECT_RATIO_PATTERN.test(value);
+}
+
+function isUtcInstant(value) {
+  if (typeof value !== 'string' || !UTC_INSTANT_PATTERN.test(value)) return false;
+  const instant = new Date(value);
+  return !Number.isNaN(instant.getTime()) && instant.toISOString() === value;
+}
+
+const QUOTA_FIELD_RULES = {
+  quotaThinkingRequired: {
+    protocols: QUOTA_CHAT_PROTOCOLS,
+    accepts: (value) => typeof value === 'boolean',
+  },
+  quotaChatImageInput: { protocols: QUOTA_CHAT_PROTOCOLS, accepts: (value) => value === true },
+  quotaImageSize: { protocols: QUOTA_IMAGE_PROTOCOLS, accepts: isPixelSize },
+  quotaPromptExtendUnsupported: {
+    protocols: QUOTA_MEDIA_PROTOCOLS,
+    accepts: (value) => value === true,
+  },
+  quotaPromptMaxChars: { protocols: QUOTA_MEDIA_PROTOCOLS, accepts: isPositiveInteger },
+  quotaVideoSize: { protocols: QUOTA_VIDEO_PROTOCOLS, accepts: isPixelSize },
+  quotaVideoResolution: {
+    protocols: QUOTA_VIDEO_PROTOCOLS,
+    accepts: (value) => QUOTA_VIDEO_RESOLUTIONS.includes(value),
+  },
+  quotaVideoRatio: { protocols: QUOTA_VIDEO_PROTOCOLS, accepts: isAspectRatio },
+  quotaVideoSeconds: { protocols: QUOTA_VIDEO_PROTOCOLS, accepts: isPositiveInteger },
+  quotaVideoDurationFixed: {
+    protocols: QUOTA_VIDEO_PROTOCOLS,
+    accepts: (value) => value === true,
+  },
+  quotaVideoShotType: {
+    protocols: QUOTA_VIDEO_PROTOCOLS,
+    accepts: (value) => QUOTA_VIDEO_SHOT_TYPES.includes(value),
+  },
+  quotaVideoWatermark: {
+    protocols: QUOTA_VIDEO_PROTOCOLS,
+    accepts: (value) => typeof value === 'boolean',
+  },
+};
+
+export function validateProviderOffering(key, offering, providers) {
+  assert.ok(isOwnKey(providers, offering.provider), `${key}: unknown offering provider`);
+  assert.ok(
+    PROVIDER_OFFERING_CATEGORIES.includes(offering.category),
+    `${key}: unknown offering category`,
+  );
+  assert.ok(
+    typeof offering.displayName === 'string' && offering.displayName.length > 0,
+    `${key}: missing offering label`,
+  );
+  assert.ok(
+    PROVIDER_OFFERING_IDENTITY_STATUSES.includes(offering.identityStatus),
+    `${key}: unknown identity status`,
+  );
+  assert.ok(
+    offering.identityStatus === 'unresolved'
+      ? offering.providerModelId === null
+      : typeof offering.providerModelId === 'string' &&
+          /^[a-zA-Z0-9][a-zA-Z0-9./_-]*$/.test(offering.providerModelId) &&
+          !offering.providerModelId.includes('..'),
+    `${key}: invalid offering identity`,
+  );
+  if (offering.retiresAt !== undefined) {
+    assert.ok(isUtcInstant(offering.retiresAt), `${key}: retiresAt must be an ISO instant in UTC`);
+  }
+
+  const protocol = offering.quotaProbeProtocol;
+  if (protocol !== undefined) {
+    assert.ok(
+      isOwnKey(QUOTA_PROTOCOL_CATEGORIES, protocol) && offering.identityStatus === 'exact',
+      `${key}: invalid quota probe protocol`,
+    );
+    assert.ok(
+      QUOTA_PROTOCOL_CATEGORIES[protocol] === offering.category,
+      `${key}: the ${protocol} protocol serves ${QUOTA_PROTOCOL_CATEGORIES[protocol]} offerings, not ${offering.category}`,
+    );
+  }
+  for (const field of Object.keys(offering)) {
+    if (PROVIDER_OFFERING_BASE_FIELDS.includes(field)) continue;
+    assert.ok(Object.hasOwn(QUOTA_FIELD_RULES, field), `${key}: unknown offering field ${field}`);
+    const rule = QUOTA_FIELD_RULES[field];
+    assert.ok(
+      rule.protocols.includes(protocol),
+      `${key}: ${field} does not belong to ${
+        protocol === undefined ? 'an offering without a quota protocol' : `the ${protocol} protocol`
+      }`,
+    );
+    assert.ok(rule.accepts(offering[field]), `${key}: invalid ${field}`);
+  }
+  assert.ok(
+    offering.quotaVideoSize === undefined || offering.quotaVideoResolution === undefined,
+    `${key}: a video offering takes quotaVideoSize or quotaVideoResolution, not both`,
+  );
+  assert.ok(
+    offering.quotaVideoRatio === undefined || offering.quotaVideoResolution !== undefined,
+    `${key}: quotaVideoRatio requires quotaVideoResolution`,
+  );
+  if (QUOTA_VIDEO_PROTOCOLS.includes(protocol)) {
+    assert.ok(
+      offering.quotaVideoSeconds !== undefined,
+      `${key}: a ${protocol} offering requires quotaVideoSeconds`,
+    );
+    assert.ok(
+      offering.quotaVideoSize !== undefined || offering.quotaVideoResolution !== undefined,
+      `${key}: a ${protocol} offering requires quotaVideoSize or quotaVideoResolution`,
+    );
+    assert.ok(
+      offering.quotaVideoResolution === undefined || offering.quotaVideoRatio !== undefined,
+      `${key}: quotaVideoResolution requires quotaVideoRatio`,
+    );
+  }
+  if (QUOTA_IMAGE_PROTOCOLS.includes(protocol)) {
+    assert.ok(
+      offering.quotaImageSize !== undefined,
+      `${key}: an ${protocol} offering requires quotaImageSize`,
+    );
+  }
+}
+
 function buildCatalog(curation, synced, familyCatalog, defaultsCatalog) {
   for (const [key, offering] of Object.entries(curation.providerOfferings ?? {})) {
-    if (offering.quotaThinkingRequired !== undefined) {
-      assert(
-        offering.quotaProbeProtocol === 'chat' &&
-          typeof offering.quotaThinkingRequired === 'boolean',
-        `${key}: thinking configuration requires a chat protocol`,
-      );
-    }
-    if (offering.quotaChatImageInput !== undefined) {
-      assert(
-        offering.quotaProbeProtocol === 'chat' && offering.quotaChatImageInput === true,
-        `${key}: image input requires a verified chat protocol`,
-      );
-    }
-    if (offering.quotaImageSize !== undefined) {
-      assert.ok(
-        offering.quotaProbeProtocol === 'image-sync' && /^\d+\*\d+$/.test(offering.quotaImageSize),
-        `${key}: invalid quota image size`,
-      );
-    }
-    if (offering.quotaProbeProtocol !== undefined) {
-      assert.ok(
-        ['chat', 'image-sync', 'video-async'].includes(offering.quotaProbeProtocol) &&
-          offering.identityStatus === 'exact',
-        `${key}: invalid quota probe protocol`,
-      );
-    }
-    assert.ok(curation.providers[offering.provider], `${key}: unknown offering provider`);
-    assert.ok(
-      ['chat', 'image', 'video', 'audio', 'embedding'].includes(offering.category),
-      `${key}: unknown offering category`,
-    );
-    assert.ok(
-      typeof offering.displayName === 'string' && offering.displayName.length > 0,
-      `${key}: missing offering label`,
-    );
-    assert.ok(
-      ['exact', 'unresolved'].includes(offering.identityStatus),
-      `${key}: unknown identity status`,
-    );
-    assert.ok(
-      offering.identityStatus === 'unresolved'
-        ? offering.providerModelId === null
-        : typeof offering.providerModelId === 'string' &&
-            /^[a-zA-Z0-9][a-zA-Z0-9./_-]*$/.test(offering.providerModelId) &&
-            !offering.providerModelId.includes('..'),
-      `${key}: invalid offering identity`,
-    );
+    validateProviderOffering(key, offering, curation.providers);
   }
   const developers = loadDeveloperCatalog();
   const developerLabels = {};

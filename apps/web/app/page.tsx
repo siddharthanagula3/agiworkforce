@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
+import { readFreeMediaOfferForRender } from '@/lib/server/free-media-offer-reader';
 
 const TITLE = 'AGI | One AI Workspace. Six Surfaces. Your Rules.';
 const DESCRIPTION =
@@ -41,6 +42,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Home() {
-  return <MarketingLanding />;
+export default async function Home() {
+  return <MarketingLanding freeMediaOffer={await readFreeMediaOfferForRender()} />;
 }

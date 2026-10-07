@@ -9,6 +9,7 @@ import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection'
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
+import { resolveLimitedFreeMedia } from '../lib/free-media-choice';
 import { regenerateModelOptions as selectableRegenerateModelOptions } from '../lib/regenerate-model-options';
 import { pickFreePoolModel } from '../lib/eligible-model';
 import { useModelCatalogue } from '../lib/use-model-catalogue';
@@ -122,6 +123,7 @@ import {
   type CloudWorkMode,
   type ProviderMode,
   type SendPreviewPresentation,
+  canUseBillingPlanCapability,
   hasSelfServeUpgradePath,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -254,6 +256,7 @@ import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import { hasPendingApproval } from '../lib/pending-approval';
+import { savedMessageId } from '../lib/pending-message-saves';
 import {
   WorkSessionPanel,
   WorkSessionToggleButton,
@@ -463,6 +466,10 @@ function clientFallbackTitle(firstUserContent: string): string {
 
 const BLOCKED_SEND_TOAST =
   'Your last message is still starting. This one was saved here, send it again in a moment.';
+const FREE_IMAGE_LOOKUP_FAILED_TOAST =
+  'Free image availability could not be checked, so your request was not sent. It is back in the message box: try again in a moment.';
+const FREE_IMAGE_CHAT_CHANGED_TOAST =
+  'Your image request was not sent because the chat changed while it was being prepared. It is saved as a draft in the chat you wrote it in.';
 const SEND_FINGERPRINT_FIELD_SEPARATOR = '|';
 const SEND_FINGERPRINT_ATTACHMENT_SEPARATOR = ',';
 const SEND_FINGERPRINT_ATTACHMENT_FIELD_SEPARATOR = ':';
@@ -768,6 +775,7 @@ async function deleteConversationMessage(params: {
   messageId: string;
   authToken: string;
   subtree?: boolean;
+  missingIsDeleted?: boolean;
 }): Promise<string | null> {
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
@@ -783,6 +791,7 @@ async function deleteConversationMessage(params: {
     },
   );
 
+  if (params.missingIsDeleted && response.status === 404) return null;
   if (!response.ok) {
     throw new Error(await readChatMutationError(response, 'Failed to delete message'));
   }
@@ -1232,6 +1241,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // resolves it before any await, so this ref is the one case that can honor
   // the contract instead of discarding it through `void sendContent(...)`.
   const lastSendGuardBlockedRef = useRef(false);
+  const sendTypedImageRef = useRef<
+    | ((
+        content: string,
+        skillId: string | undefined,
+        meta: SendMeta,
+      ) => false | typeof SEND_GUARD_BLOCKED | void)
+    | null
+  >(null);
   // Conversations whose auto-title read has already been started. The effect below
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
@@ -3697,6 +3714,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       attachments?: File[],
       skillId?: string,
       meta?: SendMeta,
+      typedImageResolved = false,
     ): false | typeof SEND_GUARD_BLOCKED | void => {
       let resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
       const outgoingContent = content;
@@ -3724,13 +3742,53 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...resolvedMeta,
             artifactInstruction: visualRoute.target.directive,
           };
-        } else if (!freeQuotaSelection(targetModelId)) {
+        } else if (!freeQuotaSelection(targetModelId) && !typedImageResolved) {
           const defaultImageModel = IMAGE_MODELS[0];
-          if (defaultImageModel) {
-            handleGenerateImage(content, {
-              aspectRatio: 'auto',
-              modelId: defaultImageModel.id,
+          const sentFromConversationId = displayedConversationId ?? null;
+          const handBackUnsent = () => parkUnsentDraft(sentFromConversationId, content);
+          const sendAsChatTurn = (turnMeta: SendMeta) => {
+            if (sendTypedImageRef.current?.(content, skillId, turnMeta) === false) {
+              handBackUnsent();
+            }
+          };
+          const generateOnPlan = () => {
+            if (defaultImageModel) {
+              handleGenerateImage(content, { aspectRatio: 'auto', modelId: defaultImageModel.id });
+            } else {
+              sendAsChatTurn({ ...resolvedMeta });
+            }
+          };
+          if (
+            billingPolicyReady &&
+            !canUseBillingPlanCapability(subscriptionTier, 'image_generation')
+          ) {
+            void resolveLimitedFreeMedia('image').then((lookup) => {
+              if ((displayedConversationIdRef.current ?? null) !== sentFromConversationId) {
+                handBackUnsent();
+                toast.error(FREE_IMAGE_CHAT_CHANGED_TOAST);
+                return;
+              }
+              if (lookup.status === 'unknown') {
+                handBackUnsent();
+                toast.error(FREE_IMAGE_LOOKUP_FAILED_TOAST);
+                return;
+              }
+              if (lookup.status === 'not_offered') {
+                generateOnPlan();
+                return;
+              }
+              sendAsChatTurn({
+                ...resolvedMeta,
+                workMode: 'chat',
+                modelOverrideId: lookup.modelId,
+                webSearchEnabled: false,
+                codeExecutionEnabled: false,
+              });
             });
+            return;
+          }
+          if (defaultImageModel) {
+            generateOnPlan();
             return;
           }
         }
@@ -3803,10 +3861,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       displayedConversationId,
       displayedMessages,
       activeModelId,
+      billingPolicyReady,
+      subscriptionTier,
       handleGenerateImage,
       sendContent,
     ],
   );
+
+  useEffect(() => {
+    sendTypedImageRef.current = (content, skillId, meta) =>
+      handleSend(content, undefined, skillId, meta, true);
+  }, [handleSend]);
 
   useEffect(() => {
     if (!pendingByokHandoff) return;
@@ -4317,7 +4382,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   ]);
 
   const deletePersistedMessages = useCallback(
-    async (ids: string[]): Promise<boolean> => {
+    async (ids: string[], options: { missingIsDeleted?: boolean } = {}): Promise<boolean> => {
       if (!displayedConversationId || ids.length === 0) return false;
       const conversationId = displayedConversationId;
       const mutationIds = [...new Set(ids)];
@@ -4351,6 +4416,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             conversationId,
             messageId,
             authToken,
+            ...(options.missingIsDeleted ? { missingIsDeleted: true } : {}),
           });
           // AUDIT-FIX ROOT-CAUSE: delete from the conversation the row belongs
           // to; the loop awaits a network call per message and the user can
@@ -4528,11 +4594,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             (candidate) => candidate.id === id,
           )
         : undefined;
-      const isPersistedMediaRefusal =
+      const isPersistedRefusal =
         message?.metadata?.toolType === 'image-generation' ||
-        message?.metadata?.toolType === 'video-generation';
-      if (isPersistedMediaRefusal) {
-        void deletePersistedMessages([id]);
+        message?.metadata?.toolType === 'video-generation' ||
+        message?.metadata?.paywall?.freeLimit !== undefined;
+      if (isPersistedRefusal) {
+        void savedMessageId(id).then((savedId) =>
+          deletePersistedMessages([savedId], { missingIsDeleted: true }),
+        );
         return;
       }
       // Legacy chat-stream quota cards are synthetic and have no server row.
@@ -4958,9 +5027,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRegenerateWithModel = useCallback(
     async (id: string, modelId: string) => {
-      await handleRegenerateMessage(id, resolveSelectableModelId(modelId));
+      const targetModelId = resolveSelectableModelId(modelId);
+      const limitCard = displayedMessages.find((message) => message.id === id)?.metadata?.paywall;
+      if (limitCard && !(await handleConversationModelChange(targetModelId))) return;
+      await handleRegenerateMessage(id, targetModelId);
     },
-    [handleRegenerateMessage],
+    [displayedMessages, handleConversationModelChange, handleRegenerateMessage],
   );
 
   const lastAssistantMessage = useMemo(

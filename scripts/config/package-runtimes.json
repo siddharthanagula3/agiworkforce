@@ -103,7 +103,8 @@
       "./account-security": "universal",
       "./client-request": "universal",
       "./me": "universal",
-      "./support": "universal"
+      "./support": "universal",
+      "./waitlist": "universal"
     },
     "packages/contracts/compliance": {
       ".": "universal"

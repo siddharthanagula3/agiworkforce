@@ -245,6 +245,8 @@ export interface MessageMetadata {
   provider?: string;
   /** The routing lane that served this turn, when the router explicitly named one. */
   routeLane?: string;
+  /** The substitution code of a reply another model wrote, saved once that reply has text. */
+  fallbackReason?: string;
   /**
    * Per-turn usage, lifted from the PERSISTED `web_messages.input_tokens` /
    * `output_tokens` columns by `toChatMessage` on conversation load. There is
@@ -534,8 +536,8 @@ export interface Message {
   provider?: string;
   /**
    * Stable substitution code from `X-AGI-Fallback-Reason` when the server served
-   * this turn on a model other than the one the user picked. Per-turn and not
-   * persisted: it explains this delivery, not the stored message.
+   * this turn on a model other than the one the user picked. Set when the reply's
+   * first text arrives; the saved reply keeps it as `metadata.fallbackReason`.
    */
   fallbackReason?: string;
   /**

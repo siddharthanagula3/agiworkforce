@@ -16,6 +16,12 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
+  FREE_QUOTA_MEDIA_OFFER_PATH,
+  FreeQuotaMediaOfferSchema,
+  type FreeQuotaMediaCategory,
+  type FreeQuotaMediaOffer,
+} from '@agiworkforce/cloud-contracts';
+import {
   BILLING_PLAN_CAPABILITY_LABELS,
   BILLING_PLAN_PRICING,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
@@ -50,6 +56,12 @@ import {
   type SelfServeIndividualPlanTier,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
+import {
+  freeMediaAccess,
+  freeMediaLastDayLabel,
+  freeMediaPlanStanding,
+  type FreeMediaCategoryOffer,
+} from '@/features/models/lib/free-media-offer';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useMounted } from '@shared/hooks/useMounted';
 import {
@@ -278,6 +290,56 @@ function capabilityCell(plan: BillingPlanTier, capability: BillingPlanCapability
   return canUseBillingPlanCapability(plan, capability) ? 'Yes' : 'No';
 }
 
+const NO_FREE_MEDIA_OFFER: FreeQuotaMediaOffer = { image: null, video: null };
+const LIMITED_PREVIEW_CELL = 'Limited preview';
+const FREE_MEDIA_COPY = {
+  both: {
+    line: 'freeMediaLineBoth',
+    undated: 'freeMediaLineBothUndated',
+    feature: 'freeMediaFeatureBoth',
+  },
+  image: {
+    line: 'freeMediaLineImage',
+    undated: 'freeMediaLineImageUndated',
+    feature: 'freeMediaFeatureImage',
+  },
+  video: {
+    line: 'freeMediaLineVideo',
+    undated: 'freeMediaLineVideoUndated',
+    feature: 'freeMediaFeatureVideo',
+  },
+} as const;
+
+function mediaCapabilityCell(
+  plan: BillingPlanTier,
+  category: FreeQuotaMediaCategory,
+  offer: FreeMediaCategoryOffer | null,
+): string {
+  const standing = freeMediaPlanStanding(plan, category);
+  const access = freeMediaAccess({
+    planIncludes: standing === 'included',
+    offer: standing === 'offer_eligible' ? offer : null,
+  });
+  if (access.label === 'included') return 'Yes';
+  return access.label === 'limited' ? LIMITED_PREVIEW_CELL : 'No';
+}
+
+function freeMediaPreview(offer: FreeQuotaMediaOffer): {
+  copy: (typeof FREE_MEDIA_COPY)[keyof typeof FREE_MEDIA_COPY];
+  lastDay: string | null;
+} | null {
+  const offered = [offer.image, offer.video].filter((kind) => kind !== null);
+  if (offered.length === 0) return null;
+  const lastDays = offered.flatMap((kind) => (kind.lastDay === null ? [] : [kind.lastDay]));
+  return {
+    copy: FREE_MEDIA_COPY[offer.image && offer.video ? 'both' : offer.image ? 'image' : 'video'],
+    lastDay:
+      lastDays.length === offered.length
+        ? lastDays.reduce((latest, candidate) => (candidate > latest ? candidate : latest))
+        : null,
+  };
+}
+
 const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en', {
   notation: 'compact',
   maximumFractionDigits: 2,
@@ -290,7 +352,7 @@ function contextWindowCell(plan: BillingPlanTier): string {
     : `Up to ${CONTEXT_WINDOW_FORMAT.format(tokens)} tokens`;
 }
 
-function managedPlanCapabilities(plan: BillingPlanTier) {
+function managedPlanCapabilities(plan: BillingPlanTier, freeMedia: FreeQuotaMediaOffer) {
   const limits = getBillingPlanProductLimits(plan);
   return {
     contextWindow: contextWindowCell(plan),
@@ -300,8 +362,8 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
     skillsConnectors: capabilityCell(plan, 'skills_connectors'),
     agiWork: capabilityCell(plan, 'agi_work'),
     deepResearch: capabilityCell(plan, 'deep_research'),
-    imageGeneration: capabilityCell(plan, 'image_generation'),
-    videoGeneration: capabilityCell(plan, 'video_generation'),
+    imageGeneration: mediaCapabilityCell(plan, 'image', freeMedia.image),
+    videoGeneration: mediaCapabilityCell(plan, 'video', freeMedia.video),
     apiAccess: capabilityCell(plan, 'managed_api'),
     developerSurfaces: capabilityCell(plan, 'developer_surfaces'),
     teamAdmin: capabilityCell(plan, 'team_admin'),
@@ -429,6 +491,7 @@ export default function PricingPage() {
   const comparisonToggleRef = useRef<HTMLButtonElement>(null);
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [freeMediaOffer, setFreeMediaOffer] = useState<FreeQuotaMediaOffer>(NO_FREE_MEDIA_OFFER);
   const priceLocale = useMounted() ? undefined : SERVER_RENDER_PRICE_LOCALE;
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
   const [portalPending, setPortalPending] = useState(false);
@@ -493,6 +556,18 @@ export default function PricingPage() {
         if (error instanceof DOMException && error.name === 'AbortError') return;
         setPricingStatus('error');
       });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(FREE_QUOTA_MEDIA_OFFER_PATH, { signal: controller.signal })
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((value: unknown) => {
+        const parsed = FreeQuotaMediaOfferSchema.safeParse(value);
+        setFreeMediaOffer(parsed.success ? parsed.data : NO_FREE_MEDIA_OFFER);
+      })
+      .catch(() => undefined);
     return () => controller.abort();
   }, []);
 
@@ -864,7 +939,16 @@ export default function PricingPage() {
     percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
   })}`;
 
+  const mediaPreview = freeMediaPreview(freeMediaOffer);
+  const freeMediaLine = mediaPreview
+    ? mediaPreview.lastDay
+      ? t(mediaPreview.copy.line, {
+          date: freeMediaLastDayLabel(mediaPreview.lastDay, priceLocale),
+        })
+      : t(mediaPreview.copy.undated)
+    : null;
   const freeFeatures = presentCopy([
+    mediaPreview ? t(mediaPreview.copy.feature) : null,
     t('freeFeature1'),
     t('freeFeature2'),
     t('freeFeature3'),
@@ -960,7 +1044,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareFreeUsage'),
-      ...managedPlanCapabilities('free'),
+      ...managedPlanCapabilities('free', freeMediaOffer),
       bestFor: t('compareFreeBestFor'),
     },
     {
@@ -969,7 +1053,7 @@ export default function PricingPage() {
       price: `${basicPrice}/mo`,
       billingInterval: t('monthlyOnly'),
       usageCapacity: usageCapacityCopy('basic'),
-      ...managedPlanCapabilities('basic'),
+      ...managedPlanCapabilities('basic', freeMediaOffer),
       bestFor: t('compareBasicBestFor'),
     },
     {
@@ -978,7 +1062,7 @@ export default function PricingPage() {
       price: `${proPrice}/mo`,
       billingInterval: t('monthlyOnly'),
       usageCapacity: usageCapacityCopy('pro'),
-      ...managedPlanCapabilities('pro'),
+      ...managedPlanCapabilities('pro', freeMediaOffer),
       bestFor: t('compareProBestFor'),
     },
     {
@@ -987,7 +1071,7 @@ export default function PricingPage() {
       price: `${maxPrice}/mo`,
       billingInterval: t('monthlyOnly'),
       usageCapacity: usageCapacityCopy('max'),
-      ...managedPlanCapabilities('max'),
+      ...managedPlanCapabilities('max', freeMediaOffer),
       bestFor: t('compareMaxBestFor'),
     },
     {
@@ -996,7 +1080,7 @@ export default function PricingPage() {
       price: `${max15xPrice}/mo`,
       billingInterval: t('monthlyOnly'),
       usageCapacity: usageCapacityCopy('max_15x'),
-      ...managedPlanCapabilities('max_15x'),
+      ...managedPlanCapabilities('max_15x', freeMediaOffer),
       bestFor: 'Highest-capacity work and video generation',
     },
     {
@@ -1012,7 +1096,7 @@ export default function PricingPage() {
         ? t('compareTeamBillingYearly')
         : t('compareTeamBilling'),
       usageCapacity: usageCapacityCopy('team'),
-      ...managedPlanCapabilities('team'),
+      ...managedPlanCapabilities('team', freeMediaOffer),
       bestFor: t('compareTeamBestFor'),
       highlighted: true,
     },
@@ -1022,7 +1106,7 @@ export default function PricingPage() {
       price: t('custom'),
       billingInterval: t('annualContract'),
       usageCapacity: t('compareEnterpriseUsage'),
-      ...managedPlanCapabilities('enterprise'),
+      ...managedPlanCapabilities('enterprise', freeMediaOffer),
       bestFor: t('compareEnterpriseBestFor'),
       highlighted: true,
     },
@@ -1043,6 +1127,11 @@ export default function PricingPage() {
           <h1 id="pricing-hero-title" className="agi-pricing-title">
             {t('pageTitle')}
           </h1>
+          {freeMediaLine ? (
+            <p className="agi-fl-section-lede" style={{ marginTop: 'var(--space-2)' }}>
+              {freeMediaLine}
+            </p>
+          ) : null}
           {!CHECKOUT_ENABLED ? (
             <p
               role="status"

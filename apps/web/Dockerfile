@@ -41,7 +41,13 @@ RUN pnpm --filter @agiworkforce/web build
 
 FROM ${NODE_RUNTIME_IMAGE} AS runner
 
-RUN rm -rf /usr/local/lib/node_modules/npm && \
+# The runtime tag is rebuilt less often than Debian publishes security fixes.
+# Without the upgrade a patched library stays vulnerable in this image until
+# the tag is rebuilt, and the container scan gate blocks every merge meanwhile.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /usr/local/lib/node_modules/npm && \
     rm -f /usr/local/bin/npm /usr/local/bin/npx
 
 ENV NODE_ENV=production

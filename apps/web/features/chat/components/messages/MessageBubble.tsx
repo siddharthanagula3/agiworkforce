@@ -89,7 +89,6 @@ import { useProjectAnswerSave } from '@/features/projects/components/project-ans
 import { useSaveAsSkill } from '@/features/skills/components/save-as-skill';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import {
-  getModelMetadataById,
   isAutoModeModelId,
   providerModeToPrivacyMode,
   type ArtifactManifest,
@@ -98,6 +97,7 @@ import {
   type ProjectFileCitation,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
+import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import { describeAttachmentTruncation } from '@agiworkforce/cloud-contracts';
 import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
@@ -787,9 +787,10 @@ const MessageBubbleComponent = function MessageBubble({
     movedReason: message.metadata?.movedReason ?? null,
     servedModelId: message.model ?? message.metadata?.model ?? null,
   });
+  const servedModelId = message.model ?? message.metadata?.model;
   const fallbackNotice = describeFallbackReason(
     message.metadata?.fallbackReason,
-    getModelMetadataById(message.model ?? message.metadata?.model)?.name,
+    servedModelId ? freeModelLabel(servedModelId) : null,
   );
   const [secretRedactionNoticeDismissed, setSecretRedactionNoticeDismissed] = useState(false);
   const secretRedactionNotice = describeSecretRedactionNotice(

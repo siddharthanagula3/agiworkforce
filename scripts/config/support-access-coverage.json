@@ -120,6 +120,14 @@
       "serves": "submitted_to_platform",
       "reason": "A share or artifact its owner published to the open web, looked up by the public token anyone already holds."
     },
+    "apps/web/app/api/admin/waitlist/export/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The public waitlist as a file: each address was submitted by its owner through a waitlist form so the platform could contact them."
+    },
+    "apps/web/app/api/admin/waitlist/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "Waitlist rows and the consent decisions recorded with them, each submitted by its subject by joining a waitlist. No workspace content is read."
+    },
     "apps/web/app/api/models/free-quota/attestation/route.ts": {
       "serves": "platform_only",
       "reason": "The operator's own record that the QwenCloud console's free quota only switch is on, bound to the platform key; it reads and writes no customer data."

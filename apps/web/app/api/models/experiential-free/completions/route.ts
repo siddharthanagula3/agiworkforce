@@ -14,9 +14,8 @@ import {
   experientialFreeConfiguration,
   loadExperientialFreeOfferings,
 } from '@/lib/server/experiential-free';
+import { FreeOfferingRequestSchema, freeOfferingContentText } from '@agiworkforce/cloud-contracts';
 import {
-  FreeOfferingRequestSchema,
-  freeOfferingContentText,
   freeOfferingRequiresCodeExecution,
   freeOfferingRequiresWebAccess,
 } from '@/features/models/lib/free-offering-request';
