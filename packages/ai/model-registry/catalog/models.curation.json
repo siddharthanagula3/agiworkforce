@@ -3658,9 +3658,9 @@
       "speedOverride": "fast",
       "releasedOverride": "August 12, 2026",
       "lifecycle": {
-        "stage": "probed",
+        "stage": "evaluated",
         "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#grok-4.6"
+        "source": "tools/evals/measurements/runs/grok-4.6.json"
       }
     },
     "grok-4.7": {
@@ -3728,9 +3728,9 @@
       "speedOverride": "fast",
       "releasedOverride": "September 2026",
       "lifecycle": {
-        "stage": "probed",
+        "stage": "evaluated",
         "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#grok-4.7"
+        "source": "tools/evals/measurements/runs/grok-4.7.json"
       }
     },
     "veo-3.1": {
