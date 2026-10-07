@@ -493,7 +493,10 @@ async function maskedTextPixels(page: Page, geometry: MaskedGeometry) {
   };
   const masked = await page.screenshot({ type: 'png', clip });
   await page.locator('#mask-owner').evaluate((owner) => {
-    (owner as HTMLElement).style.setProperty('mask-image', 'none');
+    (owner as HTMLElement).style.setProperty(
+      'mask-image',
+      'linear-gradient(currentColor, currentColor)',
+    );
   });
   const plain = await page.screenshot({ type: 'png', clip });
   await page.locator('#masked-font').evaluate((text) => {
@@ -512,7 +515,7 @@ for (const fade of [
     page,
   }, testInfo) => {
     const geometry = await maskedGeometry(page);
-    const stop = maskPercent(geometry, geometry.text.bottom);
+    const stop = maskPercent(geometry, Math.ceil(geometry.text.bottom));
     await maskedFontFixture(
       page,
       `mask-image:linear-gradient(to bottom, currentColor ${stop}, transparent ${fade.end})`,
