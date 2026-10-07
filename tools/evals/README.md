@@ -93,7 +93,10 @@ its capabilities, context window and pricing all come from the compiled model
 registry. The adapter is the one `packages/ai/providers/factory` builds for
 that route, with the credential its declared auth names, the same resolution
 `pnpm probe:models` uses. A suite the model lacks the capability for is recorded
-as unsupported; a long-context row larger than the context window is skipped.
+as unsupported; a long-context row larger than the context window is skipped,
+and so is a row whose attachment the route's adapter has no channel for, with
+the adapter's own reason. A picture is sent on the image channel, a document on
+the file channel.
 
 Live runs obey the cheap-model rule structurally: a route priced above the
 median output price of live text routes in the registry is refused unless

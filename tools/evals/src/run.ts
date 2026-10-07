@@ -14,7 +14,7 @@ import {
   type LiveTarget,
 } from './live';
 import type { RetryCost } from './metrics';
-import { partialResponseOf } from './provider';
+import { partialResponseOf, unreadableAttachmentReason } from './provider';
 import { buildRunReport, type RunIdentity, type RunReport } from './report';
 import {
   caseFingerprint,
@@ -94,6 +94,7 @@ function attemptRecorder(runId: string, now: () => number = () => Date.now()): A
           });
           return response;
         } catch (error) {
+          if (unreadableAttachmentReason(error) !== null) throw error;
           const partial = partialResponseOf(error);
           attempts.push({
             ...context,
