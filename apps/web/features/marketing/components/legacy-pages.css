@@ -2496,7 +2496,6 @@
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
-  margin-right: clamp(-80px, -8vw, -140px);
   animation: hero-fade-up 0.8s var(--agi-ease-out) 0.5s both;
 }
 
