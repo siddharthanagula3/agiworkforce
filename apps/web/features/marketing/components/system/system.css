@@ -2505,7 +2505,7 @@
   padding: 0.5rem;
   border: 1px solid var(--agi-rule-strong);
   border-radius: var(--corner-surface);
-  background: var(--agi-card, var(--agi-ground-2));
+  background: var(--chat-bg);
   box-shadow: 0 24px 60px var(--agi-shadow);
 }
 [data-design='agi'] .agi-ds-navpanel[data-columns='2'] {
@@ -2532,7 +2532,7 @@
 }
 [data-design='agi'] .agi-ds-navpanel-item:hover,
 [data-design='agi'] .agi-ds-navpanel-item:focus-visible {
-  background: var(--agi-ground-2, var(--agi-console-tint));
+  background: var(--chat-surface-hover);
 }
 [data-design='agi'] .agi-ds-navpanel-title {
   font-size: var(--public-body-size);
