@@ -133,7 +133,7 @@
   font-size: 0.875rem;
   line-height: var(--public-mockup-leading-text);
   color: var(--chat-text-secondary);
-  text-wrap: pretty;
+  text-wrap: wrap;
   overflow-wrap: normal;
 }
 

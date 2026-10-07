@@ -616,7 +616,7 @@
 [data-design='agi'] .agi-h1-line {
   display: block;
   white-space: normal;
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 [data-design='agi'] .agi-h1-line--quiet {
   color: var(--agi-ink-2);
@@ -2968,7 +2968,7 @@
 
 [data-design='agi'] .agi-fl-surface-body {
   margin: 12px 0 0;
-  max-width: 52ch;
+  max-width: none;
   font-size: var(--public-body-size);
   line-height: 1.62;
   color: var(--agi-ink-2);
@@ -4893,7 +4893,7 @@
   letter-spacing: -0.012em;
   line-height: 1.12;
   color: var(--agi-ink);
-  text-wrap: balance;
+  text-wrap: wrap;
   max-width: 22ch;
 }
 
@@ -5228,7 +5228,7 @@
   font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.02;
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'] .agi-device-auth-lede {
@@ -5833,7 +5833,7 @@
 
 [data-design='agi'] .agi-fl-surface-row--text .agi-fl-surface-body,
 [data-design='agi'] .agi-fl-surface-row--text .agi-fl-surface-caps {
-  max-width: 64ch;
+  max-width: none;
 }
 
 [data-design='agi'] .agi-fl-hero-spacer {

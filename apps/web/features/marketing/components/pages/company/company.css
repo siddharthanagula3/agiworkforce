@@ -67,7 +67,7 @@
   line-height: var(--co-leading-title);
   letter-spacing: -0.02em;
   color: var(--chat-text-primary);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-pagehead-em {
@@ -79,7 +79,7 @@
   font-size: var(--public-body-size);
   line-height: var(--co-leading-body);
   color: var(--chat-text-secondary);
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-pagehead-copy > .agi-ds-btn-row {
@@ -135,7 +135,7 @@
   line-height: var(--co-leading-heading);
   letter-spacing: -0.015em;
   color: var(--chat-text-primary);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-section .agi-ds-h3 {
@@ -144,7 +144,7 @@
   line-height: 1.5;
   letter-spacing: -0.005em;
   color: var(--chat-text-primary);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-section .agi-ds-eyebrow {
@@ -161,7 +161,7 @@
   font-size: var(--public-body-size);
   line-height: var(--co-leading-body);
   color: var(--chat-text-primary);
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-section .agi-ds-prose[data-size='sm'] {
@@ -185,7 +185,7 @@
   .agi-ds-stack
   > .agi-ds-h2
   + .agi-ds-prose:last-child {
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-section .agi-ds-prose strong {
@@ -257,7 +257,7 @@
   font-size: var(--agi-text-md);
   line-height: var(--co-leading-body);
   color: var(--chat-text-primary);
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-availability-links {
@@ -348,38 +348,6 @@
   border-color: var(--chat-border-strong);
   outline: calc(var(--stroke-hairline) * 2) solid var(--chat-focus-ring);
   outline-offset: var(--stroke-hairline);
-}
-
-@media (min-width: 64rem) {
-  [data-design='agi'].agi-ds-page.agi-co
-    main
-    .agi-ds-section
-    > .agi-ds-container
-    > .agi-ds-stack:not(:has(> .agi-ds-grid-2)) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    gap: var(--space-5) var(--space-8);
-    align-items: start;
-  }
-
-  [data-design='agi'].agi-ds-page.agi-co
-    main
-    .agi-ds-section
-    > .agi-ds-container
-    > .agi-ds-stack:not(:has(> .agi-ds-grid-2))
-    > :first-child {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  [data-design='agi'].agi-ds-page.agi-co
-    main
-    .agi-ds-section
-    > .agi-ds-container
-    > .agi-ds-stack:not(:has(> .agi-ds-grid-2))
-    > :not(:first-child) {
-    grid-column: 2;
-  }
 }
 
 @media (max-width: 47.9375rem) {
