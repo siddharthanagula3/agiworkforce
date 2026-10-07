@@ -1,0 +1,654 @@
+[data-design='agi'].fr4 {
+  --fr4-font: var(--font-fr4, var(--agi-font));
+  --fr4-h1: 56px;
+  --fr4-ui: 17px;
+  --fr4-label: 17px;
+  --fr4-title: 17px;
+  --fr4-mono: 16px;
+  --fr4-note: 15px;
+  --fr4-header: 65px;
+  --fr4-gutter: 120px;
+  --fr4-copy: 440px;
+  --fr4-dial: clamp(360px, calc(100svh - 380px), 520px);
+  --fr4-label-gap: 40px;
+  --fr4-lr: calc(var(--fr4-dial) / 2 + var(--fr4-label-gap));
+  --fr4-stage-pad: 40px;
+  --fr4-ground: var(--agi-illo-orange);
+  --fr4-ink: var(--agi-illo-ink);
+  --fr4-cream: var(--agi-illo-cream);
+  --fr4-amber: color-mix(in srgb, var(--agi-illo-yellow) 55%, var(--agi-illo-orange));
+  --fr4-lane: var(--agi-lane-cloud);
+  --fr4-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--fr4-ground);
+  color: var(--fr4-ink);
+}
+
+.fr4 .fr4-hero {
+  display: grid;
+  grid-template-columns: var(--fr4-copy) minmax(0, 1fr);
+  column-gap: 40px;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: calc(100svh - var(--fr4-header));
+  padding: 24px var(--fr4-gutter);
+  overflow: hidden;
+  background: var(--fr4-ground);
+  font-family: var(--fr4-font);
+}
+
+.fr4 .fr4-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fr4 .fr4-copy > * {
+  margin: 0;
+}
+
+.fr4 .fr4-claim,
+.fr4 .fr4-actions,
+.fr4 .fr4-availability {
+  opacity: 0;
+  animation: fr4-up 600ms var(--fr4-ease) both;
+}
+
+.fr4 .fr4-claim {
+  margin-bottom: 26px;
+  font-size: var(--fr4-h1);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  animation-delay: 100ms;
+}
+
+.fr4 .fr4-claim-line {
+  display: block;
+}
+
+.fr4 .fr4-readout {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 262px;
+  margin-bottom: 28px;
+  padding: 20px 24px 18px;
+  border-radius: var(--corner-panel);
+  background: var(--fr4-cream);
+  color: var(--fr4-ink);
+  visibility: hidden;
+}
+
+.fr4 .fr4-readout[data-printed] {
+  visibility: visible;
+  animation: fr4-card 320ms var(--fr4-ease) both;
+}
+
+.fr4 .fr4-readout-title {
+  margin: 0 0 12px;
+  font-size: var(--fr4-title);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.fr4 .fr4-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.fr4 .fr4-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: baseline;
+  opacity: 0;
+  animation: fr4-print 240ms var(--fr4-ease) both;
+  animation-delay: calc(var(--fr4-i) * 110ms);
+}
+
+.fr4 .fr4-row dt {
+  font-size: var(--fr4-mono);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.fr4 .fr4-row dd {
+  margin: 0;
+  font-family: var(--agi-font-mono);
+  font-size: var(--fr4-mono);
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fr4 .fr4-row[data-lane='cloud'] dd::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border-radius: var(--corner-detail);
+  background: var(--fr4-lane);
+  vertical-align: 0;
+  opacity: 0;
+  animation: fr4-fade 200ms var(--fr4-ease) both;
+  animation-delay: calc(var(--fr4-i) * 110ms + 360ms);
+}
+
+.fr4 .fr4-note {
+  margin: 14px 0 0;
+  font-size: var(--fr4-note);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.fr4 .fr4-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 22px;
+  animation-delay: 300ms;
+}
+
+.fr4 .fr4-availability {
+  max-width: 26em;
+  font-family: var(--agi-font);
+  font-size: var(--fr4-ui);
+  font-weight: 500;
+  line-height: 1.5;
+  animation-delay: 420ms;
+}
+
+.fr4 .fr4-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 52px;
+  padding: 0 24px;
+  border-radius: var(--corner-surface);
+  font-family: var(--fr4-font);
+  font-size: var(--fr4-ui);
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform 160ms var(--fr4-ease),
+    box-shadow 160ms var(--fr4-ease);
+}
+
+.fr4 .fr4-btn:hover {
+  transform: translateY(-1px);
+}
+
+.fr4 .fr4-btn:focus-visible {
+  outline: 3px solid var(--fr4-ink);
+  outline-offset: 3px;
+}
+
+.fr4 .fr4-btn-primary {
+  background: var(--fr4-ink);
+  color: var(--fr4-cream);
+}
+
+.fr4 .fr4-btn-primary:hover {
+  box-shadow: 0 0 0 3px var(--fr4-cream);
+}
+
+.fr4 .fr4-btn-secondary {
+  background: var(--fr4-cream);
+  color: var(--fr4-ink);
+  box-shadow: inset 0 0 0 2px var(--fr4-ink);
+}
+
+.fr4 .fr4-btn-secondary:hover {
+  box-shadow:
+    inset 0 0 0 2px var(--fr4-ink),
+    0 0 0 3px var(--fr4-cream);
+}
+
+.fr4 .fr4-stage {
+  display: grid;
+  justify-items: end;
+  align-content: center;
+  padding-right: var(--fr4-stage-pad);
+}
+
+.fr4 .fr4-sign-row {
+  display: none;
+}
+
+.fr4 .fr4-dial-area {
+  position: relative;
+  width: var(--fr4-dial);
+  height: var(--fr4-dial);
+}
+
+.fr4 .fr4-dial {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+  animation: fr4-face 600ms var(--fr4-ease) both;
+}
+
+.fr4 .fr4-dial:active {
+  cursor: grabbing;
+}
+
+.fr4 .fr4-dial:focus-visible {
+  box-shadow: 0 0 0 4px var(--fr4-cream);
+}
+
+.fr4 .fr4-face,
+.fr4 .fr4-needle {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.fr4 .fr4-face-disc {
+  fill: var(--fr4-ink);
+}
+
+.fr4 .fr4-tick {
+  stroke: var(--fr4-cream);
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: fr4-draw 260ms var(--fr4-ease) both;
+  animation-delay: calc(120ms + var(--fr4-i) * 30ms);
+  transition: stroke 120ms linear;
+}
+
+.fr4 .fr4-tick-hit {
+  stroke: var(--fr4-amber);
+}
+
+.fr4 .fr4-needle {
+  transform: rotate(210deg);
+  will-change: transform;
+}
+
+.fr4 .fr4-needle-bar {
+  stroke: var(--fr4-cream);
+}
+
+.fr4 .fr4-needle-tip {
+  stroke: var(--fr4-amber);
+}
+
+.fr4 .fr4-needle-weight {
+  fill: var(--fr4-cream);
+}
+
+.fr4 .fr4-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--fr4-cream);
+  color: var(--fr4-ink);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.fr4 .fr4-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.fr4 .fr4-label {
+  position: absolute;
+  left: calc(50% + var(--fr4-lr) * var(--fr4-sx));
+  top: calc(50% - var(--fr4-lr) * var(--fr4-cy));
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  box-sizing: border-box;
+  height: 42px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--corner-pill);
+  background: transparent;
+  color: var(--fr4-ink);
+  font-family: var(--fr4-font);
+  font-size: var(--fr4-label);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  animation: fr4-fade 260ms var(--fr4-ease) both;
+  animation-delay: calc(160ms + var(--fr4-i) * 30ms);
+  transition:
+    transform 160ms var(--fr4-ease),
+    background 160ms linear;
+}
+
+.fr4 .fr4-label[aria-pressed='true'] {
+  background: var(--fr4-cream);
+}
+
+.fr4 .fr4-label:focus-visible {
+  outline: 3px solid var(--fr4-ink);
+  outline-offset: 2px;
+}
+
+.fr4 .fr4-label[data-anchor='centre'] {
+  transform: translate(-50%, -50%);
+}
+
+.fr4 .fr4-label[data-anchor='start'] {
+  transform: translate(0, -50%);
+}
+
+.fr4 .fr4-label[data-anchor='end'] {
+  transform: translate(-100%, -50%);
+}
+
+.fr4 .fr4-label[data-anchor='centre']:hover {
+  transform: translate(-50%, calc(-50% - 2px));
+}
+
+.fr4 .fr4-label[data-anchor='start']:hover {
+  transform: translate(0, calc(-50% - 2px));
+}
+
+.fr4 .fr4-label[data-anchor='end']:hover {
+  transform: translate(-100%, calc(-50% - 2px));
+}
+
+.fr4 .fr4-label[data-pos='0'] {
+  --fr4-sx: 0;
+  --fr4-cy: 1;
+}
+
+.fr4 .fr4-label[data-pos='1'] {
+  --fr4-sx: 0.5;
+  --fr4-cy: 0.866;
+}
+
+.fr4 .fr4-label[data-pos='2'] {
+  --fr4-sx: 0.866;
+  --fr4-cy: 0.5;
+}
+
+.fr4 .fr4-label[data-pos='3'] {
+  --fr4-sx: 1;
+  --fr4-cy: 0;
+}
+
+.fr4 .fr4-label[data-pos='4'] {
+  --fr4-sx: 0.866;
+  --fr4-cy: -0.5;
+}
+
+.fr4 .fr4-label[data-pos='5'] {
+  --fr4-sx: 0.5;
+  --fr4-cy: -0.866;
+}
+
+.fr4 .fr4-label[data-pos='6'] {
+  --fr4-sx: 0;
+  --fr4-cy: -1;
+}
+
+.fr4 .fr4-label[data-pos='7'] {
+  --fr4-sx: -0.5;
+  --fr4-cy: -0.866;
+}
+
+.fr4 .fr4-label[data-pos='8'] {
+  --fr4-sx: -0.866;
+  --fr4-cy: -0.5;
+}
+
+.fr4 .fr4-label[data-pos='9'] {
+  --fr4-sx: -1;
+  --fr4-cy: 0;
+}
+
+.fr4 .fr4-label[data-pos='10'] {
+  --fr4-sx: -0.866;
+  --fr4-cy: 0.5;
+}
+
+.fr4 .fr4-label[data-pos='11'] {
+  --fr4-sx: -0.5;
+  --fr4-cy: 0.866;
+}
+
+.fr4 .fr4-step {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fr4-ink);
+  color: var(--fr4-cream);
+  cursor: pointer;
+}
+
+.fr4 .fr4-step:disabled {
+  cursor: default;
+  background: color-mix(in srgb, var(--fr4-ink) 35%, var(--fr4-ground));
+}
+
+.fr4 .fr4-step:focus-visible {
+  outline: 3px solid var(--fr4-ink);
+  outline-offset: 3px;
+}
+
+.fr4 .fr4-step svg {
+  width: 24px;
+  height: 24px;
+}
+
+.fr4 .fr4-sign {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-width: 180px;
+  height: 48px;
+  margin: 0;
+  padding: 0 18px;
+  border-radius: var(--corner-pill);
+  background: var(--fr4-cream);
+  color: var(--fr4-ink);
+  font-size: var(--fr4-label);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@keyframes fr4-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fr4-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fr4-face {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fr4-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fr4-card {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fr4-print {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1400px) {
+  [data-design='agi'].fr4 {
+    --fr4-gutter: 96px;
+    --fr4-copy: 420px;
+    --fr4-h1: 52px;
+    --fr4-stage-pad: 88px;
+  }
+}
+
+@media (max-width: 1100px) {
+  [data-design='agi'].fr4 {
+    --fr4-gutter: 48px;
+    --fr4-copy: 380px;
+    --fr4-h1: 44px;
+    --fr4-dial: 320px;
+    --fr4-label-gap: 28px;
+    --fr4-stage-pad: 120px;
+  }
+
+  .fr4 .fr4-hero {
+    column-gap: 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  [data-design='agi'].fr4 {
+    --fr4-gutter: 20px;
+    --fr4-h1: 36px;
+    --fr4-dial: 300px;
+    --fr4-stage-pad: 0px;
+  }
+
+  .fr4 .fr4-hero {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 32px;
+    align-content: start;
+    padding-top: 24px;
+    padding-bottom: 40px;
+  }
+
+  .fr4 .fr4-stage {
+    order: -1;
+    justify-items: center;
+    row-gap: 22px;
+  }
+
+  .fr4 .fr4-sign-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .fr4 .fr4-labels {
+    display: none;
+  }
+
+  .fr4 .fr4-hub {
+    width: 68px;
+    height: 68px;
+  }
+
+  .fr4 .fr4-readout {
+    min-height: 0;
+  }
+
+  .fr4 .fr4-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2px;
+  }
+
+  .fr4 .fr4-actions {
+    flex-direction: column;
+    align-items: stretch;
+    align-self: stretch;
+  }
+
+  .fr4 .fr4-availability {
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr4 .fr4-claim,
+  .fr4 .fr4-actions,
+  .fr4 .fr4-availability,
+  .fr4 .fr4-dial,
+  .fr4 .fr4-label,
+  .fr4 .fr4-row,
+  .fr4 .fr4-row[data-lane='cloud'] dd::before,
+  .fr4 .fr4-readout[data-printed] {
+    animation: none;
+    opacity: 1;
+  }
+
+  .fr4 .fr4-readout {
+    visibility: visible;
+  }
+
+  .fr4 .fr4-tick {
+    animation: none;
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+
+  .fr4 .fr4-needle {
+    transform: rotate(0deg);
+  }
+
+  .fr4 .fr4-label,
+  .fr4 .fr4-btn {
+    transition: none;
+  }
+}
