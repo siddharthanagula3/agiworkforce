@@ -8,8 +8,10 @@ import { classifyArtifactDocument } from './artifact-document-classification';
 
 const sanitiser = vi.hoisted(() => ({ withoutDom: false }));
 
+type DompurifyModule = typeof import('dompurify');
+
 vi.mock('dompurify', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('dompurify')>();
+  const actual = await importOriginal<DompurifyModule>();
   const domless = { isSupported: false };
   return {
     ...actual,

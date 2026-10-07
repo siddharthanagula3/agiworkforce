@@ -87,8 +87,10 @@ const transport = vi.hoisted(() => {
 });
 
 const notifications = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+type SonnerModule = typeof import('sonner');
+
 vi.mock('sonner', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('sonner')>();
+  const actual = await importOriginal<SonnerModule>();
   return {
     ...actual,
     toast: Object.assign(

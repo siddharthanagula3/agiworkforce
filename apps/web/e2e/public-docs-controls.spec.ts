@@ -787,14 +787,7 @@ test('Docs premise rich article identity rejects stale glossary definitions', as
       route.fulfill({
         status: 200,
         contentType: 'text/html',
-        body: `<!doctype html><main><article>${renderToStaticMarkup(createElement('h1', null, source.title))}<div class="dx-prose">${source.renderedBody}</div></article></main><script>
-          const ids=${JSON.stringify(sections)};
-          document.querySelectorAll('main h2').forEach((heading,index)=>heading.id=ids[index]);
-          const variant=${JSON.stringify(variant)};
-          const definitions=Array.from(document.querySelectorAll('.dx-prose p')).filter(paragraph=>paragraph.querySelector('strong'));
-          if(variant==='drop')definitions.forEach(paragraph=>paragraph.remove());
-          if(variant==='change')definitions.forEach(paragraph=>paragraph.textContent='Stale definition body.');
-        </script>`,
+        body: `<!doctype html><main><article>${renderToStaticMarkup(createElement('h1', null, source.title))}<div class="dx-prose">${source.renderedBody}</div></article></main>`,
       }),
     );
     const page = await context.newPage();
@@ -803,6 +796,22 @@ test('Docs premise rich article identity rejects stale glossary definitions', as
     for (const next of ['complete', 'drop', 'change'] as const) {
       variant = next;
       expect((await page.goto(href))?.status()).toBe(200);
+      await page.evaluate(
+        ({ ids, change }) => {
+          document.querySelectorAll('main h2').forEach((heading, index) => {
+            heading.id = String(ids[index]);
+          });
+          const definitions = Array.from(document.querySelectorAll('.dx-prose p')).filter(
+            (paragraph) => paragraph.querySelector('strong'),
+          );
+          if (change === 'drop') definitions.forEach((paragraph) => paragraph.remove());
+          if (change === 'change')
+            definitions.forEach((paragraph) => {
+              paragraph.textContent = 'Stale definition body.';
+            });
+        },
+        { ids: sections, change: variant },
+      );
       const completeBody = await controlsBodyContract(
         page,
         source.renderedBody,

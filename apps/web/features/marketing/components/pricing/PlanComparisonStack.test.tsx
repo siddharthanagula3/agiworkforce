@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { PlanComparisonStack } from './PlanComparisonStack';
 
+type ReactI18nextModule = typeof import('react-i18next');
+
 vi.mock('react-i18next', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react-i18next')>()),
+  ...(await importOriginal<ReactI18nextModule>()),
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
