@@ -1,0 +1,2360 @@
+{
+  "key": "privacy",
+  "route": "/privacy",
+  "date": "2026-09-29",
+  "replacedOn": "2026-10-07",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Privacy policy.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-privacy-title",
+      "content": [
+        {
+          "text": "Privacy policy."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "What we collect, what we do not, and how that changes depending on which mode you run. "
+        },
+        {
+          "text": "AGI does not use customer conversation content to train AGI-owned models. We do not sell your data. Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.",
+          "strong": true
+        },
+        {
+          "text": " Last updated: 2026-09-29. Managed Cloud is in public alpha. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/privacy"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-definitions",
+      "content": [
+        {
+          "text": "Definitions"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Definitions",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Personal data"
+            }
+          ],
+          "value": [
+            {
+              "text": "Any information relating to an identified or identifiable person."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Processing"
+            }
+          ],
+          "value": [
+            {
+              "text": "Anything done with personal data: collecting, storing, using, disclosing, deleting it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Controller"
+            }
+          ],
+          "value": [
+            {
+              "text": "The party that decides why and how personal data is processed."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Processor"
+            }
+          ],
+          "value": [
+            {
+              "text": "The party that processes personal data on a controller’s instruction."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Local"
+            }
+          ],
+          "value": [
+            {
+              "text": "Running AGI entirely on your own device. Nothing about the conversation reaches us."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "BYOK"
+            }
+          ],
+          "value": [
+            {
+              "text": "Bring your own key: routing a request through your own account with a model provider."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Managed Cloud"
+            }
+          ],
+          "value": [
+            {
+              "text": "The hosted, metered service AGI Automation LLC operates, currently in public alpha."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Subprocessor"
+            }
+          ],
+          "value": [
+            {
+              "text": "A third party we or our processor engage to help process personal data, listed at "
+            },
+            {
+              "text": "/subprocessors",
+              "href": "/subprocessors"
+            },
+            {
+              "text": "."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-00",
+      "content": [
+        {
+          "text": "00 · The mode decides the answer"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Most privacy policies have one answer. This product has three, because Local, BYOK and Managed Cloud are separate trust boundaries and your data goes to genuinely different places in each. Read this table first; the rest of the page is detail."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Mode and where your data goes",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Local"
+            }
+          ],
+          "value": [
+            {
+              "text": "Where your prompts go:",
+              "strong": true
+            },
+            {
+              "text": " from the released CLI to Ollama or LM Studio on loopback. Nothing is transmitted to us and nothing is silently routed to BYOK or Managed Cloud."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "What we hold:",
+              "strong": true
+            },
+            {
+              "text": " nothing about the local model request. The current Desktop and web apps use Managed Cloud; they do not expose Local inference."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "BYOK"
+            }
+          ],
+          "value": [
+            {
+              "text": "Where your prompts go:",
+              "strong": true
+            },
+            {
+              "text": " from your client straight to the provider you targeted, on your own API key. We are not in that request path. "
+            },
+            {
+              "text": "Available in the released CLI. The VS Code extension is coming soon. Desktop and web are cloud-only and have no user-key path, so work on those surfaces is Managed Cloud.",
+              "strong": true
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "What we hold:",
+              "strong": true
+            },
+            {
+              "text": " not the provider key or prompt traffic. The CLI stores the key in the operating system credential store and calls the provider directly."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Managed Cloud"
+            }
+          ],
+          "value": [
+            {
+              "text": "Where your prompts go:",
+              "strong": true
+            },
+            {
+              "text": " through our gateway to the provider serving the model you selected. Managed Cloud is in public alpha."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "What we hold:",
+              "strong": true
+            },
+            {
+              "text": " conversations, files, projects, memories, schedules and settings, so they sync across your devices. This is the only mode where we act as your processor. See the "
+            },
+            {
+              "text": "DPA",
+              "href": "/dpa"
+            },
+            {
+              "text": "."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-01",
+      "content": [
+        {
+          "text": "01 · What we collect"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "What we collect",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Account"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " email, account ID, authentication metadata held by our identity provider."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " authentication. We do not store your password ourselves."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Billing"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " Stripe customer ID, plan, invoice metadata. Card details go to Stripe directly and we never see or store them."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " subscription management."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Conversations (Managed Cloud)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " threads, messages, tool calls, and references to attached files."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " cross-device sync. Two layers of access control: every route resolves the authenticated user and scopes the query to them, and Postgres row-level security policies are forced on the user-scoped tables behind the sync paths that bind the request identity per connection. It is defence in depth, not one absolute switch."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Files you upload or generate"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " attachments, generated images, and other stored media."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " stored in Cloudflare R2 and catalogued in Neon. The product gives clients an authenticated same-origin file route that requires both the owning account and its active Personal or organisation workspace to match. Missing, deleted, foreign, and inactive-workspace files all return the same not-found response, and those responses are private and not stored by browser caches. Generated videos use a separate private bucket. Images and other non-video files remain in a public R2 bucket: normal product responses do not expose its raw URLs, but anyone who obtains an underlying storage URL can access that object without signing in."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Location and camera details in pictures:",
+              "strong": true
+            },
+            {
+              "text": " before a picture you attach in the AGI web, desktop or mobile app leaves your device, AGI removes the location, camera and time details stored inside it, keeping only what is needed to show it the right way up and in the right colours. A picture that cannot be read well enough to do this is not sent. The file name is kept as you gave it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Voice and audio"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " microphone audio, captured only while you are dictating into the composer or holding a Voice Mode conversation, and the text that comes back from it."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " turning speech into text, and holding a spoken conversation. Nothing is captured until you start one of the two. Dictation sends the recording to OpenAI’s transcription endpoint; Voice Mode opens a realtime session with OpenAI and your microphone audio streams from your browser to that session for as long as it runs. "
+            },
+            {
+              "text": "We do not store the audio.",
+              "strong": true
+            },
+            {
+              "text": " The dictation route passes the bytes on and keeps none, and a voice session record holds that session’s settings and a pointer into the transcript, with no audio in it. The text transcript is kept as ordinary conversation content and follows the conversation rows above. There is no voiceprint, speaker identification or other biometric identifier anywhere in this product, and nothing here infers who is speaking. What OpenAI does with audio it receives is its own published practice, named on "
+            },
+            {
+              "text": "/subprocessors",
+              "href": "/subprocessors"
+            },
+            {
+              "text": ", not a promise we can make for it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Conversations (Local)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " CLI sessions sent to Ollama or LM Studio on loopback. Not silently routed to BYOK or Managed Cloud."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " AGI Cloud is not in the model request path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "BYOK keys"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " provider credentials saved by the released CLI in the operating system credential store."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " the CLI reads the key locally and sends requests directly to the selected provider; AGI Cloud does not receive it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Telemetry"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " Browser error and performance reports via Sentry use the telemetry consent in Settings; Google Analytics page views use the analytics choice in the cookie banner. Both browser gates fail closed. Server and edge operational error reporting can run when Sentry is configured and does not use the browser setting."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " operational visibility. Request bodies, query strings, cookies, headers and prompt- or content-named fields are removed. Free-text diagnostic messages may remain after secrets are masked. Consented browser reports retain a stable user id so a crash can be tied to a session; server and edge reports do not."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Logs and security events"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " server logs with bearer tokens redacted, plus an append-only security audit log of account-lifecycle and administrative events."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " debugging, abuse prevention, and incident investigation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Referral program checks"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " when you join through a referral link, a one-way hash of the network you signed up from, and a comparison of your app installations, your card’s Stripe fingerprint and a normalized form of your email address with those of the person who referred you. Card fingerprints are read from Stripe when a reward falls due and are not stored by us."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " stopping self-referral and reward abuse. A match withholds the reward and records why. The network hash stays with the referral record and is deleted with your account."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Things you send us on purpose"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " feedback (your subject, message, and optionally a diagnostic log we scrub for secrets before storing), content reports (the category, your note, and a short excerpt of the message you are reporting), and support conversations."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " answering you and fixing what you reported. A support escalation emails the transcript and the contact address you gave to our support inbox, which is one of the three things in this product that can send email at all."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Records you create by using the product"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " your search history, and the memories the assistant keeps about you when you enable them."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " making search and the assistant useful across sessions. Both are yours to clear: search history has a clear action, and memory is off unless you turn it on."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Profile details you choose to add"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " display name, avatar, and optional fields such as a phone number, stored with your settings."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " personalising the product. Optional means optional: nothing here is required to use an account."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Enterprise contact list"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " your email address, if you ask us to discuss contract-scoped Enterprise access or additional Enterprise capabilities with you."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " only what you consented to, recorded per purpose before the address is stored. You can be asked about product updates separately and decline that without leaving the list."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Devices and downloads"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " push tokens for the mobile apps. For a desktop download: a hashed IP, the user-agent, the referring page and a coarse country in the download record, and separately, your "
+            },
+            {
+              "text": "unhashed",
+              "em": true
+            },
+            {
+              "text": " IP address in our server logs."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " delivering notifications you asked for, and understanding which builds are being downloaded. "
+            },
+            {
+              "text": "Two honest caveats. The hash in the download record uses a fixed salt, so it is pseudonymous rather than anonymous: anyone holding both the hash and a candidate address can confirm a match. And the download endpoint separately writes the raw IP to application logs for abuse detection, which the hashing does not cover.",
+              "strong": true
+            },
+            {
+              "text": " Both are improvements we owe you rather than controls we are claiming."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Directory-provisioned identities (Enterprise)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Examples:",
+              "strong": true
+            },
+            {
+              "text": " when your employer connects a directory, the name, email and directory identifier it sends us for each user it provisions."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Why, and how it is protected:",
+              "strong": true
+            },
+            {
+              "text": " creating and deactivating accounts on your organisation’s instruction. Your employer decides what is sent; we act on it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Why this table grew on 2026-09-29.",
+          "strong": true
+        },
+        {
+          "text": " A review compared it against every write path in the product and found the six categories above missing: the things you send us on purpose (feedback with its diagnostic logs, content reports and support transcripts), search history and memories, profile fields, the early-access list, device tokens and download records, and directory-provisioned identities. All of it was already being collected; this page had not kept up. If you add a collection point and do not add a row here, that is the defect this paragraph exists to prevent."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Hosted AI providers we may route requests to (Managed Cloud):",
+          "strong": true
+        },
+        {
+          "text": " Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity and Moonshot directly; MiniMax, Qwen and Zhipu through OpenRouter, which therefore also handles those requests. Which one depends on the model you select. "
+        },
+        {
+          "text": "OpenRouter is additionally the failover for every other chat model in the catalogue",
+          "strong": true
+        },
+        {
+          "text": ", so if a direct route fails, prompt content for a model from any provider can pass through it. We would rather say that than let the three named families imply a narrower answer. The full current list with regions is at "
+        },
+        {
+          "text": "/subprocessors",
+          "href": "/subprocessors"
+        },
+        {
+          "text": ". BYOK routes from your client directly to the provider; Local contacts none of them."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "If you never opened an account and your data is in here anyway"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The rest of this notice is written to the person holding the account. This part is written to everyone else. Text typed or pasted into a chat, files uploaded to it, and whatever a connector fetches when an account holder points the agent at a mailbox, calendar, drive or CRM routinely carries personal data about people who never signed up: a colleague on the thread, a guest on the invite, a name in the spreadsheet. So do the identities an employer’s directory provisions for people who may never sign in. We do not ask those people for anything and we do not contact them; nothing in the product does."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "What happens to it.",
+          "strong": true
+        },
+        {
+          "text": " It is kept as part of the record it arrived in and gets that record’s treatment: the storage described in the table above and the clock in section 05, nothing separate. In Local it never reaches us. In BYOK it goes from the account holder’s client to their provider, not to us."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "On what basis.",
+          "strong": true
+        },
+        {
+          "text": " In Managed Cloud we hold it as the account holder’s processor and act on their instruction under the "
+        },
+        {
+          "text": "DPA",
+          "href": "/dpa"
+        },
+        {
+          "text": "; they are the controller, and bringing your data in was their decision, not ours. Our own processing rests on our contract with them rather than on any consent from you, and the "
+        },
+        {
+          "text": "terms",
+          "href": "/terms"
+        },
+        {
+          "text": " make them confirm they were entitled to give it to us, including having given any notice or obtained any consent your law required first. That duty is theirs and we cannot discharge it for them."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "What you can do about it.",
+          "strong": true
+        },
+        {
+          "text": " File an access, correction, erasure or grievance request at "
+        },
+        {
+          "text": "/privacy/requests",
+          "href": "/privacy/requests"
+        },
+        {
+          "text": " without signing in: the form asks for a contact address, not an account. Two limits, said here rather than discovered later: we can only act on a record we can locate, so the request needs enough detail to find it; and where the data sits inside a customer’s account we hold it on that customer’s instruction, so we will usually have to route your request to them rather than act on it ourselves."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-02",
+      "content": [
+        {
+          "text": "02 · What we do not collect"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Training data"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI does not train AGI-owned models on customer prompts, responses, or files. In Managed Cloud, we send prompts and attached content to the provider serving the model you select and receive its response; some models are reached through OpenRouter or through an inference gateway instead of directly, and "
+        },
+        {
+          "text": "/subprocessors",
+          "href": "/subprocessors"
+        },
+        {
+          "text": " names each of those and the condition under which it carries a request. Those third parties handle that content under their applicable terms and data-use policies; this statement about AGI-owned models is not a promise on their behalf. In BYOK mode, provider handling is governed by your own provider account and terms. For Experiential Labs promotional routes, its Free organization setting captures prompts and responses for up to 30 days and its published policy permits using captured content to develop, evaluate and improve its services and hosted models. Its no-training routing setting restricts upstream providers, not this platform capture. Selecting one of those routes sends your content under that provider policy; use another model for content you cannot share on those terms."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Provider traffic in BYOK mode"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "When you BYOK against Anthropic, OpenAI, Google or another provider, the request goes from your client to the provider. We do not see, log, or store that traffic."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Local-mode anything"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Local mode uses on-device or local model routes and does not silently send chats, files, or developer sessions to BYOK providers or Managed Cloud."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Advertising and cross-context profiles"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We run no advertising, set no advertising cookies, and do not sell or share personal data for cross-context behavioural advertising."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-03",
+      "content": [
+        {
+          "text": "03 · How we use it, and on what basis"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "One row per purpose, rather than a sentence listing four bases and leaving you to work out which applies to what. Where a row says "
+        },
+        {
+          "text": "legitimate interests",
+          "em": true
+        },
+        {
+          "text": ", it also says why we think ours do not override yours. That balancing test is the part a bare list omits."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "How we use it, and on what basis",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Creating and running your account"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " email, account identifier, authentication metadata, settings."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "performance of a contract.",
+              "strong": true
+            },
+            {
+              "text": " You asked us to run an account; it cannot exist without these."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Running the assistant (Managed Cloud)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " conversations, files, projects, memories, schedules."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "performance of a contract.",
+              "strong": true
+            },
+            {
+              "text": " This is the service itself. Local and BYOK do not produce this data for us at all."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Taking payment"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " billing identifiers, plan, invoice metadata. Card numbers go to Stripe and never reach us."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "performance of a contract",
+              "strong": true
+            },
+            {
+              "text": ", and "
+            },
+            {
+              "text": "legal obligation",
+              "strong": true
+            },
+            {
+              "text": " for the records tax and accounting law requires us to keep."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Answering you"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " support conversations, feedback, content reports."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "performance of a contract",
+              "strong": true
+            },
+            {
+              "text": " when you are a customer; "
+            },
+            {
+              "text": "legitimate interests",
+              "strong": true
+            },
+            {
+              "text": " otherwise. You initiated the contact, and we cannot reply without keeping what you sent."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Keeping the service secure and available"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " server logs, server and edge operational error reports, the security audit log, rate-limiting state, account status."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "legitimate interests.",
+              "strong": true
+            },
+            {
+              "text": " Every user has an interest in the service not being taken over or abused, the data is operational rather than content, and you cannot opt out of it without also opting out of being protected by it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Preventing referral abuse"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " the referral program checks described above."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "legitimate interests.",
+              "strong": true
+            },
+            {
+              "text": " Referral rewards are meant for genuine new customers, and the checks compare signals you already give us or Stripe already holds instead of adding new tracking."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Understanding which builds are downloaded"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " download records: hashed IP, user-agent, referrer, coarse country, plus the raw IP in server logs, as section 01 says."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "legitimate interests.",
+              "strong": true
+            },
+            {
+              "text": " Narrow, and the honest caveats about the fixed salt and the raw log entry are in section 01 rather than buried here."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Crash and error reporting"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " consented browser error reports with a stable user id. Sensitive request fields are removed and free-text diagnostics are masked for secret-shaped values."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "your consent.",
+              "strong": true
+            },
+            {
+              "text": " Off unless you turn it on in settings. Server and edge operational error reporting falls under Keeping the service secure and available above and does not attach a stable user id."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Product analytics"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " aggregated page views on this site, and product usage events from the AGI apps on web, desktop, mobile, Chrome, VS Code and the command line, recorded against your account: that a response was stopped or regenerated, that a suggested edit was accepted or dismissed, and similar product steps, with fixed labels such as your plan or the model provider. They never carry your messages, code, files or file names."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "your consent.",
+              "strong": true
+            },
+            {
+              "text": " Nothing loads or is recorded until you give it, and the gate fails closed: if your choice cannot be read, analytics stays off. Analytics consent given before this disclosure (notice revision product-analytics-v1) covered page views only, so the app events need you to allow analytics again. Change it any time from Settings in any AGI app or on the data rights page; a workspace administrator can also turn it off for every member."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Telling you when something opens"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " the email you gave the early-access list."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "your consent",
+              "strong": true
+            },
+            {
+              "text": ", recorded per purpose against the revision of this notice you were shown, before the address is stored."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Complying with the law"
+            }
+          ],
+          "value": [
+            {
+              "text": "Data used:",
+              "strong": true
+            },
+            {
+              "text": " whatever a valid legal process compels, narrowed to the minimum."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Basis:",
+              "strong": true
+            },
+            {
+              "text": " "
+            },
+            {
+              "text": "legal obligation.",
+              "strong": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "India works differently and has its own page.",
+          "strong": true
+        },
+        {
+          "text": " Under the Digital Personal Data Protection Act, 2023 consent is the default ground rather than one of several, so the analysis is not the same as the table above. It is at "
+        },
+        {
+          "text": "/privacy/india",
+          "href": "/privacy/india"
+        },
+        {
+          "text": ", and it governs for data principals in India where the two differ."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-04",
+      "content": [
+        {
+          "text": "04 · Sharing"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We share data only with the subprocessors listed at "
+        },
+        {
+          "text": "/subprocessors",
+          "href": "/subprocessors"
+        },
+        {
+          "text": ", and only as necessary to run the service. We do not sell data. We may disclose data if compelled by valid legal process; we narrow such disclosures to the minimum required. If AGI is involved in a merger or sale of assets, personal data may transfer as part of it, and this policy continues to apply until the acquirer publishes its own."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-google",
+      "content": [
+        {
+          "text": "Google user data"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "This covers every Google connector, including Gmail, Google Calendar, Google Drive and Google Contacts. AGI’s use and transfer to any other app of information received from Google APIs will adhere to the "
+        },
+        {
+          "text": "Google API Services User Data Policy",
+          "href": "https://developers.google.com/terms/api-services-user-data-policy"
+        },
+        {
+          "text": ", including the Limited Use requirements, and to the "
+        },
+        {
+          "text": "Google Workspace API User Data and Developer Policy",
+          "href": "https://developers.google.com/workspace/workspace-api-user-data-developer-policy"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "How we handle Google user data",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Access"
+            }
+          ],
+          "value": [
+            {
+              "text": "Only after you connect a Google account, and only when you ask for it in a chat or in a routine you set up. A routine that starts on new mail receives the sender, recipients, subject, labels and a snippet of up to 500 characters of each new inbox message. Nothing syncs or indexes your Google account in the background."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Use"
+            }
+          ],
+          "value": [
+            {
+              "text": "Only to provide the feature you asked for, such as reading and drafting mail, sending a message you approve, reading and creating calendar events, searching and reading your Drive files and looking up contacts."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "AI training"
+            }
+          ],
+          "value": [
+            {
+              "text": "We do not use Google user data to develop, improve or train generalized AI or machine learning models. Once a chat or routine can reach Google data, we send it only to AI providers whose terms bar training on it. If the model you picked cannot run that way, we tell you and send nothing."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Memory"
+            }
+          ],
+          "value": [
+            {
+              "text": "We do not save memories from a chat that holds Google data. That chat, the memories drawn from it and files imported from Google reach your other chats only when those chats are also kept to AI providers that do not train on them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Transfer"
+            }
+          ],
+          "value": [
+            {
+              "text": "We do not sell it, and we do not transfer it to advertisers, data brokers or information resellers or use it for advertising or credit decisions. It goes only to the subprocessors that run your request, such as the AI provider serving it, and otherwise only for security, to comply with law, or in a merger or sale of assets with your prior consent."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "People"
+            }
+          ],
+          "value": [
+            {
+              "text": "No one at AGI reads it unless you ask us to, for example by escalating a chat to human support, which sends us that chat; unless it is necessary for security, such as investigating abuse or a bug; or unless the law requires it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tokens"
+            }
+          ],
+          "value": [
+            {
+              "text": "The tokens that connect your account are encrypted at rest with AES-256-GCM. When you disconnect or delete your account, we ask Google to revoke them and erase our copy. You can also remove AGI at "
+            },
+            {
+              "text": "myaccount.google.com/permissions",
+              "href": "https://myaccount.google.com/permissions"
+            },
+            {
+              "text": "."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Retention"
+            }
+          ],
+          "value": [
+            {
+              "text": "We keep no separate copy of what a connector retrieves. It persists only where it lands: in a chat reply and that chat's search index, in a routine's run history, or as a Drive file you import into a project. A deleted chat or project can be restored for 30 days and is then permanently deleted. Deleting a routine deletes its run history at once. Workspace retention settings also apply, and deleting your account erases all of it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-05",
+      "content": [
+        {
+          "text": "05 · Retention"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Every row below is a job or a mechanism that exists in the product, with the ones we do not control named as such. We would rather publish a shorter schedule that is true than a complete-looking one that is not."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Retention schedule",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Account and its content"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " kept while your account is active. Permanently erased 24 hours after a deletion request."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " the request records a deletion timestamp and schedules erasure 24 hours out; a daily scheduled job then erases your user-scoped records and stored objects and deletes your identity at our authentication provider."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Billing records"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " erased with the account, or aged out at the end of the statutory record-keeping period (8 years), whichever comes first for that row."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " your subscription, credit ledger and usage rows are erased with everything else. Three things survive on purpose, and you should know about them: an organisation’s billing history keeps the ledger row with your user id removed, because the record belongs to that organisation rather than to you; double-charge protection keys and any payment still moving when you delete are kept, because deleting those can charge you twice or lose money we owe you; and Stripe holds its own record of your payments and invoices under its retention, not ours: card numbers go to Stripe directly and never reach us. A daily scheduled job now enforces a maximum age on the rows that outlive an account. Books of account (the credit ledger and the organisation usage ledger) are kept 8 years and then deleted, and the request-shaped metadata beside them is emptied after 2 years because the amount, the type and the date are the record, not the routing detail. Metering events are deleted after 2 years and their metadata emptied after 180 days. Double-charge protection keys are deleted once their 24-hour window closes, completed settlement jobs 90 days after they finish, and payment-webhook receipts 180 days after processing, with any error text they captured cleared after 30 days. Two things carry no maximum age and we will not pretend otherwise: your current plan row and your current credit balance, because ageing those out would cancel a live subscription or delete credits you paid for. They go when the account goes."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Conversations (Managed Cloud)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " kept until you delete them or delete your account, unless your organisation has switched on a retention window, in which case that window also applies. A deleted conversation can be restored for 30 days, then a daily job permanently deletes it with its messages and search index."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " nothing expires a personal conversation automatically. A conversation that belongs to an organisation workspace is different: "
+            },
+            {
+              "text": "an owner can set a retention window on that workspace, and a nightly scheduled job then permanently deletes workspace conversations with no activity for longer than it",
+              "strong": true
+            },
+            {
+              "text": ". That sweep is off unless the workspace switches it on, it never touches a personal conversation, conversations under a legal hold are withheld from it, and every run is recorded. This page previously said no such window was enforced; the job was running, and the denial is corrected here rather than quietly dropped."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Temporary chats (Managed Cloud)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " about 30 days."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " a daily scheduled job hard-deletes temporary conversations past the window; messages go with them. A workspace legal hold that covers a conversation keeps it until the hold is released."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Background jobs (Managed Cloud)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " up to 30 days."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " the job runner, every few minutes. Jobs that finished are deleted within 30 days. Jobs that failed for good, including Gmail and Google Calendar trigger events, are deleted 30 days after they fail."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Deleted files"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " 30 days in the recently-deleted bin, then the bytes are removed."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " a daily scheduled job hard-deletes the records and deletes the underlying objects from storage. If an object deletion fails, the record survives and the next run retries it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sandboxes"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " within 24 hours of creation, or sooner once its resume mapping is gone."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " a scheduled job that runs every hour enforces a 24-hour age cap on every sandbox (matching the resume mapping’s own 24-hour expiry) and reclaims it at that cap or as soon as the mapping no longer points to it, whichever comes first. A sandbox that is merely paused gives its slot up after two hours rather than twenty-four."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Security audit log"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " 90 days."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " a database routine deletes entries older than 90 days, run by a "
+            },
+            {
+              "text": "scheduled job every night",
+              "strong": true
+            },
+            {
+              "text": ": "
+            },
+            {
+              "text": "/api/cron/purge-security-audit-logs",
+              "code": true
+            },
+            {
+              "text": " at 02:30 UTC, registered in "
+            },
+            {
+              "text": "vercel.json",
+              "code": true
+            },
+            {
+              "text": ". This entry previously said the routine was run by an administrator rather than on a schedule; that stopped being true when the cron was added, and the policy is corrected here rather than left understating what happens."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Server logs and backups"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention:",
+              "strong": true
+            },
+            {
+              "text": " vendor-governed."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Enforced by:",
+              "strong": true
+            },
+            {
+              "text": " platform logs and database or object-storage snapshots are retained according to our hosting vendors’ own configuration. We do not operate a separate process that reaches into vendor snapshots to remove individual records, and we will not claim a number we do not set."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "What deliberately survives deleting your account"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "“Delete my account” erases an enumerated list of 117 user-scoped tables and your stored files. A short list of things is kept on purpose, and you should know what before you decide, not after."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "What survives deletion, and why",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Security and organisation audit log entries naming you"
+            }
+          ],
+          "value": [
+            {
+              "text": "Both audit trails are append-only integrity controls, enforced by database privilege rather than by our code. On the security trail the application role can add an entry but cannot update or delete one; on the organisation trail it cannot insert either, and writes go through a privileged routine instead. That is the point of an audit trail. Erasure does not purge them. We are recording that as a gap rather than describing the erasure as total: a separate privileged routine exists to purge them, and it is not part of the automatic path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "A record that you were erased"
+            }
+          ],
+          "value": [
+            {
+              "text": "A suppression entry survives so the system can tell that this subject must stay erased. Deleting it would erase the evidence that the erasure happened."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Double-charge protection keys and payments still moving"
+            }
+          ],
+          "value": [
+            {
+              "text": "Deleting these can charge you twice or lose a settlement owed to you. They outlive the account they protected."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Rows that belong to an organisation rather than to you"
+            }
+          ],
+          "value": [
+            {
+              "text": "An organisation's billing ledger keeps the row with your user id removed; files you added to a shared project keep the file and drop the attribution; abuse reports you filed about someone else keep the report and drop you. Deleting an organisation because its creator left would erase every other member."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Stripe's own records"
+            }
+          ],
+          "value": [
+            {
+              "text": "Your payments and invoices sit with Stripe under its retention, not ours. Card numbers go to Stripe directly and never reach us."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anything given without an account, keyed to an address"
+            }
+          ],
+          "value": [
+            {
+              "text": "An early-access email, a consent decision or a rights request made without signing in is not reachable by account deletion",
+              "strong": true
+            },
+            {
+              "text": ", because there is no account to delete. Nothing ages those out automatically either. Use the request form at "
+            },
+            {
+              "text": "/privacy/requests",
+              "href": "/privacy/requests"
+            },
+            {
+              "text": " and we will remove them."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-incidents",
+      "content": [
+        {
+          "text": "Security incidents"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We keep a written procedure for a personal data breach: who declares one, what goes into a notification to a regulator, and what an affected person is told. It runs against a 72-hour clock for notifying a regulator where a law requires one, which is the same commitment the "
+        },
+        {
+          "text": "terms",
+          "href": "/terms"
+        },
+        {
+          "text": " make. The safeguards the procedure sits on top of are at "
+        },
+        {
+          "text": "/security",
+          "href": "/security"
+        },
+        {
+          "text": ", including the parts of that posture we have not built."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "How a notice would actually reach you.",
+          "strong": true
+        },
+        {
+          "text": " There is no account-lifecycle mail in this product. The only email it can send is support escalation, scheduled-task notification, and operational alerts to us, and none of those can reach a list of affected customers. So a notice to you would arrive as an in-product message and at a dated public address rather than by email, with direct email only where we hold your address and a person sends it by hand. Neither that in-product notice nor that public page exists as a built feature today; they would be put up during the incident. The same statement is in section 10 of the "
+        },
+        {
+          "text": "India notice",
+          "href": "/privacy/india"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-06",
+      "content": [
+        {
+          "text": "06 · What you can change yourself"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Controls that exist in the product right now, separated from the statutory rights in the next section on purpose. A right you have to write in and ask for is not the same thing as a switch you can reach, and a policy that mixes them makes the product sound more self-serve than it is."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Controls you can use today",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Export your data"
+            }
+          ],
+          "value": [
+            {
+              "text": "Account settings. Downloads the reviewed personal and account-data sections with a completeness record. Complete means every reviewed section was read without skipped or truncated rows; partial names anything unavailable, skipped, or truncated. Live secrets, credential verifiers, and product-internal cost ledgers are intentionally excluded. Every export is rate limited and written to the security audit log. Where something is missing, use the access request in the next section."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Delete your account"
+            }
+          ],
+          "value": [
+            {
+              "text": "Account settings. Erasure is scheduled 24 hours out, then performed by a daily job that also deletes your identity at our authentication provider. Read the survivors table in section 05 first. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Withdraw a consent"
+            }
+          ],
+          "value": [
+            {
+              "text": "/privacy/requests",
+              "href": "/privacy/requests"
+            },
+            {
+              "text": ". Per purpose, one click, immediate. Withdrawing an optional purpose never costs you access to anything you did not withdraw."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Turn analytics off"
+            }
+          ],
+          "value": [
+            {
+              "text": "The cookie preferences dialog, reachable from "
+            },
+            {
+              "text": "/cookies",
+              "href": "/cookies"
+            },
+            {
+              "text": ". It is already off until you turn it on; this is how you change your mind."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Turn crash reporting off"
+            }
+          ],
+          "value": [
+            {
+              "text": "Settings. A separate switch from analytics, in a different place, because they are different vendors doing different things. We would rather say that than imply one toggle covers both."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Clear your search history"
+            }
+          ],
+          "value": [
+            {
+              "text": "Settings. Removes the stored history for your account."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Memory"
+            }
+          ],
+          "value": [
+            {
+              "text": "Off unless you enable it. When on, the assistant keeps facts about you across sessions, and you can remove them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Temporary chat"
+            }
+          ],
+          "value": [
+            {
+              "text": "The composer. A temporary conversation is hard-deleted by a daily job about 30 days later, messages with it, unless a workspace legal hold covers it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Delete a conversation or a file"
+            }
+          ],
+          "value": [
+            {
+              "text": "In the product. Deleted files sit in a recently-deleted bin for 30 days, then the bytes are removed from storage."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Choose where a request goes"
+            }
+          ],
+          "value": [
+            {
+              "text": "In the released CLI, Local keeps the conversation on your machine and sends us nothing; BYOK goes straight to your provider on your key. VS Code BYOK is coming soon. Web and Desktop are cloud-only."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-07",
+      "content": [
+        {
+          "text": "07 · Your rights, and how to use them"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Depending on where you live and subject to applicable exceptions, privacy laws such as the GDPR, UK GDPR, and CCPA may give you rights of access, correction, deletion, portability, objection or restriction, and non-discrimination. Two requests are self-serve in the product:"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Rights and how to use them",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Export"
+            }
+          ],
+          "value": [
+            {
+              "text": "Signed in, you can export your data from the account export endpoint at any time. It is rate limited and each export is recorded in the security audit log."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Deletion"
+            }
+          ],
+          "value": [
+            {
+              "text": "Request account deletion from the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email, because the only email this product sends is support escalation, scheduled-task notifications and operational alerts to us: there is no account-lifecycle mail. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Everything else"
+            }
+          ],
+          "value": [
+            {
+              "text": "Email "
+            },
+            {
+              "text": "contact@agiworkforce.com",
+              "href": "mailto:contact@agiworkforce.com?subject=Privacy%20request"
+            },
+            {
+              "text": " from your account address with the subject line “Privacy request”. Applicable law determines the response period. You may use an authorised agent where the law allows."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "EU, UK and Swiss residents may also lodge a complaint with their supervisory authority. California residents: we do not sell or share personal information, so there is no opt-out to exercise, and the CCPA service-provider terms we operate under are in section 06 of the "
+        },
+        {
+          "text": "DPA",
+          "href": "/dpa"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-08",
+      "content": [
+        {
+          "text": "08 · International transfers"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI data is hosted in the United States. "
+        },
+        {
+          "text": "We do not offer EU or UK data residency",
+          "strong": true
+        },
+        {
+          "text": ", so European customers’ data is transferred to and processed in the US. For EU, UK and Swiss personal data we rely on the Standard Contractual Clauses with the UK Addendum and the Swiss adaptations, set out in section 06 of the "
+        },
+        {
+          "text": "DPA",
+          "href": "/dpa#s-06"
+        },
+        {
+          "text": ". AGI has not appointed a representative under GDPR Art. 27; the current position is at "
+        },
+        {
+          "text": "/legal/eu-representative",
+          "href": "/legal/eu-representative"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-09",
+      "content": [
+        {
+          "text": "09 · Children"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI accounts are for people aged 18 and over; 13- to 17-year-olds may use it only under an account opened and supervised by a parent, guardian or school, as set out in section 02 of the "
+        },
+        {
+          "text": "terms",
+          "href": "/terms"
+        },
+        {
+          "text": ". We do not knowingly collect personal data from children under 13, or under the higher digital-consent age where one applies. If you believe a child has provided us data, email us and we will delete it."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-10",
+      "content": [
+        {
+          "text": "10 · Changes"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We may update this policy. The current version is always at this URL with the revision date at the top, and material changes are recorded on "
+        },
+        {
+          "text": "/changelog",
+          "href": "/changelog"
+        },
+        {
+          "text": ". No mailing path in this product can reach an arbitrary list of customers, so we do not promise emailed notice of a change."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-11",
+      "content": [
+        {
+          "text": "11 · Contact"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA. Email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Privacy%20request"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Terms",
+            "href": "/terms"
+          }
+        ],
+        [
+          {
+            "text": "DPA",
+            "href": "/dpa"
+          }
+        ],
+        [
+          {
+            "text": "Cookies",
+            "href": "/cookies"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ]
+      ]
+    }
+  ]
+}

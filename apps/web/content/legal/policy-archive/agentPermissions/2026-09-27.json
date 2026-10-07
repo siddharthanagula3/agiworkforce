@@ -1,0 +1,1818 @@
+{
+  "key": "agentPermissions",
+  "route": "/agent-permissions",
+  "date": "2026-09-27",
+  "replacedOn": "2026-10-07",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "What the agent may do, and what it must ask.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Approvals"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-perm-title",
+      "content": [
+        {
+          "text": "What the agent may do, and what it must ask."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The exact default authority of the agent on each surface, the limits of the protections we ship, the connector scopes actually requested today, and every way to take access back. "
+        },
+        {
+          "text": "Some of this is less flattering than a marketing page would write it. That is the point. You cannot review a permission model you have to infer.",
+          "strong": true
+        },
+        {
+          "text": " The rules that govern how you use it are at "
+        },
+        {
+          "text": "/acceptable-use",
+          "href": "/acceptable-use"
+        },
+        {
+          "text": ". Last updated: 2026-09-27. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/agent-permissions"
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Managed Cloud · default authority"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "default-authority",
+      "content": [
+        {
+          "text": "On the website, eligible tools run automatically by default."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "One account-wide setting decides what may run without asking, and it governs our own built-in tools as well as connectors. A new website account uses “Skip approvals” unless you save another setting. Eligible reads, searches, sandboxed code, and reversible actions can run without a prompt. Destructive or unknown actions, saved per-tool choices, and workspace restrictions still apply. If the account policy cannot be read, the server falls back to asking."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "What each account default runs without asking",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Ask before every action"
+            }
+          ],
+          "value": [
+            {
+              "text": "Every tool action waits for you, reads included. No built-in tool runs without asking."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run read-only actions without asking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads, searches, page fetches and sandboxed code run on their own; writes still ask. Runs without asking: Offer to reconnect an app, Web search, Map search, Place search, Ask you a question, Plan an itinerary, Compare products, Fetch a page, Run code, List files, Read a file, Run a skill, Read a stored tool result, Search memories, Search your files, Open one of your files, Draft a plugin."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Skip approvals"
+            }
+          ],
+          "value": [
+            {
+              "text": "Tools run on their own. Destructive and unknown actions still ask. This is the default. Runs without asking: Offer to reconnect an app, Web search, Map search, Place search, Ask you a question, Plan an itinerary, Compare products, Fetch a page, Run code, Create a folder, List files, Read a file, Create a document file, Create an image, Edit an image, Run a skill, Read a stored tool result, Save a memory, Search memories, Search your files, Open one of your files, Create a scheduled task, Draft a plugin, Start an AGI Work task."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "The built-in tools, and what each one does."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Built-in tools",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Offer to reconnect an app"
+            }
+          ],
+          "value": [
+            {
+              "text": "Shows you a button to reconnect a connected app whose sign-in expired or was revoked. None of its tools run until you reconnect it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Web search"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs a search and reads the results. Classified as a read that accepts untrusted content and creates an egress path, because a search query is a place secrets can leak and a result page is attacker-influenced text."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "List your Chrome tabs"
+            }
+          ],
+          "value": [
+            {
+              "text": "Lists the titles and addresses of the tabs open in your paired Chrome, so you can choose which one to read."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Map search"
+            }
+          ],
+          "value": [
+            {
+              "text": "Looks up a place or a route and renders a map card in the conversation. A search, not a verified place identity and not turn-by-turn navigation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Place search"
+            }
+          ],
+          "value": [
+            {
+              "text": "Looks up businesses and places by name or kind near a location, with ratings and opening hours, and shows them in the conversation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Ask you a question"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks you to choose between options when a request could mean more than one thing, and continues with the answer you give."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Plan an itinerary"
+            }
+          ],
+          "value": [
+            {
+              "text": "Looks up each stop of a trip plan as a places search and renders the plan as an itinerary card with a map and directions links. It reads place data and books nothing."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Compare products"
+            }
+          ],
+          "value": [
+            {
+              "text": "Renders the products a search found as a comparison card with prices, stores, buy links and specs. It keeps only links this turn retrieved, makes no request of its own and buys nothing."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Fetch a page"
+            }
+          ],
+          "value": [
+            {
+              "text": "Fetches a single URL through an SSRF-guarded path. Same classification as search, for the same reasons."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run code"
+            }
+          ],
+          "value": [
+            {
+              "text": "Executes model-authored code in an isolated cloud sandbox belonging to that conversation, not on your device. Classified as an irreversible execute action that creates an egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run a shell command"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs a shell command inside the Code session cloud sandbox. Commands are checked for denied and destructive operations; their risk and your approval mode decide whether they run or wait for confirmation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Write a file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Writes a file inside the conversation's own sandbox workspace. Not your filesystem, not your cloud storage. Classified as an irreversible write, so no account default runs it on its own."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Create a folder"
+            }
+          ],
+          "value": [
+            {
+              "text": "Creates a folder in that same sandbox workspace. Reversible, and no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "List files"
+            }
+          ],
+          "value": [
+            {
+              "text": "Lists what is in that sandbox workspace. Reads nothing outside it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read a file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads a file back out of that sandbox workspace. Classified as accepting untrusted content, because whatever a previous step wrote there can be attacker-influenced."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Edit a file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Edits a file already in that sandbox workspace. Classified as an irreversible write, so no account default runs it on its own."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Create a document file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Generates a Word document (.docx), a PowerPoint deck (.pptx), an Excel workbook (.xlsx), a PDF (.pdf) or a CSV (.csv) on our servers and attaches it to the conversation for you to download. Those five formats are the whole of it, and it never edits a file you already have. Reversible, no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Create an image"
+            }
+          ],
+          "value": [
+            {
+              "text": "Creates an image from a description and shows it in the conversation. It runs the same pipeline as Image mode, with its safety checks, model policy and credit charge, and is offered only when your plan includes image generation. Classified as a reversible write with no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Edit an image"
+            }
+          ],
+          "value": [
+            {
+              "text": "Makes a new version of an image you attached or one made earlier in the conversation, through the same pipeline as Image mode. The original is kept. Classified as a reversible write with no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run a skill"
+            }
+          ],
+          "value": [
+            {
+              "text": "Loads a skill's instructions into the turn. Skills act through the tools above and are gated by them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read a stored tool result"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads back a tool result that was too long to show in full, or that was trimmed from earlier in the conversation, from the copy kept under your account. Classified as accepting untrusted content, because that result came from a page, a file or a sandbox run."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Save a memory"
+            }
+          ],
+          "value": [
+            {
+              "text": "Saves one lasting fact about you to your Memory when you ask it to remember something or state a preference you would want used later. You can review and delete it in Memory settings. Reversible, no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Search memories"
+            }
+          ],
+          "value": [
+            {
+              "text": "Searches the facts saved in your Memory for ones relevant to the current question. Reads only your own Memory and has no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Forget memories"
+            }
+          ],
+          "value": [
+            {
+              "text": "Deletes the saved memories whose text contains the subject you asked it to forget. Classified as an irreversible delete, so no account default runs it on its own."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Search your files"
+            }
+          ],
+          "value": [
+            {
+              "text": "Searches the files you uploaded and your project's knowledge for passages about a topic and returns the best excerpts. Classified as accepting untrusted content, because a document can carry attacker-written text."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Open one of your files"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads one of the files you uploaded or your project's knowledge files whole, by the id a file search returned. Classified as accepting untrusted content, because a document can carry attacker-written text."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Create a scheduled task"
+            }
+          ],
+          "value": [
+            {
+              "text": "Creates a task that runs a prompt on its own at a set time, once or on a repeating cadence, and lists it in Schedules, where you can pause or delete it. Reversible, no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Draft a plugin"
+            }
+          ],
+          "value": [
+            {
+              "text": "Checks a plugin written in the chat the way the create form does and shows it as a draft card. Nothing is saved until you press Save plugin or Save as a skill."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Start an AGI Work task"
+            }
+          ],
+          "value": [
+            {
+              "text": "Offered in a voice session: hands the goal you spoke to the chat as an AGI Work task, which runs in the background and is tracked in Tasks, where you can stop it. Reversible, no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read a file on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads a text file in a folder you granted to the desktop app. The contents come back to the chat."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "List a folder on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Lists the files and folders inside a folder you granted to the desktop app."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Find files on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Finds files by name inside a folder you granted to the desktop app and returns their paths."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Search files on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Searches the text of files inside a folder you granted to the desktop app and returns matching lines."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read your phone calendar"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads the events in a date range from the calendars on your phone, after the phone asks for calendar access."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Check your free time"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads when you are busy or free in a date range from the calendars on your phone, without the event details."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Add a calendar event"
+            }
+          ],
+          "value": [
+            {
+              "text": "Adds an event to a calendar on your phone. Your phone asks for calendar access, and AGI asks before it adds anything."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Add a reminder"
+            }
+          ],
+          "value": [
+            {
+              "text": "Adds a reminder on your phone. Your phone asks for reminders access, and AGI asks before it adds anything."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Write a file on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Creates or replaces a text file inside a folder you granted to the desktop app. Not reversible from the chat."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Edit a file on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Replaces one exact passage in a text file inside a folder you granted to the desktop app. Not reversible from the chat."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run a command on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs a terminal command in a folder you granted and returns its output once it exits. The desktop app asks for the exact command first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Start a command on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Starts a command that keeps running, such as a dev server, in a folder you granted. The desktop app asks for the exact command first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read a running command"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads what a command started on your computer printed since the last read, and can type into it after you approve the input."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Stop a running command"
+            }
+          ],
+          "value": [
+            {
+              "text": "Stops a command the assistant started on your computer, together with everything it started."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Take a screenshot"
+            }
+          ],
+          "value": [
+            {
+              "text": "Captures your screen through the desktop app so the assistant can see what is open. The picture comes back to the chat."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Look closely at the screen"
+            }
+          ],
+          "value": [
+            {
+              "text": "Captures one region of your screen at full detail through the desktop app. The picture comes back to the chat."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Move the pointer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Moves the mouse pointer on your computer without clicking. Used between steps while controlling the screen."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Scroll on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Scrolls the window or area under a point on your screen through the desktop app."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Wait on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Pauses before the next step so a window can open or a page can load. It does nothing on its own."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Click on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Clicks at a point on your screen through the desktop app. A click can send, buy or delete in whatever app is open."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Drag on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Presses, moves and releases the mouse on your screen, to drag a file, a selection or a slider."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Type on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Types text into whatever has keyboard focus on your computer. Typed text can be sent by the app that receives it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Press a key on your computer"
+            }
+          ],
+          "value": [
+            {
+              "text": "Presses a key or shortcut on your computer, such as Enter or a menu shortcut, in whatever app is in front."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read your Chrome tab"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads the address, title and visible text of the active tab in your paired Chrome, on sites you approved in the extension."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Capture your Chrome tab"
+            }
+          ],
+          "value": [
+            {
+              "text": "Captures the visible part of the active tab in your paired Chrome, on sites you approved in the extension."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read the Chrome console"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads the console messages the active tab in your paired Chrome logged. The desktop app always asks first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read Chrome network activity"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads the requests the active tab in your paired Chrome made, with addresses and status. The desktop app always asks first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Open a page in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Click in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Clicks an element on the active tab of your paired Chrome, which can submit a form, on sites you approved."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Type in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Types into a field on the active tab of your paired Chrome, on sites you approved in the extension."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Download through Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Downloads a file through your paired Chrome into your downloads folder. The desktop app always asks first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read your Chrome tab"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads the address, title and visible text of the active tab in your paired Chrome, on sites you approved in the extension."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Capture your Chrome tab"
+            }
+          ],
+          "value": [
+            {
+              "text": "Captures the visible part of the active tab in your paired Chrome, on sites you approved in the extension."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read the Chrome console"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads the console messages the active tab in your paired Chrome logged. AGI always asks first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read Chrome network activity"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads the requests the active tab in your paired Chrome made, with addresses and status. AGI always asks first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Open a page in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Click in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Clicks an element on the active tab of your paired Chrome, which can submit a form, on sites you approved."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Type in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Types into a field on the active tab of your paired Chrome, on sites you approved in the extension."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Download through Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Downloads a file through your paired Chrome into your downloads folder. AGI always asks first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Find on your Chrome tab"
+            }
+          ],
+          "value": [
+            {
+              "text": "Lists the buttons, links and fields on the active tab of your paired Chrome, optionally matching a search term, on sites you approved in the extension."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Fill a form in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Fills fields of a form on the active tab of your paired Chrome, on sites you approved in the extension. It does not submit the form."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Go back or forward in Chrome"
+            }
+          ],
+          "value": [
+            {
+              "text": "Moves the active tab of your paired Chrome back or forward in its history, on sites you approved in the extension."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "You can override the account default one tool at a time, in both directions: set a tool to “Always allow” and it stops asking, set it to “Needs approval” or “Blocked” and it asks or is refused whatever the default says. “Skip approvals” is also a workspace decision: where a workspace withholds it, the account falls back to asking before every action rather than to the middle setting nobody chose."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Managed Cloud · approval required"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "always-ask",
+      "content": [
+        {
+          "text": "These always ask."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Connectors"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Every connector and MCP tool we do not know"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A connector or MCP tool in the turn puts the whole turn into manual approval mode. A tool we have not classified is treated as an irreversible write that can move data out, which no account default runs on its own, so it asks under all three settings. The three GitHub tools are classified: reading a pull-request diff can run without asking, posting a comment or a review cannot."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Your setting"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Anything you marked \"Needs approval\""
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A saved \"ask\" verdict outranks automatic mode and the account default alike, so you can pull any built-in tool back into the approval flow."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Escalation"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "A tool call that trips the injection escalation"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "When untrusted content has entered the conversation, a private authenticated source is reachable, and the pending call can move data out of the boundary, a call that would otherwise run escalates to a human decision. On an unattended run there is nobody to ask, so it is refused. See the limits below."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "The precedence order, in full."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Approval precedence order",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "1. You blocked the tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "Denied."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2. A step your own device carries out, on a turn that is connected to that device"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "3. You saved Always allow, and the injection escalation trips"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks. On an unattended run there is nobody to ask, so it is denied instead."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "4. You saved Always allow"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "5. You saved Needs approval"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "6. Something else in the turn needs approval, your account default covers this tool, and the escalation has not tripped"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "7. Something in the turn needs approval and your account default does not cover this tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "8. The injection escalation trips"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks. On an unattended run there is nobody to ask, so it is denied instead."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "9. Every tool offered in the turn runs under your account default"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Honest limits"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "honest-limits",
+      "content": [
+        {
+          "text": "What the injection escalation does not catch."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The escalation is a mitigation, not a proof. We publish its gaps because a reviewer will find them anyway, and a mitigation you can reason about is worth more than a clean claim you cannot."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Coverage"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Pasted text is not counted"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Untrusted content is recognised when a tool fetched it (a web page, a search result, a pull-request diff), when you attach a file or image, and when a project knowledge file or connector context you selected enters the chat. Text you paste yourself is not counted, and that is a real injection vector this check does not see."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Bias"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "It over-triggers on purpose"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Whether a sensitive source is reachable is derived from which tools were offered, not from what was actually read. A connector merely being available counts. We would rather cost you a click than miss a case."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Visibility"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Undeclared exfiltration is invisible"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Whether a call can move data out is per-tool metadata. An MCP server that phones home during what it declares as a read is not visible to this check, which is exactly why any tool we have not classified is treated as creating an egress path."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Override"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "It cannot stop you approving"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The check turns a call that would have run into a call that asks. If it escalates and you approve, the call runs."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Blocking"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "blocking",
+      "content": [
+        {
+          "text": "A Block is enforced on the server."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Blocking a tool is not a client-side preference. The verdict is stored against your account and checked on the server before any side effect, on the streaming tool loop and again when an approval is resumed. A modified client, or a request you write yourself against the API, cannot execute a tool you blocked; the model is told the tool is blocked and instructed not to retry it."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "What blocking does not do:",
+          "strong": true
+        },
+        {
+          "text": " it does not hide the tool from the model’s list of available tools. The model may still attempt the call. The call is refused before it runs, and nothing happens."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "In the browser"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "browser-permissions",
+      "content": [
+        {
+          "text": "Computer use in Chrome."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The Chrome extension can drive a tab through the Chrome debugger, and read that tab’s console and network activity over the same attachment. Starting a session is always an explicit action: you type a goal and click. Once running:"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Browser computer-use permissions",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Ask before acting"
+            }
+          ],
+          "value": [
+            {
+              "text": "On by default. An unset preference means ask; autopilot is an explicit opt-out you have to choose."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Unanswered approvals"
+            }
+          ],
+          "value": [
+            {
+              "text": "Denied after 30 seconds. The gate fails closed, not open."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Where it can go"
+            }
+          ],
+          "value": [
+            {
+              "text": "Navigation is confined to the site allowlist you maintain in extension options."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Text leaving the page"
+            }
+          ],
+          "value": [
+            {
+              "text": "Page-text summaries and field readbacks are redacted by the driver before they leave."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Screenshots"
+            }
+          ],
+          "value": [
+            {
+              "text": "Screenshots are not redacted and cannot be. You cannot scrub secrets out of a PNG.",
+              "strong": true
+            },
+            {
+              "text": " They reach the Managed Cloud gateway. If a page has a secret visibly rendered on it, a screenshot of that page carries it. This is a residual, accepted risk, bounded by the allowlist and the approval gate."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Console and network capture"
+            }
+          ],
+          "value": [
+            {
+              "text": "The extension reads a page's console messages and the requests it makes, but only while a run is active or you turn the watch on yourself, and only on a site carrying both grants. Message text passes the same redaction as page text. A request line keeps the URL, method, status, type and timing; it drops credentials in the URL and never reads a request body or a header."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Downloads"
+            }
+          ],
+          "value": [
+            {
+              "text": "A download starts only when you ask for one, saves to your own downloads folder, and must come from the page’s own origin or another origin already on your allowlist. Chrome picks the filename."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Where inference happens"
+            }
+          ],
+          "value": [
+            {
+              "text": "Computer use requires Managed Cloud sign-in and calls the Managed Cloud gateway directly from the extension."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "On Desktop"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "desktop-permissions",
+      "content": [
+        {
+          "text": "Local execution, local approval."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Desktop runs tools on your machine, so it carries its own gate: dangerous tools prompt in manual mode, per-tool approval policies are stored and reapplied, and connector settings expose a standing Always allow / Needs approval / Blocked control for each tool. Desktop is also the only surface today that completes a real OAuth flow. See the next section."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Connectors"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "connectors",
+      "content": [
+        {
+          "text": "What is actually requested today."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The connector directory is larger than what is connectable. This section describes the current state, not the roadmap."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Managed Cloud connects exactly three kinds of thing."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "What Managed Cloud connects",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "The GitHub App"
+            }
+          ],
+          "value": [
+            {
+              "text": "Three tools: read a pull-request diff, post an issue or pull-request comment, and post a pull-request review. Access comes from the GitHub App installation you authorize; its permission set is configured on GitHub during install and is shown to you there. We do not restate it here, because it is not declared in our own code and we will not guess at a permission list on your behalf."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Operator-configured MCP servers"
+            }
+          ],
+          "value": [
+            {
+              "text": "Remote MCP endpoints configured server-side by AGI. The endpoint and its credentials stay server-side; nothing you supply flows into them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Your own remote MCP servers"
+            }
+          ],
+          "value": [
+            {
+              "text": "A server URL you provide, with an optional bearer token that is encrypted at rest and scoped to your account alone. Its tools are whatever that server advertises at runtime."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Every other connector in the directory is not connectable on the web today.",
+          "strong": true
+        },
+        {
+          "text": " Attempting to connect one returns an explicit “not implemented” response rather than a fake connected state. No OAuth token for Gmail, Drive, Slack, Notion, or any other branded catalog connector is stored in your AGI account, because no such flow exists on the web. The record we keep for a connector is an enablement flag: a connector id, an auth type, and whether it is active. It holds no tokens and no endpoint URLs."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Desktop uses the managed connector service."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The current Electron Desktop opens the same account-scoped connector authorization flow as the web app. It does not store connector OAuth tokens in a local SQLite database. The provider’s consent screen is the authoritative list of scopes for a configured connector, and authorization does not finish unless the managed service verifies that connection."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A directory entry is not proof that a connector is available. The app asks the managed service which connectors are configured and reports an unavailable or incomplete setup explicitly instead of inventing a successful connection."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "A custom MCP server is your trust boundary."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI does not vet the remote MCP servers you add. The operator of that server sees the conversation context you send to its tools, and any token you enter is transmitted to it. We validate that the URL resolves to a public host (private and link-local addresses are rejected), and we encrypt the token at rest and scope it to your account. That is infrastructure hygiene, not an endorsement of the server. Add servers you trust, the way you would add a dependency."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Revocation"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "revocation",
+      "content": [
+        {
+          "text": "Every way to take access back."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Ways to revoke access",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Disconnect a connector"
+            }
+          ],
+          "value": [
+            {
+              "text": "Removes the connection and also deletes every saved per-tool permission for that connector, so a past \"Always allow\" cannot survive a reconnect."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Reset one tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "Set a single tool back to \"Needs approval\", or delete its saved verdict outright. This exists specifically so a one-time \"Always allow\" is not permanent."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Block one tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "A blocked tool is refused server-side before it runs, on the normal tool loop and on the approval-resume path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Unlink GitHub"
+            }
+          ],
+          "value": [
+            {
+              "text": "Disconnecting GitHub deletes your installation records so GitHub tools stop being offered. The GitHub App itself remains installed on your GitHub account until you remove it at github.com/settings/installations. Do both for full revocation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Delete a custom MCP connector"
+            }
+          ],
+          "value": [
+            {
+              "text": "Removes the server and the encrypted bearer token you supplied with it. Rotate that token on the server side too if it was ever sensitive."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Browser: remove a site"
+            }
+          ],
+          "value": [
+            {
+              "text": "Take a site off the extension's allowlist and the browser agent can no longer navigate to it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Browser: re-enable the gate"
+            }
+          ],
+          "value": [
+            {
+              "text": "Turn \"ask before acting\" back on if you previously opted into autopilot. Only an explicit opt-out disables it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Desktop: per-tool policy"
+            }
+          ],
+          "value": [
+            {
+              "text": "Desktop connector settings carry a standing Always allow / Needs approval / Blocked control per tool."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "On the web today, per-tool permissions are set from the approval card shown in the conversation when a tool asks: that is where Always allow, Needs approval, and Blocked live. A standing per-tool settings panel exists on Desktop. Connecting and disconnecting a connector is recorded in your account’s security audit events."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Read the acceptable use policy",
+            "href": "/acceptable-use"
+          }
+        ],
+        [
+          {
+            "text": "Security posture",
+            "href": "/security"
+          }
+        ],
+        [
+          {
+            "text": "Privacy policy",
+            "href": "/privacy"
+          }
+        ]
+      ]
+    }
+  ]
+}

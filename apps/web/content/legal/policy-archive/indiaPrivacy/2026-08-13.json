@@ -1,0 +1,866 @@
+{
+  "key": "indiaPrivacy",
+  "route": "/privacy/india",
+  "date": "2026-08-13",
+  "replacedOn": "2026-10-07",
+  "commit": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+  "committedAt": "2026-09-21T08:04:57-05:00",
+  "title": "Notice to Data Principals in India.",
+  "blocks": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "India · Digital Personal Data Protection Act, 2023"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "hero",
+      "content": [
+        {
+          "text": "Notice to Data Principals in India."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "This is the itemised notice the DPDP Act requires us to give you before we process your personal data. It sits alongside the "
+        },
+        {
+          "text": "main privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": ", which describes the same processing in more detail; "
+        },
+        {
+          "text": "where the two differ on your rights in India, this page governs.",
+          "strong": true
+        },
+        {
+          "text": " Last updated: 2026-08-13. Managed Cloud is in public alpha."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-00",
+      "content": [
+        {
+          "text": "00 · Who is responsible."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA, is the "
+        },
+        {
+          "text": "Data Fiduciary",
+          "strong": true
+        },
+        {
+          "text": " for the processing described here: it decides why and how your personal data is processed. You are the "
+        },
+        {
+          "text": "Data Principal",
+          "strong": true
+        },
+        {
+          "text": ". AGI has no establishment in India and no data centre in India; your data is hosted in the United States, which section 06 explains."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-01",
+      "content": [
+        {
+          "text": "01 · The mode decides what we hold."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Most of this notice depends on which mode you run, because Local, BYOK and Managed Cloud are separate trust boundaries and your data goes to genuinely different places in each. Read this first."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Trust boundaries",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Local"
+            }
+          ],
+          "value": [
+            {
+              "text": "Where it goes: from the released CLI to Ollama or LM Studio on loopback. Nothing is transmitted to us and nothing is silently routed to BYOK or Managed Cloud."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "What we hold: nothing about the local model request. The current Desktop and web apps use Managed Cloud and do not expose Local inference."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "BYOK"
+            }
+          ],
+          "value": [
+            {
+              "text": "Where it goes: from your client straight to the provider you targeted, on your own API key. We are not in that request path."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "What we hold: not the provider key or prompt traffic. BYOK is available in the released CLI, which stores provider credentials in the operating system credential store and calls the provider directly. The VS Code extension is coming soon; Desktop and web do not expose provider-key entry."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Managed Cloud"
+            }
+          ],
+          "value": [
+            {
+              "text": "Where it goes: through our gateway to the provider serving the model you selected."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "What we hold: conversations, files, projects, memories, schedules and settings, so they sync across your devices."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-02",
+      "content": [
+        {
+          "text": "02 · What we process, and for which purpose."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The Act requires the purpose to be specific and the data to be limited to what that purpose needs. Each row below is one purpose, not a category we might later reuse."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Processing purposes",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Email address, account identifier, authentication metadata"
+            }
+          ],
+          "value": [
+            {
+              "text": "Purpose: creating and securing your account. Held by our identity provider; we do not store your password. Basis: your request, the account cannot exist without it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Billing identifiers, plan, invoice metadata"
+            }
+          ],
+          "value": [
+            {
+              "text": "Purpose: taking payment and managing your subscription. Card details go to Stripe directly and never reach us. Basis: performing the paid service you signed up for."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Conversations, files, projects, memories (Managed Cloud only)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Purpose: running the assistant and syncing your work across your devices. Basis: providing the Managed Cloud service you chose to use. Local and BYOK do not produce this data for us."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Error reports and performance traces (Sentry)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Purpose: diagnosing crashes. Content-scrubbed, but a stable user id is retained so a crash can be tied to a session, so they are pseudonymous, not anonymous. Basis: your consent. Off until you turn it on."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Aggregated page views (Google Analytics 4)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Purpose: understanding which parts of the product get used. Basis: your consent, recorded per purpose. The gate fails closed: if your choice cannot be read, analytics stays off."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Email address given for Enterprise access"
+            }
+          ],
+          "value": [
+            {
+              "text": "Purpose: discussing contract-scoped Enterprise access and additional Enterprise capabilities with you. Optionally, product updates: a separate box you can leave unticked or withdraw on its own. Basis: your consent, recorded before the address is stored."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Server logs and an append-only security audit log"
+            }
+          ],
+          "value": [
+            {
+              "text": "Purpose: debugging, preventing abuse, and investigating security incidents. Bearer tokens are redacted. Basis: keeping the service secure and available."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "What we do not do with it.",
+          "strong": true
+        },
+        {
+          "text": " AGI does not train AGI-owned models on your prompts, responses or files. We run no advertising, set no advertising cookies, and do not sell or share personal data for cross-context behavioural advertising."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-03",
+      "content": [
+        {
+          "text": "03 · The consent we ask for, one purpose at a time."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Consent under this Act has to be specific, unbundled, and given by a clear affirmative action. So every box is unticked when you meet it, an optional purpose never blocks a necessary one, and every decision (including the boxes you leave unticked) is recorded against the revision of this notice that was on screen. These are the purposes we ask about:"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Consent purposes",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Store my email address so AGI can discuss contract-scoped Enterprise access with me."
+            }
+          ],
+          "value": [
+            {
+              "text": "Your address is stored so a person can discuss contract-scoped Enterprise access and contact you as additional Enterprise capabilities become available. Organisation, SSO, SCIM, audit export, and retention controls are already live for entitled workspaces. It is used for this Enterprise conversation and nothing else; nothing in the product mails this list automatically."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Required for the thing you asked for"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Store my email address so we can tell you when this platform ships."
+            }
+          ],
+          "value": [
+            {
+              "text": "Your address is stored so we can email you once AGI Mobile, AGI in Chrome or AGI in VS Code has a verified installer to download. It is used for that and nothing else, and is unrelated to the Enterprise contract-access contact list."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Required for the thing you asked for"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Also email me product updates and launch news."
+            }
+          ],
+          "value": [
+            {
+              "text": "Occasional email about new releases and capabilities, sent by a person rather than an automated system. Separate from the early-access list, so you can withdraw it without leaving that list."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Optional, declining costs you nothing"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Allow aggregated usage analytics."
+            }
+          ],
+          "value": [
+            {
+              "text": "Aggregated page views via Google Analytics 4, used to understand which parts of the product get used. Off unless you turn it on. This is the same choice as the analytics switch in the cookie banner."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Optional, declining costs you nothing"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Withdrawing is as easy as giving: change any of them at "
+        },
+        {
+          "text": "/privacy/requests",
+          "href": "/privacy/requests"
+        },
+        {
+          "text": ", with no email and no support ticket. Withdrawal stops the future processing that depended on it; it does not undo processing that already lawfully happened, and it does not delete your account. That is a separate request on the same page. "
+        },
+        {
+          "text": "AGI is not registered with a Consent Manager under section 6(7), so consent is given to us directly rather than through one.",
+          "strong": true
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-04",
+      "content": [
+        {
+          "text": "04 · Who else receives it."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The published list, with what each one receives and where it runs, is at "
+        },
+        {
+          "text": "/subprocessors",
+          "href": "/subprocessors"
+        },
+        {
+          "text": ". In summary: an identity provider holds your login, Stripe holds your payments, our hosting and database vendors hold what you store in Managed Cloud, object storage holds your files, and error/analytics vendors receive only what section 02 describes and only with your consent."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "That published list is currently incomplete, and we would rather say so here than let you rely on it.",
+          "strong": true
+        },
+        {
+          "text": " A review completed on 2026-08-13 found recipients that receive personal data and are not on it: an email provider used for support escalations and scheduled-task notifications, a video-generation provider that receives the prompt text you type, a geocoding service that receives location queries you make, and the Apple and Google store APIs that receive purchase identifiers on mobile. Correcting that page is a tracked open item. If your decision to use this service depends on the full recipient list, ask the grievance contact in section 08 before you sign up."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Model providers.",
+          "strong": true
+        },
+        {
+          "text": " In Managed Cloud, the prompt and any attached content go to the provider serving the model you selected, and for routed models the request passes through OpenRouter. Those providers handle that content under their own terms and data-use policies; our no-training statement is about AGI-owned models and is not a promise on their behalf. In BYOK the request goes from your client straight to the provider on your key, governed by your own account with them. In Local, none of them are contacted."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-05",
+      "content": [
+        {
+          "text": "05 · How long we keep it."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The Act requires erasure once the purpose is no longer being served, unless retention is required by law. Every row below is a job or a mechanism that exists in the product, and the ones we do not control are named as such. The full schedule, including billing records, is section 05 of the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Retention",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Account and its content"
+            }
+          ],
+          "value": [
+            {
+              "text": "Kept while your account is active. Permanently erased 24 hours after a deletion request, by a daily scheduled job that also deletes your identity at our authentication provider."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Conversations (Managed Cloud)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Kept until you delete them or delete your account. There is no automatic expiry on ordinary conversations today, and we will not describe one until it runs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Temporary chats"
+            }
+          ],
+          "value": [
+            {
+              "text": "About 30 days, hard-deleted by a daily job unless a workspace legal hold covers them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Deleted files"
+            }
+          ],
+          "value": [
+            {
+              "text": "30 days in the recently-deleted bin, then the underlying objects are removed."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Security audit log"
+            }
+          ],
+          "value": [
+            {
+              "text": "90 days as a policy. The routine that enforces it is run by an administrator, not on a schedule, so treat it as the policy rather than an automatic guarantee."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Consent records"
+            }
+          ],
+          "value": [
+            {
+              "text": "Kept for as long as the account exists, including withdrawn consents, because a record that consent was once held is the evidence this Act asks us to be able to produce. Erased with the account."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Early-access list email addresses"
+            }
+          ],
+          "value": [
+            {
+              "text": "No maximum age is enforced today.",
+              "strong": true
+            },
+            {
+              "text": " The address is removed on request via the grievance contact below. We will not publish a window until a job deletes them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Server logs and backups"
+            }
+          ],
+          "value": [
+            {
+              "text": "Vendor-governed. We do not operate a process that reaches into vendor snapshots to remove individual records, and we will not claim a number we do not set."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-06",
+      "content": [
+        {
+          "text": "06 · Where it goes, and out of India."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Your personal data is processed and stored in the United States.",
+          "strong": true
+        },
+        {
+          "text": " AGI does not offer data residency in India, so using this service means your personal data leaves India. The Act permits transfer outside India except to territories the Central Government restricts by notification; whether any notification affects the United States is a question of the live notification list on the date you read this, and we will not assert an answer to it here. If you need Indian data residency, we do not have it, and you should not sign up expecting it."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-07",
+      "content": [
+        {
+          "text": "07 · Your rights, and what actually happens."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Your rights",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Access: a summary of your data and who it has been shared with"
+            }
+          ],
+          "value": [
+            {
+              "text": "Signed in, export your data from the account export endpoint at any time. It is rate limited and each export is recorded in the security audit log. The list of recipients is section 04 and "
+            },
+            {
+              "text": "/subprocessors",
+              "href": "/subprocessors"
+            },
+            {
+              "text": "; the export does not enumerate them per record."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Correction, completion and updating"
+            }
+          ],
+          "value": [
+            {
+              "text": "Profile and settings are editable in the product. For anything you cannot edit yourself, use the request form below and say what is wrong; we correct it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Erasure"
+            }
+          ],
+          "value": [
+            {
+              "text": "Request account deletion in the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email, because the only email this product sends is support-escalation and scheduled-task notification: there is no account-lifecycle email path. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Withdraw consent"
+            }
+          ],
+          "value": [
+            {
+              "text": "/privacy/requests",
+              "href": "/privacy/requests"
+            },
+            {
+              "text": ", per purpose, immediately, without contacting anyone."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Grievance redressal"
+            }
+          ],
+          "value": [
+            {
+              "text": "Section 08. Use it before approaching the Data Protection Board: the Act expects you to have exhausted our route first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Nominate someone to exercise your rights if you die or become incapacitated"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not self-serve.",
+              "strong": true
+            },
+            {
+              "text": " There is no nomination field in the product today. Send the nomination to the grievance contact in section 08 and we will record it against your account manually. This is an open item, not a finished feature."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The Act also places duties on you: do not impersonate someone else when giving your data, do not suppress material information when it is legally required, and do not file false or frivolous grievances."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-08",
+      "content": [
+        {
+          "text": "08 · Grievance redressal."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Grievance Officer, AGI Automation LLC"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=DPDP%20grievance"
+        },
+        {
+          "text": " with the subject line “DPDP grievance”, or post to AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA. We aim to respond within 30 days. "
+        },
+        {
+          "text": "That target is our commitment, not a statutory deadline we are quoting.",
+          "strong": true
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Subject-line routing is used because this is the one mailbox proven to receive mail; a dedicated grievance address is not provisioned, and we would rather publish a working inbox than a dedicated one that bounces. If our response does not resolve it, you may complain to the Data Protection Board of India."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-09",
+      "content": [
+        {
+          "text": "09 · Children, stated honestly."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Under this Act a child is anyone under 18, and processing a child’s data requires verifiable consent from a parent or guardian. AGI accounts are for people aged 18 and over, and the "
+        },
+        {
+          "text": "terms",
+          "href": "/terms"
+        },
+        {
+          "text": " permit 13- to 17-year-olds only under an account opened and supervised by a parent, guardian or school. "
+        },
+        {
+          "text": "We do not currently perform verifiable parental consent or age verification.",
+          "strong": true
+        },
+        {
+          "text": " That is a gap against this Act, we are naming it rather than implying otherwise, and it is tracked as an open item. We do not knowingly collect a child’s personal data; if you believe we have, use the grievance contact above and we will delete it. We do not run behavioural advertising or tracking directed at children in any mode."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-10",
+      "content": [
+        {
+          "text": "10 · Security and breach."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We are required to protect your data with reasonable security safeguards, and to notify the Data Protection Board and every affected Data Principal if there is a breach. Our operational posture is at "
+        },
+        {
+          "text": "/security",
+          "href": "/security"
+        },
+        {
+          "text": ". The internal procedure for a breach (who declares it, what goes in the Board notification, and what you would receive) is written down and rehearsed against a 72-hour clock. The email this product can send today is support-escalation and scheduled-task notification; there is no account-lifecycle mailing path, so a user-facing breach notice would be delivered in-product and at a public URL rather than by email. We would rather tell you that now than discover it during an incident."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-11",
+      "content": [
+        {
+          "text": "11 · Language, and changes."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "This notice is published in English. The Act entitles you to it in any language in the Eighth Schedule to the Constitution; translations are not yet published, and that is an open item. The current version is always at this URL with the revision date at the top, and material changes are recorded on "
+        },
+        {
+          "text": "/changelog",
+          "href": "/changelog"
+        },
+        {
+          "text": ". No mailing path for policy changes exists in the product, so we do not promise emailed notice of a change."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Exercise your rights",
+            "href": "/privacy/requests"
+          }
+        ],
+        [
+          {
+            "text": "Full privacy policy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ],
+        [
+          {
+            "text": "Security",
+            "href": "/security"
+          }
+        ]
+      ]
+    }
+  ]
+}

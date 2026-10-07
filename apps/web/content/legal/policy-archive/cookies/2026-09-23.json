@@ -1,0 +1,882 @@
+{
+  "key": "cookies",
+  "route": "/cookies",
+  "date": "2026-09-23",
+  "replacedOn": "2026-10-07",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Cookies.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-cookies-title",
+      "content": [
+        {
+          "text": "Cookies."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We use the minimum needed to keep you signed in and the site functional. No advertising cookies, ever. Analytics is opt-in and the consent check fails closed: if we cannot read your choice, analytics stays off. Last updated: 2026-09-23. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/cookies"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-01",
+      "content": [
+        {
+          "text": "01 · Cookies we set."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Every cookie this site sets, including the two third parties that set their own. Each row names the file that sets it, so you can check this table against the code rather than take our word for it."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Cookies we set",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Session cookies set by our authentication provider"
+            }
+          ],
+          "value": [
+            {
+              "text": "Strictly necessary.",
+              "strong": true
+            },
+            {
+              "text": " Keeps you signed in and lets server routes identify you. Without these you cannot use an account."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Clerk, on our behalf · Session and short-lived refresh cookies, managed by the provider. · "
+            },
+            {
+              "text": "lib/identity/provider.tsx (ClerkProvider)",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "__Host-anon-session-id"
+            }
+          ],
+          "value": [
+            {
+              "text": "Strictly necessary.",
+              "strong": true
+            },
+            {
+              "text": " Identifies a signed-out browser so rate limits and request-integrity checks can be applied without an account. HttpOnly, Secure and SameSite=Strict, and the __Host- prefix means the browser refuses to set it from JavaScript or from another subdomain."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "AGI Automation LLC · 24 hours. · "
+            },
+            {
+              "text": "lib/csrf.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agiworkforce-language"
+            }
+          ],
+          "value": [
+            {
+              "text": "Strictly necessary.",
+              "strong": true
+            },
+            {
+              "text": " Remembers your chosen interface language so the server renders the same locale you saw last time."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "AGI Automation LLC · 1 year. · "
+            },
+            {
+              "text": "app/i18n/index.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "_ga and _ga_*"
+            }
+          ],
+          "value": [
+            {
+              "text": "Analytics.",
+              "strong": true
+            },
+            {
+              "text": " Google Analytics page-view and session measurement. These are set only after you opt in, and are not set at all until then."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Google · Up to 2 years, set by Google. · "
+            },
+            {
+              "text": "shared/components/AnalyticsConsentGate.tsx",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "__stripe_mid, __stripe_sid"
+            }
+          ],
+          "value": [
+            {
+              "text": "Payment.",
+              "strong": true
+            },
+            {
+              "text": " Fraud prevention on card payments. Set by Stripe when their payment script loads, which happens only at the moment you confirm a payment, not while you browse, and not on the pricing page. If you never pay, they are never set."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Stripe · Up to 1 year (mid) and 30 minutes (sid), set by Stripe. · "
+            },
+            {
+              "text": "features/billing/services/stripe-payments.ts",
+              "code": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We set no advertising or cross-site tracking cookies, and we do not sell or share personal information for cross-context behavioural advertising. Only the analytics row needs your consent; the rest are necessary to keep you signed in, keep the site functional, or complete a payment you asked for."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-02",
+      "content": [
+        {
+          "text": "02 · What else we put on your device."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A cookie policy that only lists cookies is answering a narrower question than the one you asked.",
+          "strong": true
+        },
+        {
+          "text": " Most of what this product stores on your device is in local or session storage, not cookies, including your session credentials. None of it is a tracking technology and none of it is shared, but you should be able to see it, so here is the whole of it: every key that carries an identifier, a credential, or something you wrote is named below with the file that writes it, and the last row accounts for the remainder by the prefix they all share. Fourteen of the named keys were missing from this table until 12 September 2026, including a cached copy of your profile and plan, the custom commands you wrote, and an unsent message you typed. A test now derives the list from the code, so the table cannot fall behind it again."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Device storage",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "cookie-consent"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Your analytics choice. Never sent to us. Anything unreadable counts as no decision, which means analytics stays off. A browser sending Global Privacy Control overrides whatever is stored here."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Clearing site data, which resets you to analytics off. · "
+            },
+            {
+              "text": "shared/lib/cookie-consent.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi.notice.free-plan-training"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " The account id that dismissed the Free plan notice about free model providers, so it is shown once per account rather than on every visit. Never sent to us."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Clearing site data, which shows the notice again. · "
+            },
+            {
+              "text": "features/chat/components/FreePlanTrainingNotice.tsx",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi.privacy.shareTelemetry"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " A device-local mirror of your error-reporting preference, so the choice applies before the server answers. Off unless you turn it on."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Clearing site data. · "
+            },
+            {
+              "text": "lib/sentry-shared.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi-user-profile-store"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " A cached copy of your account profile so the app can render before the server answers: your name, email, avatar, and your plan and its renewal dates. It is a copy of what we already hold, not a separate collection."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/user-profile-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi-artifacts-store"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Artifacts you have open, cached so they survive a reload. This can contain content you generated."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Clearing site data. · "
+            },
+            {
+              "text": "features/chat/stores/artifacts-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agiworkforce-web-settings"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Your app settings, including any custom commands you wrote. Those are your own text, held on your device."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/web-settings-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi-notification-store"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " In-app notifications you have received, their read state, and your notification settings."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/notification-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi-company-hub-store"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Your AGI Work sessions and which one is active."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/company-hub-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agent-metrics-storage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Counters the app keeps for you about your own runs: sessions, completed and failed tasks, tokens and messages, and recent activity. Device-local, never sent to us, and not the metering we bill from."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/agent-metrics-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi-tool-permissions"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " The allow, ask and block verdicts you saved for individual tools."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "features/connectors/stores/tool-permissions-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agiworkforce-web-chat"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Your model choice, the sidebar state, and the standing per-conversation decisions you made: which connectors a chat may not reach, whether Memory is off for it, and whether it is a Chat or an AGI Work thread. No message text."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/web-chat-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi-model-store, agi-response-style, agi-thinking-store, agi-ui-store, tool-storage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Interface preferences with no personal data in them: the model and provider you last picked, your response style, your thinking-effort setting, panel and layout state, and your tool filters and trusted workflows."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/model-store.ts, features/chat/stores/style-store.ts, shared/stores/thinking-store.ts, shared/stores/layout-store.ts, shared/stores/tool-store.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi_last_activity"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " A timestamp of your last interaction, used to time out an idle session."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/hooks/useSessionTimeout.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "theme, theme-preference"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Light, dark or system. Read before first paint so the page does not flash the wrong theme."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Clearing site data. · "
+            },
+            {
+              "text": "public/theme-init.js",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agiworkforce-language"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " The same locale choice as the cookie above, cached for the client."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Clearing site data. · "
+            },
+            {
+              "text": "app/i18n/index.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi:tts-voice-uri"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Which system voice you picked for read-aloud."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Clearing site data. · "
+            },
+            {
+              "text": "lib/hooks/useTTS.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi.terms-accepted-version"
+            }
+          ],
+          "value": [
+            {
+              "text": "Session storage.",
+              "strong": true
+            },
+            {
+              "text": " The revision of the terms you ticked, so signing in with a provider that leaves the page and returns does not lose the click. It is consumed once the account records your acceptance."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Closing the tab, or completing sign-up. · "
+            },
+            {
+              "text": "app/signup/TermsGate.tsx",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "agi.team.invitation-token"
+            }
+          ],
+          "value": [
+            {
+              "text": "Session storage.",
+              "strong": true
+            },
+            {
+              "text": " An invitation token carried across the sign-in redirect so the invite still applies when you land back."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Closing the tab, or accepting the invitation. · "
+            },
+            {
+              "text": "features/teams/components/TeamInvitationAcceptance.tsx",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "__storage_test__"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Nothing readable. It is written and removed again in the same breath, to find out whether this browser allows local storage at all before anything tries to use it."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Removed immediately by the check that wrote it. · "
+            },
+            {
+              "text": "shared/utils/browser-utils.ts",
+              "code": true
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Everything else, under an agi or agiworkforce prefix"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local storage.",
+              "strong": true
+            },
+            {
+              "text": " Interface state with no personal data in it: which model favourites you starred, which notices and banners you dismissed, which conversations are unread, and which interface variants you are on. Every remaining key the app writes carries one of those two prefixes, which is how the sign-out sweep finds them all. Nothing outside that prefix and outside this table is written by us."
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "Cleared by: Signing out, or clearing site data. · "
+            },
+            {
+              "text": "shared/stores/authentication-store.ts (APP_STORAGE_KEY_PATTERNS)",
+              "code": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Local storage survives closing the browser; session storage does not. Clearing site data in your browser removes both, and will sign you out."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-03",
+      "content": [
+        {
+          "text": "03 · Two things people usually get told wrong."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "There is no CSRF cookie"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Our cross-site request protection is a token carried in a request header and bound to your session, not a cookie. Earlier versions of this page listed a \"CSRF token\" cookie. Nothing set one, so it is gone."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Your consent choice is not stored in a cookie"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "It is stored in your browser’s local storage under the key "
+        },
+        {
+          "text": "cookie-consent",
+          "code": true
+        },
+        {
+          "text": ", on your device only. It is never sent to us. Clearing site data resets it to the default, which is analytics off."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-04",
+      "content": [
+        {
+          "text": "04 · Do Not Track and Global Privacy Control."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We honour Global Privacy Control.",
+          "strong": true
+        },
+        {
+          "text": " A browser that sends the Sec-GPC header, or sets navigator.globalPrivacyControl, is read here as refusing every purpose that is not needed to serve the request you are making: analytics, and the product-update list in the consent centre. That refusal wins over an acceptance stored in this browser, so an earlier “allow analytics” choice stops applying for as long as the signal is on, and the analytics switch in cookie preferences is shown off and locked with the reason beside it."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "What it does not do: it never touches the strictly necessary cookies in the table above, so it cannot sign you out or keep you from signing in, and it does not overrule a form you fill in yourself. If you tick a box asking us to email you, that tick is your instruction and we act on it. Do Not Track is a separate, older header with no agreed meaning and we still do not read it; the outcome it asks for is the one Global Privacy Control now gets. We do not sell or share personal data for advertising, and honouring the signal does not depend on that."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-05",
+      "content": [
+        {
+          "text": "05 · Your choices."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Change your cookie preferences at any time: analytics stays off until you turn it on, and switching it back off stops it loading on your next page view. You can also manage cookies through your browser; clearing them will sign you out of any active session. For data export or deletion, see the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Privacy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ]
+      ]
+    }
+  ]
+}

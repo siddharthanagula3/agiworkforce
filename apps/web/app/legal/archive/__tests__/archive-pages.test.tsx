@@ -7,8 +7,11 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 }));
 
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
   policyHistories,
+  policyHistoryForKey,
+  policyHistoryHref,
   versionStanding,
   type PolicyHistory,
   type PolicyVersionEntry,
@@ -155,19 +158,29 @@ describe('/legal/archive', () => {
     expect(versionParams()).not.toContainEqual({ policy: 'terms', date: '2026-09-22' });
   });
 
-  it('lists a policy introduced after version histories began, without offering previous versions it does not have', async () => {
+  it('lists a policy introduced after version histories began and offers previous versions only where a history holds more than one', async () => {
     render(await PolicyHistoryPage({ params: Promise.resolve({ policy: 'referral-terms' }) }));
     expect(screen.getByRole('link', { name: 'Current version' })).toHaveAttribute(
       'href',
       '/referral-terms',
     );
 
-    const { container } = render(<PolicyVersionsLink policy="referralTerms" />);
-    expect(container).toBeEmptyDOMElement();
-    render(<PolicyVersionsLink policy="privacy" />);
-    expect(screen.getByRole('link', { name: 'Previous versions' })).toHaveAttribute(
-      'href',
-      '/legal/archive/privacy',
-    );
+    for (const policy of Object.keys(POLICY_LAST_UPDATED) as (keyof typeof POLICY_LAST_UPDATED)[]) {
+      const history = policyHistoryForKey(policy);
+      const { container, unmount } = render(<PolicyVersionsLink policy={policy} />);
+      if (history && history.versions.length > 1) {
+        expect(within(container).getByRole('link', { name: 'Previous versions' })).toHaveAttribute(
+          'href',
+          policyHistoryHref(history),
+        );
+      } else {
+        expect(container, policy).toBeEmptyDOMElement();
+      }
+      unmount();
+    }
+    expect(policyHistoryForKey('referralTerms')?.versions.map((version) => version.date)).toEqual([
+      '2026-10-07',
+      '2026-09-27',
+    ]);
   });
 });

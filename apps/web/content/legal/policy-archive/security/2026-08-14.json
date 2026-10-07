@@ -1,0 +1,1404 @@
+{
+  "key": "security",
+  "route": "/security",
+  "date": "2026-08-14",
+  "replacedOn": "2026-10-07",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Three boundaries, three different answers.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Security"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-security-title",
+      "content": [
+        {
+          "text": "Three boundaries, three different answers."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Written for someone doing a security review, not for a buyer. Where the data sits, what encrypts it, who can reach it, what gets logged, and what happens when you delete: answered per mode, in specifics you can check. We hold no SOC 2 report, no ISO 27001 certificate, and no third-party penetration test. The gaps are listed on this page rather than left for you to find."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Report a vulnerability",
+            "href": "#report"
+          }
+        ],
+        [
+          {
+            "text": "Read what we have not done",
+            "href": "#not-done"
+          }
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "review",
+      "content": [
+        {
+          "text": "Reviewed 2026-08-14."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Managed Cloud is in public alpha. No certifications are claimed."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "boundaries",
+      "content": [
+        {
+          "text": "The mode decides the whole risk model."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Most of this page only applies to one of the three. In Local mode the honest answer to “which of your subprocessors touches my data” is none of them, because none of our infrastructure is in the path at all."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Local"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Nothing we operate is in the path."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "CLI Local mode runs the model on your own hardware through Ollama and LM Studio. The request stays between the CLI and the loopback runtime, with no AGI server or subprocessor in the path. The current public Desktop is managed-cloud only."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "BYOK"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Your key, your provider, direct."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "On CLI and VS Code, requests made with your own provider key travel from the local runtime to that provider. The CLI and VS Code are coming soon. The key stays in that runtime, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion, but the provider you chose does, under their terms."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Managed Cloud"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "We host it, so we hold it. Public alpha."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Managed Cloud is the only mode where we store your content. It has been open to signed-in users by default since 27 June 2026 and is in public alpha, not general availability. Everything below about databases, access control, logging, and deletion describes this mode."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "data",
+      "content": [
+        {
+          "text": "Where data lives, by category, by mode, by holder."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Named third parties and their regions are listed on "
+        },
+        {
+          "text": "/subprocessors",
+          "href": "/subprocessors"
+        },
+        {
+          "text": ". Processing terms are on "
+        },
+        {
+          "text": "/dpa",
+          "href": "/dpa"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Where data lives",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Chats and messages"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: CLI JSON and JSONL session files on your device. BYOK: those local files, plus your provider. Managed Cloud: Neon Postgres (United States)."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Artifacts and generated files"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: your device. BYOK: your device. Managed Cloud: Neon Postgres; rendered on a separate sandbox origin."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Uploaded and generated media"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: your device. BYOK: your device. Managed Cloud: Cloudflare R2, catalogued in Neon and served by an authenticated owner-and-workspace-scoped app route; videos use a private bucket, while images and non-video files remain in a public bucket whose raw URLs are not returned by normal product responses."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Memories, projects, settings"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: your device. BYOK: your device. Managed Cloud: Neon Postgres."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Provider API keys"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: not applicable. BYOK: encrypted on your device, in the OS credential store or under a device-derived key. Managed Cloud: not applicable, Managed Cloud uses our provider accounts, not yours."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Account identity and sessions"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: not held by us, no AGI identity is in the request path. BYOK: account required to sync; identity at Clerk. Managed Cloud: Clerk (United States)."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Security and error logs"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: local audit log on your device. BYOK: local audit log on your device. Managed Cloud: Neon (security events) and Sentry (errors, PII off)."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Code execution"
+            }
+          ],
+          "value": [
+            {
+              "text": "Local: your machine, behind the execution gate. BYOK: your machine, behind the execution gate. Managed Cloud: E2B, off unless an operator explicitly enables it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "transit",
+      "content": [
+        {
+          "text": "Encryption in transit: what the browser is told, and enforced with."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Encryption in transit",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "HSTS"
+            }
+          ],
+          "value": [
+            {
+              "text": "Every response carries Strict-Transport-Security with max-age=63072000 (two years), includeSubDomains, and preload. After the first visit a browser will not speak plaintext HTTP to us or any subdomain."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mixed content"
+            }
+          ],
+          "value": [
+            {
+              "text": "The Content-Security-Policy sets upgrade-insecure-requests and block-all-mixed-content, so a page cannot silently pull a subresource over HTTP."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Browser hardening"
+            }
+          ],
+          "value": [
+            {
+              "text": "X-Frame-Options DENY, X-Content-Type-Options nosniff, X-DNS-Prefetch-Control off, a Permissions-Policy that denies camera, geolocation, payment, USB, and XR outright, and Referrer-Policy origin-when-cross-origin."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Host confusion"
+            }
+          ],
+          "value": [
+            {
+              "text": "Browser traffic that lands on the API hostname is redirected (307) to the application host, so a signed-in session never renders on an origin it does not belong to."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "rest",
+      "content": [
+        {
+          "text": "Encryption at rest: named algorithms, named parameters."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Encryption at rest",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Desktop account data"
+            }
+          ],
+          "value": [
+            {
+              "text": "The current Electron Desktop is a managed-cloud account shell. Conversations, projects, and account state use the same encrypted hosted stores as Web; this public Desktop does not keep a separate Local or BYOK chat database."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "CLI provider credentials"
+            }
+          ],
+          "value": [
+            {
+              "text": "The released CLI stores provider credentials in the operating system credential store and keeps only a non-secret provider index on disk. A bare agi login signs in to managed cloud; agi login followed by a provider name is the BYOK key path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Hosted API keys"
+            }
+          ],
+          "value": [
+            {
+              "text": "API keys you create for the hosted API are hashed with Argon2id. Only the hash and a short non-secret prefix are stored, and the prefix is stripped from API responses. The raw key exists once, in the response that created it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Hosted connector tokens"
+            }
+          ],
+          "value": [
+            {
+              "text": "Bearer tokens for custom MCP connectors are encrypted with AES-256-GCM under a dedicated key. If that key is missing or malformed the production process refuses to start rather than falling back to a per-process key that would silently lose your tokens on the next deploy."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Two-factor secrets"
+            }
+          ],
+          "value": [
+            {
+              "text": "TOTP secrets are stored encrypted and backup codes are stored hashed. Disabling two-factor authentication requires a valid current code."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Advanced Account Security"
+            }
+          ],
+          "value": [
+            {
+              "text": "Passkeys and security keys registered for Advanced Account Security are stored as public keys with their signature counters, so no private key reaches the server. Recovery keys are stored as SHA-256 hashes and each works once. While it is on, every signed-in session is refused until it passes a passkey or security key check, or completes a recovery after its 48-hour hold."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "access",
+      "content": [
+        {
+          "text": "Access control: who gets in, and what stops them."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Access control",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Sessions and protected routes"
+            }
+          ],
+          "value": [
+            {
+              "text": "Authentication is handled by Clerk. Sixteen route groups (chat, code, library, models, developers, open, quick-ask, schedules, tasks, settings, billing, upgrade, admin, workspace, operator, and welcome) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Administrative access"
+            }
+          ],
+          "value": [
+            {
+              "text": "Admin routes require an explicit admin or owner role read from the Clerk identity, not from anything the browser sends. There is no client-side flag that grants it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Cross-site request forgery"
+            }
+          ],
+          "value": [
+            {
+              "text": "State-changing requests carry an HMAC-SHA256 token compared in constant time. The signing secret must be at least 32 bytes or the process refuses it. A previous secret can be honoured during a rotation window and then removed. If no secret is configured, a random one is generated so every token fails, the system fails closed, not open."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Rate limiting and abuse"
+            }
+          ],
+          "value": [
+            {
+              "text": "Limits are enforced per endpoint through Upstash Redis, which is required at production runtime. The module throws on start if it is not configured. Security-sensitive endpoints are marked fail-closed and reject requests when the limiter is unreachable; a few business-critical paths such as checkout are deliberately fail-open, and are marked as such in the code."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Support access to your workspace"
+            }
+          ],
+          "value": [
+            {
+              "text": "Holding our production credentials is not access. Reading a workspace as support requires a grant naming that workspace, the scopes, a ticket and a written reason, requested by one operator and approved by a different one, and it expires: one hour by default and never more than eight, enforced by a database constraint rather than by a code path. Every grant, every read taken under one, and every read refused for want of one is appended to a log your owners and admins can read for themselves."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Whether that log can be edited"
+            }
+          ],
+          "value": [
+            {
+              "text": "The application role holds no write privilege on it, a trigger refuses updates and deletes for every role including the connection an operator holds, and each entry carries the hash of the entry before it for that workspace. A row removed or rewritten by someone who disabled the trigger still leaves a break, and a verification endpoint recomputes the chain and names the first entry that does not reconcile."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Whether support can read around encryption"
+            }
+          ],
+          "value": [
+            {
+              "text": "A workspace holding its own key in its own KMS is unreadable to us without that KMS answering. A workspace on our platform key used to be the gap, because we hold that key: resolving any workspace’s keys as a support principal now passes the same grant check, for both kinds, and a deployment with no grant check wired refuses support resolution outright rather than falling back to the platform key."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "isolation",
+      "content": [
+        {
+          "text": "Execution isolation: untrusted code and untrusted URLs."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A model writes code and picks URLs. Both are untrusted input, and both are treated as such."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Execution isolation",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Script injection"
+            }
+          ],
+          "value": [
+            {
+              "text": "Every response carries a Content-Security-Policy built per request with a fresh random nonce. script-src contains no 'unsafe-inline': an injected inline script has no nonce and does not execute. object-src is 'none', base-uri and form-action are 'self', and frame-ancestors is 'none' everywhere except one documented case, owner-scoped PDF preview, which is restricted to PDF responses on an authenticated file route."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Allowlist integrity"
+            }
+          ],
+          "value": [
+            {
+              "text": "The third-party origins the policy admits are derived, not pasted. The authentication origin is decoded from the publishable key and rejected unless it is shaped like a hostname; the upload origin is admitted only if the account identifier is exactly 32 hex characters and the bucket name matches a valid bucket shape. A typo in an environment variable therefore cannot widen script-src or connect-src to an arbitrary host, it just drops the origin."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Model-generated artifacts"
+            }
+          ],
+          "value": [
+            {
+              "text": "Artifacts render on a separate origin with its own policy: default-src 'none', connect-src 'none', frame-src 'self', form-action 'none', base-uri 'none', object-src 'none', Referrer-Policy no-referrer, cross-origin isolation headers, and frame-ancestors pinned to our application hosts. Code in an artifact can paint, but it cannot make a fetch, XHR or WebSocket call (connect-src is 'none'), submit a form, or reach the parent page. It is not fully network-isolated: the policy still permits images and fonts over https and scripts from two pinned CDNs, so an artifact can issue outbound GETs for those resource types. Treat an artifact as sandboxed against interaction with your session, not as an airgap. Where that origin is not configured, artifacts fall back to a same-origin frame WITHOUT allow-same-origin, which is the flag combination that would defeat the sandbox. Scripts inside an HTML artifact do not run unless the artifact is explicitly marked as needing them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Server-side request forgery"
+            }
+          ],
+          "value": [
+            {
+              "text": "Outbound URLs are checked against private, loopback, link-local, and reserved ranges BEFORE the hostname allowlist is consulted, including IPv4-mapped IPv6 forms, so even an over-broad allowlist cannot be steered at cloud metadata at 169.254.169.254 or an internal address. Remote MCP server URLs must be HTTPS, must resolve to a public address, and must not embed credentials. The status page you can read at /status deliberately calls its health checks in-process rather than fetching itself, because building a request URL out of inbound headers is the same class of bug."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Hosted code execution"
+            }
+          ],
+          "value": [
+            {
+              "text": "Managed code execution through E2B is off unless an operator sets an explicit execution flag. Holding an E2B API key does not by itself open the loop. That was a deliberate design decision, so a credential appearing in the environment cannot quietly enable remote execution."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Desktop command execution"
+            }
+          ],
+          "value": [
+            {
+              "text": "The desktop shell gate classifies a command three ways, most restrictive wins. Commands classified as forbidden never run, even if you approve them. Commands classified as prompt route into the confirmation flow before execution. The classifier combines argv-prefix policy rules with a dangerous-pattern check that catches pipes and shell operators the prefix rules cannot express."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "db",
+      "content": [
+        {
+          "text": "Tenant isolation: database isolation, including where it does not reach yet."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "This is the section most vendors round up. We are not going to, because the number is checkable and rounding it up is exactly the failure a review is meant to catch."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Database isolation",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "What the policies do"
+            }
+          ],
+          "value": [
+            {
+              "text": "Row-level security policies on user-scoped tables carry both a read condition and an explicit write condition, so a cross-tenant read and a cross-tenant insert or update are both rejected by the database. The user identity comes from a session variable that returns NULL when unset, and NULL denies, an unset context sees nothing rather than everything."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "How a request binds to them"
+            }
+          ],
+          "value": [
+            {
+              "text": "A request served by the user-scoped database client opens a transaction, switches to a role that cannot bypass row-level security, binds the caller identity for that transaction only, and then runs the query. The identity is taken from a token whose signature was verified upstream."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Workspace scope"
+            }
+          ],
+          "value": [
+            {
+              "text": "The workspace header a client sends is a selector, not a grant. Membership and role are resolved inside the database from the membership table, so a client that names a workspace it does not belong to collapses to personal scope. Malformed values are rejected before they reach the query."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Where this applies today"
+            }
+          ],
+          "value": [
+            {
+              "text": "The user-scoped client is used by chat and conversation sync, projects, memory, settings and organization sharing, code sessions, schedules, connector permissions, media generation, research reports, artifact publishing, and OpenAI-compatible endpoints. On those routes the database enforces isolation independently of the application. We do not publish a route count because it changes as routes are added or consolidated."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Where it does not, yet"
+            }
+          ],
+          "value": [
+            {
+              "text": "Other hosted routes connect as the database owner, which bypasses row-level security by design. Those routes must implement authentication, ownership, and workspace filters in their application queries; using the owner connection is not itself an isolation control. Widening database-enforced coverage is an open item below, with no promised date."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "logging",
+      "content": [
+        {
+          "text": "Logging: what is captured, and what is deliberately not."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Logging",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "What the hosted platform records"
+            }
+          ],
+          "value": [
+            {
+              "text": "A single module owns writes into the security event table. It records seven failure and abuse event types: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, administrative action, failed CSRF validation, and invalid signature, plus a separate taxonomy for successful business events. Authentication, account-lifecycle, billing, connector, team and organisation, API-key, and session routes call that module."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "What it does not record"
+            }
+          ],
+          "value": [
+            {
+              "text": "Individual built-in tool calls are not listed in the account activity feed. The security audit path records a tool’s name, category and outcome, plus duration when available; it does not store the call’s arguments or result. The connector permissions panel shows a separate recent call log with connector, tool, time and outcome. Audit and connector-log writes can fail, so neither log is a complete replayable transcript."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Error output"
+            }
+          ],
+          "value": [
+            {
+              "text": "Errors returned to a browser are generic per status class. Database messages, constraint names, and driver codes are logged server-side and never sent to the client, except for a short explicit allowlist of application-defined codes the interface needs in order to explain what to do next."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Secret leakage"
+            }
+          ],
+          "value": [
+            {
+              "text": "A detector scans values for secret-shaped strings (provider key prefixes, live payment keys, JSON web tokens, bearer headers, database connection strings) and throws before the value can be logged or returned."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Error monitoring"
+            }
+          ],
+          "value": [
+            {
+              "text": "Sentry runs with default PII collection disabled, plus scrubbing hooks on both events and breadcrumbs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Who can read it"
+            }
+          ],
+          "value": [
+            {
+              "text": "Security event records are readable by the account they belong to, through user-scoped settings routes; org-wide admin views are not built yet. The table is append-only: update and delete are revoked from the application role, and a trigger refuses both for every role except the table owner, which is what lets the retention routine run at all. Retention is 90 days and it is scheduled: a cron-authenticated job at 02:07 UTC calls that routine, then measures the oldest row still present and records the purge as a security event of its own, so a window that did not hold is visible rather than silent."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "deletion",
+      "content": [
+        {
+          "text": "Deletion: what actually happens when you delete an account."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Deletion is the claim vendors are least often asked to demonstrate and most often fail. Here is the mechanism, in the order it runs."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Deletion",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "The list is enumerated, not implied"
+            }
+          ],
+          "value": [
+            {
+              "text": "Erasure walks a hardcoded, foreign-key-ordered list of 117 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, voice sessions, automation audit events, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Bytes before rows"
+            }
+          ],
+          "value": [
+            {
+              "text": "Stored media objects are deleted from object storage first, and only then are their catalogue rows removed. If an object delete fails, its row is kept so a later run can retry, deleting the row first would destroy the only pointer to a live object and leave it orphaned forever."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "It refuses to claim success it did not achieve"
+            }
+          ],
+          "value": [
+            {
+              "text": "The erasure result carries a completeness flag that is true only when every table and every stored object was disposed of. A table that does not exist on a deployment is reported as skipped; a table that errored is reported with its error. Partial erasure does not report as done."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Data before identity"
+            }
+          ],
+          "value": [
+            {
+              "text": "The scheduled purge erases account data BEFORE deleting the identity record. If erasure fails, you still have a recoverable account rather than orphaned rows with no owner to attach them to."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "It actually runs"
+            }
+          ],
+          "value": [
+            {
+              "text": "A cron-authenticated job runs daily at 04:07 UTC and claims up to 100 pending accounts per run, stopping early enough in the invocation to finish the account it is on. Separate scheduled jobs purge deleted media at 04:00 UTC and temporary chats at 03:00 UTC, and sandboxes are reclaimed at 11 minutes past every hour rather than once a day. This is the mechanism behind the 24-hour deletion window in the privacy policy."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Export first, if you want it"
+            }
+          ],
+          "value": [
+            {
+              "text": "A self-service export endpoint returns your account data as a JSON file download before you delete anything."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Local mode"
+            }
+          ],
+          "value": [
+            {
+              "text": "There is nothing for us to delete. Remove the application data directory and the encrypted database goes with it. We never had a copy."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "release",
+      "content": [
+        {
+          "text": "Release integrity: what runs before anything ships."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Release integrity",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Dependency and code scanning"
+            }
+          ],
+          "value": [
+            {
+              "text": "Merge checks include JavaScript and Rust dependency audits, cargo-deny policy checks, Semgrep, CodeQL, Trivy scans of infrastructure and runtime images, and an OWASP ZAP baseline against the built web image. The gate also checks that third-party GitHub Actions are pinned to full commit SHAs. Findings at or above each gate's severity floor block the merge unless the scan ledger names an owner, a reason and an expiry. Expired and stale acceptances fail the gate."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "macOS builds"
+            }
+          ],
+          "value": [
+            {
+              "text": "The public Electron Desktop release workflow requires Apple signing and notarization credentials and verifies a separate disk image for each Mac architecture before publication. A configured workflow is not evidence that an installer has shipped; /download offers an asset only after the release API verifies it. You can verify an offered installer with codesign, spctl, and stapler."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Windows builds"
+            }
+          ],
+          "value": [
+            {
+              "text": "No Windows installer is offered for the public Electron Desktop. A separate manual Windows signing workflow belongs to the retained Tauri codebase; it is not a public Desktop download or evidence that a Windows installer has shipped."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "report",
+      "content": [
+        {
+          "text": "Reporting a vulnerability."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Security"
+        },
+        {
+          "text": " with "
+        },
+        {
+          "text": "Security",
+          "strong": true
+        },
+        {
+          "text": " in the subject line. This is the mailbox that is actually monitored; we would rather publish one address that works than a dedicated alias that bounces."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Reporting a vulnerability",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Include"
+            }
+          ],
+          "value": [
+            {
+              "text": "The affected surface (web, desktop, mobile, extension, CLI), the version or URL, steps to reproduce, and what an attacker gains. A proof of concept helps. Please do not send video only."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "In scope"
+            }
+          ],
+          "value": [
+            {
+              "text": "agiworkforce.com and its subdomains, the hosted API, the artifact sandbox origin, the desktop application and its updater, the CLI, and the browser and editor extensions."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Out of scope"
+            }
+          ],
+          "value": [
+            {
+              "text": "Findings in third-party services we consume, report those to the vendor. Denial of service, volumetric or brute-force testing, social engineering of our staff or users, physical attacks, spam or rate-limit exhaustion, and reports produced by a scanner with no demonstrated impact."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Safe harbour"
+            }
+          ],
+          "value": [
+            {
+              "text": "If you research in good faith, stay within the scope above, avoid privacy violations and service degradation, use only accounts you own or have permission to test, and give us a reasonable chance to fix the issue before disclosing it, we will not pursue or support legal action against you, and we will say so in writing if you ask."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Response"
+            }
+          ],
+          "value": [
+            {
+              "text": "We do not publish a fixed acknowledgement or remediation time. This is not a 24/7 reporting channel; reports are reviewed on a best-effort basis during working hours."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Reward"
+            }
+          ],
+          "value": [
+            {
+              "text": "There is no paid bounty programme. We will credit you by name in the changelog if you want the credit, and decline to name you if you do not."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "not-done",
+      "content": [
+        {
+          "text": "What we have not done."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "No dates are attached to any of these. A date we cannot keep is worse than an admission we can. As of 2026-08-14:"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "What we have not done",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "SOC 2"
+            }
+          ],
+          "value": [
+            {
+              "text": "No SOC 2 Type I or Type II report exists. No audit is underway and there is no auditor engaged. Nothing on this site should be read as implying otherwise."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ISO 27001"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not certified. No certification body engaged."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "HIPAA"
+            }
+          ],
+          "value": [
+            {
+              "text": "AGI is not offered for protected health information. We do not sign business associate agreements."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Penetration test"
+            }
+          ],
+          "value": [
+            {
+              "text": "No third-party penetration test has been performed. The scanning described above is automated tooling in our own pipeline, which is not a substitute."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Bug bounty"
+            }
+          ],
+          "value": [
+            {
+              "text": "We do not run a paid bounty programme. Reports are still read and fixed (see below), but do not expect payment."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Database policy coverage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Row-level security is bound on the user-scoped routes named above. Other privileged routes must enforce authenticated ownership and workspace scope in application queries; widening database-enforced coverage remains open work."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Inline styles"
+            }
+          ],
+          "value": [
+            {
+              "text": "The Content-Security-Policy still permits 'unsafe-inline' for styles because the component library depends on inline style attributes. Scripts do not have this exemption; styles do."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Remote image sources"
+            }
+          ],
+          "value": [
+            {
+              "text": "The main-page Content-Security-Policy permits HTTPS image sources because generated media, connector icons and user-provided images can arrive from runtime URLs before they are stored behind a same-origin file route. Restricting those sources to a same-origin image proxy remains open work."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Identity SDK integrity"
+            }
+          ],
+          "value": [
+            {
+              "text": "Clerk loads its browser SDK and UI preload from the identity origin without Subresource Integrity attributes. The script policy restricts external execution to identity origins and inline execution to nonce-bearing scripts, but a verified same-origin copy of those vendor assets does not exist yet."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Production access controls"
+            }
+          ],
+          "value": [
+            {
+              "text": "The break-glass mechanism described under access is built and audited, and the offboarding steps are written down as a runbook. Two things remain: there is no periodic access review on a schedule, and the platform key is currently held in the deployment environment rather than in a key-management service, so unsealing it leaves a record only in our own trail and not in a vendor’s. Assume both until this row says otherwise."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Availability commitments"
+            }
+          ],
+          "value": [
+            {
+              "text": "No published recovery point or recovery time objective. A weekly host-neutral restore drill checks commands and schema against a disposable database, but there is no scheduled restore test against production data and no measured production recovery time. The planned targets on /sla are targets, not commitments."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "On-call"
+            }
+          ],
+          "value": [
+            {
+              "text": "There is no 24/7 rotation. Incident response is best-effort during working hours."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Incident history"
+            }
+          ],
+          "value": [
+            {
+              "text": "We have not published an incident archive or postmortems. The notification commitment is on /status; the archive does not exist yet."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "EU representative"
+            }
+          ],
+          "value": [
+            {
+              "text": "AGI Automation LLC has not yet designated a representative in the European Union under Article 27 GDPR. Status is tracked at /legal/eu-representative."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Health-check coverage"
+            }
+          ],
+          "value": [
+            {
+              "text": "The live check on /status covers required configuration, Postgres, the payments API, whether the default chat and voice routes have a live model and a working provider behind them, whether the background work queues are draining, and whether the search index is present. Authentication, object storage, the gateway, the rate limiter, and individual model routes are not covered by it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "India: DPDP Act, 2023"
+            }
+          ],
+          "value": [
+            {
+              "text": "Our position is published in full at /privacy/india, including the parts that are gaps rather than controls: no verifiable parental consent (the Act treats anyone under 18 as a child), no notice translations into Eighth Schedule languages, no Indian data residency, and a grievance contact published as a role rather than a named officer. The consent and rights machinery is implemented; those four are not."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Automated-abuse verification"
+            }
+          ],
+          "value": [
+            {
+              "text": "There is no first-party CAPTCHA or bot-verification check anywhere in our own code, and no server-side verification call for one. Sign-up bot protection is a feature of our identity provider, configured in its dashboard rather than in this repository, which means we cannot demonstrate its state from source, and a reviewer should not assume it. Unauthenticated endpoints that accept personal data are protected by CSRF validation and per-IP rate limiting, which are real controls but are not bot verification."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Log redaction"
+            }
+          ],
+          "value": [
+            {
+              "text": "Bearer tokens are redacted before logs are written. There is no field-level redaction configured on the structured logger itself, so an email address passed into a log call is written as given. Reducing what reaches logs, rather than filtering it afterwards, is open work."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Fail-closed coverage is not uniform"
+            }
+          ],
+          "value": [
+            {
+              "text": "Some controls fail closed by design and are described above: the analytics consent gate is one, and the web rate limiter refuses to start in production without its backing store. Others degrade rather than refuse when a dependency is unavailable, and a small number of operational switches can be set to admit traffic that would otherwise be blocked. Making the fail direction consistent, and making every security-relevant setting refuse a boot rather than warn, is tracked remediation work rather than something we have finished."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Legacy credential formats"
+            }
+          ],
+          "value": [
+            {
+              "text": "Some second-factor secrets stored before the current encryption scheme are still readable in their original format, and no migration job has rewritten them. New enrolments use the current scheme. Until that migration runs, the honest statement is that our encryption-at-rest posture is not uniform across every historical row."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "related",
+      "content": [
+        {
+          "text": "The rest of the trust surface."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Dated posture ledger",
+            "href": "/trust"
+          }
+        ],
+        [
+          {
+            "text": "Live status",
+            "href": "/status"
+          }
+        ],
+        [
+          {
+            "text": "Privacy policy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ],
+        [
+          {
+            "text": "Data processing addendum",
+            "href": "/dpa"
+          }
+        ],
+        [
+          {
+            "text": "Service levels",
+            "href": "/sla"
+          }
+        ]
+      ]
+    }
+  ]
+}
