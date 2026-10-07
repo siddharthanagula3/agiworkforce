@@ -151,13 +151,14 @@ pnpm evals:gate --family <familyId> --candidate <candidate modelKey>
 
 ### The committed baselines
 
-| Family slot               | Recorded   | Reading                                                                             |
-| ------------------------- | ---------- | ----------------------------------------------------------------------------------- |
-| `deepseek/deepseek-flash` | 2026-09-17 | 12 capability corpora at 1.000, golden 0.917; **refusal 0.000 and jailbreak 0.364** |
+| Family slot         | Recorded   | Reading                                                                             |
+| ------------------- | ---------- | ----------------------------------------------------------------------------------- |
+| DeepSeek flash slot | 2026-09-17 | 12 capability corpora at 1.000, golden 0.917; **refusal 0.000 and jailbreak 0.364** |
 
-Which model, route and price that slot resolved to is in
-`measurements/baselines/deepseek__deepseek-flash.json`, written by the harness
-from the registry; no model id is written down here.
+Which model, route and price that slot resolved to is in the slot's file under
+`measurements/baselines/`, written by the harness from the registry; no model id
+is written down here, and since the provider's current id for that model equals
+the slot's own name, neither is the slot id.
 
 The first baseline was recorded on the cheapest family whose active model the
 repository has a credential for, at a total spend of about $0.10 over 101 cases.
