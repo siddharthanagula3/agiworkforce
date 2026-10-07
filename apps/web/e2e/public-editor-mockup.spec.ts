@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
+import { PUBLIC_APPROVED_FADES } from './lib/public-mask-paint';
 import { measurePublicFontProof, settlePublicPage } from './lib/public-page-readiness';
 import { scanPublicTypography, type PublicTypographyReport } from './lib/public-typography';
 import { measurePublicTypographyWithScroll } from './lib/public-typography-scroll';
@@ -7,6 +8,8 @@ import { capturePublicViewportStrips } from './lib/public-viewport-strip-capture
 const figure = 'figure.agi-dev.agi-editor-responsive[data-device="editor"]';
 const fonts = [{ cssVariable: '--font-geist-sans' }, { cssVariable: '--font-geist-mono' }];
 const widths = [320, 360, 390, 768, 1024, 1366, 1440, 1920];
+const heroFade = PUBLIC_APPROVED_FADES.figure.image;
+const bentoFade = PUBLIC_APPROVED_FADES.bento.image;
 const callers = [
   {
     name: 'vscode',
@@ -15,6 +18,7 @@ const callers = [
     title: 'AGI · VS Code',
     badge: '@agi',
     widths,
+    fade: { from: 0, image: heroFade },
   },
   {
     name: 'home',
@@ -23,6 +27,7 @@ const callers = [
     title: 'example.ts · AGI in VS Code',
     badge: 'VS Code',
     widths: [320, 390, 1440],
+    fade: { from: 641, image: heroFade },
   },
   {
     name: 'solutions',
@@ -31,6 +36,7 @@ const callers = [
     title: 'example.ts · AGI in VS Code',
     badge: 'VS Code',
     widths: [320, 390, 1440],
+    fade: { from: 641, image: bentoFade },
   },
 ];
 const lines = [
@@ -54,6 +60,7 @@ function assertText(
   report: PublicTypographyReport,
   bounds: { left: number; right: number; top: number; bottom: number },
   minimum: number,
+  prose: number,
 ) {
   expect(report.findings).toEqual([]);
   expect(report.unmeasured).toEqual([]);
@@ -66,7 +73,7 @@ function assertText(
   for (const sample of report.samples) {
     expect(sample.renderedSize).not.toBeNull();
     expect(sample.renderedSize!).toBeGreaterThanOrEqual(
-      sample.mono ? 15 : sample.selector === 'p' ? 17 : minimum,
+      sample.mono ? 15 : sample.selector === 'p' ? prose : minimum,
     );
     expect(sample.rects.length).toBeGreaterThan(0);
     for (const rect of sample.rects) {
@@ -82,14 +89,38 @@ async function geometry(frame: Locator) {
   return frame.evaluate((root) => {
     const box = root.getBoundingClientRect();
     const masked = [];
-    for (let owner: Element | null = root; owner; owner = owner.parentElement) {
+    const maskOwners = [...root.querySelectorAll('*')];
+    for (let element: Element | null = root; element; element = element.parentElement)
+      maskOwners.push(element);
+    for (const owner of maskOwners) {
       const css = getComputedStyle(owner);
       if (
         css.maskImage !== 'none' ||
-        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-image'))
+        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-image')) ||
+        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-box-image-source'))
       )
-        masked.push(owner.getAttribute('class'));
+        masked.push({
+          frame: owner === root,
+          class: owner.getAttribute('class'),
+          mask: css.maskImage,
+          webkitMask: css.getPropertyValue('-webkit-mask-image'),
+          size: css.maskSize,
+          position: css.maskPosition,
+          repeat: css.maskRepeat,
+          origin: css.maskOrigin,
+          clip: css.maskClip,
+          composite: css.maskComposite,
+          mode: css.maskMode,
+          border: css.getPropertyValue('-webkit-mask-box-image-source'),
+        });
     }
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const token = (name: string) => {
+      const value = getComputedStyle(root).getPropertyValue(name).trim();
+      const match = /^(\d*\.?\d+)(rem|px)$/u.exec(value);
+      if (!match) throw new Error('Unmeasured mockup text token: ' + name + '=' + value);
+      return Number(match[1]) * (match[2] === 'rem' ? rootPx : 1);
+    };
     const shell = root.querySelector<HTMLElement>('.agi-dev-shell');
     const chat = root.querySelector<HTMLElement>('.agi-ed-chat');
     if (!shell || !chat) throw new Error('Editor shell/chat owner is missing');
@@ -104,6 +135,12 @@ async function geometry(frame: Locator) {
         height: box.height,
       },
       masked,
+      textTokens: {
+        body: token('--public-mockup-text-body'),
+        control: token('--public-mockup-text-control'),
+        meta: token('--public-mockup-text-meta'),
+        code: token('--public-mockup-text-code'),
+      },
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       shellOverflow: getComputedStyle(shell).overflow,
       shellHiddenHeight: shell.scrollHeight - shell.clientHeight,
@@ -205,10 +242,17 @@ for (const caller of callers)
           await expect(body.locator('.agi-editor-tools')).toHaveCount(2);
           for (const group of await body.locator('.agi-editor-tools').all()) {
             await expect(group.locator('span > svg.agi-editor-icon')).toHaveCount(3);
-            const rows = await group
-              .locator('span')
-              .evaluateAll((items) => items.map((item) => item.getBoundingClientRect().top));
-            expect(new Set(rows).size).toBe(1);
+            const rail = await group.locator('span').evaluateAll((items) =>
+              items.map((item) => {
+                const box = item.getBoundingClientRect();
+                return { left: box.left, top: box.top, bottom: box.bottom };
+              }),
+            );
+            expect(rail).toHaveLength(3);
+            expect(new Set(rail.map((item) => item.left)).size).toBe(1);
+            for (const [position, item] of rail.entries())
+              if (position > 0)
+                expect(item.top).toBeGreaterThanOrEqual(rail[position - 1]!.bottom - 0.05);
           }
           await expect(body.locator('.agi-ed-row > .agi-ed-source')).toHaveText(lines);
           const font = await measurePublicFontProof(page, frame, fonts);
@@ -220,6 +264,10 @@ for (const caller of callers)
           expect(before.box.width).toBeGreaterThan(0);
           expect(before.box.height).toBeGreaterThan(0);
           expect(before.directBento).toBe(caller.name === 'solutions');
+          expect(before.textTokens).toEqual({ body: 16, control: 16, meta: 14, code: 15 });
+          const prose = before.textTokens.body;
+          evidence['paintScope'] =
+            'Font proof counts only text with at least 2px inside the fully opaque band of the owner-approved fade; text wholly in the fading band stays under the typography, containment and roster requirements.';
           const partitions = [];
           for (const [part, minimum] of [
             ['.agi-dev-bar', 15],
@@ -231,12 +279,12 @@ for (const caller of callers)
               scopeSelector: `${frameSelector} ${part}`,
             });
             partitions.push(report);
-            assertText(report, before.box, minimum);
+            assertText(report, before.box, minimum, prose);
           }
           for (const paragraph of await body.locator('.agi-ed-msg p').all())
             expect(
               await paragraph.evaluate((owner) => parseFloat(getComputedStyle(owner).fontSize)),
-            ).toBeGreaterThanOrEqual(17);
+            ).toBe(prose);
           evidence['partitions'] = partitions;
           const code = frame.locator('.agi-ed-editor');
           const codeSelector = `${frameSelector} .agi-ed-editor`;
@@ -246,7 +294,7 @@ for (const caller of callers)
             scopeSelector: codeSelector,
           });
           evidence['code'] = complete;
-          assertText(complete, before.box, 15);
+          assertText(complete, before.box, 15, prose);
           expect(complete.scrollProof.planComplete).toBe(true);
           expect(complete.scrollProof.restored).toBe(true);
           expect(complete.scrollProof.restorationFailures).toEqual([]);
@@ -338,7 +386,26 @@ for (const caller of callers)
           evidence['after'] = after;
           for (const reading of [before, after]) {
             expect(reading.overflow).toBeLessThanOrEqual(0);
-            expect(reading.masked).toEqual([]);
+            expect(reading.masked).toEqual(
+              width >= caller.fade.from
+                ? [
+                    {
+                      frame: true,
+                      class: expect.stringContaining('agi-dev'),
+                      mask: expect.stringMatching(caller.fade.image),
+                      webkitMask: expect.stringMatching(caller.fade.image),
+                      size: 'auto',
+                      position: '0% 0%',
+                      repeat: 'repeat',
+                      origin: 'border-box',
+                      clip: 'border-box',
+                      composite: 'add',
+                      mode: 'match-source',
+                      border: 'none',
+                    },
+                  ]
+                : [],
+            );
             expect(reading.shellOverflow).toBe('visible');
             expect(reading.chatOverflow).toBe('visible');
             expect(reading.shellHiddenHeight).toBeLessThanOrEqual(0);
@@ -356,6 +423,7 @@ for (const caller of callers)
               }),
               after.box,
               minimum,
+              prose,
             );
           await expect(body.locator('.agi-ed-row > .agi-ed-source')).toHaveText(lines);
         } finally {

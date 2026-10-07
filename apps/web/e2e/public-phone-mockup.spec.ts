@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
+import { PUBLIC_APPROVED_FADES } from './lib/public-mask-paint';
 import { measurePublicFontProof, settlePublicPage } from './lib/public-page-readiness';
 import { scanPublicTypography } from './lib/public-typography';
 
@@ -11,6 +12,8 @@ const mobileStories = [
 const reply =
   'From your memory: the demo runs from the CLI in Local mode, the deck lives in the Investor project, and the dry run is Thursday at 4pm. Want a reminder?';
 const widths = [320, 360, 390, 768, 1024, 1366, 1440, 1920];
+const fade = PUBLIC_APPROVED_FADES.figure.image;
+const fadeRemovedBelow = 641;
 
 test.describe.configure({ retries: 0 });
 test.setTimeout(90_000);
@@ -41,24 +44,50 @@ async function readPhone(frame: Locator) {
       });
     }
     const masks = [];
-    for (let owner: Element | null = root; owner; owner = owner.parentElement) {
+    const maskOwners = [...root.querySelectorAll('*')];
+    for (let element: Element | null = root; element; element = element.parentElement)
+      maskOwners.push(element);
+    for (const owner of maskOwners) {
       const css = getComputedStyle(owner);
       if (
         css.maskImage !== 'none' ||
-        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-image'))
+        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-image')) ||
+        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-box-image-source'))
       )
         masks.push({
+          frame: owner === root,
           tag: owner.localName,
           class: owner.getAttribute('class'),
           mask: css.maskImage,
           webkitMask: css.getPropertyValue('-webkit-mask-image'),
+          size: css.maskSize,
+          position: css.maskPosition,
+          repeat: css.maskRepeat,
+          origin: css.maskOrigin,
+          clip: css.maskClip,
+          composite: css.maskComposite,
+          mode: css.maskMode,
+          border: css.getPropertyValue('-webkit-mask-box-image-source'),
         });
     }
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const token = (name: string) => {
+      const value = getComputedStyle(root).getPropertyValue(name).trim();
+      const match = /^(\d*\.?\d+)(rem|px)$/u.exec(value);
+      if (!match) throw new Error('Unmeasured mockup text token: ' + name + '=' + value);
+      return Number(match[1]) * (match[2] === 'rem' ? rootPx : 1);
+    };
     return {
       connected: root.isConnected,
       box: rect(box),
       textNodes,
       masks,
+      textTokens: {
+        body: token('--public-mockup-text-body'),
+        control: token('--public-mockup-text-control'),
+        meta: token('--public-mockup-text-meta'),
+        code: token('--public-mockup-text-code'),
+      },
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
@@ -187,20 +216,20 @@ for (const path of ['/mobile', '/'] as const) {
               'Send',
             ])
               await expect(body.locator(`svg[aria-label="${name}"]`)).toHaveCount(1);
-            for (const paragraph of await body
+            const paragraphs = await body
               .locator('.agi-mk-user, .agi-mk-agi > p:not(.agi-mk-receipt):not(.agi-mk-tool)')
-              .all()) {
-              expect(
-                await paragraph.evaluate((element) =>
-                  parseFloat(getComputedStyle(element).fontSize),
-                ),
-              ).toBeGreaterThanOrEqual(17);
-            }
+              .evaluateAll((elements) =>
+                elements.map((element) => parseFloat(getComputedStyle(element).fontSize)),
+              );
+            expect(paragraphs).toHaveLength(2);
             const font = await measurePublicFontProof(page, frame, [
               { cssVariable: '--font-geist-sans' },
               { cssVariable: '--font-geist-mono' },
             ]);
             const before = await readPhone(frame);
+            expect(before.textTokens).toEqual({ body: 16, control: 16, meta: 14, code: 15 });
+            for (const size of paragraphs) expect(size).toBe(before.textTokens.body);
+            const faded = (path === '/mobile' && index === 0) || width >= fadeRemovedBelow;
             const typography = await page.evaluate(scanPublicTypography, {
               pageType: 'marketing' as const,
               pathname: path,
@@ -211,6 +240,8 @@ for (const path of ['/mobile', '/'] as const) {
               selector,
               font: font.expectedFontProof,
               fontCoverageGaps: font.fontCoverageGaps,
+              paintScope:
+                'Font proof counts only text with at least 2px inside the fully opaque band of the owner-approved fade; text wholly in the fading band stays under the typography, containment and roster requirements.',
               before,
               coverage: typography.coverage,
               findings: typography.findings,
@@ -267,7 +298,27 @@ for (const path of ['/mobile', '/'] as const) {
               expect(reading.box.width).toBeGreaterThan(0);
               expect(reading.box.height).toBeGreaterThan(0);
               expect(reading.documentOverflow).toBeLessThanOrEqual(0);
-              expect(reading.masks).toEqual([]);
+              expect(reading.masks).toEqual(
+                faded
+                  ? [
+                      {
+                        frame: true,
+                        tag: 'figure',
+                        class: expect.stringContaining('agi-dev'),
+                        mask: expect.stringMatching(fade),
+                        webkitMask: expect.stringMatching(fade),
+                        size: 'auto',
+                        position: '0% 0%',
+                        repeat: 'repeat',
+                        origin: 'border-box',
+                        clip: 'border-box',
+                        composite: 'add',
+                        mode: 'match-source',
+                        border: 'none',
+                      },
+                    ]
+                  : [],
+              );
               for (const node of reading.textNodes) {
                 expect(node.rects.length, node.text).toBeGreaterThan(0);
                 for (const rect of node.rects) {
