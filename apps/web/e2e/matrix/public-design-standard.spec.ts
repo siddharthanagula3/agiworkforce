@@ -1,25 +1,25 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-import { OG_IMAGE } from '../lib/seo/site';
+import { OG_IMAGE } from '../../lib/seo/site';
 import {
   capturePublicPageCoherence,
   comparePublicPageCoherence,
-} from './lib/public-page-coherence';
+} from '../lib/public-page-coherence';
 import {
   measurePublicKeyboardFocus,
   measurePublicPageIntegrity,
   measurePublicReducedMotion,
-} from './lib/public-page-integrity';
+} from '../lib/public-page-integrity';
 import {
   getPublicRouteInventory,
   selectPublicRouteCases,
   type PublicRouteCase,
   type PublicRouteStateInput,
-} from './lib/public-route-inventory';
-import { settlePublicPage } from './lib/public-page-readiness';
-import { evaluatePublicTextContrast } from './lib/public-text-contrast';
-import { measurePublicTypographyWithScroll } from './lib/public-typography-scroll';
+} from '../lib/public-route-inventory';
+import { settlePublicPage } from '../lib/public-page-readiness';
+import { evaluatePublicTextContrast } from '../lib/public-text-contrast';
+import { measurePublicTypographyWithScroll } from '../lib/public-typography-scroll';
 
 const inventory = getPublicRouteInventory();
 type PublicDesignCase = PublicRouteCase & {

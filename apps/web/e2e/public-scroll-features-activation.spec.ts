@@ -12,6 +12,7 @@ const sourceFiles = [
   'apps/web/features/marketing/components/system/system.css',
   'apps/web/features/marketing/components/FeatureScenes.tsx',
   'apps/web/features/marketing/components/DeviceMockups.tsx',
+  'apps/web/features/marketing/components/app-preview/ScenePreviews.tsx',
   'apps/web/e2e/lib/public-page-readiness.ts',
   'apps/web/e2e/lib/public-route-inventory.ts',
   path.relative(repositoryRoot, __filename),
@@ -27,7 +28,7 @@ const hashSources = () =>
   );
 
 const title = 'Every claim names the source it came from.';
-const figure = 'Example Web research plan awaiting approval';
+const figure = 'Authored example of a research plan waiting to start';
 
 async function nativeStoryState(page: Page) {
   const article = page.getByRole('article', { name: title, exact: true });

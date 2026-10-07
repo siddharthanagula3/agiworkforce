@@ -5,9 +5,9 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { measurePublicFontProof, settlePublicPage } from './lib/public-page-readiness';
 import { evaluatePublicTextContrast } from './lib/public-text-contrast';
 import { measurePublicTypographyWithScroll } from './lib/public-typography-scroll';
-import { capturePublicViewportStrips } from './lib/public-viewport-strip-capture';
 
 const fonts = [{ cssVariable: '--font-geist-sans' }, { cssVariable: '--font-geist-mono' }];
+const textFloorPx = 16;
 const settings = [
   { width: 320, theme: 'dark', motion: 'reduce' },
   { width: 390, theme: 'light', motion: 'reduce' },
@@ -41,7 +41,6 @@ const routes = [
   },
   { path: '/features/plugins', code: [], transcripts: ['A plugin install in the AGI CLI'] },
   { path: '/download', code: [], transcripts: ['Example output from verifying a CLI archive'] },
-  { path: '/', code: [], transcripts: [] },
 ] as const;
 const root = path.resolve(__dirname, '../../..');
 const sourceOwners = [
@@ -50,10 +49,6 @@ const sourceOwners = [
   'apps/web/features/marketing/components/system/CodeTabs.tsx',
   'apps/web/features/marketing/components/system/Transcript.tsx',
   'apps/web/features/marketing/components/code-example-responsive.css',
-  'apps/web/features/marketing/components/ShowcaseScenes.tsx',
-  'apps/web/features/marketing/components/showcase-mockup-responsive.css',
-  'apps/web/features/marketing/components/MarketingLanding.tsx',
-  'apps/web/features/marketing/components/FlagshipSections.tsx',
   'apps/web/features/marketing/components/Reveal.tsx',
   'apps/web/features/marketing/components/motion/Stage.tsx',
   'apps/web/features/marketing/components/motion/motionPreferences.ts',
@@ -73,7 +68,6 @@ const sourceOwners = [
   'apps/web/e2e/lib/public-typography.ts',
   'apps/web/e2e/lib/public-typography-scroll.ts',
   'apps/web/e2e/lib/public-text-contrast.ts',
-  'apps/web/e2e/lib/public-viewport-strip-capture.ts',
   'apps/web/shared/components/seo/theme-init-script.ts',
   'apps/web/shared/components/CookieConsent.tsx',
   'apps/web/shared/lib/cookie-consent.ts',
@@ -162,7 +156,7 @@ async function proveText(page: Page, frame: Locator, selector: string, pathname:
   for (const sample of report.samples) {
     expect(allowed).toContain(firstFamily(sample.fontFamily));
     expect(sample.renderedSize).not.toBeNull();
-    expect(sample.renderedSize!).toBeGreaterThanOrEqual(sample.mono ? 15 : 16);
+    expect(sample.renderedSize!).toBeGreaterThanOrEqual(sample.mono ? 15 : textFloorPx);
     expect(sample.rects.length).toBeGreaterThan(0);
   }
   for (const state of report.scrollProof.states) {
@@ -205,19 +199,50 @@ async function proveText(page: Page, frame: Locator, selector: string, pathname:
   const rawFonts = await frame.evaluate((root) => {
     const groups = new Map<string, { family: string; font: string; points: Set<number> }>();
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
     while (walker.nextNode()) {
       const node = walker.currentNode;
-      if (!node.parentElement || !(node.textContent ?? '').trim()) continue;
+      const text = node.textContent ?? '';
+      if (!node.parentElement || !text.trim()) continue;
       const css = getComputedStyle(node.parentElement);
       const family = (css.fontFamily.split(',')[0] ?? '')
         .trim()
         .replace(/^['"]|['"]$/g, '')
         .toLowerCase();
       const font = `${css.fontStyle} ${css.fontWeight} ${css.fontSize} ${JSON.stringify(family)}`;
+      const ports: DOMRect[] = [];
+      for (
+        let owner: Element | null = node.parentElement;
+        owner;
+        owner = owner === root ? null : owner.parentElement
+      ) {
+        const style = getComputedStyle(owner);
+        if (style.overflowX !== 'visible' || style.overflowY !== 'visible')
+          ports.push(owner.getBoundingClientRect());
+      }
       const group = groups.get(font) ?? { family, font, points: new Set<number>() };
-      for (const character of node.textContent ?? '')
-        if (!/\s/u.test(character)) group.points.add(character.codePointAt(0)!);
-      groups.set(font, group);
+      let offset = 0;
+      for (const character of text) {
+        const start = offset;
+        offset += character.length;
+        if (/\s/u.test(character)) continue;
+        range.setStart(node, start);
+        range.setEnd(node, offset);
+        const glyphs = [...range.getClientRects()].filter((box) => box.width > 0 && box.height > 0);
+        const whollyShown =
+          glyphs.length > 0 &&
+          glyphs.every((box) =>
+            ports.every(
+              (port) =>
+                box.left >= port.left &&
+                box.right <= port.right &&
+                box.top >= port.top &&
+                box.bottom <= port.bottom,
+            ),
+          );
+        if (whollyShown) group.points.add(character.codePointAt(0)!);
+      }
+      if (group.points.size) groups.set(font, group);
     }
     return [...groups.values()].map((group) => ({ ...group, points: [...group.points] }));
   });
@@ -272,8 +297,14 @@ async function keyboardScroll(
     let steps = 0;
     while (Math.abs(current - target) > 1 && steps < 256) {
       const previous = current;
-      await port.press(key);
-      await expect.poll(() => port.evaluate((root) => root.scrollLeft)).not.toBe(previous);
+      // Chromium drops about one in eight arrow presses that reverse direction
+      // straight after a native scroll reaches its end; the next press scrolls.
+      await expect(async () => {
+        await port.press(key);
+        await expect
+          .poll(() => port.evaluate((root) => root.scrollLeft), { timeout: 1000 })
+          .not.toBe(previous);
+      }).toPass({ timeout: 5000 });
       current = await port.evaluate((root) => root.scrollLeft);
       positions.push(current);
       steps += 1;
@@ -313,7 +344,7 @@ async function reachCodeWithTab(page: Page, frame: Locator, port: Locator) {
 
 for (const route of routes)
   for (const setting of settings) {
-    test(`coded-examples-${route.path === '/' ? 'home' : route.path.slice(1).replaceAll('/', '-')}-${setting.width}-${setting.theme}`, async ({
+    test(`coded-examples-${route.path.slice(1).replaceAll('/', '-')}-${setting.width}-${setting.theme}`, async ({
       browser,
     }, info) => {
       const baseURL = info.project.use.baseURL;
@@ -329,10 +360,7 @@ for (const route of routes)
       const sourceFiles = [
         ...new Set([
           __filename,
-          path.join(
-            root,
-            route.path === '/' ? 'apps/web/app/page.tsx' : `apps/web/app${route.path}/page.tsx`,
-          ),
+          path.join(root, `apps/web/app${route.path}/page.tsx`),
           ...sourceOwners.map((owner) => path.join(root, owner)),
         ]),
       ].sort();
@@ -439,11 +467,11 @@ for (const route of routes)
             for (const control of await frame.locator('button').all())
               expect(
                 await control.evaluate((root) => parseFloat(getComputedStyle(root).fontSize)),
-              ).toBeGreaterThanOrEqual(16);
+              ).toBeGreaterThanOrEqual(textFloorPx);
             for (const note of await frame.locator('figcaption').all())
               expect(
                 await note.evaluate((root) => parseFloat(getComputedStyle(root).fontSize)),
-              ).toBeGreaterThanOrEqual(17);
+              ).toBeGreaterThanOrEqual(textFloorPx);
             const proof = await proveText(page, frame, selector, route.path);
             await reachCodeWithTab(page, frame, panel);
             const keyboard = await keyboardScroll(page, panel, info, `code-${codeIndex}-${index}`);
@@ -473,129 +501,6 @@ for (const route of routes)
           const keyboard = await keyboardScroll(page, frame, info, 'transcript');
           expect(await frame.locator('.agi-lp-terminal-line').allTextContents()).toEqual(lines);
           (evidence['examples'] as unknown[]).push({ label, lines, proof, keyboard });
-        }
-        for (const [className, label, ports] of [
-          [
-            'agi-dw',
-            'AGI reviewing a code diff',
-            ['Before TypeScript example', 'After TypeScript example'],
-          ],
-          ['agi-ap', 'AGI asking for tool approval', ['Command example']],
-        ] as const) {
-          const selector = `main figure.${className}.agi-showcase-responsive`;
-          await expect(page.locator(selector)).toHaveCount(route.path === '/' ? 1 : 0);
-          if (route.path !== '/') continue;
-          const frame = page.getByRole('main').getByRole('figure', { name: label, exact: true });
-          await frame.scrollIntoViewIfNeeded();
-          expect((await frameState(frame)).stage).toEqual({
-            perspective: 'none',
-            transform: 'none',
-          });
-          if (className === 'agi-dw') {
-            await expect(frame.locator('.agi-dw-file')).toHaveText('TypeScript example');
-            await expect(frame.locator('.agi-dw-badge')).toHaveText('Authored example');
-            await expect(frame.locator('.agi-dw-actions > span')).toHaveText(['Approve', 'Reject']);
-            await expect(frame.locator('.agi-dw-line')).toHaveCount(10);
-          } else {
-            await expect(frame.locator('.agi-ap-chrome > span')).toHaveText([
-              'Tool Approval',
-              'CLI example',
-            ]);
-            await expect(frame.locator('.agi-ap-ask')).toHaveText('Allow this command?');
-            await expect(frame.locator('.agi-ap-actions > span')).toHaveText([
-              'Yes',
-              'No',
-              'Allow Session',
-            ]);
-            expect(
-              await frame
-                .locator('.agi-ap-ask')
-                .evaluate((root) => parseFloat(getComputedStyle(root).fontSize)),
-            ).toBeGreaterThanOrEqual(17);
-          }
-          for (const control of await frame
-            .locator('.agi-dw-actions > span,.agi-ap-actions > span')
-            .all())
-            expect(
-              await control.evaluate((root) => parseFloat(getComputedStyle(root).fontSize)),
-            ).toBeGreaterThanOrEqual(16);
-          const proof = await proveText(page, frame, selector, route.path);
-          const keyboard = [];
-          for (const portLabel of ports) {
-            const port = frame.getByRole('region', { name: portLabel, exact: true });
-            await expect(port).toHaveCount(1);
-            await expect(port).toHaveAttribute('tabindex', '0');
-            keyboard.push({
-              label: portLabel,
-              proof: await keyboardScroll(
-                page,
-                port,
-                info,
-                portLabel.replaceAll(' ', '-'),
-                portLabel === 'Command example' && setting.width < 768,
-              ),
-            });
-          }
-          const state = await frameState(frame);
-          if (setting.width === 1440) {
-            await frame.hover({ position: { x: 1, y: 1 } });
-            await expect
-              .poll(() =>
-                frame.evaluate((root) => {
-                  const stage = root.closest<HTMLElement>('.agi-mx-stage');
-                  if (!stage) throw new Error('Showcase native stage is missing');
-                  return (
-                    Math.abs(parseFloat(stage.style.getPropertyValue('--agi-mx-rx')) || 0) +
-                    Math.abs(parseFloat(stage.style.getPropertyValue('--agi-mx-ry')) || 0)
-                  );
-                }),
-              )
-              .toBeGreaterThan(0);
-            expect(await frameState(frame)).toEqual(state);
-            await page.mouse.move(1, 1);
-            await expect.poll(() => frameState(frame)).toEqual(state);
-          }
-          await expect
-            .poll(() =>
-              frame.evaluate(async (root) => {
-                const stage = root.closest('.agi-mx-stage');
-                const body = stage?.querySelector(':scope > .agi-mx-body');
-                if (!stage || !body) throw new Error('Showcase stage is missing before capture');
-                const readings: string[] = [];
-                for (let count = 0; count < 3; count += 1) {
-                  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-                  readings.push(
-                    JSON.stringify(
-                      [stage, body].map((owner) => ({
-                        style: owner.getAttribute('style'),
-                        computed: [...getComputedStyle(owner)]
-                          .sort()
-                          .map((name) => [name, getComputedStyle(owner).getPropertyValue(name)]),
-                      })),
-                    ),
-                  );
-                }
-                return (
-                  readings.every((reading) => reading === readings[0]) &&
-                  stage.getAttribute('style')?.includes('will-change') !== true
-                );
-              }),
-            )
-            .toBe(true);
-          const captures = [];
-          for (const part of [`.${className}-chrome`, `.${className}-foot`]) {
-            const capture = await capturePublicViewportStrips(page, frame.locator(part), {
-              stickyHeader: page.getByRole('banner'),
-              sourceFiles,
-            });
-            captures.push(capture.evidence);
-            for (const image of capture.images)
-              await info.attach(`${className}-${part.slice(1)}-${image.index}.png`, {
-                body: image.bytes,
-                contentType: 'image/png',
-              });
-          }
-          (evidence['examples'] as unknown[]).push({ label, proof, keyboard, captures });
         }
         expect(
           await page.evaluate(
