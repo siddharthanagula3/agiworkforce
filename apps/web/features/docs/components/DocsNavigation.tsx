@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
+import { Menu } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -145,7 +146,8 @@ export function DocsNavigation({
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetTrigger asChild>
             <button ref={phoneTriggerRef} type="button" className="dx-menu">
-              Browse documentation
+              <Menu aria-hidden="true" />
+              <span>Browse documentation</span>
             </button>
           </SheetTrigger>
           <SheetContent

@@ -1,9 +1,15 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
+import { safePlatform } from '@shared/utils/browser-utils';
 import type { DocsNavGroup } from '../lib/docs-nav';
+
+const subscribeToPlatform = () => () => {};
+const readShortcutHint = () => (safePlatform.isMac() ? '⌘K' : 'Ctrl K');
+const readServerShortcutHint = () => null;
 
 export function DocsSidebar({
   groups,
@@ -13,6 +19,11 @@ export function DocsSidebar({
   onSearch: () => void;
 }) {
   const pathname = usePathname();
+  const shortcutHint = useSyncExternalStore(
+    subscribeToPlatform,
+    readShortcutHint,
+    readServerShortcutHint,
+  );
 
   return (
     <nav aria-label="Documentation pages">
@@ -22,9 +33,15 @@ export function DocsSidebar({
           className="dx-search-button"
           onClick={onSearch}
           aria-haspopup="dialog"
+          aria-keyshortcuts="Meta+K Control+K"
         >
           <Search aria-hidden="true" />
           <span>Search documentation</span>
+          {shortcutHint ? (
+            <kbd className="dx-search-kbd" aria-hidden="true">
+              {shortcutHint}
+            </kbd>
+          ) : null}
         </button>
       </div>
       {groups.map((group) => (

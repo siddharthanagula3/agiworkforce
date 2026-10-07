@@ -112,7 +112,7 @@ describe('documentation search navigation', () => {
     const readStyle = window.getComputedStyle.bind(window);
     vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
       const style = readStyle(element, pseudo);
-      if (element.matches('.dx-menu')) style.display = phone ? 'block' : 'none';
+      if (element.matches('.dx-menu')) style.display = phone ? 'flex' : 'none';
       return style;
     });
   });
@@ -120,6 +120,27 @@ describe('documentation search navigation', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', '⌘K'],
+    ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Ctrl K'],
+  ])('shows the search shortcut for %s without changing the control name', (agent, hint) => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(agent);
+    render(<DocsNavigation groups={groups} searchLinks={docsSearchLinks()} />);
+    const opener = screen.getAllByRole('button', { name: 'Search documentation' }).at(-1);
+    if (!opener) throw new Error('Desktop documentation search is missing');
+    expect(opener).toHaveAttribute('aria-keyshortcuts', 'Meta+K Control+K');
+    const shortcut = opener.querySelector('kbd');
+    expect(shortcut).toHaveTextContent(hint);
+    expect(shortcut).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('labels the phone trigger with text and hides its icon from assistive technology', () => {
+    phone = true;
+    render(<DocsNavigation groups={groups} searchLinks={docsSearchLinks()} />);
+    const trigger = screen.getByRole('button', { name: 'Browse documentation' });
+    expect(trigger.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it.each(['ctrlKey', 'metaKey'] as const)(
@@ -484,6 +505,7 @@ describe('documentation print controls', () => {
     const css = postcss.parse(readFileSync(join(process.cwd(), 'features/docs/docs.css'), 'utf8'));
     const owners = [
       readFileSync(require.resolve('@agiworkforce/design-tokens/foundation.css'), 'utf8'),
+      readFileSync(require.resolve('@agiworkforce/design-tokens/chat.css'), 'utf8'),
       readFileSync(require.resolve('@agiworkforce/design-tokens/tailwind.css'), 'utf8'),
       readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8'),
       css.toString(),
