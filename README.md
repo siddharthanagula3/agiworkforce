@@ -37,7 +37,7 @@ a unified chat protocol.
 
 ## Key features
 
-- **Multi-provider model routing**: Catalog of 406 models across 23 providers:
+- **Multi-provider model routing**: Catalog of 407 models across 23 providers:
   AGI managed cloud, OpenAI, Anthropic, Google, xAI, DeepSeek, Qwen, Moonshot,
   MiniMax, Perplexity, ZhipuAI, Runway, OpenRouter, Experiential Labs,
   NVIDIA NIM, Groq, Cloudflare Workers AI, Vercel AI Gateway, AWS Bedrock, and
