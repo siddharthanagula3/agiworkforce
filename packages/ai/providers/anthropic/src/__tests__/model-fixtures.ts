@@ -13,3 +13,13 @@ if (!premiumModel) {
 }
 
 export const ANTHROPIC_PREMIUM_MODEL_ID = premiumModel.id;
+
+const betweenToolsModel = getModelsForProvider('anthropic').find(
+  (model) => model.reasoning?.disabledThinkingType === 'between_tools',
+);
+
+if (!betweenToolsModel) {
+  throw new Error('An Anthropic model that turns thinking off with between_tools must exist');
+}
+
+export const ANTHROPIC_BETWEEN_TOOLS_MODEL_ID = betweenToolsModel.id;

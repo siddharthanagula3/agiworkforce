@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
-import { ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
+import { ANTHROPIC_BETWEEN_TOOLS_MODEL_ID, ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
 
 function baseReq(overrides: Partial<ChatRequest> = {}): ChatRequest {
   return {
@@ -29,6 +29,18 @@ describe('translateChatRequest · adaptive thinking', () => {
 
   it('omits thinking entirely when unset', () => {
     expect(translateChatRequest(baseReq()).thinking).toBeUndefined();
+  });
+
+  it('turns thinking off with the wire value a model declares when it rejects disabled', () => {
+    const request = baseReq({
+      model: ANTHROPIC_BETWEEN_TOOLS_MODEL_ID,
+      thinking: { type: 'disabled' },
+      effort: 'high',
+    });
+    expect(translateChatRequest(request).thinking).toEqual({ type: 'between_tools' });
+    expect(() => translateChatRequest({ ...request, effort: 'max' })).toThrow(
+      /effort must be high or lower/,
+    );
   });
 });
 

@@ -301,6 +301,39 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
+    "claude-sonnet-5-5": {
+      "identity": {
+        "key": "claude-sonnet-5-5",
+        "displayName": "Claude Sonnet 5.5",
+        "provider": "anthropic",
+        "developer": "anthropic",
+        "providerModelId": "claude-sonnet-5-5",
+        "openRouterSlug": "anthropic/claude-sonnet-5.5",
+        "kind": "code",
+        "familyPartner": "claude-opus-5-5",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["anthropic/claude-sonnet-5.5"],
+        "family": "claude-sonnet",
+        "version": "5.5"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 28, 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-09-28",
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+        "replacedBy": null
+      },
+      "speed": "fast",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
     "claude-haiku-4-5": {
       "identity": {
         "key": "claude-haiku-4-5",
@@ -12897,6 +12930,7 @@
       "claude-opus-5-5",
       "claude-opus-4-8",
       "claude-sonnet-5",
+      "claude-sonnet-5-5",
       "claude-haiku-4-5",
       "claude-haiku-5-5"
     ],
@@ -14112,6 +14146,28 @@
         "outputPerMillion": 10,
         "cacheReadPerMillion": 0.2,
         "cacheWritePerMillion": 2.5
+      }
+    },
+    "anthropic/claude-sonnet-5-5": {
+      "modelKey": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "providerModelId": "claude-sonnet-5-5",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 2.5,
+        "cacheWrite1hPerMillion": 4
       }
     },
     "anthropic/claude-haiku-4-5": {
@@ -25324,6 +25380,30 @@
       "codeExecution": true,
       "promptCaching": true
     },
+    "claude-sonnet-5-5": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
+    },
     "claude-haiku-4-5": {
       "textInput": true,
       "imageInput": true,
@@ -35466,6 +35546,15 @@
       "cacheWritePerMillion": 2.5,
       "cacheWrite1hPerMillion": 4
     },
+    "claude-sonnet-5-5": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.2,
+      "cacheWritePerMillion": 2.5,
+      "cacheWrite1hPerMillion": 4
+    },
     "claude-haiku-4-5": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -38595,6 +38684,12 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-01"
     },
+    "claude-sonnet-5-5": {
+      "contextTokens": 1000000,
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-06"
+    },
     "claude-haiku-4-5": {
       "contextTokens": 200000,
       "maxInputTokens": 200000,
@@ -39234,6 +39329,7 @@
     "claude-opus-5-5": {},
     "claude-opus-4-8": {},
     "claude-sonnet-5": {},
+    "claude-sonnet-5-5": {},
     "claude-haiku-4-5": {},
     "claude-haiku-5-5": {},
     "gemini-embedding-2": {},
@@ -40232,6 +40328,20 @@
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Claude Opus 5.5 carried four values that Anthropic's pages contradict. The effort page states that medium is its default effort and that adaptive thinking is always on, with thinking.type disabled returning 400 at every effort level, where the row recorded default effort high, thinking that could be disabled and a maximum disabled effort of high; the models overview gives a Jun 2026 knowledge cutoff where the row recorded 2026-05; and the public OpenRouter list names it anthropic/claude-opus-5.5 where the row recorded anthropic/claude-opus-5-5. Corrected from platform.claude.com/docs/en/build-with-claude/effort, the models overview and openrouter.ai/api/v1/models, retrieved 2026-10-07. Prices, context and output limits already matched."
+    },
+    {
+      "id": "verification/2026-10-07/66",
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "Claude Sonnet 5.5 (claude-sonnet-5-5), released 2026-09-28, joins the catalog at lifecycle stage registered. Read from platform.claude.com on 2026-10-07: the model overview (id, 1M context, 128K output, Jun 2026 cutoff, $2/$10), the what's-new page (thinking.type disabled returns 400 and between_tools replaces it at high effort or below, forced tool_choice returns 400, computer use through computer_toolset_20260801, thinking blocks bound to model, prefix and account, notes between tool calls returned as thinking blocks), and the effort and prompt caching pages (all five levels, default high, 512-token minimum). The row declares reasoning.disabledThinkingType between_tools, which the Anthropic adapter sends in place of disabled, and providerCompatibility.forcedToolChoice false. The cache read price is recorded at $0.20 because Anthropic's pages give both $0.20 and $0.10. The OpenRouter slug anthropic/claude-sonnet-5.5 was read from the public openrouter.ai/api/v1/models list the same day."
+    },
+    {
+      "id": "verification/2026-10-07/67",
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Claude Opus 5.5 and Claude Fable 5.1 now declare providerCompatibility.forcedToolChoice false. The Claude Opus 5.5 what's-new page states that tool_choice any or a named tool returns 400 on Claude Opus 5.5 and that the same applies on Claude Fable 5.1; neither row recorded it, so a forced tool choice sent to either was a provider error. Verified against platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5, retrieved 2026-10-07."
     }
   ],
   "retiredModels": {
