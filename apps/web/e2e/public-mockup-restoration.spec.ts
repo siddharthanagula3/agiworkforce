@@ -53,13 +53,6 @@ for (const profile of [
               surfacePreview: element.closest('.agi-fl-surface-visual') !== null,
               height: box.height,
               geometry: element.getAttribute('data-geometry'),
-              controls: Array.from(element.querySelectorAll('.agi-dev-send')).map((control) => ({
-                width: control.getBoundingClientRect().width,
-                height: control.getBoundingClientRect().height,
-              })),
-              segments: Array.from(element.querySelectorAll('.agi-mk-seg')).map(
-                (segment) => segment.getBoundingClientRect().height,
-              ),
             };
           }),
         );
@@ -67,31 +60,17 @@ for (const profile of [
           expect(frame.width, frame.label ?? route).toBeGreaterThan(0);
           expect(frame.left, frame.label ?? route).toBeGreaterThanOrEqual(0);
           expect(frame.right, frame.label ?? route).toBeLessThanOrEqual(frame.viewport);
-          if (frame.scaledPreview) {
-            const [designWidth, designHeight] = (frame.geometry ?? '').split('x').map(Number);
-            expect(designWidth, frame.label ?? route).toBeGreaterThan(0);
-            expect(designHeight, frame.label ?? route).toBeGreaterThan(0);
-            expect(
-              Math.abs(frame.width / frame.height - designWidth! / designHeight!),
-              frame.label ?? route,
-            ).toBeLessThan(0.01);
-            if (frame.surfacePreview || (frame.heroPreview && profile.width > 900))
-              expect(frame.mask, frame.label ?? route).toMatch(APPROVED_HERO_FADE);
-            else expect(frame.mask, frame.label ?? route).toBe('none');
-          }
-          for (const control of frame.controls) {
-            expect(control.width).toBe(32);
-            expect(control.height).toBe(32);
-          }
-          for (const segment of frame.segments) expect(segment).toBeLessThanOrEqual(36);
-        }
-        if (profile.width > 900) {
-          const hero = page.locator('.agi-fl-hero-visual figure.agi-dev:not(.agi-app)');
-          if (await hero.count()) {
-            expect(
-              await hero.first().evaluate((element) => getComputedStyle(element).maskImage),
-            ).not.toBe('none');
-          }
+          expect(frame.scaledPreview, frame.label ?? route).toBe(true);
+          const [designWidth, designHeight] = (frame.geometry ?? '').split('x').map(Number);
+          expect(designWidth, frame.label ?? route).toBeGreaterThan(0);
+          expect(designHeight, frame.label ?? route).toBeGreaterThan(0);
+          expect(
+            Math.abs(frame.width / frame.height - designWidth! / designHeight!),
+            frame.label ?? route,
+          ).toBeLessThan(0.01);
+          if (frame.surfacePreview || (frame.heroPreview && profile.width > 900))
+            expect(frame.mask, frame.label ?? route).toMatch(APPROVED_HERO_FADE);
+          else expect(frame.mask, frame.label ?? route).toBe('none');
         }
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),

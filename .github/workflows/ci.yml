@@ -1172,6 +1172,15 @@ jobs:
       # credential decision, not a workflow edit.
       # `web-e2e-ci-coverage.test.ts` fails if this list drifts from the set of
       # specs that do not import the QA harness.
+      # The specs in apps/web/e2e/matrix are not in this list on purpose. The
+      # public acceptance matrix is every public route at eight widths in two
+      # themes, about 3,200 browser cases, and the footer capture matrix is 48
+      # cases at about 42 seconds each, which alone is more than this step's
+      # 25 minutes. Both run on demand from web-public-matrix.yml instead of on
+      # every push. The same test pins which specs may live in that folder.
+      # Measured locally on 2026-10-07 against a dev server, one worker: the
+      # 48 listed specs are 806 tests and 2,145 seconds of test time, so about
+      # 18 minutes at two workers. Runner speed is not measured.
       - name: Run signed-out Web Playwright flows
         working-directory: apps/web
         env:
@@ -1185,21 +1194,40 @@ jobs:
             checkout.spec.ts \
             enterprise-surface.spec.ts \
             gallery-public.spec.ts \
+            home-surface-explorer.spec.ts \
             landing-keyboard.spec.ts \
             marketing-mobile-nav.spec.ts \
             marketing-mount-scroll.spec.ts \
             marketing-stage-contrast.spec.ts \
             policy-version-history.spec.ts \
             pricing-public.spec.ts \
-            public-first-viewport.spec.ts \
-            public-page-header.spec.ts \
-            public-header-scroll.spec.ts \
-            home-surface-explorer.spec.ts \
             public-account-pages.spec.ts \
             public-auth-clean.spec.ts \
+            public-coded-examples.spec.ts \
+            public-docs-controls.spec.ts \
+            public-docs-search.spec.ts \
             public-entry-points.spec.ts \
+            public-first-viewport.spec.ts \
+            public-header-scroll.spec.ts \
             public-identity-pages.spec.ts \
             public-mockup-restoration.spec.ts \
+            public-page-coherence-instrument.spec.ts \
+            public-page-header.spec.ts \
+            public-page-integrity-instrument.spec.ts \
+            public-page-readiness-instrument.spec.ts \
+            public-preview-placement.spec.ts \
+            public-provider-cards.spec.ts \
+            public-route-inventory-instrument.spec.ts \
+            public-route-inventory.spec.ts \
+            public-scroll-features-activation.spec.ts \
+            public-text-contrast-instrument.spec.ts \
+            public-typography-instrument.spec.ts \
+            public-typography-scroll-instrument.spec.ts \
+            public-typography-source-instrument.spec.ts \
+            public-typography-source.spec.ts \
+            public-viewport-minimal-scroll.spec.ts \
+            public-viewport-retained-scroll.spec.ts \
+            public-viewport-strip-capture.spec.ts \
             qa-14-public-route-contrast.spec.ts \
             quick-ask-entry.spec.ts \
             release-notes.spec.ts \

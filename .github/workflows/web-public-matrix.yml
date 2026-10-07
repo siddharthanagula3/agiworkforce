@@ -1,0 +1,176 @@
+# The public acceptance matrix: every public route, at eight widths, in both
+# themes, checked for accessibility, type size, contrast, page integrity,
+# keyboard focus, reduced motion and coherence, plus the shared footer captured
+# on three pages at the same widths. That is about 3,250 browser cases, hours
+# of runner time, so it is not part of the push gate in ci.yml. It runs only
+# when someone starts it here, one job per width so a width can fail or be
+# re-run on its own. `routes` narrows it to the pages a change touched.
+# `web-e2e-ci-coverage.test.ts` pins which specs live in apps/web/e2e/matrix,
+# so a spec cannot be parked there to escape the push gate.
+name: Web Public Acceptance Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      routes:
+        description: 'Comma-separated public paths to check, for example /pricing,/about. Empty checks every route.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-public-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-matrix:
+    name: Public pages at ${{ matrix.width }}px
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        width: [320, 360, 390, 768, 1024, 1366, 1440, 1920]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: agiworkforce_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+      NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+      # The data layer refuses a plaintext connection string unless the
+      # database is a loopback Postgres reached through the local websocket
+      # proxy, which is how development runs. Without it every page answered
+      # 500 from the health check and each spec ran to its timeout.
+      AGI_DATABASE_WS_PROXY: 127.0.0.1:5433
+      # next start makes NODE_ENV production, which arms rate-limit.ts's
+      # SEV-WEB-13 module-scope guard (Redis credentials or refuse to serve) and
+      # empty-500s every rate-limited API route. This single-instance CI server
+      # is a preview-class environment, so use the guard's own preview exemption
+      # instead of weakening the guard or faking Redis.
+      VERCEL_ENV: preview
+      CLERK_SECRET_KEY: test-clerk-secret-key
+      # The same public, non-routable clerk-ci.invalid fixture the packaging
+      # jobs use, and live-format on purpose. A pk_test_ key names a Clerk
+      # DEVELOPMENT instance, and those issue a dev-browser JWT via a handshake
+      # redirect to their frontend API before any route calling auth() renders
+      #, the reason validate-env.ts warns about pk_test in production. `/` is
+      # the only audited page that calls auth(), so it chased that redirect to
+      # a host that does not resolve and was the one page never scanned. A live
+      # instance reads cookies directly: no cookies, signed out, no redirect.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      # `next start` sets NODE_ENV=production, so instrumentation.ts treats a
+      # missing billing key as a fatal boot error. These flows are signed-out
+      # a11y and public-auth checks that never reach Stripe, and putting real
+      # or realistic keys on a public CI runner would be worse than booting
+      # degraded, so take the escape hatch the validator documents.
+      AGI_ALLOW_INVALID_ENV: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare the test database
+        run: pnpm db:migrate -- apply --target ci
+
+      - name: Build Web app
+        # next build's own "Running TypeScript..." phase has hit
+        # "Ineffective mark-compacts near heap limit" under Node's default
+        # old-space cap here, independent of the js-verify job's tsc --noEmit.
+        # 6 GB of old space stays under this runner's memory while covering
+        # the ~3 GB the type-check phase needs.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: pnpm --filter @agiworkforce/web build
+
+      - name: Start the database proxy
+        run: |
+          set -euo pipefail
+          node scripts/dev-db-ws-proxy.mjs > apps/web/db-proxy.log 2>&1 &
+          echo $! > apps/web/db-proxy.pid
+
+      - name: Start Web app
+        run: |
+          set -euo pipefail
+          pnpm --filter @agiworkforce/web start > apps/web/app.log 2>&1 &
+          echo $! > apps/web/app.pid
+
+      - name: Wait for Web app
+        run: |
+          set -euo pipefail
+          for i in {1..90}; do
+            if ! kill -0 "$(cat apps/web/app.pid)" > /dev/null 2>&1; then
+              echo "Web process exited before the app became ready"
+              tail -200 apps/web/app.log || true
+              exit 1
+            fi
+            if curl -fsS http://127.0.0.1:3000/ > /dev/null; then
+              echo "Web app is ready after $((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Web app failed to start"
+          tail -200 apps/web/app.log || true
+          tail -50 apps/web/db-proxy.log || true
+          exit 1
+
+      - name: Run the public acceptance matrix at this width
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
+          PUBLIC_DESIGN_WIDTHS: ${{ matrix.width }}
+          SELECTED_ROUTES: ${{ inputs.routes }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SELECTED_ROUTES" ]; then
+            export PUBLIC_DESIGN_ROUTES="$SELECTED_ROUTES"
+          fi
+          pnpm exec playwright test e2e/matrix --project=chromium --workers=2 --retries=0
+
+      - name: Print Web app log on failure
+        if: failure()
+        run: tail -n 300 apps/web/app.log
+
+      - name: Upload matrix report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-public-matrix-report-${{ matrix.width }}
+          path: apps/web/playwright-report
+          retention-days: 14
+
+      - name: Stop Web app
+        if: always()
+        run: |
+          if [ -f apps/web/app.pid ]; then
+            kill "$(cat apps/web/app.pid)" 2>/dev/null || true
+          fi

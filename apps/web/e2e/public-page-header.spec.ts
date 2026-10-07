@@ -1,5 +1,4 @@
 import { test, expect, type Page } from '@playwright/test';
-const ROUTES = ['/security'];
 const HEADER = 'main > section.agi-ds-pagehead';
 const LABEL_MIN_PX = 14;
 const LEDE_MIN_PX = 17;
@@ -7,23 +6,46 @@ const LEDE_MAX_PX = 19;
 const TITLE_MIN_WEIGHT = 600;
 const CONTAINER_GAP_TOLERANCE_PX = 1;
 
+type Limits = {
+  title: { min: number; max: number };
+  header: { top: number; bottom: number };
+  section: number;
+};
+
 const VIEWPORTS = [
   {
     name: '1180x757',
     width: 1180,
     height: 757,
-    title: { min: 32, max: 48 },
-    header: { top: 80, bottom: 48 },
-    section: 80,
+    reference: { title: { min: 32, max: 48 }, header: { top: 80, bottom: 48 }, section: 80 },
+    company: { title: { min: 36, max: 36 }, header: { top: 40, bottom: 48 }, section: 56 },
   },
   {
     name: '390x844',
     width: 390,
     height: 844,
-    title: { min: 28, max: 36 },
-    header: { top: 48, bottom: 32 },
-    section: 56,
+    reference: { title: { min: 28, max: 36 }, header: { top: 48, bottom: 32 }, section: 56 },
+    company: { title: { min: 30, max: 30 }, header: { top: 32, bottom: 40 }, section: 40 },
   },
+] as const satisfies readonly ({ name: string; width: number; height: number } & Record<
+  'reference' | 'company',
+  Limits
+>)[];
+
+const PAGES = [
+  { route: '/security', layout: 'reference', label: 'Security' },
+  { route: '/about', layout: 'company', label: 'About AGI' },
+  { route: '/blog', layout: 'company', label: 'Writing' },
+  { route: '/careers', layout: 'company', label: 'Careers' },
+  { route: '/contact', layout: 'company', label: 'Contact' },
+  { route: '/beta', layout: 'company', label: 'Beta programme' },
+  { route: '/founder', layout: 'company', label: 'The founder' },
+  { route: '/press', layout: 'company', label: 'Press' },
+  { route: '/partners', layout: 'company', label: 'Partners' },
+  { route: '/trust', layout: 'company', label: 'Trust' },
+  { route: '/community', layout: 'company', label: 'Community' },
+  { route: '/waitlist', layout: 'company', label: 'AGI Cloud' },
+  { route: '/connectors/mcp-directory', layout: 'company', label: 'Connectors · MCP directory' },
 ] as const;
 
 function firstFamily(fontFamily: string): string {
@@ -66,8 +88,6 @@ function measure(page: Page) {
     );
     return {
       sans: rootStyle.getPropertyValue('--agi-font'),
-      serif: rootStyle.getPropertyValue('--agi-font-display'),
-      mono: rootStyle.getPropertyValue('--agi-font-mono'),
       title: {
         family: titleStyle.fontFamily,
         size: px(titleStyle.fontSize),
@@ -104,36 +124,24 @@ for (const viewport of VIEWPORTS) {
   test.describe(`public page header at ${viewport.name}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test('/about keeps its label and accessible title without promotional copy', async ({
-      page,
-    }) => {
-      await openRoute(page, '/about');
-      const header = page.locator(HEADER);
-      await expect(header.locator('.agi-ds-pagehead-label')).toHaveText('About AGI');
-      await expect(header.getByRole('heading', { level: 1 })).toHaveClass('sr-only');
-      await expect(header.locator('.agi-ds-pagehead-lede')).toHaveCount(0);
-      await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-      );
-      expect(overflow).toBe(false);
-    });
-
-    for (const route of ROUTES) {
-      test(`${route} sets a compact sans title block on the section grid`, async ({ page }) => {
+    for (const { route, layout, label } of PAGES) {
+      test(`${route} sets a visible sans title block on the section grid`, async ({ page }) => {
         await openRoute(page, route);
+        const limits = viewport[layout];
+        const header = page.locator(HEADER);
+        await expect(header.locator('.agi-ds-pagehead-label')).toHaveText(label);
+        await expect(header.getByRole('heading', { level: 1 })).toBeVisible();
+        await expect(header.getByRole('heading', { level: 1 })).not.toHaveClass(/sr-only/u);
+        await expect(header.locator('.agi-ds-pagehead-lede')).toBeVisible();
         const measured = await measure(page);
 
         const sans = firstFamily(measured.sans);
-        const serif = firstFamily(measured.serif);
-        const mono = firstFamily(measured.mono);
         expect(sans).not.toBe('');
         expect(firstFamily(measured.title.family)).toBe(sans);
-        expect(firstFamily(measured.title.family)).not.toBe(serif);
         expect(measured.title.style).toBe('normal');
         expect(measured.title.weight).toBeGreaterThanOrEqual(TITLE_MIN_WEIGHT);
-        expect(measured.title.size).toBeGreaterThanOrEqual(viewport.title.min);
-        expect(measured.title.size).toBeLessThanOrEqual(viewport.title.max);
+        expect(measured.title.size).toBeGreaterThanOrEqual(limits.title.min);
+        expect(measured.title.size).toBeLessThanOrEqual(limits.title.max);
 
         expect(measured.label.size).toBeGreaterThanOrEqual(LABEL_MIN_PX);
         expect(measured.lede.size).toBeGreaterThanOrEqual(LEDE_MIN_PX);
@@ -145,14 +153,13 @@ for (const viewport of VIEWPORTS) {
           );
           expect(text.style, `${text.text} is italic`).toBe('normal');
           expect(text.transform, `${text.text} is transformed`).toBe('none');
-          expect(firstFamily(text.family), `${text.text} is serif`).not.toBe(serif);
-          expect(firstFamily(text.family), `${text.text} is monospace`).not.toBe(mono);
+          expect(firstFamily(text.family), `${text.text} is not sans`).toBe(sans);
         }
 
-        expect(measured.header.top).toBeLessThanOrEqual(viewport.header.top);
-        expect(measured.header.bottom).toBeLessThanOrEqual(viewport.header.bottom);
-        expect(measured.next.top).toBeLessThanOrEqual(viewport.section);
-        expect(measured.next.bottom).toBeLessThanOrEqual(viewport.section);
+        expect(measured.header.top).toBeLessThanOrEqual(limits.header.top);
+        expect(measured.header.bottom).toBeLessThanOrEqual(limits.header.bottom);
+        expect(measured.next.top).toBeLessThanOrEqual(limits.section);
+        expect(measured.next.bottom).toBeLessThanOrEqual(limits.section);
 
         expect(Math.abs(measured.containerLeft.header - measured.containerLeft.next)).toBeLessThan(
           CONTAINER_GAP_TOLERANCE_PX,
