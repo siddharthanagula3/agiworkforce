@@ -40,7 +40,8 @@
     "nvidia/nemotron-3-super-120b-a12b",
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "google/gemma-4-26b-a4b-it:free"
+    "google/gemma-4-26b-a4b-it:free",
+    "deepseek-v4-flash-vision-exp"
   ],
   "retiredModels": [
     {
@@ -510,6 +511,38 @@
       "released": "July 2026",
       "retiredOn": "2026-09-04",
       "metadataSource": "packages/contracts/types/src/models.json@22fa072c3"
+    },
+    {
+      "id": "deepseek-v4-flash-vision-exp",
+      "displayName": "DeepSeek V4 Flash Vision (Experimental)",
+      "provider": "deepseek",
+      "developer": "deepseek",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "August 21, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "deepseek-flash",
+      "metadataSource": "catalog/models.curation.json#deepseek-v4-flash-vision-exp"
     }
   ],
   "grandfatheredWithoutMetadata": [

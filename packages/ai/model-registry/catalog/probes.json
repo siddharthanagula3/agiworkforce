@@ -62,16 +62,6 @@
       "toolOutcome": "honoured",
       "toolDetail": null
     },
-    "deepseek-v4-flash-vision-exp": {
-      "routeId": "deepseek/deepseek-v4-flash-vision-exp",
-      "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 345,
-      "echoedModelId": "deepseek-flash",
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
     "deepseek-v4-pro": {
       "routeId": "deepseek/deepseek-v4-pro",
       "probedOn": "2026-09-12",
