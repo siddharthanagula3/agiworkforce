@@ -81,6 +81,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   // matter, the way the registry quotes them as data.
   'docs/research/provider-free-value-matrix-2026-09-01.md',
   'docs/research/free-inference-tos-workbook-2026-09-01.md',
+  'docs/research/global-distribution-research-2026-10-05.md',
   'docs/architecture/byok-provider-strategy.md',
 ]);
 
