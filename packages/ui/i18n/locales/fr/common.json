@@ -248,7 +248,8 @@
       "label": "Connectez vos applications",
       "seeAll": "Tous les connecteurs",
       "open": "Configurer {{name}}",
-      "dismiss": "Masquer les suggestions d'applications"
+      "dismiss": "Masquer les suggestions d'applications",
+      "optionalLink": "Connectez vos applications (facultatif)"
     }
   }
 }

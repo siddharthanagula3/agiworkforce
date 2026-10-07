@@ -248,7 +248,8 @@
       "label": "Verbinde deine Apps",
       "seeAll": "Alle Konnektoren",
       "open": "{{name}} einrichten",
-      "dismiss": "App-Vorschläge ausblenden"
+      "dismiss": "App-Vorschläge ausblenden",
+      "optionalLink": "Apps verbinden (optional)"
     }
   }
 }

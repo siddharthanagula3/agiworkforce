@@ -4,48 +4,52 @@ title: Getting started with AGI
 path: /help
 category: getting-started
 tags: getting started, first steps, setup, sign in, new account, onboarding, install
-updated: 2026-09-20
+updated: 2026-10-05
 scope: public
 ---
 
 ## Create an account and start a chat
 
-Sign up at agiworkforce.com, then open the chat surface and send your first message.
-A new account can use AGI managed cloud straight away on the Free plan, which is
-open by default with no waitlist and no invite code to redeem. Paid upgrades are
-opening in stages and need an access code; without one you join the upgrade
-waitlist.
+Open [Sign up](https://agiworkforce.com/signup), create an account, then open the
+web chat and send a message. Consult [Plans](https://agiworkforce.com/pricing) and
+[Billing and plans](https://agiworkforce.com/help/billing-and-plans) before
+choosing an upgrade.
 
-## The three trust modes
+## Choose a model route
 
-AGI runs in three separate trust modes and never silently moves work between them.
+Check [surface availability](https://agiworkforce.com/get-started) before
+installing the CLI or another client.
 
-- **Local** runs models on your own hardware. The released CLI supports Ollama and
-  LM Studio. Local is free and can run offline after the runtime and model are
-  installed.
-- **BYOK** means you bring your own provider API key. The released CLI supports it
-  today, and VS Code BYOK is coming soon. Keys stay in the surface's private
-  credential store and traffic goes directly to your provider. Usage is billed by
-  the provider, not by AGI, with no markup. BYOK is free.
-- **Managed cloud** runs on AGI-operated provider access. It is metered, and
-  current plan details live on the pricing page.
+- **Local** uses a model served by a local runtime. With an installed CLI and
+  local model server, select Ollama or LM Studio. See
+  [Local mode](https://agiworkforce.com/help/local-mode) for setup.
+- **BYOK** means bringing your own provider API key. See
+  [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login
+  commands, key storage and custom endpoints. Review your provider's billing and
+  data-use terms before using a key.
+- **Managed cloud** uses your AGI account. Review the current plan details on the
+  pricing page.
 
-Web, Mobile, Desktop and Chrome do not accept provider keys. The current Desktop
-application is a managed-cloud account shell and does not run local models.
+The current Desktop application is managed-cloud-only and does not accept
+provider keys or run local models.
 
-Moving a conversation from Local to BYOK is always an explicit fork with context
-selection, a payload preview, and a visible provider label. It never happens
-automatically.
+## Keep model routes separate
+
+The CLI refuses a model request when the session's trust mode and provider route
+differ. A reviewed Local continuation requires a matching payload preview and
+creates a new destination session. Review the selected context and destination
+before confirming a continuation.
 
 ## What to set up first
 
-1. Pick a trust mode. If you want to stay offline, install the CLI and configure
-   Ollama or LM Studio.
-2. If you want to use your own provider account, run `agi login <provider>` and
-   verify it with `agi auth-status`.
-3. If you want AGI to handle provider access for you, use managed cloud on the web.
+1. For local inference, follow the Local mode guide after checking CLI
+   availability.
+2. For a supported provider API key, run `agi login <provider>` and inspect saved
+   credentials with `agi auth-status`.
+3. To use your AGI account in the browser, open
+   [AGI Web](https://agiworkforce.com/chat).
 
 ## Where to go next
 
-The help index links the six things people ask about most. The FAQ covers the
-reasoning behind the trust boundaries.
+Browse [Help](https://agiworkforce.com/help) for setup and troubleshooting, or
+[FAQ](https://agiworkforce.com/faq) for product questions.

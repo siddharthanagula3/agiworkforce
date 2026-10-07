@@ -5,45 +5,39 @@ path: /vscode-extension
 category: surfaces
 tags: vs code, vscode, editor, extension, ide, explain selection, refactor, generate tests, fix issue, agent mode, sign in to cloud, local runtime
 platforms: vscode
-updated: 2026-09-17
+updated: 2026-10-05
 scope: public
 ---
 
-## Availability
+## Check availability first
 
-The VS Code extension is not published yet. The VS Code page carries its status
-and a notify list; there is no marketplace listing to install from today, and
-this page will not pretend otherwise.
+Check [surface availability](https://agiworkforce.com/get-started) before
+installing the extension or CLI. Read the
+[VS Code overview](https://agiworkforce.com/vscode-extension) for setup and
+platform requirements.
 
-## What it is being built to do
+## Editor commands
 
-The extension puts a chat sidebar and an editor chat panel in VS Code, backed by
-the same account as the web app. Its commands cover the editor work you would
-otherwise paste into a chat: **Explain Selection**, **Fix Issue**, **Refactor
-Code** and **Generate Tests**, plus diagnostics and code actions in the editor
-itself.
+The extension implementation registers **Explain Selection**, **Fix Issue**,
+**Refactor Code** and **Generate Tests**. Select code in the active editor, choose
+a command, and review its output before applying a change.
 
-## Sessions and conversations
+## Account and provider credentials
 
-Conversations are listed in the sidebar and can be opened, forked, deleted and
-refreshed, with a session history view, so a conversation started in the editor
-is the same kind of object as one started on the web.
+**Set API Key** and **Clear API Key** manage the AGI Workforce account API key.
+For model-provider key setup and storage, see
+[BYOK](https://agiworkforce.com/help/byok-provider-keys). Keep account sign-in
+separate from provider-key setup.
 
-## Trust modes in the editor
+## Checking the local runtime
 
-VS Code is one of the two surfaces that accept your own provider keys. **Set API
-Key** and **Clear API Key** manage BYOK, **Select Model** chooses what answers,
-and **Restart Local Runtime** manages a model running on your machine. **Sign in
-to AGI Cloud** and **Sign out of AGI Cloud** control managed access separately,
-so the two trust boundaries stay distinct here as everywhere else.
+Use **Check the CLI in This Environment** to inspect the configured CLI path and
+its version in the editor's environment. Use **Restart Local Runtime** to restart
+the extension's CLI runtime connections.
 
-## The CLI in the same environment
+## The CLI in the integrated terminal
 
-**Check the CLI in This Environment** reports whether the `agi` command is
-present and usable from the editor's environment, which is the first thing to
-check when an editor action that shells out fails.
-
-## Until it ships
-
-Use the CLI in the VS Code integrated terminal. It is published, it accepts
-provider keys, and `agi review` and `agi apply` cover the diff workflow.
+With an installed CLI, open the integrated terminal and inspect the command help.
+`agi review` sends a Git diff to the selected model for review. `agi apply` applies
+a diff from a file or saved session. Review the proposed patch before applying it.
+For provider-key login, follow the BYOK guide after checking availability.
