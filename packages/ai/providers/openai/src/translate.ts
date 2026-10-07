@@ -17,6 +17,7 @@ import {
   stripSystemPromptCacheBoundary,
 } from '@agiworkforce/provider-protocol';
 
+import { acceptsSamplingParameters } from './sampling';
 import type {
   OpenAIChatAssistantToolCall,
   OpenAIChatCompletionCreateParams,
@@ -317,6 +318,9 @@ export function translateChatRequest(
   const promptCacheKey = derivePromptCacheKey(req);
   const responseFormat = translateResponseFormat(req);
 
+  const reasoningEffort = resolveChatReasoningEffort(req, compat, provider, hasTools);
+  const sampling = provider !== 'openai' || acceptsSamplingParameters(req.model, reasoningEffort);
+
   const params: OpenAIChatCompletionCreateParams = {
     model: req.model,
     messages,
@@ -324,8 +328,8 @@ export function translateChatRequest(
     stream_options: { include_usage: compat.supportsUsageInStreaming },
     ...(tools && tools.length > 0 ? { tools } : {}),
     ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
-    ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
-    ...(req.topP !== undefined ? { top_p: req.topP } : {}),
+    ...(sampling && req.temperature !== undefined ? { temperature: req.temperature } : {}),
+    ...(sampling && req.topP !== undefined ? { top_p: req.topP } : {}),
     ...(req.stopSequences ? { stop: req.stopSequences } : {}),
     ...(req.seed !== undefined ? { seed: req.seed } : {}),
     ...(req.frequencyPenalty !== undefined ? { frequency_penalty: req.frequencyPenalty } : {}),
@@ -345,26 +349,33 @@ export function translateChatRequest(
     }
   }
 
-  if (
-    compat.supportsReasoningEffort &&
-    (req.effort !== undefined || req.thinking?.type === 'enabled')
-  ) {
-    const requested =
-      req.effort ??
-      thinkingBudgetToRequestedEffort(
-        req.thinking?.type === 'enabled' ? req.thinking.budgetTokens : undefined,
-      );
-    const resolved = resolveOpenAIReasoningEffortForModel({
-      model: { provider: 'openai', id: req.model },
-      effort: requested,
-    });
-    const omitForTools = provider === 'openai' && hasTools;
-    if (resolved && !omitForTools) {
-      params.reasoning_effort = resolved as NonNullable<
-        OpenAIChatCompletionCreateParams['reasoning_effort']
-      >;
-    }
+  if (reasoningEffort !== undefined) {
+    params.reasoning_effort = reasoningEffort as NonNullable<
+      OpenAIChatCompletionCreateParams['reasoning_effort']
+    >;
   }
 
   return params;
+}
+
+function resolveChatReasoningEffort(
+  req: ChatRequest,
+  compat: OpenAICompletionsCompatDefaults,
+  provider: string,
+  hasTools: boolean,
+): string | undefined {
+  if (!compat.supportsReasoningEffort) return undefined;
+  if (req.effort === undefined && req.thinking?.type !== 'enabled') return undefined;
+  if (provider === 'openai' && hasTools) return undefined;
+  const requested =
+    req.effort ??
+    thinkingBudgetToRequestedEffort(
+      req.thinking?.type === 'enabled' ? req.thinking.budgetTokens : undefined,
+    );
+  return (
+    resolveOpenAIReasoningEffortForModel({
+      model: { provider: 'openai', id: req.model },
+      effort: requested,
+    }) ?? undefined
+  );
 }

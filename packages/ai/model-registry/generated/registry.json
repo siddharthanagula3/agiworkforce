@@ -34,6 +34,70 @@
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
     },
+    "gpt-6.1-sol": {
+      "identity": {
+        "key": "gpt-6.1-sol",
+        "displayName": "GPT-6.1 Sol",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-6.1-sol",
+        "openRouterSlug": "openai/gpt-6.1-sol",
+        "kind": "reasoning",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["openai/gpt-6.1-sol"],
+        "family": "gpt-frontier",
+        "version": "6.1"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "replacedBy": null
+      },
+      "speed": "medium",
+      "residencyRegions": ["us", "eu", "ae"],
+      "evidenceRefs": []
+    },
+    "gpt-6-luna": {
+      "identity": {
+        "key": "gpt-6-luna",
+        "displayName": "GPT-6 Luna",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-6-luna",
+        "openRouterSlug": "openai/gpt-6-luna",
+        "kind": "reasoning",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["openai/gpt-6-luna"],
+        "family": "gpt-fast",
+        "version": "6"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "replacedBy": null
+      },
+      "speed": "medium",
+      "residencyRegions": ["us", "eu", "ae"],
+      "evidenceRefs": []
+    },
     "gpt-5.6-sol": {
       "identity": {
         "key": "gpt-5.6-sol",
@@ -12980,6 +13044,8 @@
   "providerModelKeys": {
     "openai": [
       "gpt-6-astra",
+      "gpt-6.1-sol",
+      "gpt-6-luna",
       "gpt-5.6-sol",
       "gpt-5.6-terra",
       "gpt-5.6-luna",
@@ -13469,6 +13535,66 @@
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
+      }
+    },
+    "openai/gpt-6.1-sol": {
+      "modelKey": "gpt-6.1-sol",
+      "provider": "openai",
+      "providerModelId": "gpt-6.1-sol",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.1,
+        "cacheWritePerMillion": 2.5,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 272000,
+            "inputPerMillion": 4,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 5
+          }
+        ]
+      }
+    },
+    "openai/gpt-6-luna": {
+      "modelKey": "gpt-6-luna",
+      "provider": "openai",
+      "providerModelId": "gpt-6-luna",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "cacheReadPerMillion": 0.01,
+        "cacheWritePerMillion": 0.125,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 272000,
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 0.75,
+            "cacheReadPerMillion": 0.02,
+            "cacheWritePerMillion": 0.25
+          }
+        ]
       }
     },
     "openai/gpt-5.6-sol": {
@@ -25349,6 +25475,54 @@
       "codeExecution": true,
       "promptCaching": true
     },
+    "gpt-6.1-sol": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": true,
+      "promptCaching": true
+    },
+    "gpt-6-luna": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": true,
+      "promptCaching": true
+    },
     "gpt-5.6-sol": {
       "textInput": true,
       "imageInput": true,
@@ -35663,6 +35837,40 @@
         }
       ]
     },
+    "gpt-6.1-sol": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.1,
+      "cacheWritePerMillion": 2.5,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputPerMillion": 4,
+          "outputPerMillion": 15,
+          "cacheReadPerMillion": 0.2,
+          "cacheWritePerMillion": 5
+        }
+      ]
+    },
+    "gpt-6-luna": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.5,
+      "cacheReadPerMillion": 0.01,
+      "cacheWritePerMillion": 0.125,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputPerMillion": 0.2,
+          "outputPerMillion": 0.75,
+          "cacheReadPerMillion": 0.02,
+          "cacheWritePerMillion": 0.25
+        }
+      ]
+    },
     "gpt-5.6-sol": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -38875,6 +39083,18 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-04-30"
     },
+    "gpt-6.1-sol": {
+      "contextTokens": 1050000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-04-30"
+    },
+    "gpt-6-luna": {
+      "contextTokens": 1050000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-05-18"
+    },
     "gpt-5.6-sol": {
       "contextTokens": 1050000,
       "maxOutputTokens": 128000,
@@ -39559,6 +39779,8 @@
   },
   "benchmarks": {
     "gpt-6-astra": {},
+    "gpt-6.1-sol": {},
+    "gpt-6-luna": {},
     "gpt-5.6-sol": {},
     "gpt-5.6-terra": {},
     "gpt-5.6-luna": {},
@@ -40596,6 +40818,20 @@
       "verifiedBy": "official-deepseek-documentation-and-live-api",
       "status": "ADDITION",
       "notes": "DeepSeek V4.1 Flash (deepseek-flash), released 2026-09-10, joins the catalog at lifecycle stage registered. Read on 2026-10-07 from api-docs.deepseek.com: the pricing page (peak $0.30 cache miss, $1.20 output, $0.006 cache hit, off-peak half, vision supported, thinking and non-thinking), the 2026-09-10 news post (native multimodal support; V4-Flash and V4-Flash-Vision-Exp are retired and their ids temporarily route to V4.1-Flash; deepseek-v4-pro requests route to V4.1-Flash at V4.1-Flash rates from 2026-09-14 04:00 UTC until V4.1-Pro launches) and the thinking mode guide (thinking.type enabled or disabled, enabled by default, reasoning_effort low, high or max with high the default). Measured the same day on the DeepSeek API: GET /models lists deepseek-flash as DeepSeek-V4.1-Flash with a 1,048,576 token context, 393,216 output tokens and text and image input; a request for deepseek-v4-flash is answered by deepseek-flash; and tool_choice required in thinking mode returns \"Thinking mode does not support this tool_choice\", so the row declares providerCompatibility.forcedToolChoice false. The weights are published at huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash under the MIT license. OpenRouter lists deepseek/deepseek-v4.1-flash. The deepseek/deepseek-flash slot does not move with this entry."
+    },
+    {
+      "id": "verification/2026-10-07/70",
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "GPT-6.1 Sol (gpt-6.1-sol) and GPT-6 Luna (gpt-6-luna) join the catalog at lifecycle stage registered. Read from developers.openai.com on 2026-10-07: each model page (1,050,000 token context, 922,000 input, 128,000 output; Sol $2/$0.10/$2.50/$10 with an Apr 30 2026 cutoff and effort low to max, medium the default; Luna $0.10/$0.01/$0.125/$0.50 with a May 18 2026 cutoff and effort none to max, medium the default; text and image input, text output; over 272K input tokens billed at 2x input and cache and 1.5x output; Chat Completions, Responses and Batch; web search, file search, image generation, code interpreter, hosted shell, apply patch, skills, computer use, MCP and tool search on Responses), the latest-model guide (GPT-6 Astra and GPT-6.1 Sol do not accept none; tool calling on those two requires Responses; Luna supports function calling in Chat Completions only at reasoning_effort none; temperature, top_p and top_logprobs must be removed when effort is not none) and the prompt caching guide (GPT-5.6 and later: 1,024 token minimum, 30 minute lifetime, writes at 1.25x, explicit breakpoints). Both rows declare reasoning.rejectsSamplingParameters, which the OpenAI adapter now reads. The models list shows no Terra in generation 6 and describes GPT-6.1 Sol as near-Astra performance at a lower cost. OpenAI gives no release date for either; the OpenRouter slugs are dated 2026-09-29 and 2026-09-22. Whether a forced tool_choice is accepted is not stated on any page read."
+    },
+    {
+      "id": "verification/2026-10-07/71",
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "GPT-6 Astra now records medium as its default effort and declares reasoning.rejectsSamplingParameters. The latest-model guide states that GPT-6 Astra and GPT-6.1 Sol support low, medium (default), high, xhigh and max, do not support none, and that temperature, top_p and top_logprobs must be removed when reasoning effort is not none; the row recorded no default and did not say sampling parameters are rejected, so a request carrying a temperature was a provider error. Prices, limits, cutoff and endpoints on developers.openai.com/api/docs/models/gpt-6-astra still match the row. Verified 2026-10-07."
     }
   ],
   "retiredModels": {
@@ -42078,6 +42314,7 @@
     "legacyTiers": {
       "economy": [
         "gpt-5.6-luna",
+        "gpt-6-luna",
         "gemini-3.5-flash-lite",
         "gemini-3.8-flash",
         "qwen-3.8-flash",
@@ -42096,6 +42333,7 @@
       "flagship_additions": [
         "gpt-5.6-sol",
         "gpt-6-astra",
+        "gpt-6.1-sol",
         "claude-fable-5-1",
         "claude-opus-5",
         "grok-4.6"
