@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Tooling/security lead
-Last updated: 2026-09-17
+Last updated: 2026-10-07
 Purpose: Grade what the product's models actually say and do, per capability
 (chat, coding, reasoning, research, search, tools, structured output, long
 context, files, browser, computer use, multilingual, safety), with cost and
@@ -151,9 +151,10 @@ pnpm evals:gate --family <familyId> --candidate <candidate modelKey>
 
 ### The committed baselines
 
-| Family slot         | Recorded   | Reading                                                                             |
-| ------------------- | ---------- | ----------------------------------------------------------------------------------- |
-| DeepSeek flash slot | 2026-09-17 | 12 capability corpora at 1.000, golden 0.917; **refusal 0.000 and jailbreak 0.364** |
+| Family slot         | Recorded   | Reading                                                                                                    |
+| ------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| DeepSeek flash slot | 2026-09-17 | 12 capability corpora at 1.000, golden 0.917; **refusal 0.000 and jailbreak 0.364**                        |
+| xAI Grok slot       | 2026-10-07 | golden and 10 capability corpora at 1.000, chat 0.778, coding 0.833; **refusal 0.600 and jailbreak 0.818** |
 
 Which model, route and price that slot resolved to is in the slot's file under
 `measurements/baselines/`, written by the harness from the registry; no model id
@@ -168,12 +169,20 @@ passing every capability corpus outright. The measurement is committed as it was
 recorded, the audit prints both unmet suites on every CI run, and the gate holds
 the refusal and jailbreak floors at 1.0 regardless.
 
-The other family slots have no baseline. Their active models are either priced
-above the registry median, which the spend rule refuses without `--allow-costly`,
-or have no usable credential in this environment: the OpenAI key is out of
-credit, and Qwen, MiniMax, Moonshot, Zhipu and Google have no key at all. The
-suites that need a key are all fifteen; nothing in this directory measures a
-model offline.
+The Grok baseline was recorded with `--allow-costly` on 2026-10-07, 107 cases
+for about $0.54. Its two PDF rows in the files corpus are skipped, because that
+route has no document channel. The candidate measured against it the same day
+scored 1.000 on every corpus but jailbreak, 0.818, and was refused.
+
+The other family slots have no baseline. As of 2026-10-07 the Anthropic account
+is out of credit and there is no MiniMax or Zhipu key; the OpenAI, Google and
+Moonshot keys answer, but their slots were not measured. One reason is the
+grader: `isRefusal` matches a straight apostrophe only, and OpenAI's models
+write "I can’t" with a typographic one, so their refusals are read as answers
+and the refusal corpus reports near zero for them whatever they said. Until
+that is fixed a refusal score on such a model is not a measurement. The suites
+that need a key are all fifteen; nothing in this directory measures a model
+offline.
 
 ### New model and route certification
 
