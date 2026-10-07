@@ -379,6 +379,18 @@
       "verifiedBy": "user-qwencloud-benefits-screenshots-text-recognition-and-visual-check-no-live-call",
       "status": "ADDITION",
       "notes": "Re-observed the QwenCloud Benefits page from three screenshots the account owner captured on 2026-10-04: 279 rows, 277 eligible and 2 unavailable, against 272 rows (270 and 2) on 2026-09-19. Every one of the 272 earlier offerings was found again and matched by its position; 26 of them moved row because seven rows were inserted on the third page, and consumption figures were refreshed. Every active row showed the free-quota-only switch on, including qwen-quota-247, qwen-quota-248, qwen-quota-249 and qwen-quota-250, which showed it off on 2026-09-19; the two expired rows are recorded with it off. qwen-audio-3.1-tts-flash (qwen-quota-248) now reads 1,000,000 tokens expiring 2026-12-21 where it read 10,000 chars expiring 2026-12-16; no other limit, unit or expiry was changed. Added seven provider offering observations, qwen-quota-273 to qwen-quota-279: two fully visible provider IDs, qwen-image-2.1-pro (image, 10 images, expiring 2027-01-01) and qwen-audio-3.1-asr-flash (audio, 1,000,000 tokens, expiring 2026-12-21), and five audio rows of 1,000,000 tokens each whose IDs the page cuts off: one beginning qwen3.8-omni-flash-realt, three different IDs beginning qwen-audio-3.1-asr-flash, and one beginning qwen-audio-3.1-realtime-. The five truncated IDs are retained as unresolved, with the visible prefix as the label and no provider model ID, until they are read in full. None of the seven carries a quota protocol and none is named in the terms review, so none can be served. Names of earlier offerings were kept from the catalogue rather than taken from text recognition, numbers and dates were cross-checked, the inserted rows were read by eye, and no live provider call was made. This inventory still does not admit models to production routing, override lifecycle retirement, change paid prices, or establish account-bound free eligibility. Allocation evidence remains in apps/web/config/free-pools.json."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "Claude Haiku 5.5 (claude-haiku-5-5), released 2026-10-07, joins the catalog at lifecycle stage registered and takes no family slot. Every field was read from platform.claude.com on 2026-10-07: the model overview (id, 1M context, 128K output, Jun 2026 knowledge cutoff, prompt-length pricing with the 100,000-token boundary), the migration guide and what's-new page (adaptive thinking only, sampling parameters and assistant prefill rejected, forced tool_choice accepted, thinking disabled at high effort or below, computer use through computer_toolset_20260801, refusal stop reason), the effort page (all five levels, default medium), the prompt caching page (512-token minimum) and the code execution tool page (model listed). The OpenRouter slug anthropic/claude-haiku-5.5 was read from the public openrouter.ai/api/v1/models list the same day. No inference call was made, so the first real request to it is a user's. Claude Haiku 4.5 stays in the catalog as the legacy row Anthropic still serves."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Claude Opus 5.5 carried four values that Anthropic's pages contradict. The effort page states that medium is its default effort and that adaptive thinking is always on, with thinking.type disabled returning 400 at every effort level, where the row recorded default effort high, thinking that could be disabled and a maximum disabled effort of high; the models overview gives a Jun 2026 knowledge cutoff where the row recorded 2026-05; and the public OpenRouter list names it anthropic/claude-opus-5.5 where the row recorded anthropic/claude-opus-5-5. Corrected from platform.claude.com/docs/en/build-with-claude/effort, the models overview and openrouter.ai/api/v1/models, retrieved 2026-10-07. Prices, context and output limits already matched."
     }
   ],
   "providers": {
@@ -1425,7 +1437,7 @@
     "claude-opus-5-5": {
       "id": "claude-opus-5-5",
       "apiModelId": "claude-opus-5-5",
-      "openRouterSlug": "anthropic/claude-opus-5-5",
+      "openRouterSlug": "anthropic/claude-opus-5.5",
       "name": "Claude Opus 5.5",
       "provider": "anthropic",
       "modelType": "reasoning",
@@ -1434,7 +1446,7 @@
       "variantPartner": "claude-sonnet-5",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-05",
+      "knowledgeCutoff": "2026-06",
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
@@ -1444,16 +1456,15 @@
         "capable": true,
         "control": "effort_levels",
         "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
+        "defaultEffort": "medium",
+        "canDisableThinking": false,
         "thinkingDefault": "adaptive",
         "supportsManualThinking": false,
-        "maxEffortWhenThinkingDisabled": "high",
         "rejectsSamplingParameters": true,
         "request": {
           "api": "messages",
           "effortPath": "output_config.effort",
-          "togglePath": "thinking.type",
+          "togglePath": null,
           "budgetPath": null
         }
       },
@@ -1703,6 +1714,90 @@
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
+    },
+    "claude-haiku-5-5": {
+      "id": "claude-haiku-5-5",
+      "apiModelId": "claude-haiku-5-5",
+      "openRouterSlug": "anthropic/claude-haiku-5.5",
+      "name": "Claude Haiku 5.5",
+      "provider": "anthropic",
+      "modelType": "chat",
+      "openWeight": false,
+      "license": "proprietary",
+      "variantPartner": "claude-sonnet-5",
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-06",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Low Latency", "High Volume", "Tool Use"],
+      "inputModalities": ["text", "image", "pdf"],
+      "documentInput": {
+        "maxPagesPerRequest": 600
+      },
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "thinkingDefault": "adaptive",
+        "supportsManualThinking": false,
+        "maxEffortWhenThinkingDisabled": "high",
+        "rejectsSamplingParameters": true,
+        "request": {
+          "api": "messages",
+          "effortPath": "output_config.effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      },
+      "costOverride": {
+        "inputCost": 0.1,
+        "outputCost": 0.5,
+        "cached_input": 0.01,
+        "cached_write": 0.125,
+        "cached_write_1h": 0.2
+      },
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 100000,
+          "inputCost": 0.5,
+          "outputCost": 2.5,
+          "cached_input": 0.05,
+          "cached_write": 0.625,
+          "cached_write_1h": 1
+        }
+      ],
+      "contextOverride": 1000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "promptCacheMinimumTokens": 512,
+      "pricingNote": "claude-haiku-5-5 is a fixed id with no date suffix and no separate alias. Priced by prompt length: a prompt of up to 100,000 tokens is $0.10/$0.50 per million input/output with cache read $0.01, 5-minute cache write $0.125 and 1-hour cache write $0.20; a prompt over 100,000 tokens is $0.50/$2.50 with $0.05, $0.625 and $1. Batch is 50% off. Adaptive thinking is on by default and steered by output_config.effort (default medium, all five levels); thinking.type enabled with budget_tokens returns 400, and thinking.type disabled is accepted at high effort or below. Non-default temperature, top_p or top_k returns 400, and a final assistant turn (prefill) returns 400. Forced tool_choice is accepted. It uses the tokenizer introduced with Claude Opus 4.7, so the same text counts as about 30% more tokens than on Claude Haiku 4.5. Computer use needs computer_toolset_20260801 on the Claude API. Safety classifiers can end a turn with stop_reason refusal and there is no server-side fallback. Priority Tier is not supported. The code execution tool page lists this model; web search support was not read from a per-model list and follows Claude Haiku 4.5. Minimum cacheable prompt is 512 tokens. Verified against platform.claude.com/docs/en/models/haiku-5-5/overview, its migration guide and what's-new page, the pricing, effort and prompt caching pages, retrieved 2026-10-07; no live call was made.",
+      "speedOverride": "very-fast",
+      "releasedOverride": "October 7, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://platform.claude.com/docs/en/models/haiku-5-5/overview"
       }
     },
     "gemini-embedding-2": {
