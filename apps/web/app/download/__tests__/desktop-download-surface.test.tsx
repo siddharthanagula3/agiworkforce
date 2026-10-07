@@ -181,8 +181,16 @@ describe('public Desktop download surfaces', () => {
       screen.getByRole('region', { name: 'Desktop installer availability' }),
     ).not.toHaveTextContent('AGI Desktop ships for macOS');
     expect(
-      screen.getByRole('region', { name: 'We check the signature before you download.' }),
-    ).toHaveTextContent('When a Desktop installer is published');
+      screen.getByRole('heading', {
+        name: 'We check the signature before you download.',
+        level: 1,
+      }),
+    ).toHaveClass('sr-only');
+    const verification = screen.getByRole('region', {
+      name: 'A build has to prove itself before it reaches this page.',
+    });
+    expect(verification).toHaveTextContent('Notarized and stapled before upload');
+    expect(verification).toHaveTextContent('CLI checksums carry a Sigstore signature');
     expect(within(status).getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
       'href',
       '/login?redirectTo=%2F',

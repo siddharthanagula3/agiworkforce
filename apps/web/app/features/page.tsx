@@ -63,9 +63,9 @@ const FEATURES: readonly ScrollFeature[] = [
   {
     id: 'feature-projects',
     eyebrow: 'Projects',
-    title: 'A project rebuilds its own context into every prompt.',
-    body: 'Standing instructions, files and the threads you already ran are reassembled into the system message for each request, ranked against the question you asked.',
-    points: ['Instructions and files follow every thread', 'Context ranked against each question'],
+    title: 'Project instructions, with selected reference material.',
+    body: 'Chats in a project can use its saved instructions and selected passages from knowledge files and earlier project chats, within access and context limits.',
+    points: ['Saved instructions for a project', 'References selected for the question'],
     href: '/features/projects',
     linkLabel: 'Learn more about projects',
     visual: <ProjectWindow />,
@@ -142,15 +142,9 @@ export default function FeaturesPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
+              <h1 className="sr-only" id={IDS.hero}>
                 Conversation is the front door. This is what sits behind it.
               </h1>
-              <p className="agi-lp-lede">
-                Projects, artifacts, memory, research, and agents are not separate products: they
-                are what a chat can reach into. Every one opens from the same composer on a
-                managed-cloud account, and each reply names the model that answered in its actions
-                menu. Local and BYOK are CLI routes.
-              </p>
               <ButtonRow>
                 <Button href="/login?redirectTo=%2F">Try AGI Web</Button>
                 <Button href="/download" variant="secondary">
@@ -171,6 +165,10 @@ export default function FeaturesPage() {
               <h2 className="agi-ds-h2" id={IDS.loop}>
                 Chat, and the things a chat opens into.
               </h2>
+              <Prose>
+                These features open from the same composer on a managed-cloud account. Local and
+                BYOK are CLI routes.
+              </Prose>
             </div>
             <ScrollFeatures features={FEATURES} label="Six things a chat opens into" />
           </Stack>

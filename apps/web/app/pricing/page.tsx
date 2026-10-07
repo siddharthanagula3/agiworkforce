@@ -1,7 +1,15 @@
 'use client';
 
 import { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@/lib/compliance/free-plan-training-disclosure';
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import '@/features/marketing/components/pricing/pricing.css';
+import { PlanComparisonStack } from '@/features/marketing/components/pricing/PlanComparisonStack';
+import {
+  pricingDeveloperSurfaceCell,
+  pricingSurfaceStatus,
+} from '@/features/marketing/components/pricing/developer-surface-presentation';
+import { SURFACE_NAMES } from '@/lib/surface-status';
+import type { TFunction } from 'i18next';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
@@ -151,6 +159,9 @@ const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['price', 'Price'],
   ['billingInterval', 'Billing'],
   ['usageCapacity', 'Managed usage'],
+  ['trainingData', 'Trains on your content'],
+  ['teamAdmin', BILLING_PLAN_CAPABILITY_LABELS.team_admin],
+  ['enterpriseControls', BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls],
   ['contextWindow', 'Context window'],
   ['managedChat', BILLING_PLAN_CAPABILITY_LABELS.managed_chat],
   ['projects', 'Projects'],
@@ -162,11 +173,21 @@ const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['videoGeneration', BILLING_PLAN_CAPABILITY_LABELS.video_generation],
   ['apiAccess', BILLING_PLAN_CAPABILITY_LABELS.managed_api],
   ['developerSurfaces', BILLING_PLAN_CAPABILITY_LABELS.developer_surfaces],
-  ['teamAdmin', BILLING_PLAN_CAPABILITY_LABELS.team_admin],
-  ['enterpriseControls', BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls],
-  ['trainingData', 'Trains on your content'],
   ['bestFor', 'Best for'],
 ];
+
+const COMPARISON_IDENTITY_COLUMNS: ReadonlySet<string> = new Set([
+  'plan',
+  'price',
+  'billingInterval',
+  'bestFor',
+]);
+
+const COMPARISON_CAPABILITY_COUNT = COMPARISON_COLUMNS.filter(
+  ([column]) => !COMPARISON_IDENTITY_COLUMNS.has(column),
+).length;
+
+const COMPARISON_VALUE_COLUMNS = COMPARISON_COLUMNS.filter(([column]) => column !== 'plan');
 
 function CheckIcon() {
   return (
@@ -227,22 +248,17 @@ const WRAPPING_COMPARISON_COLUMNS: ReadonlySet<string> = new Set([
   'bestFor',
 ]);
 
-function comparisonCellStyle(column: string, highlighted: boolean): CSSProperties {
-  if (column === 'plan') {
-    return {
-      fontWeight: 600,
-      color: highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
-      whiteSpace: 'nowrap',
-    };
-  }
-  if (column === 'price') return { color: 'var(--agi-ink)' };
-  if (WRAPPING_COMPARISON_COLUMNS.has(column)) return { color: 'var(--agi-ink-2)' };
-  return { color: 'var(--agi-ink-2)', whiteSpace: 'nowrap' };
+function comparisonCellClass(column: string): string {
+  if (column === 'price') return 'agi-compare-cell--ink';
+  if (WRAPPING_COMPARISON_COLUMNS.has(column)) return 'agi-compare-cell--wrap';
+  return 'agi-compare-cell--quiet';
 }
 
-function comparisonCellValue(column: string, row: CompareRow): string {
-  if (column === 'plan') return row.label;
-  return String(row[column as Exclude<keyof CompareRow, 'planId' | 'label' | 'highlighted'>]);
+function comparisonCellValue(column: string, row: CompareRow, t: TFunction<'pricing'>): string {
+  const value = String(
+    row[column as Exclude<keyof CompareRow, 'planId' | 'label' | 'highlighted'>],
+  );
+  return column === 'developerSurfaces' ? pricingDeveloperSurfaceCell(row.planId, value, t) : value;
 }
 
 // AGI trains on no plan's content. The Free plan is served by providers' free
@@ -408,6 +424,9 @@ export default function PricingPage() {
 
   const [audience, setAudience] = useState<'individual' | 'business'>('individual');
   const [maxVariant, setMaxVariant] = useState<'max' | 'max_15x'>('max');
+  const [fullTableShown, setFullTableShown] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(true);
+  const comparisonToggleRef = useRef<HTMLButtonElement>(null);
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const priceLocale = useMounted() ? undefined : SERVER_RENDER_PRICE_LOCALE;
@@ -490,6 +509,12 @@ export default function PricingPage() {
   const proPrice = formatLocalizedAmount(
     localizedPlans?.pro.monthly,
     pro.monthlyPriceUsd,
+    priceLocale,
+  );
+  const paidPriceEntry = localizedPlans?.basic.monthly ?? localizedPlans?.pro.monthly;
+  const freePrice = formatLocalizedAmount(
+    paidPriceEntry ? { ...paidPriceEntry, amountMinor: 0 } : undefined,
+    0,
     priceLocale,
   );
   const basicPrice = formatLocalizedAmount(
@@ -843,10 +868,9 @@ export default function PricingPage() {
     t('freeFeature1'),
     t('freeFeature2'),
     t('freeFeature3'),
-    t('freeLocalByok'),
+    t('freeLocalByok', { surface: SURFACE_NAMES.cli, status: pricingSurfaceStatus('cli', t) }),
   ]);
   const basicFeatures = presentCopy([
-    ...usageComparisonCopy('basic'),
     t('basicFeature2'),
     t('basicFeature3'),
     t('basicFeature4'),
@@ -879,7 +903,6 @@ export default function PricingPage() {
         ])
       : presentCopy([
           ...usageComparisonCopy('max_15x'),
-          t('max15xFeature2'),
           t('max15xFeature3'),
           t('max15xFeature4'),
           t('max15xFeature5'),
@@ -1009,24 +1032,17 @@ export default function PricingPage() {
   // them, so the two can never disagree about how many plans are compared.
   const comparableRows = compareRows.filter((row) => isPlanSelectableOnSurface(row.planId, 'web'));
   const comparablePlanCount = comparableRows.length;
+  const presentedComparisonCellValue = (column: string, row: CompareRow) =>
+    comparisonCellValue(column, row, t);
 
   return (
-    <div data-design="agi">
+    <div data-design="agi" data-public-reference="pricing">
       <Header />
       <main id="main-content" tabIndex={-1} className="agi-shell">
-        <section
-          className="agi-page-hero"
-          aria-labelledby="pricing-hero-title"
-          style={{
-            borderBottom: 'none',
-            paddingTop: 'var(--space-7)',
-            paddingBottom: 'var(--space-5)',
-          }}
-        >
-          <h1 id="pricing-hero-title" className="agi-fl-h1">
+        <section className="agi-pricing-pagehead" aria-labelledby="pricing-hero-title">
+          <h1 id="pricing-hero-title" className="agi-pricing-title">
             {t('pageTitle')}
           </h1>
-          <p className="agi-fl-section-lede">{t('heroLede')}</p>
           {!CHECKOUT_ENABLED ? (
             <p
               role="status"
@@ -1039,15 +1055,7 @@ export default function PricingPage() {
           ) : null}
         </section>
 
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            marginBottom: 'var(--space-6)',
-          }}
-        >
+        <div className="agi-pricing-audience">
           <div
             className="agi-tier-toggle"
             role="group"
@@ -1082,10 +1090,9 @@ export default function PricingPage() {
         </div>
 
         <section
-          className="agi-fl-section"
+          className="agi-fl-section agi-pricing-plans"
           aria-label={t('audienceBusiness')}
           hidden={audience !== 'business'}
-          style={{ paddingTop: 0 }}
         >
           <h2 className="sr-only">{t('audienceBusiness')}</h2>
           <div
@@ -1097,6 +1104,15 @@ export default function PricingPage() {
               <h3 id="pricing-team-title" className="agi-tier-name">
                 {team.label}
               </h3>
+              <div className="agi-tier-price">
+                <span className="agi-tier-price-num">
+                  {teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice}
+                </span>{' '}
+                <span className="agi-tier-price-sub">{t('perSeatPricingSub')}</span>{' '}
+                <span className="agi-tier-price-sub">
+                  {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
+                </span>
+              </div>
               {teamYearlyAvailable ? (
                 <div
                   className="agi-tier-toggle"
@@ -1135,15 +1151,6 @@ export default function PricingPage() {
                   </button>
                 </div>
               ) : null}
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">
-                  {teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice}
-                </span>{' '}
-                <span className="agi-tier-price-sub">{t('perSeatPricingSub')}</span>{' '}
-                <span className="agi-tier-price-sub">
-                  {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
-                </span>
-              </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
                 {teamFeatures.map((feature) => (
@@ -1153,15 +1160,8 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <div
-                className="agi-tier-seats"
-                style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
-              >
-                <label
-                  className="agi-tier-seats-label"
-                  htmlFor="team-seat-count"
-                  style={{ fontSize: 13, color: 'var(--agi-ink-2)' }}
-                >
+              <div className="agi-tier-seats">
+                <label className="agi-tier-seats-label" htmlFor="team-seat-count">
                   {t('seatCountLabel')}
                 </label>
                 <input
@@ -1173,17 +1173,6 @@ export default function PricingPage() {
                   max={MAX_PURCHASABLE_SEATS}
                   step={1}
                   value={teamSeats}
-                  style={{
-                    width: 88,
-                    minHeight: 36,
-                    padding: 'var(--space-2) var(--space-3)',
-                    background: 'var(--agi-bg-2)',
-                    border: '1px solid var(--agi-rule)',
-                    borderRadius: 'var(--corner-control)',
-                    color: 'var(--agi-ink)',
-                    fontSize: 14,
-                    fontFamily: 'inherit',
-                  }}
                   onChange={(event) => {
                     const parsed = Number.parseInt(event.target.value, 10);
                     if (!Number.isFinite(parsed)) {
@@ -1196,10 +1185,7 @@ export default function PricingPage() {
                   }}
                 />
               </div>
-              <p
-                className="agi-tier-seats-total"
-                style={{ margin: 0, fontSize: 13, color: 'var(--agi-ink-quiet)' }}
-              >
+              <p className="agi-tier-seats-total">
                 {teamInterval === 'yearly'
                   ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
                   : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
@@ -1215,10 +1201,10 @@ export default function PricingPage() {
             <Reveal as="article" delay={60} className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('enterpriseBadge')}</span>
               <h3 className="agi-tier-name">{t('enterpriseHeading')}</h3>
-              <p className="agi-tier-price">
+              <div className="agi-tier-price">
                 <span className="agi-tier-price-num">{t('custom')}</span>
                 <span className="agi-tier-price-sub">{t('customPricingSub')}</span>
-              </p>
+              </div>
               <p className="agi-tier-body">
                 SSO, SCIM, and audit are shipped and entitlement-gated; we scope capacity, data
                 retention, and rollout to how your org actually works. Reach out and we will plan it
@@ -1253,10 +1239,9 @@ export default function PricingPage() {
         </section>
 
         <section
-          className="agi-fl-section"
+          className="agi-fl-section agi-pricing-plans"
           aria-label={t('audienceIndividual')}
           hidden={audience !== 'individual'}
-          style={{ paddingTop: 0 }}
         >
           <h2 className="sr-only">{t('audienceIndividual')}</h2>
 
@@ -1301,10 +1286,10 @@ export default function PricingPage() {
           >
             <Reveal as="article" className="agi-tier">
               <h3 className="agi-tier-name">{BILLING_PLAN_PRICING.free.label}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{t('free')}</span>
-                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
-              </p>
+              <div className="agi-tier-price">
+                <span className="agi-tier-price-num">{freePrice}</span>
+                <span className="agi-tier-price-sub">{t('perMonth')}</span>
+              </div>
               <p className="agi-tier-body">{t('freeTierBody')}</p>
               <ul className="agi-tier-features">
                 {freeFeatures.map((feature) => (
@@ -1324,12 +1309,15 @@ export default function PricingPage() {
             {isPlanSelectableOnSurface('basic', 'web') && (
               <Reveal as="article" delay={40} className="agi-tier">
                 <h3 className="agi-tier-name">{basic.label}</h3>
-                <p className="agi-tier-price">
+                <div className="agi-tier-price">
                   <span className="agi-tier-price-num">{basicPrice}</span>
-                  <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-                </p>
+                  <span className="agi-tier-price-sub">{t('perMonth')}</span>
+                </div>
                 <p className="agi-tier-body">{t('basicTierBody')}</p>
                 <ul className="agi-tier-features">
+                  <li className="agi-tier-features-lead">
+                    {t('everythingInPlan', { plan: BILLING_PLAN_PRICING.free.label })}
+                  </li>
                   {basicFeatures.map((feature) => (
                     <li key={feature}>
                       <CheckIcon />
@@ -1343,12 +1331,15 @@ export default function PricingPage() {
 
             <Reveal as="article" delay={80} className="agi-tier">
               <h3 className="agi-tier-name">{pro.label}</h3>
-              <p className="agi-tier-price">
+              <div className="agi-tier-price">
                 <span className="agi-tier-price-num">{proPrice}</span>
-                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-              </p>
+                <span className="agi-tier-price-sub">{t('perMonth')}</span>
+              </div>
               <p className="agi-tier-body">{t('proTierBody')}</p>
               <ul className="agi-tier-features">
+                <li className="agi-tier-features-lead">
+                  {t('everythingInPlan', { plan: basic.label })}
+                </li>
                 {proFeatures.map((feature) => (
                   <li key={feature}>
                     <CheckIcon />
@@ -1391,16 +1382,19 @@ export default function PricingPage() {
                   </button>
                 </div>
               </div>
-              <p className="agi-tier-price">
+              <div className="agi-tier-price">
                 <span className="agi-tier-price-num">
                   {maxVariant === 'max' ? maxPrice : max15xPrice}
                 </span>
-                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-              </p>
+                <span className="agi-tier-price-sub">{t('perMonth')}</span>
+              </div>
               <p className="agi-tier-body">
                 {maxVariant === 'max' ? t('maxTierBody') : t('max15xTierBody')}
               </p>
               <ul className="agi-tier-features">
+                <li className="agi-tier-features-lead">
+                  {t('everythingInPlan', { plan: maxVariant === 'max' ? pro.label : max.label })}
+                </li>
                 {maxTierFeatures.map((feature) => (
                   <li key={feature}>
                     <CheckIcon />
@@ -1427,183 +1421,134 @@ export default function PricingPage() {
         </section>
 
         <section className="agi-fl-section" aria-labelledby="pricing-compare-title">
-          <p className="agi-fl-eyebrow">{t('compareEyebrow')}</p>
           <h2 id="pricing-compare-title" className="agi-fl-h2">
             {t('compareHeading')}
           </h2>
-          <p className="agi-fl-section-lede">{t('compareSubheading', { topPlan: max15x.label })}</p>
-          <details className="agi-compare-disclosure" open>
-            <summary className="agi-compare-summary">
-              <span>Full capability table</span>
-              <span className="agi-compare-summary-hint">
-                {comparablePlanCount} plans across {COMPARISON_COLUMNS.length} capabilities
-              </span>
-            </summary>
-            <div
-              aria-label="Scrollable plan comparison"
-              role="region"
-              tabIndex={0}
-              style={{ overflowX: 'auto', marginTop: 'var(--space-5)' }}
-            >
-              <table
-                aria-label="Plan capabilities"
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  fontSize: 13,
-                  color: 'var(--agi-ink)',
+          <div
+            className={
+              fullTableShown ? 'agi-compare-views agi-compare-views--table' : 'agi-compare-views'
+            }
+          >
+            <div className="agi-compare-narrow">
+              <button
+                ref={comparisonToggleRef}
+                type="button"
+                className="agi-tier-cta agi-tier-cta--ghost agi-compare-table-toggle"
+                aria-expanded={fullTableShown}
+                aria-controls="pricing-compare-table"
+                onClick={() => {
+                  if (!fullTableShown) setComparisonOpen(true);
+                  setFullTableShown((shown) => !shown);
                 }}
               >
-                <thead>
-                  <tr>
-                    {COMPARISON_COLUMNS.map(([col, label]) => (
-                      <th
-                        key={col}
-                        scope="col"
-                        style={{
-                          textAlign: 'left',
-                          padding: 'var(--space-3) var(--space-4)',
-                          borderBottom: '1px solid var(--agi-rule-strong)',
-                          color: 'var(--agi-ink-quiet)',
-                          fontSize: 12,
-                          letterSpacing: '0.06em',
-                          textTransform: 'uppercase',
-                          fontFamily: 'var(--agi-font-mono)',
-                          fontWeight: 500,
-                          verticalAlign: 'bottom',
-                          minWidth: '9rem',
-                        }}
-                      >
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparableRows.map((row, i) => (
-                    <tr
-                      key={row.planId}
-                      style={{
-                        background: row.highlighted
-                          ? 'var(--agi-amber-soft)'
-                          : i % 2 === 0
-                            ? 'transparent'
-                            : 'var(--agi-bg-2)',
-                      }}
-                    >
-                      {COMPARISON_COLUMNS.map(([col]) => (
-                        <td
-                          key={`${row.planId}-${col}`}
-                          style={{
-                            padding: 'var(--space-4) var(--space-4)',
-                            borderBottom: '1px solid var(--agi-rule)',
-                            ...comparisonCellStyle(col, row.highlighted === true),
-                          }}
-                        >
-                          {comparisonCellValue(col, row)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                {t(fullTableShown ? 'compareHideFullTable' : 'compareShowFullTable')}
+              </button>
+              <PlanComparisonStack
+                rows={comparableRows}
+                columns={COMPARISON_VALUE_COLUMNS}
+                cellValue={presentedComparisonCellValue}
+              />
             </div>
-          </details>
+            <details
+              id="pricing-compare-table"
+              className="agi-compare-disclosure"
+              open={comparisonOpen}
+              onToggle={(event) => {
+                const open = event.currentTarget.open;
+                const hidesFocus = !open && event.currentTarget.contains(document.activeElement);
+                setComparisonOpen(open);
+                if (!open) {
+                  setFullTableShown(false);
+                  const toggle = comparisonToggleRef.current;
+                  if (hidesFocus && toggle?.getClientRects().length) toggle.focus();
+                }
+              }}
+            >
+              <summary className="agi-compare-summary">
+                <span>{t('compareTableTitle')}</span>
+                <span className="agi-compare-summary-hint agi-compare-count">
+                  {t('compareTableHint', {
+                    plans: comparablePlanCount,
+                    capabilities: COMPARISON_CAPABILITY_COUNT,
+                  })}
+                </span>
+              </summary>
+              <div>
+                <p className="agi-compare-cue">{t('compareScrollCue')}</p>
+                <div
+                  aria-label="Scrollable plan comparison"
+                  role="region"
+                  tabIndex={0}
+                  className="agi-compare-scroll"
+                >
+                  <table aria-label="Plan capabilities" className="agi-compare-table">
+                    <thead>
+                      <tr>
+                        {COMPARISON_COLUMNS.map(([col, label]) => (
+                          <th key={col} scope="col">
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparableRows.map((row) => (
+                        <tr
+                          key={row.planId}
+                          className={row.highlighted ? 'agi-compare-row--highlighted' : undefined}
+                        >
+                          <th scope="row">{row.label}</th>
+                          {COMPARISON_VALUE_COLUMNS.map(([col]) => (
+                            <td key={`${row.planId}-${col}`} className={comparisonCellClass(col)}>
+                              {presentedComparisonCellValue(col, row)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="pricing-models-title">
-          <p className="agi-fl-eyebrow">Models</p>
           <h2 id="pricing-models-title" className="agi-fl-h2">
-            Models included by plan
+            Model eligibility by plan
           </h2>
           <p className="agi-fl-section-lede">
-            Auto routes each message to the best model for the task, your plan, and cost; the
-            ceiling it can reach rises with the plan. Manual model selection widens the same way:
-            this is how many of each provider&apos;s models are reachable at each level, read live
-            from our model catalog.
+            Counts show plan eligibility for models in the plan catalog. Availability also depends
+            on the route and environment.
           </p>
           <div
             aria-label="Scrollable model access by plan"
             role="region"
             tabIndex={0}
-            style={{ overflowX: 'auto', marginTop: 'var(--space-6)' }}
+            className="agi-compare-scroll agi-compare-scroll--models"
           >
             <table
               aria-label="Model access by plan"
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: 13,
-                color: 'var(--agi-ink)',
-              }}
+              className="agi-compare-table agi-compare-table--models"
             >
               <thead>
                 <tr>
-                  <th
-                    scope="col"
-                    style={{
-                      textAlign: 'left',
-                      padding: 'var(--space-3) var(--space-4)',
-                      borderBottom: '1px solid var(--agi-rule-strong)',
-                      color: 'var(--agi-ink-quiet)',
-                      fontSize: 12,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      fontFamily: 'var(--agi-font-mono)',
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Provider
-                  </th>
+                  <th scope="col">Provider</th>
                   {MODEL_ACCESS_COLUMNS.map((column) => (
-                    <th
-                      key={column.label}
-                      scope="col"
-                      style={{
-                        textAlign: 'left',
-                        padding: 'var(--space-3) var(--space-4)',
-                        borderBottom: '1px solid var(--agi-rule-strong)',
-                        color: 'var(--agi-ink-quiet)',
-                        fontSize: 12,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        fontFamily: 'var(--agi-font-mono)',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
+                    <th key={column.label} scope="col">
                       {column.label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {modelAccessByProvider().map((row, i) => (
-                  <tr
-                    key={row.provider}
-                    style={{ background: i % 2 === 0 ? 'transparent' : 'var(--agi-bg-2)' }}
-                  >
-                    <td
-                      style={{
-                        padding: 'var(--space-4) var(--space-4)',
-                        borderBottom: '1px solid var(--agi-rule)',
-                        fontWeight: 600,
-                        color: 'var(--agi-ink)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {row.label}
-                    </td>
+                {modelAccessByProvider().map((row) => (
+                  <tr key={row.provider}>
+                    <th scope="row">{row.label}</th>
                     {row.accessByColumn.map((accessibleCount, columnIndex) => (
                       <td
                         key={`${row.provider}-${MODEL_ACCESS_COLUMNS[columnIndex]?.label}`}
-                        style={{
-                          padding: 'var(--space-4) var(--space-4)',
-                          borderBottom: '1px solid var(--agi-rule)',
-                          color: 'var(--agi-ink-2)',
-                          whiteSpace: 'nowrap',
-                        }}
+                        className="agi-compare-cell--quiet"
                       >
                         {formatModelAccess(accessibleCount, row.total)}
                       </td>
@@ -1616,18 +1561,15 @@ export default function PricingPage() {
         </section>
 
         <section className="agi-fl-section" aria-labelledby="pricing-faq-title">
-          <p className="agi-fl-eyebrow">Questions</p>
           <h2 id="pricing-faq-title" className="agi-fl-h2">
             Have a question about a plan?
           </h2>
           <p className="agi-fl-section-lede">
-            Billing, upgrades, downgrades, cancellations, invoices, and what happens to your data
-            are answered on the{' '}
-            <Link href="/faq" className="agi-ds-link">
-              FAQ
-            </Link>
-            .
+            Find answers about billing, plan changes, invoices and what happens to your data.
           </p>
+          <Link href="/faq" className="agi-ds-link agi-pricing-faq-link">
+            Read the FAQ
+          </Link>
         </section>
       </main>
       <MarketingFooter />

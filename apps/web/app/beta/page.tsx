@@ -5,6 +5,7 @@ import { Section } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 import { BetaApplicationForm } from './BetaApplicationForm';
+import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: 'Apply to test',
@@ -15,7 +16,7 @@ export const metadata = buildMetadata({
 
 export default function BetaPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
+import { SURFACE_NAMES, SURFACE_STATUS } from '@/lib/surface-status';
 
 const testState = vi.hoisted(() => ({
   auth: { user: null as null | { id: string; email: string }, initialized: true },
@@ -49,35 +50,65 @@ const billingMocks = vi.hoisted(() => {
 });
 
 vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, values?: Record<string, unknown>) => {
-      if (key === 'seatTotal') {
-        return `Seats: ${String(values?.['seats'])} · ${String(values?.['total'])}/mo`;
-      }
-      if (key === 'seatTotalAnnual') {
-        return `Seats: ${String(values?.['seats'])} · ${String(values?.['total'])}/yr`;
-      }
-      if (key === 'perSeatPrice') return `${String(values?.['price'])}/seat/mo`;
-      if (key === 'usageMultiplierAll') {
-        return `${String(values?.['factor'])}x more usage than ${String(values?.['baseline'])}`;
-      }
-      if (key === 'usageMultiplierSession') {
-        return `${String(values?.['factor'])}x more usage per session than ${String(values?.['baseline'])}`;
-      }
-      if (key === 'usageMultiplierWeekly') {
-        return `${String(values?.['factor'])}x more weekly usage than ${String(values?.['baseline'])}`;
-      }
-      if (key === 'usageSameAsPerSeat') {
-        return `Same usage as ${String(values?.['baseline'])} for every seat`;
-      }
-      if (key === 'compareTeamPriceYearly') {
-        return `${String(values?.['yearly'])}/seat/mo billed yearly, ${String(values?.['monthly'])} billed monthly`;
-      }
-      return key;
-    },
-  }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+  const { createInstance } = await import('i18next');
+  const { resources } = await import('@agiworkforce/i18n');
+  const instance = createInstance();
+  await instance.init({
+    lng: 'en',
+    fallbackLng: false,
+    resources,
+    ns: ['pricing', 'models'],
+    defaultNS: 'pricing',
+    interpolation: { escapeValue: false },
+  });
+  const translated = instance.getFixedT('en', 'pricing');
+  return {
+    ...(await importOriginal<typeof import('react-i18next')>()),
+    useTranslation: () => ({
+      t: (key: string, values?: Record<string, unknown>) => {
+        if (
+          key === 'surfaceAvailableNow' ||
+          key === 'models:selector.comingSoon' ||
+          key === 'compareLocalDeveloperSurfaces' ||
+          key === 'compareByokDeveloperSurfaces' ||
+          key === 'compareManagedDeveloperSurfaces' ||
+          key === 'freeLocalByok'
+        ) {
+          if (!instance.exists(key))
+            throw new Error(`Missing pricing availability translation: ${key}`);
+          return translated(key, values);
+        }
+        if (key === 'seatTotal') {
+          return `Seats: ${String(values?.['seats'])} · ${String(values?.['total'])}/mo`;
+        }
+        if (key === 'seatTotalAnnual') {
+          return `Seats: ${String(values?.['seats'])} · ${String(values?.['total'])}/yr`;
+        }
+        if (key === 'perSeatPrice') return `${String(values?.['price'])}/seat/mo`;
+        if (key === 'usageMultiplierAll') {
+          return `${String(values?.['factor'])}x more usage than ${String(values?.['baseline'])}`;
+        }
+        if (key === 'usageMultiplierSession') {
+          return `${String(values?.['factor'])}x more usage per session than ${String(values?.['baseline'])}`;
+        }
+        if (key === 'usageMultiplierWeekly') {
+          return `${String(values?.['factor'])}x more weekly usage than ${String(values?.['baseline'])}`;
+        }
+        if (key === 'usageSameAsPerSeat') {
+          return `Same usage as ${String(values?.['baseline'])} for every seat`;
+        }
+        if (key === 'compareTeamPriceYearly') {
+          return `${String(values?.['yearly'])}/seat/mo billed yearly, ${String(values?.['monthly'])} billed monthly`;
+        }
+        if (key === 'compareTableHint') {
+          return `${String(values?.['plans'])} plans across ${String(values?.['capabilities'])} capabilities`;
+        }
+        return key;
+      },
+    }),
+  };
+});
 vi.mock('sonner', () => ({
   toast: { loading: vi.fn(), dismiss: vi.fn(), error: vi.fn(), success: vi.fn() },
 }));
@@ -380,7 +411,7 @@ describe('PricingPage', () => {
     expect(card.getByText('$20')).toBeVisible();
     expect(card.getByText('perSeatPricingSub')).toBeVisible();
     expect(card.getByText('billedYearly')).toBeVisible();
-    expect(card.getByText('$20').closest('p')!.textContent).toBe(
+    expect(card.getByText('$20').closest('.agi-tier-price')!.textContent).toBe(
       '$20 perSeatPricingSub billedYearly',
     );
     expect(card.getByText('Seats: 2 · $480/yr')).toBeVisible();
@@ -524,29 +555,70 @@ describe('PricingPage', () => {
 
     const comparison = screen.getByRole('table', { name: 'Plan capabilities' });
     const rows = within(comparison);
+    const developerEntitlement = `Yes · ${SURFACE_NAMES.cli}: ${SURFACE_STATUS.cli}; ${SURFACE_NAMES.vscode}: ${SURFACE_STATUS.vscode}`;
     expect(rows.getByRole('row', { name: /^Free / })).toHaveAccessibleName(
-      'Free free foreverLabel compareFreeUsage Up to 200K tokens Yes 1 project 1 custom MCP Yes No No No No No No No No Not by AGI. Free model providers may. compareFreeBestFor',
+      'Free free foreverLabel compareFreeUsage Not by AGI. Free model providers may. No No Up to 200K tokens Yes 1 project 1 custom MCP Yes No No No No No No compareFreeBestFor',
     );
     expect(rows.getByRole('row', { name: /^Basic / })).toHaveAccessibleName(
-      'Basic $7/mo monthlyOnly 5x more usage per session than Free Up to 1.05M tokens Yes 5 projects 5 custom MCP Yes No No No No No No No No No compareBasicBestFor',
+      'Basic $7/mo monthlyOnly 5x more usage per session than Free No No No Up to 1.05M tokens Yes 5 projects 5 custom MCP Yes No No No No No No compareBasicBestFor',
     );
     expect(rows.getByRole('row', { name: /^Pro / })).toHaveAccessibleName(
-      'Pro $20/mo monthlyOnly 5x more usage than Basic Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes Yes No Yes Yes No No No compareProBestFor',
+      `Pro $20/mo monthlyOnly 5x more usage than Basic No No No Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes Yes No Yes ${developerEntitlement} compareProBestFor`,
     );
     expect(rows.getByRole('row', { name: /^Max 5x / })).toHaveAccessibleName(
-      'Max 5x $100/mo monthlyOnly 5x more usage than Pro Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes Yes No Yes Yes No No No compareMaxBestFor',
+      `Max 5x $100/mo monthlyOnly 5x more usage than Pro No No No Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes Yes No Yes ${developerEntitlement} compareMaxBestFor`,
     );
     expect(rows.getByRole('row', { name: /^Max 20x / })).toHaveAccessibleName(
-      'Max 20x $200/mo monthlyOnly 20x more usage per session than Pro · 10x more weekly usage than Pro Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes Yes Yes Yes Yes No No No Highest-capacity work and video generation',
+      `Max 20x $200/mo monthlyOnly 20x more usage per session than Pro · 10x more weekly usage than Pro No No No Up to 1.05M tokens Yes Unlimited Unlimited Yes Yes Yes Yes Yes Yes ${developerEntitlement} Highest-capacity work and video generation`,
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team $25/seat/mo compareTeamBilling Same usage as Pro for every seat Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes Yes No Yes Yes Yes No No compareTeamBestFor',
+      `Team $25/seat/mo compareTeamBilling Same usage as Pro for every seat No Yes No Up to 1.05M tokens Yes 25 projects 25 custom MCP Yes Yes Yes Yes No Yes ${developerEntitlement} compareTeamBestFor`,
     );
     // Explicit timeout: this assertion computes the accessible name of every row
     // in the full comparison table, which is genuinely slow in jsdom and sits
     // close to the 5s default even before machine load. Raising it here keeps
     // the failure mode "assertion failed", not "flaky timeout".
   }, 30_000);
+
+  it('uses identical qualified developer-surface cells in the desktop table and plan stack', () => {
+    render(<PricingPage />);
+    const table = screen.getByRole('table', { name: 'Plan capabilities' });
+    const tableQueries = within(table);
+    const headers = tableQueries.getAllByRole('columnheader');
+    const column = headers.findIndex((header) =>
+      header.textContent?.includes('Managed Cloud in the CLI and VS Code'),
+    );
+    expect(column).toBeGreaterThan(0);
+    const select = screen.getByRole('combobox', { name: 'compareStackPlanLabel' });
+    const stack = select.closest('.agi-compare-stack');
+    expect(stack).not.toBeNull();
+    const options = within(select).getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+    for (const option of options) {
+      const plan = option.getAttribute('value');
+      const label = option.textContent;
+      expect(plan).toBeTruthy();
+      expect(label).toBeTruthy();
+      fireEvent.change(select, { target: { value: plan } });
+      const list = within(stack as HTMLElement).getByLabelText(label!);
+      expect(list.tagName).toBe('DL');
+      const pair = [...list.querySelectorAll('dt')].find(
+        (term) => term.textContent === headers[column]!.textContent,
+      );
+      expect(pair).toBeDefined();
+      const stackValue = pair!.nextElementSibling?.textContent;
+      const row = tableQueries
+        .getAllByRole('row')
+        .find((candidate) => within(candidate).queryByRole('rowheader')?.textContent === label);
+      expect(row).toBeDefined();
+      const tableValue = within(row!).getAllByRole('cell')[column - 1]!.textContent;
+      expect(stackValue).toBe(tableValue);
+      if (tableValue?.startsWith('Yes')) {
+        expect(tableValue).toContain(`${SURFACE_NAMES.cli}: ${SURFACE_STATUS.cli}`);
+        expect(tableValue).toContain(`${SURFACE_NAMES.vscode}: ${SURFACE_STATUS.vscode}`);
+      }
+    }
+  });
 
   it('lists Deep Research as a comparison column derived from the plan catalog', () => {
     render(<PricingPage />);
@@ -566,19 +638,189 @@ describe('PricingPage', () => {
     };
     const bodyRows = comparison.getAllByRole('row').slice(1);
     for (const row of bodyRows) {
-      const cells = within(row).getAllByRole('cell');
+      const cells = [within(row).getByRole('rowheader'), ...within(row).getAllByRole('cell')];
       expect(cells).toHaveLength(headers.length);
       const plan = cells[0]?.textContent ?? '';
       if (plan in expected) expect(cells[column]?.textContent).toBe(expected[plan]);
     }
   }, 30_000);
 
+  it('pins plan names as row headers inside a named, focusable scroll region', () => {
+    render(<PricingPage />);
+
+    const region = screen.getByRole('region', { name: 'Scrollable plan comparison' });
+    expect(region).toHaveAttribute('tabindex', '0');
+    expect(region).toHaveClass('agi-compare-scroll');
+    expect(region.parentElement?.parentElement).toHaveClass('agi-compare-disclosure');
+
+    const comparison = within(within(region).getByRole('table', { name: 'Plan capabilities' }));
+    const headers = comparison.getAllByRole('columnheader');
+    const headerLabels = headers.map((header) => header.textContent);
+    expect(headerLabels.slice(0, 7)).toEqual([
+      'Plan',
+      'Price',
+      'Billing',
+      'Managed usage',
+      'Trains on your content',
+      'Team administration',
+      'SSO, SCIM and admin controls',
+    ]);
+    for (const header of headers) expect(header).toHaveAttribute('scope', 'col');
+
+    const bodyRows = comparison.getAllByRole('row').slice(1);
+    expect(bodyRows.length).toBeGreaterThan(0);
+    for (const row of bodyRows) {
+      const rowHeaders = within(row).getAllByRole('rowheader');
+      expect(rowHeaders).toHaveLength(1);
+      expect(rowHeaders[0]).toHaveAttribute('scope', 'row');
+      expect(rowHeaders[0]).toBe(row.firstElementChild);
+      expect(rowHeaders[0]?.textContent?.trim()).not.toBe('');
+    }
+
+    const identity = new Set(['Plan', 'Price', 'Billing', 'Best for']);
+    const capabilityCount = headerLabels.filter((label) => !identity.has(label ?? '')).length;
+    expect(
+      screen.getByText(`${bodyRows.length} plans across ${capabilityCount} capabilities`),
+    ).toBeVisible();
+    expect(screen.getByText('compareScrollCue')).toBeVisible();
+
+    const models = within(screen.getByRole('table', { name: 'Model access by plan' }));
+    for (const row of models.getAllByRole('row').slice(1)) {
+      expect(within(row).getAllByRole('rowheader')).toHaveLength(1);
+    }
+  }, 30_000);
+
+  it('feeds the one-plan stack from the same rows and columns as the single comparison table', () => {
+    render(<PricingPage />);
+
+    const tables = screen.getAllByRole('table', { name: 'Plan capabilities' });
+    expect(tables).toHaveLength(1);
+    const table = within(tables[0] as HTMLElement);
+    const valueHeaders = table
+      .getAllByRole('columnheader')
+      .slice(1)
+      .map((header) => header.textContent);
+    const bodyRows = table.getAllByRole('row').slice(1);
+
+    const select = screen.getByRole('combobox', { name: 'compareStackPlanLabel' });
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(bodyRows.map((row) => within(row).getByRole('rowheader').textContent));
+
+    for (const row of bodyRows) {
+      const plan = within(row).getByRole('rowheader').textContent ?? '';
+      const option = within(select)
+        .getAllByRole('option')
+        .find((o) => o.textContent === plan) as HTMLOptionElement;
+      fireEvent.change(select, { target: { value: option.value } });
+
+      const list = select.closest('.agi-compare-stack')?.querySelector('dl') as HTMLElement;
+      expect(list).toHaveAttribute('aria-label', plan);
+      expect([...list.querySelectorAll('dt')].map((term) => term.textContent)).toEqual(
+        valueHeaders,
+      );
+      expect([...list.querySelectorAll('dd')].map((value) => value.textContent)).toEqual(
+        within(row)
+          .getAllByRole('cell')
+          .map((cell) => cell.textContent),
+      );
+    }
+  }, 30_000);
+
+  it('reveals the full table from the narrow view through a labelled disclosure button', () => {
+    render(<PricingPage />);
+
+    const views = screen
+      .getByRole('combobox', { name: 'compareStackPlanLabel' })
+      .closest('.agi-compare-views') as HTMLElement;
+    const details = screen
+      .getByRole('region', { name: 'Scrollable plan comparison' })
+      .closest('details') as HTMLElement;
+    expect(views).not.toHaveClass('agi-compare-views--table');
+    expect(details).toHaveAttribute('id', 'pricing-compare-table');
+
+    const toggle = screen.getByRole('button', { name: 'compareShowFullTable' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', 'pricing-compare-table');
+
+    fireEvent.click(toggle);
+    expect(views).toHaveClass('agi-compare-views--table');
+    expect(screen.getByRole('button', { name: 'compareHideFullTable' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'compareHideFullTable' }));
+    expect(views).not.toHaveClass('agi-compare-views--table');
+    expect(screen.getByRole('button', { name: 'compareShowFullTable' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('returns focus to the visible table toggle and reopens after the native disclosure closes', () => {
+    render(<PricingPage />);
+
+    const details = screen
+      .getByRole('region', { name: 'Scrollable plan comparison' })
+      .closest('details') as HTMLDetailsElement;
+    const select = screen.getByRole('combobox', { name: 'compareStackPlanLabel' });
+    const views = select.closest('.agi-compare-views') as HTMLElement;
+    const toggle = screen.getByRole('button', { name: 'compareShowFullTable' });
+    const toggleRect = new DOMRect(0, 0, 120, 44);
+    vi.spyOn(toggle, 'getClientRects').mockReturnValue(
+      Object.assign([toggleRect], { item: (index: number) => (index === 0 ? toggleRect : null) }),
+    );
+    expect(toggle.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    fireEvent.click(toggle);
+    expect(details).toHaveAttribute('open');
+
+    details.querySelector('summary')?.focus();
+    details.open = false;
+    fireEvent(details, new Event('toggle'));
+    expect(toggle).toHaveFocus();
+    expect(views).not.toHaveClass('agi-compare-views--table');
+    expect(screen.getByRole('button', { name: 'compareShowFullTable' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'compareShowFullTable' }));
+    expect(details).toHaveAttribute('open');
+    expect(views).toHaveClass('agi-compare-views--table');
+  });
+
+  it('leaves focus on the native disclosure when the narrow-view toggle is hidden', () => {
+    render(<PricingPage />);
+
+    const details = screen
+      .getByRole('region', { name: 'Scrollable plan comparison' })
+      .closest('details') as HTMLDetailsElement;
+    const summary = details.querySelector('summary')!;
+    const toggle = screen.getByRole('button', { name: 'compareShowFullTable' });
+    vi.spyOn(toggle, 'getClientRects').mockReturnValue(Object.assign([], { item: () => null }));
+
+    summary.focus();
+    details.open = false;
+    fireEvent(details, new Event('toggle'));
+
+    expect(summary).toHaveFocus();
+  });
+
   it('states each plan card’s usage relative to the plan below it, never as credit counts', async () => {
     render(<PricingPage />);
 
     const cardOf = (name: string) =>
       within(screen.getByRole('heading', { name }).closest('article')!);
-    expect(cardOf('Basic').getByText('5x more usage per session than Free')).toBeVisible();
+    expect(cardOf('Basic').queryByText('5x more usage per session than Free')).toBeNull();
+    expect(
+      within(screen.getByRole('row', { name: /^Basic / })).getByText(
+        '5x more usage per session than Free',
+      ),
+    ).toBeInTheDocument();
     expect(cardOf('Pro').getByText('5x more usage than Basic')).toBeVisible();
     expect(screen.getAllByText('5x more usage than Pro').length).toBeGreaterThan(0);
     await showMax20x();
@@ -958,6 +1200,6 @@ describe('PricingPage', () => {
   it('links to the FAQ for billing and plan questions', () => {
     render(<PricingPage />);
 
-    expect(screen.getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/faq');
+    expect(screen.getByRole('link', { name: 'Read the FAQ' })).toHaveAttribute('href', '/faq');
   });
 });

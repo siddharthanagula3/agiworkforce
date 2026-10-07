@@ -22,7 +22,6 @@ body:has([data-public-reference='web-neutral']) [data-design='agi'] {
   --agi-code-bg: var(--public-surface-elevated);
   --agi-accent: var(--public-accent);
   --agi-accent-text: var(--public-accent);
-  --agi-amber: var(--public-accent);
   --agi-button-bg: var(--public-action-fill);
   --agi-button-ink: var(--public-action-ink);
   --agi-button-bg-hover: var(--public-action-hover);

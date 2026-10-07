@@ -8,30 +8,28 @@ import {
   MarketingFooter,
   Prose,
 } from '@/features/marketing/components/system';
-import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
+import { SURFACE_STATUS } from '@/lib/surface-status';
 
 export const metadata = buildMetadata({
   title: 'BYOK: bring your own keys to the CLI',
-  description: `Bring your own provider API keys to AGI ${BYOK_SURFACES.label}. The CLI has a published release. The VS Code extension is coming soon. Keys remain in the local runtime, traffic goes direct to your provider, and the route stays visible.`,
+  description: `Provider-key setup and storage for AGI ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} Learn how provider credentials differ from AGI account sign-in.`,
   path: '/byok',
 });
 
 const CUSTODY_ROWS = [
   {
     label: 'CLI',
-    value:
-      'One OS-keyring entry per provider, under the service com.agiworkforce.cli.auth. The on-disk index keeps provider names only, since keyrings cannot be enumerated.',
+    value: `${SURFACE_STATUS.cli}. Keys saved with provider-key login use the OS credential store except on Linux or when AGIWORKFORCE_NO_KEYRING disables the keyring. In those cases, these saved keys use files in the CLI configuration directory.`,
   },
   {
     label: 'VS Code',
-    value:
-      'Coming soon. The extension hands the key to the editor’s own SecretStorage and reads it back from there, and no VSIX has been published yet.',
+    value: `${SURFACE_STATUS.vscode}. Provider-key management requires a connected local CLI runtime and delegates key storage to that runtime. The CLI storage rules apply.`,
   },
   {
-    label: 'Self-hosted',
+    label: 'AGI account key',
     value:
-      'An operator sets one environment variable per provider on their own deployment. The settings screen reports whether a variable is present and never the value behind it.',
+      'VS Code stores its separate AGI Workforce account API key in SecretStorage. This is distinct from provider-key management.',
   },
 ] as const;
 
@@ -44,18 +42,11 @@ export default function ByokPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <Eyebrow>Bring your own keys</Eyebrow>
-              <h1 className="agi-ds-h1" id="agi-byok-hero-title">
-                AGI Cloud never sees <em className="agi-ds-accent">your API key.</em>
+              <h1 className="sr-only" id="agi-byok-hero-title">
+                Bring your own provider keys.
               </h1>
-              <Prose size="lg">
-                Bring your own API keys to AGI {BYOK_SURFACES.label}. Each runtime keeps the key on
-                the machine you typed it into, encrypted at rest or in that platform&rsquo;s own
-                credential store, then calls the provider&rsquo;s endpoint directly, so the usage
-                lands on your provider account. The CLI has a published release. The VS Code
-                extension is coming soon.
-              </Prose>
               <ButtonRow>
-                <Button href="/docs/byok-env">Set up a provider key</Button>
+                <Button href="/help/byok-provider-keys">Set up a provider key</Button>
                 <Button href="/download" variant="secondary">
                   Check surface availability
                 </Button>
@@ -67,15 +58,15 @@ export default function ByokPage() {
                   <span>BYOK &middot; key custody</span>
                 </div>
                 <div className="agi-lp-console-body">
-                  <Ledger caption="Where a key lives, by surface" rows={CUSTODY_ROWS.slice(0, 3)} />
+                  <Ledger caption="Provider and account key storage" rows={CUSTODY_ROWS} />
                 </div>
                 <p className="agi-lp-receipt">
                   <span className="agi-lp-receipt-mark" aria-hidden="true">
                     &#9671;
                   </span>
-                  <span className="agi-lp-receipt-part">your key</span>
-                  <span className="agi-lp-receipt-part">direct to provider</span>
-                  <span className="agi-lp-receipt-part">never held by AGI</span>
+                  <span className="agi-lp-receipt-part">provider key</span>
+                  <span className="agi-lp-receipt-part">CLI runtime</span>
+                  <span className="agi-lp-receipt-part">separate account sign-in</span>
                 </p>
               </div>
             </div>
@@ -87,14 +78,17 @@ export default function ByokPage() {
             <h2 className="agi-ds-h2" id="agi-byok-scope-title">
               What BYOK covers.
             </h2>
+            <Prose>
+              Bring your own API keys to AGI {BYOK_SURFACES.label}. {BYOK_SURFACES.availability}
+            </Prose>
             <div style={{ marginTop: '2rem' }}>
               <Ledger
                 caption="BYOK scope"
                 rows={[
                   { label: 'Surfaces', value: BYOK_SURFACES.compact },
-                  { label: 'Released', value: 'The CLI. VS Code is coming soon.' },
-                  { label: 'Providers', value: `${BYOK_PROVIDERS.length} provider env vars` },
-                  { label: 'Routing', value: 'Direct to the provider endpoint' },
+                  { label: 'Availability', value: BYOK_SURFACES.availability },
+                  { label: 'Provider-key storage', value: 'CLI runtime' },
+                  { label: 'Account sign-in', value: 'Separate from provider-key login' },
                 ]}
               />
             </div>
@@ -106,13 +100,12 @@ export default function ByokPage() {
             <div className="agi-lp-heading">
               <Eyebrow>Key custody</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-byok-custody-title">
-                The key stays on the machine you typed it into.
+                Provider keys use the CLI runtime.
               </h2>
               <Prose>
-                There is no shared vault behind these surfaces. A key added to the CLI is unknown to
-                VS Code, because each one writes to its own store: the CLI uses the OS keyring, and
-                the extension uses the editor&rsquo;s SecretStorage. Desktop runs on your AGI
-                account and takes no provider key.
+                VS Code provider-key management uses its connected CLI runtime. Desktop runs on your
+                AGI account and takes no provider key. CLI Managed Cloud requests require an AGI
+                account token rather than a saved provider API key.
               </Prose>
             </div>
             <Ledger caption="Key custody by surface" rows={CUSTODY_ROWS} />
@@ -122,22 +115,33 @@ export default function ByokPage() {
         <section className="agi-lp-section" aria-labelledby="agi-byok-env-title">
           <div className="agi-ds-container">
             <div className="agi-lp-heading">
-              <Eyebrow>The env-var contract</Eyebrow>
+              <Eyebrow>Provider-key setup</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-byok-env-title">
-                A provider key arrives as an environment variable.
+                Add and inspect a provider key.
               </h2>
               <Prose>
-                These are the names a self-hosted deployment reads, and the CLI prompts for the key
-                by the same name while it collects one. Presence is all that is ever reported back
-                to a settings screen; the value stays server-side.
+                With an installed CLI, use a supported provider name when adding a key. A bare{' '}
+                <code>agi login</code> starts AGI managed-cloud sign-in. See the{' '}
+                <a href="/help/byok-provider-keys" className="agi-ds-link">
+                  provider-key guide
+                </a>{' '}
+                for storage rules and custom endpoint configuration.
               </Prose>
             </div>
             <Ledger
-              caption="BYOK provider environment variables"
-              rows={BYOK_PROVIDERS.map((provider) => ({
-                label: provider.label,
-                value: provider.envVar,
-              }))}
+              caption="CLI provider-key commands"
+              rows={[
+                { label: 'agi login --help', value: 'Inspect the login command usage.' },
+                {
+                  label: 'agi login <provider>',
+                  value: 'Paste a supported provider API key when prompted.',
+                },
+                {
+                  label: 'agi auth-status',
+                  value:
+                    'Reports stored credentials; it does not validate the key with the provider.',
+                },
+              ]}
             />
           </div>
         </section>
@@ -147,13 +151,12 @@ export default function ByokPage() {
             <div className="agi-lp-heading">
               <Eyebrow>Surface boundary</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-byok-boundary-title">
-                Key entry exists where the key can stay local.
+                Check the surface before adding a key.
               </h2>
             </div>
             <Prose size="lg">
-              {BYOK_SURFACES.exclusion} Those surfaces have nowhere private to put a key, so they do
-              not ask for one. Carrying an existing thread across local, BYOK, and managed cloud is
-              a separate question, answered on the{' '}
+              {BYOK_SURFACES.exclusion} Carrying an existing thread across local, BYOK, and managed
+              cloud is a separate question, answered on the{' '}
               <a href="/faq" className="agi-ds-link">
                 FAQ
               </a>
@@ -166,13 +169,12 @@ export default function ByokPage() {
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-ds-h2" id="agi-byok-close-title">
-                Route your work{' '}
-                <em className="agi-ds-accent">through the provider you already pay.</em>
+                Choose a provider.
               </h2>
               <Prose size="lg">
-                The catalog lists each provider AGI can address, how many models it carries, its
-                default model, and whether it takes your key directly or is a gateway. You pay the
-                provider at its own rates.
+                Use the provider catalog and the product&rsquo;s model picker when choosing a
+                provider or model. Review your provider&rsquo;s billing and data-use terms before
+                using a key.
               </Prose>
               <ButtonRow>
                 <Button href="/providers" variant="secondary">

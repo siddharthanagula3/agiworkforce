@@ -54,15 +54,10 @@ export default function MemoryFeaturePage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Memory</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">Every fact AGI keeps</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">Every fact AGI keeps</span>{' '}
                 <em className="agi-lp-accent">is a sentence you can read.</em>
               </h1>
-              <p className="agi-lp-lede">
-                Memory is a list of short sentences that lives in Settings. What the assistant
-                remembers about you is written there in plain language, and you can search it,
-                rewrite any line, or clear the whole list.
-              </p>
               <ButtonRow>
                 <Button href="/settings/memory">Open your memory list</Button>
               </ButtonRow>

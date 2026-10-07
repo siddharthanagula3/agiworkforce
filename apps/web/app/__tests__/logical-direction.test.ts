@@ -17,12 +17,7 @@ const PHYSICAL_DIRECTION = [
   /\btextAlign\s*:\s*['"](?:left|right)['"]/g,
 ];
 
-const FROZEN: Readonly<Record<string, { count: number; reason: string }>> = {
-  [path.join('pricing', 'page.tsx')]: {
-    count: 3,
-    reason: 'pricing is read only by founder order; three table header alignments wait for that',
-  },
-};
+const FROZEN: Readonly<Record<string, { count: number; reason: string }>> = {};
 
 function sourceFiles(directory: string, found: string[] = []): string[] {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {

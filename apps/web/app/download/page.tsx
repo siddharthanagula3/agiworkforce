@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import {
@@ -7,15 +8,91 @@ import {
   Ledger,
   MarketingFooter,
   Prose,
+  Section,
+  Stack,
   Transcript,
+  WEB_ENTRY_HREF,
   type TranscriptLine,
 } from '@/features/marketing/components/system';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
+import {
+  NOTIFY_CTA,
+  SURFACE_IDS,
+  SURFACE_NAMES,
+  SURFACE_PLATFORMS,
+  SURFACE_STATUS,
+  joinSurfaceNames,
+  surfaceCta,
+  type SurfaceCta,
+  type SurfaceId,
+} from '@/lib/surface-status';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 import { CliDownloadAvailability } from './CliDownloadAvailability';
 import '@/features/marketing/components/pages/business/code-block.css';
 
-const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
+const NOTIFY_FORM_HREF = '#notify';
+
+const SURFACE_PAGES: Record<SurfaceId, { href: string; name: string; what: string }> = {
+  web: {
+    href: '/web',
+    name: 'AGI Web',
+    what: 'Chat, projects and artifacts in the browser, with nothing to install.',
+  },
+  desktop: {
+    href: '/desktop',
+    name: 'AGI Desktop',
+    what: 'One signed and notarized macOS installer per architecture.',
+  },
+  cli: {
+    href: '/cli',
+    name: 'the agi CLI',
+    what: 'Platform archives beside a checksum file signed with Sigstore.',
+  },
+  mobile: {
+    href: '/mobile',
+    name: 'AGI Mobile',
+    what: `The app for ${joinSurfaceNames(SURFACE_PLATFORMS.mobile)}.`,
+  },
+  vscode: {
+    href: '/vscode-extension',
+    name: 'AGI in VS Code',
+    what: 'The agent inside the editor.',
+  },
+  chrome: {
+    href: '/chrome-extension',
+    name: 'AGI in Chrome',
+    what: 'A side panel in the browser.',
+  },
+};
+
+function surfaceAction(surface: SurfaceId): SurfaceCta {
+  if (surface === 'web') return { label: 'Use AGI Web', href: WEB_ENTRY_HREF };
+  const cta = surfaceCta(surface);
+  return cta.href === NOTIFY_CTA.href ? { label: cta.label, href: NOTIFY_FORM_HREF } : cta;
+}
+
+const SURFACE_AVAILABILITY_ROWS = SURFACE_IDS.map((surface) => {
+  const action = surfaceAction(surface);
+  const page = SURFACE_PAGES[surface];
+  return {
+    label: SURFACE_NAMES[surface],
+    value: (
+      <Stack gap="tight">
+        <span>
+          <strong>{SURFACE_STATUS[surface]}.</strong> {page.what}
+        </span>
+        <span className="agi-ds-availability-links">
+          <Link href={action.href} className="agi-ds-link">
+            {action.label}
+          </Link>
+          <Link href={page.href} className="agi-ds-link">
+            About {page.name}
+          </Link>
+        </span>
+      </Stack>
+    ),
+  };
+});
 const CHECKSUM_FILE = 'SHA256SUMS';
 const CHECKSUM_BUNDLE = `${CHECKSUM_FILE}.sigstore.json`;
 const SAMPLE_ARCHIVE = 'agiworkforce-darwin-arm64.tar.gz';
@@ -78,7 +155,7 @@ const RELEASE_CHECKS: { title: string; body: string }[] = [
 export const metadata = buildMetadata({
   title: 'Download AGI: verified installers and signatures',
   description:
-    'See live Desktop and CLI download availability, the release verification gates, and how to check an available installer or archive yourself.',
+    'See where each of the six surfaces stands, live Desktop and CLI download availability, the release verification gates, and how to check an installer or archive yourself.',
   path: '/download',
 });
 
@@ -91,33 +168,48 @@ export default function DownloadPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <Eyebrow>Installers and signatures</Eyebrow>
-              <h1 className="agi-ds-h1" id="agi-download-hero-title">
+              <h1 className="sr-only" id="agi-download-hero-title">
                 We check the signature <em className="agi-ds-accent">before you download.</em>
               </h1>
-              <Prose size="lg">
-                When a Desktop installer is published, its workflow requires Developer ID signing,
-                notarization, and verification before upload. The CLI workflow signs its checksum
-                file with Sigstore. This page asks the release API on load, so a download control
-                appears only for a confirmed published asset.
-              </Prose>
               <ButtonRow>
-                <Button href="#desktop-downloads">Check the installers</Button>
+                <Button href="#surface-availability">See where each surface stands</Button>
                 <Button href="#release-verification" variant="secondary">
                   How a release is signed
                 </Button>
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <Transcript label="A real installer verification session" lines={HERO_TRANSCRIPT} />
+              <Transcript
+                label="Example output from verifying a CLI archive"
+                lines={HERO_TRANSCRIPT}
+              />
             </div>
           </div>
         </section>
+
+        <Section id="surface-availability" labelledBy="agi-download-surfaces-title" rule>
+          <Stack gap="loose">
+            <Eyebrow>Surface availability</Eyebrow>
+            <h2 className="agi-ds-h2" id="agi-download-surfaces-title">
+              Where each surface stands.
+            </h2>
+            <Prose>
+              Every label here reads the same release registry as the footer. The Desktop and CLI
+              sections below read the stable channel: beta and nightly tags are never linked.
+            </Prose>
+            <Ledger caption="Surface availability" rows={SURFACE_AVAILABILITY_ROWS} />
+          </Stack>
+        </Section>
 
         <DesktopDownloadAvailability />
 
         <CliDownloadAvailability />
 
-        <section className="agi-lp-section" aria-labelledby="agi-download-verify-title">
+        <section
+          id="release-verification"
+          className="agi-lp-section"
+          aria-labelledby="agi-download-verify-title"
+        >
           <div className="agi-ds-container">
             <div className="agi-lp-heading">
               <Eyebrow>Release verification</Eyebrow>
@@ -196,7 +288,7 @@ export default function DownloadPage() {
                 },
                 {
                   label: 'Updates',
-                  value: `The desktop app checks ${UPDATER_ENDPOINT} every day, downloads a signed update in the background and installs it when you choose Restart to update or the next time the app starts`,
+                  value: `The desktop app checks ${UPDATER_ENDPOINT} daily and installs a signed update when you choose Restart to update, or at the next start`,
                 },
                 {
                   label: 'Asset hosts',
@@ -208,7 +300,7 @@ export default function DownloadPage() {
           </div>
         </section>
 
-        <section className="agi-lp-section" aria-labelledby="agi-download-notify-title">
+        <section id="notify" className="agi-lp-section" aria-labelledby="agi-download-notify-title">
           <div className="agi-ds-container">
             <div className="agi-lp-heading">
               <Eyebrow>Platforms without an installer</Eyebrow>
@@ -247,13 +339,11 @@ export default function DownloadPage() {
                 AGI Web opens in a browser <em className="agi-ds-accent">while you wait.</em>
               </h2>
               <Prose size="lg">
-                Web needs no release tag and no signature check. Sign in there now, and the same
-                account signs you into Desktop on the day an installer for your platform is
-                published. Stable channel: nothing is linked here until the release API confirms a
-                verified asset.
+                Sign in there now. The same account signs you into Desktop on the day an installer
+                for your platform is published.
               </Prose>
               <ButtonRow>
-                <Button href={WEB_CHAT_ENTRY_HREF}>Use AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Use AGI Web</Button>
                 <Button href="/desktop" variant="secondary">
                   What AGI Desktop does
                 </Button>

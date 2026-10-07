@@ -31,19 +31,9 @@ export default function DesktopPage() {
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI Desktop</p>
-              <h1 id="agi-fl-desktop-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Your account,</span>{' '}
-                <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">on your Mac.</em>
-                </span>
+              <h1 id="agi-fl-desktop-hero-title" className="sr-only">
+                AGI Desktop
               </h1>
-              <p className="agi-fl-lede">
-                The AGI app for macOS. Sign in once and the desktop app carries the web app in a
-                window that stays open, then adds what a browser cannot reach: the folders you
-                approve, the screen and the pointer when you allow a step, and a menu bar shortcut
-                that is one keystroke away. Chat uses your AGI managed-cloud account; this public
-                Desktop does not accept provider keys or local-model connections.
-              </p>
               <div className="agi-fl-cta-row">
                 <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
                   Check installer availability
@@ -57,11 +47,6 @@ export default function DesktopPage() {
                   className="agi-fl-cta agi-fl-cta--ghost"
                 />
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
-                <li>Cloud · your AGI account</li>
-                <li>Device access · explicit grants</li>
-                <li>Consent · each kind of access asks first</li>
-              </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
               <ProductFrame variant="desktop" title="AGI Workforce" badge="Cloud" />

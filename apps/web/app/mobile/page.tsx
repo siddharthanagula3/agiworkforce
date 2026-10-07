@@ -105,17 +105,9 @@ export default function MobilePage() {
               <p className="agi-fl-eyebrow">
                 AGI Mobile · iPhone &amp; Android · {SURFACE_STATUS.mobile}
               </p>
-              <h1 id="agi-mobile-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Private AI,</span>{' '}
-                <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">in your pocket.</em>
-                </span>
+              <h1 id="agi-mobile-hero-title" className="sr-only">
+                AGI Mobile
               </h1>
-              <p className="agi-fl-lede">
-                AGI Mobile is not published. The planned app starts each chat in Local Mode, keeps
-                chats, memory, and files on-device, and makes managed-cloud continuation an explicit
-                choice.
-              </p>
               <div className="agi-fl-cta-row">
                 <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
                   Get notified
@@ -126,10 +118,6 @@ export default function MobilePage() {
                   className="agi-fl-cta agi-fl-cta--secondary"
                 />
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Mobile trust modes">
-                <li>Local · on-device</li>
-                <li>Cloud · public alpha</li>
-              </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
               <ProductFrame variant="phone" title="AGI Mobile" badge="Local" />

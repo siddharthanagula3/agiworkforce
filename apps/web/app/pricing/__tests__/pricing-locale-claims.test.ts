@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { SUPPORTED_LANGUAGES } from '@agiworkforce/i18n';
+import { SURFACE_NAMES } from '@/lib/surface-status';
 
 import {
   BILLING_PLAN_PRICING,
@@ -103,6 +105,28 @@ describe('pricing locale bundles, plan feature claims', () => {
       expect(copy, `${locale}/pricing.json proFeature2 omits ${maxConnectorTools}`).toMatch(
         new RegExp(`\\b${maxConnectorTools}\\b`, 'u'),
       );
+    }
+  });
+
+  it('keeps the Pro scheduled-task label free of release promises and literal quotas in every locale', () => {
+    const bundles = pricingBundles();
+    expect(bundles.map(([locale]) => locale).sort()).toEqual(
+      SUPPORTED_LANGUAGES.map((language) => language.code).sort(),
+    );
+    expect(BILLING_PLAN_PRODUCT_LIMITS.pro.maxScheduledTasks).not.toBe(0);
+    expect(bundles.find(([locale]) => locale === 'en')?.[1]['proFeature6']).toBe('Scheduled tasks');
+
+    for (const [locale, bundle] of bundles) {
+      const copy = bundle['proFeature6'] ?? '';
+      expect(copy.trim(), `${locale}/pricing.json proFeature6 is empty`).not.toBe('');
+      expect(copy, `${locale}/pricing.json proFeature6 repeats a quota`).not.toMatch(/\p{N}|\{\{/u);
+      const compact = copy.replace(/\s/gu, '').toLowerCase();
+      for (const surface of [SURFACE_NAMES.cli, SURFACE_NAMES.vscode]) {
+        expect(
+          compact,
+          `${locale}/pricing.json proFeature6 promises an unreleased developer surface`,
+        ).not.toContain(surface.replace(/\s/gu, '').toLowerCase());
+      }
     }
   });
 });

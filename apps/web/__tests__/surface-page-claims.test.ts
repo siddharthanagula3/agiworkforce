@@ -233,16 +233,25 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       expect(pattern.test(help), `help still advertises ${label}`).toBe(false);
     }
 
-    expect(help).toMatch(/released CLI supports Ollama and\s+LM Studio/iu);
+    expect(help).toMatch(
+      /CLI implementation supports local inference through\s+Ollama and LM Studio/iu,
+    );
+    expect(help).not.toMatch(/released CLI/iu);
     expect(help).toMatch(/current Desktop\s+application is managed-cloud-only/iu);
   });
 
   it('keeps public pricing copy on the two CLI local runtimes', () => {
     const pricing = repoText('packages', 'ui', 'i18n', 'locales', 'en', 'pricing.json');
-    expect(pricing).toMatch(/Ollama or LM Studio model from the released CLI/u);
+    expect(pricing).toMatch(/Local mode supports Ollama or LM Studio models/u);
+    expect(pricing).toMatch(/\{\{surface\}\}: \{\{status\}\}/u);
+    expect(pricing).not.toMatch(/released CLI|CLI today/u);
     expect(pricing).toMatch(/Local session files on disk/u);
     expect(pricing).toMatch(/Desktop runs managed cloud/u);
     expect(pricing).not.toMatch(/SQLite|llama\.cpp|vLLM|Desktop, CLI & VS Code/u);
+    const page = rendered('app/pricing/page.tsx');
+    expect(page).toMatch(/pricingDeveloperSurfaceCell\(row\.planId, value, t\)/u);
+    expect(page).toMatch(/cellValue=\{presentedComparisonCellValue\}/u);
+    expect(page).toMatch(/\{presentedComparisonCellValue\(col, row\)\}/u);
   });
 
   it('keeps every translated pricing file free of the retired SQLite claim', () => {
@@ -376,10 +385,23 @@ describe('/get-started, a bare agi login is the managed-cloud sign-in, not a BYO
   });
 
   it('names the provider argument and the store the key lands in', () => {
+    const auth = repoText('apps', 'cli', 'src', 'auth.rs');
+    const secureStore = repoText('apps', 'cli', 'src', 'secure_store.rs');
+    expect(secureStore).toMatch(/std::env::var\("AGIWORKFORCE_NO_KEYRING"\)/u);
+    expect(secureStore).toMatch(/!cfg!\(target_os = "linux"\) && !keyring_disabled\(\)/u);
+    expect(auth).toMatch(
+      /if !crate::secure_store::uses_keychain\(\) \{[\s\S]{0,350}write_owner_only_file\(&path, &data\)/u,
+    );
+    expect(auth).toContain('save_keyring_auth(&OsKeyring::for_config_root()?, &path, self)');
     const page = collapsed('app/get-started/page.tsx');
     expect(page).toMatch(/agi login &lt;provider&gt;/u);
-    expect(page).toMatch(/saved to the OS credential store/iu);
-    expect(page).toMatch(/bare <code>agi login<\/code> signs into AGI managed cloud/iu);
+    expect(page).toContain(
+      'saved to the OS credential store except on Linux or when AGIWORKFORCE_NO_KEYRING disables the keyring',
+    );
+    expect(page).toContain('files in the CLI configuration directory');
+    expect(page).toMatch(
+      /bare(?:\{' '\})?\s+<code>agi login<\/code> signs into AGI managed cloud/iu,
+    );
     expect(page).toMatch(/agi login anthropic/u);
   });
 
@@ -428,14 +450,64 @@ describe('/get-started, desktop availability matches the release pipeline', () =
 });
 
 describe('/get-started, local and BYOK surfaces are stated with their release state', () => {
-  it('keeps Desktop out of Local and BYOK and VS Code out of the list running today', () => {
+  it('ties Local and BYOK to the CLI through the registry and keeps Desktop out of them', () => {
     const page = collapsed('app/get-started/page.tsx');
     expect(
       /Local and BYOK run on Desktop/u.test(page),
       'page claims BYOK runs on Desktop, which runs on the AGI account and takes no key',
     ).toBe(false);
-    expect(page).toMatch(/Local and BYOK run on the CLI today/u);
+    expect(
+      /Local and BYOK run on the CLI today/u.test(page),
+      'page calls the CLI a path that runs today while the registry says it is unreleased',
+    ).toBe(false);
+    expect(page).toMatch(
+      /Local and BYOK run on the CLI, which is \$\{SURFACE_STATUS\.cli\.toLowerCase\(\)\}/u,
+    );
     expect(page).toMatch(/VS Code BYOK is \$\{SURFACE_STATUS\.vscode\.toLowerCase\(\)\}/u);
+  });
+});
+
+describe('/get-started leads with the surface a visitor can use now', () => {
+  const page = rendered('app/get-started/page.tsx');
+  const nav = rendered('features/marketing/components/system/nav.ts');
+
+  it('offers Try AGI Web as the first hero action, on the shared web entry', () => {
+    expect(nav).toMatch(/WEB_ENTRY_HREF = '\/login\?redirectTo=%2F'/u);
+    expect(page).toMatch(/ctas=\{\[\s*\{ href: WEB_ENTRY_HREF, label: 'Try AGI Web' \}/u);
+  });
+
+  it('puts the Web action before any CLI link and before the CLI transcript', () => {
+    const webAction = page.indexOf("label: 'Try AGI Web'");
+    const cliLinks = [...page.matchAll(/href[=:]\s*["']\/cli["']/gu)].map((m) => m.index ?? -1);
+    const transcript = page.indexOf('lines={CLI_PREVIEW_TRANSCRIPT}');
+
+    expect(webAction).toBeGreaterThan(-1);
+    expect(cliLinks.length).toBeGreaterThan(0);
+    expect(transcript).toBeGreaterThan(-1);
+    for (const index of cliLinks) expect(index).toBeGreaterThan(webAction);
+    expect(transcript).toBeGreaterThan(webAction);
+  });
+
+  it('says the signed CLI release is not published before showing its commands', () => {
+    const prerequisite = collapsed('app/get-started/page.tsx').indexOf(
+      'no signed release has been published yet, so there is nothing to install',
+    );
+    const transcript = collapsed('app/get-started/page.tsx').indexOf(
+      'lines={CLI_PREVIEW_TRANSCRIPT}',
+    );
+    expect(prerequisite).toBeGreaterThan(-1);
+    expect(transcript).toBeGreaterThan(prerequisite);
+  });
+
+  it('gives Mobile, Chrome and VS Code their own registry-read rows', () => {
+    expect(page).toMatch(/\{ id: 'mobile', detail:/u);
+    expect(page).toMatch(/\{ id: 'chrome', detail:/u);
+    expect(page).toMatch(/\{ id: 'vscode', detail:/u);
+    expect(page).toMatch(/\{SURFACE_STATUS\[surface\.id\]\}/u);
+    expect(
+      /name="Mobile, Chrome, and VS Code"/u.test(page),
+      'page still folds three surfaces into one row',
+    ).toBe(false);
   });
 });
 
@@ -538,6 +610,13 @@ function repoText(...segments: string[]): string {
   return readFileSync(join(REPO_ROOT, ...segments), 'utf8');
 }
 
+function canonicalSupportUrl(path: string): string {
+  const site = fileText('lib/seo/site.ts');
+  const origin = /NEXT_PUBLIC_APP_URL'\]\s*\?\?\s*'([^']+)'/u.exec(site)?.[1];
+  if (!origin) throw new Error('Missing canonical public origin');
+  return new URL(path, origin).href;
+}
+
 describe('/byok, VS Code is named with the release state it actually has', () => {
   it('reads VS Code as coming soon out of the shared surface table', () => {
     const constants = fileText('lib/surface-status.ts');
@@ -545,13 +624,22 @@ describe('/byok, VS Code is named with the release state it actually has', () =>
     expect(constants).toMatch(/COMING_SOON_LABEL = 'Coming soon'/u);
   });
 
-  it('states the released surfaces the way /help already does', () => {
+  it('takes each release state from the shared surface table on /byok and /help', () => {
     const page = collapsed('app/byok/page.tsx');
-    expect(page).toMatch(/The CLI has a published release\. The VS Code extension is coming soon/u);
-    expect(page).toMatch(/Released', value: 'The CLI\. VS Code is coming soon\./u);
-    expect(page).toMatch(/Coming soon\. The extension hands the key/u);
-    expect(collapsed('app/help/page.tsx')).toMatch(
-      /The CLI has a published release; the VS Code extension is/u,
+    const help = collapsed('app/help/page.tsx');
+    for (const [route, text] of [
+      ['/byok', page],
+      ['/help', help],
+    ] as const) {
+      expect(
+        /The CLI has a published release/u.test(text),
+        `${route} states a CLI release in its own words, and the surface table says it is unreleased`,
+      ).toBe(false);
+    }
+    expect(page).toMatch(/value: `\$\{SURFACE_STATUS\.cli\}\./u);
+    expect(page).toMatch(/value: `\$\{SURFACE_STATUS\.vscode\}\./u);
+    expect(help).toMatch(
+      /provider keys on \$\{BYOK_SURFACES\.label\}\. \$\{BYOK_SURFACES\.availability\}/u,
     );
   });
 
@@ -565,19 +653,77 @@ describe('/byok, VS Code is named with the release state it actually has', () =>
 });
 
 describe('/byok, custody names the store each runtime really writes to', () => {
-  it('reads two different stores out of the two runtimes that take a key', () => {
-    expect(repoText('apps', 'cli', 'src', 'auth.rs')).toMatch(
-      /const AUTH_KEYRING_SERVICE: &str = "com\.agiworkforce\.cli\.auth";/u,
+  it('states the implemented CLI storage exceptions rather than a universal keyring promise', () => {
+    const auth = repoText('apps', 'cli', 'src', 'auth.rs');
+    const secureStore = repoText('apps', 'cli', 'src', 'secure_store.rs');
+    expect(auth).toMatch(/const AUTH_KEYRING_SERVICE: &str = "com\.agiworkforce\.cli\.auth";/u);
+    expect(secureStore).toMatch(/std::env::var\("AGIWORKFORCE_NO_KEYRING"\)/u);
+    expect(secureStore).toMatch(/!cfg!\(target_os = "linux"\) && !keyring_disabled\(\)/u);
+    expect(auth).toMatch(
+      /if !crate::secure_store::uses_keychain\(\) \{[\s\S]{0,350}write_owner_only_file\(&path, &data\)/u,
     );
-    expect(repoText('apps', 'extension-vscode', 'src', 'utils', 'api.ts')).toMatch(
-      /secrets\.store\(SECRET_KEY, apiKey\)/u,
+    expect(auth).toContain('save_keyring_auth(&OsKeyring::for_config_root()?, &path, self)');
+    const page = collapsed('app/byok/page.tsx');
+    expect(page).toContain('except on Linux or when AGIWORKFORCE_NO_KEYRING disables the keyring');
+    expect(page).toContain('files in the CLI configuration directory');
+    expect(page).not.toMatch(
+      /One OS-keyring entry per provider|on-disk index keeps provider names only/u,
     );
   });
 
-  it('says Desktop takes no key, since the Electron shell has no private store for one', () => {
+  it('follows VS Code provider entry through the connected CLI runtime to the same auth store', () => {
+    const capability = repoText(
+      'apps',
+      'extension-vscode',
+      'src',
+      'features',
+      'surfaces',
+      'capabilityManagement.ts',
+    );
+    const runtime = repoText(
+      'apps',
+      'extension-vscode',
+      'src',
+      'integrations',
+      'localRuntimeClient.ts',
+    );
+    const host = repoText('apps', 'cli', 'src', 'app_server', 'developer_host.rs');
+    expect(capability).toMatch(/async function setProviderKey\([\s\S]{0,850}'providerKeysSet'/u);
+    expect(runtime).toMatch(
+      /async setProviderKey\([\s\S]{0,350}connection.request\('providers\/setKey', \{ provider, apiKey \}\)/u,
+    );
+    expect(host).toMatch(
+      /async fn set_provider_key\([\s\S]{0,450}crate::auth::save_api_key\(&params.provider, &params.api_key\)/u,
+    );
+    const page = collapsed('app/byok/page.tsx');
+    expect(page).toContain(
+      'Provider-key management requires a connected local CLI runtime and delegates key storage to that runtime',
+    );
+    expect(page).not.toMatch(
+      /key added to the CLI is unknown to VS Code|extension hands the key to the editor/u,
+    );
+  });
+
+  it('distinguishes the AGI account SecretStorage entry from provider-key management', () => {
+    expect(repoText('apps', 'extension-vscode', 'src', 'utils', 'api.ts')).toMatch(
+      /secrets\.store\(SECRET_KEY, apiKey\)/u,
+    );
+    expect(repoText('apps', 'extension-vscode', 'src', 'utils', 'api.ts')).toContain(
+      "const SECRET_KEY = 'agiWorkforce.apiKey';",
+    );
+    expect(repoText('apps', 'extension-vscode', 'src', 'core', 'commandSetup.ts')).toContain(
+      'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage',
+    );
+    expect(collapsed('app/byok/page.tsx')).toContain(
+      'VS Code stores its separate AGI Workforce account API key in SecretStorage',
+    );
+  });
+
+  it('keeps Desktop on its AGI account without inventing a storage rationale', () => {
     const page = collapsed('app/byok/page.tsx');
     expect(page).toMatch(/Desktop runs on your AGI account and takes no provider key/u);
-    expect(page).toMatch(/the CLI uses the OS keyring/u);
+    expect(page).toContain('{BYOK_SURFACES.exclusion}');
+    expect(page).not.toMatch(/nowhere private to put a key/u);
     expect(
       /Desktop encrypts the key into its local settings database/u.test(page),
       'page still describes the Tauri key vault',
@@ -593,6 +739,63 @@ describe('/byok, custody names the store each runtime really writes to', () => {
       expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
     }
   });
+
+  it('does not claim unverified self-hosted Settings custody or universal transport secrecy', () => {
+    const page = collapsed('app/byok/page.tsx');
+    expect(page).not.toMatch(
+      /label: 'Self-hosted'|value stays server-side|Presence is all that is ever reported/u,
+    );
+    expect(page).not.toMatch(
+      /AGI Cloud never sees|never held by AGI|traffic goes direct to your provider/u,
+    );
+    expect(page).toMatch(/<h1[^>]*>\s*Bring your own provider keys\./u);
+  });
+
+  it('uses the verified key guide and CLI commands instead of a private provider-env inventory', () => {
+    const commands = repoText('apps', 'cli', 'src', 'lib.rs');
+    const auth = repoText('apps', 'cli', 'src', 'auth.rs');
+    expect(commands).toMatch(/Login \{[\s\S]{0,350}provider: Option<String>/u);
+    expect(commands).toMatch(/Command::AuthStatus => \{[\s\S]{0,150}auth::auth_status\(\)/u);
+    expect(auth).toMatch(
+      /is_api_key_provider\(pid\) \{\s*interactive_api_key_login_for_provider\(pid\)/u,
+    );
+    expect(auth).toMatch(
+      /dialoguer::Password::new\(\)[\s\S]{0,500}save_auth_entry\(provider.id, AuthEntry::ApiKey \{ key \}\)/u,
+    );
+    const start = auth.indexOf('pub fn auth_status()');
+    const end = auth.indexOf('/// Core status logic', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(auth.slice(start, end)).toContain('let store = AuthStore::load()?;');
+    expect(auth.slice(start, end)).toContain('let results = auth_status_from_store(');
+    const page = collapsed('app/byok/page.tsx');
+    expect(page).toContain('href="/help/byok-provider-keys"');
+    expect(page).toContain("label: 'agi login <provider>'");
+    expect(page).toContain("label: 'agi auth-status'");
+    expect(page).toContain(
+      'Reports stored credentials; it does not validate the key with the provider',
+    );
+    expect(page).not.toMatch(/BYOK_PROVIDERS|provider env vars|href="\/docs\/byok-env"/u);
+  });
+
+  it('keeps Managed Cloud account authentication separate without a blanket billing promise', () => {
+    const dispatch = repoText('apps', 'cli', 'src', 'models', 'provider_dispatch.rs');
+    const resolver = dispatch.indexOf('fn resolve_key');
+    const start = dispatch.indexOf('Provider::ManagedCloud => {', resolver);
+    const end = dispatch.indexOf('Provider::Ollama(OllamaMode::Local) =>', start);
+    expect(resolver).toBeGreaterThan(-1);
+    expect(start).toBeGreaterThan(resolver);
+    expect(end).toBeGreaterThan(start);
+    const managed = dispatch.slice(start, end);
+    expect(managed).toContain('let token = crate::tier_cache::load_jwt();');
+    expect(managed).toContain('Ok(token)');
+    expect(managed).not.toMatch(/resolve_config_env_auth_key|auth_store_api_key/u);
+    const page = collapsed('app/byok/page.tsx');
+    expect(page).toContain(
+      'CLI Managed Cloud requests require an AGI account token rather than a saved provider API key',
+    );
+    expect(page).not.toMatch(/You pay the provider at its own rates/u);
+  });
 });
 
 describe('/web, the browser surface has one route and it is managed cloud', () => {
@@ -604,9 +807,14 @@ describe('/web, the browser surface has one route and it is managed cloud', () =
     );
   });
 
-  it('counts one route in the numbers band', () => {
+  it('never counts more than one route, with or without a numbers band', () => {
     const page = collapsed('app/web/page.tsx');
-    expect(page).toMatch(/value: '1', label: 'route: AGI managed cloud'/u);
+    const routeCounts = [...page.matchAll(/value: '([^']+)', label: 'routes?\b[^']*'/gu)].map(
+      (match) => match[1],
+    );
+    for (const count of routeCounts) expect(count).toBe('1');
+    expect(page).not.toMatch(/\b(?:two|three|four|[2-9]|\d{2,}) routes\b/iu);
+    expect(page).toMatch(/AGI Web uses managed cloud/u);
   });
 
   it('never offers Local or BYOK as a route of the browser surface', () => {
@@ -859,5 +1067,16 @@ describe('/contact-sales, retention enforcement is named as the opt-in it is', (
       ),
       'page still ships retention enforcement as unconditional',
     ).toBe(false);
+  });
+});
+
+describe('current CLI help articles distinguish implementation from release availability', () => {
+  const availabilityUrl = canonicalSupportUrl('/get-started');
+
+  it('derives the documentation destination from the real canonical public route', () => {
+    expect(new URL(availabilityUrl).protocol).toBe('https:');
+    expect(fileText('app/get-started/page.tsx')).toContain("path: '/get-started'");
+    expect(fileText('app/get-started/page.tsx')).toContain('SURFACE_STATUS.cli');
+    expect(fileText('lib/marketing-constants.ts')).toMatch(/surface-status/u);
   });
 });

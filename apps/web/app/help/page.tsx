@@ -73,7 +73,7 @@ export default async function HelpPage({
               Browse every collection.
             </h2>
             <Prose>
-              {`${articleCount} articles across ${collections.length} collections, grouped the way the product is. Where a surface differs, the collection says so: bring your own provider keys on ${BYOK_SURFACES.label}. The CLI has a published release; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion}`}
+              {`${articleCount} articles across ${collections.length} collections, grouped the way the product is. Where a surface differs, the collection says so: bring your own provider keys on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} ${BYOK_SURFACES.exclusion}`}
             </Prose>
             {collections.length > 0 ? (
               <Ledger

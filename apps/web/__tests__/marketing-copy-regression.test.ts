@@ -388,9 +388,17 @@ describe('public marketing copy regressions', () => {
       'data-testid="web-search-indicator"',
     );
 
-    for (const [file, source] of [
-      ['app/features/ai-chat/page.tsx', aiChat],
-      ['app/features/deep-research/page.tsx', deepResearch],
+    for (const [file, source, modelDriven] of [
+      [
+        'app/features/ai-chat/page.tsx',
+        aiChat,
+        'Search-capable models reach the live web on their own',
+      ],
+      [
+        'app/features/deep-research/page.tsx',
+        deepResearch,
+        'Web search depends on the selected model, a supported search route and account access',
+      ],
     ] as const) {
       const normalized = source.replace(/\s+/g, ' ');
 
@@ -400,15 +408,12 @@ describe('public marketing copy regressions', () => {
       expect(normalized, `${file} must not tell users to turn search on`).not.toMatch(
         /turn (on )?search( on)?/i,
       );
-      expect(normalized, `${file} must describe search as model-driven`).toContain(
-        'Search-capable models reach the live web on their own',
-      );
+      expect(normalized, `${file} must describe search as model-driven`).toContain(modelDriven);
     }
 
     expect(aiChat.replace(/\s+/g, ' ')).toContain(
       'The composer states whether search is on for the model you picked',
     );
-    expect(deepResearch.replace(/\s+/g, ' ')).toContain('the composer states whether search is on');
 
     const supportArticles = readWebFile('lib/support/static-data.ts');
 

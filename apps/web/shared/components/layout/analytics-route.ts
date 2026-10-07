@@ -6,6 +6,7 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/code/[sessionId]',
   '/code/shared/[token]',
   '/connect/[deviceType]',
+  '/connectors/mcp-directory/[...id]',
   '/gallery/[templateId]',
   '/help/[slug]',
   '/legal/archive/[policy]',
@@ -66,6 +67,8 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
 export const UNMATCHED_SEGMENTS = '[unmatched]';
 
 const isParam = (segment: string) => /^\[[^\]]+\]$/.test(segment);
+const isCatchAll = (segment: string | undefined) =>
+  segment !== undefined && /^\[\.\.\.[^\]]+\]$/.test(segment);
 
 const TEMPLATES = DYNAMIC_PAGE_ROUTES.map((route) => route.split('/').slice(1)).sort(
   (a, b) => b.length - a.length,
@@ -90,7 +93,10 @@ function matchesPrefix(template: readonly string[], segments: readonly string[])
 export function canonicalRoutePath(pathname: string): string {
   const segments = segmentsOf(pathname);
   const exact = TEMPLATES.find(
-    (template) => template.length === segments.length && matchesPrefix(template, segments),
+    (template) =>
+      (template.length === segments.length ||
+        (isCatchAll(template.at(-1)) && template.length < segments.length)) &&
+      matchesPrefix(template, segments),
   );
   if (exact) return `/${exact.join('/')}`;
   const prefix = TEMPLATES.find(

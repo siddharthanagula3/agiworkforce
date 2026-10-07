@@ -66,16 +66,11 @@ export default function AiChatFeaturePage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; AI chat</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">One composer.</span>
-                <span className="agi-lp-line">Every model.</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">One composer.</span>{' '}
+                <span className="agi-lp-line">Every model.</span>{' '}
                 <em className="agi-lp-accent">The reply shows its work.</em>
               </h1>
-              <p className="agi-lp-lede">
-                Attach files, dictate, or type a slash command, then send it to the model you picked
-                for this thread. The reply carries its tool calls, its reasoning, and its sources,
-                and anything substantial opens as an artifact beside it.
-              </p>
               <ButtonRow>
                 <Button href="/login?redirectTo=%2F">Open AGI Web</Button>
                 <Button href="/desktop" variant="secondary">

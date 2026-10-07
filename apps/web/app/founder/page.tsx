@@ -14,6 +14,7 @@ import {
   PRODUCT_NAME,
   contactMailto,
 } from '../../lib/legal-constants';
+import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: `${FOUNDER_NAME}, ${FOUNDER_ROLE}`,
@@ -32,7 +33,7 @@ const FACTS: { label: string; value: string }[] = [
 
 export default function FounderPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

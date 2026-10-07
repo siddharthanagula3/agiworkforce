@@ -52,13 +52,12 @@ export default async function PluginsPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <Eyebrow>Plugins</Eyebrow>
-              <h1 className="agi-ds-h1" id="agi-plugins-title">
+              <h1 className="sr-only" id="agi-plugins-title">
                 Workflow packs, <em className="agi-ds-accent">not loose parts.</em>
               </h1>
-              <Prose size="lg">
-                Plugins bundle skills and connectors into a single install. The catalogue below is
-                the live hosted registry. <strong>{pluginAvailabilityClaim(catalog)}</strong>
-              </Prose>
+              <p className="agi-ds-prose" data-size="sm" role="status">
+                {pluginAvailabilityClaim(catalog)}
+              </p>
               <ButtonRow>
                 <Button href="/features/plugins">What a plugin bundles</Button>
               </ButtonRow>

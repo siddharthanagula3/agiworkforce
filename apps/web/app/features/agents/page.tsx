@@ -54,16 +54,10 @@ export default function FeaturesAgentsPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Agents</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">Delegation only works</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">Delegation only works</span>{' '}
                 <em className="agi-lp-accent">if the default is no.</em>
               </h1>
-              <p className="agi-lp-lede">
-                An agent is a session you hand work to: it reads files, runs commands, calls
-                connectors, and reports back with what it changed. Every risky step opens an
-                approval you have to answer, and commands run inside an OS sandbox that the run
-                fails without unless you ask for that with --no-sandbox.
-              </p>
               <ButtonRow>
                 <Button href="/cli">See the agi CLI</Button>
                 <Button href="/agent-permissions" variant="secondary">

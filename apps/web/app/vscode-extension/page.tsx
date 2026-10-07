@@ -33,18 +33,9 @@ export default function VscodeExtensionPage() {
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI in VS Code · coming soon</p>
-              <h1 id="agi-vscode-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Your editor,</span>{' '}
-                <span className="agi-fl-h1-line">with an agent</span>{' '}
-                <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">on call.</em>
-                </span>
+              <h1 id="agi-vscode-hero-title" className="sr-only">
+                AGI in VS Code
               </h1>
-              <p className="agi-fl-lede">
-                Mention @agi in VS Code chat. Work with an assistant grounded in your workspace. Run
-                /explain and /tests, review diffs, and hand heavier work to Desktop over an explicit
-                local bridge.
-              </p>
               <div className="agi-fl-cta-row">
                 <WaitlistTrigger
                   label="Discuss Enterprise access"
@@ -58,11 +49,6 @@ export default function VscodeExtensionPage() {
                   See the CLI
                 </Link>
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Extension highlights">
-                <li>@agi · chat participant</li>
-                <li>Context · workspace-scoped</li>
-                <li>Handoffs · explicit</li>
-              </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
               <ProductFrame variant="editor" title="AGI · VS Code" badge="@agi" />

@@ -20,6 +20,7 @@ import {
   ERASED_TABLE_COUNT,
   ROUTE_ISOLATION_COUNTS as ROUTE_ISOLATION,
 } from '@/lib/legal/published-counts';
+import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: 'Trust: a dated posture ledger',
@@ -279,7 +280,7 @@ const VERIFY = [
 
 export default function TrustPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

@@ -60,16 +60,10 @@ export default function FeaturesToolsPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Tool permissions</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">In AGI Desktop the agent asks first,</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">In AGI Desktop the agent asks first,</span>{' '}
                 <em className="agi-lp-accent">and nineteen tools ask every time.</em>
               </h1>
-              <p className="agi-lp-lede">
-                MCP servers, OAuth connectors, and shell commands all arrive at the same gate, and
-                the agi CLI asks before it edits a file or runs a command. On the website the
-                default is Skip approvals: eligible reads, searches, and sandboxed code run on their
-                own, while destructive actions and connector tools AGI does not know still ask.
-              </p>
               <ButtonRow>
                 <Button href="/agent-permissions">Read the permission reference</Button>
                 <Button href="/connectors" variant="secondary">
@@ -91,6 +85,11 @@ export default function FeaturesToolsPage() {
                 A tool call gets past all of this before it runs.
               </h2>
             </div>
+            <Prose>
+              On the website the default is Skip approvals: eligible reads, searches, and sandboxed
+              code run on their own, while destructive actions and connector tools AGI does not know
+              still ask.
+            </Prose>
             <Ledger
               caption="Tool approval gate order"
               rows={[

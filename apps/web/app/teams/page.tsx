@@ -42,6 +42,7 @@ export default function TeamsPage() {
       <Header />
       <main id="main-content">
         <PageHero
+          minimal
           id="agi-teams-title"
           eyebrow="AGI for teams"
           title="Seats, roles, and a console that decides what each role can reach."

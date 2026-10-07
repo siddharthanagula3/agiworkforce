@@ -30,8 +30,6 @@
   --agi-accent-ink: var(--chat-bg);
   --agi-accent-text: var(--chat-text-primary);
   --agi-accent-soft: var(--chat-surface-hover);
-  --agi-amber: var(--chat-text-primary);
-  --agi-amber-soft: var(--chat-surface-hover);
   --agi-surface-wash: transparent;
   --agi-line-soft: var(--chat-border);
   --agi-glow-soft: transparent;
