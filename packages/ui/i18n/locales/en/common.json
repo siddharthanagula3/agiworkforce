@@ -248,7 +248,8 @@
       "label": "Connect your apps",
       "seeAll": "All connectors",
       "open": "Set up {{name}}",
-      "dismiss": "Hide app suggestions"
+      "dismiss": "Hide app suggestions",
+      "optionalLink": "Connect your apps (optional)"
     }
   }
 }

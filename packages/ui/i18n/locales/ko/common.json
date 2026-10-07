@@ -248,7 +248,8 @@
       "label": "앱 연결하기",
       "seeAll": "모든 커넥터",
       "open": "{{name}} 설정",
-      "dismiss": "앱 추천 숨기기"
+      "dismiss": "앱 추천 숨기기",
+      "optionalLink": "앱 연결(선택 사항)"
     }
   }
 }

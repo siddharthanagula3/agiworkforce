@@ -4,34 +4,40 @@ title: Providers and models
 path: /providers
 category: providers
 tags: providers, models, switch model, model picker, anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu, ollama, lm studio, routing
-updated: 2026-09-19
+updated: 2026-10-05
 scope: public
 ---
 
-## Which providers are supported
+## Choose a product surface first
 
-AGI supports {{MARKETING.providers.display}} provider integrations, including
-Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and
-custom OpenAI-compatible endpoints. The released CLI supports the Ollama and LM
-Studio local runtimes. Desktop runs on your AGI account and does not accept a
-provider key or run a local model. The in-product catalog is the current source
-of truth.
+Check [surface availability](https://agiworkforce.com/get-started) before
+installing the CLI or another client. Use the
+[provider directory](https://agiworkforce.com/providers) and the product's model
+picker when choosing a provider or model.
 
-## How many models
+The current Desktop application is managed-cloud-only and does not accept
+provider keys or run local models. For CLI local inference, see
+[Local mode](https://agiworkforce.com/help/local-mode). For provider-key login and
+custom endpoint configuration, see
+[BYOK](https://agiworkforce.com/help/byok-provider-keys).
 
-{{MARKETING.models.display}} models are available across those providers. The exact
-catalogue changes as providers ship and retire models, so the model picker in the
-product is the current source of truth.
+## Understand the catalog counts
 
-## Switching model mid-conversation
+The provider-key catalog contains {{MARKETING.models.display}} model entries
+under {{MARKETING.providers.display}} provider integrations. These are catalog
+counts rather than a list of models offered to every account. Consult your
+surface's model picker and [plan](https://agiworkforce.com/pricing) for your
+selection.
 
-Within the active trust boundary, you can switch supported models in the middle of
-a conversation. The provider label updates before the next request. Moving between
-Local, BYOK, and managed Cloud requires an explicit continuation with context
-selection, a payload preview, consent, and a visible destination label.
+## Changing the model route
 
-## Automatic routing
+The CLI refuses a model request when the session's trust mode and provider route
+differ. A reviewed Local continuation requires a matching payload preview and
+creates a new destination session. Review the selected context and destination
+before confirming a continuation.
 
-When the model selection is left on automatic, AGI picks a model for the task from
-the models your plan and trust mode make available. An explicit model selection is
-never silently replaced with a different provider.
+## Choosing automatic routing
+
+Choose an automatic option offered by your model picker, or select a specific
+model. Review the provider and route shown for the request before sending
+sensitive content.

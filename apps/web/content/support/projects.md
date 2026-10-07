@@ -4,54 +4,53 @@ title: Projects: group chats around shared context
 path: /chat/projects
 category: projects
 tags: project, projects, knowledge, sources, project instructions, project memory, knowledge files, indexing, google drive, duplicate project, delete project
-updated: 2026-09-17
+updated: 2026-10-06
 scope: public
 ---
 
 ## What a project is
 
-A project holds a set of conversations plus the context they share: a written
-set of instructions, uploaded knowledge files, and its own memory scope. Every
-chat you start inside a project inherits that context.
+A project groups conversations with written instructions, knowledge files and
+a memory scope. When answering in a project, AGI can use its instructions,
+relevant knowledge passages and eligible memories. Retrieval and context limits
+can leave some material out.
 
 ## Create one
 
-Open the projects page and create a project with a name and, optionally, a
-description answering "What are you trying to achieve?". Project settings then
-carry four things:
+Open the projects page and choose **New** to create a project with a name.
+Add an optional description in Project settings. Settings include:
 
 - **Description**: what the project is for.
 - **Instructions**: context and how AGI should respond here, for example
   "Respond in Spanish. Reference the latest documentation. Keep answers short."
-- **Memory**: a switch for "Use memories from outside this project". On, chats
-  here draw on what has been remembered account-wide and anything learned here
-  stays in this project. Off, chats here use only this project's memories and
-  nothing from your other chats is included.
-- **Files**: documents that provide context for every conversation in the
-  project.
+- **Memory**: "Use memories from outside this project" controls whether
+  account-wide remembered facts are eligible alongside project memories. When
+  off in a project you own, memory and past-chat lookup are limited to that
+  project. Memory and past-chat settings still apply. Account instructions
+  and style have separate project switches.
+- **Files**: documents whose extracted passages can provide context for a
+  reply. Some passages or files may be left out.
 
 ## Add sources
 
 **Add sources** takes files from your device, text you paste or type, and Google
-Drive where that connector is set up. A connector that is not connected yet
-shows **Connect in Settings** rather than failing silently.
+Drive where that connector is set up. Choose **Set up connectors** to open
+Connectors. Choosing Google Drive while disconnected takes you there too.
 
-Each knowledge file reports its own state: **Indexing for search** while it is
-being processed, then either full indexing or **Keyword search only**, and
-**Not indexed** where it could not be processed. A file that is keyword-only is
-still usable; it is matched by words rather than by meaning.
+You may see **Indexing for search**, **Keyword search only** or **Not indexed**
+beside a file. Keyword search matches words rather than using semantic search.
 
 ## Shared projects
 
-If you open a project someone else owns, the sources panel says the owner has
-not added any sources yet and that only they can add or remove them. Ownership
-of sources does not transfer by sharing.
+A shared project can show the sources you have access to. If its sources
+panel is empty, it says the owner has not added any sources yet and that only
+they can add or remove them. The sources panel does not offer shared readers
+upload or delete controls.
 
 ## Duplicate and delete
 
 A project can be duplicated, which copies its setup into a new project.
-**Delete project** asks first, because the project and its configuration go
-with it.
+**Delete project** asks for confirmation before sending the deletion request.
 
 ## Limits
 

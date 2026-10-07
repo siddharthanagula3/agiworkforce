@@ -7,7 +7,7 @@
     },
     {
       "doc": "accounts-and-sign-in",
-      "sha256": "0e618e9978e34f7869cd112bd1b2b011e82ea1a4d118bfc1ef4df74362f70f67"
+      "indexed": true
     },
     {
       "doc": "agi-work",
@@ -23,7 +23,7 @@
     },
     {
       "doc": "byok-provider-keys",
-      "sha256": "ab8cf305e2ad1dc76ead79de2471c17515dcd935e17b802653d61fb139e1bdd7"
+      "indexed": true
     },
     {
       "doc": "chat-basics",
@@ -43,7 +43,7 @@
     },
     {
       "doc": "desktop-and-cli",
-      "sha256": "14d9790a0e4c2ed5016ada09a4579d53b7880082ecc6ab7b5aa08b41344e374d"
+      "indexed": true
     },
     {
       "doc": "enterprise-security",
@@ -59,7 +59,7 @@
     },
     {
       "doc": "getting-started",
-      "sha256": "3e362cf7da6b69e67077b95bfdb056186a6cf439ec4fcf99ba3ac3aeb838adb2"
+      "indexed": true
     },
     {
       "doc": "glossary",
@@ -67,7 +67,7 @@
     },
     {
       "doc": "install-desktop-and-mobile",
-      "sha256": "5e0d84c95097b65260cdeb0dbdd988ff021164408a37f829dad02ccb4bc1442e"
+      "indexed": true
     },
     {
       "doc": "install-the-cli",
@@ -83,7 +83,7 @@
     },
     {
       "doc": "local-mode",
-      "sha256": "9313c1cfab5c7bbe0861bc1eb53ef07c36ed6f2fc0b8c0cbf9e581a1d42efffe"
+      "indexed": true
     },
     {
       "doc": "managed-cloud",
@@ -107,11 +107,11 @@
     },
     {
       "doc": "projects",
-      "sha256": "33c4a8637d5c60feeeb8b5418ab094bc5def74b4476a083cdb2659a4ae4ce1aa"
+      "indexed": true
     },
     {
       "doc": "providers-and-models",
-      "sha256": "7c55d0ba8dfb8237b04f433bec7d545d37a0e8bc4d7df8f7024ca1d1520f3eae"
+      "indexed": true
     },
     {
       "doc": "schedules-and-triggers",
@@ -151,7 +151,7 @@
     },
     {
       "doc": "vscode-extension",
-      "sha256": "807efea976a2292e7ae31409d0ca5bff86c742ad3521a790f1722887cfbbc664"
+      "indexed": true
     },
     {
       "doc": "workspace-administration",
@@ -455,32 +455,43 @@
       ]
     },
     {
-      "id": "memory-off-carries-nothing-forward",
+      "id": "memory-off-excludes-remembered-facts",
       "doc": "memory",
-      "section": "The three memory switches",
+      "section": "Memory switches",
       "kind": "prose",
-      "sentence": "**Persistent memory**: \"Allow AGI to remember details across conversations.\" With it off, nothing is carried from one conversation to the next.",
-      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
+      "sentence": "**Persistent memory**: \"Allow AGI to remember details across conversations.\" With it off, persistent remembered facts are not included in chat context.",
+      "implementation": [
+        "apps/web/lib/services/managed-memory-context-service.ts",
+        "apps/web/lib/services/turn-context-service.ts"
+      ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
-          "name": "does not load or inject account memory when the per-chat Memory toggle is off"
+          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+          "name": "reads no memory into context for a disabled user, even with rows to read"
         },
         {
           "kind": "test",
-          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
-          "name": "writes nothing and names the reason when the workspace has memory off"
+          "file": "apps/web/lib/services/__tests__/managed-memory-context-service.test.ts",
+          "name": "reads Search past chats independently of the memory switch"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "injects at most three fenced excerpts from the user own other conversations"
         }
       ]
     },
     {
       "id": "memory-search-past-chats-never-in-temporary",
       "doc": "memory",
-      "section": "The three memory switches",
+      "section": "Memory switches",
       "kind": "prose",
       "sentence": "It is never used in temporary chats.",
-      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
+      "implementation": [
+        "apps/web/lib/services/turn-context-service.ts",
+        "apps/web/lib/services/past-chat-context-service.ts"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -490,11 +501,11 @@
       ]
     },
     {
-      "id": "memory-forget-everything-confirms",
+      "id": "memory-clear-entry-confirms",
       "doc": "memory",
       "section": "Clearing memory",
       "kind": "prose",
-      "sentence": "It asks first, because the facts cannot be recovered afterwards.",
+      "sentence": "In Settings, Memory, choose **Clear all memories**, then confirm **Forget everything**.",
       "implementation": ["apps/web/features/settings/sections/MemorySection.tsx"],
       "proof": [
         {
@@ -505,31 +516,61 @@
       ]
     },
     {
-      "id": "memory-project-scope-on",
-      "doc": "memory",
-      "section": "Memory inside a project",
-      "kind": "prose",
-      "sentence": "With \"Use memories from outside this project\" on, chats there use what has been remembered account-wide and anything learned there stays in that project.",
-      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
-          "name": "separates a project’s standing context from an ordinary project fact"
-        }
-      ]
-    },
-    {
       "id": "memory-project-scope-off",
       "doc": "memory",
       "section": "Memory inside a project",
       "kind": "prose",
-      "sentence": "With it off, chats there use only that project's memories and nothing from your other chats is included.",
+      "sentence": "With it off, only this project's remembered facts are eligible.",
       "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
       "proof": [
         {
-          "kind": "guard",
-          "file": "scripts/check-memory-isolation.mjs"
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/project-scoped-memory.test.ts",
+          "name": "a project that opted out sees only its own, never the account pool"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/project-scoped-memory.test.ts",
+          "name": "honours a project that turned global memory off"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/project-scoped-memory.test.ts",
+          "name": "scopes the lookup to the owner"
+        }
+      ]
+    },
+    {
+      "id": "memory-context-inclusion-is-bounded",
+      "doc": "memory",
+      "section": "Memory inside a project",
+      "kind": "prose",
+      "sentence": "Not every saved fact or passage is included in every reply.",
+      "implementation": [
+        "apps/web/lib/services/managed-memory-context-service.ts",
+        "apps/web/lib/services/past-chat-context-service.ts",
+        "apps/web/lib/services/project-context-service.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/managed-memory-context-service.test.ts",
+          "name": "returns null for empty memories and bounds oversized content"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/past-chat-context-service.test.ts",
+          "name": "keeps at most three matching excerpts, best first"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/past-chat-context-service.test.ts",
+          "name": "holds the whole block under the excerpt budget"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/project-context-service.test.ts",
+          "name": "drops the untrusted block first, then the recalled one, and keeps the instruction"
         }
       ]
     },
@@ -789,118 +830,88 @@
       ]
     },
     {
-      "id": "library-holds-uploads-and-artifacts",
-      "doc": "library",
-      "section": "What the Library holds",
-      "kind": "prose",
-      "sentence": "Everything you uploaded and everything AGI generated for you: documents, generated files and artifacts, in one list.",
-      "implementation": ["apps/web/lib/resources/deletion-policies.ts#RESOURCE_DELETION_POLICIES"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/lib/resources/__tests__/deletion-semantics.test.ts",
-          "name": "registers a deletion policy for every soft-deletable table"
-        }
-      ]
-    },
-    {
-      "id": "library-recently-deleted-is-restorable",
+      "id": "library-media-restore-window",
       "doc": "library",
       "section": "Deleting and restoring",
       "kind": "prose",
-      "sentence": "Deleting moves an item to **Recently deleted**, where it stays restorable.",
-      "implementation": ["apps/web/lib/resources/deletion-policies.ts#softDeleteColumn"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/lib/resources/__tests__/deletion-semantics.test.ts",
-          "name": "gives every policy a bounded recovery window"
-        }
-      ]
-    },
-    {
-      "id": "library-files-are-purged-at-thirty-days",
-      "doc": "library",
-      "section": "Deleting and restoring",
-      "kind": "prose",
-      "sentence": "For an uploaded or generated file, that window is 30 days: after it the stored bytes are removed for good.",
+      "sentence": "Deleted media files can be restored there for 30 days.",
       "implementation": [
-        "apps/web/app/api/cron/purge-deleted-media/route.ts#RECOVERY_WINDOW_DAYS",
-        "apps/web/lib/resources/deletion-policies.ts#RESOURCE_RECOVERY_WINDOW_DAYS"
+        "apps/web/lib/server/media-assets.ts",
+        "packages/ui/unified-chat/src/components/library/LibraryView.tsx"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/server/__tests__/media-assets.restore.test.ts",
           "name": "un-deletes only within the 30-day window, owner-scoped, and returns true on a hit"
-        }
-      ]
-    },
-    {
-      "id": "library-other-items-purge-after-30-days",
-      "doc": "library",
-      "section": "Deleting and restoring",
-      "kind": "prose",
-      "sentence": "Other items stay in **Recently deleted** for 30 days and are then deleted for good.",
-      "implementation": [
-        "apps/web/lib/resources/deletion-policies.ts#RESOURCE_RECOVERY_WINDOW_DAYS",
-        "apps/web/lib/resources/purge-soft-deleted.ts#purgeSoftDeletedResources"
-      ],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/lib/resources/__tests__/purge-soft-deleted.test.ts",
-          "name": "bounds each statement and only takes rows past the window"
-        }
-      ]
-    },
-    {
-      "id": "library-legal-hold-outlives-both-windows",
-      "doc": "library",
-      "section": "Deleting and restoring",
-      "kind": "prose",
-      "sentence": "A legal hold on your workspace keeps held material past either window until the hold is released.",
-      "implementation": ["apps/web/lib/services/legal-hold-gate.ts#legalHoldExclusion"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/cron/purge-soft-deleted-resources/route.test.ts",
-          "name": "purges and reports what a legal hold preserved once it is on"
         },
         {
           "kind": "test",
-          "file": "apps/web/lib/resources/__tests__/deletion-semantics.test.ts",
-          "name": "refuses to build a purge of a holdable store without the hold predicate"
+          "file": "packages/ui/unified-chat/src/components/library/__tests__/LibraryView.test.tsx",
+          "name": "offers Restore rather than Download while viewing Recently deleted"
         }
       ]
     },
     {
-      "id": "library-delete-permanently-erases-now",
+      "id": "library-permanent-delete-completes-storage-request-before-record",
       "doc": "library",
       "section": "Deleting and restoring",
       "kind": "prose",
-      "sentence": "**Delete permanently** erases the stored bytes now: nothing restores the file afterwards and anything linking to it stops resolving, so it asks first and says so.",
-      "implementation": ["apps/web/lib/server/media-assets.ts"],
+      "sentence": "AGI waits for any required storage deletion request before removing the Library record.",
+      "implementation": [
+        "apps/web/lib/server/media-assets.ts",
+        "apps/web/lib/server/media-storage.ts"
+      ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/server/__tests__/media-assets.permanent-delete.test.ts",
           "name": "locks the owner-scoped trashed row, deletes bytes, then removes the row"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/media-assets.permanent-delete.test.ts",
+          "name": "keeps the database row retryable when storage deletion fails"
         }
       ]
     },
     {
-      "id": "library-temporary-attachments-never-enter",
+      "id": "library-no-matches-reports-current-search",
       "doc": "library",
       "section": "If something is missing",
       "kind": "prose",
-      "sentence": "Files attached in a temporary chat never enter the Library by design.",
-      "implementation": ["apps/web/app/api/uploads/chat-attachment/complete/route.ts"],
+      "sentence": "\"Nothing here matches that name. Try a shorter search.\" reports no matches for the current search.",
+      "implementation": ["packages/ui/unified-chat/src/components/library/LibraryView.tsx"],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
-          "name": "retires the files a temporary chat received on the same clock as the chat"
+          "file": "packages/ui/unified-chat/src/components/library/__tests__/LibraryView.test.tsx",
+          "name": "separates a search miss from an empty account"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+          "text": "Nothing here matches that name. Try a shorter search."
+        }
+      ]
+    },
+    {
+      "id": "library-temporary-media-excluded-by-default",
+      "doc": "library",
+      "section": "If something is missing",
+      "kind": "prose",
+      "sentence": "Temporary-chat media is excluded from the Library by default.",
+      "implementation": ["apps/web/lib/server/media-assets.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/temporary-chat-purge.test.ts",
+          "name": "are never listed"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/temporary-chat-purge.test.ts",
+          "name": "loses the flag, so the purge never sees it again"
         }
       ]
     },
@@ -1193,25 +1204,60 @@
       ]
     },
     {
-      "id": "export-account-deletion-ends-the-export",
+      "id": "export-settings-links-to-the-requests-page",
       "doc": "export-your-data",
-      "section": "Before you delete your account",
+      "section": "What else you can ask for",
       "kind": "prose",
-      "sentence": "Account deletion erases conversations and account data, and the export cannot be run afterwards.",
+      "sentence": "Settings links to it directly so you do not have to find it from a policy page.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/privacy-rights-reachable.test.tsx",
+          "name": "is linked from the Privacy settings section"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/privacy-rights-reachable.test.tsx",
+          "name": "still exists to link to"
+        }
+      ]
+    },
+    {
+      "id": "export-settings-uploaded-files-opens-library",
+      "doc": "export-your-data",
+      "section": "Files and generated media",
+      "kind": "prose",
+      "sentence": "In Settings, Privacy, choose **Manage** beside **Uploaded files** to open the Library, where you can review or delete individual items.",
       "implementation": [
-        "apps/web/lib/server/account-erasure.ts#USER_SCOPED_TABLES",
-        "apps/web/app/api/user/export/route.ts"
+        "apps/web/features/settings/sections/PrivacySection.tsx",
+        "apps/web/features/library/components/LibraryView.tsx"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/lib/services/__tests__/deletion-manifest.test.ts",
-          "name": "erases every conversation store with its subject"
+          "file": "apps/web/features/settings/sections/__tests__/uploaded-files-reachable.test.ts",
+          "name": "links uploaded files to the Library"
         },
         {
           "kind": "test",
-          "file": "apps/web/lib/services/__tests__/deletion-manifest.test.ts",
-          "name": "gives every customer-content table a deletion path"
+          "file": "apps/web/features/settings/sections/__tests__/uploaded-files-reachable.test.ts",
+          "name": "links to a Library that actually exists"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/uploaded-files-reachable.test.ts",
+          "name": "links to a delete path, not just a listing"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/library/components/__tests__/LibraryView.test.tsx",
+          "name": "renders the fetched page as a grid of library tiles"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/library/components/__tests__/LibraryView.test.tsx",
+          "name": "keeps Delete behind the row menu and a confirm"
         }
       ]
     },
@@ -1420,7 +1466,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat’s link from the result state"
+          "name": "revokes the chat\u2019s link from the result state"
         },
         {
           "kind": "copy",
@@ -1506,7 +1552,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat’s link in place, keeping its address and expiry"
+          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -2778,7 +2824,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome · coming soon"
+          "text": "AGI in Chrome \u00b7 coming soon"
         },
         {
           "kind": "copy",
@@ -2792,7 +2838,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -2854,7 +2900,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome · coming soon"
+          "text": "AGI in Chrome \u00b7 coming soon"
         },
         {
           "kind": "copy",
@@ -2878,7 +2924,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome · coming soon"
+          "text": "AGI in Chrome \u00b7 coming soon"
         },
         {
           "kind": "copy",
@@ -4721,6 +4767,562 @@
           "name": "does not fire once the shortcut is switched off"
         }
       ]
+    },
+    {
+      "id": "byok-bare-login",
+      "doc": "byok-provider-keys",
+      "section": "Adding a key",
+      "kind": "prose",
+      "sentence": "A bare `agi login` starts AGI managed-cloud sign-in and does not prompt for a provider API key.",
+      "implementation": [
+        "apps/cli/src/auth.rs#is_agiworkforce_login_provider",
+        "apps/cli/src/auth.rs#login_agiworkforce"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps a bare login on AGI account authentication"
+        }
+      ]
+    },
+    {
+      "id": "byok-credential-status",
+      "doc": "byok-provider-keys",
+      "section": "Adding a key",
+      "kind": "prose",
+      "sentence": "`agi auth-status` reports stored credentials and does not validate the key with the provider.",
+      "implementation": [
+        "apps/cli/src/auth.rs#pub fn auth_status()",
+        "apps/cli/src/auth.rs#auth_status_from_store"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "describes auth-status as local credential reporting rather than provider validation"
+        }
+      ]
+    },
+    {
+      "id": "byok-storage-selection",
+      "doc": "byok-provider-keys",
+      "section": "Key storage",
+      "kind": "prose",
+      "sentence": "Keys saved with `agi login <provider>` are stored in the OS credential store except on Linux or when `AGIWORKFORCE_NO_KEYRING` disables the keyring.",
+      "implementation": [
+        "apps/cli/src/secure_store.rs#pub fn uses_keychain()",
+        "apps/cli/src/secure_store.rs#pub fn keyring_disabled()",
+        "apps/cli/src/auth.rs#pub fn save(&self)"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains both the keyring path and the implemented file-storage exceptions"
+        }
+      ]
+    },
+    {
+      "id": "byok-file-storage",
+      "doc": "byok-provider-keys",
+      "section": "Key storage",
+      "kind": "prose",
+      "sentence": "In those cases, these saved keys are stored in files in the CLI configuration directory.",
+      "implementation": [
+        "apps/cli/src/auth.rs#fn auth_path()",
+        "apps/cli/src/auth.rs#write_owner_only_file",
+        "apps/cli/src/secure_store.rs#pub fn write_owner_only"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains both the keyring path and the implemented file-storage exceptions"
+        }
+      ]
+    },
+    {
+      "id": "byok-built-in-login",
+      "doc": "byok-provider-keys",
+      "section": "Custom OpenAI-compatible endpoints",
+      "kind": "prose",
+      "sentence": "Provider API-key login accepts only the built-in provider list.",
+      "implementation": [
+        "apps/cli/src/auth.rs#fn api_key_provider",
+        "apps/cli/src/auth.rs#API_KEY_PROVIDERS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "distinguishes configured custom providers from the built-in login list"
+        }
+      ]
+    },
+    {
+      "id": "byok-custom-configuration",
+      "doc": "byok-provider-keys",
+      "section": "Custom OpenAI-compatible endpoints",
+      "kind": "prose",
+      "sentence": "Custom OpenAI-compatible providers require a CLI configuration entry with `base_url`; `api_key_env` is optional.",
+      "implementation": [
+        "apps/cli/src/models/provider_dispatch.rs#pub fn register_custom_providers"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "distinguishes configured custom providers from the built-in login list"
+        }
+      ]
+    },
+    {
+      "id": "byok-custom-validation",
+      "doc": "byok-provider-keys",
+      "section": "Custom OpenAI-compatible endpoints",
+      "kind": "prose",
+      "sentence": "Custom-provider URLs must pass the CLI endpoint validation.",
+      "implementation": [
+        "apps/cli/src/models/provider_dispatch.rs#pub fn register_custom_providers",
+        "apps/cli/src/models/provider_dispatch.rs#pub(crate) fn is_safe_provider_base_url"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "distinguishes configured custom providers from the built-in login list"
+        }
+      ]
+    },
+    {
+      "id": "byok-vscode-runtime",
+      "doc": "byok-provider-keys",
+      "section": "VS Code provider keys",
+      "kind": "prose",
+      "sentence": "VS Code provider-key management requires a connected local CLI runtime and delegates key storage to that runtime.",
+      "implementation": [
+        "apps/extension-vscode/src/integrations/localRuntimeClient.ts#async setProviderKey",
+        "apps/extension-vscode/src/integrations/localRuntimeClient.ts#private async readyConnection",
+        "apps/cli/src/app_server/developer_host.rs#async fn set_provider_key"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps VS Code provider keys on the CLI path rather than the AGI-account SecretStorage entry"
+        }
+      ]
+    },
+    {
+      "id": "byok-managed-credentials",
+      "doc": "byok-provider-keys",
+      "section": "Managed Cloud sign-in",
+      "kind": "prose",
+      "sentence": "CLI Managed Cloud requests require an AGI account token rather than a saved provider API key.",
+      "implementation": ["apps/cli/src/models/provider_dispatch.rs#fn resolve_key"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "pins Managed Cloud credential selection without a universal transport or markup promise"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-accounts-and-sign-in-bare-login",
+      "doc": "accounts-and-sign-in",
+      "section": "CLI provider credentials are separate",
+      "kind": "prose",
+      "sentence": "A bare `agi login` starts AGI managed-cloud sign-in and does not prompt for a provider API key.",
+      "implementation": [
+        "apps/cli/src/auth.rs#is_agiworkforce_login_provider",
+        "apps/cli/src/auth.rs#login_agiworkforce"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps a bare login on AGI account authentication"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-desktop-and-cli-desktop-boundary",
+      "doc": "desktop-and-cli",
+      "section": "The desktop app",
+      "kind": "prose",
+      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "implementation": [
+        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-getting-started-desktop-boundary",
+      "doc": "getting-started",
+      "section": "Choose a model route",
+      "kind": "prose",
+      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "implementation": [
+        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-getting-started-model-route-boundary",
+      "doc": "getting-started",
+      "section": "Keep model routes separate",
+      "kind": "prose",
+      "sentence": "The CLI refuses a model request when the session's trust mode and provider route differ.",
+      "implementation": [
+        "apps/cli/src/agent/mod.rs#pub fn validate_privacy_boundary",
+        "apps/cli/src/agent/chat.rs#self.validate_privacy_boundary()?;"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps model-route boundary and reviewed-continuation statements scoped to the CLI"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-getting-started-reviewed-continuation",
+      "doc": "getting-started",
+      "section": "Keep model routes separate",
+      "kind": "prose",
+      "sentence": "A reviewed Local continuation requires a matching payload preview and creates a new destination session.",
+      "implementation": [
+        "apps/cli/src/agent/mod.rs#fn complete_pending_privacy_handoff_with_store",
+        "apps/cli/src/agent/mod.rs#store.fork_redacted_continuation"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps model-route boundary and reviewed-continuation statements scoped to the CLI"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-install-desktop-and-mobile-desktop-boundary",
+      "doc": "install-desktop-and-mobile",
+      "section": "What desktop provides",
+      "kind": "prose",
+      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "implementation": [
+        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-local-mode-desktop-boundary",
+      "doc": "local-mode",
+      "section": "Running a local model",
+      "kind": "prose",
+      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "implementation": [
+        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-local-mode-conditional-catalog-refresh",
+      "doc": "local-mode",
+      "section": "Running a local model",
+      "kind": "prose",
+      "sentence": "Signed-in CLI startup may refresh the managed model catalog when it is not cached.",
+      "implementation": [
+        "apps/cli/src/tier_cache.rs#pub async fn ensure_plan_models_cached",
+        "apps/cli/src/tier_cache.rs#async fn refresh_plan_models_cache",
+        "apps/cli/src/models/gateway_models.rs#async fn fetch_from_endpoint",
+        "apps/cli/src/models/gateway_models.rs#pub async fn discover_gateway_models",
+        "apps/cli/src/lib.rs#crate::tier_cache::ensure_plan_models_cached().await;"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "scopes local inference separately from conditional catalog refresh and tool network use"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-local-mode-local-model-present",
+      "doc": "local-mode",
+      "section": "Setting it up",
+      "kind": "prose",
+      "sentence": "The CLI requires the selected local model to be reported by its server before starting inference.",
+      "implementation": [
+        "apps/cli/src/local_models.rs#pub async fn ensure_local_model_available",
+        "apps/cli/src/models/streaming.rs#ensure_local_model_available"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps local-runtime instructions attached to actual probe and streaming paths"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-local-mode-model-route-boundary",
+      "doc": "local-mode",
+      "section": "Model routes and tool permissions",
+      "kind": "prose",
+      "sentence": "The CLI refuses a model request when the session's trust mode and provider route differ.",
+      "implementation": [
+        "apps/cli/src/agent/mod.rs#pub fn validate_privacy_boundary",
+        "apps/cli/src/agent/chat.rs#self.validate_privacy_boundary()?;"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps model-route boundary and reviewed-continuation statements scoped to the CLI"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-local-mode-reviewed-continuation",
+      "doc": "local-mode",
+      "section": "Model routes and tool permissions",
+      "kind": "prose",
+      "sentence": "A reviewed Local continuation requires a matching payload preview and creates a new destination session.",
+      "implementation": [
+        "apps/cli/src/agent/mod.rs#fn complete_pending_privacy_handoff_with_store",
+        "apps/cli/src/agent/mod.rs#store.fork_redacted_continuation"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps model-route boundary and reviewed-continuation statements scoped to the CLI"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-providers-and-models-desktop-boundary",
+      "doc": "providers-and-models",
+      "section": "Choose a product surface first",
+      "kind": "prose",
+      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "implementation": [
+        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-providers-and-models-catalog-scope",
+      "doc": "providers-and-models",
+      "section": "Understand the catalog counts",
+      "kind": "prose",
+      "sentence": "These are catalog counts rather than a list of models offered to every account.",
+      "implementation": [
+        "apps/web/lib/catalog-scopes.ts#byokModelEntries",
+        "apps/web/lib/support/agent/corpus/index.ts#CATALOG_SCOPES.byokModelEntries.value"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps the provider article counts on the existing provider-key catalog scope"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-providers-and-models-model-route-boundary",
+      "doc": "providers-and-models",
+      "section": "Changing the model route",
+      "kind": "prose",
+      "sentence": "The CLI refuses a model request when the session's trust mode and provider route differ.",
+      "implementation": [
+        "apps/cli/src/agent/mod.rs#pub fn validate_privacy_boundary",
+        "apps/cli/src/agent/chat.rs#self.validate_privacy_boundary()?;"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps model-route boundary and reviewed-continuation statements scoped to the CLI"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-providers-and-models-reviewed-continuation",
+      "doc": "providers-and-models",
+      "section": "Changing the model route",
+      "kind": "prose",
+      "sentence": "A reviewed Local continuation requires a matching payload preview and creates a new destination session.",
+      "implementation": [
+        "apps/cli/src/agent/mod.rs#fn complete_pending_privacy_handoff_with_store",
+        "apps/cli/src/agent/mod.rs#store.fork_redacted_continuation"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps model-route boundary and reviewed-continuation statements scoped to the CLI"
+        }
+      ]
+    },
+    {
+      "id": "cli-help-vscode-account-key-controls",
+      "doc": "vscode-extension",
+      "section": "Account and provider credentials",
+      "kind": "prose",
+      "sentence": "**Set API Key** and **Clear API Key** manage the AGI Workforce account API key.",
+      "implementation": [
+        "apps/extension-vscode/src/core/commandSetup.ts#agi-workforce.setApiKey",
+        "apps/extension-vscode/src/core/commandSetup.ts#await clearApiKey(context.secrets)"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "keeps VS Code account-key controls separate from model-provider keys"
+        }
+      ]
+    },
+    {
+      "id": "projects-index-status-labels",
+      "doc": "projects",
+      "section": "Add sources",
+      "kind": "prose",
+      "sentence": "You may see **Indexing for search**, **Keyword search only** or **Not indexed** beside a file.",
+      "implementation": ["apps/web/features/projects/components/KnowledgeFilesPanel.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "text": "Indexing for search"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "text": "Keyword search only"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "text": "Not indexed"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.indexing.test.tsx",
+          "name": "says a file is being indexed while its index run is outstanding"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.indexing.test.tsx",
+          "name": "shows the failure and restarts indexing through the reindex endpoint"
+        }
+      ]
+    },
+    {
+      "id": "projects-shared-sources-empty-state",
+      "doc": "projects",
+      "section": "Shared projects",
+      "kind": "prose",
+      "sentence": "If its sources panel is empty, it says the owner has not added any sources yet and that only they can add or remove them.",
+      "implementation": ["apps/web/features/projects/components/SourcesPanel.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/__tests__/SourcesPanel.org-shared.test.tsx",
+          "name": "says the owner owns the sources instead of inviting an upload that would fail"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/__tests__/SourcesPanel.org-shared.test.tsx",
+          "name": "still lists the sources the member is allowed to read"
+        }
+      ]
+    },
+    {
+      "id": "projects-shared-readers-have-no-source-controls",
+      "doc": "projects",
+      "section": "Shared projects",
+      "kind": "prose",
+      "sentence": "The sources panel does not offer shared readers upload or delete controls.",
+      "implementation": ["apps/web/features/projects/components/SourcesPanel.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/__tests__/SourcesPanel.org-shared.test.tsx",
+          "name": "offers no upload or delete control"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/__tests__/SourcesPanel.org-shared.test.tsx",
+          "name": "keeps every control for a project the caller owns"
+        }
+      ]
+    },
+    {
+      "id": "projects-and-knowledge-storage-follow-the-plan",
+      "doc": "projects",
+      "section": "Limits",
+      "kind": "prose",
+      "sentence": "How many projects and how much knowledge storage you get depends on your plan.",
+      "implementation": [
+        "apps/web/app/api/projects/[id]/duplicate/route.ts",
+        "apps/web/lib/server/file-storage.ts",
+        "apps/web/lib/services/free-plan-entitlements.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/projects/[id]/duplicate/route.test.ts",
+          "name": "guards the copy with the resolved plan project limit"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/projects/[id]/knowledge-files/__tests__/storage-meter-matches-cap.test.ts",
+          "name": "sizes the meter and the cap from the same seat-aware plan of the active workspace"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -4799,24 +5401,6 @@
       "why": "editorial-rule"
     },
     {
-      "id": "library-add-to-project",
-      "doc": "library",
-      "section": "Working with an item",
-      "kind": "prose",
-      "sentence": "Add it to a project, where it becomes project knowledge for every chat in that project.",
-      "implementation": ["apps/web/app/api/projects"],
-      "why": "reader-instruction"
-    },
-    {
-      "id": "library-empty-filter-is-not-an-empty-library",
-      "doc": "library",
-      "section": "If something is missing",
-      "kind": "prose",
-      "sentence": "\"Nothing here matches that name. Try a shorter search.\" means the filter, not the Library, is empty.",
-      "implementation": ["apps/web/features/library"],
-      "why": "reader-instruction"
-    },
-    {
       "id": "library-clear-the-filter-first",
       "doc": "library",
       "section": "If something is missing",
@@ -4873,15 +5457,6 @@
       "why": "reader-instruction"
     },
     {
-      "id": "export-settings-links-to-the-requests-page",
-      "doc": "export-your-data",
-      "section": "What else you can ask for",
-      "kind": "prose",
-      "sentence": "Settings links to it directly so you do not have to find it from a policy page.",
-      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
-      "why": "reader-instruction"
-    },
-    {
       "id": "delete-export-cannot-run-after-the-account-is-gone",
       "doc": "delete-your-account",
       "section": "Before you confirm",
@@ -4934,6 +5509,15 @@
       "sentence": "Ctrl+N and Cmd+N are reserved by the browser for a new window, so the page never receives the keypress and nothing can be bound to it.",
       "implementation": ["apps/web/features/chat/hooks/use-keyboard-shortcuts.ts"],
       "why": "external-fact"
+    },
+    {
+      "id": "cli-help-accounts-reader-code-recovery",
+      "doc": "accounts-and-sign-in",
+      "section": "Signing in",
+      "kind": "prose",
+      "sentence": "If a verification code has not arrived, check your spam folder and confirm the email address, then use **Resend code** when it becomes available.",
+      "implementation": [],
+      "why": "reader-instruction"
     }
   ]
 }

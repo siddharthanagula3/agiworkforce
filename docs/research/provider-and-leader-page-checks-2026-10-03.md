@@ -2,7 +2,7 @@
 
 Status: Current research snapshot
 Owner: Web lead
-Last updated: 2026-10-03
+Last updated: 2026-10-04
 
 Pages fetched on 2026-10-03 while planning the remediation recorded in
 `audit/prior-audits/signed-in-web-audit-2026-10-03.md` and
@@ -51,3 +51,18 @@ not verified. Nothing here was observed signed in.
 
 These are product and engineering references. They are not a legal conclusion
 about any disclosure.
+
+## Public design references rechecked on 2026-10-04
+
+Read-only primary-source refresh for the interrupted visual remediation in
+`design/public-neutral-system`. These are public HTML observations; no signed-in
+competitor session or mobile viewport was verified in this refresh.
+
+| Source                                                                                                                                                | Status               | Evidence                                                                                         | Limits and AGI choice                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [ChatGPT pricing](https://chatgpt.com/pricing/)                                                                                                       | Observed public HTML | Plans have short summaries and a comparison grouped into Essentials, Models and Features.        | Plan/region availability and responsive behavior were not verified. AGI keeps its canonical plan values and adds a narrow-screen selector with an optional full comparison.                            |
+| [Claude pricing](https://claude.com/pricing)                                                                                                          | Observed public HTML | Public plan and comparison information is available.                                             | No competitor economics or entitlements were copied. AGI retains its own billing contracts.                                                                                                            |
+| [Claude connectors and plugins](https://claude.com/marketplace/connectors-plugins), [Linear detail](https://claude.com/marketplace/connectors/linear) | Observed public HTML | Listings lead to a public detail page with purpose, publisher, setup links and tool information. | AGI exposes only fields in its directory snapshot, distinguishes indexed metadata from verified behavior, and does not probe publisher endpoints during page rendering. Unknown fields remain unknown. |
+
+Content pages use compact sans headings and shared spacing. Desktop/Web/Chrome
+mockups continue to label their managed route. Local and BYOK availability remains owned by the surface registry.

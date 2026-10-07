@@ -248,7 +248,8 @@
       "label": "Conecta tus apps",
       "seeAll": "Todos los conectores",
       "open": "Configurar {{name}}",
-      "dismiss": "Ocultar sugerencias de apps"
+      "dismiss": "Ocultar sugerencias de apps",
+      "optionalLink": "Conecta tus apps (opcional)"
     }
   }
 }

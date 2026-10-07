@@ -5,49 +5,47 @@ path: /byok
 category: providers
 tags: byok, api key, provider key, anthropic, openai, google, bring your own key, add key, encrypted
 platforms: cli, vscode
-updated: 2026-09-19
+updated: 2026-10-05
 scope: public
 ---
 
 ## What BYOK means here
 
-BYOK is "bring your own key". The released CLI accepts provider API keys today,
-and VS Code BYOK is coming soon. AGI sends requests directly to the provider you
-selected. Usage is billed by that provider, not by AGI, and AGI adds no markup.
-Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI
-account.
+BYOK means "bring your own key". Check [surface availability](https://agiworkforce.com/get-started)
+before installing the CLI or VS Code extension. Review your provider's billing
+and data-use terms before using a key.
 
 ## Adding a key
 
-1. Run `agi login <provider>`, such as `agi login anthropic`.
+1. Run `agi login <provider>` with a supported provider name. Use
+   `agi login --help` to inspect the command usage.
 2. Paste the provider API key when the CLI prompts for it.
-3. Run `agi auth-status` to confirm the saved provider. The CLI stores the secret
-   in the OS credential store.
+3. Run `agi auth-status` to inspect the saved credentials.
 
-A bare `agi login` signs in to AGI managed cloud. It does not prompt for a
-provider API key.
+A bare `agi login` starts AGI managed-cloud sign-in and does not prompt for a
+provider API key. `agi auth-status` reports stored credentials and does not
+validate the key with the provider.
 
-## Anthropic
+## Key storage
 
-Create an API key in the Anthropic console, then run `agi login anthropic`.
-
-## OpenAI
-
-Create an API key in the OpenAI platform dashboard, then run `agi login openai`.
+Keys saved with `agi login <provider>` are stored in the OS credential store
+except on Linux or when `AGIWORKFORCE_NO_KEYRING` disables the keyring. In those
+cases, these saved keys are stored in files in the CLI configuration directory.
 
 ## Custom OpenAI-compatible endpoints
 
-The released CLI accepts the provider names listed by `agi login --help`. Custom
-OpenAI-compatible endpoints remain subject to the CLI's current configuration and
-provider support.
+Provider API-key login accepts only the built-in provider list. Custom
+OpenAI-compatible providers require a CLI configuration entry with `base_url`;
+`api_key_env` is optional. Custom-provider URLs must pass the CLI endpoint
+validation.
 
-## VS Code release state
+## VS Code provider keys
 
-The VS Code extension has a private SecretStorage-backed key flow in the codebase,
-but no VSIX has been published yet. The public setup instructions will apply when
-that release is available.
+VS Code provider-key management requires a connected local CLI runtime and
+delegates key storage to that runtime. The CLI storage rules above apply to those
+keys.
 
-## BYOK keys are never used for managed cloud
+## Managed Cloud sign-in
 
-Managed cloud runs on AGI-operated provider access, and BYOK credentials are
-explicitly refused on that path. The two remain separate trust boundaries.
+CLI Managed Cloud requests require an AGI account token rather than a saved
+provider API key.

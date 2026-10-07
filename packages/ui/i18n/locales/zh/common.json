@@ -248,7 +248,8 @@
       "label": "连接你的应用",
       "seeAll": "所有连接器",
       "open": "设置 {{name}}",
-      "dismiss": "隐藏应用推荐"
+      "dismiss": "隐藏应用推荐",
+      "optionalLink": "连接你的应用(可选)"
     }
   }
 }
