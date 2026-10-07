@@ -7,6 +7,7 @@ import {
   NECESSARY_ONLY_PREFERENCES,
   parseCookieConsentRecord,
 } from '../shared/lib/cookie-consent';
+import { PUBLIC_APPROVED_FADES } from './lib/public-mask-paint';
 import { measurePublicFontProof, settlePublicPage } from './lib/public-page-readiness';
 import { scanPublicTypography } from './lib/public-typography';
 import {
@@ -16,13 +17,14 @@ import {
 
 const widths = [320, 360, 390, 768, 1024, 1366, 1440, 1920] as const;
 const examples = [
-  { path: '/desktop', kind: 'desktop', owner: 'desktop-page', widths, tab: null },
+  { path: '/desktop', kind: 'desktop', owner: 'desktop-page', widths, tab: null, fadeFrom: 0 },
   {
     path: '/',
     kind: 'desktop',
     owner: 'home-desktop',
     widths: [320, 390, 1440],
     tab: 'AGI Desktop',
+    fadeFrom: 641,
   },
   {
     path: '/',
@@ -30,9 +32,52 @@ const examples = [
     owner: 'home-chrome',
     widths: [320, 390, 1440],
     tab: 'AGI in Chrome',
+    fadeFrom: 641,
   },
 ] as const;
 const fonts = [{ cssVariable: '--font-geist-sans' }, { cssVariable: '--font-geist-mono' }];
+const compactWidths: readonly number[] = [320, 360, 390];
+const compactContainerPx = 480;
+const fade = PUBLIC_APPROVED_FADES.figure;
+const paintFloorPx = 2;
+const scenes = {
+  desktop: {
+    hiddenOwner: 'agi-desk-side',
+    hiddenWhenCompact: [
+      'AGI',
+      'New chat',
+      'Search',
+      'Projects',
+      'Library',
+      'Example chats',
+      'Release notes',
+      'Quarterly notes',
+      'Project checklist',
+      'Managed Cloud',
+    ],
+    neverFaded: [
+      ['agi-dev-title', 'AGI Workforce'],
+      ['agi-dev-badge', 'Cloud'],
+      ['agi-device-example-label', 'Example prompt'],
+      ['agi-device-example-title', 'Release notes'],
+      ['', 'Review the launch checklist, record the open questions, and plan the next update.'],
+    ],
+  },
+  chrome: {
+    hiddenOwner: 'agi-cr-tab',
+    hiddenWhenCompact: ['New Tab'],
+    neverFaded: [
+      ['agi-cr-tab-label', 'Q3 Strategy · Google Docs'],
+      ['agi-dev-badge', 'Chrome'],
+      ['agi-cr-url', 'docs.google.com'],
+      ['agi-cr-doc-title', 'Q3 Strategy Document'],
+      [
+        'agi-cr-doc-copy',
+        'Review the launch checklist and record the open questions before the next team meeting.',
+      ],
+    ],
+  },
+} as const;
 
 test.describe.configure({ retries: 0 });
 test.setTimeout(90_000);
@@ -57,8 +102,10 @@ async function readDevice(frame: Locator) {
       const range = document.createRange();
       range.selectNodeContents(node);
       const clips = [];
+      let hiddenBy: string | null = null;
       for (let element: Element | null = parent; element; element = element.parentElement) {
         const css = getComputedStyle(element);
+        if (css.display === 'none') hiddenBy = element.getAttribute('class');
         if (css.overflowX !== 'visible' || css.overflowY !== 'visible') {
           const box = element.getBoundingClientRect();
           clips.push({
@@ -72,32 +119,70 @@ async function readDevice(frame: Locator) {
       }
       textNodes.push({
         text,
+        owner: parent.getAttribute('class') ?? '',
         rawText: node.data,
         rects: [...range.getClientRects()]
           .filter((box) => box.width > 0 && box.height > 0)
           .map(rect),
         clips,
+        hiddenBy,
       });
     }
     const masks = [];
-    for (let element: Element | null = root; element; element = element.parentElement) {
+    const maskOwners = [...root.querySelectorAll('*')];
+    for (let owner: Element | null = root; owner; owner = owner.parentElement)
+      maskOwners.push(owner);
+    for (const element of maskOwners) {
       const css = getComputedStyle(element);
       if (
         css.maskImage !== 'none' ||
-        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-image'))
+        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-image')) ||
+        !['', 'none'].includes(css.getPropertyValue('-webkit-mask-box-image-source'))
       )
         masks.push({
+          frame: element === root,
           tag: element.localName,
           class: element.getAttribute('class'),
           mask: css.maskImage,
           webkitMask: css.getPropertyValue('-webkit-mask-image'),
+          size: css.maskSize,
+          position: css.maskPosition,
+          repeat: css.maskRepeat,
+          origin: css.maskOrigin,
+          clip: css.maskClip,
+          composite: css.maskComposite,
+          mode: css.maskMode,
+          border: css.getPropertyValue('-webkit-mask-box-image-source'),
         });
     }
+    const sizes = (selector: string) =>
+      [...root.querySelectorAll(selector)].map((element) => ({
+        class: element.getAttribute('class'),
+        text: (element.textContent ?? '').replace(/\s+/gu, ' ').trim(),
+        px: parseFloat(getComputedStyle(element).fontSize),
+      }));
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const token = (name: string) => {
+      const value = getComputedStyle(root).getPropertyValue(name).trim();
+      const match = /^(\d*\.?\d+)(rem|px)$/u.exec(value);
+      if (!match) throw new Error('Unmeasured mockup text token: ' + name + '=' + value);
+      return Number(match[1]) * (match[2] === 'rem' ? rootPx : 1);
+    };
     return {
       connected: root.isConnected,
       box: rect(root.getBoundingClientRect()),
       textNodes,
       masks,
+      textTokens: {
+        body: token('--public-mockup-text-body'),
+        control: token('--public-mockup-text-control'),
+        meta: token('--public-mockup-text-meta'),
+        code: token('--public-mockup-text-code'),
+      },
+      proseSizes: sizes('.agi-mk-agi > p,.agi-cr-doc-copy,.agi-mk-ghost'),
+      labelSizes: sizes(
+        '.agi-device-example-label,.agi-dev-type,.agi-desk-new,.agi-desk-item,.agi-mk-seg span,.agi-mk-chip--model,.agi-cr-tab-label',
+      ),
       viewportWidth: document.documentElement.clientWidth,
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
@@ -191,20 +276,6 @@ async function assertScene(frame: Locator, kind: 'desktop' | 'chrome') {
     await expect(frame.locator('svg.agi-device-icon')).toHaveCount(12);
     await expect(frame.locator('.agi-dev-send svg.lucide-arrow-up')).toHaveCount(1);
   }
-  const prose = frame.locator(
-    '.agi-device-example-label,.agi-mk-agi > p,.agi-cr-doc-copy,.agi-mk-ghost,.agi-dev-type',
-  );
-  for (const paragraph of await prose.all())
-    expect(
-      await paragraph.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)),
-    ).toBeGreaterThanOrEqual(17);
-  const controls = frame.locator(
-    '.agi-desk-new,.agi-desk-item,.agi-mk-seg span,.agi-mk-chip--model,.agi-cr-tab-label',
-  );
-  for (const control of await controls.all())
-    expect(
-      await control.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)),
-    ).toBeGreaterThanOrEqual(16);
 }
 
 for (const example of examples) {
@@ -389,10 +460,95 @@ for (const example of examples) {
           });
           evidence['after'] = { reading: after, typography: afterTypography, font: afterFont };
           await assertScene(frame, example.kind);
+          const compact = compactWidths.includes(width);
+          const faded = width >= example.fadeFrom;
+          const scene = scenes[example.kind];
+          const paintScope: Record<string, unknown>[] = [];
+          evidence['paintScope'] = {
+            note: 'Font-proof counts are scoped to text with at least 2px inside the fully opaque band of the owner-approved fade (the top 58% of the figure). Text listed under faded lies wholly in the fading band by design; it stays under the typography, containment and roster requirements.',
+            readings: paintScope,
+          };
           for (const [reading, typography, font] of [
             [before, beforeTypography, beforeFont],
             [after, afterTypography, afterFont],
           ] as const) {
+            const hidden = reading.textNodes.filter((node) => node.hiddenBy !== null);
+            const shown = reading.textNodes.filter((node) => node.hiddenBy === null);
+            const opaqueBottom = faded
+              ? reading.box.top + fade.opaqueShare * reading.box.height
+              : Infinity;
+            const painted = (node: (typeof shown)[number], bandBottom: number) =>
+              node.rects.some((box) => {
+                let { left, right, top } = box;
+                let bottom = Math.min(box.bottom, bandBottom);
+                if (faded) {
+                  left = Math.max(left, reading.box.left);
+                  right = Math.min(right, reading.box.right);
+                  top = Math.max(top, reading.box.top);
+                }
+                for (const clip of node.clips) {
+                  if (clip.x) {
+                    left = Math.max(left, clip.box.left);
+                    right = Math.min(right, clip.box.right);
+                  }
+                  if (clip.y) {
+                    top = Math.max(top, clip.box.top);
+                    bottom = Math.min(bottom, clip.box.bottom);
+                  }
+                }
+                return right - left >= paintFloorPx && bottom - top >= paintFloorPx;
+              });
+            const opaqueText = shown.filter((node) => painted(node, opaqueBottom));
+            const fadedText = shown.filter((node) => !painted(node, opaqueBottom));
+            paintScope.push({
+              opaqueBottom,
+              opaque: opaqueText.map((node) => node.text),
+              faded: fadedText.map((node) => node.text),
+              hidden: hidden.map((node) => node.text),
+            });
+            expect(reading.box.width < compactContainerPx).toBe(compact);
+            expect(hidden.map((node) => node.text)).toEqual(
+              compact ? [...scene.hiddenWhenCompact] : [],
+            );
+            for (const node of hidden) {
+              expect(node.hiddenBy?.split(/\s+/u), node.text).toContain(scene.hiddenOwner);
+              expect(node.rects, node.text).toEqual([]);
+            }
+            expect(reading.masks).toEqual(
+              faded
+                ? [
+                    {
+                      frame: true,
+                      tag: 'figure',
+                      class: expect.stringContaining('agi-dev'),
+                      mask: expect.stringMatching(fade.image),
+                      webkitMask: expect.stringMatching(fade.image),
+                      size: 'auto',
+                      position: '0% 0%',
+                      repeat: 'repeat',
+                      origin: 'border-box',
+                      clip: 'border-box',
+                      composite: 'add',
+                      mode: 'match-source',
+                      border: 'none',
+                    },
+                  ]
+                : [],
+            );
+            if (!faded) expect(fadedText).toEqual([]);
+            for (const node of fadedText) expect(painted(node, Infinity), node.text).toBe(true);
+            for (const [owner, text] of scene.neverFaded)
+              expect(
+                opaqueText.filter((node) => node.owner === owner && node.text === text),
+                text,
+              ).toHaveLength(1);
+            expect(reading.textTokens).toEqual({ body: 16, control: 16, meta: 14, code: 15 });
+            expect(reading.proseSizes.length).toBeGreaterThan(0);
+            for (const entry of reading.proseSizes)
+              expect(entry.px, entry.text).toBe(reading.textTokens.body);
+            expect(reading.labelSizes.length).toBeGreaterThan(0);
+            for (const entry of reading.labelSizes)
+              expect(entry.px, entry.text).toBe(reading.textTokens.meta);
             expect(font.fontCoverageGaps).toEqual([]);
             expect(font.expectedFontProof).toHaveLength(2);
             const families = font.expectedFontProof.map((entry) => entry.family);
@@ -410,16 +566,20 @@ for (const example of examples) {
             ).toBe(true);
             expect(
               font.usedFontFamilies.reduce((total, entry) => total + entry.usedTextNodes, 0),
-            ).toBe(reading.textNodes.length);
+            ).toBe(opaqueText.length);
             expect(typography.findings).toEqual([]);
             expect(typography.unmeasured).toEqual([]);
-            expect(typography.excluded).toEqual([]);
-            expect(typography.coverage.textNodes).toBe(reading.textNodes.length);
-            expect(typography.coverage.paintedTextNodes).toBe(reading.textNodes.length);
-            const samples = typography.samples.filter((entry) => entry.kind === 'text');
-            expect(samples.map((entry) => entry.text)).toEqual(
-              reading.textNodes.map((entry) => entry.text),
+            expect(typography.excluded).toEqual(
+              hidden.map((node) => ({
+                selector: expect.any(String),
+                text: node.text,
+                reason: 'display-none',
+              })),
             );
+            expect(typography.coverage.textNodes).toBe(reading.textNodes.length);
+            expect(typography.coverage.paintedTextNodes).toBe(shown.length);
+            const samples = typography.samples.filter((entry) => entry.kind === 'text');
+            expect(samples.map((entry) => entry.text)).toEqual(shown.map((entry) => entry.text));
             for (const sample of typography.samples) {
               expect(sample.renderedSize).not.toBeNull();
               expect(sample.renderedSize!).toBeGreaterThanOrEqual(sample.mono ? 15 : 14);
@@ -431,8 +591,7 @@ for (const example of examples) {
             expect(reading.box.left).toBeGreaterThanOrEqual(-0.05);
             expect(reading.box.right).toBeLessThanOrEqual(reading.viewportWidth + 0.05);
             expect(reading.documentOverflow).toBeLessThanOrEqual(0);
-            expect(reading.masks).toEqual([]);
-            for (const node of reading.textNodes) {
+            for (const node of shown) {
               expect(node.rects.length, node.text).toBeGreaterThan(0);
               for (const box of node.rects) {
                 expect(box.left, node.text).toBeGreaterThanOrEqual(reading.box.left - 0.05);
