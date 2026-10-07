@@ -154,6 +154,18 @@
   color: var(--chat-text-muted);
 }
 
+[data-design='agi'].agi-ds-page.agi-co main .agi-ds-pagehead .agi-ds-eyebrow {
+  display: block;
+  margin: 0 0 var(--space-2);
+  font-family: inherit;
+  font-size: var(--agi-text-sm);
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: var(--co-leading-small);
+  text-transform: none;
+  color: var(--chat-text-muted);
+}
+
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-section .agi-ds-prose {
   max-inline-size: var(--co-measure);
   font-size: var(--public-body-size);
