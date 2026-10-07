@@ -39,7 +39,7 @@
   font-size: var(--public-footer-text-body);
   line-height: var(--public-footer-leading-body);
   color: var(--agi-ink-2);
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 [data-design='agi'] footer.agi-ds-footer.agi-footer-responsive .agi-ds-footer-cols {
@@ -79,7 +79,7 @@
   line-height: var(--public-footer-leading-ui);
   letter-spacing: var(--type-body-tracking);
   color: var(--agi-ink);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'] footer.agi-ds-footer.agi-footer-responsive .agi-ds-footer-link,

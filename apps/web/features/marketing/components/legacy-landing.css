@@ -72,7 +72,7 @@
   margin-top: var(--agi-space-3);
   font-size: var(--agi-text-md);
   line-height: var(--agi-leading-body);
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 [data-design='agi'] .agi-fl-hero--flagship .agi-fl-cta-row {
@@ -1772,7 +1772,7 @@
   letter-spacing: -0.008em;
   line-height: 1.3;
   color: var(--agi-ink);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 [data-design='agi'] .agi-fl-latest-summary {
   display: -webkit-box;

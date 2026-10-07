@@ -16,7 +16,7 @@ body:has([data-design='agi'][data-public-reference]) {
   font-style: normal;
   font-weight: var(--public-heading-weight);
   line-height: var(--public-leading-heading);
-  text-wrap: balance;
+  text-wrap: wrap;
   scroll-margin-block-start: var(--public-anchor-offset);
 }
 
@@ -29,7 +29,7 @@ body:has([data-design='agi'][data-public-reference]) {
 }
 
 [data-design='agi'][data-public-reference] :is(p, li, dd, dt, blockquote) {
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 [data-design='agi'][data-public-reference] :is(pre, code, kbd, samp) {
@@ -80,7 +80,7 @@ body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent
   font-family: var(--public-font-text);
   font-size: var(--public-text-section);
   line-height: var(--public-leading-heading);
-  text-wrap: balance;
+  text-wrap: wrap;
   padding-block: var(--space-1);
 }
 
@@ -112,7 +112,7 @@ body:has([data-design='agi'][data-public-reference]) [aria-label='Cookie consent
   font-size: var(--public-text-body);
   line-height: var(--public-leading-body);
   color: var(--public-ink-secondary);
-  text-wrap: pretty;
+  text-wrap: wrap;
   min-block-size: 0;
   padding-block: var(--space-1);
   overflow-y: auto;

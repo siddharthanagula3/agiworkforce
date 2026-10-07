@@ -225,7 +225,7 @@ body > [data-state]:has(+ .dx-nav-drawer) {
 }
 
 [data-design='agi'].dx-search-dialog .agi-ds-h3 {
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 [data-design='agi'].dx-search-dialog .dx-search-description,
@@ -425,7 +425,7 @@ body > [data-state]:has(+ .dx-nav-drawer) {
   letter-spacing: -0.02em;
   line-height: var(--dx-leading-title);
   color: var(--chat-text-primary);
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 .dx-desc {
@@ -434,7 +434,7 @@ body > [data-state]:has(+ .dx-nav-drawer) {
   font-size: var(--dx-type-lede);
   line-height: var(--dx-leading-lede);
   color: var(--chat-text-secondary);
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 .dx-meta {
@@ -501,7 +501,7 @@ body > [data-state]:has(+ .dx-nav-drawer) {
   font-size: var(--agi-text-md);
   line-height: var(--dx-leading-body);
   color: var(--chat-text-primary);
-  text-wrap: pretty;
+  text-wrap: wrap;
 }
 
 .dx-prose > section:first-child > :first-child {
@@ -515,7 +515,7 @@ body > [data-state]:has(+ .dx-nav-drawer) {
   letter-spacing: -0.015em;
   line-height: var(--dx-leading-heading);
   color: var(--chat-text-primary);
-  text-wrap: balance;
+  text-wrap: wrap;
   scroll-margin-top: calc(var(--dx-header) + var(--space-5));
 }
 
@@ -526,7 +526,7 @@ body > [data-state]:has(+ .dx-nav-drawer) {
   letter-spacing: -0.01em;
   line-height: 1.4;
   color: var(--chat-text-primary);
-  text-wrap: balance;
+  text-wrap: wrap;
   scroll-margin-top: calc(var(--dx-header) + var(--space-5));
 }
 
