@@ -21,11 +21,13 @@ export function NoteList({ items }: { items: readonly NoteItem[] }) {
 }
 
 export function FounderBlock({
+  id,
   quote,
   body,
   name,
   role,
 }: {
+  id?: string;
   quote: ReactNode;
   body: ReactNode;
   name: string;
@@ -34,7 +36,9 @@ export function FounderBlock({
   return (
     <Stack gap="loose">
       <AgiMark size={40} accent="var(--agi-ink)" />
-      <h2 className="agi-ds-h2">{quote}</h2>
+      <h2 className="agi-ds-h2" id={id}>
+        {quote}
+      </h2>
       <Prose>{body}</Prose>
       <p className="agi-ds-prose" data-size="sm">
         <strong>{name}</strong> &middot; {role}

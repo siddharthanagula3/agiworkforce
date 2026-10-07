@@ -10,8 +10,10 @@ export interface LinkCardItem {
   external?: boolean;
 }
 
+const THREE_COLUMN_ITEM_COUNT = 3;
+
 export function LinkGrid({ items }: { items: readonly LinkCardItem[] }) {
-  const spanLastItem = items.length % 2 === 1;
+  const spanLastItem = items.length % 2 === 1 && items.length !== THREE_COLUMN_ITEM_COUNT;
   const lastIndex = items.length - 1;
 
   return (
