@@ -46,7 +46,11 @@ for (const profile of [
               viewport: innerWidth,
               mask: getComputedStyle(element).maskImage,
               scaledPreview: element.classList.contains('agi-app'),
-              heroPreview: element.closest('.agi-fl-hero-visual') !== null,
+              heroPreview:
+                element.closest(
+                  '.agi-fl-hero-visual, .agi-lp-hero-stage, .agi-ds-pagehead-split',
+                ) !== null,
+              surfacePreview: element.closest('.agi-fl-surface-visual') !== null,
               height: box.height,
               geometry: element.getAttribute('data-geometry'),
               controls: Array.from(element.querySelectorAll('.agi-dev-send')).map((control) => ({
@@ -71,7 +75,7 @@ for (const profile of [
               Math.abs(frame.width / frame.height - designWidth! / designHeight!),
               frame.label ?? route,
             ).toBeLessThan(0.01);
-            if (frame.heroPreview && profile.width > 900)
+            if (frame.surfacePreview || (frame.heroPreview && profile.width > 900))
               expect(frame.mask, frame.label ?? route).toMatch(APPROVED_HERO_FADE);
             else expect(frame.mask, frame.label ?? route).toBe('none');
           }
