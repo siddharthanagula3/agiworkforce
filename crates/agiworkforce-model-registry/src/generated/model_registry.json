@@ -1336,6 +1336,38 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
+    "grok-4.7": {
+      "identity": {
+        "key": "grok-4.7",
+        "displayName": "Grok 4.7",
+        "provider": "xai",
+        "developer": "xai",
+        "providerModelId": "grok-4.7",
+        "openRouterSlug": "x-ai/grok-4.7",
+        "kind": "reasoning",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["x-ai/grok-4.7"],
+        "family": "grok",
+        "version": "4.7"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://docs.x.ai/developers/models/grok-4.7",
+        "replacedBy": null
+      },
+      "speed": "fast",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
     "veo-3.1": {
       "identity": {
         "key": "veo-3.1",
@@ -13310,7 +13342,7 @@
     ],
     "zhipu": ["glm-5.3", "glm-5.3-flash"],
     "moonshot": ["kimi-k3", "kimi-k2.7-code", "kimi-k2.6"],
-    "xai": ["grok-4.6"],
+    "xai": ["grok-4.6", "grok-4.7"],
     "minimax": ["minimax-m3", "minimax-m2.7"],
     "groq": ["gpt-oss-safeguard-20b", "qwen-3.6-27b", "qwen-3.8-27b"]
   },
@@ -16462,6 +16494,77 @@
         "outputPerMillion": 6,
         "cacheReadPerMillion": 0.5,
         "cacheWritePerMillion": 2
+      }
+    },
+    "xai/grok-4.7": {
+      "modelKey": "grok-4.7",
+      "provider": "xai",
+      "providerModelId": "grok-4.7",
+      "harnessId": "xai/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "unknown",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 6,
+        "cacheReadPerMillion": 0.5,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 200000,
+            "thresholdBoundary": "inclusive",
+            "inputPerMillion": 4,
+            "outputPerMillion": 12,
+            "cacheReadPerMillion": 1
+          }
+        ]
+      }
+    },
+    "open_router/grok-4.7": {
+      "modelKey": "grok-4.7",
+      "provider": "open_router",
+      "providerModelId": "x-ai/grok-4.7",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 6,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 0
+      }
+    },
+    "vercel_gateway/grok-4.7": {
+      "modelKey": "grok-4.7",
+      "provider": "vercel_gateway",
+      "providerModelId": "spacexai/grok-4.7",
+      "harnessId": "vercel_gateway/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 6,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 0
       }
     },
     "google/veo-3.1": {
@@ -26125,6 +26228,30 @@
       "promptCaching": true
     },
     "grok-4.6": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
+    },
+    "grok-4.7": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -35821,6 +35948,22 @@
         }
       ]
     },
+    "grok-4.7": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 6,
+      "cacheReadPerMillion": 0.5,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 200000,
+          "thresholdBoundary": "inclusive",
+          "inputPerMillion": 4,
+          "outputPerMillion": 12,
+          "cacheReadPerMillion": 1
+        }
+      ]
+    },
     "veo-3.1": {
       "currency": "USD",
       "unit": "per_second",
@@ -38784,6 +38927,7 @@
     "kimi-k2.7-code": { "contextTokens": 262144, "maxOutputTokens": 32768 },
     "kimi-k2.6": { "contextTokens": 262144, "maxOutputTokens": 32768 },
     "grok-4.6": { "contextTokens": 500000, "knowledgeCutoff": "2026-02-01" },
+    "grok-4.7": { "contextTokens": 500000, "knowledgeCutoff": "2026-05" },
     "veo-3.1": {
       "contextTokens": 1024,
       "videoGeneration": {
@@ -39508,6 +39652,7 @@
     "kimi-k2.7-code": {},
     "kimi-k2.6": {},
     "grok-4.6": {},
+    "grok-4.7": {},
     "veo-3.1": {},
     "veo-3.1-fast": {},
     "gpt-4o-transcribe": {},
@@ -40342,6 +40487,13 @@
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Claude Opus 5.5 and Claude Fable 5.1 now declare providerCompatibility.forcedToolChoice false. The Claude Opus 5.5 what's-new page states that tool_choice any or a named tool returns 400 on Claude Opus 5.5 and that the same applies on Claude Fable 5.1; neither row recorded it, so a forced tool choice sent to either was a provider error. Verified against platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5, retrieved 2026-10-07."
+    },
+    {
+      "id": "verification/2026-10-07/68",
+      "date": "2026-10-07",
+      "verifiedBy": "official-xai-documentation",
+      "status": "ADDITION",
+      "notes": "Grok 4.7 (grok-4.7), released September 2026, joins the catalog at lifecycle stage registered. Read from docs.x.ai on 2026-10-07: the model page (500,000 token context, text and image input, text output, $2.00/$0.50/$6.00 below 200,000 prompt tokens and $4.00/$1.00/$12.00 for every token once the prompt reaches 200,000, effort low, medium, high and xhigh with high the default, function calling and structured outputs, no batch API), the models overview (knowledge cutoff May 2026), the reasoning guide (reasoning cannot be disabled; presencePenalty, frequencyPenalty and stop return an error) and the release notes (no text output limit; the Responses API always returns reasoning.encrypted_content). The tools overview uses grok-4.7 in its web search, X search and code interpreter examples. OpenRouter lists x-ai/grok-4.7 and the Vercel AI Gateway lists spacexai/grok-4.7, both at the same price; those two gateway routes are recorded. The Experiential Labs page for grok-4.7 shows a default waterfall of one disabled rung, so no route through that gateway is recorded. No inference call was made for this entry."
     }
   ],
   "retiredModels": {

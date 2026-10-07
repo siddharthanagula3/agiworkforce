@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-19",
+  "lastUpdated": "2026-10-07",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -403,6 +403,12 @@
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Claude Opus 5.5 and Claude Fable 5.1 now declare providerCompatibility.forcedToolChoice false. The Claude Opus 5.5 what's-new page states that tool_choice any or a named tool returns 400 on Claude Opus 5.5 and that the same applies on Claude Fable 5.1; neither row recorded it, so a forced tool choice sent to either was a provider error. Verified against platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5, retrieved 2026-10-07."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-xai-documentation",
+      "status": "ADDITION",
+      "notes": "Grok 4.7 (grok-4.7), released September 2026, joins the catalog at lifecycle stage registered. Read from docs.x.ai on 2026-10-07: the model page (500,000 token context, text and image input, text output, $2.00/$0.50/$6.00 below 200,000 prompt tokens and $4.00/$1.00/$12.00 for every token once the prompt reaches 200,000, effort low, medium, high and xhigh with high the default, function calling and structured outputs, no batch API), the models overview (knowledge cutoff May 2026), the reasoning guide (reasoning cannot be disabled; presencePenalty, frequencyPenalty and stop return an error) and the release notes (no text output limit; the Responses API always returns reasoning.encrypted_content). The tools overview uses grok-4.7 in its web search, X search and code interpreter examples. OpenRouter lists x-ai/grok-4.7 and the Vercel AI Gateway lists spacexai/grok-4.7, both at the same price; those two gateway routes are recorded. The Experiential Labs page for grok-4.7 shows a default waterfall of one disabled rung, so no route through that gateway is recorded. No inference call was made for this entry."
     }
   ],
   "providers": {
@@ -3366,6 +3372,73 @@
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
+    },
+    "grok-4.7": {
+      "id": "grok-4.7",
+      "apiModelId": "grok-4.7",
+      "openRouterSlug": "x-ai/grok-4.7",
+      "name": "Grok 4.7",
+      "provider": "xai",
+      "developer": "xai",
+      "modelType": "reasoning",
+      "contextWindow": 500000,
+      "inputCost": 2,
+      "outputCost": 6,
+      "cached_input": 0.5,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Real-time Info", "Reasoning", "Coding", "Agentic Workflows"],
+      "released": "September 2026",
+      "deprecation_date": null,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 200000,
+          "thresholdBoundary": "inclusive",
+          "inputCost": 4,
+          "outputCost": 12,
+          "cached_input": 1
+        }
+      ],
+      "pricingNote": "Base rate below 200,000 prompt tokens is $2.00/1M input, $6.00/1M output, $0.50/1M cached input. A request whose prompt reaches 200,000 tokens is billed at $4.00/$12.00/$1.00 for every token in the request. xAI publishes no cache-write price, so none is recorded. The batch API does not serve this model. Server-side tool calls are billed separately per invocation and the schema has no field for them. xAI states the model has no text output limit, so no maximum output length is recorded. xAI gives the release month only; the OpenRouter slug dates it 2026-09-16 and the Vercel AI Gateway list 2026-09-21, so the row records September 2026. Verified against docs.x.ai/developers/models/grok-4.7, the models overview, the reasoning guide and the release notes, retrieved 2026-10-07.",
+      "openWeight": false,
+      "license": "proprietary",
+      "knowledgeCutoff": "2026-05",
+      "reasoning": {
+        "capable": true,
+        "control": "always_on",
+        "supportedEfforts": ["low", "medium", "high", "xhigh"],
+        "defaultEffort": "high",
+        "canDisableThinking": false,
+        "unsupportedRequestParameters": ["stop", "frequency_penalty", "presence_penalty"],
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": { "minTier": "max" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://docs.x.ai/developers/models/grok-4.7"
       }
     },
     "veo-3.1": {
