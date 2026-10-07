@@ -900,9 +900,9 @@
       "promptCacheMinimumTokens": 1024,
       "tierPolicy": { "minTier": "max" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6-astra"
       }
     },
     "gpt-6.1-sol": {
@@ -981,9 +981,9 @@
       "promptCacheMinimumTokens": 1024,
       "tierPolicy": { "minTier": "max" },
       "lifecycle": {
-        "stage": "registered",
+        "stage": "probed",
         "stagedOn": "2026-10-07",
-        "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6.1-sol"
       }
     },
     "gpt-6-luna": {
@@ -1062,9 +1062,9 @@
       "promptCacheMinimumTokens": 1024,
       "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
-        "stage": "registered",
+        "stage": "probed",
         "stagedOn": "2026-10-07",
-        "source": "https://developers.openai.com/api/docs/models/gpt-6-luna"
+        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6-luna"
       }
     },
     "gpt-5.6-sol": {
@@ -1374,9 +1374,9 @@
       "reasoningDots": 3,
       "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "source": "packages/ai/model-registry/catalog/probes.json#gpt-5.6-luna"
       }
     },
     "claude-fable-5-1": {
