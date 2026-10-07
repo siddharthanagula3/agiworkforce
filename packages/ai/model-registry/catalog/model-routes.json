@@ -1275,6 +1275,36 @@
         }
       ]
     },
+    "grok-4.7": {
+      "additionalRoutes": [
+        {
+          "provider": "open_router",
+          "harnessId": "open-router/chat-completions",
+          "upstreamModelId": "x-ai/grok-4.7",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 6,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 0
+          }
+        },
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/chat-completions",
+          "upstreamModelId": "spacexai/grok-4.7",
+          "cacheClass": "provider_implicit_prompt_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 2,
+            "outputPerMillion": 6,
+            "cacheReadPerMillion": 0.5,
+            "cacheWritePerMillion": 0
+          }
+        }
+      ]
+    },
     "qwen-3.8-flash": {
       "additionalRoutes": [
         {
