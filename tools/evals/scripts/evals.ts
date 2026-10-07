@@ -21,6 +21,7 @@ import { auditMeasurements, readLedger, recordMeasurement } from './measurement-
 import { SUITE_NAMES, loadDatasets } from '../src/dataset';
 import {
   activeFamilies,
+  livePricing,
   measurementFileName,
   resolveLiveTarget,
   spendRefusal,
@@ -151,7 +152,7 @@ async function live(args: readonly string[]): Promise<void> {
         adapter,
         providerModelId: target.route.providerModelId,
         dataset,
-        pricing: target.route.pricing ?? null,
+        pricing: livePricing(registry, target),
       }),
   });
   print(formatRun(outcome.report, outcome.reports));

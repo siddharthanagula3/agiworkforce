@@ -67,6 +67,12 @@ export interface RoutePricing {
   readonly cacheReadPerMillion?: number;
   readonly cacheWritePerMillion?: number;
   readonly inputTokenPricingTiers?: readonly PricingTier[];
+  /**
+   * True when the provider meters reasoning tokens beside the output count
+   * rather than inside it. Pricing the output count alone then leaves out most
+   * of what a reasoning model bills.
+   */
+  readonly reasoningBilledBesideOutput?: boolean;
 }
 
 export const DEFAULT_CASE_TIMEOUT_MS = 180_000;
@@ -90,11 +96,14 @@ export function catalogCostUsd(usage: ResponseUsage, pricing: RoutePricing): num
   const cacheReadTokens = usage.cacheReadTokens ?? 0;
   const cacheWriteTokens = usage.cacheWriteTokens ?? 0;
   const uncachedInput = Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
+  const billedOutputTokens =
+    (usage.outputTokens ?? 0) +
+    (pricing.reasoningBilledBesideOutput === true ? (usage.reasoningTokens ?? 0) : 0);
   return (
     (uncachedInput * input +
       cacheReadTokens * cacheRead +
       cacheWriteTokens * cacheWrite +
-      (usage.outputTokens ?? 0) * output) /
+      billedOutputTokens * output) /
     TOKENS_PER_MILLION
   );
 }
