@@ -45,7 +45,6 @@ const PAGES = [
   { route: '/trust', layout: 'company', label: 'Trust' },
   { route: '/community', layout: 'company', label: 'Community' },
   { route: '/waitlist', layout: 'company', label: 'AGI Cloud' },
-  { route: '/connectors/mcp-directory', layout: 'company', label: 'Connectors · MCP directory' },
 ] as const;
 
 function firstFamily(fontFamily: string): string {
