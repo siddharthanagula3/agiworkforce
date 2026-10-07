@@ -301,6 +301,8 @@
   "no_training_explicit|gpt-6-luna|managed_cloud": "selected;gpt-6-luna;openai/gpt-6-luna;explicit;~;~;",
   "no_training_explicit|gpt-6.1-sol|managed_cloud": "selected;gpt-6.1-sol;openai/gpt-6.1-sol;explicit;~;~;",
   "no_training_explicit|gpt-image-2|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
+  "no_training_explicit|gpt-image-2.5-flare|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
+  "no_training_explicit|gpt-image-2.5-sunburst|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gpt-live-1|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gpt-oss-safeguard-20b|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|grok-4.6|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",

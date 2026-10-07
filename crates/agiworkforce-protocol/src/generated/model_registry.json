@@ -1072,6 +1072,62 @@
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
     },
+    "gpt-image-2.5-sunburst": {
+      "identity": {
+        "key": "gpt-image-2.5-sunburst",
+        "displayName": "GPT Image 2.5 Sunburst",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-image-2.5-sunburst",
+        "kind": "image",
+        "aliases": [],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst",
+        "replacedBy": null
+      },
+      "residencyRegions": ["us", "eu", "ae"],
+      "evidenceRefs": []
+    },
+    "gpt-image-2.5-flare": {
+      "identity": {
+        "key": "gpt-image-2.5-flare",
+        "displayName": "GPT Image 2.5 Flare",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-image-2.5-flare",
+        "kind": "image",
+        "aliases": [],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare",
+        "replacedBy": null
+      },
+      "residencyRegions": ["us", "eu", "ae"],
+      "evidenceRefs": []
+    },
     "gpt-4o-mini-tts": {
       "identity": {
         "key": "gpt-4o-mini-tts",
@@ -13041,6 +13097,8 @@
       "gpt-5.6-terra",
       "gpt-5.6-luna",
       "gpt-image-2",
+      "gpt-image-2.5-sunburst",
+      "gpt-image-2.5-flare",
       "gpt-4o-mini-tts",
       "gpt-4o-transcribe",
       "gpt-live-1",
@@ -15590,6 +15648,46 @@
       "modelKey": "gpt-image-2",
       "provider": "openai",
       "providerModelId": "gpt-image-2",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 8,
+        "outputPerMillion": 30,
+        "cacheReadPerMillion": 2
+      }
+    },
+    "openai/gpt-image-2.5-sunburst": {
+      "modelKey": "gpt-image-2.5-sunburst",
+      "provider": "openai",
+      "providerModelId": "gpt-image-2.5-sunburst",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 8,
+        "outputPerMillion": 30,
+        "cacheReadPerMillion": 2
+      }
+    },
+    "openai/gpt-image-2.5-flare": {
+      "modelKey": "gpt-image-2.5-flare",
+      "provider": "openai",
+      "providerModelId": "gpt-image-2.5-flare",
       "harnessId": "openai/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -26229,6 +26327,54 @@
       "codeExecution": false,
       "promptCaching": true
     },
+    "gpt-image-2.5-sunburst": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
+    },
+    "gpt-image-2.5-flare": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
+    },
     "gpt-4o-mini-tts": {
       "textInput": true,
       "imageInput": false,
@@ -36134,6 +36280,20 @@
       "outputPerMillion": 30,
       "cacheReadPerMillion": 2
     },
+    "gpt-image-2.5-sunburst": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 8,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 2
+    },
+    "gpt-image-2.5-flare": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 8,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 2
+    },
     "gpt-4o-mini-tts": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -39206,6 +39366,8 @@
       }
     },
     "gpt-image-2": { "contextTokens": 4000 },
+    "gpt-image-2.5-sunburst": {},
+    "gpt-image-2.5-flare": {},
     "gpt-4o-mini-tts": { "contextTokens": 2000 },
     "gemini-3.8-flash": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
     "glm-5.3": { "contextTokens": 1000000, "maxOutputTokens": 128000 },
@@ -39934,6 +40096,8 @@
     "runway-gen-4": {},
     "seedance-2.5": {},
     "gpt-image-2": {},
+    "gpt-image-2.5-sunburst": {},
+    "gpt-image-2.5-flare": {},
     "gpt-4o-mini-tts": {},
     "gemini-3.8-flash": {},
     "glm-5.3": {},
@@ -40836,6 +41000,13 @@
       "verifiedBy": "official-groq-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Groq shut down qwen/qwen3.6-27b on 2026-09-14 and names qwen/qwen3.8-27b as its replacement; its deprecations page says requests to a deprecated model id return errors after the date. The catalog row qwen-3.6-27b was still offered as a preview model with no date. It now carries the shutdown date and is marked unavailable with that reason, which stops it being routed or probed. The family tool cannot deprecate it, because the compiler holds a model that is not live at or below the shadow stage, and it stays in the catalog because model-routes.json still declares two routes for it; removing it is a separate step. Verified against console.groq.com/docs/deprecations, retrieved 2026-10-07."
+    },
+    {
+      "id": "verification/2026-10-07/76",
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "GPT Image 2.5 Sunburst (gpt-image-2.5-sunburst) and GPT Image 2.5 Flare (gpt-image-2.5-flare) join the catalog at lifecycle stage registered, read from their model pages on developers.openai.com on 2026-10-07: identical token prices (text input $5 and $1.25 cached, image input $8 and $2 cached, image output $30), image generation, image edit and batch endpoints, quality low to max, snapshots dated 2026-09-08. No inference call was made. The openai/gpt-image slot stays on gpt-image-2: neither id matches the slot pattern, which expects a bare version after gpt-image, and the eval harness has no measurement for image output. OpenAI lists no deprecation for gpt-image-2. gpt-transcribe is not added: OpenAI prices it at $0.0045 per minute of audio and the catalog has no per-audio-minute price field for a transcription model, so a row would bill at zero or at a guessed token rate."
     }
   ],
   "retiredModels": {

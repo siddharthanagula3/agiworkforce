@@ -451,6 +451,12 @@
       "verifiedBy": "official-groq-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Groq shut down qwen/qwen3.6-27b on 2026-09-14 and names qwen/qwen3.8-27b as its replacement; its deprecations page says requests to a deprecated model id return errors after the date. The catalog row qwen-3.6-27b was still offered as a preview model with no date. It now carries the shutdown date and is marked unavailable with that reason, which stops it being routed or probed. The family tool cannot deprecate it, because the compiler holds a model that is not live at or below the shadow stage, and it stays in the catalog because model-routes.json still declares two routes for it; removing it is a separate step. Verified against console.groq.com/docs/deprecations, retrieved 2026-10-07."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "GPT Image 2.5 Sunburst (gpt-image-2.5-sunburst) and GPT Image 2.5 Flare (gpt-image-2.5-flare) join the catalog at lifecycle stage registered, read from their model pages on developers.openai.com on 2026-10-07: identical token prices (text input $5 and $1.25 cached, image input $8 and $2 cached, image output $30), image generation, image edit and batch endpoints, quality low to max, snapshots dated 2026-09-08. No inference call was made. The openai/gpt-image slot stays on gpt-image-2: neither id matches the slot pattern, which expects a bare version after gpt-image, and the eval harness has no measurement for image output. OpenAI lists no deprecation for gpt-image-2. gpt-transcribe is not added: OpenAI prices it at $0.0045 per minute of audio and the catalog has no per-audio-minute price field for a transcription model, so a row would bill at zero or at a guessed token rate."
     }
   ],
   "providers": {
@@ -2943,6 +2949,84 @@
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
+    },
+    "gpt-image-2.5-sunburst": {
+      "id": "gpt-image-2.5-sunburst",
+      "apiModelId": "gpt-image-2.5-sunburst",
+      "name": "GPT Image 2.5 Sunburst",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "image",
+      "inputCost": 8,
+      "outputCost": 30,
+      "cached_input": 2,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Precise Image Editing", "HD Image Generation", "Text Rendering in Images"],
+      "released": "September 2026",
+      "deprecation_date": null,
+      "imageApi": "openai",
+      "pricingNote": "OpenAI describes this as its most capable model for image generation and editing. OpenAI publishes per-1M-token rows for this model: text input $5.00 and $1.25 cached, image input $8.00 and $2.00 cached, image output $30.00 ($15.00 on Batch); text output is not billed. This entry carries the image row, as the GPT Image 2 entry does. OpenAI publishes no per-image price for it. Quality levels are low, medium, high, xhigh, max and auto. Served on v1/images/generations, v1/images/edits and v1/batch. The page gives no release date; the dated snapshot is gpt-image-2.5-sunburst-2026-09-08. Verified against developers.openai.com/api/docs/models/gpt-image-2.5-sunburst, retrieved 2026-10-07.",
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst"
+      }
+    },
+    "gpt-image-2.5-flare": {
+      "id": "gpt-image-2.5-flare",
+      "apiModelId": "gpt-image-2.5-flare",
+      "name": "GPT Image 2.5 Flare",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "image",
+      "inputCost": 8,
+      "outputCost": 30,
+      "cached_input": 2,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Fast Image Generation", "Image Editing"],
+      "released": "September 2026",
+      "deprecation_date": null,
+      "imageApi": "openai",
+      "pricingNote": "OpenAI describes this as fast, high-quality everyday image generation. OpenAI publishes per-1M-token rows for this model: text input $5.00 and $1.25 cached, image input $8.00 and $2.00 cached, image output $30.00 ($15.00 on Batch); text output is not billed. This entry carries the image row, as the GPT Image 2 entry does. OpenAI publishes no per-image price for it. Quality levels are low, medium, high, xhigh, max and auto. Served on v1/images/generations, v1/images/edits and v1/batch. The page gives no release date; the dated snapshot is gpt-image-2.5-flare-2026-09-08. Verified against developers.openai.com/api/docs/models/gpt-image-2.5-flare, retrieved 2026-10-07.",
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare"
       }
     },
     "gpt-4o-mini-tts": {
