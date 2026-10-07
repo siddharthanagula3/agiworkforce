@@ -734,6 +734,39 @@
       "residencyRegions": ["cn"],
       "evidenceRefs": []
     },
+    "deepseek-flash": {
+      "identity": {
+        "key": "deepseek-flash",
+        "displayName": "DeepSeek V4.1 Flash",
+        "provider": "deepseek",
+        "developer": "deepseek",
+        "providerModelId": "deepseek-flash",
+        "openRouterSlug": "deepseek/deepseek-v4.1-flash",
+        "kind": "code",
+        "familyPartner": "deepseek-v4-pro",
+        "openWeight": true,
+        "license": "MIT",
+        "aliases": ["deepseek/deepseek-v4.1-flash"],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 10, 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-09-10",
+        "deprecatedOn": null,
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "stageSource": "packages/ai/model-registry/catalog/probes.json#deepseek-flash",
+        "replacedBy": null
+      },
+      "speed": "very-fast",
+      "residencyRegions": ["cn"],
+      "evidenceRefs": []
+    },
     "qwen-3.5-flash": {
       "identity": {
         "key": "qwen-3.5-flash",
@@ -12984,7 +13017,12 @@
       "gemini-3.1-flash-live-preview",
       "gemini-3.1-flash-tts-preview"
     ],
-    "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"],
+    "deepseek": [
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+      "deepseek-v4-flash-vision-exp",
+      "deepseek-flash"
+    ],
     "qwen": ["qwen-3.5-flash", "qwen-3.8-flash", "qwen-3.7-plus"],
     "perplexity": ["sonar", "sonar-reasoning-pro", "sonar-pro", "sonar-deep-research"],
     "runway": ["runway-gen-4"],
@@ -15164,6 +15202,26 @@
         "inputPerMillion": 0.44,
         "outputPerMillion": 1.32,
         "cacheReadPerMillion": 0.014
+      }
+    },
+    "deepseek/deepseek-flash": {
+      "modelKey": "deepseek-flash",
+      "provider": "deepseek",
+      "providerModelId": "deepseek-flash",
+      "harnessId": "deepseek/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.006
       }
     },
     "qwen/qwen-3.5-flash": {
@@ -25795,6 +25853,30 @@
       "codeExecution": false,
       "promptCaching": true
     },
+    "deepseek-flash": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
+    },
     "qwen-3.5-flash": {
       "textInput": true,
       "imageInput": true,
@@ -35791,6 +35873,13 @@
       "outputPerMillion": 1.32,
       "cacheReadPerMillion": 0.014
     },
+    "deepseek-flash": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 1.2,
+      "cacheReadPerMillion": 0.006
+    },
     "qwen-3.5-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -38867,6 +38956,7 @@
     "deepseek-v4-flash": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
     "deepseek-v4-pro": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
     "deepseek-v4-flash-vision-exp": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
+    "deepseek-flash": { "contextTokens": 1048576, "maxOutputTokens": 393216 },
     "qwen-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "qwen-3.8-flash": {
       "contextTokens": 1000000,
@@ -39598,6 +39688,7 @@
       }
     },
     "deepseek-v4-flash-vision-exp": {},
+    "deepseek-flash": {},
     "qwen-3.5-flash": {},
     "qwen-3.8-flash": {},
     "sonar": {
@@ -40498,6 +40589,13 @@
       "verifiedBy": "official-xai-documentation",
       "status": "ADDITION",
       "notes": "Grok 4.7 (grok-4.7), released September 2026, joins the catalog at lifecycle stage registered. Read from docs.x.ai on 2026-10-07: the model page (500,000 token context, text and image input, text output, $2.00/$0.50/$6.00 below 200,000 prompt tokens and $4.00/$1.00/$12.00 for every token once the prompt reaches 200,000, effort low, medium, high and xhigh with high the default, function calling and structured outputs, no batch API), the models overview (knowledge cutoff May 2026), the reasoning guide (reasoning cannot be disabled; presencePenalty, frequencyPenalty and stop return an error) and the release notes (no text output limit; the Responses API always returns reasoning.encrypted_content). The tools overview uses grok-4.7 in its web search, X search and code interpreter examples. OpenRouter lists x-ai/grok-4.7 and the Vercel AI Gateway lists spacexai/grok-4.7, both at the same price; those two gateway routes are recorded. The Experiential Labs page for grok-4.7 shows a default waterfall of one disabled rung, so no route through that gateway is recorded. No inference call was made for this entry."
+    },
+    {
+      "id": "verification/2026-10-07/69",
+      "date": "2026-10-07",
+      "verifiedBy": "official-deepseek-documentation-and-live-api",
+      "status": "ADDITION",
+      "notes": "DeepSeek V4.1 Flash (deepseek-flash), released 2026-09-10, joins the catalog at lifecycle stage registered. Read on 2026-10-07 from api-docs.deepseek.com: the pricing page (peak $0.30 cache miss, $1.20 output, $0.006 cache hit, off-peak half, vision supported, thinking and non-thinking), the 2026-09-10 news post (native multimodal support; V4-Flash and V4-Flash-Vision-Exp are retired and their ids temporarily route to V4.1-Flash; deepseek-v4-pro requests route to V4.1-Flash at V4.1-Flash rates from 2026-09-14 04:00 UTC until V4.1-Pro launches) and the thinking mode guide (thinking.type enabled or disabled, enabled by default, reasoning_effort low, high or max with high the default). Measured the same day on the DeepSeek API: GET /models lists deepseek-flash as DeepSeek-V4.1-Flash with a 1,048,576 token context, 393,216 output tokens and text and image input; a request for deepseek-v4-flash is answered by deepseek-flash; and tool_choice required in thinking mode returns \"Thinking mode does not support this tool_choice\", so the row declares providerCompatibility.forcedToolChoice false. The weights are published at huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash under the MIT license. OpenRouter lists deepseek/deepseek-v4.1-flash. The deepseek/deepseek-flash slot does not move with this entry."
     }
   ],
   "retiredModels": {
