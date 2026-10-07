@@ -10,8 +10,8 @@ import {
   ChromeMockup,
 } from '@/features/marketing/components/SurfaceMockups';
 import { RouteFlow } from '@/features/marketing/components/RouteFlow';
-import { ProductFrame } from '@/features/marketing/components/ProductFrame';
-import { ApprovalWindow, DiffWindow } from '@/features/marketing/components/ShowcaseScenes';
+import { EditorWindow, TerminalWindow } from '@/features/marketing/components/DeviceMockups';
+import { DiffWindow } from '@/features/marketing/components/ShowcaseScenes';
 import {
   LandingCapabilityGrid,
   LandingDevBand,
@@ -290,7 +290,7 @@ export function MarketingLanding() {
 
         <LandingDevBand
           eyebrow="For developers"
-          title="Serious about the terminal."
+          title="Serious about coding."
           body="AGI Code spans the CLI and VS Code. Sessions resume and fork. Execution is sandboxed. It all runs offline on local models."
           ctas={[
             { href: '/agi-code', label: 'Explore AGI Code' },
@@ -298,8 +298,8 @@ export function MarketingLanding() {
           ]}
           visual={
             <div className="agi-fl-devband-visual">
-              <ProductFrame variant="terminal" title="agi · zsh" />
-              <DiffWindow />
+              <TerminalWindow view="changes" />
+              <EditorWindow />
             </div>
           }
         />
@@ -312,7 +312,7 @@ export function MarketingLanding() {
             { href: '/features/tools', label: 'See Tool Permissions' },
             { href: '/security', label: 'Read the Security Model' },
           ]}
-          visual={<ApprovalWindow />}
+          visual={<DiffWindow />}
         />
 
         <section className="agi-fl-section" aria-labelledby="agi-mobile-launch-title">
