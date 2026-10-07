@@ -260,7 +260,7 @@
   }
 
   [data-design='agi'][data-public-reference='pricing']
-    .agi-pricing-pagehead:not(:has([role='status']))
+    .agi-pricing-pagehead:not(:has(> :nth-child(2)))
     + .agi-pricing-audience {
     margin-block-start: calc(var(--pricing-toggle-size) * -1);
     pointer-events: none;

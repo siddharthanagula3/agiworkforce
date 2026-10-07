@@ -203,7 +203,7 @@
 }
 
 [data-design='agi'] .agi-scene-input[data-empty] {
-  color: var(--chat-text-placeholder);
+  color: var(--chat-text-secondary);
 }
 
 [data-design='agi'] .agi-scene-input[data-control] {

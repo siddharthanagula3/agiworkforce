@@ -100,12 +100,12 @@ const SESSION_TABS = [
   {
     label: 'Swap',
     language: 'text',
-    code: '› /model <another cloud model>\n✓ Switched. Same thread, same authority: byok.',
+    code: '› /model <another cloud model>\nSwitched. Same thread, same authority: byok.',
   },
   {
     label: 'Refused',
     language: 'text',
-    code: "› /model <a byok model>\n✗ Refused: this session's authority is local.\n  A fork that moves it is /continue-with-byok, and it shows the payload first.",
+    code: "› /model <a byok model>\nRefused: this session's authority is local.\n  A fork that moves it is /continue-with-byok, and it shows the payload first.",
   },
 ] as const;
 
