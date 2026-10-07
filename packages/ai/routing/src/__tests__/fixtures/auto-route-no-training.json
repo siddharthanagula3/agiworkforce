@@ -265,6 +265,7 @@
   "no_training_alias|auto-premium|image_generation|byok|managed_cloud": "selected;gemini-3.1-flash-image;google/gemini-3.1-flash-image;preferred_slot;premium;premium;",
   "no_training_explicit|claude-fable-5-1|managed_cloud": "selected;claude-fable-5-1;anthropic/claude-fable-5-1;explicit;~;~;claude-fable-5-1,claude-fable-5-1",
   "no_training_explicit|claude-haiku-4-5|managed_cloud": "selected;claude-haiku-4-5;anthropic/claude-haiku-4-5;explicit;~;~;claude-haiku-4-5",
+  "no_training_explicit|claude-haiku-5-5|managed_cloud": "selected;claude-haiku-5-5;anthropic/claude-haiku-5-5;explicit;~;~;",
   "no_training_explicit|claude-opus-4-8|managed_cloud": "selected;claude-opus-4-8;anthropic/claude-opus-4-8;explicit;~;~;",
   "no_training_explicit|claude-opus-5|managed_cloud": "selected;claude-opus-5;anthropic/claude-opus-5;explicit;~;~;claude-opus-5,claude-opus-5",
   "no_training_explicit|claude-opus-5-5|managed_cloud": "selected;claude-opus-5-5;anthropic/claude-opus-5-5;explicit;~;~;",
