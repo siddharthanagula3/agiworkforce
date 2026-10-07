@@ -169,6 +169,19 @@ export function summarizeOpenAIResponsesRequest(
   };
 }
 
+const PROVIDER_POLICY_STOP_CODES: ReadonlySet<string> = new Set(['cyber_policy']);
+
+/**
+ * OpenAI refuses some requests before any model output with an API error whose
+ * code names the policy. That is the provider's safety layer stopping the
+ * response, the same thing a `content_filter` finish is, so it ends the turn as
+ * a refusal instead of surfacing as a transport failure to retry or rotate.
+ */
+export function providerPolicyStopCode(err: unknown): string | undefined {
+  const code = (err as { code?: unknown } | null | undefined)?.code;
+  return typeof code === 'string' && PROVIDER_POLICY_STOP_CODES.has(code) ? code : undefined;
+}
+
 function findCatalogModel(id: string): ModelInfo | undefined {
   return OPENAI_MODEL_CATALOG.find((model) => model.id === id);
 }
@@ -301,6 +314,11 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
           }
           return;
         } catch (err) {
+          const policyStop = providerPolicyStopCode(err);
+          if (policyStop !== undefined) {
+            yield { type: 'stop', reason: 'refusal', providerFinishReason: policyStop };
+            return;
+          }
           const classified = classifyError(err);
           const retryAfterSeconds = classified.retryAfterSeconds ?? parseRetryAfterFromError(err);
           yield {
@@ -355,6 +373,11 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
           yield chunk;
         }
       } catch (err) {
+        const policyStop = providerPolicyStopCode(err);
+        if (policyStop !== undefined) {
+          yield { type: 'stop', reason: 'refusal', providerFinishReason: policyStop };
+          return;
+        }
         const classified = classifyError(err);
         const retryAfterSeconds = classified.retryAfterSeconds ?? parseRetryAfterFromError(err);
         yield {
