@@ -64,25 +64,25 @@ export function contactMailto(subject?: string): string {
 
 export const POLICY_LAST_UPDATED = {
   terms: '2026-09-23',
-  privacy: '2026-09-29',
+  privacy: '2026-10-07',
   acceptableUse: '2026-09-27',
   dpa: '2026-08-17',
-  cookies: '2026-09-23',
+  cookies: '2026-10-07',
   subprocessors: '2026-09-28',
-  security: '2026-08-14',
+  security: '2026-10-07',
   trust: '2026-09-21',
   sla: '2026-09-04',
   refunds: '2026-09-27',
-  referralTerms: '2026-09-27',
+  referralTerms: '2026-10-07',
   accessibility: '2026-09-27',
   euRepresentative: '2026-08-05',
   mobile: '2026-09-29',
   copyright: '2026-09-27',
-  indiaPrivacy: '2026-08-13',
+  indiaPrivacy: '2026-10-07',
   dataRights: '2026-08-13',
   dataUse: '2026-08-14',
   disclaimer: '2026-09-02',
-  agentPermissions: '2026-09-27',
+  agentPermissions: '2026-10-07',
 } as const;
 
 export const CANONICAL_POLICY_ROUTES = {
