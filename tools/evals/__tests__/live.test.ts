@@ -11,6 +11,7 @@ import {
   measurementFileName,
   outputPriceCeiling,
   resolveLiveTarget,
+  livePricing,
   spendRefusal,
   unsupportedSuiteReason,
   type RegistryLike,
@@ -55,6 +56,27 @@ const registry: RegistryLike = {
   limits: { cheap: { contextTokens: 32_000 }, mid: { contextTokens: 1_000_000 } },
   families: { 'lab/fast': { activeModelKey: 'cheap' }, 'lab/pro': { activeModelKey: 'costly' } },
 };
+
+describe('live pricing', () => {
+  it('marks reasoning as billed beside output only where the provider governance says so', () => {
+    const target = resolveLiveTarget(registry, 'cheap');
+    expect(livePricing(registry, target)?.reasoningBilledBesideOutput).toBe(false);
+    const beside: RegistryLike = {
+      ...registry,
+      governance: { gateway: { reasoningTokenBillingClass: 'additional_to_output' } },
+    };
+    expect(livePricing(beside, target)).toEqual({
+      inputPerMillion: 0.1,
+      outputPerMillion: 0.4,
+      reasoningBilledBesideOutput: true,
+    });
+    const inside: RegistryLike = {
+      ...registry,
+      governance: { gateway: { reasoningTokenBillingClass: 'included_in_output' } },
+    };
+    expect(livePricing(inside, target)?.reasoningBilledBesideOutput).toBe(false);
+  });
+});
 
 describe('live target resolution', () => {
   it('resolves the default route, or a named route of the same model', () => {

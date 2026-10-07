@@ -3369,9 +3369,9 @@
       },
       "tierPolicy": { "minTier": "max" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "source": "packages/ai/model-registry/catalog/probes.json#grok-4.6"
       }
     },
     "grok-4.7": {
@@ -3436,9 +3436,9 @@
       },
       "tierPolicy": { "minTier": "max" },
       "lifecycle": {
-        "stage": "registered",
+        "stage": "probed",
         "stagedOn": "2026-10-07",
-        "source": "https://docs.x.ai/developers/models/grok-4.7"
+        "source": "packages/ai/model-registry/catalog/probes.json#grok-4.7"
       }
     },
     "veo-3.1": {
