@@ -27,6 +27,7 @@ import type {
   ResponsesTool,
   ResponsesToolChoice,
 } from './responses-types';
+import { acceptsSamplingParameters } from './sampling';
 import { derivePromptCacheKey } from './translate';
 
 function isTextBlock(b: ContentBlock): b is TextBlock {
@@ -278,6 +279,7 @@ export function translateChatRequestToResponses(
   const toolChoice = translateToolChoice(req.toolChoice, tools);
 
   const reasoning = resolveReasoningConfig(req, compat);
+  const sampling = acceptsSamplingParameters(req.model, reasoning?.effort);
 
   const promptCacheKey = derivePromptCacheKey(req);
 
@@ -290,8 +292,8 @@ export function translateChatRequestToResponses(
     ...(usesNativeWebSearch ? { include: ['web_search_call.action.sources'] as const } : {}),
     ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
     ...(req.maxOutputTokens !== undefined ? { max_output_tokens: req.maxOutputTokens } : {}),
-    ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
-    ...(req.topP !== undefined ? { top_p: req.topP } : {}),
+    ...(sampling && req.temperature !== undefined ? { temperature: req.temperature } : {}),
+    ...(sampling && req.topP !== undefined ? { top_p: req.topP } : {}),
     ...(req.stopSequences && req.stopSequences.length > 0 ? { stop: req.stopSequences } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(options.previousResponseId ? { previous_response_id: options.previousResponseId } : {}),

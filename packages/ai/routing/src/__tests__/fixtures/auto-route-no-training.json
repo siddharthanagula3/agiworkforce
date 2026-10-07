@@ -297,6 +297,8 @@
   "no_training_explicit|gpt-5.6-sol|managed_cloud": "selected;gpt-5.6-sol;vercel_gateway/gpt-5.6-sol;explicit;~;~;gpt-5.6-sol,gpt-5.6-sol",
   "no_training_explicit|gpt-5.6-terra|managed_cloud": "selected;gpt-5.6-terra;cheaperinference/gpt-5.6-terra;explicit;~;~;gpt-5.6-terra,gpt-5.6-terra",
   "no_training_explicit|gpt-6-astra|managed_cloud": "selected;gpt-6-astra;cheaperinference/gpt-6-astra;explicit;~;~;gpt-6-astra",
+  "no_training_explicit|gpt-6-luna|managed_cloud": "selected;gpt-6-luna;openai/gpt-6-luna;explicit;~;~;",
+  "no_training_explicit|gpt-6.1-sol|managed_cloud": "selected;gpt-6.1-sol;openai/gpt-6.1-sol;explicit;~;~;",
   "no_training_explicit|gpt-image-2|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gpt-live-1|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gpt-oss-safeguard-20b|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
