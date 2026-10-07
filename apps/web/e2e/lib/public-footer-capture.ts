@@ -164,7 +164,7 @@ export async function footerNativeState(page: Page, footer: Locator, details = t
 }
 
 function footerMaterial(state: Awaited<ReturnType<typeof footerNativeState>>) {
-  const { scroll, headerBottom, ...material } = state;
+  const { scroll: _scroll, headerBottom: _headerBottom, ...material } = state;
   return material;
 }
 
@@ -209,8 +209,8 @@ export async function matchingFooterMaterial(
     return {
       material: {
         ...material,
-        text: text.map(({ rects, ...node }) => node),
-        geometry: geometry.map(({ rect, ...element }) => element),
+        text: text.map(({ rects: _rects, ...node }) => node),
+        geometry: geometry.map(({ rect: _rect, ...element }) => element),
       },
       rectangles: [
         rect,
