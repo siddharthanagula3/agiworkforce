@@ -5,8 +5,10 @@ import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkfor
 import {
   credentialSha256,
   recordFreeQuotaSuspension,
+  reserveFreeQuotaDailyUse,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
+import type { LimitedMediaOffer } from '@/lib/server/free-pools';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 type ScanModule0 = typeof import('@/lib/api-auth');
@@ -20,6 +22,7 @@ type ScanModule6 = typeof import('next/cache');
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
   user: { id: 'fixture-user-a', plan: 'free' },
+  limitedOffer: undefined as LimitedMediaOffer | undefined,
 }));
 
 const cache = await vi.hoisted(async () => {
@@ -62,6 +65,7 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
       const inventory = document.inventory!;
       return {
         ...document,
+        limitedMediaOffer: mocks.limitedOffer,
         inventory: {
           ...inventory,
           termsReview: {
@@ -142,6 +146,7 @@ beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   mocks.store = createMemoryKeyValueStore();
+  mocks.limitedOffer = undefined;
   cache.clear();
 });
 
@@ -218,4 +223,26 @@ it('serves the outage catalogue, not the last cached one, while shared state sta
   expect(ready(duringOutage)).toEqual([]);
   expect(ready(stillDown)).toEqual([]);
   expect(ready(recovered)).toEqual(ready(cached));
+});
+
+it('counts each account apart while every account still shares one read of the quota state', async () => {
+  mocks.limitedOffer = { dailyCapPerUser: { image: 3, video: 1 } };
+  await attestAllOfferings();
+  const reads = vi.spyOn(mocks.store, 'batch');
+  await reserveFreeQuotaDailyUse(mocks.store, {
+    userId: 'fixture-user-a',
+    category: 'image',
+    cap: 3,
+    nowMs: Date.now(),
+  });
+
+  const used = await catalogueFor({ id: 'fixture-user-a', plan: 'free' });
+  const fresh = await catalogueFor({ id: 'fixture-user-b', plan: 'free' });
+
+  const remaining = (catalogue: FreeQuotaCatalogue) =>
+    catalogue.limitedOffer?.find((offer) => offer.category === 'image')?.remainingToday;
+  expect(reads).toHaveBeenCalledTimes(1);
+  expect(remaining(used)).toBe(2);
+  expect(remaining(fresh)).toBe(3);
+  expect(fresh.models).toEqual(used.models);
 });

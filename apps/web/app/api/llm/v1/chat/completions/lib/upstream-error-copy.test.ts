@@ -237,6 +237,20 @@ describe('a spent free pool', () => {
     expect(copy.message).toMatch(/not a limit on your account/);
   });
 
+  it('leaves the provider in service when one model has spent its free tier', () => {
+    vi.mocked(markProviderDegraded).mockClear();
+    upstreamFailureCopy(
+      Object.assign(new Error('The free tier of the model has been exhausted.'), {
+        status: 403,
+        code: 'AllocationQuota.FreeTierOnly',
+      }),
+      'qwen',
+      { requestedModel: 'some-pinned-model' },
+    );
+
+    expect(markProviderDegraded).not.toHaveBeenCalled();
+  });
+
   it('still marks the provider for a quota window that is the provider own', () => {
     vi.mocked(markProviderDegraded).mockClear();
     upstreamFailureCopy(

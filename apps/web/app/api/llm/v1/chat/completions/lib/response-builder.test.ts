@@ -5,6 +5,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn() },
 }));
 
+import { FreeLimitSchema } from '@agiworkforce/cloud-contracts';
+import { getRoutingSlotModel } from '@agiworkforce/types';
 import { buildUpstreamErrorResponse } from './response-builder';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
@@ -43,6 +45,86 @@ describe('buildUpstreamErrorResponse', () => {
       'Google capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.',
     );
     expect(body.error.message).not.toContain('RESOURCE_EXHAUSTED');
+  });
+
+  it('names the free lane’s ways out when the shared free allowance is spent', async () => {
+    const response = buildUpstreamErrorResponse(
+      upstreamError('429 Rate limit exceeded: free-models-per-day', 429),
+      'open_router',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
+      'user-1',
+      'request-1',
+      'streaming',
+    );
+
+    const body = (await response.json()) as {
+      error: { code: string; recovery?: Array<{ action: string; href: string }> };
+    };
+    expect(body.error.code).toBe('free_allowance_exhausted');
+    expect(body.error.recovery).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'upgrade' }),
+        expect.objectContaining({ action: 'byok' }),
+      ]),
+    );
+  });
+
+  it('states the spent shared allowance as a typed free limit any client can read', async () => {
+    const freeAuto = getRoutingSlotModel('router_zero_cost');
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 2, 12), toFake: ['Date'] });
+    try {
+      const withReset = buildUpstreamErrorResponse(
+        Object.assign(upstreamError('429 Rate limit exceeded: free-models-per-day', 429), {
+          retryAfterSeconds: 3_600,
+        }),
+        'open_router',
+        freeAuto,
+        freeAuto,
+        'user-1',
+        'request-1',
+        'streaming',
+      );
+      const withoutReset = buildUpstreamErrorResponse(
+        upstreamError('429 Rate limit exceeded: free-models-per-day', 429),
+        'open_router',
+        freeAuto,
+        freeAuto,
+        'user-1',
+        'request-2',
+        'non-streaming',
+      );
+
+      const timed = (await withReset.json()) as { error: { free_limit?: unknown } };
+      const untimed = (await withoutReset.json()) as { error: { free_limit?: unknown } };
+      expect(FreeLimitSchema.parse(timed.error.free_limit)).toEqual({
+        model: freeAuto,
+        reason: 'shared_pool_used',
+        resets_at: '2026-10-02T13:00:00.000Z',
+      });
+      expect(FreeLimitSchema.parse(untimed.error.free_limit)).toEqual({
+        model: freeAuto,
+        reason: 'shared_pool_used',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends no free limit for a refusal that is not the shared free allowance', async () => {
+    const response = buildUpstreamErrorResponse(
+      upstreamError('Google API rate limit exceeded (429)', 429),
+      'google',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
+      'user-1',
+      'request-1',
+      'streaming',
+    );
+
+    expect(((await response.json()) as { error: { free_limit?: unknown } }).error.free_limit).toBe(
+      undefined,
+    );
   });
 
   it('keeps a momentary rate limit distinct from an exhausted quota', async () => {

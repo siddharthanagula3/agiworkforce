@@ -1,6 +1,9 @@
 'use client';
 
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
+import type { FreeLimit } from '@agiworkforce/cloud-contracts';
+import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
+import { trackMessageSave } from '@/features/chat/lib/pending-message-saves';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import {
   chatCompletionEndpoint,
@@ -91,6 +94,7 @@ import {
   MANAGED_CLOUD_TOOL_LOOP_HEADER,
   CloudToolApprovalProjectionSchema,
   DEVICE_STEP_RESUME_PATH,
+  FREE_QUOTA_FALLBACK_REQUEST_KEY,
   TOOL_APPROVAL_RESUME_PATH,
   TOOL_INPUT_RESUME_PATH,
   type ManagedCloudAgentRunHandle,
@@ -343,6 +347,7 @@ class ChatApiError extends Error {
   resetAt: string | undefined;
   retryAt: string | undefined;
   recovery: readonly ServerQuotaRecovery[];
+  freeLimit: FreeLimit | undefined;
 
   constructor(
     message: string,
@@ -352,6 +357,7 @@ class ChatApiError extends Error {
       resetAt?: string;
       retryAt?: string;
       recovery?: readonly ServerQuotaRecovery[];
+      freeLimit?: FreeLimit;
     } = {},
   ) {
     super(message);
@@ -361,6 +367,7 @@ class ChatApiError extends Error {
     this.resetAt = options.resetAt;
     this.retryAt = options.retryAt;
     this.recovery = options.recovery ?? NO_RECOVERY_OPTIONS;
+    this.freeLimit = options.freeLimit;
   }
 }
 
@@ -370,8 +377,8 @@ function readErrorResetAt(payload: unknown, response: Response): string | undefi
     const error = body['error'];
     const candidate =
       error && typeof error === 'object'
-        ? (error as Record<string, unknown>)['reset_at']
-        : body['reset_at'];
+        ? (error as Record<string, unknown>)['resets_at']
+        : body['resets_at'];
     if (typeof candidate === 'string' && !Number.isNaN(Date.parse(candidate))) {
       return new Date(candidate).toISOString();
     }
@@ -494,6 +501,7 @@ function readChatApiErrorPayload(
   code?: string;
   recovery?: readonly ServerQuotaRecovery[];
   retryAt?: string;
+  freeLimit?: FreeLimit;
 } {
   if (!payload || typeof payload !== 'object') {
     return { message: fallbackMessage };
@@ -514,15 +522,36 @@ function readChatApiErrorPayload(
     const nestedCode = readString(errorBody['code']);
     const recovery = readServerQuotaRecoveries(errorBody['recovery']);
     const retryAt = readRetryAt(errorBody['retry_at']);
+    const freeLimit = readFreeLimit(errorBody['free_limit']);
     return {
       message: nestedMessage ?? topLevelMessage ?? fallbackMessage,
       code: nestedCode ?? topLevelCode,
       ...(recovery.length > 0 ? { recovery } : {}),
       ...(retryAt ? { retryAt } : {}),
+      ...(freeLimit ? { freeLimit } : {}),
     };
   }
 
   return { message: topLevelMessage ?? fallbackMessage, code: topLevelCode };
+}
+
+async function chatApiErrorFromResponse(
+  response: Response,
+  fallbackMessage: string,
+): Promise<ChatApiError> {
+  const errorData: unknown = await response.json().catch(() => ({}));
+  const { message, code, recovery, retryAt, freeLimit } = readChatApiErrorPayload(
+    errorData,
+    fallbackMessage,
+  );
+  return new ChatApiError(message, {
+    code,
+    status: response.status,
+    resetAt: readErrorResetAt(errorData, response),
+    ...(recovery ? { recovery } : {}),
+    ...(retryAt ? { retryAt } : {}),
+    ...(freeLimit ? { freeLimit } : {}),
+  });
 }
 
 function getVisibleErrorMessage(error: unknown): string {
@@ -739,6 +768,12 @@ function readConversationMessages(conversationId: string): Message[] {
 
 function findConversationMessage(conversationId: string, messageId: string): Message | undefined {
   return readConversationMessages(conversationId).find((message) => message.id === messageId);
+}
+
+function disclosedFallbackReason(
+  message: Message | undefined,
+): Pick<MessageMetadata, 'fallbackReason'> {
+  return message?.fallbackReason ? { fallbackReason: message.fallbackReason } : {};
 }
 
 type MessageContent = ReturnType<typeof buildApiMessageContent>;
@@ -1660,18 +1695,7 @@ async function driveDeviceSteps(
     signal: ctx.signal,
   });
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const { message, code, recovery, retryAt } = readChatApiErrorPayload(
-      errorData,
-      `Device step resume failed: ${response.status}`,
-    );
-    throw new ChatApiError(message, {
-      code,
-      status: response.status,
-      resetAt: readErrorResetAt(errorData, response),
-      ...(recovery ? { recovery } : {}),
-      ...(retryAt ? { retryAt } : {}),
-    });
+    throw await chatApiErrorFromResponse(response, `Device step resume failed: ${response.status}`);
   }
 
   const assistantContent =
@@ -1711,15 +1735,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
   const streamFallbackReason = response.headers.get(FALLBACK_REASON_HEADER)?.trim();
-  // D-2026-09-05-06. Persisted rather than per-turn, unlike the substitution
-  // code above: a continuity receipt the transcript forgets on reload would
+  // D-2026-09-05-06. Persisted, like the substitution code above once its
+  // reply has text: a continuity receipt the transcript forgets on reload would
   // leave the move unexplained the next time the conversation is opened.
   const movedFromModel = response.headers.get(MOVED_FROM_MODEL_HEADER)?.trim();
   const movedReason = response.headers.get(MOVED_REASON_HEADER)?.trim();
   const isTurnContinuation = ctx.seedContent !== undefined;
-  if (streamFallbackReason) {
-    updateMessage(assistantMessageId, { fallbackReason: streamFallbackReason }, conversationId);
-  } else if (!isTurnContinuation) {
+  if (!isTurnContinuation) {
     updateMessage(assistantMessageId, { fallbackReason: undefined }, conversationId);
   }
   // Read here rather than at each caller so a continuation and a resumed run
@@ -1768,6 +1790,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   }
   const appendToMessage = store.appendToMessage;
   const appendToThinking = store.appendToThinking;
+  let fallbackDisclosed = false;
   const coalescedAppends = createFrameCoalescedAppender({
     onFlush: (kind, messageId, text) => {
       if (kind === 'thinking') {
@@ -1775,6 +1798,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         return;
       }
       appendToMessage(messageId, text, conversationId);
+      if (streamFallbackReason && !fallbackDisclosed) {
+        fallbackDisclosed = true;
+        updateMessage(messageId, { fallbackReason: streamFallbackReason }, conversationId);
+      }
       latencyTrace?.scheduleFirstPaint();
     },
   });
@@ -2343,6 +2370,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (movedFromModel) {
       metadata.movedFromModel = movedFromModel;
       if (movedReason) metadata.movedReason = movedReason;
+    }
+    const fallbackReason = fallbackDisclosed ? streamFallbackReason : seedMetadata?.fallbackReason;
+    if (fallbackReason) {
+      metadata.fallbackReason = fallbackReason;
     }
     if (toolTimeline.length > 0) {
       metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
@@ -4109,6 +4140,7 @@ export function useChatStream(
                   : undefined,
               stream: true,
               [INTERACTIVE_CARD_REQUEST_KEY]: WEB_INTERACTIVE_CARD_CAPABILITY,
+              [FREE_QUOTA_FALLBACK_REQUEST_KEY]: true,
               temperature: options.temperature,
               max_tokens: options.maxTokens,
               web_search: options.webSearch || options.research || undefined,
@@ -4212,18 +4244,7 @@ export function useChatStream(
           connectingTicker.stop();
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const { message, code, recovery, retryAt } = readChatApiErrorPayload(
-              errorData,
-              `Request failed: ${response.status}`,
-            );
-            throw new ChatApiError(message, {
-              code,
-              status: response.status,
-              resetAt: readErrorResetAt(errorData, response),
-              ...(recovery ? { recovery } : {}),
-              ...(retryAt ? { retryAt } : {}),
-            });
+            throw await chatApiErrorFromResponse(response, `Request failed: ${response.status}`);
           }
 
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
@@ -4518,20 +4539,7 @@ export function useChatStream(
           });
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const {
-              message: errMessage,
-              code,
-              recovery,
-              retryAt,
-            } = readChatApiErrorPayload(errorData, `Request failed: ${response.status}`);
-            throw new ChatApiError(errMessage, {
-              code,
-              status: response.status,
-              resetAt: readErrorResetAt(errorData, response),
-              ...(recovery ? { recovery } : {}),
-              ...(retryAt ? { retryAt } : {}),
-            });
+            throw await chatApiErrorFromResponse(response, `Request failed: ${response.status}`);
           }
 
           // The account just sent a turn, so whatever capacity was exhausted
@@ -4586,16 +4594,21 @@ export function useChatStream(
             return;
           }
 
-          const streamedSoFar =
-            findConversationMessage(conversationId, assistantMessageId)?.content ?? seedContent;
+          const interrupted = findConversationMessage(conversationId, assistantMessageId);
+          const streamedSoFar = interrupted?.content ?? seedContent;
           const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage, errorCode)}`;
+          const interruptedMetadata: MessageMetadata = {
+            ...priorMetadata,
+            ...disclosedFallbackReason(interrupted),
+            ...(errorCode ? { errorCode } : {}),
+          };
           updateMessage(
             assistantMessageId,
             {
               isStreaming: false,
               content: mergedContent,
               error: true,
-              metadata: { ...priorMetadata, ...(errorCode ? { errorCode } : {}) },
+              metadata: interruptedMetadata,
             },
             conversationId,
           );
@@ -4608,11 +4621,7 @@ export function useChatStream(
                 role: 'assistant',
                 content: mergedContent,
                 model,
-                metadata: {
-                  ...priorMetadata,
-                  finishReason: undefined,
-                  ...(errorCode ? { errorCode } : {}),
-                },
+                metadata: { ...interruptedMetadata, finishReason: undefined },
               },
               getAuthToken,
             ).catch((err) => notifyPersistenceFailure('assistant', err));
@@ -4994,18 +5003,7 @@ export function useResolveToolApproval(
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const { message, code, recovery, retryAt } = readChatApiErrorPayload(
-            errorData,
-            `Resume failed: ${response.status}`,
-          );
-          throw new ChatApiError(message, {
-            code,
-            status: response.status,
-            resetAt: readErrorResetAt(errorData, response),
-            ...(recovery ? { recovery } : {}),
-            ...(retryAt ? { retryAt } : {}),
-          });
+          throw await chatApiErrorFromResponse(response, `Resume failed: ${response.status}`);
         }
 
         const outcome = await consumeAssistantStream({
@@ -5247,18 +5245,7 @@ function useResolveToolInput(
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const { message, code, recovery, retryAt } = readChatApiErrorPayload(
-            errorData,
-            `Resume failed: ${response.status}`,
-          );
-          throw new ChatApiError(message, {
-            code,
-            status: response.status,
-            resetAt: readErrorResetAt(errorData, response),
-            ...(recovery ? { recovery } : {}),
-            ...(retryAt ? { retryAt } : {}),
-          });
+          throw await chatApiErrorFromResponse(response, `Resume failed: ${response.status}`);
         }
 
         let settled = await consumeAssistantStream({
@@ -5403,6 +5390,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   if (isAbort) {
     const cancelledMetadata: MessageMetadata = {
       ...currentMessage?.metadata,
+      ...disclosedFallbackReason(currentMessage),
       finishReason: 'stopped',
       ...(currentActivity
         ? {
@@ -5501,11 +5489,13 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     message: errorMessage,
     planTier: subscription?.tier,
     subscriptionSource: subscription?.subscription_source,
+    requestedModel: model,
     ...(error instanceof ChatApiError && error.recovery.length > 0
       ? { recovery: error.recovery }
       : {}),
     ...(error instanceof ChatApiError && error.resetAt ? { resetAt: error.resetAt } : {}),
     ...(error instanceof ChatApiError && error.retryAt ? { retryAt: error.retryAt } : {}),
+    ...(error instanceof ChatApiError && error.freeLimit ? { freeLimit: error.freeLimit } : {}),
   });
   if (paywall) {
     if (errorCode === 'free_trial_token_budget_reached') {
@@ -5518,11 +5508,40 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     if (isAccountWideUsageBlock(paywall)) {
       useChatStore.getState().setAccountUsageBlock(paywall);
     }
+    const refusalMetadata: MessageMetadata =
+      paywall.freeLimit && errorCode ? { paywall, errorCode } : { paywall };
     updateMessage(
       assistantMessageId,
-      { isStreaming: false, content: '', error: false, metadata: { paywall } },
+      { isStreaming: false, content: '', error: false, metadata: refusalMetadata },
       conversationId,
     );
+    if (paywall.freeLimit && !isTemporaryConversation && userMessagePersisted) {
+      trackMessageSave(
+        assistantMessageId,
+        saveMessageToDb(
+          conversationId,
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: errorMessage,
+            model,
+            metadata: refusalMetadata,
+            ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
+          },
+          getAuthToken,
+        )
+          .then((saved) => {
+            if (saved?.id && saved.id !== assistantMessageId) {
+              updateMessage(assistantMessageId, { id: saved.id }, conversationId);
+            }
+            return saved;
+          })
+          .catch((err) => {
+            notifyPersistenceFailure('assistant', err);
+            return null;
+          }),
+      );
+    }
     setError(errorMessage, conversationId);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
@@ -5542,6 +5561,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
       error: true,
       metadata: {
         ...freshMetadata,
+        ...disclosedFallbackReason(currentMessage),
         isExecutingCode: false,
         isSearching: false,
         ...(errorCode ? { errorCode } : {}),

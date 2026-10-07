@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { PUBLIC_WAITLIST_PATH } from '@agiworkforce/cloud-contracts/waitlist';
 
 const clerkState = vi.hoisted(() => ({
   clerkPaths: [] as string[],
@@ -79,6 +80,35 @@ describe('web proxy', () => {
       clerkState.clerkPaths = [];
       await proxy(new NextRequest(`http://localhost${pathname}`, { method: 'POST' }), {} as never);
       expect(clerkState.clerkPaths, pathname).toEqual([]);
+    }
+  });
+
+  it('serves the waitlist token request without the identity proxy and unreadable from another origin', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/api/waitlist/public', {
+        headers: { Origin: 'https://another-site.example' },
+      }),
+      {} as never,
+    );
+
+    expect(clerkState.clerkPaths).toEqual([]);
+    expect(response?.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(response?.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+  });
+
+  it('serves the path the browser client joins through without the identity proxy', async () => {
+    const { proxy, PUBLIC_API_ROUTE_PATTERNS } = await import('../proxy');
+
+    expect(PUBLIC_API_ROUTE_PATTERNS).toContain(PUBLIC_WAITLIST_PATH);
+    for (const method of ['GET', 'POST']) {
+      clerkState.clerkPaths = [];
+      await proxy(
+        new NextRequest(`http://localhost${PUBLIC_WAITLIST_PATH}`, { method }),
+        {} as never,
+      );
+      expect(clerkState.clerkPaths, method).toEqual([]);
     }
   });
 

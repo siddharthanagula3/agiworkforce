@@ -1,6 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import {
+  FREE_QUOTA_CATALOGUE_PATH,
+  type FreeQuotaMediaCategory,
+} from '@agiworkforce/cloud-contracts';
+import {
+  limitedFreeMedia,
+  orderedReadyFreeMedia,
+  type LimitedFreeMedia,
+} from '@/features/models/lib/free-media-offer';
 import type { FreeQuotaCatalogue, FreeQuotaModel } from '@/features/models/lib/free-quota-types';
 
 export type PromotionalMediaModel = Pick<
@@ -8,46 +17,82 @@ export type PromotionalMediaModel = Pick<
   'key' | 'displayName' | 'category' | 'status' | 'outputSize' | 'durationSeconds'
 >;
 
-export function usePromotionalMediaModels(enabled: boolean) {
-  const [models, setModels] = useState<PromotionalMediaModel[]>([]);
-  const [issuer, setIssuer] = useState<string | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+export type LimitedPromotionalMedia = Record<FreeQuotaMediaCategory, LimitedFreeMedia | null>;
+
+export interface PromotionalMedia {
+  models: PromotionalMediaModel[];
+  issuer: string | null;
+  limited: LimitedPromotionalMedia;
+  status: 'loading' | 'ready' | 'error';
+  retry: () => void;
+  refresh: () => void;
+}
+
+type Settled = Pick<PromotionalMedia, 'models' | 'issuer' | 'limited'> & {
+  attempt: number;
+  failed: boolean;
+};
+
+const NOT_OFFERED_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
+const NO_MODELS: PromotionalMediaModel[] = [];
+const NOT_LIMITED: LimitedPromotionalMedia = { image: null, video: null };
+
+function settle(catalogue: FreeQuotaCatalogue | null, attempt: number): Settled {
+  return {
+    attempt,
+    failed: false,
+    issuer: catalogue?.issuer ?? null,
+    models: catalogue ? orderedReadyFreeMedia(catalogue) : NO_MODELS,
+    limited: {
+      image: limitedFreeMedia(catalogue, 'image'),
+      video: limitedFreeMedia(catalogue, 'video'),
+    },
+  };
+}
+
+export function usePromotionalMediaModels(enabled: boolean): PromotionalMedia {
+  const [settled, setSettled] = useState<Settled | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
-    if (!enabled) {
-      setModels([]);
-      setIssuer(null);
-      setStatus('ready');
-      return;
-    }
+    if (!enabled) return;
     const controller = new AbortController();
-    setStatus('loading');
-    void fetch('/api/models/free-quota', {
+    void fetch(FREE_QUOTA_CATALOGUE_PATH, {
       cache: 'no-store',
       credentials: 'same-origin',
       signal: controller.signal,
     })
       .then(async (response) => {
+        if (NOT_OFFERED_STATUSES.has(response.status)) return null;
         if (!response.ok) throw new Error('Promotional media availability could not be checked');
-        const catalogue = (await response.json()) as FreeQuotaCatalogue | null;
-        if (controller.signal.aborted) return;
-        setIssuer(catalogue?.issuer ?? null);
-        setModels(
-          catalogue?.models.filter(
-            (model) =>
-              (model.category === 'image' || model.category === 'video') &&
-              model.status === 'ready',
-          ) ?? [],
-        );
-        setStatus('ready');
+        return (await response.json()) as FreeQuotaCatalogue | null;
+      })
+      .then((catalogue) => {
+        if (!controller.signal.aborted) setSettled(settle(catalogue, attempt));
       })
       .catch(() => {
-        if (!controller.signal.aborted) setStatus('error');
+        if (!controller.signal.aborted) {
+          setSettled({ ...settle(null, attempt), failed: true });
+        }
       });
     return () => controller.abort();
-  }, [attempt, enabled]);
+  }, [attempt, enabled, revision]);
 
   const retry = useCallback(() => setAttempt((current) => current + 1), []);
-  return { models, issuer, status, retry };
+  const refresh = useCallback(() => setRevision((current) => current + 1), []);
+  const actions = { retry, refresh };
+  if (!enabled) {
+    return { models: NO_MODELS, issuer: null, limited: NOT_LIMITED, status: 'ready', ...actions };
+  }
+  if (!settled || settled.attempt !== attempt) {
+    return { models: NO_MODELS, issuer: null, limited: NOT_LIMITED, status: 'loading', ...actions };
+  }
+  return {
+    models: settled.models,
+    issuer: settled.issuer,
+    limited: settled.limited,
+    status: settled.failed ? 'error' : 'ready',
+    ...actions,
+  };
 }

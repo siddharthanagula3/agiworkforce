@@ -766,6 +766,19 @@ const ALLOWLIST = [
       "single user's data",
   },
   {
+    match: /features\/admin\/services\/operator-waitlist\.ts$/,
+    tables: ['cloud_managed_waitlist', 'waitlist', 'consent_records'],
+    reason:
+      'only imported by app/api/admin/waitlist/route.ts and app/api/admin/waitlist/export/route.ts, ' +
+      'each of which calls requirePlatformAdmin(request) before the read and writes an ' +
+      'admin_action audit entry carrying the row count. Listing every address that joined a ' +
+      'waitlist with the consent decisions recorded for it is the purpose of the view: a ' +
+      'waitlist row is captured before any account exists, so there is no owner to constrain ' +
+      'by, and the consent rows are matched by the keyed hash of each listed address or by the ' +
+      'account already attached to that waitlist row, never by a subject the caller supplies. ' +
+      'The pseudonymous email column of the waitlist table is never selected',
+  },
+  {
     match: /features\/admin\/services\/product-metrics\.ts$/,
     tables: ['subscriptions', 'product_analytics_events'],
     reason:

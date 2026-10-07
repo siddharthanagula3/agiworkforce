@@ -21,7 +21,9 @@ const offeringFor = (protocol: string) =>
 const chat = offeringFor('chat');
 const image = Object.entries(offerings).find(
   ([, entry]) =>
-    entry.provider === 'qwen' && entry.quotaProbeProtocol === 'image-sync' && !entry.quotaImageSize,
+    entry.provider === 'qwen' &&
+    entry.quotaProbeProtocol === 'image-sync' &&
+    !entry.quotaPromptExtendUnsupported,
 )![0];
 const video = offeringFor('video-async');
 
@@ -140,6 +142,48 @@ describe('direct provider experiments without paid fallback', () => {
     }
   });
 
+  it('returns the provider’s own words beside its code when a model is refused', async () => {
+    for (const response of [
+      { code: 'Throttling.AllocationQuota', message: 'Free allocated quota exceeded.' },
+      { error: { code: 'Throttling.AllocationQuota', message: 'Free allocated quota exceeded.' } },
+    ]) {
+      const transport = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(JSON.stringify(response), { status: 429 }));
+      expect(await runQwenQuotaProbe(image, key, policy, transport)).toMatchObject({
+        status: 'failed',
+        providerCode: 'Throttling.AllocationQuota',
+        providerMessage: 'Free allocated quota exceeded.',
+      });
+    }
+  });
+
+  it('returns a failed video task’s own words beside its code', async () => {
+    const transport = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ output: { task_id: 'fixture-task', task_status: 'PENDING' } }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            output: {
+              task_status: 'FAILED',
+              code: 'Throttling.AllocationQuota',
+              message: 'Free allocated quota exceeded.',
+            },
+          }),
+        ),
+      );
+    expect(await runQwenQuotaProbe(video, key, policy, transport, async () => {})).toMatchObject({
+      status: 'failed',
+      providerCode: 'Throttling.AllocationQuota',
+      providerMessage: 'Free allocated quota exceeded.',
+    });
+  });
+
   it('disables paid prompt extension for image generation', async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
@@ -153,7 +197,12 @@ describe('direct provider experiments without paid fallback', () => {
     const result = await runQwenQuotaProbe(image, key, policy, transport);
     expect(result.status).toBe('succeeded');
     const body = JSON.parse(String(transport.mock.calls[0]![1]!.body));
-    expect(body.parameters).toEqual({ prompt_extend: false, size: policy.imageSize, n: 1 });
+    expect(offerings[image]!.quotaImageSize).toMatch(/^[1-9]\d*\*[1-9]\d*$/);
+    expect(body.parameters).toStrictEqual({
+      prompt_extend: false,
+      size: offerings[image]!.quotaImageSize,
+      n: 1,
+    });
     expect(body.model).toBe(offerings[image]!.providerModelId);
     expect(transport).toHaveBeenCalledTimes(1);
   });
@@ -175,8 +224,9 @@ describe('direct provider experiments without paid fallback', () => {
       );
     const result = await runQwenQuotaProbe(video, key, policy, transport, async () => {});
     expect(result.status).toBe('succeeded');
+    expect(offerings[video]!.quotaVideoSeconds).toBeGreaterThan(0);
     expect(JSON.parse(String(transport.mock.calls[0]![1]!.body)).parameters).toMatchObject({
-      duration: policy.videoSeconds,
+      duration: offerings[video]!.quotaVideoSeconds,
       prompt_extend: false,
     });
     expect(transport.mock.calls[1]![1]!.method).toBe('GET');
@@ -264,7 +314,9 @@ describe('selected free stream', () => {
     expect(transport).toHaveBeenCalledOnce();
   });
   it('uses catalog-specific image dimensions and the actual user prompt', async () => {
-    const custom = Object.entries(offerings).find(([, entry]) => entry.quotaImageSize)![0];
+    const custom = Object.entries(offerings).find(
+      ([, entry]) => entry.quotaImageSize && !entry.quotaPromptExtendUnsupported,
+    )![0];
     const transport = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({

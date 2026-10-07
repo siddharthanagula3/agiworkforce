@@ -31,6 +31,8 @@ export const FALLBACK_REASON_CODES = [
   'openrouter_route_failover',
   'insufficient_credits',
   'research_unsupported_model',
+  'free_limit_reached',
+  'free_capacity_unavailable',
   UNSPECIFIED_SUBSTITUTION_REASON,
 ] as const;
 
@@ -100,6 +102,14 @@ export function describeFallbackReason(
       return servedBy
         ? `${servedBy} cannot run Deep Research, so this reply used web search instead. No research report was saved.`
         : 'This model cannot run Deep Research, so this reply used web search instead. No research report was saved.';
+    case 'free_limit_reached':
+      return servedBy
+        ? `Free Auto reached its free limit, so ${servedBy} answered instead.`
+        : 'Free Auto reached its free limit, so another free model answered instead.';
+    case 'free_capacity_unavailable':
+      return servedBy
+        ? `Free Auto had no free capacity right now, so ${servedBy} answered instead.`
+        : 'Free Auto had no free capacity right now, so another free model answered instead.';
     case UNSPECIFIED_SUBSTITUTION_REASON:
       return servedBy
         ? `This reply came from ${servedBy}, not the model you picked. The reason was not recorded.`
@@ -125,6 +135,9 @@ export function fallbackStepLabel(
       return servedBy ? `Switched to ${servedBy}` : 'Switched to a cheaper model';
     case 'research_unsupported_model':
       return 'Switched to web search';
+    case 'free_limit_reached':
+    case 'free_capacity_unavailable':
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to another free model';
     case UNSPECIFIED_SUBSTITUTION_REASON:
       return servedBy ? `Switched to ${servedBy}` : 'Switched to a different model';
     case 'managed_failover':

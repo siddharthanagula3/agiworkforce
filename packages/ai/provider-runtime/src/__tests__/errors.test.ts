@@ -7,8 +7,14 @@ import {
   DATA_POLICY_NO_ENDPOINT_CODE,
   FallbackTriggeredError,
   EmptyProviderResponseError,
+  FREE_TIER_ONLY_PROVIDER_HINT,
+  MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+  MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
+  MODEL_STUDIO_MODEL_RETIRED_HINT,
   SPENDING_CAP_PROVIDER_HINT,
   classifyError,
+  classifyModelStudioError,
   parseContextOverflow,
 } from '../errors';
 
@@ -141,15 +147,13 @@ describe('classifyError', () => {
     expect(c.fallbackable).toBe(true);
   });
 
-  it('classifies an exceeded allocation quota on a 429 as quota_exhausted', () => {
+  it('does not read a per-minute allocation throttle as a spent free tier', () => {
     const err = {
       status: 429,
       error: { code: 'Throttling.AllocationQuota' },
       message: 'Allocated quota exceeded, please increase your quota limit.',
     };
-    const c = classifyError(err);
-    expect(c.category).toBe('quota_exhausted');
-    expect(c.code).toBe('free_quota_exhausted');
+    expect(classifyError(err).code).not.toBe('free_quota_exhausted');
   });
 
   it('classifies a marketplace refusing the minimum discount as capacity, not overload', () => {
@@ -503,5 +507,378 @@ describe('classifyError, an exhausted OpenRouter free pool', () => {
       status: 429,
     });
     expect(classifyError(err).category).toBe('rate_limit');
+  });
+});
+
+describe('classifyModelStudioError, the codes Model Studio documents', () => {
+  function compatibleModeError(status: number, code: string, message: string) {
+    return Object.assign(new Error(`${status} ${message}`), {
+      status,
+      code,
+      type: code,
+      error: { code, message, type: code },
+    });
+  }
+
+  it.each([
+    [
+      403,
+      'AllocationQuota.FreeTierOnly',
+      "The free tier of the model has been exhausted. If you want to continue access the model on a paid basis, please disable the 'use free tier only' mode in the management console.",
+    ],
+    [429, 'Throttling.AllocationQuota', 'Free allocated quota exceeded.'],
+    [429, 'insufficient_quota', 'Free allocated quota exceeded.'],
+  ])('reads %i %s as one model’s spent free tier', (status, code, message) => {
+    const c = classifyModelStudioError(compatibleModeError(status, code, message));
+    expect(c).toMatchObject({
+      category: 'quota_exhausted',
+      code: 'free_quota_exhausted',
+      providerHint: FREE_TIER_ONLY_PROVIDER_HINT,
+      retryable: false,
+      fallbackable: true,
+      status,
+    });
+  });
+
+  it.each([
+    [429, 'Throttling.AllocationQuota', '  FREE ALLOCATED QUOTA EXCEEDED.\n'],
+    [429, 'insufficient_quota', 'free allocated quota exceeded.'],
+  ])(
+    'reads the spent free allocation sentence under %i %s whatever its case or padding',
+    (status, code, message) => {
+      const c = classifyModelStudioError(compatibleModeError(status, code, message));
+      expect(c.code).toBe('free_quota_exhausted');
+      expect(c.providerHint).toBe(FREE_TIER_ONLY_PROVIDER_HINT);
+    },
+  );
+
+  it('reads the spent free allocation from the native protocol body, which carries no status', () => {
+    const c = classifyModelStudioError({
+      code: 'Throttling.AllocationQuota',
+      message: 'Free allocated quota exceeded.',
+      request_id: 'fixture-request',
+    });
+    expect(c.code).toBe('free_quota_exhausted');
+    expect(c.providerHint).toBe(FREE_TIER_ONLY_PROVIDER_HINT);
+  });
+
+  it.each([
+    '403 The free tier of the model has been exhausted.',
+    '429 Free allocated quota exceeded.',
+  ])(
+    'does not call a free tier spent on the sentence alone, with no code beside it: %s',
+    (text) => {
+      const err = new Error(text);
+      const c = classifyModelStudioError(err);
+      expect(c.category).not.toBe('quota_exhausted');
+      expect(c.providerHint).toBeUndefined();
+      expect(c).toEqual(classifyError(err));
+    },
+  );
+
+  it.each([
+    [400, 'InvalidParameter', 'Input text cannot be used: Free allocated quota exceeded.'],
+    [
+      400,
+      'InvalidParameter',
+      'Input text cannot be used: The free tier of the model has been exhausted.',
+    ],
+    [400, 'InvalidParameter', 'Input text cannot be used: AllocationQuota.FreeTierOnly'],
+    [400, 'InvalidParameter', 'Free allocated quota exceeded.'],
+    [
+      500,
+      'InternalError.Algo',
+      'An error occurred in model serving, error message is: [Free allocated quota exceeded.]',
+    ],
+    [
+      500,
+      'InternalError.Algo',
+      'An error occurred in model serving, error message is: [AllocationQuota.FreeTierOnly]',
+    ],
+  ])(
+    'does not call a free tier spent when %i %s only quotes the wording: %s',
+    (status, code, message) => {
+      const c = classifyModelStudioError(compatibleModeError(status, code, message));
+      expect(c.category).not.toBe('quota_exhausted');
+      expect(c.code).not.toBe('free_quota_exhausted');
+      expect(c.providerHint).toBeUndefined();
+      expect(c.status).toBe(status);
+    },
+  );
+
+  it.each([
+    [
+      429,
+      'Throttling.AllocationQuota',
+      'Allocated quota exceeded for a request that said: Free allocated quota exceeded.',
+    ],
+    [429, 'insufficient_quota', 'Your prompt "Free allocated quota exceeded." was throttled.'],
+    [429, 'Throttling.RateQuota', 'Free allocated quota exceeded.'],
+    [429, 'limit_requests', 'The free tier of the model has been exhausted.'],
+  ])(
+    'keeps %i %s a rate limit worth waiting out when its message is not the documented one: %s',
+    (status, code, message) => {
+      const c = classifyModelStudioError(compatibleModeError(status, code, message));
+      expect(c).toMatchObject({ category: 'rate_limit', retryable: true, fallbackable: true });
+      expect(c.providerHint).toBeUndefined();
+    },
+  );
+
+  it('reads the free tier sentence under an access refusal as the refusal its code names', () => {
+    const c = classifyModelStudioError(
+      compatibleModeError(403, 'AccessDenied', 'The free tier of the model has been exhausted.'),
+    );
+    expect(c).toMatchObject({
+      category: 'invalid_model',
+      providerHint: MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+    });
+  });
+
+  it('still reads the allocation code from the prose of an error no provider classifier saw', () => {
+    const c = classifyError(new Error('403 AllocationQuota.FreeTierOnly'));
+    expect(c.code).toBe('free_quota_exhausted');
+  });
+
+  it.each([
+    [
+      429,
+      'Throttling.AllocationQuota',
+      'Allocated quota exceeded, please increase your quota limit.',
+    ],
+    [
+      429,
+      'insufficient_quota',
+      'You exceeded your current quota, please check your plan and billing details.',
+    ],
+    [429, 'Throttling.RateQuota', 'Requests rate limit exceeded, please try again later.'],
+    [429, 'limit_requests', 'You have exceeded your request limit.'],
+    [
+      429,
+      'Throttling.BurstRate',
+      'Request rate increased too quickly. To ensure system stability, please adjust your client logic to scale requests more smoothly over time.',
+    ],
+    [
+      429,
+      'limit_burst_rate',
+      'Request rate increased too quickly. To ensure system stability, please adjust your client logic to scale requests more smoothly over time.',
+    ],
+    [429, 'Throttling', 'Requests throttling triggered.'],
+  ])('reads %i %s as a rate limit worth waiting out', (status, code, message) => {
+    const c = classifyModelStudioError(compatibleModeError(status, code, message));
+    expect(c).toMatchObject({ category: 'rate_limit', retryable: true, fallbackable: true });
+  });
+
+  it('keeps the wait the provider asked for on a throttle', () => {
+    const err = Object.assign(
+      compatibleModeError(
+        429,
+        'limit_requests',
+        'Requests rate limit exceeded, please try again later.',
+      ),
+      { headers: { 'retry-after': '20' } },
+    );
+    expect(classifyModelStudioError(err).retryAfterSeconds).toBe(20);
+  });
+
+  it.each([
+    [400, 'Arrearage', 'Access denied, please make sure your account is in good standing.'],
+    [
+      429,
+      'BudgetLimitExceeded',
+      'The budget configured in Budget Management has been exhausted. You will be unable to make further API calls until the budget limit is increased or reset.',
+    ],
+    [429, 'PrepaidBillOverdue', 'Prepaid bill overdue.'],
+    [429, 'PostpaidBillOverdue', 'Pay-as-you-go bill overdue.'],
+    [429, 'CommodityNotPurchased', 'Commodity has not purchased yet.'],
+  ])('reads %i %s as the whole account’s billing state', (status, code, message) => {
+    const c = classifyModelStudioError(compatibleModeError(status, code, message));
+    expect(c).toMatchObject({
+      category: 'billing_exhausted',
+      providerHint: MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+      retryable: false,
+      fallbackable: false,
+    });
+  });
+
+  it.each([
+    [400, 'InvalidParameter', 'Input text cannot be used: payment required'],
+    [400, 'InvalidParameter', 'Input text cannot be used: check your plan and billing details'],
+    [400, 'InvalidParameter', 'Input text cannot be used: insufficient funds'],
+    [
+      500,
+      'InternalError.Algo',
+      'An error occurred in model serving, error message is: [insufficient_quota]',
+    ],
+  ])(
+    'does not call the account unfunded when %i %s only quotes billing wording: %s',
+    (status, code, message) => {
+      const err = compatibleModeError(status, code, message);
+      const c = classifyModelStudioError(err);
+      expect(c.category).not.toBe('billing_exhausted');
+      expect(c.providerHint).toBeUndefined();
+      expect(c.status).toBe(status);
+      expect(classifyError(err).category).toBe('billing_exhausted');
+    },
+  );
+
+  it.each(['Payment required', 'Your credit balance is too low.', 'insufficient_quota'])(
+    'does not call the account unfunded on wording alone, with no status or code beside it: %s',
+    (message) => {
+      expect(classifyModelStudioError({ message }).category).not.toBe('billing_exhausted');
+      expect(classifyError({ message }).category).toBe('billing_exhausted');
+    },
+  );
+
+  it('reads the unfunded sentence under a 429 with no code as a rate limit worth waiting out', () => {
+    const c = classifyModelStudioError({
+      status: 429,
+      message: 'You exceeded your current quota, please check your plan and billing details.',
+    });
+    expect(c).toMatchObject({ category: 'rate_limit', retryable: true, fallbackable: true });
+  });
+
+  it.each([
+    [{ status: 402, message: 'Payment required' }, 'payment_required_402'],
+    [
+      compatibleModeError(
+        400,
+        'billing_hard_limit_reached',
+        'Billing hard limit has been reached.',
+      ),
+      'credit_balance_low',
+    ],
+  ])('still reads an unfunded account from the status or a code field', (err, code) => {
+    expect(classifyModelStudioError(err)).toMatchObject({
+      category: 'billing_exhausted',
+      code,
+      retryable: false,
+      fallbackable: false,
+    });
+    expect(classifyModelStudioError(err).providerHint).toBeUndefined();
+  });
+
+  it.each([
+    [404, 'ModelNotFound', 'Model can not be found.'],
+    [404, 'model_not_found', 'The model xxx does not exist or you do not have access to it.'],
+    [400, 'InvalidParameter', 'Model not exist.'],
+    [404, 'model_not_supported', 'Unsupported model xxx for OpenAI compatibility mode.'],
+  ])('reads %i %s as a model this account cannot reach', (status, code, message) => {
+    const c = classifyModelStudioError(compatibleModeError(status, code, message));
+    expect(c).toMatchObject({
+      category: 'invalid_model',
+      code: 'invalid_model',
+      providerHint: MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
+    });
+  });
+
+  it('reads the documented not-found sentence when no code survives', () => {
+    const c = classifyModelStudioError({ status: 400, message: 'Model not exist.' });
+    expect(c.providerHint).toBe(MODEL_STUDIO_MODEL_NOT_FOUND_HINT);
+  });
+
+  it.each([
+    'The image url is invalid: model not exist in path',
+    'Input text cannot be used: model not exist.',
+  ])(
+    'leaves a validation message that only quotes the not-found sentence to the shared classifier: %s',
+    (message) => {
+      const err = compatibleModeError(400, 'InvalidParameter', message);
+      const c = classifyModelStudioError(err);
+      expect(c.providerHint).toBeUndefined();
+      expect(c).toEqual(classifyError(err));
+    },
+  );
+
+  it('names no model refusal when only the wording of a serving error mentions the model', () => {
+    const c = classifyModelStudioError(
+      compatibleModeError(
+        500,
+        'InternalError.Algo',
+        "An error occurred in model serving, error message is: [Cluster 'xxx' not found!]",
+      ),
+    );
+    expect(c.providerHint).toBeUndefined();
+  });
+
+  it.each([
+    [403, 'Model.AccessDenied', 'Model access denied.'],
+    [403, 'AccessDenied', 'Access denied.'],
+    [403, 'access_denied', 'Access denied.'],
+    [403, 'AccessDenied', 'current user api does not support synchronous calls.'],
+    [403, 'Workspace.AccessDenied', 'Workspace access denied.'],
+    [403, 'App.AccessDenied', 'App access denied.'],
+  ])(
+    'reads %i %s as a refusal of that model the account can still fix, never of the credential',
+    (status, code, message) => {
+      const c = classifyModelStudioError(compatibleModeError(status, code, message));
+      expect(c).toMatchObject({
+        category: 'invalid_model',
+        code: 'model_tier_restricted',
+        providerHint: MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+        retryable: false,
+        fallbackable: true,
+        status,
+      });
+    },
+  );
+
+  it('reads a deprecated model endpoint as that model retired, never as the credential', () => {
+    const c = classifyModelStudioError(
+      compatibleModeError(403, 'Endpoint.AccessDenied', 'Workspace endpoint access denied.'),
+    );
+    expect(c).toMatchObject({
+      category: 'invalid_model',
+      code: 'model_tier_restricted',
+      providerHint: MODEL_STUDIO_MODEL_RETIRED_HINT,
+      retryable: false,
+      fallbackable: true,
+      status: 403,
+    });
+  });
+
+  it('leaves an account that never activated Model Studio to the credential classifier', () => {
+    const err = compatibleModeError(
+      403,
+      'AccessDenied.Unpurchased',
+      'Access to model denied. Please make sure you are eligible for using the model.',
+    );
+    expect(classifyModelStudioError(err)).toEqual(classifyError(err));
+    expect(classifyModelStudioError(err).category).toBe('auth');
+  });
+
+  it.each([
+    [400, 'DataInspectionFailed', 'Input or output data may contain inappropriate content.'],
+    [400, 'data_inspection_failed', 'Input data may contain inappropriate content.'],
+  ])('reads %i %s as a content refusal', (status, code, message) => {
+    expect(classifyModelStudioError(compatibleModeError(status, code, message)).category).toBe(
+      'safety',
+    );
+  });
+
+  it('leaves everything Model Studio does not name to the shared classifier', () => {
+    const err = compatibleModeError(401, 'invalid_api_key', 'Incorrect API key provided.');
+    expect(classifyModelStudioError(err)).toEqual(classifyError(err));
+  });
+
+  it('keeps a classification an adapter already carried', () => {
+    const err = Object.assign(new Error('insufficient_quota'), {
+      classification: {
+        category: 'server_overload',
+        code: 'overloaded_503',
+        retryable: true,
+        fallbackable: true,
+      },
+    });
+    expect(classifyModelStudioError(err).category).toBe('server_overload');
+  });
+
+  it('reads the native protocol body, where the code sits at the top level', () => {
+    const c = classifyModelStudioError({
+      status: 429,
+      code: 'Throttling.RateQuota',
+      message: 'Requests rate limit exceeded, please try again later.',
+      request_id: 'fixture-request',
+    });
+    expect(c.category).toBe('rate_limit');
   });
 });

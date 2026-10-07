@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { ROUTE_HANDLER_DELEGATES, type RouteHandlerDelegate } from './registry';
+
 export const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'] as const;
 
 export type MutatingMethod = (typeof MUTATING_METHODS)[number];
@@ -51,26 +53,39 @@ function emittersIn(text: string): AuditEmitterKind[] {
 /**
  * One hop of import resolution, because almost no route emits its own event:
  * the write and the audit record live together in the service, which is the
- * right place for them and invisible to a grep of the route file.
+ * right place for them and invisible to a grep of the route file. A handler the
+ * registry declares for the route is followed one hop further.
  */
-export function classifyRoute(appRoot: string, absolute: string): RouteAuditCoverage {
+export function classifyRoute(
+  appRoot: string,
+  absolute: string,
+  delegates: readonly RouteHandlerDelegate[] = ROUTE_HANDLER_DELEGATES,
+): RouteAuditCoverage {
   const text = readFileSync(absolute, 'utf8');
   const route = absolute.slice(join(appRoot, 'app/api').length + 1);
   const methods = [...text.matchAll(MUTATING_EXPORT)].map((match) => match[1] as MutatingMethod);
+  const handlers = new Set(
+    delegates.filter((delegate) => delegate.route === route).map((delegate) => delegate.handler),
+  );
 
   const emits = new Set(emittersIn(text));
-  const emitters = emits.size > 0 ? [route] : [];
+  const emitters = new Set(emits.size > 0 ? [route] : []);
 
-  for (const match of text.matchAll(/from\s+'(@\/[^']+)'/g)) {
-    const target = resolveAlias(appRoot, match[1] as string);
-    if (!target) continue;
-    const found = emittersIn(readFileSync(target, 'utf8'));
-    if (found.length === 0) continue;
-    for (const kind of found) emits.add(kind);
-    emitters.push(target.slice(appRoot.length + 1));
-  }
+  const followImports = (source: string, throughHandlers: boolean): void => {
+    for (const match of source.matchAll(/from\s+'(@\/[^']+)'/g)) {
+      const target = resolveAlias(appRoot, match[1] as string);
+      if (!target) continue;
+      const imported = target.slice(appRoot.length + 1);
+      const importedText = readFileSync(target, 'utf8');
+      const found = emittersIn(importedText);
+      for (const kind of found) emits.add(kind);
+      if (found.length > 0) emitters.add(imported);
+      if (throughHandlers && handlers.has(imported)) followImports(importedText, false);
+    }
+  };
+  followImports(text, true);
 
-  return { route, methods: [...new Set(methods)], emits: [...emits], emitters };
+  return { route, methods: [...new Set(methods)], emits: [...emits], emitters: [...emitters] };
 }
 
 export function sweepRouteAuditCoverage(appRoot: string): RouteAuditCoverage[] {

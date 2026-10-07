@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-02
+Last updated: 2026-10-04
 
 The three administrative surfaces in `apps/web`, who each one admits, and what
 can be done from it. Read this before granting anyone access to any of them: two
@@ -65,14 +65,15 @@ panels that act rather than report.
 
 ## What is on `/operator`
 
-`apps/web/features/admin/pages/OperatorDashboardPage.tsx`. Seventeen tabs, each
+`apps/web/features/admin/pages/OperatorDashboardPage.tsx`. Eighteen tabs, each
 addressable by location hash so a link can land on a control rather than on the
-overview: `overview`, `feedback`, `users`, `product`, `costs`, `routing`,
-`rollout`, `quota`, `flags`, `services`, `dashboards`, `routes`, `economics`,
-`content`, `privacy`, `support`, `jobs`.
+overview: `overview`, `feedback`, `users`, `waitlist`, `product`, `costs`,
+`routing`, `rollout`, `quota`, `flags`, `services`, `dashboards`, `routes`,
+`economics`, `content`, `privacy`, `support`, `jobs`.
 
 | Tab         | Panel                       | What it is for                                                                                |
 | ----------- | --------------------------- | --------------------------------------------------------------------------------------------- |
+| `waitlist`  | `WaitlistPanel`             | who joined a waitlist, with consent on record, and the CSV export; see the section below      |
 | `costs`     | `OperatorCostsPanel`        | spend against providers                                                                       |
 | `routing`   | `RoutingHealthPanel`        | route health and breaker state                                                                |
 | `rollout`   | `ModelRolloutPanel`         | staged model rollout                                                                          |
@@ -91,6 +92,47 @@ an organisation owner or admin, and nesting the operator dashboard inside it
 would have handed the platform's own books to any customer admin. It would also
 have bounced a platform operator who holds no organisation role, which is the
 normal case for whoever runs the platform.
+
+## Seeing who joined a waitlist
+
+Open `/operator#waitlist`. The public pages collect an address through a
+waitlist form: the platform availability form on `/download` and the home page,
+and the Enterprise access form on `/waitlist` and in the dialog the surface
+pages open. This tab is the list of everyone who submitted one.
+
+- **Public waitlist.** One row per address and source, newest first, with the
+  total and a count per source. The source is the value the form sends, not the
+  page the visitor was on, so it separates the Enterprise list from the platform
+  availability list but does not name a platform.
+- **Consent on record.** Each row shows the latest decision for the purposes its
+  own list asks for, and no others; `consentPurposesForWaitlistSource` in
+  `apps/web/lib/consent-purposes.ts` owns which purposes those are. A withdrawal
+  is the latest decision, so it reads `not granted`. A purpose missing from a
+  row has no decision on record for that list and is never consent. That has two
+  causes: the row is older than the consent ledger, or the form asked under
+  another list's notice when the address was stored. The home page Mobile form
+  did the second until the change that derives a form's purposes from its source
+  was deployed, so a `mobile` row stored before that deploy agreed to the
+  Enterprise purpose, shows no `platform_availability_waitlist` decision here,
+  and is not to be mailed a launch notice.
+- **Export CSV** downloads the same rows from `GET /api/admin/waitlist/export`,
+  with one column per consent purpose. Send a launch notice only to rows where
+  `platform_availability_waitlist` says `granted`. `product_updates` is a
+  separate choice from joining the list, so mail product news only to rows where
+  it says `granted`. An address on two lists has two rows. Cells a spreadsheet
+  would run as a formula are written with a leading quote.
+- **Paid plan upgrade waitlist.** Signed-in accounts that asked for a paid plan,
+  by account id and plan. That table stores a pseudonym rather than an address,
+  so reach each one through its account in the `users` tab.
+
+Nothing in the product mails either list, and joining sends no confirmation. Each
+time the tab loads and each export writes an `admin_action` row to
+`security_audit_logs` with the operator id and the row count, never the
+addresses. When that row cannot be written the read is refused: the tab shows an
+error and the export answers with an error instead of a file, so a failure here
+can mean the audit table is unreachable and never means the list is empty. A
+join is recorded only after the consent decisions are written, so a visitor who
+saw the success message is in this list.
 
 ## Rules for acting from these surfaces
 

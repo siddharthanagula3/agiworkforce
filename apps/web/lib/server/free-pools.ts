@@ -1,6 +1,9 @@
 import 'server-only';
 
-import type { FreeQuotaTermsReviewStanding } from '@agiworkforce/cloud-contracts';
+import type {
+  FreeQuotaMediaCategory,
+  FreeQuotaTermsReviewStanding,
+} from '@agiworkforce/cloud-contracts';
 import { isFreeEligibilityValid, type FreeEligibility } from '@agiworkforce/routing';
 import { z } from 'zod';
 import { getProviderOffering } from '@agiworkforce/types';
@@ -79,6 +82,12 @@ export const FreeQuotaInventorySchema = z
         approvedOfferingKeys: z.array(z.string().min(1)).min(1),
       })
       .nullable(),
+    freeAutoFallback: z
+      .object({
+        offeringKeys: z.array(z.string().min(1)).min(1),
+        spendOnCapacityShortage: z.boolean(),
+      })
+      .optional(),
   })
   .superRefine((inventory, context) => {
     const seen = new Set<string>();
@@ -125,6 +134,21 @@ export const FreeQuotaInventorySchema = z
         approved.add(key);
       }
     }
+    const ranked = new Set<string>();
+    for (const key of inventory.freeAutoFallback?.offeringKeys ?? []) {
+      if (
+        !seen.has(key) ||
+        ranked.has(key) ||
+        getProviderOffering(key)?.quotaProbeProtocol !== 'chat'
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['freeAutoFallback', 'offeringKeys'],
+          message: 'The Free Auto fallback must rank distinct observed chat offerings',
+        });
+      }
+      ranked.add(key);
+    }
   });
 
 export type FreeQuotaInventory = z.infer<typeof FreeQuotaInventorySchema>;
@@ -152,12 +176,29 @@ export function reviewedQuotaOfferingKeys(
   return new Set(review.approvedOfferingKeys);
 }
 
+const DailyCapSchema = z.number().int().nonnegative();
+
+export const LimitedMediaOfferSchema = z.strictObject({
+  dailyCapPerUser: z.strictObject({ image: DailyCapSchema, video: DailyCapSchema }),
+});
+
+export type LimitedMediaOffer = z.infer<typeof LimitedMediaOfferSchema>;
+
+export function limitedMediaDailyCap(
+  offer: LimitedMediaOffer | undefined,
+  category: FreeQuotaMediaCategory,
+): number | null {
+  const cap = offer?.dailyCapPerUser[category] ?? 0;
+  return cap > 0 ? cap : null;
+}
+
 export const FreePoolsDocumentSchema = z.object({
   schemaVersion: z.number().int().min(MIN_SCHEMA_VERSION),
   workbook: z.string().min(MIN_IDENTIFIER_LENGTH),
   notes: z.string().optional(),
   entries: z.array(FreePoolEntrySchema),
   inventory: FreeQuotaInventorySchema.optional(),
+  limitedMediaOffer: LimitedMediaOfferSchema.optional(),
 });
 
 export type FreePoolTerms = z.infer<typeof FreePoolTermsSchema>;

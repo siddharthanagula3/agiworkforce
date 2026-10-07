@@ -361,6 +361,24 @@
       "verifiedBy": "official-deepinfra-and-novita-model-catalogues",
       "status": "ADDITION",
       "notes": "Structured output on the DeepInfra and Novita routes, read on 2026-09-28. docs.deepinfra.com/chat/structured-outputs describes json_object and json_schema modes on the OpenAI-compatible API for the models its catalogue marks; the public catalogue at api.deepinfra.com/models/list tags deepseek-ai/DeepSeek-V4-Flash, deepseek-ai/DeepSeek-V4-Pro, zai-org/GLM-5.3, zai-org/GLM-5.3-Flash, moonshotai/Kimi-K3 and MiniMaxAI/MiniMax-M3 with both json and structured-output, so those six DeepInfra routes list json_object and json_schema. docs.novita.ai/guides/llm-structured-outputs uses the OpenAI json_schema format and renders its supported-model list from the public catalogue at api.novita.ai/v3/openai/models, which gives structured-outputs in the features of all seven routed models (deepseek/deepseek-v4-flash, deepseek/deepseek-v4-pro-0813, qwen/qwen3.8-flash, zai-org/glm-5.3, zai-org/glm-5.3-flash, moonshotai/kimi-k3, minimax/minimax-m3), so those Novita routes list json_schema."
+    },
+    {
+      "date": "2026-10-02",
+      "verifiedBy": "official-model-studio-retirement-notices",
+      "status": "CORRECTION",
+      "notes": "Provider offerings whose Model Studio model is being retired now carry retiresAt, and a free quota offering is withdrawn at that instant even though its allocation runs longer. Alibaba Cloud's notices, read on 2026-10-02: [Model Studio] Notice on the Postponed Retirement of Selected Legacy Models (alibabacloud.com/en/notice/model_studio_notice_on_the_postponed_retirement_of_selected_legacy_models_7d0, published 2026-07-06), [Model Studio] Notice of Retirement for Selected Legacy Models (alibabacloud.com/en/notice/model_studio_notice_of_retirement_for_selected_legacy_models_7d9, 2026-07-10), [Model Studio] Notice of Retirement for Selected Legacy Long-tail Models (alibabacloud.com/en/notice/model_studio_notice_of_retirement_for_selected_legacy_longtail_models_7d4, 2026-07-09) and the speech and mainline notices they cite (alibabacloud.com/en/notice/modelstudiospeech_series_legacy_mainline_models_eos_notice_792 and alibabacloud.com/en/notice/model_studionotice_on_the_decommissioning_of_certain_historical_mainline_models_731) each say the listed models cease service on 2026-10-10 00:00:00 (UTC+08), recorded as 2026-10-09T16:00:00.000Z. The notice on the decommissioning of selected historical snapshot models (alibabacloud.com/en/notice/model_studio_notice_on_the_decommissioning_of_selected_historical_snapshot_models_730) says its models ceased on 2026-05-13 00:00:00 (UTC+08), recorded as 2026-05-12T16:00:00.000Z. deepseek-v4-flash retires with deepseek-v4-flash-0731 named as its replacement, so the 0731 offering carries no retirement. Every offering with a quota protocol was also found on the Model Studio pricing page (alibabacloud.com/help/en/model-studio/model-pricing, last updated 2026-09-28), so no provider model id was found wrong."
+    },
+    {
+      "date": "2026-10-04",
+      "verifiedBy": "official-model-studio-api-references-two-independent-readers-no-live-call",
+      "status": "ADDITION",
+      "notes": "Fifteen Model Studio media offerings gained a quota protocol from documentation alone. Their request settings were extracted from the provider's API references on 2026-10-04 by two independent readers who cross-checked each other, and no live provider call was made: the owner decided to connect them from the documentation, so the first real request to each is a user's. wan2.6-t2v (qwen-quota-009) was already connected and its 2-second request was verified live on 2026-09-20; its clip length moves to 5 seconds, inside the documented range of 2 to 15, and that length has not been exercised live. Text-to-video, an asynchronous task on /api/v1/services/aigc/video-generation/video-synthesis with X-DashScope-Async: enable, polled at /api/v1/tasks/{task_id}, result at output.video_url: wan2.2-t2v-plus at 832*480, because it has no 720P tier, and wan2.1-t2v-plus and wan2.1-t2v-turbo at 1280*720, all three with a duration the provider fixes at 5 seconds, so none is sent; wan2.7-t2v, wan2.7-t2v-2026-04-25 and wan2.7-t2v-2026-06-12 at resolution 720P, ratio 16:9 and duration 5, with no size and no shot_type; happyhorse-1.0-t2v and happyhorse-1.1-t2v at resolution 720P, ratio 16:9, duration 3 and watermark false, because their watermark defaults to on and their reference documents neither size nor prompt_extend. prompt_extend false is sent wherever the parameter is documented. The wan2.7-t2v-2026-04-25 snapshot is named by the video model list, the price list and the rate-limit list but not by the wan2.7 API reference, so its parameters are those of the family page. Text-to-image: wan2.6-t2i on the existing synchronous /api/v1/services/aigc/multimodal-generation/generation shape at 1280*1280, its documented minimum; wan2.7-image-pro and wan2.7-image on the same shape at 1024*1024 with size and n only, because the two pages that cover the parameter list prompt_extend as not supported for them; wan2.2-t2i-plus, wan2.2-t2i-flash, wan2.1-t2i-plus and wan2.1-t2i-turbo on the asynchronous old protocol, /api/v1/services/aigc/text2image/image-synthesis with X-DashScope-Async: enable and input.prompt, result at the first output.results entry that has a url, at 1024*1024 with n 1 and prompt_extend false, and with the prompt shortened to their documented maximum of 500 characters because the reference does not say what happens beyond it. z-image-turbo (qwen-quota-101), connected and verified live on 2026-09-20, now holds its 1024*1024 size in the catalogue instead of taking it from the web policy, so its request is unchanged; the z-image reference lists 1024*1024 as the 1:1 size, and every image offering with a quota protocol must now state its size. Left without a protocol: wan2.5-t2v-preview, wan2.5-t2i-preview, wan3.0-video and wan3.0-video-prime, which the provider marks as preview; wan2.6-image, whose text-only path the Alibaba Cloud and QwenCloud references describe differently; and every model that needs an input image or video. Sources read on 2026-10-04: alibabacloud.com/help/en/model-studio/legacy-wan-text-to-video-api-reference, alibabacloud.com/help/en/model-studio/text-to-video-api-reference, alibabacloud.com/help/en/model-studio/happyhorse-text-to-video-api-reference, alibabacloud.com/help/en/model-studio/video-generate-edit-model, alibabacloud.com/help/en/model-studio/text-to-image-v2-api-reference, alibabacloud.com/help/en/model-studio/wan-image-generation-and-editing-api-reference, alibabacloud.com/help/en/model-studio/wan-image-edit, alibabacloud.com/help/en/model-studio/z-image-api-reference, alibabacloud.com/help/en/model-studio/model-pricing, alibabacloud.com/help/en/model-studio/rate-limit, docs.qwencloud.com/api-reference/video-generation/wan-text-to-video/create-task.md, docs.qwencloud.com/api-reference/video-generation/wan27-text-to-video/create-task.md, docs.qwencloud.com/api-reference/video-generation/happyhorse-text-to-video/create-task.md, docs.qwencloud.com/developer-guides/getting-started/video-models.md, docs.qwencloud.com/api-reference/image-generation/wan-text-to-image-v2/create-task.md, docs.qwencloud.com/api-reference/image-generation/wan27-image-gen-edit/synchronous.md and docs.qwencloud.com/developer-guides/image-generation/text-to-image.md."
+    },
+    {
+      "date": "2026-10-04",
+      "verifiedBy": "user-qwencloud-benefits-screenshots-text-recognition-and-visual-check-no-live-call",
+      "status": "ADDITION",
+      "notes": "Re-observed the QwenCloud Benefits page from three screenshots the account owner captured on 2026-10-04: 279 rows, 277 eligible and 2 unavailable, against 272 rows (270 and 2) on 2026-09-19. Every one of the 272 earlier offerings was found again and matched by its position; 26 of them moved row because seven rows were inserted on the third page, and consumption figures were refreshed. Every active row showed the free-quota-only switch on, including qwen-quota-247, qwen-quota-248, qwen-quota-249 and qwen-quota-250, which showed it off on 2026-09-19; the two expired rows are recorded with it off. qwen-audio-3.1-tts-flash (qwen-quota-248) now reads 1,000,000 tokens expiring 2026-12-21 where it read 10,000 chars expiring 2026-12-16; no other limit, unit or expiry was changed. Added seven provider offering observations, qwen-quota-273 to qwen-quota-279: two fully visible provider IDs, qwen-image-2.1-pro (image, 10 images, expiring 2027-01-01) and qwen-audio-3.1-asr-flash (audio, 1,000,000 tokens, expiring 2026-12-21), and five audio rows of 1,000,000 tokens each whose IDs the page cuts off: one beginning qwen3.8-omni-flash-realt, three different IDs beginning qwen-audio-3.1-asr-flash, and one beginning qwen-audio-3.1-realtime-. The five truncated IDs are retained as unresolved, with the visible prefix as the label and no provider model ID, until they are read in full. None of the seven carries a quota protocol and none is named in the terms review, so none can be served. Names of earlier offerings were kept from the catalogue rather than taken from text recognition, numbers and dates were cross-checked, the inserted rows were read by eye, and no live provider call was made. This inventory still does not admit models to production routing, override lifecycle retirement, change paid prices, or establish account-bound free eligibility. Allocation evidence remains in apps/web/config/free-pools.json."
     }
   ],
   "providers": {
@@ -4361,7 +4379,8 @@
       "displayName": "deepseek-v4-flash",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-004": {
       "provider": "qwen",
@@ -4377,7 +4396,8 @@
       "displayName": "deepseek-v3.2",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-006": {
       "provider": "qwen",
@@ -4410,7 +4430,10 @@
       "displayName": "wan2.6-t2v",
       "category": "video",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "video-async"
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoSize": "1280*720",
+      "quotaVideoSeconds": 5,
+      "quotaVideoShotType": "single"
     },
     "qwen-quota-010": {
       "provider": "qwen",
@@ -4424,21 +4447,33 @@
       "providerModelId": "wan2.2-t2v-plus",
       "displayName": "wan2.2-t2v-plus",
       "category": "video",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoSize": "832*480",
+      "quotaVideoSeconds": 5,
+      "quotaVideoDurationFixed": true
     },
     "qwen-quota-012": {
       "provider": "qwen",
       "providerModelId": "wan2.1-t2v-plus",
       "displayName": "wan2.1-t2v-plus",
       "category": "video",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoSize": "1280*720",
+      "quotaVideoSeconds": 5,
+      "quotaVideoDurationFixed": true
     },
     "qwen-quota-013": {
       "provider": "qwen",
       "providerModelId": "wan2.1-t2v-turbo",
       "displayName": "wan2.1-t2v-turbo",
       "category": "video",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoSize": "1280*720",
+      "quotaVideoSeconds": 5,
+      "quotaVideoDurationFixed": true
     },
     "qwen-quota-014": {
       "provider": "qwen",
@@ -4536,14 +4571,20 @@
       "providerModelId": "wan2.7-image-pro",
       "displayName": "wan2.7-image-pro",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1024*1024",
+      "quotaPromptExtendUnsupported": true
     },
     "qwen-quota-028": {
       "provider": "qwen",
       "providerModelId": "wan2.7-image",
       "displayName": "wan2.7-image",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1024*1024",
+      "quotaPromptExtendUnsupported": true
     },
     "qwen-quota-029": {
       "provider": "qwen",
@@ -4637,7 +4678,8 @@
       "displayName": "qwen3.6-max-preview",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-041": {
       "provider": "qwen",
@@ -4762,14 +4804,16 @@
       "displayName": "qwen-plus-2025-09-11",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-057": {
       "provider": "qwen",
       "providerModelId": "qwen-plus-2025-07-28",
       "displayName": "qwen-plus-2025-07-28",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-058": {
       "provider": "qwen",
@@ -4792,7 +4836,8 @@
       "providerModelId": "fun-asr-mtl",
       "displayName": "fun-asr-mtl",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-061": {
       "provider": "qwen",
@@ -4806,21 +4851,24 @@
       "providerModelId": "fun-asr-2025-11-07",
       "displayName": "fun-asr-2025-11-07",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-063": {
       "provider": "qwen",
       "providerModelId": "fun-asr-mtl-2025-08-25",
       "displayName": "fun-asr-mtl-2025-08-25",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-064": {
       "provider": "qwen",
       "providerModelId": "fun-asr-2025-08-25",
       "displayName": "fun-asr-2025-08-25",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-065": {
       "provider": "qwen",
@@ -4877,7 +4925,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaChatImageInput": true
+      "quotaChatImageInput": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-072": {
       "provider": "qwen",
@@ -4886,7 +4935,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaChatImageInput": true
+      "quotaChatImageInput": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-073": {
       "provider": "qwen",
@@ -4895,7 +4945,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaChatImageInput": true
+      "quotaChatImageInput": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-074": {
       "provider": "qwen",
@@ -4913,7 +4964,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaChatImageInput": true
+      "quotaChatImageInput": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-076": {
       "provider": "qwen",
@@ -4922,7 +4974,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaChatImageInput": true
+      "quotaChatImageInput": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-077": {
       "provider": "qwen",
@@ -4930,7 +4983,8 @@
       "displayName": "qwen3-max",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-078": {
       "provider": "qwen",
@@ -4938,7 +4992,8 @@
       "displayName": "qwen3-max-preview",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-079": {
       "provider": "qwen",
@@ -4946,7 +5001,8 @@
       "displayName": "qwen3-max-2026-01-23",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-080": {
       "provider": "qwen",
@@ -4954,7 +5010,8 @@
       "displayName": "qwen3-max-2025-09-23",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-081": {
       "provider": "qwen",
@@ -4968,14 +5025,16 @@
       "providerModelId": "qwen3-asr-flash-2026-02-10",
       "displayName": "qwen3-asr-flash-2026-02-10",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-083": {
       "provider": "qwen",
       "providerModelId": "qwen3-asr-flash-2025-09-08",
       "displayName": "qwen3-asr-flash-2025-09-08",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-084": {
       "provider": "qwen",
@@ -5036,21 +5095,24 @@
       "providerModelId": "qwen-voice-enrollment",
       "displayName": "qwen-voice-enrollment",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-091": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-vc-2026-01-22",
       "displayName": "qwen3-tts-vc-2026-01-22",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-092": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-vd-2026-01-26",
       "displayName": "qwen3-tts-vd-2026-01-26",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-093": {
       "provider": "qwen",
@@ -5072,28 +5134,32 @@
       "providerModelId": "qwen3-asr-flash-filetrans-2025-11-17",
       "displayName": "qwen3-asr-flash-filetrans-2025-11-17",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-096": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-instruct-flash",
       "displayName": "qwen3-tts-instruct-flash",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-097": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-instruct-flash-2026-01-26",
       "displayName": "qwen3-tts-instruct-flash-2026-01-26",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-098": {
       "provider": "qwen",
       "providerModelId": "qwen-vl-ocr",
       "displayName": "qwen-vl-ocr",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-099": {
       "provider": "qwen",
@@ -5115,21 +5181,24 @@
       "displayName": "z-image-turbo",
       "category": "image",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "image-sync"
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1024*1024"
     },
     "qwen-quota-102": {
       "provider": "qwen",
       "providerModelId": "qwen-image-edit-max",
       "displayName": "qwen-image-edit-max",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-103": {
       "provider": "qwen",
       "providerModelId": "qwen-image-edit-max-2026-01-16",
       "displayName": "qwen-image-edit-max-2026-01-16",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-104": {
       "provider": "qwen",
@@ -5138,7 +5207,8 @@
       "category": "image",
       "identityStatus": "exact",
       "quotaProbeProtocol": "image-sync",
-      "quotaImageSize": "1328*1328"
+      "quotaImageSize": "1328*1328",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-105": {
       "provider": "qwen",
@@ -5147,7 +5217,8 @@
       "category": "image",
       "identityStatus": "exact",
       "quotaProbeProtocol": "image-sync",
-      "quotaImageSize": "1328*1328"
+      "quotaImageSize": "1328*1328",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-106": {
       "provider": "qwen",
@@ -5156,7 +5227,8 @@
       "category": "image",
       "identityStatus": "exact",
       "quotaProbeProtocol": "image-sync",
-      "quotaImageSize": "1328*1328"
+      "quotaImageSize": "1328*1328",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-107": {
       "provider": "qwen",
@@ -5165,7 +5237,8 @@
       "category": "image",
       "identityStatus": "exact",
       "quotaProbeProtocol": "image-sync",
-      "quotaImageSize": "1328*1328"
+      "quotaImageSize": "1328*1328",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-108": {
       "provider": "qwen",
@@ -5174,49 +5247,56 @@
       "category": "image",
       "identityStatus": "exact",
       "quotaProbeProtocol": "image-sync",
-      "quotaImageSize": "1328*1328"
+      "quotaImageSize": "1328*1328",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-109": {
       "provider": "qwen",
       "providerModelId": "qwen-image-edit-plus-2025-12-15",
       "displayName": "qwen-image-edit-plus-2025-12-15",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-110": {
       "provider": "qwen",
       "providerModelId": "qwen-image-edit-plus-2025-10-30",
       "displayName": "qwen-image-edit-plus-2025-10-30",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-111": {
       "provider": "qwen",
       "providerModelId": "qwen-image-edit-plus",
       "displayName": "qwen-image-edit-plus",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-112": {
       "provider": "qwen",
       "providerModelId": "qwen-image-edit",
       "displayName": "qwen-image-edit",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-113": {
       "provider": "qwen",
       "providerModelId": "qwen3-livetranslate-flash",
       "displayName": "qwen3-livetranslate-flash",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-114": {
       "provider": "qwen",
       "providerModelId": "qwen3-livetranslate-flash-2025-12-01",
       "displayName": "qwen3-livetranslate-flash-2025-12-01",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-115": {
       "provider": "qwen",
@@ -5230,7 +5310,8 @@
       "providerModelId": "qwen-mt-turbo",
       "displayName": "qwen-mt-turbo",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-117": {
       "provider": "qwen",
@@ -5253,49 +5334,56 @@
       "displayName": "qwen3-coder-next",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-120": {
       "provider": "qwen",
       "providerModelId": "qwen3-vl-32b-instruct",
       "displayName": "qwen3-vl-32b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-121": {
       "provider": "qwen",
       "providerModelId": "qwen3-vl-32b-thinking",
       "displayName": "qwen3-vl-32b-thinking",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-122": {
       "provider": "qwen",
       "providerModelId": "qwen3-vl-30b-a3b-instruct",
       "displayName": "qwen3-vl-30b-a3b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-123": {
       "provider": "qwen",
       "providerModelId": "qwen3-vl-30b-a3b-thinking",
       "displayName": "qwen3-vl-30b-a3b-thinking",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-124": {
       "provider": "qwen",
       "providerModelId": "qwen3-vl-8b-instruct",
       "displayName": "qwen3-vl-8b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-125": {
       "provider": "qwen",
       "providerModelId": "qwen3-vl-8b-thinking",
       "displayName": "qwen3-vl-8b-thinking",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-126": {
       "provider": "qwen",
@@ -5304,7 +5392,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaThinkingRequired": true
+      "quotaThinkingRequired": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-127": {
       "provider": "qwen",
@@ -5312,7 +5401,8 @@
       "displayName": "qwen3-vl-235b-a22b-instruct",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-128": {
       "provider": "qwen",
@@ -5321,7 +5411,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaThinkingRequired": true
+      "quotaThinkingRequired": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-129": {
       "provider": "qwen",
@@ -5329,7 +5420,8 @@
       "displayName": "qwen3-next-80b-a3b-instruct",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-130": {
       "provider": "qwen",
@@ -5338,7 +5430,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaThinkingRequired": true
+      "quotaThinkingRequired": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-131": {
       "provider": "qwen",
@@ -5346,7 +5439,8 @@
       "displayName": "qwen3-30b-a3b-instruct-2507",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-132": {
       "provider": "qwen",
@@ -5355,7 +5449,8 @@
       "category": "chat",
       "identityStatus": "exact",
       "quotaProbeProtocol": "chat",
-      "quotaThinkingRequired": true
+      "quotaThinkingRequired": true,
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-133": {
       "provider": "qwen",
@@ -5363,7 +5458,8 @@
       "displayName": "qwen3-235b-a22b-instruct-2507",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-134": {
       "provider": "qwen",
@@ -5371,7 +5467,8 @@
       "displayName": "qwen3-14b",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-135": {
       "provider": "qwen",
@@ -5379,7 +5476,8 @@
       "displayName": "qwen3-30b-a3b",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-136": {
       "provider": "qwen",
@@ -5387,7 +5485,8 @@
       "displayName": "qwen3-8b",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-137": {
       "provider": "qwen",
@@ -5395,7 +5494,8 @@
       "displayName": "qwen3-32b",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-138": {
       "provider": "qwen",
@@ -5403,7 +5503,8 @@
       "displayName": "qwen3-235b-a22b",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-139": {
       "provider": "qwen",
@@ -5411,7 +5512,8 @@
       "displayName": "qwen3-coder-plus",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-140": {
       "provider": "qwen",
@@ -5419,7 +5521,8 @@
       "displayName": "qwen3-coder-plus-2025-09-23",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-141": {
       "provider": "qwen",
@@ -5427,7 +5530,8 @@
       "displayName": "qwen3-coder-plus-2025-07-22",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-142": {
       "provider": "qwen",
@@ -5464,7 +5568,9 @@
       "providerModelId": "wan2.6-t2i",
       "displayName": "wan2.6-t2i",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1280*1280"
     },
     "qwen-quota-147": {
       "provider": "qwen",
@@ -5478,28 +5584,40 @@
       "providerModelId": "wan2.2-t2i-plus",
       "displayName": "wan2.2-t2i-plus",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-async",
+      "quotaImageSize": "1024*1024",
+      "quotaPromptMaxChars": 500
     },
     "qwen-quota-149": {
       "provider": "qwen",
       "providerModelId": "wan2.2-t2i-flash",
       "displayName": "wan2.2-t2i-flash",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-async",
+      "quotaImageSize": "1024*1024",
+      "quotaPromptMaxChars": 500
     },
     "qwen-quota-150": {
       "provider": "qwen",
       "providerModelId": "wan2.1-t2i-plus",
       "displayName": "wan2.1-t2i-plus",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-async",
+      "quotaImageSize": "1024*1024",
+      "quotaPromptMaxChars": 500
     },
     "qwen-quota-151": {
       "provider": "qwen",
       "providerModelId": "wan2.1-t2i-turbo",
       "displayName": "wan2.1-t2i-turbo",
       "category": "image",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-async",
+      "quotaImageSize": "1024*1024",
+      "quotaPromptMaxChars": 500
     },
     "qwen-quota-152": {
       "provider": "qwen",
@@ -5513,21 +5631,24 @@
       "providerModelId": "qwen3-tts-flash-2025-11-27",
       "displayName": "qwen3-tts-flash-2025-11-27",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-154": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-flash-2025-09-18",
       "displayName": "qwen3-tts-flash-2025-09-18",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-155": {
       "provider": "qwen",
       "providerModelId": "qwen3-omni-30b-a3b-captioner",
       "displayName": "qwen3-omni-30b-a3b-captioner",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-156": {
       "provider": "qwen",
@@ -5541,28 +5662,32 @@
       "providerModelId": "qwen3-omni-flash-2025-12-01",
       "displayName": "qwen3-omni-flash-2025-12-01",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-158": {
       "provider": "qwen",
       "providerModelId": "qwen3-omni-flash-2025-09-15",
       "displayName": "qwen3-omni-flash-2025-09-15",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-159": {
       "provider": "qwen",
       "providerModelId": "qwen-omni-turbo",
       "displayName": "qwen-omni-turbo",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-160": {
       "provider": "qwen",
       "providerModelId": "qwen-omni-turbo-2025-03-26",
       "displayName": "qwen-omni-turbo-2025-03-26",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-161": {
       "provider": "qwen",
@@ -5576,7 +5701,8 @@
       "providerModelId": "qwen2.5-omni-7b",
       "displayName": "qwen2.5-omni-7b",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-163": {
       "provider": "qwen",
@@ -5584,7 +5710,8 @@
       "displayName": "qwen-turbo",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-164": {
       "provider": "qwen",
@@ -5592,7 +5719,8 @@
       "displayName": "qwen-vl-plus",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-165": {
       "provider": "qwen",
@@ -5600,21 +5728,24 @@
       "displayName": "qwen-vl-max",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-166": {
       "provider": "qwen",
       "providerModelId": "qvq-max",
       "displayName": "qvq-max",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-167": {
       "provider": "qwen",
       "providerModelId": "qwq-plus",
       "displayName": "qwq-plus",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-168": {
       "provider": "qwen",
@@ -5636,7 +5767,8 @@
       "providerModelId": "qwen3-coder-30b-a3b-instruct",
       "displayName": "qwen3-coder-30b-a3b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-171": {
       "provider": "qwen",
@@ -5644,14 +5776,16 @@
       "displayName": "qwen3-coder-480b-a35b-instruct",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-172": {
       "provider": "qwen",
       "providerModelId": "qwen2.5-7b-instruct",
       "displayName": "qwen2.5-7b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-173": {
       "provider": "qwen",
@@ -5665,7 +5799,8 @@
       "providerModelId": "qwen2.5-vl-72b-instruct",
       "displayName": "qwen2.5-vl-72b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-175": {
       "provider": "qwen",
@@ -5679,119 +5814,136 @@
       "providerModelId": "qwen-omni-turbo-realtime-2025-05-08",
       "displayName": "qwen-omni-turbo-realtime-2025-05-08",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-177": {
       "provider": "qwen",
       "providerModelId": "qwen3-omni-flash-realtime",
       "displayName": "qwen3-omni-flash-realtime",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-178": {
       "provider": "qwen",
       "providerModelId": "qwen3-livetranslate-flash-realtime",
       "displayName": "qwen3-livetranslate-flash-realtime",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-179": {
       "provider": "qwen",
       "providerModelId": "qwen2.5-14b-instruct",
       "displayName": "qwen2.5-14b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-180": {
       "provider": "qwen",
       "providerModelId": "qwen-vl-plus-2025-08-15",
       "displayName": "qwen-vl-plus-2025-08-15",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-181": {
       "provider": "qwen",
       "providerModelId": "qwen-turbo-latest",
       "displayName": "qwen-turbo-latest",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-182": {
       "provider": "qwen",
       "providerModelId": "qwen-vl-max-2025-08-13",
       "displayName": "qwen-vl-max-2025-08-13",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-183": {
       "provider": "qwen",
       "providerModelId": "qwen-max-2025-01-25",
       "displayName": "qwen-max-2025-01-25",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-184": {
       "provider": "qwen",
       "providerModelId": "qwen2.5-vl-3b-instruct",
       "displayName": "qwen2.5-vl-3b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-185": {
       "provider": "qwen",
       "providerModelId": "qwen3-livetranslate-flash-realtime-2025-09-22",
       "displayName": "qwen3-livetranslate-flash-realtime-2025-09-22",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-186": {
       "provider": "qwen",
       "providerModelId": "qwen2.5-vl-32b-instruct",
       "displayName": "qwen2.5-vl-32b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-187": {
       "provider": "qwen",
       "providerModelId": "qwen-vl-max-latest",
       "displayName": "qwen-vl-max-latest",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-188": {
       "provider": "qwen",
       "providerModelId": "qwen-turbo-2025-04-28",
       "displayName": "qwen-turbo-2025-04-28",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-189": {
       "provider": "qwen",
       "providerModelId": "qwen-vl-plus-latest",
       "displayName": "qwen-vl-plus-latest",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-190": {
       "provider": "qwen",
       "providerModelId": "qwen2.5-72b-instruct",
       "displayName": "qwen2.5-72b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-191": {
       "provider": "qwen",
       "providerModelId": "qvq-max-latest",
       "displayName": "qvq-max-latest",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-192": {
       "provider": "qwen",
       "providerModelId": "qvq-max-2025-03-25",
       "displayName": "qvq-max-2025-03-25",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-193": {
       "provider": "qwen",
@@ -5805,14 +5957,16 @@
       "providerModelId": "qwen3-tts-flash-realtime-2025-09-18",
       "displayName": "qwen3-tts-flash-realtime-2025-09-18",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-195": {
       "provider": "qwen",
       "providerModelId": "qwen3-asr-flash-realtime-2025-10-27",
       "displayName": "qwen3-asr-flash-realtime-2025-10-27",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-196": {
       "provider": "qwen",
@@ -5826,7 +5980,8 @@
       "providerModelId": "qwen-vl-plus-2025-05-07",
       "displayName": "qwen-vl-plus-2025-05-07",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-198": {
       "provider": "qwen",
@@ -5840,35 +5995,40 @@
       "providerModelId": "qwen2.5-14b-instruct-1m",
       "displayName": "qwen2.5-14b-instruct-1m",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-200": {
       "provider": "qwen",
       "providerModelId": "qwen-omni-turbo-realtime",
       "displayName": "qwen-omni-turbo-realtime",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-201": {
       "provider": "qwen",
       "providerModelId": "qwen3-1.7b",
       "displayName": "qwen3-1.7b",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-202": {
       "provider": "qwen",
       "providerModelId": "qwen3-4b",
       "displayName": "qwen3-4b",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-203": {
       "provider": "qwen",
       "providerModelId": "qwen-vl-max-2025-04-08",
       "displayName": "qwen-vl-max-2025-04-08",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-204": {
       "provider": "qwen",
@@ -5889,7 +6049,8 @@
       "providerModelId": "qwen2.5-7b-instruct-1m",
       "displayName": "qwen2.5-7b-instruct-1m",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-207": {
       "provider": "qwen",
@@ -5903,56 +6064,64 @@
       "providerModelId": "qwen-vl-plus-2025-01-25",
       "displayName": "qwen-vl-plus-2025-01-25",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-209": {
       "provider": "qwen",
       "providerModelId": "qwen2.5-32b-instruct",
       "displayName": "qwen2.5-32b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-210": {
       "provider": "qwen",
       "providerModelId": "fun-asr-realtime-2025-11-07",
       "displayName": "fun-asr-realtime-2025-11-07",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-211": {
       "provider": "qwen",
       "providerModelId": "qwen3-omni-flash-realtime-2025-12-01",
       "displayName": "qwen3-omni-flash-realtime-2025-12-01",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-212": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-vc-realtime-2025-11-27",
       "displayName": "qwen3-tts-vc-realtime-2025-11-27",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-213": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-vd-realtime-2025-12-16",
       "displayName": "qwen3-tts-vd-realtime-2025-12-16",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-214": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-flash-realtime-2025-11-27",
       "displayName": "qwen3-tts-flash-realtime-2025-11-27",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-215": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-vd-realtime-2025-12-16",
       "displayName": "qwen3-tts-vd-realtime-2025-12-16",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-216": {
       "provider": "qwen",
@@ -5973,21 +6142,24 @@
       "providerModelId": "qwen2.5-vl-7b-instruct",
       "displayName": "qwen2.5-vl-7b-instruct",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-219": {
       "provider": "qwen",
       "providerModelId": "qwen3-0.6b",
       "displayName": "qwen3-0.6b",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-05-12T16:00:00.000Z"
     },
     "qwen-quota-220": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-instruct-flash-realtime",
       "displayName": "qwen3-tts-instruct-flash-realtime",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-221": {
       "provider": "qwen",
@@ -6001,7 +6173,8 @@
       "providerModelId": "qwen3-asr-flash-realtime-2026-02-10",
       "displayName": "qwen3-asr-flash-realtime-2026-02-10",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-223": {
       "provider": "qwen",
@@ -6015,14 +6188,16 @@
       "providerModelId": "qwen3-tts-vc-realtime-2026-01-15",
       "displayName": "qwen3-tts-vc-realtime-2026-01-15",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-225": {
       "provider": "qwen",
       "providerModelId": "qwen3-tts-vd-realtime-2026-01-15",
       "displayName": "qwen3-tts-vd-realtime-2026-01-15",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-226": {
       "provider": "qwen",
@@ -6043,7 +6218,8 @@
       "providerModelId": "qwen3-tts-instruct-flash-realtime-2026-01-22",
       "displayName": "qwen3-tts-instruct-flash-realtime-2026-01-22",
       "category": "audio",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-09T16:00:00.000Z"
     },
     "qwen-quota-229": {
       "provider": "qwen",
@@ -6071,7 +6247,13 @@
       "providerModelId": "happyhorse-1.1-t2v",
       "displayName": "happyhorse-1.1-t2v",
       "category": "video",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoResolution": "720P",
+      "quotaVideoRatio": "16:9",
+      "quotaVideoSeconds": 3,
+      "quotaPromptExtendUnsupported": true,
+      "quotaVideoWatermark": false
     },
     "qwen-quota-233": {
       "provider": "qwen",
@@ -6085,21 +6267,35 @@
       "providerModelId": "wan2.7-t2v-2026-04-25",
       "displayName": "wan2.7-t2v-2026-04-25",
       "category": "video",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoResolution": "720P",
+      "quotaVideoRatio": "16:9",
+      "quotaVideoSeconds": 5
     },
     "qwen-quota-235": {
       "provider": "qwen",
       "providerModelId": "wan2.7-t2v",
       "displayName": "wan2.7-t2v",
       "category": "video",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoResolution": "720P",
+      "quotaVideoRatio": "16:9",
+      "quotaVideoSeconds": 5
     },
     "qwen-quota-236": {
       "provider": "qwen",
       "providerModelId": "happyhorse-1.0-t2v",
       "displayName": "happyhorse-1.0-t2v",
       "category": "video",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoResolution": "720P",
+      "quotaVideoRatio": "16:9",
+      "quotaVideoSeconds": 3,
+      "quotaPromptExtendUnsupported": true,
+      "quotaVideoWatermark": false
     },
     "qwen-quota-237": {
       "provider": "qwen",
@@ -6364,7 +6560,60 @@
       "providerModelId": "wan2.7-t2v-2026-06-12",
       "displayName": "wan2.7-t2v-2026-06-12",
       "category": "video",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async",
+      "quotaVideoResolution": "720P",
+      "quotaVideoRatio": "16:9",
+      "quotaVideoSeconds": 5
+    },
+    "qwen-quota-273": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-2.1-pro",
+      "displayName": "qwen-image-2.1-pro",
+      "category": "image",
       "identityStatus": "exact"
+    },
+    "qwen-quota-274": {
+      "provider": "qwen",
+      "providerModelId": null,
+      "displayName": "qwen3.8-omni-flash-realt...",
+      "category": "audio",
+      "identityStatus": "unresolved"
+    },
+    "qwen-quota-275": {
+      "provider": "qwen",
+      "providerModelId": null,
+      "displayName": "qwen-audio-3.1-asr-flash...",
+      "category": "audio",
+      "identityStatus": "unresolved"
+    },
+    "qwen-quota-276": {
+      "provider": "qwen",
+      "providerModelId": null,
+      "displayName": "qwen-audio-3.1-asr-flash...",
+      "category": "audio",
+      "identityStatus": "unresolved"
+    },
+    "qwen-quota-277": {
+      "provider": "qwen",
+      "providerModelId": null,
+      "displayName": "qwen-audio-3.1-asr-flash...",
+      "category": "audio",
+      "identityStatus": "unresolved"
+    },
+    "qwen-quota-278": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.1-asr-flash",
+      "displayName": "qwen-audio-3.1-asr-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-279": {
+      "provider": "qwen",
+      "providerModelId": null,
+      "displayName": "qwen-audio-3.1-realtime-...",
+      "category": "audio",
+      "identityStatus": "unresolved"
     }
   }
 }

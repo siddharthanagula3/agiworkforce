@@ -4,6 +4,7 @@ import { getProviderOffering } from '@agiworkforce/types';
 import {
   eligibleFreeEligibility,
   evaluateFreePoolEntry,
+  limitedMediaDailyCap,
   loadFreePools,
   parseFreePoolsDocument,
   reviewedQuotaOfferingKeys,
@@ -169,6 +170,31 @@ describe('the shipped configuration', () => {
     expect(reviewedQuotaOfferingKeys(inventory, review.expiresAtMs).size).toBe(0);
   });
 
+  it('ranks the Free Auto fallback over observed chat offerings, each named once', () => {
+    const pools = loadFreePools();
+    const inventory = pools.inventory!;
+    const fallback = inventory.freeAutoFallback!;
+    expect(fallback.offeringKeys.length).toBeGreaterThan(0);
+    expect(
+      fallback.offeringKeys.every((key) => getProviderOffering(key)?.quotaProbeProtocol === 'chat'),
+    ).toBe(true);
+    const imageKey = inventory.entries.find(
+      (candidate) => getProviderOffering(candidate.offeringKey)?.category === 'image',
+    )!.offeringKey;
+    for (const offeringKeys of [
+      [...fallback.offeringKeys, fallback.offeringKeys[0]!],
+      ['qwen-quota-unobserved'],
+      [imageKey],
+    ]) {
+      expect(() =>
+        parseFreePoolsDocument({
+          ...pools,
+          inventory: { ...inventory, freeAutoFallback: { ...fallback, offeringKeys } },
+        }),
+      ).toThrow();
+    }
+  });
+
   it('clears only named offerings during a favorable, current review window', () => {
     const inventory = loadFreePools().inventory!;
     const key = inventory.entries[0]!.offeringKey;
@@ -203,6 +229,40 @@ describe('the shipped configuration', () => {
         inventory: { ...reviewed, termsReview: { ...review, approvedOfferingKeys: [key, key] } },
       }),
     ).toThrow();
+  });
+});
+
+describe('the limited free media offer configuration', () => {
+  function withOffer(limitedMediaOffer: unknown) {
+    return parseFreePoolsDocument({ ...document([entry()]), limitedMediaOffer });
+  }
+
+  it('is off for both kinds when the block is absent', () => {
+    const { limitedMediaOffer } = parseFreePoolsDocument(document([entry()]));
+    expect(limitedMediaOffer).toBeUndefined();
+    expect(limitedMediaDailyCap(limitedMediaOffer, 'image')).toBeNull();
+    expect(limitedMediaDailyCap(limitedMediaOffer, 'video')).toBeNull();
+  });
+
+  it('reads a cap of zero as off for that kind only', () => {
+    const { limitedMediaOffer } = withOffer({ dailyCapPerUser: { image: 4, video: 0 } });
+    expect(limitedMediaDailyCap(limitedMediaOffer, 'image')).toBe(4);
+    expect(limitedMediaDailyCap(limitedMediaOffer, 'video')).toBeNull();
+  });
+
+  it('rejects a cap that is negative, fractional, missing or misnamed', () => {
+    for (const dailyCapPerUser of [
+      { image: -1, video: 1 },
+      { image: 1.5, video: 1 },
+      { image: '5', video: 1 },
+      { image: 5 },
+      { image: 5, video: 1, audio: 1 },
+      { images: 5, video: 1 },
+    ]) {
+      expect(() => withOffer({ dailyCapPerUser }), JSON.stringify(dailyCapPerUser)).toThrow();
+    }
+    expect(() => withOffer({})).toThrow();
+    expect(() => withOffer({ dailyCapPerUser: { image: 5, video: 1 }, enabled: true })).toThrow();
   });
 });
 

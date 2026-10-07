@@ -30,7 +30,7 @@ import type {
 } from '@agiworkforce/types';
 import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 import {
-  classifyError,
+  classifyModelStudioError,
   toStreamErrorClassification,
   resolveValidatedBaseUrl,
   withStreamIdleWatchdog,
@@ -169,7 +169,7 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
           }
           return;
         } catch (err) {
-          const classified = classifyError(err);
+          const classified = classifyModelStudioError(err);
           if (!yielded && classified.retryable && attempt < endpoints.length - 1) {
             continue;
           }

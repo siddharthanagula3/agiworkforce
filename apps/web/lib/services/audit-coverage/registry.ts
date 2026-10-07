@@ -158,6 +158,21 @@ export interface RequiredRouteAuditEvents {
   eventTypes: readonly AuditEventType[];
 }
 
+export interface RouteHandlerDelegate {
+  route: string;
+  /** The service the route hands its whole request to, relative to the app root. */
+  handler: string;
+}
+
+/**
+ * Routes whose handler lives in a service that other callers share. The modules
+ * that record their events are one import beyond that service, so the sweep
+ * follows these declared handlers one hop further and no others.
+ */
+export const ROUTE_HANDLER_DELEGATES: readonly RouteHandlerDelegate[] = [
+  { route: 'models/free-quota/completions/route.ts', handler: 'lib/server/free-quota-turn.ts' },
+];
+
 export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = [
   { route: 'billing/refund-requests/route.ts', eventTypes: ['refund_requested'] },
   {
@@ -268,6 +283,10 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
   {
     route: 'support/actions/propose/route.ts',
     eventTypes: ['support_action_proposed'],
+  },
+  {
+    route: 'models/free-quota/completions/route.ts',
+    eventTypes: ['provider_egress_refused'],
   },
 ] as const;
 

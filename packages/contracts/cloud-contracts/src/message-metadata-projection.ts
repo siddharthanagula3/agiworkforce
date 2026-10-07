@@ -67,6 +67,7 @@ const ESSENTIAL_KEYS: ReadonlySet<string> = new Set([
   'finishReason',
   'movedFromModel',
   'movedReason',
+  'fallbackReason',
   'privacyMode',
   'providerMode',
   'isPinned',

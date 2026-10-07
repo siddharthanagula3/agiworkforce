@@ -1,5 +1,6 @@
 import type { SearchResponse, SearchResult } from './search-media';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import type { FreeLimitReason } from '@agiworkforce/cloud-contracts';
 import type { ArtifactDerivationPolicy } from '@agiworkforce/artifacts';
 import { isChatOutputFormat, type ChatOutputFormat } from '@/lib/chat-output-format';
 export type { SearchResponse, SearchResult, MediaGenerationResult } from './search-media';
@@ -109,6 +110,14 @@ export interface FreeCapacitySlot {
   byokHref?: string;
 }
 
+export interface FreeLimitSlot {
+  modelId: string;
+  modelName: string;
+  reason: FreeLimitReason;
+  alternativeModel?: { id: string; name: string };
+  byokHref?: string;
+}
+
 export interface PaywallSlot {
   feature: string;
   requiredTier: string;
@@ -119,6 +128,7 @@ export interface PaywallSlot {
   suggestStandardModel?: boolean;
   resetAt?: string;
   freeCapacity?: FreeCapacitySlot;
+  freeLimit?: FreeLimitSlot;
 }
 
 export interface ComparisonOptions {

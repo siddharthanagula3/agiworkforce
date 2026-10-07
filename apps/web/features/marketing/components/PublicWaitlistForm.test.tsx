@@ -11,7 +11,10 @@ import type { WaitlistModalSource } from './WaitlistModal';
 
 const mockJoinPublicWaitlist = vi.fn();
 
-vi.mock('@/lib/services/waitlistServiceClient', () => ({
+type WaitlistServiceClientModule = typeof import('@/lib/services/waitlistServiceClient');
+
+vi.mock('@/lib/services/waitlistServiceClient', async (importOriginal) => ({
+  ...(await importOriginal<WaitlistServiceClientModule>()),
   joinPublicWaitlist: (...args: unknown[]) => mockJoinPublicWaitlist(...args),
 }));
 
