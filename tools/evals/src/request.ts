@@ -22,6 +22,14 @@ import type { EvalCase, EvalToolDef } from './types';
 export type EvalContentBlock =
   | { readonly type: 'text'; readonly text: string }
   | {
+      readonly type: 'image';
+      readonly source: {
+        readonly type: 'base64';
+        readonly mediaType: string;
+        readonly data: string;
+      };
+    }
+  | {
       readonly type: 'file';
       readonly filename: string;
       readonly source: {
@@ -70,6 +78,13 @@ function fileName(fixture: string): string {
   return fixture.split('/').at(-1) ?? fixture;
 }
 
+/**
+ * A picture travels on the image channel, the way the product sends one. Sent
+ * as a file it reaches only the routes that have a document channel, and every
+ * Chat Completions route refuses it before the model sees anything.
+ */
+const IMAGE_MEDIA_TYPE_PREFIX = 'image/';
+
 function renderSources(evalCase: EvalCase): string | null {
   if (evalCase.sources === undefined || evalCase.sources.length === 0) return null;
   const rendered = evalCase.sources.map((source) => {
@@ -82,15 +97,16 @@ function renderSources(evalCase: EvalCase): string | null {
 function finalUserContent(evalCase: EvalCase): string | EvalContentBlock[] {
   const blocks: EvalContentBlock[] = [];
   for (const attachment of evalCase.attachments ?? []) {
-    blocks.push({
-      type: 'file',
-      filename: fileName(attachment.fixture),
-      source: {
-        type: 'base64',
-        mediaType: attachment.mediaType,
-        data: readFixture(attachment.fixture).toString('base64'),
-      },
-    });
+    const source = {
+      type: 'base64' as const,
+      mediaType: attachment.mediaType,
+      data: readFixture(attachment.fixture).toString('base64'),
+    };
+    blocks.push(
+      attachment.mediaType.startsWith(IMAGE_MEDIA_TYPE_PREFIX)
+        ? { type: 'image', source }
+        : { type: 'file', filename: fileName(attachment.fixture), source },
+    );
   }
   const preamble: string[] = [];
   if (evalCase.haystack !== undefined) {

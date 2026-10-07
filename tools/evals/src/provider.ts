@@ -49,6 +49,19 @@ export function partialResponseOf(error: unknown): ModelResponse | null {
   return error instanceof EvalStreamError ? error.partial : null;
 }
 
+const UNREADABLE_ATTACHMENT_ERROR_NAME = 'UnsupportedFileInputError';
+
+/**
+ * The adapter's own statement that this route has no channel for an attached
+ * file, raised before anything is sent. It is a fact about the route, not an
+ * answer, so the row is skipped with that reason and never retried or scored.
+ */
+export function unreadableAttachmentReason(error: unknown): string | null {
+  return error instanceof Error && error.name === UNREADABLE_ATTACHMENT_ERROR_NAME
+    ? error.message
+    : null;
+}
+
 export interface StreamingAdapter {
   stream(request: ProviderChatRequest, signal: AbortSignal): AsyncIterable<StreamChunkLike>;
 }

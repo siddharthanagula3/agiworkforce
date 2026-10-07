@@ -169,6 +169,66 @@ describe('a live run', () => {
   });
 });
 
+describe('attachments a route cannot read', () => {
+  const files = loadDataset('files');
+  const pdfRow = files.cases.find((entry) => entry.id === 'files/pdf-invoice-total')!;
+  const csvRow = files.cases.find((entry) => entry.id === 'files/csv-aggregate')!;
+
+  function unreadable(): Error {
+    const error = new Error('supplier-invoice.pdf is a application/pdf file, unreadable here');
+    error.name = 'UnsupportedFileInputError';
+    return error;
+  }
+
+  it('sends a picture on the image channel and a document on the file channel', () => {
+    const imageRow = files.cases.find((entry) => entry.id === 'files/image-bar-chart')!;
+    const blockTypes = (id: typeof imageRow) => {
+      const content = buildRequest(id).messages.at(-1)!.content;
+      return typeof content === 'string' ? [] : content.map((block) => block.type);
+    };
+    expect(blockTypes(imageRow)).toEqual(['image', 'text']);
+    expect(blockTypes(pdfRow)).toEqual(['file', 'text']);
+  });
+
+  it('skips the row with the adapter reason, once, and still scores the rest', async () => {
+    let calls = 0;
+    const respond: Responder = async (evalCase) => {
+      calls += 1;
+      if (evalCase.id === pdfRow.id) throw unreadable();
+      return { text: 'not the answer' };
+    };
+    const outcome = await runLive([{ ...files, cases: [pdfRow, csvRow] }], {
+      target: resolveLiveTarget(registry, 'mid'),
+      recordedOn: '2026-10-07',
+      responderFor: () => respond,
+    });
+    const summary = outcome.report.suites.files!;
+    expect(calls).toBe(2);
+    expect(summary.total).toBe(1);
+    expect(summary.skipped).toEqual([
+      { id: pdfRow.id, reason: 'supplier-invoice.pdf is a application/pdf file, unreadable here' },
+    ]);
+    expect(outcome.recording.responses[pdfRow.id]).toBeUndefined();
+    expect(outcome.attempts.map((attempt) => attempt.caseId)).toEqual([csvRow.id]);
+  });
+
+  it('still aborts on any other failure after the retries', async () => {
+    let calls = 0;
+    const respond: Responder = async () => {
+      calls += 1;
+      throw new Error('socket hang up');
+    };
+    await expect(
+      runLive([{ ...files, cases: [csvRow] }], {
+        target: resolveLiveTarget(registry, 'mid'),
+        recordedOn: '2026-10-07',
+        responderFor: () => respond,
+      }),
+    ).rejects.toThrow(/socket hang up/);
+    expect(calls).toBe(3);
+  });
+});
+
 describe('determinism', () => {
   it('generates the same haystack for the same seed and places the needle at its depth', () => {
     const spec = { seed: 7, targetChars: 5_000, depth: 0.25, needle: 'NEEDLE-SENTENCE.' };
