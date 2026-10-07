@@ -7,6 +7,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/marketing-constants';
+import '@/features/marketing/components/pages/company/company.css';
 
 const BYOK_RELEASE_SURFACES = [
   { id: 'desktop', label: 'Desktop' },
@@ -69,7 +70,7 @@ const WHILE_YOU_WAIT = [
 
 export default function WaitlistPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

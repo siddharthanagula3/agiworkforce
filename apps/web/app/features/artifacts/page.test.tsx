@@ -38,9 +38,8 @@ describe('ArtifactsFeaturePage capability claims', () => {
     render(<ArtifactsFeaturePage />);
 
     const publishRow = screen.getByText('Publish').parentElement?.textContent ?? '';
-    expect(publishRow).toMatch(/public page/i);
-    expect(publishRow).toMatch(/link/i);
-    expect(publishRow).toMatch(/revoke/i);
+    expect(publishRow).toMatch(/public links? open for anyone with the link/i);
+    expect(publishRow).toMatch(/unpublish/i);
   });
 
   it('labels no capability on the page as unshipped while the page claims it works', () => {

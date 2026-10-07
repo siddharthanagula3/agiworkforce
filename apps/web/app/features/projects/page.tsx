@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { PROJECT_TEMPLATES } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { ProjectWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -15,7 +16,7 @@ import {
 export const metadata = buildMetadata({
   title: 'Projects: a home for recurring work',
   description:
-    'AGI Projects group chats, knowledge files, and standing instructions under one objective. Recurring work opens with its context already in place.',
+    'AGI Projects group chats, knowledge files and standing instructions. Project chats can use selected references within access and context limits.',
   path: '/features/projects',
 });
 
@@ -35,25 +36,25 @@ const ACCUMULATES = [
   {
     meta: 'Instructions',
     title: 'Written once',
-    body: 'Project settings holds a single instructions field. Up to 8,000 characters of it ride into the system message of every chat in the project.',
+    body: 'Save standing instructions in Project settings for chats in the project.',
   },
   {
     meta: 'Files',
     title: 'Added as the work needs them',
-    body: 'The Sources tab takes images, PDFs, text, JSON and XML, dropped in or picked. A project holds up to 20 files, tracked against that cap.',
+    body: 'Keep reference files with the project. Selected readable passages can provide context for a question.',
   },
   {
     meta: 'Threads',
     title: 'Accumulate on their own',
-    body: 'Every chat started from the project belongs to it, listed by date, and the ones you already ran become ranked context for the next question.',
+    body: 'Earlier project chats can supply selected, bounded excerpts for a later question.',
   },
 ] as const;
 
 const BUDGET_FACTS = [
-  'filename match scores 6, summary match 3',
-  '40 recent chats ranked, 15 survive',
-  '16,000 characters per file, 48,000 across all',
-  '1,600 characters per chat excerpt',
+  'Files and chats ranked against the question.',
+  'Selected readable passages within the context limit.',
+  'Bounded excerpts from earlier project chats.',
+  'File content may be partial or omitted.',
 ] as const;
 
 export default function ProjectsFeaturePage() {
@@ -65,16 +66,9 @@ export default function ProjectsFeaturePage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Projects</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">A project rebuilds</span>
-                <span className="agi-lp-line">its own context</span>
-                <em className="agi-lp-accent">into every prompt.</em>
+              <h1 className="sr-only" id={IDS.hero}>
+                Project instructions, with selected reference material.
               </h1>
-              <p className="agi-lp-lede">
-                Open a chat inside a project and AGI reassembles what it holds, your standing
-                instructions, your files, and the threads you already ran, into the system message
-                for that one turn. Built fresh each time, ranked against the question you asked.
-              </p>
               <ButtonRow>
                 <Button href={PROJECTS_ENTRY_HREF}>Open Projects in AGI Web</Button>
               </ButtonRow>
@@ -90,20 +84,17 @@ export default function ProjectsFeaturePage() {
             <div className="agi-lp-heading">
               <p className="agi-lp-eyebrow">Starting</p>
               <h2 className="agi-lp-h2" id={IDS.templates}>
-                Every template arrives <em className="agi-lp-accent">already written.</em>
+                Start blank or choose a preset.
               </h2>
             </div>
             <div className="agi-lp-moments">
               <article className="agi-lp-moment">
                 <div className="agi-lp-moment-copy">
-                  <h3 className="agi-lp-moment-title">Four starting points</h3>
+                  <h3 className="agi-lp-moment-title">An authored settings draft</h3>
                   <p className="agi-lp-moment-body">
-                    Blank leaves everything empty. Research ships with &ldquo;Cite a source for
-                    every factual claim, and link it.&rdquo; Writing ships with &ldquo;Match the
-                    voice of the samples in this project.&rdquo; Engineering ships with &ldquo;Show
-                    the smallest change that solves the problem.&rdquo; Meeting notes ships with
-                    &ldquo;Separate decisions from discussion, and name the owner of each
-                    action.&rdquo;
+                    The project dialog offers{' '}
+                    {PROJECT_TEMPLATES.map((template) => template.label).join(', ')}. Presets
+                    provide starting instructions; the settings below show an authored draft.
                   </p>
                 </div>
                 <ProjectWindow />
@@ -117,7 +108,7 @@ export default function ProjectsFeaturePage() {
             <div>
               <Eyebrow>What builds up</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.accumulate}>
-                Everything you add stays where the work is.
+                Instructions, files and chats in one project.
               </h2>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -137,12 +128,12 @@ export default function ProjectsFeaturePage() {
             <div>
               <Eyebrow>What gets sent</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.assembly}>
-                The project block sits at the top of the system message.
+                How project context is assembled.
               </h2>
               <Prose>
-                Rebuilt on every request inside a project, and skipped when the project holds
-                nothing yet. Your files and earlier threads go in as reference data, and the model
-                is told never to follow instructions found inside them.
+                Project chats can use saved instructions and selected passages from files and
+                earlier chats, within access and context limits. Files and past chats enter as
+                reference data.
               </Prose>
             </div>
             <Ledger
@@ -150,15 +141,16 @@ export default function ProjectsFeaturePage() {
               rows={[
                 {
                   label: 'Header',
-                  value: 'Names the project and carries its description.',
+                  value: 'The project name and available description.',
                 },
                 {
                   label: 'Instructions',
-                  value: 'Your standing instructions, included verbatim.',
+                  value: 'Saved project instructions within the context limit.',
                 },
                 {
                   label: 'Files',
-                  value: 'Each file listed by name with a summary, then its extracted content.',
+                  value:
+                    'File names and available summaries, with selected readable passages when they fit.',
                 },
                 {
                   label: 'Threads',
@@ -166,8 +158,7 @@ export default function ProjectsFeaturePage() {
                 },
                 {
                   label: 'Boundary',
-                  value:
-                    'A standing instruction that the model must never follow directives found inside project files or past chats.',
+                  value: 'Files and past chats are passed as untrusted reference material.',
                 },
               ]}
             />
@@ -195,26 +186,26 @@ export default function ProjectsFeaturePage() {
             <div>
               <Eyebrow>Over time</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.lifecycle}>
-                A project is something you can move, copy, or close out.
+                Manage a project as the work changes.
               </h2>
             </div>
             <Ledger
               caption="Project lifecycle"
               rows={[
                 {
-                  label: 'Pin',
+                  label: 'Star',
                   value:
-                    'Pin a project from its menu. The gallery sorts by pinned first, or by last update, creation date, or name.',
+                    'Star a project beside its name. Sort the gallery by starred first, last update, creation date, or name.',
                 },
                 {
                   label: 'Copy',
                   value:
-                    'Duplicate builds a second project carrying the same instructions, description, and knowledge files. Export streams it out as a JSON download.',
+                    'Duplicate creates another project with its description and instructions. Export downloads project settings and available file information as JSON.',
                 },
                 {
                   label: 'Delete',
                   value:
-                    'Deleting removes the project and permanently destroys the uploaded file contents. The chats that ran inside it move to All Chats.',
+                    'Delete permanently removes the project and its knowledge files, including the uploaded file contents, and cannot be undone. Its conversations move to All Chats.',
                 },
               ]}
             />
@@ -225,11 +216,12 @@ export default function ProjectsFeaturePage() {
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-lp-h2" id={IDS.close}>
-                Memory is the other thing <em className="agi-lp-accent">a project scopes.</em>
+                Choose which memories a project can use.
               </h2>
               <p className="agi-lp-lede">
-                A project can be told to ignore everything remembered outside it, so chats there
-                draw only on the project&rsquo;s own memories.
+                In Project settings, turn off &ldquo;Use memories from outside this project&rdquo;
+                to limit remembered facts and past-chat search to this project when those features
+                are enabled.
               </p>
               <ButtonRow>
                 <Button href="/features/memory">See how memory works</Button>

@@ -5,6 +5,7 @@ import { Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import '@/features/marketing/components/pages/company/company.css';
 
 const HERO_FACTS = ['Discord: none', 'Forum: none', 'Slack: none', 'X: mirror only, no support'];
 
@@ -16,7 +17,7 @@ export const metadata = buildMetadata({
 
 export default function CommunityPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

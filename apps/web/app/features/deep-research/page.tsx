@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { WebWindow } from '@/features/marketing/components/DeviceMockups';
 import { ResearchWindow } from '@/features/marketing/components/FeatureScenes';
@@ -13,14 +14,12 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 
-const RESEARCH_MAX_TURNS = 6;
-const RESEARCH_MAX_SEARCHES = 12;
-const RESEARCH_GATHER_BUDGET_MINUTES = 4;
+const RESEARCH_PLANS = billingPlanCapabilityPlanLabels('deep_research');
 
 export const metadata = buildMetadata({
-  title: 'Deep research: cited answers across web, files, and tools',
+  title: 'Deep research: plans, sources, and reports',
   description:
-    'Research in AGI is designed around citations: a plan you approve before it searches, a bounded gathering phase, and a report with a bracketed number behind every factual claim.',
+    'Review and edit a research plan, choose sources and report options, then follow gathering and report-writing progress in chat.',
   path: '/features/deep-research',
 });
 
@@ -33,10 +32,10 @@ const IDS = {
 } as const;
 
 const RUN_BOUNDS = [
-  `${RESEARCH_MAX_TURNS} model turns in the run`,
-  `${RESEARCH_MAX_SEARCHES} web searches, then gathering stops`,
-  `${RESEARCH_GATHER_BUDGET_MINUTES} minutes of gathering budget`,
-  'eight pages opened and read in full, three per round',
+  'Gathering rounds and searches have configured limits.',
+  'A gathering time budget limits further searching.',
+  'Page reads have limits on count and extracted text.',
+  'Reports can be incomplete when gathering ends early.',
 ] as const;
 
 export default function DeepResearchPage() {
@@ -48,22 +47,11 @@ export default function DeepResearchPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Deep research</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">Every claim names</span>
-                <em className="agi-lp-accent">the source it came from.</em>
+              <h1 className="sr-only" id={IDS.hero}>
+                Deep research
               </h1>
-              <p className="agi-lp-lede">
-                Deep Research writes out the searches it intends to make, then stops and waits for
-                you to approve them. What comes back is a report with a bracketed number behind
-                every factual claim, the matching sources listed beside it, and a stored copy you
-                can reopen long after the chat has scrolled away.
-              </p>
-              <p className="agi-lp-lede">
-                Deep Research is included on Pro plans and above, and needs a research-capable model
-                or Auto.
-              </p>
               <ButtonRow>
-                <Button href="/login?redirectTo=%2Fchat">Start a research run</Button>
+                <Button href="/login?redirectTo=%2Fchat">Open chat</Button>
                 <Button href="/pricing#pricing-compare-title" variant="secondary">
                   See plans
                 </Button>
@@ -78,20 +66,20 @@ export default function DeepResearchPage() {
         <section className="agi-lp-section" aria-labelledby={IDS.plan}>
           <div className="agi-ds-container">
             <div className="agi-lp-heading">
-              <p className="agi-lp-eyebrow">Before it searches</p>
+              <p className="agi-lp-eyebrow">Review the plan</p>
               <h2 className="agi-lp-h2" id={IDS.plan}>
-                The run shows its plan <em className="agi-lp-accent">first.</em>
+                Review the plan <em className="agi-lp-accent">before web gathering.</em>
               </h2>
             </div>
             <div className="agi-lp-moments">
               <article className="agi-lp-moment">
                 <div className="agi-lp-moment-copy">
-                  <h3 className="agi-lp-moment-title">Nothing searches until you say go</h3>
+                  <h3 className="agi-lp-moment-title">Review and edit before you start</h3>
                   <p className="agi-lp-moment-body">
-                    Search-capable models reach the live web on their own, and the composer states
-                    whether search is on for the model you picked. Deep Research goes further: the
-                    opening turn lists three to six searches it intends to run, and runs none of
-                    them until you accept the plan.
+                    Web search depends on the selected model, a supported search route and account
+                    access. Web Deep Research presents an editable plan and waits for you to choose
+                    Start research before gathering from the web. You can also choose sources and
+                    report options.
                   </p>
                 </div>
                 <WebWindow />
@@ -108,8 +96,7 @@ export default function DeepResearchPage() {
                 A bounded loop that runs on the server.
               </h2>
               <Prose>
-                It plans, waits, gathers, writes, and stores what it wrote. Each stage names itself
-                in the chat while it is happening.
+                Follow planning, approval, searching and report-writing progress in chat.
               </Prose>
             </div>
             <Ledger
@@ -117,27 +104,28 @@ export default function DeepResearchPage() {
               rows={[
                 {
                   label: 'Plan',
-                  value: 'Lists the searches it intends to run, and runs none of them yet.',
+                  value:
+                    'Creates an editable plan. Planning may use a model call; selected file sources may be looked up first.',
                 },
                 {
                   label: 'Approve',
                   value:
-                    'The run pauses. Searching spends your budget, so nothing runs until you accept the plan.',
+                    'Choose Start research to begin web gathering, or cancel. You can change the steps, sources and report options.',
                 },
                 {
                   label: 'Gather',
                   value:
-                    'Each round runs those searches and can open up to three pages to read them in full.',
+                    'Searches allowed sources and can fetch page text within the run’s limits.',
                 },
                 {
                   label: 'Cite',
                   value:
-                    'The last turn writes the report against a numbered source list, a bracketed number behind every factual claim.',
+                    'The model is asked to cite factual claims with numbered sources; citations help you check the report.',
                 },
                 {
                   label: 'Keep',
                   value:
-                    'Stored against your account, listed newest first. Export as Markdown, PDF, or Word, or hand it to the artifacts panel.',
+                    'Saved reports are listed newest first. Export as Markdown, PDF or Word. In the chat report panel, turn a saved report into an artifact.',
                 },
               ]}
             />
@@ -147,10 +135,10 @@ export default function DeepResearchPage() {
         <div className="agi-lp-factline">
           <div className="agi-ds-container">
             <p className="agi-lp-eyebrow" style={{ marginBottom: '0.75rem' }}>
-              What a run may spend
+              Gathering limits
             </p>
             <h2 className="agi-ds-h3" style={{ marginBottom: '1rem' }}>
-              Every run is capped before it starts.
+              Configured limits bound the gathering phase.
             </h2>
             <ul className="agi-lp-factline-list">
               {RUN_BOUNDS.map((fact) => (
@@ -164,11 +152,11 @@ export default function DeepResearchPage() {
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-lp-h2" id={IDS.close}>
-                Deep Research is <em className="agi-lp-accent">included on Pro plans and above.</em>
+                Choose a plan <em className="agi-lp-accent">with Deep Research.</em>
               </h2>
               <p className="agi-lp-lede">
-                The toggle stays off on the Free and Basic plans, and it needs a model that supports
-                research or the Auto router. The plan page lists what each tier includes.
+                Deep Research is included on {RESEARCH_PLANS} plans. Choose Auto or a model with
+                research support. Availability also depends on account and workspace access.
               </p>
               <ButtonRow>
                 <Button href="/pricing#pricing-compare-title">See which plans include it</Button>

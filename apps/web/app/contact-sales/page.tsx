@@ -33,6 +33,7 @@ export default function ContactSalesPage() {
       <Header />
       <main id="main-content">
         <PageHero
+          minimal
           id="agi-contact-sales-title"
           eyebrow="Contact sales"
           title="Talk to sales."

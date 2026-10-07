@@ -32,18 +32,6 @@
     "phrase": "released"
   },
   {
-    "file": "app/byok/page.tsx",
-    "phrase": "published release"
-  },
-  {
-    "file": "app/byok/page.tsx",
-    "phrase": "published release"
-  },
-  {
-    "file": "app/byok/page.tsx",
-    "phrase": "released"
-  },
-  {
     "file": "app/desktop/page.tsx",
     "phrase": "released"
   },
@@ -58,10 +46,6 @@
   {
     "file": "app/features/page.tsx",
     "phrase": "released"
-  },
-  {
-    "file": "app/help/page.tsx",
-    "phrase": "published release"
   },
   {
     "file": "app/local/page.tsx",

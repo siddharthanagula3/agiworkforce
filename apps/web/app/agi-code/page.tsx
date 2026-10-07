@@ -56,7 +56,7 @@ export default function AgiCodePage() {
               platforms: 'macOS · Linux · Windows',
               status: SURFACE_STATUS.cli,
               href: '/cli',
-              frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
+              frame: { variant: 'terminal', title: 'agi · zsh' },
             },
             {
               index: '02',

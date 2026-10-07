@@ -115,6 +115,7 @@ export default function ProvidersPage() {
       <Header />
       <main id="main-content">
         <PageHero
+          minimal
           id="agi-providers-title"
           eyebrow="Provider catalog"
           title="Explore providers and local runtimes."

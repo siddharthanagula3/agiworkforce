@@ -5,6 +5,7 @@ import { Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { contactMailto } from '@/lib/legal-constants';
+import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: 'Careers: a small team, on purpose',
@@ -20,7 +21,7 @@ const HERO_FACTS = [
 
 export default function CareersPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

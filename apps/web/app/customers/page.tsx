@@ -168,6 +168,7 @@ export default function CustomersPage() {
       <Header />
       <main id="main-content">
         <PageHero
+          minimal
           id="agi-customers-title"
           eyebrow="Customers"
           title="Only written permission puts a name on this page."

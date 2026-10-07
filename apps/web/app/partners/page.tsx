@@ -16,6 +16,7 @@ import {
   PageHero,
 } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: 'Partners',
@@ -53,7 +54,7 @@ const OPPORTUNITY_FACTS = OPPORTUNITIES.map(
 
 export default function PartnersPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

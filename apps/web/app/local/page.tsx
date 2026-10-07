@@ -52,14 +52,9 @@ export default function LocalPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <Eyebrow>Local mode</Eyebrow>
-              <h1 className="agi-ds-h1" id="agi-local-hero-title">
+              <h1 className="sr-only" id="agi-local-hero-title">
                 The runtime refuses <em className="agi-ds-accent">to move a local session.</em>
               </h1>
-              <Prose size="lg">
-                Point AGI at a model server you already run. The work happens on your hardware, with
-                no AGI account and no meter, and the only route out of local mode is one you read
-                before you send it.
-              </Prose>
               <ButtonRow>
                 <Button href="/download#cli-downloads">Get the CLI</Button>
                 <Button href="/desktop" variant="secondary">

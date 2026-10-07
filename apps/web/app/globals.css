@@ -1525,10 +1525,10 @@ html[data-contrast='more'] *:focus-visible {
   --agi-display-1: clamp(2.75rem, 1rem + 4.2vw, 5.5rem);
   --agi-display-2: clamp(2rem, 1.2rem + 2.4vw, 3.6rem);
   --agi-display-3: clamp(1.5rem, 1.2rem + 1vw, 2.1rem);
-  --agi-section-y-xs: 3.5rem;
-  --agi-section-y-sm: 4.5rem;
-  --agi-section-y-md: 7rem;
-  --agi-section-y-lg: 8.75rem;
+  --agi-section-y-xs: 2rem;
+  --agi-section-y-sm: 2.5rem;
+  --agi-section-y-md: 4rem;
+  --agi-section-y-lg: 5rem;
 
   --agi-radius-control: var(--corner-compact);
   --agi-radius-frame: var(--corner-field);
@@ -1557,6 +1557,20 @@ html[data-contrast='more'] *:focus-visible {
     'ss01' on;
   --agi-amber: #f0a84a;
   --agi-amber-soft: rgba(240, 168, 74, 0.16);
+
+  --agi-illo-violet: var(--auth-scene-purple);
+  --agi-illo-orange: var(--auth-scene-orange);
+  --agi-illo-yellow: var(--auth-scene-yellow);
+  --agi-illo-ink: var(--auth-scene-black);
+  --agi-illo-pink: #f2699c;
+  --agi-illo-blue: #3f83f8;
+  --agi-illo-green: #2bb673;
+  --agi-illo-red: #ee5a45;
+  --agi-illo-cream: #f6efe2;
+  --agi-illo-lilac: #cbbcff;
+  --agi-illo-sky: #a9d4ff;
+  --agi-illo-mint: #b6ecd0;
+  --agi-illo-peach: #ffd2b0;
 } /* AUDIT-FIX: only the page root fills the viewport. Header/footer chrome
    bands also carry data-design="agi" so the rule above must not cascade
    min-height: 100vh to them, or every page gets a full-viewport blank band

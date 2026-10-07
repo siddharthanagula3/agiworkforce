@@ -12,14 +12,14 @@ import { describe, expect, it } from 'vitest';
  * conversation, screenshots included, to the Managed Cloud gateway under the
  * user's account token. The absolutes are banned as patterns rather than as
  * quoted copy so they trip on the words a future writer types, and the honest
- * exception is required in each of the four places the old claim lived: hero,
+ * exception is required in each of the four places the page explains it: architecture,
  * destinations grid, capabilities, and the boundary ledger.
  *
  * Cross-page rules keep the wording consistent with /agent-permissions, which
  * is where the residual screenshot risk is written out in full.
  *
  * The page now composes the flagship sections, so its copy lives in the three
- * module consts the sections map over plus the hero lede paragraph. The
+ * module consts the sections map over plus the architecture introduction. The
  * helpers read those regions; a rename of a const is a deliberate edit and
  * should fail here rather than let a region go unchecked.
  *
@@ -56,9 +56,14 @@ function copyBlock(name: string): string {
   return block![0]!.replace(/\s+/gu, ' ');
 }
 
-function heroLede(): string {
-  const lede = /className="agi-fl-lede">([\s\S]*?)<\/p>/u.exec(chromeSource());
-  expect(lede, 'hero lede not found').not.toBeNull();
+function architectureLede(): string {
+  const section =
+    /<section[^>]*aria-labelledby="agi-fl-chrome-arch-title">([\s\S]*?)<\/section>/u.exec(
+      chromeSource(),
+    );
+  expect(section, 'architecture section not found').not.toBeNull();
+  const lede = /className="agi-fl-section-lede">([\s\S]*?)<\/p>/u.exec(section![1]!);
+  expect(lede, 'architecture introduction not found').not.toBeNull();
   return lede![1]!.replace(/\s+/gu, ' ');
 }
 
@@ -85,6 +90,14 @@ describe('/chrome-extension, transmission claims', () => {
     }
   });
 
+  it('does not equate site automation approval with explicit page attachment', () => {
+    expect(collapsed()).not.toMatch(/unapproved origin[^.]*no page text/iu);
+  });
+
+  it('does not promise that every site permission expires with a task', () => {
+    expect(collapsed()).not.toMatch(/scoped task permissions|permissions scoped to the task/iu);
+  });
+
   it('names the Managed Cloud gateway as the destination reached from the extension', () => {
     const source = collapsed();
     expect(source).toMatch(/Managed Cloud gateway/u);
@@ -98,9 +111,12 @@ describe('/chrome-extension, transmission claims', () => {
     expect(source).toMatch(/account token/iu);
   });
 
-  it('carries the exception in the hero, not only in the fine print', () => {
-    expect(heroLede()).toMatch(/computer use/iu);
-    expect(heroLede()).toMatch(/Managed Cloud/u);
+  it('states the screenshot and Managed Cloud boundary in the architecture introduction', () => {
+    const introduction = architectureLede();
+    expect(introduction).toMatch(/computer use/iu);
+    expect(introduction).toMatch(/Managed Cloud/u);
+    expect(introduction).toMatch(/screenshots/iu);
+    expect(introduction).toMatch(/never stores provider keys/iu);
   });
 
   it('carries the exception where the page names its destinations', () => {

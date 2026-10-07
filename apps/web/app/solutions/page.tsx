@@ -80,14 +80,10 @@ export default function SolutionsPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Solutions</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">Every page below</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">Every page below</span>{' '}
                 <em className="agi-lp-accent">is a different way into the same workspace.</em>
               </h1>
-              <p className="agi-lp-lede">
-                This page is an index and argues nothing on its own. Each entry names the job its
-                page was written for, and behind all of them sits one workspace.
-              </p>
               <ButtonRow>
                 <Button href="/download">See what&rsquo;s live</Button>
               </ButtonRow>

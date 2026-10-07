@@ -72,16 +72,10 @@ export default async function FeaturesPluginsPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Plugins</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">A plugin ships code</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">A plugin ships code</span>{' '}
                 <em className="agi-lp-accent">that runs as you.</em>
               </h1>
-              <p className="agi-lp-lede">
-                A plugin&rsquo;s commands, agents, and skills are markdown that spawns nothing. Its
-                hooks are shell commands and its MCP servers are connections opened on load, which
-                is why <code>agi plugin install</code> refuses to do anything until you pin a
-                SHA-256 of the tree you actually read. <strong>{availability}</strong>
-              </p>
               <ButtonRow>
                 <Button href="/plugins">Browse the catalogue</Button>
                 <Button href="/cli" variant="secondary">
@@ -103,6 +97,7 @@ export default async function FeaturesPluginsPage() {
                 Some of what a plugin carries is inert, and some of it executes.
               </h2>
             </div>
+            <Prose size="sm">{availability}</Prose>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {FOLDER_CONTENTS.map((item) => (
                 <div key={item.meta} className="agi-ds-card">

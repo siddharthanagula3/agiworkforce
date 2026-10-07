@@ -8,6 +8,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import { Eyebrow, Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { SUPPORT_ROWS } from '@/features/marketing/components/pages/company/support-content';
 import { CONTACT_EMAIL, CONTACT_SUBJECTS, contactMailto } from '@/lib/legal-constants';
+import '@/features/marketing/components/pages/company/company.css';
 
 export default function ContactPage() {
   const [draftOpened, setDraftOpened] = useState(false);
@@ -41,7 +42,7 @@ export default function ContactPage() {
   }
 
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

@@ -50,15 +50,10 @@ export default function UseCasesPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Use cases</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">One page per job,</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">One page per job,</span>{' '}
                 <em className="agi-lp-accent">each shows that job running.</em>
               </h1>
-              <p className="agi-lp-lede">
-                A founder automating CI, a partner drafting a deliverable, an engineer running a
-                client runbook, and a rep prepping a deal each reach for a different surface first.
-                The four pages below take one of those apiece.
-              </p>
               <ButtonRow>
                 <Button href="/download">See what&rsquo;s live</Button>
                 <Button href="/solutions" variant="secondary">

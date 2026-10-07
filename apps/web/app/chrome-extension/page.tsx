@@ -46,7 +46,7 @@ const CAPABILITIES = [
   {
     meta: 'Chat',
     title: 'Answers from Managed Cloud',
-    body: 'Press send and the conversation goes to AGI Managed Cloud under your account. The panel holds no provider key and offers no second chat route, so an unapproved origin contributes no page text to it.',
+    body: 'Press send and the conversation goes to AGI Managed Cloud under your account. The panel holds no provider key and offers no second chat route.',
   },
   {
     meta: 'Bridge',
@@ -60,8 +60,8 @@ const CAPABILITIES = [
   },
   {
     meta: 'Permissions',
-    title: 'Scoped task permissions',
-    body: 'Page interaction runs on approved sites with permissions scoped to the task at hand. Not a blanket grant across your browsing.',
+    title: 'Approved-site permissions',
+    body: 'Permission profiles specify the approved sites, allowed actions and any expiry. You can revoke a profile to end the sessions using it.',
   },
   {
     meta: 'Automation',
@@ -118,18 +118,9 @@ export default function ChromeExtensionPage() {
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI in Chrome · coming soon</p>
-              <h1 id="agi-fl-chrome-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Your browser,</span>{' '}
-                <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">with context.</em>
-                </span>
+              <h1 id="agi-fl-chrome-hero-title" className="sr-only">
+                AGI in Chrome
               </h1>
-              <p className="agi-fl-lede">
-                AGI opens in a side panel beside any tab. It captures page context only when you
-                ask, and the answer comes back from AGI Managed Cloud under your account. Computer
-                use goes further: it posts the conversation and every screenshot it takes to the
-                Managed Cloud gateway directly from the extension.
-              </p>
               <div className="agi-fl-cta-row">
                 <Link href="/desktop" className="agi-fl-cta agi-fl-cta--primary">
                   See AGI Desktop
@@ -138,14 +129,9 @@ export default function ChromeExtensionPage() {
                   Get Started
                 </Link>
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Boundary summary">
-                <li>Capture · on request</li>
-                <li>Chat · Managed Cloud</li>
-                <li>Computer use · screenshots included</li>
-              </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame variant="browser" title="AGI · side panel" badge="Scoped" />
+              <ProductFrame variant="browser" title="AGI · side panel" badge="Page context" />
             </div>
           </div>
         </section>

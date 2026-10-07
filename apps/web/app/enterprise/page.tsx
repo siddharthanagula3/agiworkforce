@@ -72,6 +72,7 @@ export default function EnterprisePage() {
       <Header />
       <main id="main-content">
         <PageHero
+          minimal
           id="agi-enterprise-title"
           eyebrow="AGI for enterprise"
           title="Your data can stay where it is while the security review runs."

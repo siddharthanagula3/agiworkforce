@@ -68,11 +68,14 @@ export default async function UseCaseDetailPage({ params }: Props) {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">{entry.eyebrow}</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                {headline.lead ? <span className="agi-lp-line">{headline.lead}</span> : null}
+              <h1 className="sr-only" id={IDS.hero}>
+                {headline.lead ? (
+                  <>
+                    <span className="agi-lp-line">{headline.lead}</span>{' '}
+                  </>
+                ) : null}
                 <em className="agi-lp-accent">{headline.accent}</em>
               </h1>
-              <p className="agi-lp-lede">{entry.lede}</p>
               <ButtonRow>
                 {entry.ctas.map((cta) => (
                   <Button href={cta.href} variant={cta.variant} key={cta.href}>

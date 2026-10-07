@@ -214,13 +214,11 @@ describe('the pages that print a scope keep the scope and its definition reachab
     expect(page).toMatch(/value: CATALOG_SCOPES\[id\]\.definition/);
   });
 
-  it('links the /web roster figure to the plans and to the definitions', () => {
+  it('prints no roster figure on /web, so the page cannot disagree with the catalog', () => {
     const page = pageSource('app/web/page.tsx');
 
-    expect(page).toMatch(/value: String\(CATALOG_SCOPES\.managedRosterModels\.value\)/);
-    expect(page).toMatch(/<Link href="\/pricing"/);
-    expect(page).toMatch(/<Link href="\/providers#definitions"/);
-    expect(page).toMatch(/Which of the \{CATALOG_SCOPES\.managedRosterModels\.value\} each plan/);
+    expect(page).not.toMatch(/CATALOG_SCOPES/);
+    expect(page).not.toMatch(/\b\d{2,}\s+models\b/);
   });
 
   it('says on /web where Local and BYOK run, with the CLI availability note', () => {

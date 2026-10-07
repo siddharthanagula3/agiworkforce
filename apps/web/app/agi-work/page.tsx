@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
-import { AgentRunWindow } from '@/features/marketing/components/FeatureScenes';
+import { AgiWorkRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   Button,
@@ -61,15 +61,10 @@ export default function AgiWorkPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">AGI Work</p>
-              <h1 className="agi-lp-h1" id={IDS.hero}>
-                <span className="agi-lp-line">AGI Work writes a plan first,</span>
+              <h1 className="sr-only" id={IDS.hero}>
+                <span className="agi-lp-line">AGI Work writes a plan first,</span>{' '}
                 <em className="agi-lp-accent">then asks before it acts.</em>
               </h1>
-              <p className="agi-lp-lede">
-                Switch the composer from Chat to AGI Work, describe the outcome, and pin the
-                constraints and the deliverable if they matter. It works the plan with web search,
-                page fetches, sandboxed code, and files, stopping whenever a call needs your say-so.
-              </p>
               <ButtonRow>
                 <Button href="/chat">Open AGI Work</Button>
                 <Button href="/tasks" variant="secondary">
@@ -78,7 +73,7 @@ export default function AgiWorkPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <AgentRunWindow />
+              <AgiWorkRunWindow />
             </div>
           </div>
         </section>

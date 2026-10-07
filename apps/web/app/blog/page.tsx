@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: 'Writing: engineering notes, not content marketing',
@@ -30,7 +31,7 @@ const TOPICS = [
 
 export default function BlogPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero

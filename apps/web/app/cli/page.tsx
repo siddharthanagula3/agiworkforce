@@ -66,7 +66,7 @@ const FEATURES = [
   {
     meta: 'Cost',
     title: 'Live cost HUD',
-    body: 'Running tokens in and out, dollar spend, and context usage sit in the corner of the TUI. Pricing comes from the model catalog. Never hardcoded.',
+    body: 'The TUI status line shows session tokens, credits and context usage. Credit totals are computed from the session cost ledger.',
   },
   {
     meta: 'Migration',
@@ -85,17 +85,9 @@ export default function CliPage() {
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI CLI · {SURFACE_STATUS.cli}</p>
-              <h1 id="agi-fl-cli-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">An agent in</span>{' '}
-                <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">your terminal.</em>
-                </span>
+              <h1 id="agi-fl-cli-hero-title" className="sr-only">
+                AGI CLI
               </h1>
-              <p className="agi-fl-lede">
-                The agi binary is a Rust developer agent. Resume and fork sessions. Run
-                non-interactive code review. Execute in a sandbox with explicit approvals. Works
-                offline with local models.
-              </p>
               <div className="agi-fl-cta-row">
                 <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--primary">
                   Check availability
@@ -104,14 +96,9 @@ export default function CliPage() {
                   Explore AGI Code
                 </Link>
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="CLI highlights">
-                <li>Local · offline-capable</li>
-                <li>BYOK · your keys</li>
-                <li>Sandboxed · by default</li>
-              </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame variant="terminal" title="agi · zsh" badge="sandboxed" />
+              <ProductFrame variant="terminal" title="agi · zsh" />
             </div>
           </div>
         </section>
@@ -131,9 +118,7 @@ export default function CliPage() {
             <tbody>
               {SUBCOMMANDS.map((s) => (
                 <tr key={s.cmd}>
-                  <td style={{ fontFamily: 'var(--agi-font-mono)', textTransform: 'lowercase' }}>
-                    {s.cmd}
-                  </td>
+                  <td className="agi-ledger-command">{s.cmd}</td>
                   <td>{s.desc}</td>
                 </tr>
               ))}

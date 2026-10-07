@@ -1,5 +1,6 @@
-import { Metadata } from 'next';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { buildMetadata } from '@/lib/seo/metadata';
+import '@/features/marketing/components/system/public-reference.css';
 import QueryRuntimeProvider from '../QueryRuntimeProvider';
 
 const TITLE = 'Pricing: what each plan and each route costs';
@@ -13,9 +14,11 @@ const LISTED_PLANS = [
 ].join(', ');
 const DESCRIPTION = `AGI public alpha pricing for ${LISTED_PLANS}, and ${BILLING_PLAN_PRICING.enterprise.label}, with Local and BYOK choices kept separate from managed cloud.`;
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: TITLE,
   description: DESCRIPTION,
+  path: '/pricing',
+  imageAlt: 'AGI pricing plans',
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -26,31 +29,7 @@ export const metadata: Metadata = {
     'AI for teams',
     'enterprise AI',
   ],
-  openGraph: {
-    title: TITLE,
-    description: DESCRIPTION,
-    type: 'website',
-    url: 'https://agiworkforce.com/pricing',
-    images: [
-      {
-        url: '/api/og',
-        width: 1200,
-        height: 630,
-        alt: 'AGI pricing plans',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: TITLE,
-    description: DESCRIPTION,
-    images: ['/api/og'],
-    creator: '@agiworkforce',
-  },
-  alternates: {
-    canonical: '/pricing',
-  },
-};
+});
 
 export default function PricingLayout({ children }: { children: React.ReactNode }) {
   return <QueryRuntimeProvider>{children}</QueryRuntimeProvider>;

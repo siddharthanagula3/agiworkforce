@@ -53,15 +53,9 @@ export default function IntegrationsPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <Eyebrow>Integrations</Eyebrow>
-              <h1 className="agi-ds-h1" id="agi-integrations-title">
+              <h1 className="sr-only" id="agi-integrations-title">
                 Plug AGI <em className="agi-ds-accent">into your stack.</em>
               </h1>
-              <Prose size="lg">
-                Three patterns connect AGI to the tools you already use: MCP plugins for the agent,
-                the native messaging bridge between Chrome and Desktop, and BYOK provider keys on
-                the released CLI. VS Code support is coming soon. Every connection runs behind
-                explicit, visible permissions.
-              </Prose>
               <ButtonRow>
                 {HERO_CTAS.map(({ href, label, variant }) => (
                   <Button key={href} href={href} variant={variant}>
@@ -103,6 +97,7 @@ export default function IntegrationsPage() {
               <h2 className="agi-ds-h2" id="agi-integrations-patterns-title">
                 How the pieces connect.
               </h2>
+              <Prose>Every connection runs behind explicit, visible permissions.</Prose>
             </div>
             <div className="agi-ds-grid-2">
               {PATTERNS.map((item) => (

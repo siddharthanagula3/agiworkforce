@@ -27,6 +27,7 @@ import {
   LEGAL_ENTITY_DESCRIPTOR,
   REGISTERED_AGENT_ADDRESS,
 } from '../../lib/legal-constants';
+import '@/features/marketing/components/pages/company/company.css';
 
 const PROGRESS_COUNT = 5;
 const PROGRESS = RELEASES.slice(0, PROGRESS_COUNT)
@@ -60,7 +61,7 @@ const PRINCIPLES = [
 
 export default function AboutPage() {
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
         <PageHero
@@ -93,6 +94,7 @@ export default function AboutPage() {
           <FounderBlock
             quote={<>&ldquo;You should own the choice of model.&rdquo;</>}
             body="AGI is built on a single conviction: the person doing the work should decide where it runs and which model answers, not a vendor lock-in. Everything here follows from that, from Local Mode that never phones home to BYOK that keeps your keys on your machine."
+            id="agi-about-founder-title"
             name={FOUNDER_NAME}
             role={`${FOUNDER_ROLE}, ${LEGAL_ENTITY}`}
           />

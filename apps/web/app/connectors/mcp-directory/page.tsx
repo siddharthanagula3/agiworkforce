@@ -5,40 +5,40 @@ import { Header } from '@shared/components/layout/Header';
 import {
   Button,
   ButtonRow,
-  Eyebrow,
   MarketingFooter,
   Prose,
+  Section,
+  Stack,
 } from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
 import { isConnectableNow } from '@/lib/connectors/directory/snapshot-view';
 import { helpEntryPoint, helpHref } from '@/lib/support/help-entry-points';
-import { DirectoryCardIcon } from './DirectoryCardIcon';
-import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
+import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
+import { DirectoryRecordCard } from './DirectoryRecordCard';
+import { BADGE_NOTE, BASE_PATH, SIGN_IN_HREF } from './directory-public';
+import type { DirectoryRecord } from '@/lib/connectors/directory/types';
+import '@/features/marketing/components/pages/company/company.css';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = buildMetadata({
   title: 'MCP connector directory',
   description:
-    'Browse every remote MCP server this deployment indexes, from the official Model Context Protocol registry and from vendors publishing their own. Sign in to connect one.',
+    'Browse indexed remote MCP servers, inspect their publisher and listed tools, then sign in to connect one.',
   path: '/connectors/mcp-directory',
 });
 
 const PAGE_SIZE = 60;
 const SEARCH_PARAM = 'q';
 const CATEGORY_PARAM = 'category';
-const BASE_PATH = '/connectors/mcp-directory';
-const SIGN_IN_HREF = '/login?redirectTo=%2Fconnectors';
 const ALL_CATEGORIES_LABEL = 'All';
+const SEARCH_INPUT_ID = 'agi-mcp-directory-search';
+const CATEGORY_SELECT_ID = 'agi-mcp-directory-category';
 
-const BADGE_LABELS: Record<DirectoryBadge, string> = {
-  'first-party': 'First-party',
-  official: 'Official',
-  verified: 'Verified',
-  registry: 'Community',
-  community: 'Community',
-};
+const PILL_CLASS =
+  'inline-flex min-h-9 items-center rounded-full border border-border px-3 text-sm text-foreground pointer-coarse:min-h-11 aria-[current=page]:border-foreground aria-[current=page]:font-medium';
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -64,16 +64,18 @@ function href(search: string, category: string): string {
   return query ? `${BASE_PATH}?${query}` : BASE_PATH;
 }
 
-function iconHref(record: DirectoryRecord): string | null {
-  return record.iconUrl
-    ? `/api/connectors/directory/icon?id=${encodeURIComponent(record.id)}`
-    : null;
+function activeFilterSummary(search: string, category: string): string {
+  if (search && category) return `Matching "${search}" in ${category}.`;
+  if (search) return `Matching "${search}".`;
+  return `In ${category}.`;
 }
 
 export default async function McpDirectoryPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const search = firstValue(params[SEARCH_PARAM]).toLowerCase();
+  const searchText = firstValue(params[SEARCH_PARAM]);
+  const search = searchText.toLowerCase();
   const category = firstValue(params[CATEGORY_PARAM]);
+  const filtered = Boolean(search || category);
 
   const view = await getSnapshotView();
   const selected = view.records.filter(
@@ -83,88 +85,117 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
       (!category || record.categories.includes(category)),
   );
   const page = selected.slice(0, PAGE_SIZE);
+  const truncated = selected.length > page.length;
+  const total = selected.length.toLocaleString();
 
   return (
-    <div data-design="agi" className="agi-ds-page">
+    <div data-design="agi" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content">
-        <section className="agi-lp-hero" aria-labelledby="agi-mcp-directory-title">
-          <div className="agi-ds-container agi-lp-hero-grid">
-            <div className="agi-lp-hero-copy">
-              <Eyebrow>Connectors &middot; MCP directory</Eyebrow>
-              <h1 className="agi-ds-h1" id="agi-mcp-directory-title">
-                Every remote MCP server, <em className="agi-ds-accent">in one place.</em>
-              </h1>
-              <Prose size="lg">
-                These are the remote servers this deployment indexes, from the official Model
-                Context Protocol registry and from vendors who publish their own. Each entry says
-                who published it. Sign in to connect one to a conversation. Servers that run as a
-                local process have no URL, so those are added from the released CLI instead. The
-                current public Desktop reports no local MCP capability.
-              </Prose>
-              <ButtonRow>
-                <Button href={SIGN_IN_HREF}>Sign in to connect</Button>
-                <Button href="https://modelcontextprotocol.io/registry/about" variant="secondary">
-                  About the MCP registry
-                </Button>
-              </ButtonRow>
-            </div>
-          </div>
-        </section>
+        <PageHero
+          id="agi-mcp-directory-title"
+          eyebrow="Connectors · MCP directory"
+          title="Find a connector for your work."
+          lede="Search the remote MCP servers indexed here. Open a listing to inspect its publisher and tools before you connect."
+          ctas={[
+            { href: SIGN_IN_HREF, label: 'Sign in to connect' },
+            {
+              href: 'https://modelcontextprotocol.io/registry/about',
+              label: 'About the MCP registry',
+              variant: 'secondary',
+            },
+          ]}
+        />
 
-        <section className="agi-lp-section" aria-labelledby="agi-mcp-directory-list-title">
-          <div className="agi-ds-container">
-            <div className="agi-lp-heading">
-              <Eyebrow>
-                {selected.length.toLocaleString()}{' '}
-                {selected.length === 1 ? 'connector' : 'connectors'}
+        <Section id="results" size="xs" labelledBy="agi-mcp-directory-list-title" rule>
+          <Stack gap="tight" className="agi-ds-full">
+            <h2 className="agi-ds-h2" id="agi-mcp-directory-list-title" tabIndex={-1}>
+              Browse the directory.
+            </h2>
+            <div role="status" aria-atomic="true">
+              <Prose>
+                {total} {selected.length === 1 ? 'connector' : 'connectors'}
                 {view.bootstrapComplete ? '' : ' indexed so far'}
-              </Eyebrow>
-              <h2 className="agi-ds-h2" id="agi-mcp-directory-list-title">
-                Browse the directory.
-              </h2>
+                {truncated ? `, showing the first ${page.length.toLocaleString()}` : ''}
+              </Prose>
             </div>
 
-            <form action={BASE_PATH} method="get" className="mb-6 flex flex-wrap gap-2">
-              <label className="sr-only" htmlFor="agi-mcp-directory-search">
-                Search connectors
-              </label>
-              <input
-                id="agi-mcp-directory-search"
-                type="search"
-                name={SEARCH_PARAM}
-                defaultValue={firstValue(params[SEARCH_PARAM])}
-                placeholder="Search connectors"
-                className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground"
-              />
-              {category ? <input type="hidden" name={CATEGORY_PARAM} value={category} /> : null}
-              <button
-                type="submit"
-                className="h-10 shrink-0 rounded-lg border border-border px-4 text-sm font-medium text-foreground"
-              >
+            <form
+              action={`${BASE_PATH}#agi-mcp-directory-list-title`}
+              method="get"
+              role="search"
+              aria-label="Search connectors"
+              className="flex w-full flex-wrap items-end gap-3"
+            >
+              <div className="agi-ds-field min-w-0 flex-1 basis-64">
+                <label htmlFor={SEARCH_INPUT_ID} className="text-sm font-medium text-foreground">
+                  Search connectors
+                </label>
+                <input
+                  id={SEARCH_INPUT_ID}
+                  type="search"
+                  name={SEARCH_PARAM}
+                  defaultValue={searchText}
+                  placeholder="Name, publisher or tool"
+                  className="agi-ds-input"
+                />
+              </div>
+              <div className="agi-ds-field w-full sm:hidden">
+                <label htmlFor={CATEGORY_SELECT_ID} className="text-sm font-medium text-foreground">
+                  Category
+                </label>
+                <select
+                  id={CATEGORY_SELECT_ID}
+                  name={CATEGORY_PARAM}
+                  defaultValue={category}
+                  className="agi-ds-input"
+                >
+                  <option value="">{ALL_CATEGORIES_LABEL}</option>
+                  {DIRECTORY_CATEGORIES.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button type="submit" className="agi-ds-btn" data-variant="secondary">
                 Search
               </button>
             </form>
 
-            <nav aria-label="Categories" className="mb-6 flex flex-wrap gap-2">
+            <Prose>
+              Servers that run as a local process have no URL, so those are added from the CLI.{' '}
+              {CLI_AVAILABILITY_NOTE}
+            </Prose>
+
+            <nav aria-label="Categories" className="hidden w-full flex-wrap gap-2 sm:flex">
               <Link
-                href={href(firstValue(params[SEARCH_PARAM]), '')}
+                href={href(searchText, '')}
                 aria-current={category ? undefined : 'page'}
-                className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground aria-[current=page]:text-foreground"
+                className={PILL_CLASS}
               >
                 {ALL_CATEGORIES_LABEL}
               </Link>
               {DIRECTORY_CATEGORIES.map((name) => (
                 <Link
                   key={name}
-                  href={href(firstValue(params[SEARCH_PARAM]), name)}
+                  href={href(searchText, name)}
                   aria-current={category === name ? 'page' : undefined}
-                  className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground aria-[current=page]:text-foreground"
+                  className={PILL_CLASS}
                 >
                   {name}
                 </Link>
               ))}
             </nav>
+
+            {filtered ? (
+              <Prose>
+                {activeFilterSummary(searchText, category)}{' '}
+                <Link href={BASE_PATH} className="agi-ds-link">
+                  Clear filters
+                </Link>
+              </Prose>
+            ) : null}
 
             {page.length === 0 ? (
               <Prose>
@@ -173,55 +204,25 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
                   : 'The directory is still being indexed, so this search may be incomplete. Try again shortly.'}
               </Prose>
             ) : (
-              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {page.map((record) => {
-                  const icon = iconHref(record);
-                  return (
-                    <li
-                      key={record.id}
-                      className="flex flex-col gap-2 rounded-xl border border-border p-4"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        {icon ? (
-                          <DirectoryCardIcon src={icon} monogram={record.monogram} />
-                        ) : (
-                          <span
-                            aria-hidden
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-xs text-muted-foreground"
-                          >
-                            {record.monogram}
-                          </span>
-                        )}
-                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                          {record.name}
-                        </span>
-                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          {BADGE_LABELS[record.badge]}
-                        </span>
-                      </div>
-                      <p className="line-clamp-3 text-sm text-muted-foreground">
-                        {record.description}
-                      </p>
-                      <p className="mt-auto text-xs text-muted-foreground">
-                        {record.publisher}
-                        {record.toolNames.length > 0
-                          ? ` · ${record.toolNames.length} ${record.toolNames.length === 1 ? 'tool' : 'tools'}`
-                          : ''}
-                      </p>
-                    </li>
-                  );
-                })}
+              <ul className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {page.map((record) => (
+                  <DirectoryRecordCard key={record.id} record={record} />
+                ))}
               </ul>
             )}
 
-            {selected.length > page.length ? (
+            {truncated ? (
               <Prose>
-                Showing the first {page.length.toLocaleString()}. Sign in to search and filter the
-                whole directory.
+                Showing the first {page.length.toLocaleString()} of {total}. Search or choose a
+                category to narrow the list, or{' '}
+                <Link href={SIGN_IN_HREF} className="agi-ds-link">
+                  sign in
+                </Link>{' '}
+                to browse all of them.
               </Prose>
             ) : null}
-          </div>
-        </section>
+          </Stack>
+        </Section>
 
         <section className="agi-lp-close" aria-labelledby="agi-mcp-directory-close-title">
           <div className="agi-ds-container">
@@ -230,10 +231,9 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
                 Bring <em className="agi-ds-accent">your own tools.</em>
               </h2>
               <Prose size="lg">
-                We do not sign or vouch for a community server; the badge on each entry says who
-                published it and nothing more. Signed in, the custom connector dialog also accepts
-                any remote HTTP or SSE MCP endpoint and your own token, and every tool a connector
-                offers stays behind your per-tool permission.
+                {BADGE_NOTE} Signed in, the custom connector dialog also accepts any remote HTTP or
+                SSE MCP endpoint and your own token, and every tool a connector offers stays behind
+                your per-tool permission.
               </Prose>
               <ButtonRow>
                 <Button href={SIGN_IN_HREF}>Sign in to connect</Button>

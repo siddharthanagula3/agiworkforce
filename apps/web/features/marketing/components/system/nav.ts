@@ -80,7 +80,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
       {
         href: '/features/projects',
         label: 'Projects',
-        description: 'Instructions and files that follow every prompt',
+        description: 'Project instructions and selected references',
       },
       {
         href: '/features/tools',

@@ -167,6 +167,7 @@ export default function ApiDocsPage() {
       <Header />
       <main id="main-content" tabIndex={-1}>
         <PageHero
+          minimal
           id="agi-api-docs-title"
           eyebrow="API docs"
           title="OpenAI-compatible endpoints."
