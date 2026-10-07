@@ -1048,7 +1048,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: scope
     if: needs.scope.outputs.web_changed == 'true'
-    timeout-minutes: 45
+    timeout-minutes: 60
     # DATABASE_URL below points at a Postgres this job never started, so every
     # page answered 500 from the health check. The env-validation crash used to
     # kill the server first and hide it.
@@ -1175,12 +1175,16 @@ jobs:
       # The specs in apps/web/e2e/matrix are not in this list on purpose. The
       # public acceptance matrix is every public route at eight widths in two
       # themes, about 3,200 browser cases, and the footer capture matrix is 48
-      # cases at about 42 seconds each, which alone is more than this step's
-      # 25 minutes. Both run on demand from web-public-matrix.yml instead of on
+      # cases at about 42 seconds each, which alone is close to this step's
+      # whole budget. Both run on demand from web-public-matrix.yml instead of on
       # every push. The same test pins which specs may live in that folder.
       # Measured locally on 2026-10-07 against a dev server, one worker: the
       # 48 listed specs are 806 tests and 2,145 seconds of test time, so about
-      # 18 minutes at two workers. Runner speed is not measured.
+      # 18 minutes at two workers. Measured on the runner on 2026-10-07 (run
+      # 37698652308): 834 tests took 25.0 minutes at two workers and the
+      # 25-minute cap stopped the route contrast spec at 233 of its 240
+      # route and theme pairs, so the cap is 35 minutes and the job's limit
+      # is 60 to leave room for the build before it.
       - name: Run signed-out Web Playwright flows
         working-directory: apps/web
         env:
@@ -1236,7 +1240,7 @@ jobs:
             status-first-screen.spec.ts \
             trial-cancel.spec.ts \
             trust-surface-layout.spec.ts \
-            --project=chromium --workers=2 --retries=1 --global-timeout=1500000
+            --project=chromium --workers=2 --retries=1 --global-timeout=2100000
 
       - name: Print Web app log on failure
         if: failure()
