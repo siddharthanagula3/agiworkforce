@@ -1,0 +1,301 @@
+{
+  "key": "referralTerms",
+  "route": "/referral-terms",
+  "date": "2026-09-27",
+  "replacedOn": "2026-10-07",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Referral program terms.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-referral-terms-title",
+      "content": [
+        {
+          "text": "Referral program terms."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "These terms govern the referral program run by AGI Automation LLC. They add to our "
+        },
+        {
+          "text": "terms of service",
+          "href": "/terms"
+        },
+        {
+          "text": ", which also apply; where the two differ about the program, these terms control. Last updated: 2026-09-27."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "how",
+      "content": [
+        {
+          "text": "How it works."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "To take part you must be at least 18 and hold an AGI Workforce account in your own name."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "How the referral program works",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Your link"
+            }
+          ],
+          "value": [
+            {
+              "text": "Settings > Referrals gives you one personal referral link. Share it only with people you know who would welcome it. Do not send spam, buy ads against the AGI Workforce name, or post your link on coupon or deal sites."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Your friend"
+            }
+          ],
+          "value": [
+            {
+              "text": "Opens your link, then creates a new AGI Workforce account in the same browser within 30 days. An account more than a day old cannot be referred, and each account can be referred only once."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Friend trial"
+            }
+          ],
+          "value": [
+            {
+              "text": "A 7-day free Pro trial, started at checkout with a payment card. The trial terms below apply."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Friend reward"
+            }
+          ],
+          "value": [
+            {
+              "text": "500 bonus credits when the friend's first paid subscription invoice is paid through checkout on the web. Subscriptions bought in the App Store or Google Play do not qualify."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Your reward"
+            }
+          ],
+          "value": [
+            {
+              "text": "500 bonus credits once 14 days have passed after that invoice without a refund, chargeback or dispute."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Limits"
+            }
+          ],
+          "value": [
+            {
+              "text": "A referrer can earn at most 10 rewards in a calendar month and 50 in a calendar year. A friend who converts beyond a limit still gets their own reward; the referrer gets nothing for that friend."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "trial",
+      "content": [
+        {
+          "text": "Free trial terms."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Before your card is taken, checkout shows the Pro price and the date the trial converts. When the trial ends it converts automatically into a paid Pro subscription at that price plus any applicable tax, billed every month or every year as you chose at checkout, until you cancel. 2 days before it converts we email you a reminder with the amount, the date and a one-click cancel link. Cancel from that link or in Settings > Billing any time before the trial ends and you are not charged; Pro stays on until the trial ends. Once a payment is taken, our "
+        },
+        {
+          "text": "refund policy",
+          "href": "/refund-policy"
+        },
+        {
+          "text": " applies."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A trial is available once per person, and only to an account that has never held a paid subscription. Paid upgrades are opening in stages, so the trial becomes available when your account can upgrade."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "credits",
+      "content": [
+        {
+          "text": "Bonus credits."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Bonus credit rules",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Expiry"
+            }
+          ],
+          "value": [
+            {
+              "text": "Bonus credits expire 90 days after they are added. Whatever is unused then is removed."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Order of use"
+            }
+          ],
+          "value": [
+            {
+              "text": "They can be used only while you are on a paid plan. They are spent after your plan's included usage and before any credits you bought, soonest expiring first."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "No cash value"
+            }
+          ],
+          "value": [
+            {
+              "text": "Bonus credits are not money or legal tender. They cannot be sold, transferred to another account, exchanged for cash or refunded, and they end if the account that holds them is closed."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "abuse",
+      "content": [
+        {
+          "text": "Fair use."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "You cannot refer yourself or another account you control. To check this we compare the two accounts’ payment card fingerprints, device identifiers, the network each signed up from and their email addresses. We give no reward, and may remove a reward already given, for self-referral, duplicate or fake accounts, a card, device or network shared with the referrer, disposable or alias email addresses, or any other attempt to game the program. If the qualifying invoice is refunded or disputed, the unspent bonus credits from that referral are removed from both accounts. Abuse can also lead to action on the account under our terms of service."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "changes",
+      "content": [
+        {
+          "text": "Changes, taxes and where the program applies."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We may change these terms or end the program at any time by updating this page and the date at its top. A change does not take away bonus credits already added to an account, except under the fair use rules above. If we end the program, a referral whose qualifying invoice was paid before the end is still rewarded when its hold passes."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "You are responsible for any taxes on rewards you receive. The program is void where prohibited or restricted by law, and nothing in these terms limits rights you have under the consumer protection law where you live."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "If you think a reward was withheld or removed in error, email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Referral%20program"
+        },
+        {
+          "text": " from the address on your account."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Invite friends",
+            "href": "/settings/referrals"
+          }
+        ],
+        [
+          {
+            "text": "Terms of service",
+            "href": "/terms"
+          }
+        ]
+      ]
+    }
+  ]
+}

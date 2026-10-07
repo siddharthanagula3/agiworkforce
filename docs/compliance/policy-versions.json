@@ -7,6 +7,12 @@
       "served": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
       "main": "7460f331a2e0a5229dd997805af2de66667614b5",
       "note": "Vercel's newest production deployment on 2 October 2026 was built on 21 September 2026 from e353673cce, whose tree main holds as 9633cf72ad, and the live policy pages printed the dates POLICY_LAST_UPDATED gives at that commit, checked page by page that day. Main was at 7460f331a2 when this was checked, so a version main had replaced by then was never published on this site."
+    },
+    {
+      "checkedOn": "2026-10-07",
+      "served": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+      "main": "d1892b7efd77c8d0691d2bd6deb39c6b1918043a",
+      "note": "On 7 October 2026 production answered /api/version with commit d4c600d9b2, which is main's head, and the live /privacy, /cookies, /referral-terms, /agent-permissions, /privacy/india and /security pages printed 2026-09-29, 2026-09-23, 2026-09-27, 2026-09-27, 2026-08-13 and 2026-08-14, read from each page that day. Those versions were therefore published on this site. d1892b7efd is the commit on this branch that moves the six dates to 2026-10-07; it had not been deployed when this was checked."
     }
   ],
   "documents": {

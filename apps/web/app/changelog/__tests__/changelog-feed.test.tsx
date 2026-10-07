@@ -492,7 +492,12 @@ describe('/changelog lists policy changes', () => {
 
     expect(introduced.map((policy) => policy.route)).toContain('/referral-terms');
     for (const policy of introduced) {
-      const row = rows.find((entry) => entry.date === policy.date && entry.href === policy.route);
+      const row = rows.find(
+        (entry) =>
+          entry.date === policy.date &&
+          (entry.href === policy.route ||
+            entry.href === `/legal/archive/${policy.slug}/${policy.date}`),
+      );
       const entry = entries.find(
         (node) =>
           categoryTerms(node).includes(policy.slug) &&
