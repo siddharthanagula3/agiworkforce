@@ -64,6 +64,11 @@ test('a Skeleton counts as a loading state and an EmptyState as an empty one', (
   assert.ok(!missingStates("<Skeleton />;\n<EmptyState title='x' />;").includes('empty'));
 });
 
+test('the sign-in progress block counts as a loading state and an unknown component does not', () => {
+  assert.ok(!missingStates("<AuthProgress label='x' />;").includes('loading'));
+  assert.ok(missingStates("<AuthFrame label='x' />;").includes('loading'));
+});
+
 test('a server component is out of scope even when it fetches', () => {
   assert.equal(fetchesData(BARE_ROUTE.replace("'use client';\n", '')), false);
   assert.deepEqual(
