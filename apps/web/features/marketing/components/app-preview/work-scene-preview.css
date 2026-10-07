@@ -1,0 +1,347 @@
+[data-design='agi'] .agi-app-window {
+  --u: calc(100cqw / var(--app-w));
+}
+
+[data-design='agi'] .agi-work {
+  container-type: inline-size;
+}
+
+[data-design='agi'] .agi-work-icon {
+  flex: none;
+  inline-size: calc(var(--u) * 14);
+  block-size: calc(var(--u) * 14);
+  stroke-width: 2;
+}
+
+[data-design='agi'] .agi-work-run {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  font-size: calc(var(--u) * 14);
+  line-height: 1.43;
+}
+
+[data-design='agi'] .agi-work-run-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding-block: calc(var(--u) * 6);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-work-run-summary {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-design='agi'] .agi-work-run-plan {
+  display: block;
+  margin-block-end: calc(var(--u) * 4);
+  margin-inline-start: calc(var(--u) * 8);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-work-run-rows {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+  margin-block-start: calc(var(--u) * 4);
+  margin-inline-start: calc(var(--u) * 8);
+  padding-inline-start: calc(var(--u) * 16);
+  border-inline-start: 1px solid var(--chat-border);
+}
+
+[data-design='agi'] .agi-work-step {
+  position: relative;
+  padding-block: calc(var(--u) * 6);
+  padding-inline-start: calc(var(--u) * 32);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-work-step-mark {
+  position: absolute;
+  inset-block-start: calc(var(--u) * 6);
+  inset-inline-start: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--u) * 20);
+  block-size: calc(var(--u) * 20);
+  border-radius: var(--corner-pill);
+  background: var(--chat-bg);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-work-step-text {
+  display: block;
+}
+
+[data-design='agi'] .agi-work-tool {
+  padding-block: calc(var(--u) * 4);
+  padding-inline-start: calc(var(--u) * 28);
+}
+
+[data-design='agi'] .agi-work-tool-card {
+  margin-block: calc(var(--u) * 2);
+}
+
+[data-design='agi'] .agi-work-tool-card[data-gated] {
+  padding: 0 calc(var(--u) * 4) calc(var(--u) * 4);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-work-tool-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  block-size: calc(var(--u) * 28);
+  padding-inline: calc(var(--u) * 4);
+  color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-work-tool-card[data-gated] .agi-work-tool-bar {
+  margin-block: calc(var(--u) * 2);
+}
+
+[data-design='agi'] .agi-work-tool-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--u) * 24);
+  block-size: calc(var(--u) * 24);
+  border-radius: var(--corner-pill);
+  background: var(--chat-surface-hover);
+  font-size: calc(var(--u) * 12);
+  font-weight: 600;
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-work-tool-name {
+  min-inline-size: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-design='agi'] .agi-work-tool-time {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font-size: calc(var(--u) * 12);
+  color: var(--chat-text-muted);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-work-tool-status {
+  flex: none;
+  font-size: calc(var(--u) * 12);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-work-tool-body {
+  display: grid;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 8);
+  border: 1px solid var(--chat-border);
+  border-radius: calc(var(--u) * 8);
+  background: var(--chat-code-bg);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: calc(var(--u) * 12);
+  line-height: 1.4;
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-work-banner {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 8);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 4);
+  background: var(--chat-surface-hover);
+}
+
+[data-design='agi'] .agi-work-banner-text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+[data-design='agi'] .agi-work-decisions {
+  display: inline-flex;
+  flex: none;
+  gap: calc(var(--u) * 6);
+}
+
+[data-design='agi'] .agi-work-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 4);
+  block-size: calc(var(--u) * 24);
+  padding-inline: calc(var(--u) * 8);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: calc(var(--u) * 4);
+  background: var(--chat-bg);
+  font-weight: 500;
+  color: var(--chat-text-primary);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-work-btn[data-ink] {
+  border-color: var(--chat-text-primary);
+  background: var(--chat-text-primary);
+  color: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-work-btn-glyph {
+  flex: none;
+  inline-size: calc(var(--u) * 10);
+  block-size: calc(var(--u) * 10);
+}
+
+[data-design='agi'] .agi-work-label {
+  display: block;
+  margin-block-end: calc(var(--u) * 4);
+  margin-inline-start: calc(var(--u) * 2);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-work-diff {
+  border: 1px solid var(--chat-border);
+  border-radius: calc(var(--u) * 4);
+  background: var(--chat-code-bg);
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-work-diff-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 4) calc(var(--u) * 8);
+  border-block-end: 1px solid var(--chat-border);
+}
+
+[data-design='agi'] .agi-work-diff-path {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  color: var(--chat-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-design='agi'] .agi-work-diff-added {
+  color: var(--chat-success-text);
+}
+
+[data-design='agi'] .agi-work-diff-removed {
+  color: var(--chat-destructive-text);
+}
+
+[data-design='agi'] .agi-work-diff-lines {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.375;
+}
+
+[data-design='agi'] .agi-work-diff-line {
+  display: flex;
+  color: var(--chat-text-muted);
+  white-space: pre;
+}
+
+[data-design='agi'] .agi-work-diff-line[data-diff='add'] {
+  background: color-mix(in srgb, var(--chat-success) 10%, transparent);
+  color: var(--chat-success-text);
+}
+
+[data-design='agi'] .agi-work-diff-line[data-diff='remove'] {
+  background: color-mix(in srgb, var(--chat-destructive) 10%, transparent);
+  color: var(--chat-destructive-text);
+}
+
+[data-design='agi'] .agi-work-diff-line i {
+  flex: none;
+  inline-size: calc(var(--u) * 16);
+  font-style: normal;
+  text-align: center;
+}
+
+[data-design='agi'] .agi-work-composer {
+  flex: none;
+  inline-size: 100%;
+  max-inline-size: calc(var(--u) * 768);
+}
+
+[data-design='agi'] .agi-work-composer .agi-app-composer {
+  position: relative;
+}
+
+[data-design='agi'] .agi-app-send.agi-work-stop {
+  background: var(--chat-text-primary);
+  color: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-work-stop-glyph {
+  fill: currentColor;
+}
+
+[data-design='agi'] .agi-work-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  inline-size: fit-content;
+  margin-block-start: calc(var(--u) * -12);
+  margin-inline-start: calc(var(--u) * 24);
+  padding: calc(var(--u) * 16) calc(var(--u) * 4) calc(var(--u) * 6);
+  border: 1px solid var(--chat-border-strong);
+  border-block-start: 0;
+  border-radius: 0 0 calc(var(--u) * 16) calc(var(--u) * 16);
+  background: var(--chat-surface-hover);
+}
+
+[data-design='agi'] .agi-work-bar span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  block-size: calc(var(--u) * 32);
+  padding-inline: calc(var(--u) * 8);
+  font-weight: 500;
+  color: var(--chat-text-muted);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-app-window.agi-work-imagewindow {
+  block-size: auto;
+}
+
+[data-design='agi'] .agi-app-titlebar.agi-work-titlebar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+[data-design='agi'] .agi-work-titlebar .agi-app-titletext {
+  margin-inline: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-design='agi'] .agi-work-titlebadge {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-work-image {
+  display: block;
+  flex: none;
+  inline-size: 100%;
+  block-size: auto;
+}

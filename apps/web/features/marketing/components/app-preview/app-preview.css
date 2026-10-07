@@ -984,6 +984,26 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   font-weight: 600;
 }
 
+[data-design='agi'] .agi-app-tui-changes {
+  gap: calc(var(--u) * 3);
+}
+
+[data-design='agi'] .agi-app-tui-changes span {
+  white-space: pre;
+}
+
+[data-design='agi'] .agi-app-tui [data-diff='meta'] {
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-app-tui [data-diff='file'] {
+  font-weight: 700;
+}
+
+[data-design='agi'] .agi-app-tui [data-diff='hunk'] {
+  color: var(--chat-accent);
+}
+
 [data-design='agi'] .agi-app-tui [data-diff='remove'] {
   color: var(--chat-destructive-text);
 }
@@ -1233,9 +1253,22 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   border-block-end: 0;
 }
 
-[data-design='agi'] .agi-fl-surface-visual figure.agi-dev.agi-app[data-device][data-geometry] {
+[data-design='agi']
+  .agi-fl-devband-visual
+  figure.agi-dev.agi-app--editor[data-device][data-geometry] {
+  aspect-ratio: calc(var(--app-w)) / calc(var(--app-h) * 0.64);
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-fl-surface-visual figure.agi-dev.agi-app[data-device][data-geometry],
+[data-design='agi'] .agi-fl-devband-visual figure.agi-dev.agi-app[data-device][data-geometry] {
   -webkit-mask-image: linear-gradient(to bottom, currentColor 58%, transparent 100%);
   mask-image: linear-gradient(to bottom, currentColor 58%, transparent 100%);
+}
+
+[data-design='agi'] .agi-ds-pagehead:has(.agi-ds-pagehead-split .agi-app) + *,
+[data-design='agi'] .agi-lp-hero:has(.agi-lp-hero-stage .agi-app) + * {
+  border-block-start: 0;
 }
 
 @media (min-width: 901px) {

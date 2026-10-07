@@ -665,12 +665,35 @@ const TERMINAL_ACCESS: Record<TerminalRouteMode, string> = {
 
 const TERMINAL_CHOICES = ['Yes', 'No', 'Allow Session', 'Always Allow'];
 
+export type TerminalView = 'approval' | 'changes';
+
+type TerminalChangeKind = 'meta' | 'file' | 'hunk' | 'add' | 'remove';
+
+const TERMINAL_CHANGES_TITLE = 'Workspace · changes since the last commit';
+
+const TERMINAL_CHANGES: ReadonlyArray<{ text: string; kind?: TerminalChangeKind }> = [
+  { text: 'Changes since the last commit (1 file changed, +2 -1):' },
+  { text: '  M  src/greet.ts  +2 -1' },
+  { text: ' ' },
+  { text: 'diff --git a/src/greet.ts b/src/greet.ts', kind: 'meta' },
+  { text: '--- a/src/greet.ts', kind: 'file' },
+  { text: '+++ b/src/greet.ts', kind: 'file' },
+  { text: '@@ -1,3 +1,4 @@', kind: 'hunk' },
+  { text: ' export function greet(name: string): string {' },
+  { text: '-  return `Hello, ${name}`;', kind: 'remove' },
+  { text: '+  const trimmed = name.trim();', kind: 'add' },
+  { text: "+  return trimmed ? `Hello, ${trimmed}` : 'Hello';", kind: 'add' },
+  { text: ' }' },
+];
+
 export function TerminalAppPreview({
   className,
   routeMode = 'local',
+  view = 'approval',
 }: {
   className?: string;
   routeMode?: TerminalRouteMode;
+  view?: TerminalView;
 }) {
   const provider = routeMode === 'local' ? CLI_LOCAL_RUNTIMES.names[0] : undefined;
   return (
@@ -690,22 +713,32 @@ export function TerminalAppPreview({
           {provider ? <em>{provider}</em> : null}
           <span>main</span>
         </div>
-        <div className="agi-app-tui-box" data-title="Tool Approval">
-          <span>Allow write_file to modify:</span>
-          <span>
-            file.txt <i>(+1 / -1 lines)</i>
-          </span>
-          <span data-diff="remove">- alpha</span>
-          <span data-diff="add">+ beta</span>
-          <span className="agi-app-tui-choices">
-            {TERMINAL_CHOICES.map((choice, index) => (
-              <span key={choice} data-on={index === 0 || undefined}>
-                [ {choice} ]
+        {view === 'changes' ? (
+          <div className="agi-app-tui-box agi-app-tui-changes" data-title={TERMINAL_CHANGES_TITLE}>
+            {TERMINAL_CHANGES.map((line, index) => (
+              <span key={`${index}-${line.text}`} data-diff={line.kind}>
+                {line.text}
               </span>
             ))}
-          </span>
-          <i>←/→ move Enter confirm Tab note Esc = No</i>
-        </div>
+          </div>
+        ) : (
+          <div className="agi-app-tui-box" data-title="Tool Approval">
+            <span>Allow write_file to modify:</span>
+            <span>
+              file.txt <i>(+1 / -1 lines)</i>
+            </span>
+            <span data-diff="remove">- alpha</span>
+            <span data-diff="add">+ beta</span>
+            <span className="agi-app-tui-choices">
+              {TERMINAL_CHOICES.map((choice, index) => (
+                <span key={choice} data-on={index === 0 || undefined}>
+                  [ {choice} ]
+                </span>
+              ))}
+            </span>
+            <i>←/→ move Enter confirm Tab note Esc = No</i>
+          </div>
+        )}
         <div className="agi-app-tui-box agi-app-tui-input" data-title="Default">
           <span>
             <b>&gt;</b> <i>Message AGI... Enter sends · Ctrl-J newline · / commands · @ files</i>

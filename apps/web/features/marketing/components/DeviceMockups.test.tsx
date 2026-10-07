@@ -318,6 +318,43 @@ describe('CLI terminal', () => {
     for (const text of ['"Local"', '"Your key"', '"Managed"']) expect(design).toContain(text);
   });
 
+  it('shows workspace changes the way the CLI workspace pane prints them', () => {
+    const { container } = render(<TerminalWindow view="changes" />);
+    const box = container.querySelector('.agi-app-tui-box');
+    expect(box).toHaveAttribute('data-title', 'Workspace · changes since the last commit');
+    expect(container.querySelector('.agi-app-tui-choices')).toBeNull();
+    const lines = Array.from(box?.querySelectorAll(':scope > span') ?? []);
+    expect(lines[0]?.textContent).toBe('Changes since the last commit (1 file changed, +2 -1):');
+    expect(lines[1]?.textContent).toBe('  M  src/greet.ts  +2 -1');
+    const added = lines.filter((line) => line.getAttribute('data-diff') === 'add');
+    const removed = lines.filter((line) => line.getAttribute('data-diff') === 'remove');
+    expect([added.length, removed.length]).toEqual([2, 1]);
+    for (const line of added) expect(line.textContent?.startsWith('+')).toBe(true);
+    for (const line of removed) expect(line.textContent?.startsWith('-')).toBe(true);
+    expect(lines.find((line) => line.getAttribute('data-diff') === 'hunk')?.textContent).toBe(
+      '@@ -1,3 +1,4 @@',
+    );
+  });
+
+  it('the CLI still prints the workspace pane the way the preview draws it', () => {
+    const tui = readSource('apps/cli/src/tui/tui_app.rs');
+    expect(tui).toContain('" Workspace · changes since the last commit "');
+    for (const prefix of [
+      'starts_with("+++")',
+      "starts_with('+')",
+      "starts_with('-')",
+      'starts_with("@@")',
+    ])
+      expect(tui).toContain(prefix);
+    expect(readSource('apps/cli/src/platform/runtime/git.rs')).toContain(
+      '"changes since the last commit"',
+    );
+    const model = readSource('apps/cli/src/diff_model.rs');
+    expect(model).toContain('"{} file{} changed, +{} -{}"');
+    expect(model).toContain('"{}  {}  +{} -{}{suffix}"');
+    expect(model).toContain("FileChangeKind::Modified => 'M'");
+  });
+
   it('ProductFrame passes the terminal route through', () => {
     const terminal = render(<ProductFrame variant="terminal" title="agi" routeMode="byok" />);
     expect(terminal.container.textContent).toContain('Your key');
@@ -401,8 +438,11 @@ describe('ProductFrame facade', () => {
         image={{ src: '/logo-512.png', width: 2940, height: 1414, alt: 'CLI' }}
       />,
     );
-    expect(container.querySelector('figure.agi-dev')?.className).toContain('agi-dev--image');
-    expect(container.querySelector('img.agi-dev-image')).not.toBeNull();
-    expect(container.querySelector('.agi-dev-title')?.textContent).toBe('agi · zsh');
+    const figure = container.querySelector('figure.agi-dev.agi-app');
+    expect(figure?.className).toContain('agi-dev--image');
+    expect(figure?.getAttribute('data-geometry')).toBe('2940x1414');
+    expect(container.querySelector('img.agi-work-image')?.getAttribute('alt')).toBe('CLI');
+    expect(container.querySelector('.agi-app-titletext')?.textContent).toBe('agi · zsh');
+    expect(container.querySelector('.agi-app-titlebar')?.getAttribute('aria-hidden')).toBe('true');
   });
 });
