@@ -433,6 +433,18 @@
       "verifiedBy": "official-deepseek-documentation-and-live-api",
       "status": "CORRECTION",
       "notes": "DeepSeek V4 Flash (deepseek-v4-flash) now carries the price DeepSeek actually bills for it. The 2026-09-10 news post and the pricing page state that V4-Flash and V4-Flash-Vision-Exp are retired and that both ids temporarily route to V4.1-Flash at V4.1-Flash rates, and a request for deepseek-v4-flash on 2026-10-07 was answered by deepseek-flash. The row is corrected from $0.44/$1.32/$0.014 to the peak V4.1-Flash rate of $0.30/$1.20/$0.006. The DeepSeek vision default moves from deepseek-v4-flash-vision-exp to deepseek-flash, which is the model that already answers the retired id and which the list-models endpoint reports as accepting image input; deepseek-v4-flash-vision-exp then leaves the catalog through retired-models.json. The deepseek/deepseek-flash slot stays on deepseek-v4-flash: the promotion gate refused deepseek-flash on 2026-10-07 with the refusal corpus at 0.000 and the jailbreak corpus at 0.364 against floors of 1.000."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-and-one-live-image-call",
+      "status": "ADDITION",
+      "notes": "Four Google models join the catalog at lifecycle stage registered: Gemini Omni 1.1 Flash (gemini-omni-1.1-flash, stable 2026-08-27, video), Gemini 3.8 Live (gemini-3.8-live, 2026-09-15, live audio), Gemini 3.8 Flash TTS (gemini-3.8-flash-tts, 2026-09-22, speech) and Gemini Nano Banana 2.1 (gemini-nano-banana-2.1, 2026-10-06, image). Prices were read from ai.google.dev/gemini-api/docs/pricing, release dates and replacements from the deprecations page, and limits and capabilities from each model page, all on 2026-10-07. One live call was made, a single 1K image from gemini-nano-banana-2.1 to read the output format the catalog requires, which was image/jpeg; no call was made to the other three. None of the four matches the family pattern of the slot it would replace, because Google renamed each line, and the eval harness measures text answers only, so no slot moves with this entry."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Shutdown dates from the Gemini API deprecations page, retrieved 2026-10-07, are now recorded as deprecation_date: 2026-10-22 for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview (which read 2026-09-30), and 2026-11-17 for gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. The three Veo rows hold the google/veo, google/veo-fast and google/veo-lite slots, so video generation through those slots stops on 2026-10-22 unless the slots are moved before then. gemini-3.1-flash-image was deprecated on 2026-10-06 with no shutdown date announced, so its row carries no date."
     }
   ],
   "providers": {
@@ -2223,70 +2235,6 @@
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_fast"
       }
     },
-    "gemini-3.1-flash-lite": {
-      "id": "gemini-3.1-flash-lite",
-      "apiModelId": "gemini-3.1-flash-lite",
-      "openRouterSlug": "google/gemini-3.1-flash-lite",
-      "name": "Gemini 3.1 Flash-Lite",
-      "provider": "google",
-      "modelType": "multimodal",
-      "openWeight": false,
-      "license": "proprietary",
-      "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.5-flash-lite",
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2025-01",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Cheapest Multimodal", "Function Calling", "High Volume"],
-      "deprecation_date": "2027-05-07",
-      "pricingNote": "Input $0.25/1M for text, image and video and $0.50/1M for audio; output $1.50/1M; cache read $0.025/1M text, image and video and $0.05/1M audio, plus $1.00 per 1M tokens per hour of storage. Cheaper than gemini-3.5-flash-lite but Google has announced a 2027-05-07 shutdown and the knowledge cutoff is a year older, so gemini-3.5-flash-lite stays the family slot. Verified against ai.google.dev/gemini-api/docs/pricing and the deprecations page, retrieved 2026-09-04.",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "medium",
-        "canDisableThinking": false,
-        "request": {
-          "api": "gen",
-          "effortPath": "thinkingConfig.thinkingLevel",
-          "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
-        }
-      },
-      "tierPolicy": {
-        "minTier": "basic"
-      },
-      "costOverride": {
-        "inputCost": 0.25,
-        "outputCost": 1.5,
-        "cached_input": 0.025
-      },
-      "contextOverride": 1048576,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speedOverride": "very-fast",
-      "releasedOverride": "May 7, 2026",
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#gemini-3.1-flash-lite.deprecation_date"
-      },
-      "deprecated": true
-    },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
       "apiModelId": "gemini-3.1-flash-image",
@@ -2333,6 +2281,54 @@
         "stage": "promoted",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation"
+      }
+    },
+    "gemini-nano-banana-2.1": {
+      "id": "gemini-nano-banana-2.1",
+      "apiModelId": "gemini-nano-banana-2.1",
+      "name": "Gemini Nano Banana 2.1",
+      "provider": "google",
+      "modelType": "image",
+      "openWeight": false,
+      "license": "proprietary",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "deprecation_date": null,
+      "imageApi": "gemini",
+      "imageOutputMimeType": "image/jpeg",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "bestFor": ["Image Generation", "Image Editing"],
+      "costOverride": {
+        "inputCost": 1.5,
+        "outputCost": 30
+      },
+      "imagePerImageCost": 0.0336,
+      "pricingNote": "Paid tier only. Input $1.50/1M (text, image, video). Output $7.50/1M for text and thinking, $30.00/1M for images, which Google states as $0.0336 per 1K image, $0.0504 per 2K image and $0.113 per 4K image; imagePerImageCost carries the 1K rate. Batch is half. Token limits are 131,072 in and 32,768 out. Output is 1K by default, with 2K and 4K available. Google does not state the output image format on the pages read; one generateContent call on 2026-10-07 returned image/jpeg, 1,120 image tokens for a 1K image and 385 thinking tokens, which is what imageOutputMimeType records. Google names this model as the replacement for gemini-3.1-flash-image, which it deprecated on 2026-10-06 with no shutdown date. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
+      "releasedOverride": "October 6, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1"
       }
     },
     "gemini-3-pro-image": {
@@ -3186,81 +3182,6 @@
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_premium"
       }
     },
-    "gemini-3.6-flash": {
-      "id": "gemini-3.6-flash",
-      "apiModelId": "gemini-3.6-flash",
-      "openRouterSlug": "google/gemini-3.6-flash",
-      "name": "Gemini 3.6 Flash",
-      "provider": "google",
-      "modelType": "multimodal",
-      "openWeight": false,
-      "license": "proprietary",
-      "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.8-flash",
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2026-03",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": [
-        "Lowest Latency Flash",
-        "Function Calling",
-        "Search Grounding",
-        "Multimodal Reasoning"
-      ],
-      "deprecation_date": "2026-09-06",
-      "promo_expires_at": "2027-01-01T00:00:00Z",
-      "post_promo_prices": {
-        "input": 1.5,
-        "output": 7.5,
-        "cached_input": 0.15
-      },
-      "pricingNote": "Same introductory schedule as the newer Flash rows: $0.75/1M input, $3.75/1M output and $0.075/1M cached input through 2026-12-31, then $1.50/$7.50/$0.15 from 2027-01-01. The only Flash at or above 3.6 that accepts the minimal thinking level, which makes it the lowest-latency Flash lane at the same price as 3.8. Stable with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "medium",
-        "canDisableThinking": false,
-        "request": {
-          "api": "gen",
-          "effortPath": "thinkingConfig.thinkingLevel",
-          "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
-        }
-      },
-      "tierPolicy": {
-        "minTier": "basic"
-      },
-      "costOverride": {
-        "inputCost": 0.75,
-        "outputCost": 3.75,
-        "cached_input": 0.075
-      },
-      "contextOverride": 1048576,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "July 21, 2026",
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#gemini-3.6-flash.deprecation_date"
-      },
-      "deprecated": true
-    },
     "glm-5.3": {
       "id": "glm-5.3",
       "apiModelId": "glm-5.3",
@@ -3531,68 +3452,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "kimi-k2.6": {
-      "id": "kimi-k2.6",
-      "apiModelId": "kimi-k2.6",
-      "openRouterSlug": "moonshotai/kimi-k2.6",
-      "name": "Kimi K2.6",
-      "provider": "moonshot",
-      "modelType": "multimodal",
-      "openWeight": true,
-      "license": "Modified MIT License",
-      "inputModalities": ["text", "image", "video"],
-      "variantPartner": "kimi-k3",
-      "maxOutputTokens": 32768,
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["General Chat", "Tool Use", "Vision"],
-      "deprecation_date": "2026-09-06",
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_toggle",
-        "canDisableThinking": true,
-        "thinkingDefault": "enabled",
-        "request": {
-          "api": "chat",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "costOverride": {
-        "inputCost": 0.95,
-        "outputCost": 4,
-        "cached_input": 0.16
-      },
-      "contextOverride": 262144,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.16/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. The 32,768 output figure is the documented default; Moonshot publishes no ceiling and no knowledge cutoff. Older than kimi-k3 and below the Kimi family context floor, so it can never take the family slot. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k26, retrieved 2026-09-04.",
-      "speedOverride": "medium",
-      "releasedOverride": "April 20, 2026",
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#kimi-k2.6.deprecation_date"
-      },
-      "deprecated": true
-    },
     "grok-4.6": {
       "id": "grok-4.6",
       "apiModelId": "grok-4.6",
@@ -3742,7 +3601,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Professional Video", "High Quality Clips"],
-      "deprecation_date": null,
+      "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.4,
       "videoPerSecondCostByResolution": {
         "720p": 0.4,
@@ -3838,7 +3697,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Fast High-Quality Video", "Rapid Iteration"],
-      "deprecation_date": null,
+      "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.1,
       "videoPerSecondCostByResolution": {
         "720p": 0.1,
@@ -4169,7 +4028,7 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
-      "deprecation_date": null,
+      "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.05,
       "videoPerSecondCostByResolution": {
         "720p": 0.05,
@@ -4250,7 +4109,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Video Generation", "Conversational Video Editing"],
-      "deprecation_date": "2026-09-30",
+      "deprecation_date": "2026-10-22",
       "availability": "preview",
       "videoPerSecondCost": 0.1,
       "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06; prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 4,000 to 1,048,576, the context window Google publishes on the shared Gemini Omni Flash model card that this preview SKU's pricing entry links to, no model card exists at the preview id itself, and 4,000 was a placeholder shared with the veo-3.1 rows. litellm holds two entries for this model that disagree with each other: its gemini/ entry says 131,072 and its vertex_ai-language-models entry says 1,048,576, so the drift check will keep flagging the first one.",
@@ -4284,6 +4143,50 @@
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
+    },
+    "gemini-omni-1.1-flash": {
+      "id": "gemini-omni-1.1-flash",
+      "apiModelId": "gemini-omni-1.1-flash",
+      "name": "Gemini Omni 1.1 Flash",
+      "provider": "google",
+      "modelType": "video",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Video Generation", "Conversational Video Editing"],
+      "videoPerSecondCost": 0.1,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 1.5,
+        "outputCost": 17.5
+      },
+      "contextOverride": 1048576,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "deprecation_date": null,
+      "pricingNote": "Paid tier only. Input $1.50/1M (text, image, video, audio); output $9.00/1M text and $17.50/1M video, which Google states is approximately $0.10 per second. Video output runs 3 to 10 seconds at 360p, 720p, 1080p or 4K and 24 frames per second. Google names this model as the replacement for gemini-omni-flash-preview and for the three Veo 3.1 ids, all of which shut down on 2026-10-22. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
+      "releasedOverride": "August 27, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash"
       }
     },
     "gemini-3.5-live-translate-preview": {
@@ -4344,7 +4247,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Realtime Voice", "Live Multimodal Dialogue"],
-      "deprecation_date": null,
+      "deprecation_date": "2026-11-17",
       "availability": "preview",
       "pricingNote": "Live API audio-to-audio dialogue model. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Search grounding bills $14 per 1,000 requests after 5,000 free each month. Free tier is free of charge and batch is not supported. Thinking levels come from the model card's migration notes; the docs thinking table has no row for it, and no knowledge cutoff is published. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
       "reasoning": {
@@ -4388,6 +4291,60 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
+    "gemini-3.8-live": {
+      "id": "gemini-3.8-live",
+      "apiModelId": "gemini-3.8-live",
+      "name": "Gemini 3.8 Live",
+      "provider": "google",
+      "modelType": "multimodal",
+      "openWeight": false,
+      "license": "proprietary",
+      "inputModalities": ["text", "image", "audio", "video"],
+      "maxOutputTokens": 65536,
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Realtime Voice", "Live Multimodal Dialogue"],
+      "deprecation_date": null,
+      "costOverride": {
+        "inputCost": 0.75,
+        "outputCost": 4.5
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": false,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "reasoning": {
+        "capable": true,
+        "control": "always_on",
+        "canDisableThinking": false,
+        "request": {
+          "api": "gen",
+          "effortPath": null,
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "pricingNote": "Live API audio-to-audio dialogue model. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Token limits are 131,072 in and 65,536 out. The model reasons between turns but takes no thinking level: Google says to omit thinking_level when moving from the 3.1 preview. Asynchronous function calling is the default, proactive audio is always on and affective dialogue is gone. Structured outputs, caching, batch and code execution are not supported. Google names this model as the replacement for gemini-3.1-flash-live-preview, which shuts down on 2026-11-17. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
+      "releasedOverride": "September 15, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live"
+      }
+    },
     "gemini-3.1-flash-tts-preview": {
       "id": "gemini-3.1-flash-tts-preview",
       "apiModelId": "gemini-3.1-flash-tts-preview",
@@ -4400,7 +4357,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Voice Generation", "Narration"],
-      "deprecation_date": null,
+      "deprecation_date": "2026-11-17",
       "availability": "preview",
       "pricingNote": "Input $1.00/1M text tokens, output $20.00/1M audio tokens, batch at half both. Free tier is free of charge. Streaming through streamGenerateContent has been supported since 2026-06-17. The current Gemini text-to-speech model: the 2.5 TTS previews name it as their replacement. Still preview with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
       "reasoning": {
@@ -4433,6 +4390,57 @@
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+      }
+    },
+    "gemini-3.8-flash-tts": {
+      "id": "gemini-3.8-flash-tts",
+      "apiModelId": "gemini-3.8-flash-tts",
+      "name": "Gemini 3.8 Flash TTS",
+      "provider": "google",
+      "modelType": "tts",
+      "openWeight": false,
+      "license": "proprietary",
+      "maxOutputTokens": 16384,
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Voice Generation", "Narration"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "contextOverride": 8192,
+      "speedOverride": "fast",
+      "promo_expires_at": "2027-01-01T00:00:00Z",
+      "post_promo_prices": {
+        "input": 1,
+        "output": 18
+      },
+      "costOverride": {
+        "inputCost": 0.5,
+        "outputCost": 9
+      },
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "pricingNote": "Google lists an introductory $0.50/1M text input and $9.00/1M audio output (about $0.00225 per 10 seconds of audio) through 2026-12-31. From 2027-01-01 the published rates are $1.00 and $18.00, carried in post_promo_prices. Batch and Flex are half; cached input is $0.125 rising to $0.25. Token limits are 8,192 in and 16,384 out. Returns WAV audio by default and covers over 130 languages. Google names this model, with gemini-3.8-flash-lite-tts, as the replacement for gemini-3.1-flash-tts-preview, which shuts down on 2026-11-17. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
+      "releasedOverride": "September 22, 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts"
       }
     },
     "openrouter-auto": {

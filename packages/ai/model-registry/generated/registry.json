@@ -569,39 +569,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.1-flash-lite": {
-      "identity": {
-        "key": "gemini-3.1-flash-lite",
-        "displayName": "Gemini 3.1 Flash-Lite",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.1-flash-lite",
-        "openRouterSlug": "google/gemini-3.1-flash-lite",
-        "kind": "multimodal",
-        "familyPartner": "gemini-3.5-flash-lite",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["google/gemini-3.1-flash-lite"],
-        "family": "gemini-flash-lite",
-        "version": "3.1"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "May 7, 2026",
-        "deprecationDate": "2027-05-07",
-        "deprecated": true,
-        "releasedOn": "2026-05-07",
-        "deprecatedOn": "2027-05-07",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#gemini-3.1-flash-lite.deprecation_date",
-        "replacedBy": "gemini-3.5-flash-lite"
-      },
-      "speed": "very-fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "gemini-3.1-flash-image": {
       "identity": {
         "key": "gemini-3.1-flash-image",
@@ -627,6 +594,37 @@
         "stage": "promoted",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation",
+        "replacedBy": null
+      },
+      "speed": "fast",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
+    "gemini-nano-banana-2.1": {
+      "identity": {
+        "key": "gemini-nano-banana-2.1",
+        "displayName": "Gemini Nano Banana 2.1",
+        "provider": "google",
+        "developer": "google",
+        "providerModelId": "gemini-nano-banana-2.1",
+        "kind": "image",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": [],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "October 6, 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-10-06",
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1",
         "replacedBy": null
       },
       "speed": "fast",
@@ -1136,39 +1134,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.6-flash": {
-      "identity": {
-        "key": "gemini-3.6-flash",
-        "displayName": "Gemini 3.6 Flash",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.6-flash",
-        "openRouterSlug": "google/gemini-3.6-flash",
-        "kind": "multimodal",
-        "familyPartner": "gemini-3.8-flash",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["google/gemini-3.6-flash"],
-        "family": "gemini-flash",
-        "version": "3.6"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "July 21, 2026",
-        "deprecationDate": "2026-09-06",
-        "deprecated": true,
-        "releasedOn": "2026-07-21",
-        "deprecatedOn": "2026-09-06",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#gemini-3.6-flash.deprecation_date",
-        "replacedBy": "gemini-3.8-flash"
-      },
-      "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "glm-5.3": {
       "identity": {
         "key": "glm-5.3",
@@ -1335,39 +1300,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "kimi-k2.6": {
-      "identity": {
-        "key": "kimi-k2.6",
-        "displayName": "Kimi K2.6",
-        "provider": "moonshot",
-        "developer": "moonshot",
-        "providerModelId": "kimi-k2.6",
-        "openRouterSlug": "moonshotai/kimi-k2.6",
-        "kind": "multimodal",
-        "familyPartner": "kimi-k3",
-        "openWeight": true,
-        "license": "Modified MIT License",
-        "aliases": ["moonshotai/kimi-k2.6"],
-        "family": "kimi",
-        "version": "2.6"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "April 20, 2026",
-        "deprecationDate": "2026-09-06",
-        "deprecated": true,
-        "releasedOn": "2026-04-20",
-        "deprecatedOn": "2026-09-06",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#kimi-k2.6.deprecation_date",
-        "replacedBy": "kimi-k3"
-      },
-      "speed": "medium",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "grok-4.6": {
       "identity": {
         "key": "grok-4.6",
@@ -1448,10 +1380,10 @@
         "status": "active",
         "availability": "live",
         "released": "October 15, 2025",
-        "deprecationDate": null,
+        "deprecationDate": "2026-10-22",
         "deprecated": false,
         "releasedOn": "2025-10-15",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-10-22",
         "stage": "promoted",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.video_generation",
@@ -1477,10 +1409,10 @@
         "status": "active",
         "availability": "live",
         "released": "October 15, 2025",
-        "deprecationDate": null,
+        "deprecationDate": "2026-10-22",
         "deprecated": false,
         "releasedOn": "2025-10-15",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-10-22",
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
@@ -1657,10 +1589,10 @@
         "status": "active",
         "availability": "live",
         "released": "March 31, 2026",
-        "deprecationDate": null,
+        "deprecationDate": "2026-10-22",
         "deprecated": false,
         "releasedOn": "2026-03-31",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-10-22",
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
@@ -1686,13 +1618,42 @@
         "status": "active",
         "availability": "preview",
         "released": "June 30, 2026",
-        "deprecationDate": "2026-09-30",
+        "deprecationDate": "2026-10-22",
         "deprecated": false,
         "releasedOn": "2026-06-30",
-        "deprecatedOn": "2026-09-30",
+        "deprecatedOn": "2026-10-22",
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "replacedBy": null
+      },
+      "speed": "fast",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
+    "gemini-omni-1.1-flash": {
+      "identity": {
+        "key": "gemini-omni-1.1-flash",
+        "displayName": "Gemini Omni 1.1 Flash",
+        "provider": "google",
+        "developer": "google",
+        "providerModelId": "gemini-omni-1.1-flash",
+        "kind": "video",
+        "aliases": [],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "August 27, 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-08-27",
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash",
         "replacedBy": null
       },
       "speed": "fast",
@@ -1746,13 +1707,44 @@
         "status": "active",
         "availability": "preview",
         "released": "March 11, 2026",
-        "deprecationDate": null,
+        "deprecationDate": "2026-11-17",
         "deprecated": false,
         "releasedOn": "2026-03-11",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-11-17",
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "replacedBy": null
+      },
+      "speed": "fast",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
+    "gemini-3.8-live": {
+      "identity": {
+        "key": "gemini-3.8-live",
+        "displayName": "Gemini 3.8 Live",
+        "provider": "google",
+        "developer": "google",
+        "providerModelId": "gemini-3.8-live",
+        "kind": "multimodal",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": [],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 15, 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-09-15",
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live",
         "replacedBy": null
       },
       "speed": "fast",
@@ -1777,13 +1769,44 @@
         "status": "active",
         "availability": "preview",
         "released": "April 13, 2026",
-        "deprecationDate": null,
+        "deprecationDate": "2026-11-17",
         "deprecated": false,
         "releasedOn": "2026-04-13",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-11-17",
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "replacedBy": null
+      },
+      "speed": "fast",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
+    "gemini-3.8-flash-tts": {
+      "identity": {
+        "key": "gemini-3.8-flash-tts",
+        "displayName": "Gemini 3.8 Flash TTS",
+        "provider": "google",
+        "developer": "google",
+        "providerModelId": "gemini-3.8-flash-tts",
+        "kind": "tts",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": [],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 22, 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-09-22",
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts",
         "replacedBy": null
       },
       "speed": "fast",
@@ -13036,19 +13059,21 @@
       "gemini-embedding-2",
       "gemini-3.1-pro-preview",
       "gemini-3.5-flash-lite",
-      "gemini-3.1-flash-lite",
       "gemini-3.1-flash-image",
+      "gemini-nano-banana-2.1",
       "gemini-3-pro-image",
       "gemini-3.1-flash-lite-image",
       "gemini-3.8-flash",
-      "gemini-3.6-flash",
       "veo-3.1",
       "veo-3.1-fast",
       "veo-3.1-lite",
       "gemini-omni-flash-preview",
+      "gemini-omni-1.1-flash",
       "gemini-3.5-live-translate-preview",
       "gemini-3.1-flash-live-preview",
-      "gemini-3.1-flash-tts-preview"
+      "gemini-3.8-live",
+      "gemini-3.1-flash-tts-preview",
+      "gemini-3.8-flash-tts"
     ],
     "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-flash"],
     "qwen": ["qwen-3.5-flash", "qwen-3.8-flash", "qwen-3.7-plus"],
@@ -13407,7 +13432,7 @@
       "or-z-ai-glm-latest"
     ],
     "zhipu": ["glm-5.3", "glm-5.3-flash"],
-    "moonshot": ["kimi-k3", "kimi-k2.7-code", "kimi-k2.6"],
+    "moonshot": ["kimi-k3", "kimi-k2.7-code"],
     "xai": ["grok-4.6", "grok-4.7"],
     "minimax": ["minimax-m3", "minimax-m2.7"],
     "groq": ["gpt-oss-safeguard-20b", "qwen-3.6-27b", "qwen-3.8-27b"]
@@ -14706,26 +14731,6 @@
         "cacheWritePerMillion": 0.3
       }
     },
-    "google/gemini-3.1-flash-lite": {
-      "modelKey": "gemini-3.1-flash-lite",
-      "provider": "google",
-      "providerModelId": "gemini-3.1-flash-lite",
-      "harnessId": "google/generate-content",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.25,
-        "outputPerMillion": 1.5,
-        "cacheReadPerMillion": 0.025
-      }
-    },
     "google/gemini-3.1-flash-image": {
       "modelKey": "gemini-3.1-flash-image",
       "provider": "google",
@@ -14744,6 +14749,26 @@
         "inputPerMillion": 0.5,
         "outputPerMillion": 60,
         "imagePerImage": 0.067
+      }
+    },
+    "google/gemini-nano-banana-2.1": {
+      "modelKey": "gemini-nano-banana-2.1",
+      "provider": "google",
+      "providerModelId": "gemini-nano-banana-2.1",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_image",
+        "inputPerMillion": 1.5,
+        "outputPerMillion": 30,
+        "imagePerImage": 0.0336
       }
     },
     "google/gemini-3-pro-image": {
@@ -15684,28 +15709,6 @@
         "cacheWritePerMillion": 0.75
       }
     },
-    "google/gemini-3.6-flash": {
-      "modelKey": "gemini-3.6-flash",
-      "provider": "google",
-      "providerModelId": "gemini-3.6-flash",
-      "harnessId": "google/generate-content",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.75,
-        "outputPerMillion": 3.75,
-        "cacheReadPerMillion": 0.075,
-        "promoExpiresAt": "2027-01-01T00:00:00Z",
-        "postPromoPrices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 }
-      }
-    },
     "zhipu/glm-5.3": {
       "modelKey": "glm-5.3",
       "provider": "zhipu",
@@ -16510,26 +16513,6 @@
         "outputPerMillion": 4
       }
     },
-    "moonshot/kimi-k2.6": {
-      "modelKey": "kimi-k2.6",
-      "provider": "moonshot",
-      "providerModelId": "kimi-k2.6",
-      "harnessId": "moonshot/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4,
-        "cacheReadPerMillion": 0.16
-      }
-    },
     "xai/grok-4.6": {
       "modelKey": "grok-4.6",
       "provider": "xai",
@@ -16991,6 +16974,26 @@
         "videoPerSecond": 0.1
       }
     },
+    "google/gemini-omni-1.1-flash": {
+      "modelKey": "gemini-omni-1.1-flash",
+      "provider": "google",
+      "providerModelId": "gemini-omni-1.1-flash",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_second",
+        "inputPerMillion": 1.5,
+        "outputPerMillion": 17.5,
+        "videoPerSecond": 0.1
+      }
+    },
     "google/gemini-3.5-live-translate-preview": {
       "modelKey": "gemini-3.5-live-translate-preview",
       "provider": "google",
@@ -17029,6 +17032,25 @@
         "outputPerMillion": 4.5
       }
     },
+    "google/gemini-3.8-live": {
+      "modelKey": "gemini-3.8-live",
+      "provider": "google",
+      "providerModelId": "gemini-3.8-live",
+      "harnessId": "google/generate-content",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.75,
+        "outputPerMillion": 4.5
+      }
+    },
     "google/gemini-3.1-flash-tts-preview": {
       "modelKey": "gemini-3.1-flash-tts-preview",
       "provider": "google",
@@ -17046,6 +17068,27 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 1,
         "outputPerMillion": 20
+      }
+    },
+    "google/gemini-3.8-flash-tts": {
+      "modelKey": "gemini-3.8-flash-tts",
+      "provider": "google",
+      "providerModelId": "gemini-3.8-flash-tts",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 9,
+        "promoExpiresAt": "2027-01-01T00:00:00Z",
+        "postPromoPrices": { "input": 1, "output": 18 }
       }
     },
     "open_router/openrouter-auto": {
@@ -25801,31 +25844,31 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "gemini-3.1-flash-lite": {
+    "gemini-3.1-flash-image": {
       "textInput": true,
       "imageInput": true,
-      "audioInput": true,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
       "audioOutput": false,
       "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false,
       "imageEditing": null,
       "realtime": null,
       "reranking": null,
       "toolSchemaSupport": null,
       "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
     },
-    "gemini-3.1-flash-image": {
+    "gemini-nano-banana-2.1": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -26233,30 +26276,6 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "gemini-3.6-flash": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": true,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
     "glm-5.3": {
       "textInput": true,
       "imageInput": false,
@@ -26354,30 +26373,6 @@
       "promptCaching": true
     },
     "kimi-k2.7-code": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "kimi-k2.6": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -26665,6 +26660,30 @@
       "codeExecution": false,
       "promptCaching": false
     },
+    "gemini-omni-1.1-flash": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": true,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
+    },
     "gemini-3.5-live-translate-preview": {
       "textInput": true,
       "imageInput": false,
@@ -26713,6 +26732,30 @@
       "codeExecution": false,
       "promptCaching": false
     },
+    "gemini-3.8-live": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": true,
+      "videoInput": true,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": false,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": false
+    },
     "gemini-3.1-flash-tts-preview": {
       "textInput": true,
       "imageInput": false,
@@ -26736,6 +26779,30 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": false
+    },
+    "gemini-3.8-flash-tts": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": true,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "openrouter-auto": {
       "textInput": true,
@@ -35950,19 +36017,19 @@
       "outputPerMillion": 2.5,
       "cacheReadPerMillion": 0.03
     },
-    "gemini-3.1-flash-lite": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.25,
-      "outputPerMillion": 1.5,
-      "cacheReadPerMillion": 0.025
-    },
     "gemini-3.1-flash-image": {
       "currency": "USD",
       "unit": "per_image",
       "inputPerMillion": 0.5,
       "outputPerMillion": 60,
       "imagePerImage": 0.067
+    },
+    "gemini-nano-banana-2.1": {
+      "currency": "USD",
+      "unit": "per_image",
+      "inputPerMillion": 1.5,
+      "outputPerMillion": 30,
+      "imagePerImage": 0.0336
     },
     "gemini-3-pro-image": {
       "currency": "USD",
@@ -36081,15 +36148,6 @@
       "promoExpiresAt": "2027-01-01T00:00:00Z",
       "postPromoPrices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 }
     },
-    "gemini-3.6-flash": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.75,
-      "outputPerMillion": 3.75,
-      "cacheReadPerMillion": 0.075,
-      "promoExpiresAt": "2027-01-01T00:00:00Z",
-      "postPromoPrices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 }
-    },
     "glm-5.3": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -36136,13 +36194,6 @@
       "inputPerMillion": 0.95,
       "outputPerMillion": 4,
       "cacheReadPerMillion": 0.19
-    },
-    "kimi-k2.6": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.95,
-      "outputPerMillion": 4,
-      "cacheReadPerMillion": 0.16
     },
     "grok-4.6": {
       "currency": "USD",
@@ -36249,6 +36300,13 @@
       "outputPerMillion": 17.5,
       "videoPerSecond": 0.1
     },
+    "gemini-omni-1.1-flash": {
+      "currency": "USD",
+      "unit": "per_second",
+      "inputPerMillion": 1.5,
+      "outputPerMillion": 17.5,
+      "videoPerSecond": 0.1
+    },
     "gemini-3.5-live-translate-preview": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -36261,11 +36319,25 @@
       "inputPerMillion": 0.75,
       "outputPerMillion": 4.5
     },
+    "gemini-3.8-live": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.75,
+      "outputPerMillion": 4.5
+    },
     "gemini-3.1-flash-tts-preview": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 1,
       "outputPerMillion": 20
+    },
+    "gemini-3.8-flash-tts": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 9,
+      "promoExpiresAt": "2027-01-01T00:00:00Z",
+      "postPromoPrices": { "input": 1, "output": 18 }
     },
     "openrouter-auto": {
       "currency": "USD",
@@ -39072,12 +39144,8 @@
     "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
     "gemini-3.1-pro-preview": { "contextTokens": 1048576 },
     "gemini-3.5-flash-lite": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-lite": {
-      "contextTokens": 1048576,
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2025-01"
-    },
     "gemini-3.1-flash-image": { "contextTokens": 131072 },
+    "gemini-nano-banana-2.1": { "contextTokens": 131072 },
     "gemini-3-pro-image": { "contextTokens": 65536, "maxOutputTokens": 32768 },
     "gemini-3.1-flash-lite-image": {
       "contextTokens": 65536,
@@ -39139,17 +39207,11 @@
     "gpt-image-2": { "contextTokens": 4000 },
     "gpt-4o-mini-tts": { "contextTokens": 2000 },
     "gemini-3.8-flash": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
-    "gemini-3.6-flash": {
-      "contextTokens": 1048576,
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2026-03"
-    },
     "glm-5.3": { "contextTokens": 1000000, "maxOutputTokens": 128000 },
     "glm-5.3-flash": { "contextTokens": 1000000, "maxOutputTokens": 128000 },
     "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "kimi-k3": { "contextTokens": 1048576, "maxOutputTokens": 1048576 },
     "kimi-k2.7-code": { "contextTokens": 262144, "maxOutputTokens": 32768 },
-    "kimi-k2.6": { "contextTokens": 262144, "maxOutputTokens": 32768 },
     "grok-4.6": { "contextTokens": 500000, "knowledgeCutoff": "2026-02-01" },
     "grok-4.7": { "contextTokens": 500000, "knowledgeCutoff": "2026-05" },
     "veo-3.1": {
@@ -39264,9 +39326,12 @@
       }
     },
     "gemini-omni-flash-preview": { "contextTokens": 1048576 },
+    "gemini-omni-1.1-flash": { "contextTokens": 1048576 },
     "gemini-3.5-live-translate-preview": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "gemini-3.1-flash-live-preview": { "contextTokens": 131072, "maxOutputTokens": 65536 },
+    "gemini-3.8-live": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "gemini-3.1-flash-tts-preview": { "contextTokens": 8192, "maxOutputTokens": 16384 },
+    "gemini-3.8-flash-tts": { "contextTokens": 8192, "maxOutputTokens": 16384 },
     "openrouter-auto": { "contextTokens": 2000000 },
     "openrouter-auto-beta": { "contextTokens": 2000000 },
     "openrouter-free": {
@@ -39741,8 +39806,8 @@
       }
     },
     "gemini-3.5-flash-lite": {},
-    "gemini-3.1-flash-lite": {},
     "gemini-3.1-flash-image": {},
+    "gemini-nano-banana-2.1": {},
     "gemini-3-pro-image": {},
     "gemini-3.1-flash-lite-image": {},
     "deepseek-v4-flash": {
@@ -39870,13 +39935,11 @@
     "gpt-image-2": {},
     "gpt-4o-mini-tts": {},
     "gemini-3.8-flash": {},
-    "gemini-3.6-flash": {},
     "glm-5.3": {},
     "glm-5.3-flash": {},
     "qwen-3.7-plus": {},
     "kimi-k3": {},
     "kimi-k2.7-code": {},
-    "kimi-k2.6": {},
     "grok-4.6": {},
     "grok-4.7": {},
     "veo-3.1": {},
@@ -39888,9 +39951,12 @@
     "minimax-m2.7": {},
     "veo-3.1-lite": {},
     "gemini-omni-flash-preview": {},
+    "gemini-omni-1.1-flash": {},
     "gemini-3.5-live-translate-preview": {},
     "gemini-3.1-flash-live-preview": {},
+    "gemini-3.8-live": {},
     "gemini-3.1-flash-tts-preview": {},
+    "gemini-3.8-flash-tts": {},
     "openrouter-auto": {},
     "openrouter-auto-beta": {},
     "openrouter-free": {},
@@ -40748,6 +40814,20 @@
       "verifiedBy": "official-deepseek-documentation-and-live-api",
       "status": "CORRECTION",
       "notes": "DeepSeek V4 Flash (deepseek-v4-flash) now carries the price DeepSeek actually bills for it. The 2026-09-10 news post and the pricing page state that V4-Flash and V4-Flash-Vision-Exp are retired and that both ids temporarily route to V4.1-Flash at V4.1-Flash rates, and a request for deepseek-v4-flash on 2026-10-07 was answered by deepseek-flash. The row is corrected from $0.44/$1.32/$0.014 to the peak V4.1-Flash rate of $0.30/$1.20/$0.006. The DeepSeek vision default moves from deepseek-v4-flash-vision-exp to deepseek-flash, which is the model that already answers the retired id and which the list-models endpoint reports as accepting image input; deepseek-v4-flash-vision-exp then leaves the catalog through retired-models.json. The deepseek/deepseek-flash slot stays on deepseek-v4-flash: the promotion gate refused deepseek-flash on 2026-10-07 with the refusal corpus at 0.000 and the jailbreak corpus at 0.364 against floors of 1.000."
+    },
+    {
+      "id": "verification/2026-10-07/73",
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-and-one-live-image-call",
+      "status": "ADDITION",
+      "notes": "Four Google models join the catalog at lifecycle stage registered: Gemini Omni 1.1 Flash (gemini-omni-1.1-flash, stable 2026-08-27, video), Gemini 3.8 Live (gemini-3.8-live, 2026-09-15, live audio), Gemini 3.8 Flash TTS (gemini-3.8-flash-tts, 2026-09-22, speech) and Gemini Nano Banana 2.1 (gemini-nano-banana-2.1, 2026-10-06, image). Prices were read from ai.google.dev/gemini-api/docs/pricing, release dates and replacements from the deprecations page, and limits and capabilities from each model page, all on 2026-10-07. One live call was made, a single 1K image from gemini-nano-banana-2.1 to read the output format the catalog requires, which was image/jpeg; no call was made to the other three. None of the four matches the family pattern of the slot it would replace, because Google renamed each line, and the eval harness measures text answers only, so no slot moves with this entry."
+    },
+    {
+      "id": "verification/2026-10-07/74",
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Shutdown dates from the Gemini API deprecations page, retrieved 2026-10-07, are now recorded as deprecation_date: 2026-10-22 for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview (which read 2026-09-30), and 2026-11-17 for gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. The three Veo rows hold the google/veo, google/veo-fast and google/veo-lite slots, so video generation through those slots stops on 2026-10-22 unless the slots are moved before then. gemini-3.1-flash-image was deprecated on 2026-10-06 with no shutdown date announced, so its row carries no date."
     }
   ],
   "retiredModels": {
@@ -40845,6 +40925,39 @@
     },
     "gemini-3-flash-preview": { "id": "gemini-3-flash-preview", "metadataPreserved": false },
     "gemini-3-pro-preview": { "id": "gemini-3-pro-preview", "metadataPreserved": false },
+    "gemini-3.1-flash-lite": {
+      "id": "gemini-3.1-flash-lite",
+      "displayName": "Gemini 3.1 Flash-Lite",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "multimodal",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": true,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "May 7, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.5-flash-lite",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-lite",
+      "metadataPreserved": true
+    },
     "gemini-3.5-flash": {
       "id": "gemini-3.5-flash",
       "displayName": "Gemini 3.5 Flash",
@@ -40870,6 +40983,39 @@
       "released": "May 2026",
       "retiredOn": "2026-07-22",
       "metadataSource": "packages/contracts/types/src/models.json@5a165d78b",
+      "metadataPreserved": true
+    },
+    "gemini-3.6-flash": {
+      "id": "gemini-3.6-flash",
+      "displayName": "Gemini 3.6 Flash",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "multimodal",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": true,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "July 21, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-flash",
+      "metadataSource": "catalog/models.curation.json#gemini-3.6-flash",
       "metadataPreserved": true
     },
     "gemini-3.7-flash": {
@@ -41070,6 +41216,39 @@
       "released": "2024",
       "retiredOn": "2026-07-22",
       "metadataSource": "packages/contracts/types/src/models.json@5a165d78b",
+      "metadataPreserved": true
+    },
+    "kimi-k2.6": {
+      "id": "kimi-k2.6",
+      "displayName": "Kimi K2.6",
+      "provider": "moonshot",
+      "developer": "moonshot",
+      "modelType": "multimodal",
+      "contextWindow": 262144,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "April 20, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "kimi-k3",
+      "metadataSource": "catalog/models.curation.json#kimi-k2.6",
       "metadataPreserved": true
     },
     "mistral-large-3": {
