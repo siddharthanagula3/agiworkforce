@@ -873,7 +873,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-code-row[data-change] i,
 [data-design='agi'] .agi-app-code-row[data-change] b {
-  color: var(--chat-text-secondary);
+  color: var(--chat-text-primary);
 }
 
 [data-design='agi'] .agi-app-code-row i {
