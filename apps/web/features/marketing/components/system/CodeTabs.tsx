@@ -1,6 +1,7 @@
 'use client';
 
 import { useTablistKeyboard } from '@agiworkforce/ui';
+import { Check, Copy } from 'lucide-react';
 import { useId, useState } from 'react';
 import '../code-example-responsive.css';
 
@@ -15,6 +16,80 @@ const COPY_LABEL = 'Copy';
 const COPIED_LABEL = 'Copied';
 const COPIED_ANNOUNCEMENT = 'Copied to clipboard';
 const COPIED_RESET_MS = 1600;
+
+type CodeTokenKind = 'comment' | 'string' | 'number' | 'keyword' | 'function';
+
+const CODE_KEYWORDS = new Set([
+  'as',
+  'async',
+  'await',
+  'const',
+  'curl',
+  'def',
+  'export',
+  'false',
+  'for',
+  'from',
+  'function',
+  'if',
+  'import',
+  'in',
+  'let',
+  'new',
+  'null',
+  'print',
+  'return',
+  'true',
+  'with',
+  'DELETE',
+  'GET',
+  'PATCH',
+  'POST',
+  'PUT',
+  'False',
+  'None',
+  'True',
+]);
+
+const COMMENT_START: Record<string, RegExp> = {
+  shell: /(^|\s)#/u,
+  python: /(^|\s)#/u,
+  typescript: /(^|\s)\/\//u,
+  javascript: /(^|\s)\/\//u,
+};
+
+const CODE_TOKEN =
+  /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)(\()?/gu;
+
+interface CodeToken {
+  text: string;
+  kind?: CodeTokenKind;
+}
+
+function tokenizeCodeLine(line: string, language: string): CodeToken[] {
+  const commentAt = COMMENT_START[language]?.exec(line);
+  const commentIndex = commentAt ? commentAt.index + commentAt[1]!.length : -1;
+  const code = commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+  const tokens: CodeToken[] = [];
+  let cursor = 0;
+  for (const match of code.matchAll(CODE_TOKEN)) {
+    const [, quoted, numeric, word, call] = match;
+    const start = match.index;
+    if (start > cursor) tokens.push({ text: code.slice(cursor, start) });
+    if (quoted) tokens.push({ text: quoted, kind: 'string' });
+    else if (numeric)
+      tokens.push(language === 'shell' ? { text: numeric } : { text: numeric, kind: 'number' });
+    else if (word) {
+      const kind = CODE_KEYWORDS.has(word) ? 'keyword' : call ? 'function' : undefined;
+      tokens.push(kind ? { text: word, kind } : { text: word });
+      if (call) tokens.push({ text: call });
+    }
+    cursor = start + match[0].length;
+  }
+  if (cursor < code.length) tokens.push({ text: code.slice(cursor) });
+  if (commentIndex >= 0) tokens.push({ text: line.slice(commentIndex), kind: 'comment' });
+  return tokens;
+}
 
 export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: string }) {
   const [active, setActive] = useState(0);
@@ -66,6 +141,7 @@ export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: str
           ))}
         </div>
         <button type="button" className="agi-ds-codetabs-copy" onClick={copy}>
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
           {copied ? COPIED_LABEL : COPY_LABEL}
         </button>
         <span className="sr-only" role="status" aria-live="polite">
@@ -82,7 +158,17 @@ export function CodeTabs({ tabs, title }: { tabs: readonly CodeTab[]; title: str
       >
         {tab.code.split('\n').map((line, index) => (
           <span className="agi-ds-codetabs-line" key={index}>
-            {line || ' '}
+            {line
+              ? tokenizeCodeLine(line, tab.language).map((token, position) =>
+                  token.kind ? (
+                    <span data-token={token.kind} key={`${position}-${token.text}`}>
+                      {token.text}
+                    </span>
+                  ) : (
+                    token.text
+                  ),
+                )
+              : ' '}
           </span>
         ))}
       </pre>
