@@ -1556,7 +1556,7 @@
           "state": "present",
           "via": "import",
           "entry": "apps/web/lib/byok-providers.ts",
-          "mount": "apps/web/app/byok/page.tsx"
+          "mount": "apps/web/app/docs/byok-env/page.tsx"
         },
         "desktop": {
           "state": "unverified",

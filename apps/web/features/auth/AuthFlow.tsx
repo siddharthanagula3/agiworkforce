@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { LifecycleStatus } from '@agiworkforce/types';
 
 import {
   clearSignupAttemptMarkers,
@@ -36,6 +37,7 @@ import type {
 } from './authContract';
 
 const INITIAL_STEP: AuthStep = { kind: 'email' };
+const RESTING_PHASE = 'idle' satisfies Extract<LifecycleStatus, 'idle'> & AuthPhase;
 
 function providerCheckedThePassword(result: AuthResult): boolean {
   if (result.status === 'complete') return true;
@@ -71,7 +73,7 @@ export function AuthFlow({
   const scene = useAuthSceneBridge();
 
   const [step, setStep] = useState<AuthStep>(INITIAL_STEP);
-  const [phase, setPhase] = useState<AuthPhase>('idle');
+  const [phase, setPhase] = useState<AuthPhase>(RESTING_PHASE);
   const [providerPending, setProviderPending] = useState<AuthProviderId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<AuthErrorKind | null>(null);
@@ -83,7 +85,7 @@ export function AuthFlow({
   const inFlight = useRef(false);
   const admittedChoices = useRef(NO_OPTIONAL_CHOICES);
 
-  const busy = phase !== 'idle';
+  const busy = phase !== RESTING_PHASE;
 
   useEffect(() => {
     if (error !== null || fieldError !== null || step.kind === 'notice') scene.setMood('error');
@@ -142,7 +144,7 @@ export function AuthFlow({
       } finally {
         if (!handingOff) {
           inFlight.current = false;
-          setPhase('idle');
+          setPhase(RESTING_PHASE);
         }
       }
     },
@@ -188,7 +190,7 @@ export function AuthFlow({
           if (mode === 'signup') clearSignupAttemptMarkers();
           inFlight.current = false;
           setProviderPending(null);
-          setPhase('idle');
+          setPhase(RESTING_PHASE);
         }
       }
     },

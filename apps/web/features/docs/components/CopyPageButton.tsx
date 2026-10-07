@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { Check, Copy } from 'lucide-react';
 
 const CONFIRMATION_MS = 2000;
 
-type CopyStatus = 'idle' | 'pending' | 'copied' | 'failed';
+type CopyStatus = Extract<LifecycleStatus, 'idle' | 'pending' | 'failed'> | 'copied';
 
 export function CopyTextButton({
   text,

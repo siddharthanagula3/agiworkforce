@@ -19,7 +19,7 @@ const FRAMES: readonly StyleFrame[] = [
     name: 'Daybreak',
     href: '/dev/frame-3',
     picture:
-      'The mark is a sun rising over a city of six towers, one per surface. Web is lit; the others are under construction.',
+      'The mark is a sun rising over a city of six towers, one per surface. Web is lit; cranes stand over the others.',
     motion:
       'Night turns to day, the Web tower lights up floor by floor, the cranes swing and settle.',
     swatches: ['var(--agi-illo-sky)', 'var(--agi-illo-peach)', 'var(--agi-accent)'],
