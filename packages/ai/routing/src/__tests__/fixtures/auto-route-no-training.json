@@ -270,6 +270,7 @@
   "no_training_explicit|claude-opus-5|managed_cloud": "selected;claude-opus-5;anthropic/claude-opus-5;explicit;~;~;claude-opus-5,claude-opus-5",
   "no_training_explicit|claude-opus-5-5|managed_cloud": "selected;claude-opus-5-5;anthropic/claude-opus-5-5;explicit;~;~;",
   "no_training_explicit|claude-sonnet-5|managed_cloud": "selected;claude-sonnet-5;anthropic/claude-sonnet-5;explicit;~;~;claude-sonnet-5,claude-sonnet-5",
+  "no_training_explicit|claude-sonnet-5-5|managed_cloud": "selected;claude-sonnet-5-5;anthropic/claude-sonnet-5-5;explicit;~;~;",
   "no_training_explicit|deepseek-v4-flash|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|deepseek-v4-flash-vision-exp|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|deepseek-v4-pro|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
