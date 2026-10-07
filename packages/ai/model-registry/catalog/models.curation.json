@@ -1021,178 +1021,6 @@
         "source": "packages/ai/model-registry/catalog/probes.json#gpt-6-astra"
       }
     },
-    "gpt-6.1-sol": {
-      "id": "gpt-6.1-sol",
-      "apiModelId": "gpt-6.1-sol",
-      "openRouterSlug": "openai/gpt-6.1-sol",
-      "name": "GPT-6.1 Sol",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxInputTokens": 922000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-04-30",
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputCost": 4,
-          "cached_input": 0.2,
-          "cached_write": 5,
-          "outputCost": 15
-        }
-      ],
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Balanced Intelligence & Cost", "Coding", "Agentic Tasks", "General Chat"],
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "medium",
-        "canDisableThinking": false,
-        "rejectsSamplingParameters": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "responsesEffortPath": "reasoning.effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "imageInput": {
-        "detailValues": ["low", "high", "original", "auto"]
-      },
-      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "cachePolicy": {
-        "writeMultiplier": 1.25,
-        "readDiscount": 0.95,
-        "minCacheLifeMin": 30,
-        "explicitBreakpoints": true
-      },
-      "promptCacheMinimumTokens": 1024,
-      "tierPolicy": {
-        "minTier": "max"
-      },
-      "costOverride": {
-        "inputCost": 2,
-        "outputCost": 10,
-        "cached_input": 0.1,
-        "cached_write": 2.5
-      },
-      "contextOverride": 1050000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      },
-      "pricingNote": "Standard rates are $2 input, $0.10 cached input, $2.50 cache write and $10 output per million tokens. A request whose prompt exceeds 272,000 input tokens is billed in full at 2x the input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. Batch and Flex take 50% off and fast mode doubles the applicable rates. Prompt caching needs at least 1,024 tokens, a cached prefix stays reusable for 30 minutes, cache writes cost 1.25x input and explicit breakpoints are supported, all stated for GPT-5.6 and later. Reasoning cannot be turned off: none is not accepted and low is the floor. Temperature, top_p and top_logprobs are rejected while reasoning is on, so the row declares rejectsSamplingParameters. Tool calling needs the Responses API; Chat Completions serves this model without tools. OpenAI gives no release date; the OpenRouter slug is dated 2026-09-29, so the row records September 2026. Verified against developers.openai.com/api/docs/models/gpt-6.1-sol, the latest-model guide and the prompt caching guide, retrieved 2026-10-07.",
-      "speedOverride": "medium",
-      "releasedOverride": "September 2026",
-      "lifecycle": {
-        "stage": "probed",
-        "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6.1-sol"
-      }
-    },
-    "gpt-6-luna": {
-      "id": "gpt-6-luna",
-      "apiModelId": "gpt-6-luna",
-      "openRouterSlug": "openai/gpt-6-luna",
-      "name": "GPT-6 Luna",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxInputTokens": 922000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-05-18",
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputCost": 0.2,
-          "cached_input": 0.02,
-          "cached_write": 0.25,
-          "outputCost": 0.75
-        }
-      ],
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Cost-Efficient Reasoning", "Quick Tasks", "High Throughput", "Classification"],
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "rejectsSamplingParameters": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "responsesEffortPath": "reasoning.effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "imageInput": {
-        "detailValues": ["low", "high", "original", "auto"]
-      },
-      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "cachePolicy": {
-        "writeMultiplier": 1.25,
-        "readDiscount": 0.9,
-        "minCacheLifeMin": 30,
-        "explicitBreakpoints": true
-      },
-      "promptCacheMinimumTokens": 1024,
-      "tierPolicy": {
-        "minTier": "basic"
-      },
-      "costOverride": {
-        "inputCost": 0.1,
-        "outputCost": 0.5,
-        "cached_input": 0.01,
-        "cached_write": 0.125
-      },
-      "contextOverride": 1050000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      },
-      "pricingNote": "Standard rates are $0.10 input, $0.01 cached input, $0.125 cache write and $0.50 output per million tokens. A request whose prompt exceeds 272,000 input tokens is billed at 2x the input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. Batch and Flex are priced at 50% of standard and fast mode at 2x. Prompt caching needs at least 1,024 tokens, a cached prefix stays reusable for 30 minutes, cache writes cost 1.25x input and explicit breakpoints are supported, all stated for GPT-5.6 and later. Temperature, top_p and top_logprobs are rejected unless reasoning effort is none; the row declares rejectsSamplingParameters and the OpenAI adapter still sends them when the request resolves to none. Chat Completions supports function calling only with reasoning_effort none; the adapter uses the Responses API for this model. OpenAI gives no release date; the OpenRouter slug is dated 2026-09-22, so the row records September 2026. Verified against developers.openai.com/api/docs/models/gpt-6-luna, the latest-model guide and the prompt caching guide, retrieved 2026-10-07.",
-      "speedOverride": "medium",
-      "releasedOverride": "September 2026",
-      "lifecycle": {
-        "stage": "probed",
-        "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6-luna"
-      }
-    },
     "gpt-5.6-sol": {
       "id": "gpt-5.6-sol",
       "apiModelId": "gpt-5.6-sol",
@@ -1530,6 +1358,178 @@
         "stage": "probed",
         "stagedOn": "2026-10-07",
         "source": "packages/ai/model-registry/catalog/probes.json#gpt-5.6-luna"
+      }
+    },
+    "gpt-6.1-sol": {
+      "id": "gpt-6.1-sol",
+      "apiModelId": "gpt-6.1-sol",
+      "openRouterSlug": "openai/gpt-6.1-sol",
+      "name": "GPT-6.1 Sol",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-04-30",
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputCost": 4,
+          "cached_input": 0.2,
+          "cached_write": 5,
+          "outputCost": 15
+        }
+      ],
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Balanced Intelligence & Cost", "Coding", "Agentic Tasks", "General Chat"],
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
+        "canDisableThinking": false,
+        "rejectsSamplingParameters": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "responsesEffortPath": "reasoning.effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "imageInput": {
+        "detailValues": ["low", "high", "original", "auto"]
+      },
+      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "inputModalities": ["text", "image", "pdf"],
+      "deprecation_date": null,
+      "cachePolicy": {
+        "writeMultiplier": 1.25,
+        "readDiscount": 0.95,
+        "minCacheLifeMin": 30,
+        "explicitBreakpoints": true
+      },
+      "promptCacheMinimumTokens": 1024,
+      "tierPolicy": {
+        "minTier": "max"
+      },
+      "costOverride": {
+        "inputCost": 2,
+        "outputCost": 10,
+        "cached_input": 0.1,
+        "cached_write": 2.5
+      },
+      "contextOverride": 1050000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "pricingNote": "Standard rates are $2 input, $0.10 cached input, $2.50 cache write and $10 output per million tokens. A request whose prompt exceeds 272,000 input tokens is billed in full at 2x the input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. Batch and Flex take 50% off and fast mode doubles the applicable rates. Prompt caching needs at least 1,024 tokens, a cached prefix stays reusable for 30 minutes, cache writes cost 1.25x input and explicit breakpoints are supported, all stated for GPT-5.6 and later. Reasoning cannot be turned off: none is not accepted and low is the floor. Temperature, top_p and top_logprobs are rejected while reasoning is on, so the row declares rejectsSamplingParameters. Tool calling needs the Responses API; Chat Completions serves this model without tools. OpenAI gives no release date; the OpenRouter slug is dated 2026-09-29, so the row records September 2026. Verified against developers.openai.com/api/docs/models/gpt-6.1-sol, the latest-model guide and the prompt caching guide, retrieved 2026-10-07.",
+      "speedOverride": "medium",
+      "releasedOverride": "September 2026",
+      "lifecycle": {
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6.1-sol"
+      }
+    },
+    "gpt-6-luna": {
+      "id": "gpt-6-luna",
+      "apiModelId": "gpt-6-luna",
+      "openRouterSlug": "openai/gpt-6-luna",
+      "name": "GPT-6 Luna",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-05-18",
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputCost": 0.2,
+          "cached_input": 0.02,
+          "cached_write": 0.25,
+          "outputCost": 0.75
+        }
+      ],
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Cost-Efficient Reasoning", "Quick Tasks", "High Throughput", "Classification"],
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "rejectsSamplingParameters": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "responsesEffortPath": "reasoning.effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "imageInput": {
+        "detailValues": ["low", "high", "original", "auto"]
+      },
+      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "inputModalities": ["text", "image", "pdf"],
+      "deprecation_date": null,
+      "cachePolicy": {
+        "writeMultiplier": 1.25,
+        "readDiscount": 0.9,
+        "minCacheLifeMin": 30,
+        "explicitBreakpoints": true
+      },
+      "promptCacheMinimumTokens": 1024,
+      "tierPolicy": {
+        "minTier": "basic"
+      },
+      "costOverride": {
+        "inputCost": 0.1,
+        "outputCost": 0.5,
+        "cached_input": 0.01,
+        "cached_write": 0.125
+      },
+      "contextOverride": 1050000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "pricingNote": "Standard rates are $0.10 input, $0.01 cached input, $0.125 cache write and $0.50 output per million tokens. A request whose prompt exceeds 272,000 input tokens is billed at 2x the input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. Batch and Flex are priced at 50% of standard and fast mode at 2x. Prompt caching needs at least 1,024 tokens, a cached prefix stays reusable for 30 minutes, cache writes cost 1.25x input and explicit breakpoints are supported, all stated for GPT-5.6 and later. Temperature, top_p and top_logprobs are rejected unless reasoning effort is none; the row declares rejectsSamplingParameters and the OpenAI adapter still sends them when the request resolves to none. Chat Completions supports function calling only with reasoning_effort none; the adapter uses the Responses API for this model. OpenAI gives no release date; the OpenRouter slug is dated 2026-09-22, so the row records September 2026. Verified against developers.openai.com/api/docs/models/gpt-6-luna, the latest-model guide and the prompt caching guide, retrieved 2026-10-07.",
+      "speedOverride": "medium",
+      "releasedOverride": "September 2026",
+      "lifecycle": {
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6-luna"
       }
     },
     "claude-fable-5-1": {
@@ -4364,10 +4364,11 @@
       "apiModelId": "gemini-3.8-live",
       "name": "Gemini 3.8 Live",
       "provider": "google",
-      "modelType": "multimodal",
+      "modelType": "audio",
       "openWeight": false,
       "license": "proprietary",
       "inputModalities": ["text", "image", "audio", "video"],
+      "outputModalities": ["audio"],
       "maxOutputTokens": 65536,
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -4405,7 +4406,7 @@
           "budgetPath": null
         }
       },
-      "pricingNote": "Live API audio-to-audio dialogue model. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Token limits are 131,072 in and 65,536 out. The model reasons between turns but takes no thinking level: Google says to omit thinking_level when moving from the 3.1 preview. Asynchronous function calling is the default, proactive audio is always on and affective dialogue is gone. Structured outputs, caching, batch and code execution are not supported. Google names this model as the replacement for gemini-3.1-flash-live-preview, which shuts down on 2026-11-17. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
+      "pricingNote": "Live API audio-to-audio dialogue model, served only over a live session. It can also return text there, but outputModalities lists audio alone, as the other live voice row does, so the chat path never routes a text request to it. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Token limits are 131,072 in and 65,536 out. The model reasons between turns but takes no thinking level: Google says to omit thinking_level when moving from the 3.1 preview. Asynchronous function calling is the default, proactive audio is always on and affective dialogue is gone. Structured outputs, caching, batch and code execution are not supported. Google names this model as the replacement for gemini-3.1-flash-live-preview, which shuts down on 2026-11-17. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
       "releasedOverride": "September 15, 2026",
       "lifecycle": {
         "stage": "registered",

@@ -284,7 +284,7 @@
   "no_training_explicit|gemini-3.5-live-translate-preview|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-3.8-flash|managed_cloud": "selected;gemini-3.8-flash;google/gemini-3.8-flash;explicit;~;~;gemini-3.8-flash",
   "no_training_explicit|gemini-3.8-flash-tts|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
-  "no_training_explicit|gemini-3.8-live|managed_cloud": "selected;gemini-3.8-live;google/gemini-3.8-live;explicit;~;~;",
+  "no_training_explicit|gemini-3.8-live|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-embedding-2|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-nano-banana-2.1|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-omni-1.1-flash|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
