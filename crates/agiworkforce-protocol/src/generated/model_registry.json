@@ -1391,9 +1391,9 @@
         "deprecated": false,
         "releasedOn": "2026-08-12",
         "deprecatedOn": null,
-        "stage": "probed",
+        "stage": "evaluated",
         "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#grok-4.6",
+        "stageSource": "tools/evals/measurements/runs/grok-4.6.json",
         "replacedBy": null
       },
       "speed": "fast",
@@ -1423,9 +1423,9 @@
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "probed",
+        "stage": "evaluated",
         "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#grok-4.7",
+        "stageSource": "tools/evals/measurements/runs/grok-4.7.json",
         "replacedBy": null
       },
       "speed": "fast",

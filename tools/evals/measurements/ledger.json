@@ -133,12 +133,201 @@
       }
     },
     {
+      "path": "baselines/xai__grok.json",
+      "digest": "81ee2d856c903ead649d0118f1406d50bbde6083fa174762be8f9a234564c13e",
+      "runId": "5d5dc21f-2fb6-4d8e-ad3b-9381edbb80a9",
+      "modelKey": "grok-4.6",
+      "routeId": "xai/grok-4.6",
+      "measuredAt": "2026-10-07T22:17:30.958Z",
+      "familyId": "xai/grok",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:07:14.645Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.6,
+          "completeness": 0.8,
+          "met": false,
+          "measuredAt": "2026-10-07T22:08:27.823Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8181818181818182,
+          "completeness": 0.9090909090909091,
+          "met": false,
+          "measuredAt": "2026-10-07T22:10:00.256Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-07T22:10:46.955Z"
+        },
+        "coding": {
+          "version": 1,
+          "priority": "P1",
+          "score": 0.8333333333333334,
+          "completeness": 0.8333333333333334,
+          "met": false,
+          "measuredAt": "2026-10-07T22:11:56.601Z"
+        },
+        "reasoning": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:13:02.826Z"
+        },
+        "research": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:13:43.563Z"
+        },
+        "search": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:14:25.798Z"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:14:41.944Z"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:15:13.626Z"
+        },
+        "long-context": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:15:44.906Z"
+        },
+        "files": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:16:13.831Z"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:16:30.889Z"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:16:41.131Z"
+        },
+        "multilingual": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:17:30.958Z"
+        }
+      }
+    },
+    {
+      "path": "recordings/deepseek-flash.json",
+      "digest": "de6d66944b84d3eaee6f8aba03cae29afeb099f66a46c6516244820f42c75c9d",
+      "runId": "cf8adace-bccd-45a1-8685-d9871a2e3c7f",
+      "modelKey": "deepseek-flash",
+      "routeId": "deepseek/deepseek-flash",
+      "measuredAt": "2026-10-07"
+    },
+    {
       "path": "recordings/deepseek-v4-flash.json",
       "digest": "e77f8563fff3b7c0bf873202a645a256f3eadb4b0a4977951b9d11486f140538",
       "runId": null,
       "modelKey": "deepseek-v4-flash",
       "routeId": "deepseek/deepseek-v4-flash",
       "measuredAt": "2026-09-18"
+    },
+    {
+      "path": "recordings/grok-4.6.json",
+      "digest": "310e60520c12e31bbe58f915e407a8f0143d90710f24a87c4c2830fc4a03e8e5",
+      "runId": "5d5dc21f-2fb6-4d8e-ad3b-9381edbb80a9",
+      "modelKey": "grok-4.6",
+      "routeId": "xai/grok-4.6",
+      "measuredAt": "2026-10-07"
+    },
+    {
+      "path": "recordings/grok-4.7.json",
+      "digest": "417ce2867c744f0702bb7f8ae279d1b5360461383add40f1c579c215f980842f",
+      "runId": "0bda8c11-5126-43ec-b47f-2a16f3ad0d58",
+      "modelKey": "grok-4.7",
+      "routeId": "xai/grok-4.7",
+      "measuredAt": "2026-10-07"
+    },
+    {
+      "path": "runs/deepseek-flash.json",
+      "digest": "c000d7449af5f3dd0b720f41198b6eb1a9df447fcc27cb5045c69054b4ba31d5",
+      "runId": "cf8adace-bccd-45a1-8685-d9871a2e3c7f",
+      "modelKey": "deepseek-flash",
+      "routeId": "deepseek/deepseek-flash",
+      "measuredAt": "2026-10-07T22:19:50.172Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-07T22:17:50.626Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0,
+          "completeness": 0.45,
+          "met": false,
+          "measuredAt": "2026-10-07T22:18:50.885Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.36363636363636365,
+          "completeness": 0.6818181818181818,
+          "met": false,
+          "measuredAt": "2026-10-07T22:19:50.172Z"
+        }
+      }
     },
     {
       "path": "runs/deepseek-v4-flash.json",
@@ -267,6 +456,266 @@
           "completeness": null,
           "met": true,
           "measuredAt": "2026-09-18"
+        }
+      }
+    },
+    {
+      "path": "runs/grok-4.6.json",
+      "digest": "cea9d2cc6e04a79b4317d43458c803f6ceea807e8f25c569dae7925802a35487",
+      "runId": "5d5dc21f-2fb6-4d8e-ad3b-9381edbb80a9",
+      "modelKey": "grok-4.6",
+      "routeId": "xai/grok-4.6",
+      "measuredAt": "2026-10-07T22:17:30.958Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:07:14.645Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.6,
+          "completeness": 0.8,
+          "met": false,
+          "measuredAt": "2026-10-07T22:08:27.823Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8181818181818182,
+          "completeness": 0.9090909090909091,
+          "met": false,
+          "measuredAt": "2026-10-07T22:10:00.256Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-07T22:10:46.955Z"
+        },
+        "coding": {
+          "version": 1,
+          "priority": "P1",
+          "score": 0.8333333333333334,
+          "completeness": 0.8333333333333334,
+          "met": false,
+          "measuredAt": "2026-10-07T22:11:56.601Z"
+        },
+        "reasoning": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:13:02.826Z"
+        },
+        "research": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:13:43.563Z"
+        },
+        "search": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:14:25.798Z"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:14:41.944Z"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:15:13.626Z"
+        },
+        "long-context": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:15:44.906Z"
+        },
+        "files": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:16:13.831Z"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:16:30.889Z"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:16:41.131Z"
+        },
+        "multilingual": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:17:30.958Z"
+        }
+      }
+    },
+    {
+      "path": "runs/grok-4.7.json",
+      "digest": "24cdc5b20138bd4811c9132487abdc4dc64ce0473d4a0c7d92644d0b6223c126",
+      "runId": "0bda8c11-5126-43ec-b47f-2a16f3ad0d58",
+      "modelKey": "grok-4.7",
+      "routeId": "xai/grok-4.7",
+      "measuredAt": "2026-10-07T22:33:39.237Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:26:58.050Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:27:43.566Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8181818181818182,
+          "completeness": 0.9090909090909091,
+          "met": false,
+          "measuredAt": "2026-10-07T22:29:03.746Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:29:22.862Z"
+        },
+        "coding": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:30:45.162Z"
+        },
+        "reasoning": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:31:22.141Z"
+        },
+        "research": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:31:39.363Z"
+        },
+        "search": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:31:53.875Z"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:32:04.136Z"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:32:18.624Z"
+        },
+        "long-context": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:32:34.343Z"
+        },
+        "files": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:32:56.460Z"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:33:04.049Z"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:33:15.946Z"
+        },
+        "multilingual": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-07T22:33:39.237Z"
         }
       }
     }
