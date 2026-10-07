@@ -4,10 +4,14 @@
   "description": "Shared presentation primitives with no business logic.",
   "private": true,
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./agi-mark": "./src/AgiMark.tsx",
+    "./auth-scene": "./src/auth-scene/index.ts",
+    "./auth-scene.css": "./src/auth-scene/auth-scene.css",
     "./button": "./src/primitives/Button.tsx",
     "./cn": "./src/cn.ts",
     "./dialog": "./src/primitives/Dialog.tsx",

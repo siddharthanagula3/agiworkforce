@@ -2,6 +2,13 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
+import {
+  AuthCharacterScene,
+  AuthSceneBridgeProvider,
+  createSceneStore,
+} from '@agiworkforce/ui/auth-scene';
+import '@agiworkforce/ui/auth-scene.css';
+
 import './auth.css';
 import { AuthBrand } from './AuthBrand';
 import {
@@ -11,9 +18,6 @@ import {
   AUTH_SPLIT_COLUMN_CLASS,
   AUTH_SPLIT_PAGE_CLASS,
 } from './authStyles';
-import { AuthCharacterScene } from './scene/AuthCharacterScene';
-import { AuthSceneBridgeProvider } from './scene/AuthSceneContext';
-import { createSceneStore } from './scene/sceneStore';
 
 export function AuthShell({
   children,

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LifecycleStatus } from '@agiworkforce/types';
 
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+
 import {
   clearSignupAttemptMarkers,
   writeSignupAttemptMarkers,
@@ -22,7 +24,6 @@ import { AuthSecondFactorStep } from './AuthSecondFactorStep';
 import { IdentityBotProtection, useIdentityAuthClient } from './identityAuthAdapter';
 import { useAuthCopy } from './authCopy';
 import { rememberAuthMethod } from './lastUsedMethod';
-import { useAuthSceneBridge } from './scene/AuthSceneContext';
 import type {
   AuthFieldName,
   AuthMethodId,
