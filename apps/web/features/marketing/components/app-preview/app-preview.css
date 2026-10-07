@@ -1147,7 +1147,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-phone-status {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-content);
   padding-block: calc(var(--u) * 16) calc(var(--u) * 10);
   font-weight: 600;
 }

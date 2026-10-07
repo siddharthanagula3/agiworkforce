@@ -1192,6 +1192,7 @@ jobs:
             auth-scene-privacy.spec.ts \
             changelog-touch-targets.spec.ts \
             checkout.spec.ts \
+            dev-design-studies.spec.ts \
             enterprise-surface.spec.ts \
             gallery-public.spec.ts \
             home-surface-explorer.spec.ts \

@@ -491,7 +491,7 @@ this document.
 
 ### BYOK
 
-- **web**: present. `apps/web/lib/byok-providers.ts`, reached by `apps/web/app/byok/page.tsx` (import).
+- **web**: present. `apps/web/lib/byok-providers.ts`, reached by `apps/web/app/docs/byok-env/page.tsx` (import).
 - **desktop**: unverified. Settled by: apps/desktop/src/lib/byok-vault.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
 - **mobile**: unverified. Settled by: A mobile screen that stores a provider key. apps/mobile/app/(app)/settings/cloud-privacy.tsx names the trust boundary; whether it accepts a key is not decidable from the file list.
 - **cli**: present. `apps/cli/src/auth.rs`, reached by `apps/cli/src/lib.rs` (module).

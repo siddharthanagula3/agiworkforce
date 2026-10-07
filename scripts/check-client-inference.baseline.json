@@ -457,12 +457,6 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/web/features/marketing/components/FeatureScenes.tsx",
-      "symbol": "ADMIN_PERMISSION_AREAS",
-      "family": "policy",
-      "why": "restates permission areas in local literals; import them from enterprise/permissions."
-    },
-    {
       "file": "apps/desktop/src/utils/ipc.ts",
       "symbol": "ErrorCode",
       "why": "The bridge names TIMEOUT, PAYLOAD_TOO_LARGE and INVALID_RESPONSE as its own transport codes instead of importing ErrorCode from @agiworkforce/types, so a renderer maps a host failure onto a code the server never uses.",

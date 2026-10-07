@@ -458,7 +458,7 @@ export async function footerCaptureFixture(page: Page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setContent(
-    '<html><head><style>body{margin:0;font:16px Arial}header{position:fixed;inset:0 0 auto;height:48px;background:white;z-index:2}main{height:80px}footer{height:1600px;background:white;color:black}a,button{display:block;min-height:48px}</style></head><body><header>Header</header><main></main><footer><a href="#fixture">Fixture link</a><button type="button">Fixture button</button><p>Native footer capture</p></footer></body></html>',
+    '<html><head><style>body{margin:0;font:16px Arial}header{position:fixed;inset:0 0 auto;height:48px;background:white}main{height:80px}footer{height:1600px;background:white;color:black}a,button{display:block;min-height:48px}</style></head><body><header>Header</header><main></main><footer><a href="#fixture">Fixture link</a><button type="button">Fixture button</button><p>Native footer capture</p></footer></body></html>',
   );
   await page.evaluate(() => document.fonts.ready);
   return page.getByRole('contentinfo');
