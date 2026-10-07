@@ -50,6 +50,8 @@ const billingMocks = vi.hoisted(() => {
   };
 });
 
+type ReactI18nextModule = typeof import('react-i18next');
+
 vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
 vi.mock('react-i18next', async (importOriginal) => {
   const { createInstance } = await import('i18next');
@@ -65,7 +67,7 @@ vi.mock('react-i18next', async (importOriginal) => {
   });
   const translated = instance.getFixedT('en', 'pricing');
   return {
-    ...(await importOriginal<typeof import('react-i18next')>()),
+    ...(await importOriginal<ReactI18nextModule>()),
     useTranslation: () => ({
       t: (key: string, values?: Record<string, unknown>) => {
         if (

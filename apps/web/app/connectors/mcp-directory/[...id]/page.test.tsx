@@ -15,8 +15,10 @@ const { getSnapshotRecords, getSnapshotView, notFound } = vi.hoisted(() => ({
   }),
 }));
 
+type MemoryCacheModule = typeof import('@/lib/connectors/directory/memory-cache');
+
 vi.mock('@/lib/connectors/directory/memory-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/directory/memory-cache')>()),
+  ...(await importOriginal<MemoryCacheModule>()),
   getSnapshotRecords,
   getSnapshotView,
 }));

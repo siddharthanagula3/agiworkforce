@@ -24,14 +24,16 @@ const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
 }));
 
+type UseConnectorsModule = typeof import('@/features/connectors/hooks/use-connectors');
+type SettingsModalProviderModule =
+  typeof import('@/features/settings/components/SettingsModalProvider');
+
 vi.mock('@/features/connectors/hooks/use-connectors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/connectors/hooks/use-connectors')>()),
+  ...(await importOriginal<UseConnectorsModule>()),
   useConnectors: () => mocks.connectors,
 }));
 vi.mock('@/features/settings/components/SettingsModalProvider', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/settings/components/SettingsModalProvider')
-  >()),
+  ...(await importOriginal<SettingsModalProviderModule>()),
   useSettingsModal: () => ({
     isOpen: false,
     openSettings: mocks.openSettings,

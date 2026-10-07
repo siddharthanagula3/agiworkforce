@@ -7,8 +7,10 @@ import { directoryRecordPath } from '../directory-public';
 
 const getSnapshotViewMock = vi.hoisted(() => vi.fn());
 
+type MemoryCacheModule = typeof import('@/lib/connectors/directory/memory-cache');
+
 vi.mock('@/lib/connectors/directory/memory-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/directory/memory-cache')>()),
+  ...(await importOriginal<MemoryCacheModule>()),
   getSnapshotView: getSnapshotViewMock,
 }));
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));

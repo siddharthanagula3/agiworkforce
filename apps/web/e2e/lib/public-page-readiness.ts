@@ -9,7 +9,7 @@ import { publicMaskPaintHandle } from './public-mask-paint';
  * outside the web font's subset asks for it. That is a missing system font,
  * not a web font that failed to download, so it does not fail readiness.
  */
-const LOCAL_FALLBACK_FACE = / Fallback$/u;
+const LOCAL_FALLBACK_FACE = / fallback$/iu;
 
 function isFailedWebFont(face: { family: string; status: string }): boolean {
   return face.status === 'error' && !LOCAL_FALLBACK_FACE.test(face.family);

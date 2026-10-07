@@ -14,10 +14,11 @@ import { ArtifactPrivacyNotice } from './ArtifactPrivacyNotice';
 
 const mocks = vi.hoisted(() => ({ openSettings: vi.fn(), closeSettings: vi.fn() }));
 
+type SettingsModalProviderModule =
+  typeof import('@/features/settings/components/SettingsModalProvider');
+
 vi.mock('@/features/settings/components/SettingsModalProvider', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/settings/components/SettingsModalProvider')
-  >()),
+  ...(await importOriginal<SettingsModalProviderModule>()),
   useSettingsModal: () => ({
     isOpen: false,
     openSettings: mocks.openSettings,
