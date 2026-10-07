@@ -2377,8 +2377,13 @@
 }
 
 [data-design='agi'] .agi-fl-launch-form {
-  max-width: 560px;
+  max-width: 50rem;
   margin-top: 24px;
+}
+
+[data-design='agi'] .agi-fl-section:has(> .agi-fl-launch-form) .agi-fl-section-lede {
+  max-width: 50rem;
+  text-wrap: pretty;
 }
 
 /* CTAs */

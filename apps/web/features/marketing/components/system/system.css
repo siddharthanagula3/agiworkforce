@@ -409,12 +409,18 @@
   cursor: pointer;
 }
 
+[data-design='agi'] .agi-ds-consent-item-label > span:last-child {
+  text-wrap: balance;
+}
+
 [data-design='agi'] .agi-ds-consent-optionality {
   color: var(--agi-ink-2);
   font-size: var(--agi-text-xs);
+  white-space: nowrap;
 }
 
 [data-design='agi'] .agi-ds-consent-item-description {
+  text-wrap: pretty;
   margin: var(--agi-space-1) 0 0 26px;
   font-size: var(--agi-text-xs);
   line-height: 1.55;
