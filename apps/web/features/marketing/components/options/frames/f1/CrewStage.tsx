@@ -4,14 +4,14 @@ import { Pause, Play } from 'lucide-react';
 import { useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import {
+  bodyPath,
   SCENE_CHARACTERS,
   SCENE_VIEWBOX,
   type SceneCharacter,
   type SceneEye,
   type SceneMouth,
-} from '@/features/auth/scene/sceneConfig';
-import { bodyPath } from '@/features/auth/scene/sceneMath';
-import { useReducedMotionFlag } from '@/features/auth/scene/useSceneMotion';
+  useReducedMotionFlag,
+} from '@agiworkforce/ui/auth-scene';
 
 import { useCrewMotion } from './useCrewMotion';
 

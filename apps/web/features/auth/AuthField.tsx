@@ -3,13 +3,14 @@
 import type { FocusEvent, InputHTMLAttributes, ReactNode, SyntheticEvent } from 'react';
 import { useCallback, useEffect, useId, useRef } from 'react';
 
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+
 import {
   AUTH_ERROR_CLASS,
   AUTH_FLOATING_INPUT_CLASS,
   AUTH_FLOATING_LABEL_CLASS,
   AUTH_HINT_CLASS,
 } from './authStyles';
-import { useAuthSceneBridge } from './scene/AuthSceneContext';
 
 const RESTING_PLACEHOLDER = ' ';
 

@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+
 import { classifyAuthError } from '@/lib/auth/error-taxonomy';
 import { usePrimaryEmailConfirmation } from '@/lib/identity/client';
 import { AuthCodeStep } from './AuthCodeStep';
@@ -10,7 +12,6 @@ import { useAuthCopy } from './authCopy';
 import { AuthPhaseStatus } from './AuthPhaseStatus';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AUTH_ERROR_CLASS, AUTH_MUTED_LINE_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from './authStyles';
-import { useAuthSceneBridge } from './scene/AuthSceneContext';
 import type { AuthPhase } from './authContract';
 
 export function ConfirmEmailStep({ footer }: { footer: ReactNode }) {

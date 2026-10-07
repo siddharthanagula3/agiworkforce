@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+
 import { TermsGate } from '@/app/signup/TermsGate';
 import { AccountPolicyLinks } from '@/features/auth/AccountDataDisclosure';
 import { AuthCodeStep } from '@/features/auth/AuthCodeStep';
@@ -16,7 +18,6 @@ import type {
   AuthPhase,
   AuthProvider,
 } from '@/features/auth/authContract';
-import { useAuthSceneBridge } from '@/features/auth/scene/AuthSceneContext';
 
 export type HarnessStep = 'email' | 'password' | 'code' | 'new_password' | 'terms';
 export type HarnessState = 'idle' | 'pending' | 'error' | 'success';

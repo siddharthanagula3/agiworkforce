@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+
 import type { SignupAttemptChoices } from '@/app/signup/signupAttemptMarkers';
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
@@ -21,7 +23,6 @@ import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
 import { AuthSwitchLine, SWITCH_INSTEAD_COPY } from './AuthSwitchLine';
 import { readLastUsedAuthMethod, type AuthLastUsed } from './lastUsedMethod';
-import { useAuthSceneBridge } from './scene/AuthSceneContext';
 import {
   AUTH_BADGE_CLASS,
   AUTH_BESIDE_TEXT_BUTTON_CLASS,
