@@ -355,6 +355,16 @@ describe('CLI terminal', () => {
     expect(model).toContain("FileChangeKind::Modified => 'M'");
   });
 
+  it('every ProductFrame variant keeps the authored-example label', () => {
+    for (const variant of ['desktop', 'web', 'browser', 'editor', 'terminal', 'phone'] as const) {
+      const { container, unmount } = render(<ProductFrame variant={variant} title="AGI Mobile" />);
+      expect(container.querySelector('figure')?.getAttribute('aria-label'), variant).toMatch(
+        /^Authored example of /,
+      );
+      unmount();
+    }
+  });
+
   it('ProductFrame passes the terminal route through', () => {
     const terminal = render(<ProductFrame variant="terminal" title="agi" routeMode="byok" />);
     expect(terminal.container.textContent).toContain('Your key');

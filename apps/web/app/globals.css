@@ -1496,7 +1496,7 @@ html[data-contrast='more'] *:focus-visible {
   --agi-font-display: var(--font-newsreader), 'Iowan Old Style', Georgia, serif;
   --agi-terminal: #060503;
   --agi-terminal-ink: #d9d2c5;
-  --agi-terminal-dim: #8f877a;
+  --agi-terminal-dim: #a3a3a3;
   --agi-phone: #000;
   --agi-shadow-lift: 0 40px 100px -50px rgba(0, 0, 0, 0.9);
 
