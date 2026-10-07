@@ -445,6 +445,12 @@
       "verifiedBy": "official-google-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Shutdown dates from the Gemini API deprecations page, retrieved 2026-10-07, are now recorded as deprecation_date: 2026-10-22 for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview (which read 2026-09-30), and 2026-11-17 for gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. The three Veo rows hold the google/veo, google/veo-fast and google/veo-lite slots, so video generation through those slots stops on 2026-10-22 unless the slots are moved before then. gemini-3.1-flash-image was deprecated on 2026-10-06 with no shutdown date announced, so its row carries no date."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-groq-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Groq shut down qwen/qwen3.6-27b on 2026-09-14 and names qwen/qwen3.8-27b as its replacement; its deprecations page says requests to a deprecated model id return errors after the date. The catalog row qwen-3.6-27b was still offered as a preview model with no date. It now carries the shutdown date and is marked unavailable with that reason, which stops it being routed or probed. The family tool cannot deprecate it, because the compiler holds a model that is not live at or below the shadow stage, and it stays in the catalog because model-routes.json still declares two routes for it; removing it is a separate step. Verified against console.groq.com/docs/deprecations, retrieved 2026-10-07."
     }
   ],
   "providers": {
@@ -4635,8 +4641,9 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Open-Weight Vision", "Tool Use", "Low Latency"],
-      "deprecation_date": null,
-      "availability": "preview",
+      "deprecation_date": "2026-09-14",
+      "availability": "unavailable",
+      "unavailableReason": "Groq shut this model down on 2026-09-14; requests to the id return an error.",
       "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate on Groq: $0.60/1M input, $3.00/1M output. Absent from both the prompt-caching and batch pages, so no cached rate and no batch discount apply. Thinking is on by default and is turned off with reasoning_effort 'none'. An adapter must send reasoning_format hidden or parsed when tools or JSON mode are on. Groq publishes no knowledge cutoff. Verified against console.groq.com/docs/model/qwen/qwen3.6-27b, retrieved 2026-09-04.",
       "reasoning": {
         "capable": true,
