@@ -116,7 +116,7 @@
 
 [data-design='agi'] .agi-ds-prose {
   margin: 0;
-  max-width: 36rem;
+  max-width: none;
   font-size: var(--public-body-size);
   line-height: 1.55;
   color: var(--agi-ink-2);
@@ -1415,7 +1415,7 @@
 
 [data-design='agi'] .agi-lp-lede {
   margin: 0;
-  max-width: 34rem;
+  max-width: none;
   font-size: 1.125rem;
   line-height: 1.55;
   color: var(--agi-ink-2);
@@ -2391,11 +2391,11 @@
 }
 
 [data-design='agi'] .agi-lp-wide-heading .agi-lp-h2 {
-  max-width: 22ch;
+  max-width: none;
 }
 
 [data-design='agi'] .agi-lp-wide-heading .agi-lp-lede {
-  max-width: 40rem;
+  max-width: none;
 }
 
 [data-design='agi'] .agi-lp-wide-caption {

@@ -5,9 +5,9 @@
 
 [data-design='agi'] .agi-shell {
   width: 100%;
-  max-width: var(--measure-content);
+  max-width: var(--agi-container);
   margin: 0 auto;
-  padding: 0 28px;
+  padding: 0 var(--agi-gutter);
 }
 [data-design='agi'] .agi-shell .agi-top {
   margin-inline: calc(50% - 50vw);

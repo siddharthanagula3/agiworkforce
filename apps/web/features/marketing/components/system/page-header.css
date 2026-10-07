@@ -122,7 +122,7 @@
 }
 
 [data-design='agi'] .agi-ds-pagehead .agi-ds-pagehead-lede {
-  max-width: var(--agi-reading-width);
+  max-width: none;
 }
 
 [data-design='agi'].agi-ds-page:has(.agi-ds-pagehead) .agi-ds-section {
