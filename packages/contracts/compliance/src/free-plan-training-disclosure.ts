@@ -8,6 +8,13 @@ export const FREE_PLAN_TRAINING_SIGNUP_NOTICE =
 
 export const FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL = 'Data use details';
 
+export const FREE_PLAN_TRAINING_TERMS_CARD_TITLE = 'About your chats';
+
+export const FREE_PLAN_TRAINING_TERMS_CARD_BODY =
+  'Free-plan provider terms may allow training on your chats. Choose which models to use in Settings > Privacy.';
+
+export const FREE_PLAN_TRAINING_TERMS_CARD_LINK_LABEL = 'Learn about data use';
+
 export const FREE_PLAN_TRAINING_NOTICE_TITLE = 'Free models and your prompts';
 
 export const FREE_PLAN_TRAINING_NOTICE_LEAD =

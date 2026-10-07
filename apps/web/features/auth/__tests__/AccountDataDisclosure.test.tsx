@@ -10,8 +10,12 @@ import {
   FREE_PLAN_TRAINING_DATA_DISCLOSURE,
   FREE_PLAN_TRAINING_SIGNUP_NOTICE,
   FREE_PLAN_TRAINING_SIGNUP_STATEMENT,
+  FREE_PLAN_TRAINING_TERMS_CARD_BODY,
+  FREE_PLAN_TRAINING_TERMS_CARD_LINK_LABEL,
+  FREE_PLAN_TRAINING_TERMS_CARD_TITLE,
 } from '@/lib/compliance/free-plan-training-disclosure';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
+import { AccountPolicyLinks } from '../AccountDataDisclosure';
 import { AuthEmailStep } from '../AuthEmailStep';
 import { AuthLegalFooter } from '../AuthLegalFooter';
 
@@ -30,18 +34,6 @@ function renderSignupScreen() {
       onSubmit={() => undefined}
       onStartProvider={() => undefined}
     />,
-  );
-}
-
-function expectFullDisclosure() {
-  expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Data Use Guidelines' })).toHaveAttribute(
-    'href',
-    CANONICAL_POLICY_ROUTES.dataUse,
-  );
-  expect(screen.getByRole('link', { name: 'Acceptable Use Policy' })).toHaveAttribute(
-    'href',
-    CANONICAL_POLICY_ROUTES.acceptableUse,
   );
 }
 
@@ -85,16 +77,44 @@ describe('account policy disclosure', () => {
     ).toBeTruthy();
   });
 
-  it('shows the full disclosure before accepting current terms without bypassing the gate', () => {
+  it('keeps the terms review notice short and reveals the full explanation before agreement, without bypassing the gate', async () => {
     render(
       <TermsGate confirmationLabel="Agree and continue">
         <div>Record agreement</div>
       </TermsGate>,
     );
 
-    expectFullDisclosure();
+    const card = screen.getByTestId('account-data-disclosure');
+    expect(card).toHaveTextContent(FREE_PLAN_TRAINING_TERMS_CARD_TITLE);
+    expect(card).toHaveTextContent(FREE_PLAN_TRAINING_TERMS_CARD_BODY);
+    const summary = screen.getByText(FREE_PLAN_TRAINING_TERMS_CARD_LINK_LABEL);
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).not.toBeVisible();
+
+    await userEvent.click(summary);
+
+    expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).toBeVisible();
+    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Agree and continue' })).toBeInTheDocument();
     expect(screen.queryByText('Record agreement')).not.toBeInTheDocument();
+  });
+
+  it('links both policies under the terms review', () => {
+    render(<AccountPolicyLinks />);
+
+    expect(screen.getByRole('link', { name: 'Data Use Guidelines' })).toHaveAttribute(
+      'href',
+      CANONICAL_POLICY_ROUTES.dataUse,
+    );
+    expect(screen.getByRole('link', { name: 'Acceptable Use Policy' })).toHaveAttribute(
+      'href',
+      CANONICAL_POLICY_ROUTES.acceptableUse,
+    );
+  });
+
+  it('says in the short card that free-plan providers may train on chats and where the choice is', () => {
+    expect(FREE_PLAN_TRAINING_TERMS_CARD_BODY).toContain('train');
+    expect(FREE_PLAN_TRAINING_TERMS_CARD_BODY).toContain('Settings > Privacy');
   });
 
   it('keeps routine sign-in limited to policy links without repeating any disclosure', () => {
