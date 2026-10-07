@@ -34,70 +34,6 @@
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
     },
-    "gpt-6.1-sol": {
-      "identity": {
-        "key": "gpt-6.1-sol",
-        "displayName": "GPT-6.1 Sol",
-        "provider": "openai",
-        "developer": "openai",
-        "providerModelId": "gpt-6.1-sol",
-        "openRouterSlug": "openai/gpt-6.1-sol",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["openai/gpt-6.1-sol"],
-        "family": "gpt-frontier",
-        "version": "6.1"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "September 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "probed",
-        "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-6.1-sol",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": ["us", "eu", "ae"],
-      "evidenceRefs": []
-    },
-    "gpt-6-luna": {
-      "identity": {
-        "key": "gpt-6-luna",
-        "displayName": "GPT-6 Luna",
-        "provider": "openai",
-        "developer": "openai",
-        "providerModelId": "gpt-6-luna",
-        "openRouterSlug": "openai/gpt-6-luna",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["openai/gpt-6-luna"],
-        "family": "gpt-fast",
-        "version": "6"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "September 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "probed",
-        "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-6-luna",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": ["us", "eu", "ae"],
-      "evidenceRefs": []
-    },
     "gpt-5.6-sol": {
       "identity": {
         "key": "gpt-5.6-sol",
@@ -188,6 +124,70 @@
         "stage": "probed",
         "stagedOn": "2026-10-07",
         "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-5.6-luna",
+        "replacedBy": null
+      },
+      "speed": "medium",
+      "residencyRegions": ["us", "eu", "ae"],
+      "evidenceRefs": []
+    },
+    "gpt-6.1-sol": {
+      "identity": {
+        "key": "gpt-6.1-sol",
+        "displayName": "GPT-6.1 Sol",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-6.1-sol",
+        "openRouterSlug": "openai/gpt-6.1-sol",
+        "kind": "reasoning",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["openai/gpt-6.1-sol"],
+        "family": "gpt-frontier",
+        "version": "6.1"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-6.1-sol",
+        "replacedBy": null
+      },
+      "speed": "medium",
+      "residencyRegions": ["us", "eu", "ae"],
+      "evidenceRefs": []
+    },
+    "gpt-6-luna": {
+      "identity": {
+        "key": "gpt-6-luna",
+        "displayName": "GPT-6 Luna",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-6-luna",
+        "openRouterSlug": "openai/gpt-6-luna",
+        "kind": "reasoning",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["openai/gpt-6-luna"],
+        "family": "gpt-fast",
+        "version": "6"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "probed",
+        "stagedOn": "2026-10-07",
+        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-6-luna",
         "replacedBy": null
       },
       "speed": "medium",
@@ -1783,7 +1783,7 @@
         "provider": "google",
         "developer": "google",
         "providerModelId": "gemini-3.8-live",
-        "kind": "multimodal",
+        "kind": "audio",
         "openWeight": false,
         "license": "proprietary",
         "aliases": [],
@@ -13091,11 +13091,11 @@
   "providerModelKeys": {
     "openai": [
       "gpt-6-astra",
-      "gpt-6.1-sol",
-      "gpt-6-luna",
       "gpt-5.6-sol",
       "gpt-5.6-terra",
       "gpt-5.6-luna",
+      "gpt-6.1-sol",
+      "gpt-6-luna",
       "gpt-image-2",
       "gpt-image-2.5-sunburst",
       "gpt-image-2.5-flare",
@@ -13583,66 +13583,6 @@
         "verifiedOn": "2026-09-06"
       }
     },
-    "openai/gpt-6.1-sol": {
-      "modelKey": "gpt-6.1-sol",
-      "provider": "openai",
-      "providerModelId": "gpt-6.1-sol",
-      "harnessId": "openai/responses",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.1,
-        "cacheWritePerMillion": 2.5,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 272000,
-            "inputPerMillion": 4,
-            "outputPerMillion": 15,
-            "cacheReadPerMillion": 0.2,
-            "cacheWritePerMillion": 5
-          }
-        ]
-      }
-    },
-    "openai/gpt-6-luna": {
-      "modelKey": "gpt-6-luna",
-      "provider": "openai",
-      "providerModelId": "gpt-6-luna",
-      "harnessId": "openai/responses",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.1,
-        "outputPerMillion": 0.5,
-        "cacheReadPerMillion": 0.01,
-        "cacheWritePerMillion": 0.125,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 272000,
-            "inputPerMillion": 0.2,
-            "outputPerMillion": 0.75,
-            "cacheReadPerMillion": 0.02,
-            "cacheWritePerMillion": 0.25
-          }
-        ]
-      }
-    },
     "openai/gpt-5.6-sol": {
       "modelKey": "gpt-5.6-sol",
       "provider": "openai",
@@ -14025,6 +13965,66 @@
         "outputPerMillion": 1.2,
         "cacheReadPerMillion": 0.02,
         "cacheWritePerMillion": 0.2
+      }
+    },
+    "openai/gpt-6.1-sol": {
+      "modelKey": "gpt-6.1-sol",
+      "provider": "openai",
+      "providerModelId": "gpt-6.1-sol",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.1,
+        "cacheWritePerMillion": 2.5,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 272000,
+            "inputPerMillion": 4,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.2,
+            "cacheWritePerMillion": 5
+          }
+        ]
+      }
+    },
+    "openai/gpt-6-luna": {
+      "modelKey": "gpt-6-luna",
+      "provider": "openai",
+      "providerModelId": "gpt-6-luna",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "cacheReadPerMillion": 0.01,
+        "cacheWritePerMillion": 0.125,
+        "inputTokenPricingTiers": [
+          {
+            "thresholdTokens": 272000,
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 0.75,
+            "cacheReadPerMillion": 0.02,
+            "cacheWritePerMillion": 0.25
+          }
+        ]
       }
     },
     "anthropic/claude-fable-5-1": {
@@ -17135,7 +17135,7 @@
       "modelKey": "gemini-3.8-live",
       "provider": "google",
       "providerModelId": "gemini-3.8-live",
-      "harnessId": "google/generate-content",
+      "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true,
@@ -25559,54 +25559,6 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "gpt-6.1-sol": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "gpt-6-luna": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": true,
-      "promptCaching": true
-    },
     "gpt-5.6-sol": {
       "textInput": true,
       "imageInput": true,
@@ -25677,6 +25629,54 @@
       "webSearch": true,
       "deepResearch": false,
       "codeExecution": false,
+      "promptCaching": true
+    },
+    "gpt-6.1-sol": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": true,
+      "promptCaching": true
+    },
+    "gpt-6-luna": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": true,
       "promptCaching": true
     },
     "claude-fable-5-1": {
@@ -26884,9 +26884,9 @@
       "imageInput": true,
       "audioInput": true,
       "videoInput": true,
-      "textOutput": true,
+      "textOutput": false,
       "imageOutput": false,
-      "audioOutput": false,
+      "audioOutput": true,
       "videoOutput": false,
       "streaming": true,
       "structuredOutput": false,
@@ -35969,40 +35969,6 @@
         }
       ]
     },
-    "gpt-6.1-sol": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 2,
-      "outputPerMillion": 10,
-      "cacheReadPerMillion": 0.1,
-      "cacheWritePerMillion": 2.5,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputPerMillion": 4,
-          "outputPerMillion": 15,
-          "cacheReadPerMillion": 0.2,
-          "cacheWritePerMillion": 5
-        }
-      ]
-    },
-    "gpt-6-luna": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.1,
-      "outputPerMillion": 0.5,
-      "cacheReadPerMillion": 0.01,
-      "cacheWritePerMillion": 0.125,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputPerMillion": 0.2,
-          "outputPerMillion": 0.75,
-          "cacheReadPerMillion": 0.02,
-          "cacheWritePerMillion": 0.25
-        }
-      ]
-    },
     "gpt-5.6-sol": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -36051,6 +36017,40 @@
           "outputPerMillion": 1.8,
           "cacheReadPerMillion": 0.04,
           "cacheWritePerMillion": 0.5
+        }
+      ]
+    },
+    "gpt-6.1-sol": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.1,
+      "cacheWritePerMillion": 2.5,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputPerMillion": 4,
+          "outputPerMillion": 15,
+          "cacheReadPerMillion": 0.2,
+          "cacheWritePerMillion": 5
+        }
+      ]
+    },
+    "gpt-6-luna": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.5,
+      "cacheReadPerMillion": 0.01,
+      "cacheWritePerMillion": 0.125,
+      "inputTokenPricingTiers": [
+        {
+          "thresholdTokens": 272000,
+          "inputPerMillion": 0.2,
+          "outputPerMillion": 0.75,
+          "cacheReadPerMillion": 0.02,
+          "cacheWritePerMillion": 0.25
         }
       ]
     },
@@ -39227,18 +39227,6 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-04-30"
     },
-    "gpt-6.1-sol": {
-      "contextTokens": 1050000,
-      "maxInputTokens": 922000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-04-30"
-    },
-    "gpt-6-luna": {
-      "contextTokens": 1050000,
-      "maxInputTokens": 922000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-05-18"
-    },
     "gpt-5.6-sol": {
       "contextTokens": 1050000,
       "maxOutputTokens": 128000,
@@ -39253,6 +39241,18 @@
       "contextTokens": 1050000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-02-16"
+    },
+    "gpt-6.1-sol": {
+      "contextTokens": 1050000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-04-30"
+    },
+    "gpt-6-luna": {
+      "contextTokens": 1050000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-05-18"
     },
     "claude-fable-5-1": {
       "contextTokens": 1000000,
@@ -39917,11 +39917,11 @@
   },
   "benchmarks": {
     "gpt-6-astra": {},
-    "gpt-6.1-sol": {},
-    "gpt-6-luna": {},
     "gpt-5.6-sol": {},
     "gpt-5.6-terra": {},
     "gpt-5.6-luna": {},
+    "gpt-6.1-sol": {},
+    "gpt-6-luna": {},
     "claude-fable-5-1": {},
     "claude-opus-5": {},
     "claude-opus-5-5": {},
