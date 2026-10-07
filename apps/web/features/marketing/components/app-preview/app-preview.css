@@ -871,6 +871,11 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   color: var(--chat-text-muted);
 }
 
+[data-design='agi'] .agi-app-code-row[data-change] i,
+[data-design='agi'] .agi-app-code-row[data-change] b {
+  color: var(--chat-text-secondary);
+}
+
 [data-design='agi'] .agi-app-code-row i {
   inline-size: calc(var(--u) * 46);
   padding-inline-end: calc(var(--u) * 12);
@@ -905,6 +910,14 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   color: var(--chat-code-syntax-string);
 }
 
+[data-design='agi'] .agi-app-code-row[data-change] [data-token='keyword'] {
+  color: color-mix(in srgb, var(--chat-code-syntax-keyword) 80%, var(--chat-text-primary));
+}
+
+[data-design='agi'] .agi-app-code-row[data-change] [data-token='function'] {
+  color: color-mix(in srgb, var(--chat-code-syntax-function) 80%, var(--chat-text-primary));
+}
+
 [data-design='agi'] .agi-app-statusbar {
   display: flex;
   flex: none;
@@ -926,6 +939,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-tui {
   display: flex;
+  --agi-app-tui-accent: color-mix(in srgb, var(--chat-accent) 82%, var(--chat-text-primary));
   flex: 1 1 auto;
   flex-direction: column;
   gap: calc(var(--u) * 16);
@@ -963,7 +977,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 [data-design='agi'] .agi-app-tui-head b,
 [data-design='agi'] .agi-app-tui-head em,
 [data-design='agi'] .agi-app-tui-input b {
-  color: var(--chat-accent);
+  color: var(--agi-app-tui-accent);
 }
 
 [data-design='agi'] .agi-app-tui-box {
@@ -1001,7 +1015,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 }
 
 [data-design='agi'] .agi-app-tui [data-diff='hunk'] {
-  color: var(--chat-accent);
+  color: var(--agi-app-tui-accent);
 }
 
 [data-design='agi'] .agi-app-tui [data-diff='remove'] {
@@ -1022,7 +1036,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 }
 
 [data-design='agi'] .agi-app-tui-choices span[data-on] {
-  background: var(--chat-accent);
+  background: var(--agi-app-tui-accent);
   color: var(--chat-bg);
 }
 
@@ -1037,7 +1051,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 }
 
 [data-design='agi'] .agi-app-tui:not([data-access='local']) .agi-app-tui-status em {
-  color: var(--chat-accent);
+  color: var(--agi-app-tui-accent);
 }
 
 [data-design='agi'] .agi-app--phone .agi-app-window {

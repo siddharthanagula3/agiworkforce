@@ -5,7 +5,7 @@
   max-inline-size: 100%;
   block-size: auto;
   font-family: var(--public-mockup-font-code);
-  font-size: var(--public-mockup-text-code);
+  font-size: var(--public-mockup-text-control);
   line-height: var(--public-mockup-leading-text);
   mask-image: none;
   -webkit-mask-image: none;
@@ -45,7 +45,7 @@
   border-radius: var(--corner-control);
   background: none;
   font-family: var(--public-mockup-font-text);
-  font-size: 0.875rem;
+  font-size: var(--public-mockup-text-control);
   font-weight: 500;
   line-height: var(--public-mockup-leading-control);
   letter-spacing: normal;
@@ -71,6 +71,15 @@
   height: 1rem;
 }
 
+@media (max-width: 480px) {
+  [data-design='agi'] .agi-code-responsive .agi-ds-codetabs-tab {
+    padding-block: var(--space-1);
+    text-align: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 @media (pointer: coarse) {
   [data-design='agi'] .agi-code-responsive .agi-ds-codetabs-tab,
   [data-design='agi'] .agi-code-responsive .agi-ds-codetabs-copy {
@@ -92,7 +101,7 @@
   block-size: auto;
   padding: var(--space-4);
   font-family: var(--public-mockup-font-code);
-  font-size: var(--public-mockup-text-code);
+  font-size: var(--public-mockup-text-control);
   line-height: 1.6;
   color: var(--chat-text-primary);
   overflow-x: auto;
@@ -130,7 +139,7 @@
   border-block-start: var(--stroke-hairline) solid var(--chat-border-strong);
   background: var(--chat-bg);
   font-family: var(--public-mockup-font-text);
-  font-size: 0.875rem;
+  font-size: var(--public-mockup-text-control);
   line-height: var(--public-mockup-leading-text);
   color: var(--chat-text-secondary);
   text-wrap: wrap;
