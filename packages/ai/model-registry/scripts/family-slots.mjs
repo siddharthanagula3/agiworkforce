@@ -369,6 +369,17 @@ function status() {
  * what it was: a stored conversation keeps the id on the row and would render
  * a raw string. The record is taken here, while the entry still exists.
  */
+/**
+ * The registry writes `null` for a capability nobody has established, and the
+ * retired record's schema admits booleans only. An unknown is not something the
+ * model was, so it is left out rather than recorded as a fact either way.
+ */
+export function retirementCapabilities(capabilities) {
+  return Object.fromEntries(
+    Object.entries(capabilities ?? {}).filter(([, value]) => typeof value === 'boolean'),
+  );
+}
+
 function retirementRecord(modelKey, model, retiredOn) {
   const registry = readJson(REGISTRY_FILE);
   const compiled = registry.models[modelKey];
@@ -379,7 +390,7 @@ function retirementRecord(modelKey, model, retiredOn) {
     developer: compiled?.identity?.developer ?? model.provider,
     modelType: model.modelType,
     contextWindow: model.contextWindow ?? registry.limits?.[modelKey]?.contextTokens ?? null,
-    capabilities: registry.capabilities?.[modelKey] ?? {},
+    capabilities: retirementCapabilities(registry.capabilities?.[modelKey]),
     released: model.released ?? null,
     retiredOn,
     replacedBy: model.lifecycle?.replacedBy ?? null,

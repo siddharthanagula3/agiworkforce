@@ -765,39 +765,6 @@
       "residencyRegions": ["cn"],
       "evidenceRefs": []
     },
-    "deepseek-v4-flash-vision-exp": {
-      "identity": {
-        "key": "deepseek-v4-flash-vision-exp",
-        "displayName": "DeepSeek V4 Flash Vision (Experimental)",
-        "provider": "deepseek",
-        "developer": "deepseek",
-        "providerModelId": "deepseek-v4-flash-vision-exp",
-        "openRouterSlug": "deepseek/deepseek-v4-flash-vision-exp",
-        "kind": "code",
-        "familyPartner": "deepseek-v4-flash",
-        "openWeight": true,
-        "license": "MIT",
-        "aliases": ["deepseek/deepseek-v4-flash-vision-exp"],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "August 21, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-08-21",
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "very-fast",
-      "residencyRegions": ["cn"],
-      "evidenceRefs": []
-    },
     "deepseek-flash": {
       "identity": {
         "key": "deepseek-flash",
@@ -13083,12 +13050,7 @@
       "gemini-3.1-flash-live-preview",
       "gemini-3.1-flash-tts-preview"
     ],
-    "deepseek": [
-      "deepseek-v4-flash",
-      "deepseek-v4-pro",
-      "deepseek-v4-flash-vision-exp",
-      "deepseek-flash"
-    ],
+    "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-flash"],
     "qwen": ["qwen-3.5-flash", "qwen-3.8-flash", "qwen-3.7-plus"],
     "perplexity": ["sonar", "sonar-reasoning-pro", "sonar-pro", "sonar-deep-research"],
     "runway": ["runway-gen-4"],
@@ -14839,9 +14801,9 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32,
-        "cacheReadPerMillion": 0.014
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.006
       }
     },
     "open_router/deepseek-v4-flash": {
@@ -14901,10 +14863,10 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 0.308,
-        "outputPerMillion": 0.924,
-        "cacheReadPerMillion": 0.0098,
-        "cacheWritePerMillion": 0.308
+        "inputPerMillion": 0.21,
+        "outputPerMillion": 0.84,
+        "cacheReadPerMillion": 0.0042,
+        "cacheWritePerMillion": 0.21
       },
       "discount": {
         "minPercent": 30,
@@ -14912,10 +14874,10 @@
         "listPricing": {
           "currency": "USD",
           "unit": "per_million_tokens",
-          "inputPerMillion": 0.44,
-          "outputPerMillion": 1.32,
-          "cacheReadPerMillion": 0.014,
-          "cacheWritePerMillion": 0.44
+          "inputPerMillion": 0.3,
+          "outputPerMillion": 1.2,
+          "cacheReadPerMillion": 0.006,
+          "cacheWritePerMillion": 0.3
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
@@ -15308,26 +15270,6 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 1.32,
         "outputPerMillion": 3.96
-      }
-    },
-    "deepseek/deepseek-v4-flash-vision-exp": {
-      "modelKey": "deepseek-v4-flash-vision-exp",
-      "provider": "deepseek",
-      "providerModelId": "deepseek-v4-flash-vision-exp",
-      "harnessId": "deepseek/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32,
-        "cacheReadPerMillion": 0.014
       }
     },
     "deepseek/deepseek-flash": {
@@ -26003,30 +25945,6 @@
       "codeExecution": false,
       "promptCaching": true
     },
-    "deepseek-v4-flash-vision-exp": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "deepseek-flash": {
       "textInput": true,
       "imageInput": true,
@@ -36063,9 +35981,9 @@
     "deepseek-v4-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.44,
-      "outputPerMillion": 1.32,
-      "cacheReadPerMillion": 0.014
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 1.2,
+      "cacheReadPerMillion": 0.006
     },
     "deepseek-v4-pro": {
       "currency": "USD",
@@ -36073,13 +35991,6 @@
       "inputPerMillion": 1.32,
       "outputPerMillion": 3.96,
       "cacheReadPerMillion": 0.044
-    },
-    "deepseek-v4-flash-vision-exp": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.44,
-      "outputPerMillion": 1.32,
-      "cacheReadPerMillion": 0.014
     },
     "deepseek-flash": {
       "currency": "USD",
@@ -39175,7 +39086,6 @@
     },
     "deepseek-v4-flash": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
     "deepseek-v4-pro": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
-    "deepseek-v4-flash-vision-exp": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
     "deepseek-flash": { "contextTokens": 1048576, "maxOutputTokens": 393216 },
     "qwen-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "qwen-3.8-flash": {
@@ -39909,7 +39819,6 @@
         "confidence": "aggregated"
       }
     },
-    "deepseek-v4-flash-vision-exp": {},
     "deepseek-flash": {},
     "qwen-3.5-flash": {},
     "qwen-3.8-flash": {},
@@ -40832,6 +40741,13 @@
       "verifiedBy": "official-openai-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "GPT-6 Astra now records medium as its default effort and declares reasoning.rejectsSamplingParameters. The latest-model guide states that GPT-6 Astra and GPT-6.1 Sol support low, medium (default), high, xhigh and max, do not support none, and that temperature, top_p and top_logprobs must be removed when reasoning effort is not none; the row recorded no default and did not say sampling parameters are rejected, so a request carrying a temperature was a provider error. Prices, limits, cutoff and endpoints on developers.openai.com/api/docs/models/gpt-6-astra still match the row. Verified 2026-10-07."
+    },
+    {
+      "id": "verification/2026-10-07/72",
+      "date": "2026-10-07",
+      "verifiedBy": "official-deepseek-documentation-and-live-api",
+      "status": "CORRECTION",
+      "notes": "DeepSeek V4 Flash (deepseek-v4-flash) now carries the price DeepSeek actually bills for it. The 2026-09-10 news post and the pricing page state that V4-Flash and V4-Flash-Vision-Exp are retired and that both ids temporarily route to V4.1-Flash at V4.1-Flash rates, and a request for deepseek-v4-flash on 2026-10-07 was answered by deepseek-flash. The row is corrected from $0.44/$1.32/$0.014 to the peak V4.1-Flash rate of $0.30/$1.20/$0.006. The DeepSeek vision default moves from deepseek-v4-flash-vision-exp to deepseek-flash, which is the model that already answers the retired id and which the list-models endpoint reports as accepting image input; deepseek-v4-flash-vision-exp then leaves the catalog through retired-models.json. The deepseek/deepseek-flash slot stays on deepseek-v4-flash: the promotion gate refused deepseek-flash on 2026-10-07 with the refusal corpus at 0.000 and the jailbreak corpus at 0.364 against floors of 1.000."
     }
   ],
   "retiredModels": {
@@ -40892,6 +40808,39 @@
       "released": "January 2026",
       "retiredOn": "2026-07-22",
       "metadataSource": "packages/contracts/types/src/models.json@5a165d78b",
+      "metadataPreserved": true
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "id": "deepseek-v4-flash-vision-exp",
+      "displayName": "DeepSeek V4 Flash Vision (Experimental)",
+      "provider": "deepseek",
+      "developer": "deepseek",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "August 21, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "deepseek-flash",
+      "metadataSource": "catalog/models.curation.json#deepseek-v4-flash-vision-exp",
       "metadataPreserved": true
     },
     "gemini-3-flash-preview": { "id": "gemini-3-flash-preview", "metadataPreserved": false },

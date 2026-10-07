@@ -119,7 +119,7 @@ test('the backfill census is the one the compiler prints', () => {
   assert.equal(census.get(LIFECYCLE_STAGE.discovered), 346);
   assert.equal(census.get(LIFECYCLE_STAGE.promoted), 18);
   assert.equal(census.get(LIFECYCLE_STAGE.evaluated), 5);
-  assert.equal(census.get(LIFECYCLE_STAGE.registered), 32);
+  assert.equal(census.get(LIFECYCLE_STAGE.registered), 31);
   assert.equal(census.get(LIFECYCLE_STAGE.probed), 3);
   assert.equal(census.get(LIFECYCLE_STAGE.deprecated), 5);
   assert.equal(
@@ -128,7 +128,7 @@ test('the backfill census is the one the compiler prints', () => {
   );
   assert.equal(
     formatStageCensus(stages),
-    'discovered 346, registered 32, probed 3, evaluated 5, promoted 18, deprecated 5',
+    'discovered 346, registered 31, probed 3, evaluated 5, promoted 18, deprecated 5',
   );
 });
 

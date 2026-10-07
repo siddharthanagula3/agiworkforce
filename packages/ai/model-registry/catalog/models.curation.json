@@ -427,6 +427,12 @@
       "verifiedBy": "official-openai-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "GPT-6 Astra now records medium as its default effort and declares reasoning.rejectsSamplingParameters. The latest-model guide states that GPT-6 Astra and GPT-6.1 Sol support low, medium (default), high, xhigh and max, do not support none, and that temperature, top_p and top_logprobs must be removed when reasoning effort is not none; the row recorded no default and did not say sampling parameters are rejected, so a request carrying a temperature was a provider error. Prices, limits, cutoff and endpoints on developers.openai.com/api/docs/models/gpt-6-astra still match the row. Verified 2026-10-07."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-deepseek-documentation-and-live-api",
+      "status": "CORRECTION",
+      "notes": "DeepSeek V4 Flash (deepseek-v4-flash) now carries the price DeepSeek actually bills for it. The 2026-09-10 news post and the pricing page state that V4-Flash and V4-Flash-Vision-Exp are retired and that both ids temporarily route to V4.1-Flash at V4.1-Flash rates, and a request for deepseek-v4-flash on 2026-10-07 was answered by deepseek-flash. The row is corrected from $0.44/$1.32/$0.014 to the peak V4.1-Flash rate of $0.30/$1.20/$0.006. The DeepSeek vision default moves from deepseek-v4-flash-vision-exp to deepseek-flash, which is the model that already answers the retired id and which the list-models endpoint reports as accepting image input; deepseek-v4-flash-vision-exp then leaves the catalog through retired-models.json. The deepseek/deepseek-flash slot stays on deepseek-v4-flash: the promotion gate refused deepseek-flash on 2026-10-07 with the refusal corpus at 0.000 and the jailbreak corpus at 0.364 against floors of 1.000."
     }
   ],
   "providers": {
@@ -584,7 +590,7 @@
         "code_generation": "family:deepseek/deepseek-flash",
         "complex_reasoning": "family:deepseek/deepseek-pro",
         "chat": "family:deepseek/deepseek-flash",
-        "vision": "deepseek-v4-flash-vision-exp",
+        "vision": "deepseek-flash",
         "long_context": "family:deepseek/deepseek-flash"
       },
       "canonicalization": {}
@@ -2453,7 +2459,7 @@
       "qualityTier": "fast",
       "bestFor": ["Cost-Effective", "Coding", "Long Context", "Multimodal", "High Volume"],
       "deprecation_date": null,
-      "pricingNote": "DeepSeek bills V4 Flash on a peak/off-peak clock, not a flat rate: peak $0.44/1M input on a cache miss, $1.32/1M output, $0.014/1M cache hit, with off-peak exactly half at $0.22/$0.66/$0.007. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut on any date, and the schema has no field for a time-of-day split. CORRECTED 2026-09-01: this row previously read $0.14/$0.28 with cache read $0.0028, which matches no row on DeepSeek's table and is roughly a third of the peak rate. Those figures came from models.dev, which still publishes them for the first-party deepseek provider. Verified against https://api-docs.deepseek.com/quick_start/pricing, retrieved 2026-09-01; the page carries no discount, promotion or expiry language of any kind.",
+      "pricingNote": "DeepSeek retired V4-Flash on 2026-09-10. Its API still accepts this id, but only as a temporary route to DeepSeek-V4.1-Flash billed at V4.1-Flash rates: peak $0.30/1M input on a cache miss, $1.20/1M output, $0.006/1M cache hit, with off-peak exactly half. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, excluding Chinese public holidays. The catalog carries the peak rate because it is the only figure never undercut, and the schema has no field for a time-of-day split. CORRECTED 2026-10-07: this row read $0.44/$1.32 with cache read $0.014, the V4-Flash rate DeepSeek stopped charging on 2026-09-10 04:00 UTC. Measured the same day: a request for this id is answered by the V4.1-Flash id. DeepSeek gives no end date for the temporary route. The other hosts in this model's route list serve the published V4-Flash weights and keep their own price sheets. Verified against https://api-docs.deepseek.com/quick_start/pricing and https://api-docs.deepseek.com/news/news260910, retrieved 2026-10-07.",
       "reasoning": {
         "capable": true,
         "control": "thinking_toggle",
@@ -2468,9 +2474,9 @@
         }
       },
       "costOverride": {
-        "inputCost": 0.44,
-        "outputCost": 1.32,
-        "cached_input": 0.014
+        "inputCost": 0.3,
+        "outputCost": 1.2,
+        "cached_input": 0.006
       },
       "tierPolicy": {
         "minTier": "pro"
@@ -2538,68 +2544,6 @@
         "stage": "evaluated",
         "stagedOn": "2026-09-05",
         "source": "models.dev#deepseek-v4-pro"
-      }
-    },
-    "deepseek-v4-flash-vision-exp": {
-      "id": "deepseek-v4-flash-vision-exp",
-      "apiModelId": "deepseek-v4-flash-vision-exp",
-      "openRouterSlug": "deepseek/deepseek-v4-flash-vision-exp",
-      "name": "DeepSeek V4 Flash Vision (Experimental)",
-      "provider": "deepseek",
-      "modelType": "code",
-      "openWeight": true,
-      "license": "MIT",
-      "inputModalities": ["text", "image"],
-      "variantPartner": "deepseek-v4-flash",
-      "maxOutputTokens": 384000,
-      "quality": "excellent",
-      "qualityTier": "fast",
-      "bestFor": ["Vision", "Coding", "Long Context", "Cost-Effective"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_toggle",
-        "supportedEfforts": ["low", "high", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "costOverride": {
-        "inputCost": 0.44,
-        "outputCost": 1.32,
-        "cached_input": 0.014
-      },
-      "contextOverride": 1000000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "pricingNote": "The only DeepSeek model that accepts images, and the correct target for the DeepSeek vision task. Same peak and off-peak clock as deepseek-v4-flash: peak $0.44/1M cache-miss input, $1.32/1M output, $0.014/1M cache hit between 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, exactly half in every other hour. The catalog carries the peak rate because it is the only figure never undercut. Images convert to input tokens by dimension at an upper bound of 384 tokens per image with no per-image fee. Experimental endpoint: DeepSeek publishes no sunset date but has retired a temporary endpoint at two weeks notice before, so treat availability as short-horizon. Effort levels are inherited from deepseek-v4-flash; the effort-mapping table names only the two text models. Verified against api-docs.deepseek.com, retrieved 2026-09-04.",
-      "speedOverride": "very-fast",
-      "releasedOverride": "August 21, 2026",
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
     "deepseek-flash": {

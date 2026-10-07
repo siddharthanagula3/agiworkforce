@@ -273,7 +273,6 @@
   "no_training_explicit|claude-sonnet-5-5|managed_cloud": "selected;claude-sonnet-5-5;anthropic/claude-sonnet-5-5;explicit;~;~;",
   "no_training_explicit|deepseek-flash|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|deepseek-v4-flash|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
-  "no_training_explicit|deepseek-v4-flash-vision-exp|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|deepseek-v4-pro|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-3-pro-image|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-3.1-flash-image|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
