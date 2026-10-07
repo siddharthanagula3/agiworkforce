@@ -2,6 +2,23 @@ import { expect, type ElementHandle, type Locator, type Page } from '@playwright
 
 import { publicMaskPaintHandle } from './public-mask-paint';
 
+/**
+ * next/font registers a metric-matched "<family> Fallback" face whose only
+ * source is a local system font. Where that system font is not installed, as
+ * on the Linux CI runners, the face reports an error as soon as a character
+ * outside the web font's subset asks for it. That is a missing system font,
+ * not a web font that failed to download, so it does not fail readiness.
+ */
+const LOCAL_FALLBACK_FACE = / Fallback$/u;
+
+function isFailedWebFont(face: { family: string; status: string }): boolean {
+  return face.status === 'error' && !LOCAL_FALLBACK_FACE.test(face.family);
+}
+
+function failedWebFontNames(faces: readonly { family: string; status: string }[]): string {
+  return [...new Set(faces.filter(isFailedWebFont).map((face) => face.family))].join(', ');
+}
+
 export type PublicReadinessRoute = {
   path: string;
   expectedHttpStatuses: readonly number[] | null;
@@ -461,8 +478,10 @@ async function loadExpectedFontRequests(
   probe: FontPaintProbe,
   readinessTimeout: number,
 ) {
-  if (probe.fontFaces.some((face) => face.status === 'error'))
-    throw new Error('Failed FontFace cannot prove readiness');
+  if (probe.fontFaces.some(isFailedWebFont))
+    throw new Error(
+      `Failed FontFace cannot prove readiness: ${failedWebFontNames(probe.fontFaces)}`,
+    );
   const fontProof = [];
   const fontDeadline = Date.now() + readinessTimeout;
   for (const sample of probe.expectedFontSamples) {
@@ -586,10 +605,9 @@ export async function measurePublicFontProof(
     const initial = await inspectReadiness(page, expectedFonts, handle);
     const expectedFontProof = await loadExpectedFontRequests(page, initial, readinessTimeout);
     const final = await inspectReadiness(page, expectedFonts, handle);
-    expect(
-      final.fontFaces.some((face) => face.status === 'error'),
-      'Failed FontFace during scoped font proof',
-    ).toBe(false);
+    expect(final.fontFaces.some(isFailedWebFont), 'Failed FontFace during scoped font proof').toBe(
+      false,
+    );
     const requests = (probe: FontPaintProbe) =>
       probe.usedFontSamples.map((font) => ({
         family: font.family,
@@ -688,8 +706,10 @@ export async function settlePublicPage(
     .poll(
       async () => {
         const probe = await inspectReadiness(page, expectedFonts);
-        if (probe.fontFaces.some((face) => face.status === 'error'))
-          throw new Error('Failed FontFace cannot prove readiness');
+        if (probe.fontFaces.some(isFailedWebFont))
+          throw new Error(
+            `Failed FontFace cannot prove readiness: ${failedWebFontNames(probe.fontFaces)}`,
+          );
         return {
           fonts: probe.fonts,
           paintedMainTextNodes: probe.paintedMainTextNodes > 0,
@@ -736,8 +756,10 @@ export async function settlePublicPage(
                 usedTextNodes: font.usedTextNodes,
               })),
             });
-            if (initial.fontFaces.some((face) => face.status === 'error'))
-              throw new Error('Failed FontFace cannot prove readiness');
+            if (initial.fontFaces.some(isFailedWebFont))
+              throw new Error(
+                `Failed FontFace cannot prove readiness: ${failedWebFontNames(initial.fontFaces)}`,
+              );
             if (
               initial.expectedFontSamples.some(
                 (font) => !font.family || !font.registeredFaces.length,
@@ -792,7 +814,7 @@ export async function settlePublicPage(
   const final = observations.at(-1);
   if (!final) throw new Error('Readiness observation samples are missing');
   expect(
-    observations.some((sample) => sample.fontFaces.some((face) => face.status === 'error')),
+    observations.some((sample) => sample.fontFaces.some(isFailedWebFont)),
     'Failed FontFace observed during readiness',
   ).toBe(false);
   expect(

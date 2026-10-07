@@ -103,7 +103,6 @@ const declaresTitle = (segment: Segment) =>
  */
 const ROUTES_WITHOUT_A_LOADING_BOUNDARY: Record<string, string> = {
   '': 'reads the free offer state from the shared cache entry for at most half a second and paints the usual pill otherwise; the only boundary above it would be the root one, which blanks the shell',
-  apps: 'awaits only the identity the request already carries, so there is no request to wait on',
   'auth/desktop': 'awaits only its own searchParams, so there is no request to wait on',
   'auth/sso-callback': 'awaits only its own searchParams, so there is no request to wait on',
   'legal/archive/[policy]':
