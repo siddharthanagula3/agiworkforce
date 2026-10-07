@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { TextAlignStart } from 'lucide-react';
 
 export interface DocsTocItem {
   id: string;
@@ -76,7 +77,10 @@ export function DocsToc({ items }: { items: readonly DocsTocItem[] }) {
         trigger.current?.focus();
       }}
     >
-      <p className="dx-toc-label">On this page</p>
+      <p className="dx-toc-label">
+        <TextAlignStart aria-hidden="true" />
+        <span>On this page</span>
+      </p>
       <button
         ref={trigger}
         type="button"

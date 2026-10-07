@@ -153,7 +153,11 @@ describe('documentation contents follows reading geometry', () => {
   it('keeps the existing native destinations and the first section before headings are reached', () => {
     render(<DocsToc items={items} />);
     flushFrames();
-    expect(screen.getByRole('navigation', { name: 'On this page' })).toBeInTheDocument();
+    const navigation = screen.getByRole('navigation', { name: 'On this page' });
+    expect(navigation).toBeInTheDocument();
+    const label = navigation.querySelector('.dx-toc-label');
+    expect(label).toHaveTextContent('On this page');
+    expect(label?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(
       items.map((item) => `#${item.id}`),
     );
