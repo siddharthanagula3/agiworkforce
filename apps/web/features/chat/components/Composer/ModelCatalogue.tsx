@@ -201,10 +201,8 @@ function formatMessageCredits(credits: number): string {
   );
 }
 
-function messageCostLabel(entry: ModelCatalogueEntry, credits: number | null): string | null {
-  if (entry.freePool && !entry.eventAccess) return FREE_POOL_COST_TEXT.toLowerCase();
-  if (credits === null) return null;
-  return `about ${credits.toLocaleString(undefined, { maximumFractionDigits: 2 })} credits per typical message`;
+function freePoolCostLabel(entry: ModelCatalogueEntry): string | null {
+  return entry.freePool && !entry.eventAccess ? FREE_POOL_COST_TEXT.toLowerCase() : null;
 }
 
 function PriceBandMark({ filled, scale }: { filled: number; scale: number }) {
@@ -456,9 +454,9 @@ export function ModelCatalogue({
     const hardLocked =
       comingSoon || environment.locked || entry.temporarilyUnavailable || notOffered;
     const locked = planLocked || hardLocked;
-    const credits =
-      entry.eventAccess || entry.freePool ? null : (messageCredits.get(entry.id) ?? null);
-    const costLabel = messageCostLabel(entry, credits);
+    const pricedInCredits =
+      !entry.eventAccess && !entry.freePool && (messageCredits.get(entry.id) ?? null) !== null;
+    const costLabel = freePoolCostLabel(entry);
     const speedLabel = resolveModelSpeedLabel(entry.id);
     const stageLabel = hardLocked ? null : releaseStageLabel(entry);
     return (
@@ -541,11 +539,7 @@ export function ModelCatalogue({
               <span className={`${TAG_CLASS} border border-[var(--chat-border)] text-success-text`}>
                 {FREE_POOL_TAG_LABEL}
               </span>
-            ) : credits !== null ? (
-              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                {formatMessageCredits(credits)}
-              </span>
-            ) : entry.priceBand && !entry.eventAccess && !entry.freePool ? (
+            ) : !pricedInCredits && entry.priceBand && !entry.eventAccess && !entry.freePool ? (
               <PriceBandMark filled={entry.priceBand.filled} scale={entry.priceBand.scale} />
             ) : null}
             {comingSoon && (
