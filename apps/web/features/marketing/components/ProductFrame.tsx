@@ -52,6 +52,6 @@ export function ProductFrame(props: ProductFrameProps) {
     case 'editor':
       return <EditorWindow title={title} badge={badge} className={className} />;
     case 'phone':
-      return <PhoneDevice label={`${title} interface`} className={className} />;
+      return <PhoneDevice className={className} />;
   }
 }
