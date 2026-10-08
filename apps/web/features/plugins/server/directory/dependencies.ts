@@ -62,7 +62,7 @@ export interface InstallableSource {
 export type SourceCheck = { ok: true; source: InstallableSource } | { ok: false; note: string };
 
 export type DependencyPlugin =
-  | { kind: 'directory'; source: InstallableSource }
+  | { kind: 'directory'; source: InstallableSource; dependencies: readonly PluginDependencyRef[] }
   | { kind: 'entry'; found: MarketplaceSourceEntry };
 
 export interface DependencyRoot {
@@ -88,6 +88,7 @@ export interface DependencyPlan {
     resolved: ResolvedDependency;
     source: InstallableSource;
     skills: InstalledDirectorySkill[];
+    dependencies: readonly PluginDependencyRef[];
   }[];
   entries: { resolved: ResolvedDependency; found: MarketplaceSourceEntry }[];
   enable: { resolved: ResolvedDependency; installationId: string }[];
@@ -257,16 +258,17 @@ async function directoryNode(
       `Dependency "${label}" (required by ${requiredBy}) cannot be installed in the web app, so install ${rootLabel} from the released CLI.`,
     );
   }
+  const dependencies = await directoryDependencies(
+    checked.source,
+    context.fetchImpl,
+    `Dependency "${label}" (required by ${requiredBy}) declares dependencies that cannot be read, so ${rootLabel} was not installed.`,
+    `The manifest of dependency "${label}" could not be read from its repository right now, so ${rootLabel} was not installed.`,
+  );
   return {
     name,
     marketplace,
-    plugin: { kind: 'directory', source: checked.source },
-    dependencies: await directoryDependencies(
-      checked.source,
-      context.fetchImpl,
-      `Dependency "${label}" (required by ${requiredBy}) declares dependencies that cannot be read, so ${rootLabel} was not installed.`,
-      `The manifest of dependency "${label}" could not be read from its repository right now, so ${rootLabel} was not installed.`,
-    ),
+    plugin: { kind: 'directory', source: checked.source, dependencies },
+    dependencies,
   };
 }
 
@@ -533,7 +535,12 @@ export async function planMarketplaceDependencies(
         `None of the skills of dependency "${dependency.label}" could be fetched from its repository right now, so ${rootLabel} was not installed.`,
       );
     }
-    plan.directory.push({ resolved: dependency, source: plugin.source, skills });
+    plan.directory.push({
+      resolved: dependency,
+      source: plugin.source,
+      skills,
+      dependencies: plugin.dependencies,
+    });
   }
   return plan;
 }

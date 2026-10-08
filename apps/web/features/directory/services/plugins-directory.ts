@@ -347,7 +347,12 @@ export async function fetchPluginDirectoryEntry(id: string): Promise<PluginDirec
 }
 
 interface ErrorBody {
-  error?: { code?: string; message?: string; installCommand?: string | null };
+  error?: {
+    code?: string;
+    message?: string;
+    installCommand?: string | null;
+    dependents?: unknown;
+  };
 }
 
 async function readErrorBody(response: Response): Promise<ErrorBody> {
@@ -1312,17 +1317,43 @@ export async function installPlugin(
 export type PluginUninstallTarget =
   { kind: 'builtin'; pluginId: string } | { kind: 'installation'; installationId: string };
 
+export interface PluginDependentSummary {
+  id: string;
+  name: string;
+}
+
+export function dependentNames(dependents: readonly PluginDependentSummary[]): string {
+  const names = dependents.map((dependent) => dependent.name);
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+const PLUGIN_HAS_DEPENDENTS_CODE = 'PLUGIN_HAS_DEPENDENTS';
+
 export type PluginUninstallOutcome =
-  { status: 'removed' } | { status: 'disabled'; message: string };
+  | { status: 'removed' }
+  | { status: 'disabled'; message: string }
+  | { status: 'has-dependents'; message: string; dependents: PluginDependentSummary[] };
+
+function readDependents(value: unknown): PluginDependentSummary[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const { id, name } = (item ?? {}) as { id?: unknown; name?: unknown };
+    return typeof id === 'string' && typeof name === 'string' ? [{ id, name }] : [];
+  });
+}
 
 export async function uninstallPlugin(
   target: PluginUninstallTarget,
   csrfToken: string,
+  withDependents = false,
 ): Promise<PluginUninstallOutcome> {
-  const path =
+  const base =
     target.kind === 'builtin'
       ? `${PLUGIN_INSTALLATIONS_PATH}/${encodeURIComponent(target.pluginId)}`
       : `${PLUGIN_MARKETPLACE_INSTALLATIONS_PATH}/${encodeURIComponent(target.installationId)}`;
+  const path = withDependents ? `${base}?withDependents=true` : base;
   const response = await fetch(path, { method: 'DELETE', headers: { [CSRF_HEADER]: csrfToken } });
   if (response.ok) return { status: 'removed' };
   const payload = await readErrorBody(response);
@@ -1333,6 +1364,18 @@ export async function uninstallPlugin(
     return {
       status: 'disabled',
       message: messageFor(response.status, payload, PLUGIN_UNINSTALL_FAILED_COPY),
+    };
+  }
+  const dependents = readDependents(payload.error?.dependents);
+  if (
+    response.status === PLUGIN_CONFLICT_STATUS &&
+    payload.error?.code === PLUGIN_HAS_DEPENDENTS_CODE &&
+    dependents.length > 0
+  ) {
+    return {
+      status: 'has-dependents',
+      message: messageFor(response.status, payload, PLUGIN_UNINSTALL_FAILED_COPY),
+      dependents,
     };
   }
   throw new DirectoryRequestError(

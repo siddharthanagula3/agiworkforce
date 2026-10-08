@@ -12,7 +12,12 @@ export { PluginDetailView } from './PluginDetailView';
 export { AddMarketplaceDialog } from './AddMarketplaceDialog';
 export { UploadFileDialog } from './UploadFileDialog';
 export { CreatePluginDialog } from './CreatePluginDialog';
-export { DirectoryActionNotice, isDirectoryActionNotice } from './action-notice';
+export {
+  DirectoryActionConfirmation,
+  DirectoryActionNotice,
+  isDirectoryActionConfirmation,
+  isDirectoryActionNotice,
+} from './action-notice';
 export { DirectoryScanCaution, isDirectoryScanCaution } from './scan-caution';
 export {
   buildFileTree,

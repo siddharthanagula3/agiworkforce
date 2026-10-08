@@ -11,6 +11,7 @@ import {
   PLUGIN_ENABLE_FAILED_COPY,
   PLUGIN_SETTINGS_LOAD_FAILED_COPY,
   PLUGIN_SETTINGS_SAVE_FAILED_COPY,
+  PluginDependentsError,
   PluginSettingsError,
 } from '../client/installation-settings';
 import { pluginTargetKey, type PluginInstallationTarget } from '../routes';
@@ -23,7 +24,7 @@ export interface PluginsSettingsAdapter {
   error: string | null;
   setSkillEnabled: (skill: string, enabled: boolean) => Promise<void>;
   setExamplePrompts: (prompts: readonly string[] | null) => Promise<void>;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  setEnabled: (enabled: boolean, withDependents?: boolean) => Promise<void>;
   reload: () => Promise<void>;
 }
 
@@ -111,14 +112,17 @@ export function usePluginsSettingsAdapter(
     [save],
   );
 
-  const setEnabled = useCallback(async (next: boolean) => {
+  const setEnabled = useCallback(async (next: boolean, withDependents = false) => {
     const current = targetRef.current;
     if (!current) return;
     setSaving(true);
     setError(null);
     try {
-      setEnabledState(await setPluginInstallationEnabled(current, next, await getCsrfToken()));
+      setEnabledState(
+        await setPluginInstallationEnabled(current, next, await getCsrfToken(), withDependents),
+      );
     } catch (caught: unknown) {
+      if (caught instanceof PluginDependentsError) throw caught;
       setError(messageOf(caught, PLUGIN_ENABLE_FAILED_COPY));
     } finally {
       setSaving(false);

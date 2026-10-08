@@ -21,7 +21,7 @@ vi.mock('../../client/installation-settings', async () => {
   };
 });
 
-import { PluginSettingsError } from '../../client/installation-settings';
+import { PluginDependentsError, PluginSettingsError } from '../../client/installation-settings';
 import { PLUGIN_TARGET_BUILTIN } from '../../routes';
 import { usePluginsSettingsAdapter } from '../use-plugins-settings-adapter';
 
@@ -97,8 +97,34 @@ describe('usePluginsSettingsAdapter', () => {
       await result.current.setEnabled(false);
     });
 
-    expect(setEnabledMock).toHaveBeenCalledWith(TARGET, false, 'token-1');
+    expect(setEnabledMock).toHaveBeenCalledWith(TARGET, false, 'token-1', false);
     expect(result.current.enabled).toBe(false);
+  });
+
+  it('hands a dependents refusal to the caller instead of showing it as an error', async () => {
+    setEnabledMock.mockRejectedValue(
+      new PluginDependentsError('Needed.', [{ id: 'review-kit', name: 'Review Kit' }]),
+    );
+    const { result } = renderHook(() => usePluginsSettingsAdapter(TARGET, true));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await expect(result.current.setEnabled(false)).rejects.toBeInstanceOf(PluginDependentsError);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.enabled).toBe(true);
+  });
+
+  it('asks the server to turn the dependents off too when told to', async () => {
+    const { result } = renderHook(() => usePluginsSettingsAdapter(TARGET, true));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.setEnabled(false, true);
+    });
+
+    expect(setEnabledMock).toHaveBeenCalledWith(TARGET, false, 'token-1', true);
   });
 
   it('surfaces a failed save and leaves the last known settings in place', async () => {

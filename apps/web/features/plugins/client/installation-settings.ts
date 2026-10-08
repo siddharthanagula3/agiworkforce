@@ -30,7 +30,33 @@ export class PluginSettingsError extends Error {
 }
 
 interface ErrorBody {
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string; dependents?: unknown };
+}
+
+const HAS_DEPENDENTS_CODE = 'PLUGIN_HAS_DEPENDENTS';
+const CONFLICT_STATUS = 409;
+
+export interface PluginDependent {
+  id: string;
+  name: string;
+}
+
+export class PluginDependentsError extends PluginSettingsError {
+  readonly dependents: readonly PluginDependent[];
+
+  constructor(message: string, dependents: readonly PluginDependent[]) {
+    super(CONFLICT_STATUS, message);
+    this.name = 'PluginDependentsError';
+    this.dependents = dependents;
+  }
+}
+
+function parseDependents(value: unknown): PluginDependent[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const { id, name } = (item ?? {}) as { id?: unknown; name?: unknown };
+    return typeof id === 'string' && typeof name === 'string' ? [{ id, name }] : [];
+  });
 }
 
 async function messageFor(response: Response, fallback: string): Promise<string> {
@@ -82,13 +108,27 @@ export async function setPluginInstallationEnabled(
   target: PluginInstallationTarget,
   enabled: boolean,
   csrfToken: string,
+  withDependents = false,
 ): Promise<boolean> {
   const response = await fetch(pluginInstallationPath(target), {
     method: 'PATCH',
     headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify(withDependents ? { enabled, withDependents } : { enabled }),
   });
   if (!response.ok) {
+    if (response.status === CONFLICT_STATUS) {
+      const body = (await response
+        .clone()
+        .json()
+        .catch(() => ({}))) as ErrorBody;
+      const dependents = parseDependents(body.error?.dependents);
+      if (body.error?.code === HAS_DEPENDENTS_CODE && dependents.length > 0) {
+        throw new PluginDependentsError(
+          body.error.message ?? PLUGIN_ENABLE_FAILED_COPY,
+          dependents,
+        );
+      }
+    }
     throw new PluginSettingsError(
       response.status,
       await messageFor(response, PLUGIN_ENABLE_FAILED_COPY),

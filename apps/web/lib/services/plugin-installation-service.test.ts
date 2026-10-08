@@ -27,6 +27,7 @@ import {
   uninstallWebPlugin,
   updatePluginInstallationSettings,
 } from './plugin-installation-service';
+import { disabledPluginSkillNames } from './enabled-plugin-ids';
 import { verifyPluginPackage } from './plugin-marketplace-service';
 
 const ARTIFACT_SHA256 = 'b'.repeat(64);
@@ -554,6 +555,20 @@ describe('listEnabledPluginIds', () => {
 
     db.query.mockResolvedValueOnce([]);
     await expect(listEnabledPluginIds(db, 'user-1')).resolves.toEqual(new Set());
+  });
+
+  it('reports the declared skills a member switched off, and none when all are on', async () => {
+    const db = database([
+      {
+        plugin_id: 'research-pack',
+        enabled_skills: ['summarise'],
+        declared_skills: ['summarise', 'literature-review'],
+      },
+      { plugin_id: 'other-pack', enabled_skills: ['a'], declared_skills: ['a'] },
+    ]);
+    const ids = await listEnabledPluginIds(db, 'user-1');
+    expect([...ids]).toEqual(['research-pack', 'other-pack']);
+    expect([...disabledPluginSkillNames(ids)]).toEqual(['literature-review']);
   });
 
   it('only joins against published, web-installable registry rows', async () => {

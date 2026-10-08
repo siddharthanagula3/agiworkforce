@@ -100,6 +100,26 @@ describe('listInstalledDirectorySkills', () => {
     expect(mocks.writeInstalledSkills).toHaveBeenCalledTimes(1);
   });
 
+  it('serves a warm cache and fetches nothing when read cached-only', async () => {
+    const fetchImpl = vi.fn();
+    const skills = await listInstalledDirectorySkills(database([ROW]), 'user-1', fetchImpl, {
+      cachedOnly: true,
+    });
+    expect(skills.map((skill) => skill.name)).toEqual(['background-removal']);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('leaves a cold repository skill out instead of fetching it when read cached-only', async () => {
+    mocks.readInstalledSkills.mockResolvedValueOnce(null);
+    const fetchImpl = vi.fn();
+    const skills = await listInstalledDirectorySkills(database([ROW]), 'user-1', fetchImpl, {
+      cachedOnly: true,
+    });
+    expect(skills).toEqual([]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(mocks.writeInstalledSkills).not.toHaveBeenCalled();
+  });
+
   it('skips installations whose version carries no sha and dedupes names across plugins', async () => {
     const db = database([
       ROW,

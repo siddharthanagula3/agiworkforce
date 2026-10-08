@@ -2,7 +2,11 @@ import { act, render, renderHook, screen, waitFor } from '@testing-library/react
 import { isValidElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DirectoryActionNotice, type DirectoryMarketplaceResult } from '@agiworkforce/ui';
+import {
+  DirectoryActionConfirmation,
+  DirectoryActionNotice,
+  type DirectoryMarketplaceResult,
+} from '@agiworkforce/ui';
 
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type { PluginDirectoryEntry } from '@/features/plugins/server/directory/types';
@@ -10,7 +14,10 @@ import type { PluginDirectoryEntry } from '@/features/plugins/server/directory/t
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 import { useDirectoryAdapter } from '../hooks/useDirectoryAdapter';
-import { DEFAULT_DIRECTORY_QUERY } from '../services/connectors-directory';
+import {
+  CONNECTOR_SHORT_LIST_NOTICE,
+  DEFAULT_DIRECTORY_QUERY,
+} from '../services/connectors-directory';
 import { DEFAULT_PLUGIN_QUERY } from '../services/plugins-directory';
 
 const routerPush = vi.fn();
@@ -311,9 +318,10 @@ describe('useDirectoryAdapter connectors paging', () => {
     });
     await waitFor(() => expect(result.current.connectors?.loading).toBe(false));
     expect(result.current.connectors?.error).toBeUndefined();
-    expect(result.current.connectors?.notice).toBe(
+    expect(result.current.connectors?.notice).toContain(
       'The connector directory is unavailable right now.',
     );
+    expect(result.current.connectors?.notice).toContain(CONNECTOR_SHORT_LIST_NOTICE);
     expect(result.current.connectors?.entries.map((entry) => entry.id)).toEqual(['gmail']);
   });
 
@@ -397,6 +405,19 @@ describe('useDirectoryAdapter directory still indexing', () => {
     expect(result.current.connectors?.notice).toContain('still being indexed');
     expect(typeof result.current.connectors?.noticeRetry).toBe('function');
     expect(result.current.connectors?.error).toBeUndefined();
+  });
+
+  it('keeps the short-list notice beside the indexing notice', async () => {
+    stubDirectory({ '': page([record('a')], 3, null, { bootstrapComplete: false }) });
+    const { result } = renderHook(() => useDirectoryAdapter());
+
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', DEFAULT_DIRECTORY_QUERY);
+    });
+    await waitFor(() => expect(result.current.connectors?.entries).toHaveLength(1));
+
+    expect(result.current.connectors?.notice).toContain(CONNECTOR_SHORT_LIST_NOTICE);
+    expect(result.current.connectors?.notice).toContain('still being indexed');
   });
 
   it('says nothing once the crawl has finished', async () => {
@@ -1076,6 +1097,54 @@ describe('useDirectoryAdapter plugins', () => {
       expect(
         result.current.plugins?.entries.find((entry) => entry.id === 'frontend-design'),
       ).toMatchObject({ installed: false, statusLabel: 'Install' }),
+    );
+  });
+
+  it('offers to remove a plugin together with the ones that need it', async () => {
+    let installed = [installationOf('frontend-design')];
+    const calls = stubPluginRoutes({
+      'GET /api/plugins/marketplace-installations': () => json({ installations: installed }),
+      'DELETE /api/plugins/marketplace-installations/inst-1': (url) => {
+        if (url.searchParams.get('withDependents') === 'true') {
+          installed = [];
+          return json(null, 204);
+        }
+        return json(
+          {
+            error: {
+              code: 'PLUGIN_HAS_DEPENDENTS',
+              message: 'Frontend Design cannot be removed yet because Review Kit needs it.',
+              dependents: [{ id: 'inst-2', name: 'Review Kit' }],
+            },
+          },
+          409,
+        );
+      },
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+
+    let confirmation: unknown;
+    await act(async () => {
+      try {
+        await result.current.uninstall?.('plugins', 'frontend-design');
+      } catch (caught: unknown) {
+        confirmation = caught;
+      }
+    });
+    expect(confirmation).toBeInstanceOf(DirectoryActionConfirmation);
+    const asked = confirmation as DirectoryActionConfirmation;
+    expect(asked.message).toContain('Review Kit');
+    expect(asked.message).toContain('cannot be undone');
+    expect(calls.filter((call) => call.startsWith('DELETE'))).toHaveLength(1);
+
+    await act(async () => {
+      await asked.run();
+    });
+    expect(calls).toContain(
+      'DELETE /api/plugins/marketplace-installations/inst-1?withDependents=true',
     );
   });
 

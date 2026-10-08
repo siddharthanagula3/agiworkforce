@@ -5,6 +5,7 @@ import {
   setPluginInstallationEnabled,
   updatePluginSettings,
   PLUGIN_NOT_INSTALLED_COPY,
+  PluginDependentsError,
   PluginSettingsError,
 } from '../installation-settings';
 import { PLUGIN_TARGET_BUILTIN, PLUGIN_TARGET_MARKETPLACE } from '../../routes';
@@ -31,6 +32,41 @@ function stubFetch(handler: (url: string, init?: RequestInit) => Response) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('turning a plugin off when another plugin needs it', () => {
+  it('raises a dependents error naming the plugins from the 409 body', async () => {
+    stubFetch(() =>
+      Response.json(
+        {
+          error: {
+            code: 'PLUGIN_HAS_DEPENDENTS',
+            message: 'Needed.',
+            dependents: [{ id: 'review-kit', name: 'Review Kit' }],
+          },
+        },
+        { status: 409 },
+      ),
+    );
+    const caught = await setPluginInstallationEnabled(BUILTIN, false, 'token').catch(
+      (error: unknown) => error,
+    );
+    expect(caught).toBeInstanceOf(PluginDependentsError);
+    expect((caught as PluginDependentsError).dependents).toEqual([
+      { id: 'review-kit', name: 'Review Kit' },
+    ]);
+  });
+
+  it('sends withDependents only when asked to', async () => {
+    const spy = stubFetch(() => Response.json({ installation: { enabled: false } }));
+    await setPluginInstallationEnabled(BUILTIN, false, 'token');
+    await setPluginInstallationEnabled(BUILTIN, false, 'token', true);
+    expect(JSON.parse(String(spy.mock.calls[0]?.[1]?.body))).toEqual({ enabled: false });
+    expect(JSON.parse(String(spy.mock.calls[1]?.[1]?.body))).toEqual({
+      enabled: false,
+      withDependents: true,
+    });
+  });
 });
 
 describe('plugin settings transport', () => {

@@ -13,6 +13,11 @@ import {
   setWebPluginEnabled,
   uninstallWebPlugin,
 } from '@/lib/services/plugin-installation-service';
+import { pluginHasDependentsResponse } from '@/features/plugins/server/directory/install-responses';
+import {
+  dependentsRefusalMessage,
+  listRegistryDependents,
+} from '@/features/plugins/server/directory/installed-dependents';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,7 +28,10 @@ const ParamsSchema = z.object({
     .trim()
     .regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
 });
-const PatchBodySchema = z.object({ enabled: z.boolean() }).strict();
+const PatchBodySchema = z
+  .object({ enabled: z.boolean(), withDependents: z.boolean().optional() })
+  .strict();
+const WITH_DEPENDENTS_QUERY = 'withDependents';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -47,6 +55,20 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     );
   }
 
+  if (!body.data.enabled) {
+    const dependents = await listRegistryDependents(db, userId, params.data.id);
+    if (dependents.length > 0) {
+      if (!body.data.withDependents) {
+        return pluginHasDependentsResponse(
+          dependentsRefusalMessage('turn off', params.data.id, dependents),
+          dependents,
+        );
+      }
+      for (const dependent of dependents) {
+        await setWebPluginEnabled(db, userId, dependent.id, false);
+      }
+    }
+  }
   const installation = await setWebPluginEnabled(db, userId, params.data.id, body.data.enabled);
   if (!installation) {
     return NextResponse.json(
@@ -79,6 +101,23 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
     );
   }
 
+  const dependents = await listRegistryDependents(db, userId, params.data.id);
+  if (dependents.length > 0) {
+    if (request.nextUrl.searchParams.get(WITH_DEPENDENTS_QUERY) !== 'true') {
+      return pluginHasDependentsResponse(
+        dependentsRefusalMessage('remove', params.data.id, dependents),
+        dependents,
+      );
+    }
+    for (const dependent of dependents) {
+      if (!(await uninstallWebPlugin(db, userId, dependent.id))) continue;
+      await recordWorkspaceAuditEvent(db, request, {
+        userId: userId,
+        eventType: 'plugin_removed',
+        detail: { resourceType: 'plugin', resourceId: dependent.id, source: 'registry' },
+      });
+    }
+  }
   const removed = await uninstallWebPlugin(db, userId, params.data.id);
   if (!removed) {
     return NextResponse.json(

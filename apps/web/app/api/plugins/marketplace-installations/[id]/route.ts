@@ -9,17 +9,30 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
-import { setMarketplaceInstallationEnabled } from '@/lib/services/plugin-marketplace-installation-service';
+import {
+  getMarketplaceInstallation,
+  setMarketplaceInstallationEnabled,
+} from '@/lib/services/plugin-marketplace-installation-service';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { uninstallDirectoryInstallation } from '@/features/plugins/server/directory/install';
 import { removePluginConnectors } from '@/lib/connectors/plugin-connectors';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
+import {
+  installsDisabledResponse,
+  pluginHasDependentsResponse,
+} from '@/features/plugins/server/directory/install-responses';
+import {
+  dependentsRefusalMessage,
+  listMarketplaceDependents,
+} from '@/features/plugins/server/directory/installed-dependents';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ParamsSchema = z.object({ id: z.string().uuid() });
-const PatchBodySchema = z.object({ enabled: z.boolean() }).strict();
+const PatchBodySchema = z
+  .object({ enabled: z.boolean(), withDependents: z.boolean().optional() })
+  .strict();
+const WITH_DEPENDENTS_QUERY = 'withDependents';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,6 +64,22 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
   }
 
   try {
+    const dependents = body.data.enabled
+      ? []
+      : await listMarketplaceDependents(db, userId, params.data.id);
+    if (dependents.length > 0) {
+      if (!body.data.withDependents) {
+        const current = await getMarketplaceInstallation(db, userId, params.data.id);
+        if (!current) return notInstalled();
+        return pluginHasDependentsResponse(
+          dependentsRefusalMessage('turn off', current.pluginKey, dependents),
+          dependents,
+        );
+      }
+      for (const dependent of dependents) {
+        await setMarketplaceInstallationEnabled(db, userId, dependent.id, false);
+      }
+    }
     const installation = await setMarketplaceInstallationEnabled(
       db,
       userId,
@@ -84,6 +113,27 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
   if (!params.success) return notInstalled();
 
   try {
+    const dependents = await listMarketplaceDependents(db, userId, params.data.id);
+    if (dependents.length > 0) {
+      if (request.nextUrl.searchParams.get(WITH_DEPENDENTS_QUERY) !== 'true') {
+        const current = await getMarketplaceInstallation(db, userId, params.data.id);
+        if (!current) return notInstalled();
+        return pluginHasDependentsResponse(
+          dependentsRefusalMessage('remove', current.pluginKey, dependents),
+          dependents,
+        );
+      }
+      for (const dependent of dependents) {
+        const removedDependent = await uninstallDirectoryInstallation(db, userId, dependent.id);
+        if (!removedDependent) continue;
+        await removePluginConnectors(request, removedDependent);
+        await recordWorkspaceAuditEvent(db, request, {
+          userId: userId,
+          eventType: 'plugin_removed',
+          detail: { resourceType: 'plugin', resourceId: dependent.id, source: 'marketplace' },
+        });
+      }
+    }
     const removed = await uninstallDirectoryInstallation(db, userId, params.data.id);
     if (!removed) return notInstalled();
     await removePluginConnectors(request, removed);

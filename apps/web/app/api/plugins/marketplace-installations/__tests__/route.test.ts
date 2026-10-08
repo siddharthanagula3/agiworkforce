@@ -18,7 +18,11 @@ const {
   recordWorkspaceAuditEventMock,
   pluginPolicyMock,
   marketplaceEntryMock,
+  listMarketplaceDependentsMock,
+  getMarketplaceInstallationMock,
 } = vi.hoisted(() => ({
+  listMarketplaceDependentsMock: vi.fn(),
+  getMarketplaceInstallationMock: vi.fn(),
   pluginPolicyMock: vi.fn(),
   marketplaceEntryMock: vi.fn(),
   authUserMock: vi.fn(),
@@ -60,7 +64,12 @@ vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
   setMarketplaceInstallationEnabled: setMarketplaceInstallationEnabledMock,
   getMarketplaceInstallationSettings: getMarketplaceInstallationSettingsMock,
   updateMarketplaceInstallationSettings: updateMarketplaceInstallationSettingsMock,
-  getMarketplaceInstallation: async () => null,
+  getMarketplaceInstallation: getMarketplaceInstallationMock,
+}));
+type DependentsModule = typeof import('@/features/plugins/server/directory/installed-dependents');
+vi.mock('@/features/plugins/server/directory/installed-dependents', async (importOriginal) => ({
+  ...(await importOriginal<DependentsModule>()),
+  listMarketplaceDependents: listMarketplaceDependentsMock,
 }));
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   isMissingPluginMarketplaceSchema: (error: unknown) =>
@@ -156,6 +165,8 @@ function params(id: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listMarketplaceDependentsMock.mockResolvedValue([]);
+  getMarketplaceInstallationMock.mockResolvedValue(null);
   authUserMock.mockResolvedValue({ userId: 'user-1' });
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
@@ -501,5 +512,73 @@ describe('PATCH /api/plugins/marketplace-installations/[id]/settings', () => {
     );
     expect(response.status).toBe(503);
     expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
+  });
+});
+
+describe('marketplace plugins that another installed plugin needs', () => {
+  const DEPENDENT_ID = '44444444-4444-4444-8444-444444444444';
+  const DEPENDENT = { id: DEPENDENT_ID, label: 'review-kit@acme', name: 'Review Kit' };
+
+  beforeEach(() => {
+    listMarketplaceDependentsMock.mockResolvedValue([DEPENDENT]);
+    getMarketplaceInstallationMock.mockResolvedValue(INSTALLATION);
+  });
+
+  it('refuses to turn it off and names the plugin that needs it', async () => {
+    const response = await PATCH(
+      patch(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`, { enabled: false }),
+      params(INSTALLATION_ID),
+    );
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('PLUGIN_HAS_DEPENDENTS');
+    expect(error.message).toContain('Review Kit');
+    expect(setMarketplaceInstallationEnabledMock).not.toHaveBeenCalled();
+  });
+
+  it('turns the dependents off first when asked to turn them off together', async () => {
+    setMarketplaceInstallationEnabledMock.mockResolvedValue({ ...INSTALLATION, enabled: false });
+    const response = await PATCH(
+      patch(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`, {
+        enabled: false,
+        withDependents: true,
+      }),
+      params(INSTALLATION_ID),
+    );
+    expect(response.status).toBe(200);
+    expect(setMarketplaceInstallationEnabledMock.mock.calls.map((call) => call[2])).toEqual([
+      DEPENDENT_ID,
+      INSTALLATION_ID,
+    ]);
+  });
+
+  it('refuses to remove it and removes nothing', async () => {
+    const response = await DELETE(
+      del(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`),
+      params(INSTALLATION_ID),
+    );
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.message).toContain('Review Kit');
+    expect(uninstallDirectoryInstallationMock).not.toHaveBeenCalled();
+    expect(removePluginConnectorsMock).not.toHaveBeenCalled();
+  });
+
+  it('removes the dependents and their connectors before it when asked to remove them together', async () => {
+    uninstallDirectoryInstallationMock
+      .mockResolvedValueOnce('review-kit')
+      .mockResolvedValueOnce('acme-support-bundle');
+    const response = await DELETE(
+      del(`/api/plugins/marketplace-installations/${INSTALLATION_ID}?withDependents=true`),
+      params(INSTALLATION_ID),
+    );
+    expect(response.status).toBe(204);
+    expect(uninstallDirectoryInstallationMock.mock.calls.map((call) => call[2])).toEqual([
+      DEPENDENT_ID,
+      INSTALLATION_ID,
+    ]);
+    expect(removePluginConnectorsMock.mock.calls.map((call) => call[1])).toEqual([
+      'review-kit',
+      'acme-support-bundle',
+    ]);
   });
 });

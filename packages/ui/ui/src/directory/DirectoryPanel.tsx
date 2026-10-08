@@ -7,7 +7,7 @@ import { cn } from '../cn';
 import { toUserMessage } from '../lib/network-error';
 import { Spinner } from '../primitives/Spinner';
 import { useConfirmAction } from '../primitives/ConfirmAction';
-import { isDirectoryActionNotice } from './action-notice';
+import { isDirectoryActionConfirmation, isDirectoryActionNotice } from './action-notice';
 import { AddMarketplaceDialog } from './AddMarketplaceDialog';
 import { ConnectorDetailView } from './ConnectorDetailView';
 import { CreatePluginDialog } from './CreatePluginDialog';
@@ -117,6 +117,8 @@ function useDebouncedValue(value: string, delayMs: number): string {
   }, [value, delayMs]);
   return debounced;
 }
+
+type GuardedWork = () => Promise<string | void> | string | void;
 
 export function DirectoryPanel(props: DirectoryPanelProps) {
   return <DirectorySectionPanel key={props.section} {...props} />;
@@ -303,6 +305,38 @@ function DirectorySectionPanel({
   const popular = useMemo(() => catalog.filter((entry) => entry.popular === true), [catalog]);
   const rest = useMemo(() => catalog.filter((entry) => entry.popular !== true), [catalog]);
 
+  const guardedRef = useRef<(id: string, work: GuardedWork) => Promise<void>>(async () => {});
+  const runGuarded = useCallback(
+    async (id: string, work: GuardedWork) => {
+      setBusyId(id);
+      setActionError(null);
+      setActionNotice(null);
+      try {
+        const notice = await work();
+        if (notice) setActionNotice(notice);
+      } catch (caught: unknown) {
+        if (isDirectoryActionConfirmation(caught)) {
+          confirm({
+            title: caught.title,
+            description: caught.message,
+            confirmLabel: caught.confirmLabel,
+            cancelLabel: INSTALL_CONFIRM_CANCEL_LABEL,
+            destructive: true,
+            onConfirm: () => guardedRef.current(id, caught.run),
+          });
+        } else if (isDirectoryActionNotice(caught)) {
+          setActionNotice(toUserMessage(caught, GENERIC_ERROR_COPY));
+        } else {
+          setActionError(toUserMessage(caught, GENERIC_ERROR_COPY));
+        }
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [confirm],
+  );
+  guardedRef.current = runGuarded;
+
   const runAction = useCallback(
     async (
       id: string,
@@ -310,21 +344,9 @@ function DirectorySectionPanel({
         ((key: DirectorySectionKey, entry: string) => Promise<string | void> | void) | undefined,
     ) => {
       if (!action) return;
-      setBusyId(id);
-      setActionError(null);
-      setActionNotice(null);
-      try {
-        const notice = await action(section, id);
-        if (notice) setActionNotice(notice);
-      } catch (caught: unknown) {
-        if (isDirectoryActionNotice(caught))
-          setActionNotice(toUserMessage(caught, GENERIC_ERROR_COPY));
-        else setActionError(toUserMessage(caught, GENERIC_ERROR_COPY));
-      } finally {
-        setBusyId(null);
-      }
+      await runGuarded(id, () => action(section, id));
     },
-    [section],
+    [section, runGuarded],
   );
 
   const requestInstall = useCallback(
@@ -633,7 +655,7 @@ function DirectorySectionPanel({
             {...(adapter.setPluginEnabled
               ? {
                   onSetEnabled: (enabled: boolean) =>
-                    adapter.setPluginEnabled?.(detail.id, enabled),
+                    runGuarded(detail.id, () => adapter.setPluginEnabled?.(detail.id, enabled)),
                 }
               : {})}
             {...(adapter.setPluginSkillEnabled
