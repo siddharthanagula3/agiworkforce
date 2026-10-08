@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef } from 'react';
+import { MessageCircle } from 'lucide-react';
 import styles from './SupportWidget.module.css';
 
 export const SupportLauncher = forwardRef<
@@ -18,7 +19,7 @@ export const SupportLauncher = forwardRef<
       aria-label={open ? 'Close product support' : 'Open product support'}
       onClick={onToggle}
     >
-      <span className={styles['launcherMark']} aria-hidden="true" />
+      <MessageCircle className={styles['launcherMark']} aria-hidden="true" />
       <span className={styles['launcherLabel']}>{open ? 'Close' : 'Support'}</span>
     </button>
   );

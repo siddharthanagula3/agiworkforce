@@ -3,15 +3,13 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
-import {
-  isSupportComposerRoute,
-  isSupportWidgetVisible,
-  resolveSupportSurface,
-} from '../lib/route-visibility';
+import { isSupportWidgetVisible } from '../lib/route-visibility';
 import { isSupportWidgetEnabled } from '../lib/widget-flag';
 import { SupportLauncher } from './SupportLauncher';
 import { SupportPanel } from './SupportPanel';
 import styles from './SupportWidget.module.css';
+
+const SUPPORT_WIDGET_SURFACE = 'marketing';
 
 export function SupportWidgetMount() {
   const pathname = usePathname();
@@ -35,20 +33,17 @@ export function SupportWidgetMount() {
   if (!isSupportWidgetEnabled()) return null;
   if (!isSupportWidgetVisible(pathname)) return null;
 
-  const surface = resolveSupportSurface(pathname);
-
   return (
     <div
-      className={
-        surface === 'marketing' ? `${styles['root'] ?? ''} agi-modal-scope` : styles['root']
-      }
-      data-surface={surface}
-      {...(surface === 'marketing' ? { 'data-design': 'agi' } : {})}
+      className={`${styles['root'] ?? ''} agi-modal-scope`}
+      data-surface={SUPPORT_WIDGET_SURFACE}
+      data-design="agi"
       data-support-widget=""
-      data-composer-route={isSupportComposerRoute(pathname) ? 'true' : 'false'}
       data-reduced-motion={reducedMotion ? 'true' : 'false'}
     >
-      {open ? <SupportPanel surface={surface} panelId={panelId} onClose={close} /> : null}
+      {open ? (
+        <SupportPanel surface={SUPPORT_WIDGET_SURFACE} panelId={panelId} onClose={close} />
+      ) : null}
       {/* The ref is load-bearing, not decoration: `close()` focuses it, which is
           the only thing that returns keyboard focus to the page after Escape.
           Without it a keyboard user is dropped on <body>. */}

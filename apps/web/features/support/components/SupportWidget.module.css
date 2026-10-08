@@ -7,16 +7,13 @@
  *
  * THEMING. The widget is fixed chrome mounted outside any themed page subtree,
  * so it declares its own palette rather than inheriting one:
- *   - `[data-surface='marketing']` also carries `data-design="agi"` on the same
- *     element, which is what makes the editorial-terminal tokens resolve. The
- *     existing `[data-theme='light'] [data-design='agi']` descendant rule in
- *     globals.css then supplies light-mode values, since the widget is a
- *     descendant of <html data-theme>.
- *   - `[data-surface='app']` uses the shadcn semantic tokens, which already
- *     flip with the `.dark` class.
- * Both branches resolve every colour from a token, so the existing
- * `prefers-contrast: more` and `forced-colors: active` blocks in globals.css
- * continue to apply.
+ * the root carries `data-design="agi"`, which is what makes the public page
+ * tokens resolve, and the `[data-theme='light'] [data-design='agi']` descendant
+ * rule in globals.css supplies light-mode values, since the widget is a
+ * descendant of <html data-theme>. The accent is the page ink, not a hue: the
+ * widget only appears on the help and support pages, which are neutral.
+ * Every colour resolves from a token, so the existing `prefers-contrast: more`
+ * and `forced-colors: active` blocks in globals.css continue to apply.
  *
  * CSP. No @import, no url() to a remote host, no web font. `style-src 'self'`
  * covers a bundled stylesheet; the widget does not rely on 'unsafe-inline'.
@@ -29,8 +26,8 @@
   --support-ink-2: var(--agi-ink-2);
   --support-ink-quiet: var(--agi-ink-quiet);
   --support-rule: var(--agi-rule-strong);
-  --support-accent: var(--agi-amber);
-  --support-accent-soft: var(--agi-amber-soft);
+  --support-accent: var(--agi-ink);
+  --support-accent-soft: color-mix(in srgb, var(--agi-ink) 16%, transparent);
   --support-button-bg: var(--agi-button-bg);
   --support-button-ink: var(--agi-button-ink);
   --support-error: var(--agi-error);
@@ -57,22 +54,6 @@
   color: var(--support-ink);
 }
 
-.root[data-surface='app'] {
-  --support-bg: hsl(var(--background));
-  --support-card: hsl(var(--card));
-  --support-ink: hsl(var(--card-foreground));
-  --support-ink-2: hsl(var(--muted-foreground));
-  --support-ink-quiet: hsl(var(--muted-foreground));
-  --support-rule: hsl(var(--border));
-  --support-accent: hsl(var(--primary));
-  --support-accent-soft: hsl(var(--primary) / 0.18);
-  --support-button-bg: hsl(var(--primary));
-  --support-button-ink: hsl(var(--primary-foreground));
-  --support-error: hsl(var(--destructive));
-  --support-shadow: rgba(0, 0, 0, 0.28);
-  font-family: inherit;
-}
-
 /* ── Launcher ─────────────────────────────────────────────────────── */
 
 .launcher {
@@ -87,7 +68,7 @@
   background: var(--support-card);
   color: var(--support-ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 12px 32px var(--support-shadow);
@@ -107,10 +88,9 @@
 
 .launcherMark {
   flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--support-accent);
+  width: 18px;
+  height: 18px;
+  color: var(--support-ink-2);
 }
 
 .launcherLabel {
@@ -650,12 +630,6 @@
 }
 
 /* ── Motion ───────────────────────────────────────────────────────── */
-
-@media (max-width: 1279px) {
-  .root[data-composer-route='true'] {
-    display: none;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .launcher,
