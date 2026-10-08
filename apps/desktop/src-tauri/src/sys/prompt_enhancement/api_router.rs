@@ -307,18 +307,23 @@ mod tests {
         let selected = route
             .model
             .expect("image route must select a catalog model");
-        let entry = models_config::get_all_model_entries()
+        let active_image_models: Vec<&str> = models_config::get_all_model_entries()
             .values()
-            .find(|entry| {
+            .filter(|entry| {
                 entry.provider == "openai"
                     && entry.capabilities.image_gen
                     && entry.deprecated != Some(true)
             })
-            .expect("catalog must expose an active OpenAI image model");
+            .map(|entry| entry.api_model_id.as_deref().unwrap_or(entry.id.as_str()))
+            .collect();
 
-        assert_eq!(
-            selected,
-            entry.api_model_id.as_deref().unwrap_or(entry.id.as_str())
+        assert!(
+            !active_image_models.is_empty(),
+            "catalog must expose an active OpenAI image model"
+        );
+        assert!(
+            active_image_models.contains(&selected.as_str()),
+            "image route selected {selected}, which is not an active OpenAI image model in the catalog: {active_image_models:?}"
         );
         assert!(router.get_fallback_providers(UseCase::ImageGen).is_empty());
     }

@@ -119,7 +119,7 @@ export function CloudReflectSection() {
           <p className="text-sm font-medium text-foreground">Memory is off</p>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
             Reflect uses the same account chat-history controls as Memory. Turn on Memory and
-            &ldquo;Generate from past chats&rdquo; in Capabilities to create a recap.
+            &ldquo;Save memories from chats&rdquo; in Capabilities to create a recap.
           </p>
         </div>
       ) : null}
