@@ -19,6 +19,7 @@ import {
   MarketingEmailGrantProvider,
   useMarketingEmailChoice,
 } from '@/features/auth/marketingEmailChoice';
+import { useSignupAgeGate } from '@/features/auth/useSignupAgeGate';
 
 import {
   clearSignupAttemptMarkers,
@@ -40,19 +41,20 @@ export function TermsGate({
   children: ReactNode;
   blockedMessage?: ReactNode;
   restorePreAuthMarker?: boolean;
-  confirmationLabel?: string;
-  confirmAge?: boolean;
   offerMarketingEmail?: boolean;
   optedOutBySignal?: boolean;
-}) {
+} & (
+  | { confirmationLabel: string; confirmAge?: boolean }
+  | { confirmationLabel?: undefined; confirmAge?: false }
+)) {
   const [accepted, setAccepted] = useState(false);
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const ageGate = useSignupAgeGate(confirmAge);
   const [hydrated, setHydrated] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const marketingEmail = useMarketingEmailChoice(optedOutBySignal);
   const checkboxId = useId();
   const noteId = useId();
-  const ready = accepted && (!confirmAge || ageConfirmed);
+  const ready = accepted && (!confirmAge || ageGate.verdict === 'eligible');
   const marketingEmailGrant =
     offerMarketingEmail && marketingEmail.wanted ? POLICY_LAST_UPDATED.privacy : null;
 
@@ -69,13 +71,7 @@ export function TermsGate({
 
   return (
     <div className={confirmationLabel ? 'flex flex-col' : 'flex flex-col gap-5'}>
-      {confirmAge ? (
-        <AuthAgeConfirmation
-          confirmed={ageConfirmed}
-          disabled={!hydrated || confirmed}
-          onChange={setAgeConfirmed}
-        />
-      ) : null}
+      {confirmAge ? <AuthAgeConfirmation gate={ageGate} disabled={!hydrated || confirmed} /> : null}
 
       <label htmlFor={checkboxId} className={AUTH_CHECK_ROW_CLASS}>
         <input
@@ -128,8 +124,8 @@ export function TermsGate({
         <button
           type="button"
           className={AUTH_PRIMARY_BUTTON_CLASS}
-          disabled={!hydrated || !ready}
-          onClick={() => setConfirmed(true)}
+          disabled={!hydrated || !accepted}
+          onClick={() => ageGate.admit(() => setConfirmed(true))}
         >
           {confirmationLabel}
         </button>

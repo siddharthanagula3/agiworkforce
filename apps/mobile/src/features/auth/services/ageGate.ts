@@ -1,4 +1,4 @@
-import { ACCOUNT_HOLDER_MINIMUM_AGE } from '@agiworkforce/types';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { storage } from '@/lib/mmkv';
 
 export type AgeGateRecord = {
@@ -91,7 +91,7 @@ export function detectRegionRule(): RegionAgeRule {
 }
 
 export function getAgeThreshold(): number {
-  return Math.max(detectRegionRule().threshold, ACCOUNT_HOLDER_MINIMUM_AGE);
+  return Math.max(detectRegionRule().threshold, ACCOUNT_MINIMUM_AGE);
 }
 
 function readRecord(): AgeGateRecord | null {
@@ -132,7 +132,7 @@ export function confirmAgeGate(ageEntered: number): AgeGateRecord {
   if (existing?.confirmed === true && existing.isMinor === true) return existing;
 
   const rule = detectRegionRule();
-  const threshold = Math.max(rule.threshold, ACCOUNT_HOLDER_MINIMUM_AGE);
+  const threshold = Math.max(rule.threshold, ACCOUNT_MINIMUM_AGE);
   const record: AgeGateRecord = {
     confirmed: true,
     isMinor: ageEntered < threshold,

@@ -41,11 +41,11 @@
     }
   },
   "target_audience": {
-    "age_group": "18+",
-    "play_age_bands": ["18 and over"],
+    "age_group": "13+",
+    "play_age_bands": ["13-15", "16-17", "18 and over"],
     "appeal_to_children": false,
     "ads": false,
-    "note": "18+ is what the binary enforces. getAgeThreshold in apps/mobile/src/features/auth/services/ageGate.ts takes the larger of the device time zone's regional age (18 for India and Brazil, 16 for EU member-state zones and North Macedonia, 13 for the United Kingdom and every other zone) and ACCOUNT_HOLDER_MINIMUM_AGE (18, packages/contracts/types/src/account-eligibility.ts), so every region asks for 18 before Cloud sign-in and 18 and over is the only declared band. An age under 18 is refused with the account age notice and puts the install into one-way minor-safe mode, which filters every outgoing prompt against a shared blocklist before it reaches any model and cannot be switched off from inside the app."
+    "note": "13+ is the lowest age the binary admits. getAgeThreshold in apps/mobile/src/features/auth/services/ageGate.ts takes the larger of the device time zone's regional age (18 for India and Brazil, 16 for EU member-state zones and North Macedonia, 13 for the United Kingdom and every other zone) and ACCOUNT_MINIMUM_AGE (13, packages/contracts/types/src/account-eligibility.ts), so Cloud sign-in asks for 18 in India and Brazil, 16 in those EU zones and 13 everywhere else, and every band from 13 up is declared. An age under the device's threshold is refused and puts the install into one-way minor-safe mode, which filters every outgoing prompt against a shared blocklist before it reaches any model and cannot be switched off from inside the app."
   },
   "data_safety": {
     "data_collected": true,

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
+import { ACCOUNT_AGE_FIELD_LABEL } from '@agiworkforce/types';
 
 const client = vi.hoisted(() => ({
   isReady: true,
@@ -44,7 +44,7 @@ const REDIRECTS = {
   switchUrl: '/login',
   ssoCallbackUrl: '/auth/sso-callback',
 };
-const REQUIRED_BOX = new RegExp(`^${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use`);
+const TYPED_AGE = '57';
 const NOTHING_CARRIED = { terms: null, choice: null, attempt: null, attemptInThisTab: null };
 
 function markers() {
@@ -54,6 +54,14 @@ function markers() {
     attempt: window.localStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
     attemptInThisTab: window.sessionStorage.getItem(MARKETING_EMAIL_ATTEMPT_STORAGE_KEY),
   };
+}
+
+function ageField(): HTMLElement {
+  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL);
+}
+
+function everythingStored(): Record<string, string> {
+  return { ...window.localStorage, ...window.sessionStorage };
 }
 
 function renderFlow(mode: AuthMode, passkeySignIn = false) {
@@ -70,7 +78,7 @@ function renderFlow(mode: AuthMode, passkeySignIn = false) {
 async function admitTickedSignupThatReaches(step: AuthStep) {
   client.startWithEmail.mockResolvedValue({ status: 'next', step } satisfies AuthResult);
   renderFlow('signup');
-  await userEvent.click(screen.getByRole('checkbox', { name: REQUIRED_BOX }));
+  await userEvent.type(ageField(), TYPED_AGE);
   await userEvent.click(
     screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
   );
@@ -110,6 +118,29 @@ describe('a sign-up attempt admitted with the marketing email box ticked', () =>
     expect(carried.attempt).toBeTruthy();
     expect(carried.attemptInThisTab).toBe(carried.attempt);
   });
+
+  it('stores the markers and the last-used method and nothing about the age it was admitted on', async () => {
+    await admitTickedSignupThatReaches({
+      kind: 'code',
+      email: EMAIL,
+      purpose: 'sign_up',
+      methods: [],
+    });
+
+    const stored = everythingStored();
+    expect(Object.keys(stored).sort()).toEqual(
+      [
+        MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,
+        MARKETING_EMAIL_CHOICE_STORAGE_KEY,
+        TERMS_GATE_STORAGE_KEY,
+      ].sort(),
+    );
+    expect(stored[TERMS_GATE_STORAGE_KEY]).toBe(POLICY_LAST_UPDATED.terms);
+    expect(stored[MARKETING_EMAIL_CHOICE_STORAGE_KEY]).toBe(POLICY_LAST_UPDATED.privacy);
+    expect(client.startWithEmail.mock.calls.flat()).not.toContain(TYPED_AGE);
+    expect(JSON.stringify(client.startWithEmail.mock.calls)).not.toMatch(/age/i);
+    expect(window.location.href).not.toContain(TYPED_AGE);
+  });
 });
 
 describe('Edit email', () => {
@@ -123,7 +154,7 @@ describe('Edit email', () => {
 
     expect(markers()).toEqual(NOTHING_CARRIED);
     expect(client.restart).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('checkbox', { name: REQUIRED_BOX })).not.toBeChecked();
+    expect(ageField()).toHaveValue('');
     expect(
       screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
     ).not.toBeChecked();
@@ -138,7 +169,7 @@ describe('Edit email', () => {
     });
     await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 
-    await userEvent.click(screen.getByRole('checkbox', { name: REQUIRED_BOX }));
+    await userEvent.type(ageField(), TYPED_AGE);
     await userEvent.type(screen.getByLabelText('Email address'), 'second@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
 

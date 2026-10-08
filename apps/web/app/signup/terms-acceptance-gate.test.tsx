@@ -3,8 +3,10 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
-  ACCOUNT_AGE_CONFIRMATION_LABEL,
-  ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
+  ACCOUNT_AGE_FIELD_LABEL,
+  ACCOUNT_AGE_INELIGIBLE_MESSAGE,
+  ACCOUNT_AGE_REQUIRED_MESSAGE,
+  ACCOUNT_MINIMUM_AGE,
 } from '@agiworkforce/types';
 
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
@@ -77,15 +79,29 @@ const REDIRECTS = {
 
 const PROVIDERS = [{ id: 'google' as const, label: 'Google' }];
 
-const CONSENT_BOX = new RegExp(`^${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use`);
+const TYPED_AGE = '57';
+const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
 
 function renderSignup() {
   render(<AuthFlow mode="signup" providers={PROVIDERS} redirects={REDIRECTS} />);
 }
 
-async function renderConfirmedSignup() {
+function ageField(): HTMLInputElement {
+  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL) as HTMLInputElement;
+}
+
+async function enterAge(age: string): Promise<void> {
+  await userEvent.clear(ageField());
+  await userEvent.type(ageField(), age);
+}
+
+async function renderSignupWithAnEligibleAge() {
   renderSignup();
-  await userEvent.click(screen.getByRole('checkbox', { name: CONSENT_BOX }));
+  await enterAge(TYPED_AGE);
+}
+
+function sentToTheIdentityProvider(): string {
+  return JSON.stringify([signUpState.create.mock.calls, signUpState.sso.mock.calls]);
 }
 
 function marketingEmailBox(): HTMLElement {
@@ -111,10 +127,11 @@ function leaveChoiceFromAnEarlierAttempt(): void {
 }
 
 /**
- * Founder decision 2026-10-04, replacing the 2026-09-06 passive sentence: one
- * box carries the age confirmation and the agreement, and no sign-up method
- * starts until it is ticked. The durable record is still written server-side
- * by /signup/complete against the policy version.
+ * Founder decision 2026-10-07, replacing the 2026-10-04 required box: the
+ * agreement is a statement beside the action, the age is typed as a number,
+ * and no sign-up method starts until that age is eligible. The age is used
+ * for that one decision and goes nowhere. The durable record of the agreement
+ * is still written server-side by /signup/complete against the policy version.
  */
 describe('/signup agreement', () => {
   beforeEach(() => {
@@ -124,33 +141,49 @@ describe('/signup agreement', () => {
     signUpState.sso.mockReset().mockResolvedValue({ error: null });
   });
 
-  it('shows one required box that carries the age confirmation and the agreement, and one optional box', () => {
+  it('states the agreement once beside the action, asks the age as a number, and keeps one optional box', () => {
     renderSignup();
 
-    const box = screen.getByRole('checkbox', { name: CONSENT_BOX });
-    expect(within(screen.getByTestId('auth-signup-consent')).getAllByRole('checkbox')).toEqual([
-      box,
-    ]);
-    expect(screen.getAllByRole('checkbox')).toEqual([box, marketingEmailBox()]);
-    expect(box).not.toBeChecked();
+    const agreement = screen.getByTestId('auth-signup-agreement');
+    expect(agreement).toHaveTextContent(
+      'By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.',
+    );
+    expect(within(agreement).queryByRole('checkbox')).toBeNull();
+    expect(screen.getAllByText(/By creating an account/)).toHaveLength(1);
+    expect(screen.getAllByRole('checkbox')).toEqual([marketingEmailBox()]);
     expect(marketingEmailBox()).not.toBeChecked();
-    expect(screen.queryByText(/By signing up/)).toBeNull();
+    expect(ageField()).toHaveValue('');
   });
 
-  it('writes no marker and calls no provider while the box is unticked', async () => {
+  it('writes no marker and calls no provider while no age is entered', async () => {
     renderSignup();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
 
-    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE);
+    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_AGE_REQUIRED_MESSAGE);
     expect(signUpState.sso).not.toHaveBeenCalled();
     expect(signUpState.create).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
   });
 
+  it(`writes no marker and calls no provider for a ${TOO_YOUNG} year old`, async () => {
+    renderSignup();
+    await enterAge(TOO_YOUNG);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
+    expect(signUpState.sso).not.toHaveBeenCalled();
+    expect(signUpState.create).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
   it('creates the account with the agreement recorded when the email is submitted', async () => {
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -162,10 +195,11 @@ describe('/signup agreement', () => {
       }),
     );
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
+    expect(sentToTheIdentityProvider()).not.toContain(TYPED_AGE);
   });
 
   it('hands a provider sign-up over with the agreement recorded', async () => {
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -175,6 +209,8 @@ describe('/signup agreement', () => {
       ),
     );
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
+    expect(sentToTheIdentityProvider()).not.toContain(TYPED_AGE);
+    expect(sentToTheIdentityProvider()).not.toMatch(/"age|birth/i);
   });
 
   it('does not leave an acceptance marker behind after signup initiation fails', async () => {
@@ -182,7 +218,7 @@ describe('/signup agreement', () => {
     signUpState.create.mockResolvedValue({
       error: { errors: [{ code: 'form_identifier_exists' }] },
     });
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'existing@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -193,7 +229,7 @@ describe('/signup agreement', () => {
 
   it('recovers from a rejected email signup request without claiming agreement was recorded', async () => {
     signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -207,10 +243,9 @@ describe('/signup agreement', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
-  it('starts nothing from Try again once the box is unticked, and retries once it is ticked again', async () => {
+  it('starts nothing from Try again once the age is no longer eligible, and retries once it is corrected', async () => {
     signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderConfirmedSignup();
-    const box = screen.getByRole('checkbox', { name: CONSENT_BOX });
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -218,19 +253,18 @@ describe('/signup agreement', () => {
     expect(signUpState.create).toHaveBeenCalledTimes(1);
 
     signUpState.create.mockResolvedValue({ error: null });
-    await userEvent.click(box);
-    expect(box).not.toBeChecked();
+    await enterAge(TOO_YOUNG);
     await userEvent.click(retry);
 
     expect(signUpState.create).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
-    expect(within(screen.getByTestId('auth-signup-consent')).getByRole('alert')).toHaveTextContent(
-      ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
+    expect(within(screen.getByTestId('auth-age-field')).getByRole('alert')).toHaveTextContent(
+      ACCOUNT_AGE_INELIGIBLE_MESSAGE,
     );
-    expect(box).toHaveAttribute('aria-invalid', 'true');
-    expect(box).toHaveFocus();
+    expect(ageField()).toHaveAttribute('aria-invalid', 'true');
+    expect(ageField()).toHaveFocus();
 
-    await userEvent.click(box);
+    await enterAge(TYPED_AGE);
     await userEvent.click(retry);
 
     await waitFor(() => expect(signUpState.create).toHaveBeenCalledTimes(2));
@@ -247,7 +281,7 @@ describe('/signup agreement', () => {
     signUpState.sso.mockResolvedValue({
       error: { errors: [{ code: 'oauth_access_denied' }] },
     });
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -257,7 +291,7 @@ describe('/signup agreement', () => {
 
   it('clears the signup marker and offers a retry when the provider handoff throws', async () => {
     signUpState.sso.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -306,7 +340,7 @@ describe('/signup marketing email choice', () => {
   });
 
   it('carries a ticked choice past the email step with the notice version on screen', async () => {
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
     await userEvent.click(marketingEmailBox());
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
@@ -323,7 +357,7 @@ describe('/signup marketing email choice', () => {
   });
 
   it('carries a ticked choice into a provider round trip', async () => {
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
     await userEvent.click(marketingEmailBox());
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
@@ -338,7 +372,7 @@ describe('/signup marketing email choice', () => {
   it('never hands a later attempt the id of the one before it', async () => {
     leaveChoiceFromAnEarlierAttempt();
     const earlier = carried().attempt;
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
     await userEvent.click(marketingEmailBox());
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
@@ -351,7 +385,7 @@ describe('/signup marketing email choice', () => {
 
   it('admits an email sign-up with the box unticked and removes a choice an earlier attempt left', async () => {
     leaveChoiceFromAnEarlierAttempt();
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'second@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -365,7 +399,7 @@ describe('/signup marketing email choice', () => {
 
   it('admits a provider sign-up with the box unticked and removes a choice an earlier attempt left', async () => {
     leaveChoiceFromAnEarlierAttempt();
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -378,7 +412,7 @@ describe('/signup marketing email choice', () => {
     signUpState.create.mockResolvedValue({
       error: { errors: [{ code: 'form_identifier_exists' }] },
     });
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
     await userEvent.click(marketingEmailBox());
 
     await userEvent.type(screen.getByLabelText('Email address'), 'existing@example.com');
@@ -394,7 +428,7 @@ describe('/signup marketing email choice', () => {
     signUpState.sso.mockResolvedValue({
       error: { errors: [{ code: 'oauth_access_denied' }] },
     });
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
     await userEvent.click(marketingEmailBox());
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
@@ -406,7 +440,7 @@ describe('/signup marketing email choice', () => {
 
   it('carries the choice as it stands when Try again is pressed, not as it stood at the failed attempt', async () => {
     signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
-    await renderConfirmedSignup();
+    await renderSignupWithAnEligibleAge();
     await userEvent.click(marketingEmailBox());
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');

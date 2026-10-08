@@ -14,6 +14,7 @@ import {
   mockAuthProviderSignIn,
 } from './lib/mock-auth-provider';
 import { test, expect, type Locator, type Page } from '@playwright/test';
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { FREE_PLAN_TRAINING_SIGNUP_STATEMENT } from '../lib/compliance/free-plan-training-disclosure';
 import { POLICY_LAST_UPDATED } from '../lib/legal-constants';
 
@@ -24,8 +25,13 @@ const ROUTES = ['/login', '/signup'] as const;
 
 const PHONE = { width: 390, height: 844 };
 const ZOOMED = { width: 640, height: 512 };
-const UNTICKED_ATTEMPT_EMAIL = 'unticked-attempt@example.invalid';
-const CONSENT_REFUSED = /tick the box to confirm you are at least \d+ and accept the terms/i;
+const NO_AGE_ATTEMPT_EMAIL = 'no-age-attempt@example.invalid';
+const AGE_REQUIRED = /enter your age in years to continue/i;
+const AGE_INELIGIBLE = /you must be at least \d+ years old to create an account/i;
+const AGREEMENT =
+  'By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.';
+const ELIGIBLE_AGE = String(ACCOUNT_MINIMUM_AGE);
+const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
 const MOCK_CODE = MOCK_EMAILED_CODE;
 const WRONG_CODE = '000000';
 const CODE_REFUSED = /check the last code we emailed you/i;
@@ -42,8 +48,12 @@ const TERMS_REVIEW_PATH = '/login/complete';
 const NOTHING_CARRIED = { terms: null, choice: null, attempt: null, attemptInThisTab: null };
 const NEXT_DOCUMENT_TIMEOUT_MS = 30_000;
 
-function consentBox(page: Page) {
-  return page.getByTestId('auth-signup-consent').getByRole('checkbox');
+function ageField(page: Page) {
+  return page.getByTestId('auth-age-field').getByRole('textbox');
+}
+
+function ageAlert(page: Page) {
+  return page.getByTestId('auth-age-field').getByRole('alert');
 }
 
 function marketingEmailBox(page: Page) {
@@ -70,7 +80,7 @@ async function openAuth(
   const submit = page.getByRole('button', { name: 'Continue', exact: true });
   await expect(submit).toBeEnabled();
   if (route === '/signup') {
-    await expect(consentBox(page)).not.toBeChecked();
+    await expect(ageField(page)).toHaveValue('');
     for (const provider of await page.getByTestId('auth-layout').getByRole('button').all()) {
       await expect(provider).toBeEnabled();
     }
@@ -88,13 +98,13 @@ function watchOutboundRequests(page: Page): string[] {
   return outbound;
 }
 
-async function expectRefused(page: Page): Promise<void> {
-  const box = consentBox(page);
-  const alert = page.getByTestId('auth-signup-consent').getByRole('alert');
-  await expect(alert).toHaveText(CONSENT_REFUSED);
-  await expect(box).toBeFocused();
-  await expect(box).toHaveAttribute('aria-invalid', 'true');
-  const describedBy = (await box.getAttribute('aria-describedby')) ?? '';
+async function expectRefused(page: Page, message: RegExp = AGE_REQUIRED): Promise<void> {
+  const field = ageField(page);
+  const alert = ageAlert(page);
+  await expect(alert).toHaveText(message);
+  await expect(field).toBeFocused();
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  const describedBy = (await field.getAttribute('aria-describedby')) ?? '';
   expect(describedBy.split(' ')).toContain(await alert.getAttribute('id'));
   await expect(page).toHaveURL(/\/signup(?:\?|$)/);
 }
@@ -119,7 +129,7 @@ async function expectCheckedOnce(page: Page, code: Locator): Promise<void> {
 
 async function openSignUpCodeStep(page: Page, email: string): Promise<Locator> {
   await openAuth(page, '/signup');
-  await consentBox(page).check();
+  await ageField(page).fill(ELIGIBLE_AGE);
   await page.getByLabel('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
@@ -197,7 +207,7 @@ async function admitSignUpToItsCodeStep(
   { email, marketingEmail }: { email: string; marketingEmail: boolean },
 ): Promise<Locator> {
   await openAuth(page, '/signup', { signUpOpensSession: true });
-  await consentBox(page).check();
+  await ageField(page).fill(ELIGIBLE_AGE);
   if (marketingEmail) await marketingEmailBox(page).check();
   await page.getByLabel('Email address').fill(email);
   await submitButton(page).click();
@@ -215,20 +225,26 @@ async function expectSessionOpening(page: Page): Promise<void> {
 
 test.describe('auth flow states', () => {
   for (const route of ROUTES) {
-    test(`${route} starts on the email step with its required consent state`, async ({ page }) => {
+    test(`${route} starts on the email step with nothing entered or refused`, async ({ page }) => {
       await openAuth(page, route);
 
       const email = page.getByLabel('Email address');
       await expect(email).toBeVisible();
       if (route === '/signup') {
         await expect(email).not.toBeFocused();
-        await expect(consentBox(page)).not.toBeChecked();
-        await expect(page.getByTestId('auth-signup-consent').getByRole('alert')).toHaveCount(0);
+        await expect(ageField(page)).toHaveValue('');
+        await expect(ageField(page)).toHaveAttribute('inputmode', 'numeric');
+        await expect(ageAlert(page)).toHaveCount(0);
+        await expect(page.getByTestId('auth-signup-agreement')).toHaveText(AGREEMENT);
+        await expect(page.getByTestId('auth-signup-agreement').getByRole('checkbox')).toHaveCount(
+          0,
+        );
         await expect(passwordField(page)).toHaveCount(0);
         await expect(page.getByRole('button', { name: 'Forgot password?' })).toHaveCount(0);
       } else {
         await expect(email).toBeFocused();
-        await expect(page.getByTestId('auth-signup-consent')).toHaveCount(0);
+        await expect(page.getByTestId('auth-age-field')).toHaveCount(0);
+        await expect(page.getByTestId('auth-signup-agreement')).toHaveCount(0);
         await expect(passwordField(page)).toBeVisible();
         await expect(passwordField(page)).toHaveAttribute('type', 'password');
         await expect(page.getByRole('button', { name: 'Forgot password?' })).toBeVisible();
@@ -249,18 +265,18 @@ test.describe('auth flow states', () => {
       await openAuth(page, route);
 
       if (route === '/signup') {
-        const confirmation = consentBox(page);
+        const age = ageField(page);
         const maximumTabs = (await page.locator('button, input, a[href], summary').count()) * 2;
         for (let step = 0; step < maximumTabs; step += 1) {
-          if (await confirmation.evaluate((element) => element === document.activeElement)) break;
+          if (await age.evaluate((element) => element === document.activeElement)) break;
           await page.keyboard.press('Tab');
         }
-        await expect(confirmation).toBeFocused();
-        await page.keyboard.press('Space');
-        await expect(confirmation).toBeChecked();
-        await expect(page.getByTestId('auth-signup-consent').getByRole('alert')).toHaveCount(0);
-        await page.keyboard.press('Space');
-        await expect(confirmation).not.toBeChecked();
+        await expect(age).toBeFocused();
+        await page.keyboard.type(ELIGIBLE_AGE);
+        await expect(age).toHaveValue(ELIGIBLE_AGE);
+        await expect(ageAlert(page)).toHaveCount(0);
+        for (const _digit of ELIGIBLE_AGE) await page.keyboard.press('Backspace');
+        await expect(age).toHaveValue('');
       }
       const controls = await page
         .getByTestId('auth-layout')
@@ -309,7 +325,7 @@ test.describe('auth flow states', () => {
     });
   }
 
-  test('/signup opens nearby data-use details from the keyboard without accepting consent', async ({
+  test('/signup opens nearby data-use details from the keyboard without starting a sign-up', async ({
     page,
   }) => {
     await page.setViewportSize(PHONE);
@@ -328,7 +344,8 @@ test.describe('auth flow states', () => {
       'href',
       '/data-use',
     );
-    await expect(consentBox(page)).not.toBeChecked();
+    await expect(ageField(page)).toHaveValue('');
+    await expect(ageAlert(page)).toHaveCount(0);
     expect(await mockAuthProviderCalls(page)).toEqual({
       signInCreate: 0,
       signUpCreate: 0,
@@ -354,7 +371,7 @@ test.describe('auth flow states', () => {
     await expect(optional).not.toBeChecked();
     await expect(optional).toBeEnabled();
 
-    await consentBox(page).focus();
+    await submitButton(page).focus();
     const maximumTabs = (await page.locator('button, input, a[href], summary').count()) * 2;
     const passed: string[] = [];
     for (let step = 0; step < maximumTabs; step += 1) {
@@ -363,13 +380,14 @@ test.describe('auth flow states', () => {
       passed.push(await page.evaluate(() => document.activeElement?.tagName ?? ''));
     }
     await expect(optional).toBeFocused();
-    expect(passed, 'only the policy links of the required box sit between the two boxes').toEqual(
-      passed.filter((tag) => tag === 'A'),
-    );
+    expect(
+      passed,
+      'only the policy links of the agreement sit between the action and the box',
+    ).toEqual(passed.filter((tag) => tag === 'A'));
 
     await page.keyboard.press('Space');
     await expect(optional).toBeChecked();
-    await expect(consentBox(page)).not.toBeChecked();
+    await expect(ageField(page)).toHaveValue('');
     await expect(page.getByTestId('auth-layout').getByRole('alert')).toHaveCount(0);
     expect(
       await page.evaluate(() => [
@@ -412,9 +430,9 @@ test.describe('auth flow states', () => {
       }),
       'the reason fits one line at 1366 wide',
     ).toBe(1);
-    await expect(consentBox(page)).toBeEnabled();
+    await expect(ageField(page)).toBeEnabled();
 
-    await consentBox(page).focus();
+    await submitButton(page).focus();
     const maximumTabs = (await page.locator('button, input, a[href], summary').count()) * 2;
     for (let step = 0; step < maximumTabs; step += 1) {
       await page.keyboard.press('Tab');
@@ -427,13 +445,13 @@ test.describe('auth flow states', () => {
     await expect(optional).not.toBeChecked();
   });
 
-  test('/signup refuses every sign-up method until the box is ticked and reaches no provider', async ({
+  test('/signup refuses every sign-up method until an age is entered and reaches no provider', async ({
     page,
   }) => {
     await openAuth(page, '/signup');
     const outbound = watchOutboundRequests(page);
 
-    await page.getByLabel('Email address').fill(UNTICKED_ATTEMPT_EMAIL);
+    await page.getByLabel('Email address').fill(NO_AGE_ATTEMPT_EMAIL);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expectRefused(page);
 
@@ -449,7 +467,7 @@ test.describe('auth flow states', () => {
     }
 
     await expect(page.getByTestId('auth-phase')).toHaveText('');
-    await expect(page.getByLabel('Email address')).toHaveValue(UNTICKED_ATTEMPT_EMAIL);
+    await expect(page.getByLabel('Email address')).toHaveValue(NO_AGE_ATTEMPT_EMAIL);
     expect(await mockAuthProviderCalls(page)).toEqual({
       signInCreate: 0,
       signUpCreate: 0,
@@ -463,10 +481,82 @@ test.describe('auth flow states', () => {
     ).toEqual([null, null]);
     expect(outbound, 'a refused attempt sends nothing to the identity provider').toEqual([]);
 
-    await consentBox(page).check();
-    await expect(page.getByTestId('auth-signup-consent').getByRole('alert')).toHaveCount(0);
-    await expect(consentBox(page)).not.toHaveAttribute('aria-invalid', 'true');
+    await ageField(page).fill(ELIGIBLE_AGE);
+    await expect(ageAlert(page)).toHaveCount(0);
+    await expect(ageField(page)).not.toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+  });
+
+  test('/signup refuses an age under the minimum at every sign-up method and reaches no provider', async ({
+    page,
+  }) => {
+    await openAuth(page, '/signup');
+    const outbound = watchOutboundRequests(page);
+
+    await page.getByLabel('Email address').fill(NO_AGE_ATTEMPT_EMAIL);
+    await ageField(page).fill(TOO_YOUNG);
+    await expect(ageAlert(page)).toHaveCount(0);
+    await submitButton(page).click();
+    await expectRefused(page, AGE_INELIGIBLE);
+
+    await ageField(page).press('Enter');
+    await expectRefused(page, AGE_INELIGIBLE);
+
+    for (const provider of await page
+      .getByTestId('auth-layout')
+      .getByRole('button', { name: /^Continue with / })
+      .all()) {
+      await provider.click();
+      await expectRefused(page, AGE_INELIGIBLE);
+    }
+
+    await expect(page.getByTestId('auth-phase')).toHaveText('');
+    expect(await mockAuthProviderCalls(page)).toEqual({
+      signInCreate: 0,
+      signUpCreate: 0,
+      signUpSso: 0,
+    });
+    expect(
+      await page.evaluate(() => [
+        window.localStorage.getItem('agi.terms-accepted-version'),
+        window.localStorage.getItem('agiworkforce-auth-last-method'),
+        ...[...Object.keys(window.localStorage), ...Object.keys(window.sessionStorage)].filter(
+          (key) => /age/i.test(key),
+        ),
+      ]),
+      'a refused age leaves no marker and no stored key that names an age',
+    ).toEqual([null, null]);
+    expect(outbound, 'a refused attempt sends nothing to the identity provider').toEqual([]);
+  });
+
+  test('/signup keeps an admitted age out of every request, the address bar and browser storage', async ({
+    page,
+  }) => {
+    await openAuth(page, '/signup');
+    const carriedAnAge: string[] = [];
+    page.on('request', (request) => {
+      const sent = `${new URL(request.url()).search} ${request.postData() ?? ''}`;
+      if (/(?:^|[?&"\s{,])age(?:"|=|%3D)/i.test(sent)) carriedAnAge.push(request.url());
+    });
+
+    await ageField(page).fill(ELIGIBLE_AGE);
+    await expect(ageField(page)).not.toHaveAttribute('name');
+    await page.getByLabel('Email address').fill(MOCK_SIGNUP_CODE_ONLY_ACCOUNT);
+    await submitButton(page).click();
+
+    await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+    expect((await mockAuthProviderCalls(page)).signUpCreate).toBe(1);
+    expect(carriedAnAge, 'no request names an age').toEqual([]);
+    expect(new URL(page.url()).search).not.toMatch(/age/i);
+    expect(
+      await page.evaluate(() =>
+        [...Object.keys(window.localStorage), ...Object.keys(window.sessionStorage)].filter((key) =>
+          /age/i.test(key),
+        ),
+      ),
+      'no stored key names an age',
+    ).toEqual([]);
+    await expect(ageField(page)).toHaveCount(0);
   });
 
   test('an email with no account names the way over to sign-up', async ({ page }) => {
@@ -967,9 +1057,11 @@ test.describe('auth flow states', () => {
     expect(leaving.flat(), 'nothing left this machine and no identity API was called').toEqual([]);
   });
 
-  test('Try again starts nothing on /signup once the box is unticked again', async ({ page }) => {
+  test('Try again starts nothing on /signup once the age is no longer eligible', async ({
+    page,
+  }) => {
     await openAuth(page, '/signup', { signUpNetworkFailures: 1 });
-    await consentBox(page).check();
+    await ageField(page).fill(ELIGIBLE_AGE);
     await page.getByLabel('Email address').fill(MOCK_SIGNUP_CODE_ONLY_ACCOUNT);
     await submitButton(page).click();
     const retry = page.getByRole('button', { name: 'Try again' });
@@ -977,17 +1069,17 @@ test.describe('auth flow states', () => {
     expect((await mockAuthProviderCalls(page)).signUpCreate).toBe(1);
     const outbound = watchOutboundRequests(page);
 
-    await consentBox(page).uncheck();
+    await ageField(page).fill(TOO_YOUNG);
     await retry.click();
 
-    await expectRefused(page);
+    await expectRefused(page, AGE_INELIGIBLE);
     expect((await mockAuthProviderCalls(page)).signUpCreate).toBe(1);
     expect(
       await page.evaluate(() => window.localStorage.getItem('agi.terms-accepted-version')),
     ).toBeNull();
     expect(outbound, 'a refused retry sends nothing to the identity provider').toEqual([]);
 
-    await consentBox(page).check();
+    await ageField(page).fill(ELIGIBLE_AGE);
     await retry.click();
 
     await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();

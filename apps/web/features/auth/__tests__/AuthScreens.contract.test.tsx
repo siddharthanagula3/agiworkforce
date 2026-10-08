@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
-  ACCOUNT_AGE_CONFIRMATION_LABEL,
-  ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
+  ACCOUNT_AGE_FIELD_LABEL,
+  ACCOUNT_AGE_REQUIRED_MESSAGE,
+  ACCOUNT_MINIMUM_AGE,
 } from '@agiworkforce/types';
 
 const signInState = vi.hoisted(() => ({
@@ -94,14 +95,12 @@ function emailField(): HTMLInputElement {
   return screen.getByLabelText('Email address') as HTMLInputElement;
 }
 
-const CONSENT_BOX = new RegExp(`^${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use`);
-
-function consentBox(): HTMLInputElement {
-  return screen.getByRole('checkbox', { name: CONSENT_BOX }) as HTMLInputElement;
+function ageField(): HTMLInputElement {
+  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL) as HTMLInputElement;
 }
 
-async function confirmAge() {
-  await userEvent.click(consentBox());
+async function enterAge() {
+  await userEvent.type(ageField(), String(ACCOUNT_MINIMUM_AGE));
 }
 
 async function submitEmail(email = EMAIL) {
@@ -181,31 +180,32 @@ describe('sign-up screen', () => {
     expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
   });
 
-  it('states the agreement in the consent box and links both policies from it', () => {
+  it('states the agreement beside the action and links both policies from it', () => {
     renderScreen('signup');
 
-    const consent = screen.getByTestId('auth-signup-consent');
-    expect(within(consent).getByRole('link', { name: 'Terms of Use' })).toHaveAttribute(
+    const agreement = screen.getByTestId('auth-signup-agreement');
+    expect(within(agreement).getByRole('link', { name: 'Terms of Use' })).toHaveAttribute(
       'href',
       CANONICAL_POLICY_ROUTES.terms,
     );
-    expect(within(consent).getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+    expect(within(agreement).getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
       'href',
       CANONICAL_POLICY_ROUTES.privacy,
     );
-    expect(consent).toHaveTextContent(
-      `${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use, and acknowledge the Privacy Policy.`,
+    expect(agreement).toHaveTextContent(
+      'By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.',
     );
-    expect(screen.queryByText(/By signing up/)).toBeNull();
+    expect(within(agreement).queryByRole('checkbox')).toBeNull();
+    expect(screen.getAllByText(/By creating an account/)).toHaveLength(1);
   });
 
-  it('creates nothing, hands off nowhere and remembers nothing until the box is ticked', async () => {
+  it('creates nothing, hands off nowhere and remembers nothing until an eligible age is entered', async () => {
     renderScreen('signup');
 
     await userEvent.type(emailField(), `${EMAIL}{Enter}`);
-    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE);
-    expect(consentBox()).toHaveFocus();
-    expect(consentBox()).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_AGE_REQUIRED_MESSAGE);
+    expect(ageField()).toHaveFocus();
+    expect(ageField()).toHaveAttribute('aria-invalid', 'true');
 
     for (const provider of PROVIDERS) {
       await userEvent.click(
@@ -221,12 +221,14 @@ describe('sign-up screen', () => {
     expect(window.localStorage.getItem('agiworkforce-auth-last-method')).toBeNull();
     expect(emailField()).toHaveValue(EMAIL);
 
-    await confirmAge();
+    await enterAge();
     expect(screen.queryByRole('alert')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() =>
       expect(signUpState.create).toHaveBeenCalledWith({ emailAddress: EMAIL, legalAccepted: true }),
     );
+    expect(signUpState.create.mock.calls).toEqual([[{ emailAddress: EMAIL, legalAccepted: true }]]);
+    expect(Object.keys({ ...window.localStorage }).filter((key) => /age/i.test(key))).toEqual([]);
   });
 
   it('mounts a challenge only where an account is created, and only as a mount point', () => {
@@ -255,7 +257,7 @@ describe('sign-up screen', () => {
 
   it('submits on Enter without reaching for the button', async () => {
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await userEvent.type(emailField(), `${EMAIL}{Enter}`);
 
@@ -271,7 +273,7 @@ describe('sign-up screen', () => {
     const gate = held<typeof ok>();
     signUpState.create.mockReturnValue(gate.promise);
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await submitEmail();
 
@@ -288,7 +290,7 @@ describe('sign-up screen', () => {
       }),
     );
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await submitEmail();
 
@@ -305,7 +307,7 @@ describe('sign-up screen', () => {
       }),
     );
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await submitEmail();
 
@@ -321,7 +323,7 @@ describe('sign-up screen', () => {
       error: { errors: [{ code: 'too_many_requests' }], status: 429, retryAfter: 2 },
     });
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await submitEmail();
 
@@ -334,7 +336,7 @@ describe('sign-up screen', () => {
       vendorError({ code: 'form_identifier_exists', meta: { paramName: 'email_address' } }),
     );
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await submitEmail();
 
@@ -346,7 +348,7 @@ describe('sign-up screen', () => {
 
   it('hands a provider sign-up to the callback the page chose and says it is going there', async () => {
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Microsoft' }));
 
@@ -374,7 +376,7 @@ describe('sign-up screen', () => {
       return ok;
     });
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await submitEmail();
 
@@ -404,7 +406,7 @@ describe('sign-up screen', () => {
       return ok;
     });
     renderScreen('signup');
-    await confirmAge();
+    await enterAge();
 
     await submitEmail();
     await userEvent.type(await screen.findByLabelText('Code'), '424242');
