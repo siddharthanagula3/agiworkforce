@@ -3464,7 +3464,6 @@ export async function processRequest(
         policy: managedMemoryPolicy,
         query: lastUserMessageText(chatRequest),
         projectContext: ownership.projectContext,
-        projectBlocks: ownership.projectBlocks,
       }),
     );
   } catch (error) {

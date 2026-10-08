@@ -31,14 +31,6 @@ import {
   toMemoryCitationsHeaderValue,
   toProjectSourcesHeaderValue,
 } from '@/lib/chat-project-sources';
-import {
-  fitProjectContextBlocks,
-  loadProjectContext,
-  MAX_PROJECT_CONTEXT_CHARS,
-  renderProjectContextBlocks,
-  type LoadedProjectContext,
-  type ProjectContextBlock,
-} from '@/lib/services/project-context-service';
 import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -606,51 +598,6 @@ export function refuseFreeQuotaKeptOutConversation(): Response {
   );
 }
 
-interface TurnProject {
-  context: LoadedProjectContext;
-  blocks: ProjectContextBlock[];
-  citations: ProjectFileCitation[];
-}
-
-async function loadTurnProject(
-  scoped: UserScopedDb,
-  turn: { projectId: string; conversationId: string; query: string },
-): Promise<TurnProject | Response> {
-  let context: LoadedProjectContext | null;
-  try {
-    context = await loadProjectContext(scoped.db, {
-      projectId: turn.projectId,
-      userId: scoped.userId,
-      currentConversationId: turn.conversationId,
-      currentUserQuery: turn.query,
-      semanticRetrieval: false,
-    });
-  } catch (error) {
-    logger.error(
-      { error, userId: scoped.userId, projectId: turn.projectId },
-      '[free-quota] project context could not be loaded; no model request was sent',
-    );
-    return policyRefusal(
-      'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
-      'project_context_load_failed',
-      503,
-    );
-  }
-  if (!context) {
-    return policyRefusal(
-      'This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.',
-      'project_context_unavailable',
-      409,
-    );
-  }
-  const rendered = renderProjectContextBlocks(context);
-  return {
-    context,
-    blocks: fitProjectContextBlocks(rendered.blocks, MAX_PROJECT_CONTEXT_CHARS),
-    citations: rendered.citations,
-  };
-}
-
 export interface FreeAutoTurn {
   requestId: string;
   requestedModel: string;
@@ -924,14 +871,6 @@ export async function serveFreeQuotaTurn(
   let projectSources: ProjectFileCitation[] = [];
   if (offering.quotaProbeProtocol === 'chat') {
     const query = latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : '';
-    const project = conversation.project_id
-      ? await loadTurnProject(scoped, {
-          projectId: conversation.project_id,
-          conversationId: body.conversation_id,
-          query,
-        })
-      : null;
-    if (project instanceof Response) return project;
     const personalContext = await resolveFreeOfferingPersonalContext(scoped.db, {
       turnId,
       userId: scoped.userId,
@@ -942,8 +881,21 @@ export async function serveFreeQuotaTurn(
       memoryEnabled: body.memory_enabled,
       personalization: body.personalization,
       query,
-      project,
     });
+    if (personalContext.status === 'project_load_failed') {
+      return policyRefusal(
+        'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
+        'project_context_load_failed',
+        503,
+      );
+    }
+    if (personalContext.status === 'project_unavailable') {
+      return policyRefusal(
+        'This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.',
+        'project_context_unavailable',
+        409,
+      );
+    }
     const preamble = buildCapabilityPreamble({
       tools: [],
       ...(body.client_timezone ? { timeZone: body.client_timezone } : {}),
@@ -955,12 +907,7 @@ export async function serveFreeQuotaTurn(
       }),
     );
     memoryCitationsHeader = toMemoryCitationsHeaderValue(personalContext.memoryCitations);
-    if (
-      project &&
-      personalContext.projectBlocks.some((block) => block.sourceClass === 'project_knowledge_file')
-    ) {
-      projectSources = project.citations;
-    }
+    projectSources = [...personalContext.projectCitations];
   }
   const projectSourcesHeader = toProjectSourcesHeaderValue(projectSources);
 
