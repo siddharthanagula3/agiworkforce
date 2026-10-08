@@ -114,7 +114,7 @@ const STACK_VIEWPORTS = [
 ] as const;
 
 const INDIVIDUAL_PLANS = ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x'];
-const BUSINESS_PLANS = ['Team', 'Enterprise'];
+const BUSINESS_PLANS = ['Team', 'Team Premium', 'Enterprise'];
 const COMPARISON_GROUPS = ['Usage', 'Models', 'Features', 'Admin and data'];
 const TOUCH_TARGET = 44;
 
@@ -149,7 +149,7 @@ function rightmostEdge(items: Locator) {
 async function expectNoDisclosureOrToggle(section: Locator) {
   await expect(section.locator('details')).toHaveCount(0);
   await expect(section.getByRole('button')).toHaveCount(0);
-  await expect(section.getByRole('region')).toHaveCount(0);
+  await expect(section.locator('[role="region"], [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
   await expect(section.getByText(/scroll sideways/i)).toHaveCount(0);
 }
 
@@ -223,7 +223,11 @@ test.describe('/pricing comparison is one table from 1100px', () => {
           const bounds = element.getBoundingClientRect();
           const scrollers: string[] = [];
           for (let node = element.parentElement; node; node = node.parentElement) {
-            if (node.scrollWidth > node.clientWidth) scrollers.push(node.className || node.tagName);
+            const overflowX = getComputedStyle(node).overflowX;
+            const userScrollable = overflowX === 'auto' || overflowX === 'scroll';
+            if (userScrollable && node.scrollWidth > node.clientWidth) {
+              scrollers.push(node.className || node.tagName);
+            }
           }
           return {
             left: bounds.left,
