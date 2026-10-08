@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 import {
   ARTIFACT_RUNTIME_MAX_PROMPT_CHARS,
   ArtifactRuntimeCompleteRequestSchema,
@@ -92,6 +93,9 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   const artifact = await readRunnableArtifact(scoped.db, token);
   if (!artifact) return refusal(404, 'artifact_not_found', UNAVAILABLE_MESSAGE);
   const connectors = [...new Set(parsed.data.connectors)];
+  if (connectors.length > 0 && !connectorsReleased()) {
+    return refusal(403, 'connectors_coming_soon', CONNECTORS_COMING_SOON_MESSAGE);
+  }
 
   const privacy = await evaluateActiveWorkspacePolicy(
     scoped.db,

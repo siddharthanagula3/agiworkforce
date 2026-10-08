@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 
 import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { logger } from '@/lib/logger';
@@ -103,6 +104,14 @@ export async function evaluateConnectorPolicyForUser(
     surface?: string | null;
   },
 ): Promise<ConnectorPolicyGateResult> {
+  if (!connectorsReleased()) {
+    return {
+      allowed: false,
+      code: 'connectors_coming_soon',
+      reason: CONNECTORS_COMING_SOON_MESSAGE,
+      organizationId: params.organizationId ?? null,
+    };
+  }
   let organizationId: string | null = params.organizationId ?? null;
   if (params.organizationId === undefined && params.userId) {
     try {

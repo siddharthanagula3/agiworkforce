@@ -2,8 +2,10 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  CONNECTORS_COMING_SOON_MESSAGE,
   billingPlanCapabilityPlanLabels,
   canUseBillingPlanCapability,
+  connectorsReleased,
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 
@@ -15,6 +17,12 @@ export async function artifactConnectorsGateResponse(
   planTier: string | null | undefined,
   headers: HeadersInit,
 ): Promise<NextResponse | null> {
+  if (!connectorsReleased()) {
+    return NextResponse.json(
+      { error: { code: 'connectors_coming_soon', message: CONNECTORS_COMING_SOON_MESSAGE } },
+      { status: 403, headers },
+    );
+  }
   if (!canUseBillingPlanCapability(normalizeBillingPlanTier(planTier), 'artifact_connectors')) {
     return NextResponse.json(
       {

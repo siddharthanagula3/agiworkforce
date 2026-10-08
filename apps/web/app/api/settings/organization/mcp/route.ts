@@ -25,6 +25,7 @@ import {
   transportForUrl,
   type McpCapabilityCounts,
 } from '@/lib/connectors/mcp-custom-connections';
+import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
 import { readConnectorPolicy } from '@/lib/services/connector-policy-service';
 import {
   evaluateMcpHostAccess,
@@ -142,6 +143,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     'policy.manage',
     'Your workspace role does not allow publishing an MCP server to this workspace.',
   );
+  assertConnectorsReleased();
 
   const body = await readValidatedJsonBody(request, PublishSchema, 'Invalid MCP server');
   const db = getNeonDb();
@@ -243,6 +245,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse> {
   );
 
   const body = await readValidatedJsonBody(request, UpdateSchema, 'Invalid MCP server change');
+  if (body.published === true || body.retired === false) assertConnectorsReleased();
   const db = getNeonDb();
   await assertWorkspaceRevisionUnchanged(
     db,

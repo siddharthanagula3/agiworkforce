@@ -31,6 +31,12 @@ import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
 import type { LimitedPromotionalMedia } from '@features/chat/hooks/use-promotional-media-models';
 
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 const chatComposerMocks = vi.hoisted(() => ({
   skillResult: {
     skills: [
@@ -360,6 +366,38 @@ describe('ChatComposerNew', () => {
         expect.objectContaining({ connectorToolsEnabled: true }),
       ),
     );
+  });
+
+  it('offers no connector and reports no connector tools while connectors are coming soon', async () => {
+    connectorRelease.released = false;
+    try {
+      chatComposerMocks.connectors.connectedIds = new Set(['custom-abc123']);
+      chatComposerMocks.connectors.sources = { 'custom-abc123': 'custom' };
+      chatComposerMocks.connectors.customNames = { 'custom-abc123': 'Internal Docs MCP' };
+      chatComposerMocks.connectors.toolConnectorIds = { 'custom-abc123': 'custom-abc123' };
+      const onSend = vi.fn();
+      render(<ChatComposerNew onSend={onSend} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      expect(screen.getByRole('button', { name: 'Connectors, Coming soon' })).toBeDisabled();
+      expect(screen.queryByText('Internal Docs MCP')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'check the internal docs');
+      fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+      await waitFor(() =>
+        expect(onSend).toHaveBeenCalledWith(
+          'check the internal docs',
+          undefined,
+          undefined,
+          expect.objectContaining({ connectorToolsEnabled: false }),
+        ),
+      );
+    } finally {
+      connectorRelease.released = true;
+    }
   });
 
   it('calls onSend with typed message on plain Enter (ChatGPT/Claude convention)', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, CopyPlus, Pencil, Send, Terminal } from 'lucide-react';
+import { Check, Copy, CopyPlus, Lock, Pencil, Send, Terminal } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -143,6 +143,7 @@ function MonoList({ values }: { values: readonly string[] }) {
 function componentRows(
   components: DirectoryPluginComponents,
   skillsListedElsewhere: boolean,
+  connectorsNote: string | undefined,
 ): { label: string; body: ReactNode }[] {
   const rows: { label: string; body: ReactNode }[] = [];
   if (components.skills.length > 0 && !skillsListedElsewhere) {
@@ -166,11 +167,22 @@ function componentRows(
     rows.push({
       label: PLUGIN_MCP_SERVERS_LABEL,
       body: (
-        <MonoList
-          values={components.mcpServers.map(
-            (server) => `${server.name}${PLUGIN_MCP_TRANSPORT_SEPARATOR}${server.transport}`,
-          )}
-        />
+        <>
+          <MonoList
+            values={components.mcpServers.map(
+              (server) => `${server.name}${PLUGIN_MCP_TRANSPORT_SEPARATOR}${server.transport}`,
+            )}
+          />
+          {connectorsNote ? (
+            <span
+              className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground"
+              data-testid="plugin-connectors-note"
+            >
+              <Lock aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+              {connectorsNote}
+            </span>
+          ) : null}
+        </>
       ),
     });
   }
@@ -187,11 +199,13 @@ function componentRows(
 function ComponentsSummary({
   components,
   skillsListedElsewhere,
+  connectorsNote,
 }: {
   components: DirectoryPluginComponents;
   skillsListedElsewhere: boolean;
+  connectorsNote?: string;
 }) {
-  const rows = componentRows(components, skillsListedElsewhere);
+  const rows = componentRows(components, skillsListedElsewhere, connectorsNote);
   if (rows.length === 0) return null;
   return (
     <section className="flex flex-col gap-3">
@@ -809,7 +823,11 @@ export function PluginDetailView({
       </p>
 
       {detail.components ? (
-        <ComponentsSummary components={detail.components} skillsListedElsewhere={showsTabs} />
+        <ComponentsSummary
+          components={detail.components}
+          skillsListedElsewhere={showsTabs}
+          connectorsNote={detail.connectorsNote}
+        />
       ) : null}
 
       {versionControl ? (

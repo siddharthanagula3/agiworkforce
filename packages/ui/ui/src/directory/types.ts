@@ -8,7 +8,12 @@ export type DirectoryBadgeKind =
 export type DirectorySortKey = 'popular' | 'updated' | 'name';
 
 export type DirectoryConnectableMode =
-  'connect' | 'api-key-form' | 'desktop-and-cli' | 'needs-setup' | 'unavailable';
+  'connect' | 'api-key-form' | 'desktop-and-cli' | 'needs-setup' | 'unavailable' | 'coming-soon';
+
+export interface DirectoryLockNotice {
+  label: string;
+  message: string;
+}
 
 export interface DirectoryToggle {
   id: string;
@@ -136,6 +141,8 @@ export interface DirectorySection {
   catalogHeading?: string;
   toggles?: readonly DirectoryToggle[];
   toggleDefaults?: Readonly<Record<string, boolean>>;
+  /** The whole section is not open yet: shown above a read-only catalog. */
+  locked?: DirectoryLockNotice;
 }
 
 export interface DirectoryDetailFile {
@@ -316,6 +323,8 @@ export interface DirectoryPluginDetail {
   submittable?: boolean;
   submission?: DirectoryPluginSubmission;
   availabilityNote?: string;
+  /** Why the MCP servers this plugin bundles will not be added as connectors. */
+  connectorsNote?: string;
   href?: string;
 }
 

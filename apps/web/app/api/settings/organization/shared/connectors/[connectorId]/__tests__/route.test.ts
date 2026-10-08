@@ -1,5 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
@@ -228,5 +234,38 @@ describe('shared connector route', () => {
         eventType: 'organization_share_revoked',
       }),
     );
+  });
+});
+
+describe('shared connector route while connectors are coming soon', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorRelease.released = false;
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.requireCsrfToken.mockResolvedValue(null);
+    mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'admin-1' });
+    mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'admin' });
+    mocks.permissions.mockResolvedValue(new Set(['sharing.manage']));
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('refuses to share a connector into the organization', async () => {
+    const response = await PUT(request('PUT'), ctx());
+
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(await response.json())).toContain('Connectors are coming soon.');
+    expect(mocks.shareConnector).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('still lets an administrator stop sharing one', async () => {
+    mocks.unshareConnector.mockResolvedValue(true);
+
+    const response = await DELETE(request('DELETE'), ctx());
+
+    expect(response.status).toBe(200);
+    expect(mocks.unshareConnector).toHaveBeenCalledWith(DB, ORG, CONNECTOR);
   });
 });

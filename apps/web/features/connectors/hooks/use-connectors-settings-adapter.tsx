@@ -1,6 +1,7 @@
 'use client';
 
 import { translateUiPlural } from '@agiworkforce/ui';
+import { connectorsReleased } from '@agiworkforce/types';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -59,6 +60,7 @@ import {
 } from '@/features/directory';
 import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
 import { openConnectorAuthorization } from '../lib/open-connector-authorization';
+import { lockConnectorDirectory } from '../lib/connector-release-lock';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
 
@@ -919,7 +921,7 @@ export function useConnectorsSettingsAdapter({
   const connectorsPanelNotice =
     [connectorsNotice, githubInstallationsNotice].filter(Boolean).join(' ') || null;
 
-  const directoryAdapter = useDirectoryAdapter({
+  const releasedDirectoryAdapter = useDirectoryAdapter({
     ...directorySkillActions,
     curatedConnectors: mergedSettingsConnectors,
     connectedConnectors: mergedConnectedConnectors,
@@ -933,7 +935,7 @@ export function useConnectorsSettingsAdapter({
             onConnected={() => {
               setApiKeyConnectorId(null);
               void loadConnectors();
-              void directoryAdapter.loadSection?.('connectors');
+              void releasedDirectoryAdapter.loadSection?.('connectors');
             }}
             onCancel={() => setApiKeyConnectorId(null)}
           />
@@ -1012,10 +1014,17 @@ export function useConnectorsSettingsAdapter({
     onConnectConnector: connectConnector,
     onDisconnectConnector: disconnectConnector,
   });
+  const directoryAdapter = useMemo(
+    () =>
+      connectorsReleased()
+        ? releasedDirectoryAdapter
+        : lockConnectorDirectory(releasedDirectoryAdapter),
+    [releasedDirectoryAdapter],
+  );
 
   return {
     adapter: {
-      addCustomConnector,
+      ...(connectorsReleased() ? { addCustomConnector } : {}),
       customConnectorAuthTokenSupported: true,
       customConnectorOAuthClientSupported: true,
       ...(oauthRedirectUri ? { customConnectorOAuthRedirectUri: oauthRedirectUri } : {}),

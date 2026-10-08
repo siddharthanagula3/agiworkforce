@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 import type { ConnectorOAuthCallbackStatus } from '@agiworkforce/cloud-contracts';
+import { connectorsReleased } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -60,6 +61,14 @@ export async function finishConnectorAuthorization(input: {
       '[connector-oauth] callback rejected: unknown, expired, replayed, or another account state',
     );
     return { returnPath: '/connectors', connectorId: '', status: 'invalid_state' };
+  }
+
+  if (!connectorsReleased()) {
+    return {
+      returnPath: pending.returnPath,
+      connectorId: pending.connectorId,
+      status: 'unavailable',
+    };
   }
 
   if (!authorizationResponseIssuerMatches(pending, iss)) {

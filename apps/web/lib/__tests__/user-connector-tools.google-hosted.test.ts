@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => true,
+}));
+
 type ScanModule0 = typeof import('@/lib/server/neon-db');
 type ScanModule1 = typeof import('@/lib/egress-policy');
 type ScanModule2 = typeof import('@agiworkforce/mcp');

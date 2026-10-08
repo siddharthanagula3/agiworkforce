@@ -60,6 +60,7 @@ export const CAPABILITY_DENIAL_REASONS = [
   'offline',
   'temporarily_unavailable',
   'maintenance',
+  'feature_coming_soon',
   'feature_experimental',
   'feature_closed_beta',
   'feature_deprecated',
@@ -367,6 +368,17 @@ export const CAPABILITY_DENIAL_TAXONOMY: Readonly<
     suggestion: 'Check the status page for when it comes back.',
     icon: 'info',
   }),
+  feature_coming_soon: descriptor(
+    'feature_coming_soon',
+    'capability',
+    DenialErrorCode.FEATURE_COMING_SOON,
+    {
+      title: 'Coming soon',
+      message: 'This has not launched yet, on any plan.',
+      suggestion: 'It will turn on here when it launches; there is nothing to change.',
+      icon: 'info',
+    },
+  ),
   feature_experimental: descriptor(
     'feature_experimental',
     'capability',

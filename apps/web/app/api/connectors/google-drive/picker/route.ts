@@ -11,6 +11,7 @@ import {
 } from '@/lib/connectors/oauth-access';
 import { createError } from '@/lib/errors';
 import { GOOGLE_DRIVE_CONNECTOR_ID } from '@/lib/connectors/google-drive-files';
+import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 async function handleGetPicker(request: NextRequest): Promise<NextResponse> {
@@ -18,6 +19,7 @@ async function handleGetPicker(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getUserScopedDb(request, { resolveOrganization: false });
+  assertConnectorsReleased();
   const developerKey = process.env['GOOGLE_PICKER_API_KEY']?.trim();
   const appId = process.env['GOOGLE_PICKER_APP_ID']?.trim();
   if (!developerKey || !appId) {

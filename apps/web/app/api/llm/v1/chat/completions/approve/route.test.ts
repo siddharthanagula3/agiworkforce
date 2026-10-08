@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => true,
+}));
+
 type ScanModule0 = typeof import('@/lib/services/cloud-agent-run-service');
 type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule2 = typeof import('@/lib/services/managed-usage-accounting-service');

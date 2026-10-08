@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => true,
+}));
+
 type ScanModule0 = typeof import('@/lib/server/terms');
 type ScanModule1 = typeof import('@/lib/github-app');
 type ScanModule2 = typeof import('@/lib/connectors/oauth-store');

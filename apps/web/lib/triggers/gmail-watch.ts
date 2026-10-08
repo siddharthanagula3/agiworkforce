@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
@@ -48,6 +49,7 @@ const OWNER_IS_A_MEMBER = ownerIsActiveWorkspaceMemberSql(
 );
 
 const WATCH_ERRORS = {
+  comingSoon: CONNECTORS_COMING_SOON_MESSAGE,
   notConfigured: 'Gmail triggers are not set up on this server yet.',
   notConnected: 'Connect Gmail in Connectors, then try again.',
   reconnect: 'Reconnect Gmail in Connectors, then try again.',
@@ -128,6 +130,7 @@ async function gmailAccessToken(
   userId: string,
   forceRefresh: boolean,
 ): Promise<{ ok: true; accessToken: string } | GmailAccessFailure> {
+  if (!connectorsReleased()) return { ok: false, error: WATCH_ERRORS.comingSoon };
   const access = await resolveConnectorAccessToken(
     userId,
     GMAIL_CONNECTOR_ID,

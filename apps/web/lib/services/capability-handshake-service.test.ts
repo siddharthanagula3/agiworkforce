@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CAPABILITY_CONTRACT_ACCOUNT,
   CAPABILITY_CONTRACT_EXPECTATIONS,
@@ -16,6 +16,12 @@ import {
   isMeCapabilityHandshakeStale,
   toWireCapabilityHandshake,
 } from './capability-handshake-service';
+
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 
 const BASE_INPUT = {
   userId: 'user_1',
@@ -426,5 +432,57 @@ describe('buildMeCapabilityHandshake, operator kill switches', () => {
     expect(none.version).toBe(
       buildMeCapabilityHandshake({ ...DESKTOP_INPUT, tier: 'pro' }).version,
     );
+  });
+});
+
+describe('buildMeCapabilityHandshake, connectors before they launch', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it.each(['free', 'basic', 'pro', 'max', 'enterprise'])(
+    'denies connectors on %s as coming soon, never as an upgrade',
+    (tier) => {
+      const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier });
+      const decision = resolveCapabilityDecision(document, 'canUseConnectors');
+
+      expect(decision.allowed).toBe(false);
+      expect(decision.reason).toBe('feature_coming_soon');
+      expect(decision.deniedByLayers[0]).toBe('model');
+      expect(document.denialReasons?.canUseConnectors).toBe('feature_coming_soon');
+    },
+  );
+
+  it('outranks the kill switch, which means a launched feature is broken', () => {
+    const document = buildMeCapabilityHandshake({
+      ...BASE_INPUT,
+      tier: 'pro',
+      closedCapabilities: ['canUseConnectors'],
+    });
+
+    expect(resolveCapabilityDecision(document, 'canUseConnectors').reason).toBe(
+      'feature_coming_soon',
+    );
+  });
+
+  it('carries the reason on the wire and leaves every other capability as it was', () => {
+    const locked = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+    connectorRelease.released = true;
+    const released = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+
+    const parsed = EffectiveCapabilityDocumentSchema.safeParse(toWireCapabilityHandshake(locked));
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.denialReasons?.['canUseConnectors']).toBe('feature_coming_soon');
+    expect(resolveCapabilityDecision(released, 'canUseConnectors').allowed).toBe(true);
+    for (const capability of ALL_PLATFORM_CAPABILITIES) {
+      if (capability === 'canUseConnectors') continue;
+      expect(resolveCapabilityDecision(locked, capability).allowed, `${capability} changed`).toBe(
+        resolveCapabilityDecision(released, capability).allowed,
+      );
+    }
+    expect(locked.version).not.toBe(released.version);
   });
 });

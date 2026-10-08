@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => true,
+}));
+
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 

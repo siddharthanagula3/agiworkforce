@@ -11,6 +11,7 @@ export type ConnectorAccessCode =
   | 'allowed'
   | 'ungoverned'
   | 'connectors_unavailable'
+  | 'connectors_coming_soon'
   | 'connector_blocked'
   | 'connector_not_allowed'
   | 'custom_connectors_disabled'

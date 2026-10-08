@@ -115,7 +115,12 @@ import {
   orgSharedServerId,
 } from '@/lib/connectors/custom-server-ids';
 import { isGoogleApiUrl, isGoogleUserDataConnector } from '@/lib/connectors/google-user-data';
-import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+  getBillingPlanProductLimits,
+  getPlanMaxConnectorTools,
+} from '@agiworkforce/types';
 
 export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
 
@@ -2097,7 +2102,7 @@ export async function loadUserConnectorCapabilityCatalog(
   connectorRef: string,
   options: LoadUserConnectorToolOptions = {},
 ): Promise<UserConnectorCapabilityCatalog | null> {
-  if (!userId || !connectorRef) return null;
+  if (!userId || !connectorRef || !connectorsReleased()) return null;
   const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
 
   let result: UserConnectorCapabilityCatalog | null = null;
@@ -2276,7 +2281,9 @@ export async function withUserConnectorMcpHandle<T>(
     reportUnreachable?: boolean;
   } = {},
 ): Promise<T | null> {
-  if (!userId || !connectorRef || connectorRef === GITHUB_SERVER_ID) return null;
+  if (!userId || !connectorRef || connectorRef === GITHUB_SERVER_ID || !connectorsReleased()) {
+    return null;
+  }
   const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
   let descriptor:
     | {
@@ -2437,7 +2444,7 @@ export async function loadUserConnectorToolCatalog(
   options: LoadUserConnectorToolOptions = {},
 ): Promise<UserConnectorToolCatalog> {
   const limit = resolveConnectorToolLimit(options.planTier);
-  if (!userId) return { tools: [], dropped: [], limit };
+  if (!userId || !connectorsReleased()) return { tools: [], dropped: [], limit };
   try {
     const defs: WebMcpToolDef[] = [];
 
@@ -2746,6 +2753,9 @@ export function makeUserConnectorExecutor(
     const guarded = async (
       run: (safeArgs: Record<string, unknown>) => Promise<ConnectorExecResult>,
     ): Promise<ConnectorExecResult> => {
+      if (!connectorsReleased()) {
+        return { handled: true, content: CONNECTORS_COMING_SOON_MESSAGE, isError: true };
+      }
       const meter = (result: ConnectorExecResult): ConnectorExecResult => {
         if (result.handled) {
           recordConnectorCall({

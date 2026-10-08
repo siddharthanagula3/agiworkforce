@@ -1,8 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Upload, FileText, HardDrive, X, ExternalLink } from 'lucide-react';
+import { Upload, FileText, HardDrive, X, ExternalLink, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import {
+  CONNECTORS_COMING_SOON_DETAIL,
+  CONNECTORS_COMING_SOON_LABEL,
+  connectorsReleased,
+} from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDialogKeyboard } from '@agiworkforce/ui';
 
@@ -26,6 +31,7 @@ export function AddSourcesModal({
   accept,
 }: Props) {
   const router = useRouter();
+  const driveReleased = connectorsReleased();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
@@ -290,13 +296,20 @@ export function AddSourcesModal({
                 />
 
                 {/* Google Drive */}
-                <SourceButton
-                  icon={<HardDrive style={{ width: 20, height: 20 }} aria-hidden="true" />}
-                  label="Google Drive"
-                  description="Pick files from your Drive"
-                  onClick={() => void handleGoogleDrive()}
-                  disabled={isUploading || isSubmitting}
-                />
+                {driveReleased ? (
+                  <SourceButton
+                    icon={<HardDrive style={{ width: 20, height: 20 }} aria-hidden="true" />}
+                    label="Google Drive"
+                    description="Pick files from your Drive"
+                    onClick={() => void handleGoogleDrive()}
+                    disabled={isUploading || isSubmitting}
+                  />
+                ) : (
+                  <ComingSoonSourceButton
+                    icon={<HardDrive style={{ width: 20, height: 20 }} aria-hidden="true" />}
+                    label="Google Drive"
+                  />
+                )}
               </div>
 
               <input
@@ -309,36 +322,56 @@ export function AddSourcesModal({
               />
 
               {/* Connector note */}
-              <p
-                style={{
-                  marginTop: 'var(--space-4)',
-                  fontSize: 12,
-                  color: 'var(--agi-ink-2)',
-                  textAlign: 'center',
-                  lineHeight: 1.5,
-                }}
-              >
-                Google Drive needs its connector.{' '}
-                <button
-                  type="button"
-                  onClick={() => handleConnectorRoute('/connectors')}
+              {driveReleased ? (
+                <p
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
+                    marginTop: 'var(--space-4)',
                     fontSize: 12,
-                    color: 'var(--color-primary)',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    display: 'inline-flex',
+                    color: 'var(--agi-ink-2)',
+                    textAlign: 'center',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Google Drive needs its connector.{' '}
+                  <button
+                    type="button"
+                    onClick={() => handleConnectorRoute('/connectors')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      fontSize: 12,
+                      color: 'var(--color-primary)',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-1)',
+                    }}
+                  >
+                    Set up connectors
+                    <ExternalLink style={{ width: 10, height: 10 }} aria-hidden="true" />
+                  </button>
+                </p>
+              ) : (
+                <p
+                  data-testid="add-sources-connectors-coming-soon"
+                  style={{
+                    marginTop: 'var(--space-4)',
+                    fontSize: 12,
+                    color: 'var(--agi-ink-2)',
+                    textAlign: 'center',
+                    lineHeight: 1.5,
+                    display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 'var(--space-1)',
                   }}
                 >
-                  Set up connectors
-                  <ExternalLink style={{ width: 10, height: 10 }} aria-hidden="true" />
-                </button>
-              </p>
+                  <Lock style={{ width: 12, height: 12, flexShrink: 0 }} aria-hidden="true" />
+                  {CONNECTORS_COMING_SOON_DETAIL}
+                </p>
+              )}
               {submitError ? (
                 <p
                   role="alert"
@@ -489,6 +522,48 @@ interface SourceButtonProps {
   badge?: string;
   onClick: () => void;
   disabled?: boolean;
+}
+
+function ComingSoonSourceButton({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-label={`${label}, ${CONNECTORS_COMING_SOON_LABEL}`}
+      data-testid="add-sources-google-drive-coming-soon"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 'var(--space-2)',
+        padding: 'var(--space-4) var(--space-2) var(--space-3)',
+        borderRadius: 'var(--corner-surface)',
+        border: '1px dashed var(--agi-rule-strong)',
+        background: 'var(--agi-bg-2)',
+        cursor: 'not-allowed',
+        textAlign: 'center',
+        width: '100%',
+      }}
+    >
+      <span style={{ color: 'var(--agi-ink-2)' }}>{icon}</span>
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--agi-ink)', lineHeight: 1.2 }}>
+        {label}
+      </span>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 'var(--space-1)',
+          fontSize: 12,
+          color: 'var(--agi-ink-2)',
+          lineHeight: 1.3,
+        }}
+      >
+        <Lock style={{ width: 12, height: 12 }} aria-hidden="true" />
+        {CONNECTORS_COMING_SOON_LABEL}
+      </span>
+    </button>
+  );
 }
 
 function SourceButton({ icon, label, description, badge, onClick, disabled }: SourceButtonProps) {

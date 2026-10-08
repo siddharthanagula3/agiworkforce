@@ -13,6 +13,7 @@ import {
   type DisconnectResponse,
   type ListConnectorsResponse,
 } from '@agiworkforce/cloud-contracts';
+import { connectorsReleased } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -377,7 +378,7 @@ async function handleGetConnectors(request: NextRequest) {
 
   return NextResponse.json({
     connectors: withHealth,
-    available: offered.available,
+    available: connectorsReleased() ? offered.available : [],
     setup: offered.setup,
     pending,
   } satisfies ListConnectorsResponse);

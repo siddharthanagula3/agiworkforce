@@ -27,6 +27,7 @@ import {
   ImagePlus,
   LibraryBig,
   ListChecks,
+  Lock,
   Monitor,
   MonitorPlay,
   Paperclip,
@@ -50,9 +51,13 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@shared/lib/utils';
 import {
   BILLING_PLAN_CAPABILITY_TIERS,
+  CONNECTORS_COMING_SOON_LABEL,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
   getBillingPlanPricing,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
+import { ConnectorsComingSoonMenuItem } from '@/features/connectors/components/ConnectorsComingSoonMenuItem';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
 import type { LibraryItem } from '@agiworkforce/cloud-contracts';
@@ -1185,22 +1190,37 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={props.onToggleConnectorsSubmenu}
-        aria-expanded={props.connectorsSubmenuOpen}
-        className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
-      >
-        <ConnectorsGlyph className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-        <span className="flex-1 text-start">{ROW_LABEL_CONNECTORS}</span>
-        <ChevronRight
-          className={cn(
-            'h-4 w-4 text-muted-foreground transition-transform',
-            props.connectorsSubmenuOpen && 'rotate-90',
-          )}
-        />
-      </button>
-      {props.connectorsSubmenuOpen && (
+      {connectorsReleased() ? (
+        <button
+          type="button"
+          onClick={props.onToggleConnectorsSubmenu}
+          aria-expanded={props.connectorsSubmenuOpen}
+          className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
+        >
+          <ConnectorsGlyph className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+          <span className="flex-1 text-start">{ROW_LABEL_CONNECTORS}</span>
+          <ChevronRight
+            className={cn(
+              'h-4 w-4 text-muted-foreground transition-transform',
+              props.connectorsSubmenuOpen && 'rotate-90',
+            )}
+          />
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled
+          aria-label={`${ROW_LABEL_CONNECTORS}, ${CONNECTORS_COMING_SOON_LABEL}`}
+          title={CONNECTORS_COMING_SOON_MESSAGE}
+          data-testid="composer-connectors-coming-soon"
+          className={cn(ROW_CLASS, 'cursor-not-allowed text-muted-foreground')}
+        >
+          <Lock aria-hidden className={GLYPH_CLASS} />
+          <span className="flex-1 text-start">{ROW_LABEL_CONNECTORS}</span>
+          <span className="shrink-0 text-caption">{CONNECTORS_COMING_SOON_LABEL}</span>
+        </button>
+      )}
+      {connectorsReleased() && props.connectorsSubmenuOpen && (
         <div role="group" aria-label={ROW_LABEL_CONNECTORS} className="space-y-0.5 pb-1">
           {props.connectors.length === 0 ? (
             <p className="px-3 py-2 ps-8 text-caption text-muted-foreground">
@@ -1529,7 +1549,9 @@ function WorkPalette(props: ComposerPlusMenuProps) {
 
       <div className={DIVIDER_CLASS} />
       <p className={SECTION_HEADING_CLASS}>{t('agiWork.compose.palette.connectorsHeading')}</p>
-      {props.connectorsLoading ? (
+      {!connectorsReleased() ? (
+        <ConnectorsComingSoonMenuItem compact label={ROW_LABEL_CONNECTORS} />
+      ) : props.connectorsLoading ? (
         <div className="flex items-center gap-3 px-3 py-2">
           <Spinner size="sm" aria-label={t('agiWork.compose.palette.connectorsLoading')} />
           <span className="text-caption text-muted-foreground">
@@ -1555,15 +1577,17 @@ function WorkPalette(props: ComposerPlusMenuProps) {
           />
         ))
       )}
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => openDirectorySettings(props, SETTINGS_SECTION_CONNECTORS)}
-        className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'text-muted-foreground')}
-      >
-        <ConnectorsGlyph className={GLYPH_CLASS} />
-        <span className="flex-1 text-start">{ROW_LABEL_MANAGE_CONNECTORS}</span>
-      </button>
+      {connectorsReleased() ? (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => openDirectorySettings(props, SETTINGS_SECTION_CONNECTORS)}
+          className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'text-muted-foreground')}
+        >
+          <ConnectorsGlyph className={GLYPH_CLASS} />
+          <span className="flex-1 text-start">{ROW_LABEL_MANAGE_CONNECTORS}</span>
+        </button>
+      ) : null}
 
       {skillHits.length > 0 && (
         <>

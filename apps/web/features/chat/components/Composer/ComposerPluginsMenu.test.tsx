@@ -9,6 +9,12 @@ import {
   type ComposerPluginsMenuProps,
 } from './ComposerPluginsMenu';
 
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 const openSettings = vi.fn();
 
 vi.mock('@features/settings/components/SettingsModalProvider', () => ({
@@ -189,5 +195,28 @@ describe('ComposerPluginsMenu empty', () => {
     expect(screen.queryByText(COMPOSER_CONNECTORS_EMPTY_COPY)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: TRIGGER_LABEL }));
     expect(await screen.findByText(COMPOSER_CONNECTORS_EMPTY_COPY)).toBeTruthy();
+  });
+});
+
+describe('ComposerPluginsMenu while connectors are coming soon', () => {
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('offers a disabled, locked Add connectors item instead of a list or a working link', () => {
+    connectorRelease.released = false;
+    const props = renderMenu();
+
+    const item = screen.getByRole('menuitem', {
+      name: `${COMPOSER_CONNECTORS_CONNECT_LABEL}, Coming soon`,
+    });
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('menuitemcheckbox')).toBeNull();
+    expect(screen.queryByLabelText(COMPOSER_CONNECTORS_SEARCH_LABEL)).toBeNull();
+    expect(screen.queryByText(COMPOSER_CONNECTORS_EMPTY_COPY)).toBeNull();
+
+    fireEvent.click(item);
+    expect(openSettings).not.toHaveBeenCalled();
+    expect(props.onSetConnectorEnabled).not.toHaveBeenCalled();
   });
 });

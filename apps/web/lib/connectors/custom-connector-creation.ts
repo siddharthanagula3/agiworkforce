@@ -9,6 +9,7 @@ import { createError } from '@/lib/errors';
 import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
+import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
 
 import { accountUrlProblem } from './account-url-connectors';
 import {
@@ -61,6 +62,7 @@ export async function createCustomConnector(
   db: DatabaseAdapter,
   input: CreateCustomConnectorInput,
 ): Promise<CreatedCustomConnector> {
+  assertConnectorsReleased();
   const { userId, request } = input;
   const name = trimmedString(input.name);
   if (!name || name.length > NAME_MAX_LENGTH) {
@@ -84,7 +86,7 @@ export async function createCustomConnector(
     request,
     surface: resolveCloudChatSurface(request),
   });
-  if (!hostDecision.allowed) throw createError.forbidden(hostDecision.reason);
+  if (!hostDecision.allowed) throw createError.forbidden(hostDecision.reason).asUserSafe();
 
   const authToken = trimmedString(input.authToken);
   if (authToken.length > AUTH_TOKEN_MAX_LENGTH) {

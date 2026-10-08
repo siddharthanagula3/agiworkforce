@@ -54,6 +54,12 @@ const mocks = vi.hoisted(() => ({
   cacheToolNames: vi.fn(),
 }));
 
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
@@ -397,6 +403,18 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     const body = (await response.json()) as { available: string[] };
 
     for (const id of selfServiceIds) expect(body.available).toContain(id);
+  });
+
+  it('offers nothing to connect while connectors are coming soon', async () => {
+    connectorRelease.released = false;
+    try {
+      const response = await GET(getRequest());
+      const body = (await response.json()) as { available: string[] };
+
+      expect(body.available).toEqual([]);
+    } finally {
+      connectorRelease.released = true;
+    }
   });
 
   it('keeps a preregistered MCP connector unavailable until an operator configures its OAuth app', async () => {

@@ -1,4 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 type ScanModule0 = typeof import('@/lib/services/connector-policy-service');
 
 const {
@@ -242,5 +248,42 @@ describe('evaluatePluginPolicyForUser', () => {
     });
     expect(decision).toMatchObject({ allowed: true, code: 'ungoverned' });
     expect(readConnectorPolicy).not.toHaveBeenCalled();
+  });
+});
+
+describe('evaluateConnectorPolicyForUser while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it.each([
+    ['a catalog connector', { connectorId: 'gmail' }],
+    ['a custom endpoint', { connectorId: null, isCustom: true, url: 'https://mcp.example.com' }],
+    ['a personal account', { connectorId: 'github', organizationId: null }],
+  ])('refuses %s as coming soon, on every plan, before reading anything', async (_, input) => {
+    const decision = await evaluateConnectorPolicyForUser({ db, userId: USER, ...input });
+
+    expect(decision).toMatchObject({
+      allowed: false,
+      code: 'connectors_coming_soon',
+      reason: 'Connectors are coming soon.',
+    });
+    expect(decision.reason).not.toMatch(/upgrade|unavailable/i);
+    expect(resolveActiveOrganizationId).not.toHaveBeenCalled();
+    expect(connectorsAllowed).not.toHaveBeenCalled();
+    expect(readConnectorPolicy).not.toHaveBeenCalled();
+  });
+
+  it('leaves plugin installs to the plugin policy, since a plugin is not a connector', async () => {
+    const decision = await evaluatePluginPolicyForUser({
+      db,
+      userId: USER,
+      pluginKey: 'docs-helper',
+    });
+
+    expect(decision.allowed).toBe(true);
   });
 });

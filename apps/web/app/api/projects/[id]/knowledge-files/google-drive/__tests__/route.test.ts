@@ -1,6 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
+
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
@@ -355,5 +361,31 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
     expect((await response.json()).results[0].message).toBe(
       'This file could not be added. Try again.',
     );
+  });
+});
+
+describe('POST /api/projects/[id]/knowledge-files/google-drive while connectors are coming soon', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorRelease.released = false;
+    db.query.mockReset();
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.requireCsrfToken.mockResolvedValue(null);
+    mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: 'org-1' });
+    mocks.isPrivateObjectStorageConfigured.mockReturnValue(true);
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('refuses before reading the project, the Drive grant or any file', async () => {
+    const response = await post({ fileIds: [DRIVE_A] });
+
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(await response.json())).toContain('Connectors are coming soon.');
+    expect(db.query).not.toHaveBeenCalled();
+    expect(mocks.resolveConnectorAccessToken).not.toHaveBeenCalled();
+    expect(mocks.downloadGoogleDriveFile).not.toHaveBeenCalled();
+    expect(mocks.putPrivateObject).not.toHaveBeenCalled();
   });
 });

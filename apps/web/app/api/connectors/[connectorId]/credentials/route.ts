@@ -134,7 +134,7 @@ async function handlePost(
     request,
     surface: resolveCloudChatSurface(request),
   });
-  if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
+  if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason).asUserSafe();
 
   const parsedBody = SaveConnectorCredentialRequestSchema.safeParse(
     await request.json().catch(() => null),

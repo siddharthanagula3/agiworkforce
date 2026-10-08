@@ -443,6 +443,7 @@ export {
   type DirectoryDetail,
   type DirectoryDetailFile,
   type DirectoryEntry,
+  type DirectoryLockNotice,
   type DirectoryFilterGroup,
   type DirectoryFilterOption,
   type DirectoryFilterSelection,

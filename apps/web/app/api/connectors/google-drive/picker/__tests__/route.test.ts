@@ -1,5 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
@@ -134,5 +140,24 @@ describe('GET /api/connectors/google-drive/picker', () => {
       resolveOrganization: false,
     });
     expect(mocks.resolveConnectorAccessToken).toHaveBeenCalledWith('user-1', 'google-drive');
+  });
+});
+
+describe('GET /api/connectors/google-drive/picker while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('refuses with the coming-soon message and hands out no Drive token', async () => {
+    const response = await GET(request());
+    const body = JSON.stringify(await response.json());
+
+    expect(response.status).toBe(403);
+    expect(body).toContain('Connectors are coming soon.');
+    expect(body).not.toContain('ya29');
+    expect(mocks.resolveConnectorAccessToken).not.toHaveBeenCalled();
   });
 });

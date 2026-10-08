@@ -1,12 +1,25 @@
 import 'server-only';
 
-import { getTierPolicy } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+  getTierPolicy,
+} from '@agiworkforce/types';
 
+import { createError, type AppError } from '@/lib/errors';
 import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import type { FlagSubject } from '@/lib/feature-flags/evaluate-flags';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { logger } from '@/lib/logger';
 import { managedCloudDataRegion } from '@/lib/server/data-region';
+
+export function connectorsComingSoonError(): AppError {
+  return createError.forbidden(CONNECTORS_COMING_SOON_MESSAGE).asUserSafe();
+}
+
+export function assertConnectorsReleased(): void {
+  if (!connectorsReleased()) throw connectorsComingSoonError();
+}
 
 async function connectorSwitchOpen(subject: FlagSubject): Promise<boolean> {
   return readKillSwitchGate(subject).then(
@@ -30,6 +43,7 @@ export async function connectorsAllowedForTurn(
     chatSurface: string;
   },
 ): Promise<boolean> {
+  if (!connectorsReleased()) return false;
   if (!getTierPolicy(turn.subscriptionTier).allowMCP) return false;
   return connectorSwitchOpen(
     buildFlagSubject(request, {
@@ -48,6 +62,7 @@ export async function connectorsAllowedWithoutRequest(input: {
   planTier: string | null | undefined;
   surface?: string | null;
 }): Promise<boolean> {
+  if (!connectorsReleased()) return false;
   if (!getTierPolicy(input.planTier).allowMCP) return false;
   return connectorSwitchOpen({
     userId: input.userId,
