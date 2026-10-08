@@ -136,7 +136,7 @@ _Cells by surface (generated):_
 
 - **Deep Research on web works end to end:** plan editing, site limits, progress, stop, partial report, a reader with contents and linked citations, and Markdown/PDF/Word export. The citation UI is strong. The retrieval stack is real: hybrid search, reranking, access-scoped results, and temporary and archived chats excluded from the index.
 - **Memory** reads work everywhere, but writes fail on production (§2.4).
-- **Study mode is broken end to end.** "Start studying" always gets a 403, because the request carries no CSRF token (`apps/web/features/study/components/StudyPage.tsx:36-53`). Even with that fixed, the study instructions never reach the model. Live QA reproduced it.
+- **Study mode works in the web chat.** The audit found it broken end to end: a missing CSRF token made "Start studying" return 403, and the study instructions never reached the model. Both are fixed: the token is sent (`3c16cbd0ec`), the active study instruction is added as a developer layer in `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, and study now runs inside the chat (`44a980b4c1`, `0c9e84472e`).
 - **There is no notebook product.** Projects stand in for one.
 - **Chrome's plain chat never searches the web.** CLI and VS Code search needs the user's own `SEARCH_API_KEY`.
 
@@ -175,12 +175,13 @@ _Cells by surface (generated):_
 
 ### G. Assistants, skills, plugins, connectors and tools
 
+- **Connectors are locked as coming soon** for every account, behind `connectorsReleased()` in `packages/contracts/types/src/connector-release.ts` (`0367c4b140`). The connector bullets below describe the code behind that switch.
 - **Connectors.** Web has a complete connector directory with OAuth, scope explanations and per-conversation connector switches. It has a complete MCP Apps host, which contradicts an older checklist.
 - **Pinned connectors work:** Box, Jira, Asana, HubSpot, Intercom, Figma, Vercel and Slack. Gmail, Google Calendar, Drive, Sheets, Teams, GitLab, BigQuery and Epic/Cerner exist only when the operator configures them (§5).
 - **Custom MCP servers:** the CLI adds local and remote servers; web adds remote ones.
 - **Tool calling is strong on the server:** approval checkpoints bound to the exact call, a 24-hour expiry, idempotency keys, durable runs and run budgets.
 - **Custom assistants exist only in the CLI,** as file-based agents with no edit or delete.
-- **Personal skills are off by default on web,** but the Upload button still shows and fails.
+- **Personal skills are on by default on web** since `ffa5965f88`; `AGI_USER_SKILL_AUTHORING=0` is only an off switch. The audit found them off by default with an Upload button that failed.
 
 Connector defects:
 
