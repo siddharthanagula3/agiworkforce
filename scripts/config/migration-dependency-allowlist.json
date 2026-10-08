@@ -1,4 +1,15 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/lib/connectors/plugin-connectors.ts",
+      "migration": 356,
+      "reason": "Production deploys are on hold (2026-10-07); the release applies the pending chain through 0357 with --confirm-production before this code is deployed. Remove once production records 0356."
+    },
+    {
+      "file": "apps/web/lib/user-connector-tools.ts",
+      "migration": 356,
+      "reason": "Production deploys are on hold (2026-10-07); the release applies the pending chain through 0357 with --confirm-production before this code is deployed. Remove once production records 0356."
+    }
+  ]
 }
