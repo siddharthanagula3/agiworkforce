@@ -512,7 +512,7 @@ svg + .menuRowLabel {
   justify-content: center;
   min-height: 44px;
   padding: 0 22px;
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   background: var(--chat-text-primary);
   color: var(--chat-bg);
   font-size: 15px;
