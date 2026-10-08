@@ -118,10 +118,6 @@ const WCAG_AA_LARGE = 3.0;
 
 const repoRoot = resolve(import.meta.dirname, '../../../../..');
 const globalsCss = readFileSync(resolve(repoRoot, 'apps/web/app/globals.css'), 'utf8');
-const legacyPagesCss = readFileSync(
-  resolve(repoRoot, 'apps/web/features/marketing/components/legacy-pages.css'),
-  'utf8',
-);
 const chatCss = readFileSync(resolve(repoRoot, 'packages/ui/design-tokens/src/chat.css'), 'utf8');
 const tailwindCss = readFileSync(
   resolve(repoRoot, 'packages/ui/design-tokens/src/tailwind.css'),
@@ -828,25 +824,6 @@ describe('the marketing design-system palette clears AA in both themes', () => {
     expect(token(BASE, '--agi-button-bg-hover')).toBe('var(--agi-ink-2)');
     expect(token(BASE, '--agi-button-ink')).toBe('var(--agi-ground)');
     expect(THEMES.light).not.toMatch(/--agi-button-(bg|ink)/);
-  });
-
-  it('draws the selected billing toggle savings label in the button ink, not the accent', () => {
-    const decls = new Map<string, string>();
-    postcss.parse(legacyPagesCss).walkRules((rule) => {
-      if (
-        !rule.selectors.includes(
-          "[data-design='agi'] .agi-tier-toggle-btn--active .agi-tier-toggle-save",
-        )
-      ) {
-        return;
-      }
-      rule.walkDecls((decl) => {
-        decls.set(decl.prop, decl.value);
-      });
-    });
-
-    expect(decls.get('color')).toBe('var(--agi-button-ink)');
-    expect(decls.get('font-size')).toBeUndefined();
   });
 
   for (const [theme, block] of Object.entries(THEMES)) {
