@@ -249,9 +249,13 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
     expect(pricing).toMatch(/Desktop runs managed cloud/u);
     expect(pricing).not.toMatch(/SQLite|llama\.cpp|vLLM|Desktop, CLI & VS Code/u);
     const page = rendered('app/pricing/page.tsx');
-    expect(page).toMatch(/pricingDeveloperSurfaceCell\(row\.planId, value, t\)/u);
-    expect(page).toMatch(/cellValue=\{presentedComparisonCellValue\}/u);
-    expect(page).toMatch(/\{presentedComparisonCellValue\(col, row\)\}/u);
+    expect(page).toMatch(
+      /capabilityRow\('developer_surfaces', pricingDeveloperSurfaceNote\(t\)\)/u,
+    );
+    expect(page).toMatch(/<PlanComparisonTable[^>]*groups=\{comparisonGroups\}/u);
+    expect(page).toMatch(
+      /<PlanComparisonStack plans=\{comparisonPlans\} groups=\{comparisonGroups\} \/>/u,
+    );
   });
 
   it('keeps every translated pricing file free of the retired SQLite claim', () => {
