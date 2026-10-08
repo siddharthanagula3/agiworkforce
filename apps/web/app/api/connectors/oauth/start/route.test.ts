@@ -1,6 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 const mocks = vi.hoisted(() => {
   class ConnectorOAuthStoreUnavailableError extends Error {
     constructor() {
@@ -285,6 +291,39 @@ describe('GET /api/connectors/oauth/start', () => {
     const response = await GET(request('?connectorId=linear&mode=json'));
 
     expect(response.status).toBe(501);
+    expect(mocks.createPending).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/connectors/oauth/start while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('refuses before any authorization is started, with a plain coming-soon message', async () => {
+    configureLinear();
+
+    const response = await GET(request('?connectorId=linear&mode=json'));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      message: 'Connectors are coming soon.',
+      connectorId: 'linear',
+    });
+    expect(mocks.createPending).not.toHaveBeenCalled();
+  });
+
+  it('sends a browser back to where it came from instead of to the provider', async () => {
+    configureLinear();
+
+    const response = await GET(request('?connectorId=linear'));
+
+    const location = new URL(response.headers.get('location') as string);
+    expect(location.origin).toBe('https://app.example.com');
+    expect(location.searchParams.get('code_challenge')).toBeNull();
     expect(mocks.createPending).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,8 @@ export * from './error-taxonomy';
 
 export * from './connector-vocabulary';
 
+export * from './connector-release';
+
 export * from './message-block-kinds';
 
 export * from './customModel';

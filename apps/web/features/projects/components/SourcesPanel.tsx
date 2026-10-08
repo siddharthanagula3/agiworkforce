@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';
-import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
+import {
+  ALLOWED_ATTACHMENT_ACCEPT,
+  connectorsReleased,
+  type ProjectKnowledgeFile,
+} from '@agiworkforce/types';
 import { HardDrive, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
@@ -397,7 +401,9 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
           >
             {readOnly
               ? 'The owner of this project has not added any sources yet. Only they can add or remove them.'
-              : 'Upload files, paste text or add files from Google Drive to give AGI deeper context about your project.'}
+              : connectorsReleased()
+                ? 'Upload files, paste text or add files from Google Drive to give AGI deeper context about your project.'
+                : 'Upload files or paste text to give AGI deeper context about your project.'}
           </p>
 
           {readOnly ? null : (

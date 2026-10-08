@@ -11,6 +11,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireSharingManager, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { shareConnector, unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
+import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
@@ -39,6 +40,7 @@ async function handleShare(
 
   const { db, userId } = await getUserScopedDb(request);
   const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
+  assertConnectorsReleased();
 
   const shared = await shareConnector(db, {
     organizationId: membership.organizationId,

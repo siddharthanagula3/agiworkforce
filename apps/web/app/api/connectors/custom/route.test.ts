@@ -1,5 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
 const mocks = vi.hoisted(() => ({
@@ -288,5 +294,28 @@ describe('DELETE /api/connectors/custom vendor revocation', () => {
         'you remove it at https://sentry.example/settings/apps.',
     });
     expect(order).toEqual(['row deleted']);
+  });
+});
+
+describe('POST /api/connectors/custom while connectors are coming soon', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorRelease.released = false;
+    mocks.getSubscription.mockResolvedValue({ plan_tier: 'max' });
+    mocks.query.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('refuses on a paid plan as coming soon, before the server is contacted or a row is written', async () => {
+    const response = await POST(request());
+    const body = (await response.json()) as { error: { message: string } };
+
+    expect(response.status).toBe(403);
+    expect(body.error.message).toBe('Connectors are coming soon.');
+    expect(body.error.message).not.toMatch(/upgrade/i);
+    expect(mocks.connect).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 });

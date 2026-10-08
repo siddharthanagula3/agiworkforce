@@ -1,4 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
@@ -35,5 +41,24 @@ describe('registerGmailWatch when the Gmail token cannot be refreshed right now'
 
     const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
     expect(params[2]).toBe('Gmail could not be reached. Try again later.');
+  });
+});
+
+describe('registerGmailWatch while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('records the coming-soon message and never reads the Gmail grant', async () => {
+    const query = vi.fn(async () => []);
+
+    await registerGmailWatch({ query } as never, TRIGGER, { restart: true });
+
+    const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(params[2]).toBe('Connectors are coming soon.');
+    expect(mocks.resolve).not.toHaveBeenCalled();
   });
 });

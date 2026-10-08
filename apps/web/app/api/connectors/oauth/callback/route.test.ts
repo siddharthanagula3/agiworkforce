@@ -1,6 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 const mocks = vi.hoisted(() => {
   class ConnectorOAuthStoreUnavailableError extends Error {
     constructor() {
@@ -323,5 +329,28 @@ describe('GET /api/connectors/oauth/callback', () => {
 
     expect(location(response).pathname).toBe('/login');
     expect(mocks.consumePending).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/connectors/oauth/callback while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('spends the state, exchanges no code and stores no grant', async () => {
+    mocks.consumePending.mockResolvedValue(pending());
+
+    const response = await GET(request(`?state=${STATE}&code=auth-code`));
+
+    expect(mocks.consumePending).toHaveBeenCalledWith(STATE, 'user-1');
+    expect(mocks.exchange).not.toHaveBeenCalled();
+    expect(mocks.upsertGrant).not.toHaveBeenCalled();
+    const target = location(response);
+    expect(target.pathname).toBe('/connectors');
+    expect(target.searchParams.get('status')).toBe('unavailable');
+    expect(target.searchParams.get('connector')).toBe('linear');
   });
 });

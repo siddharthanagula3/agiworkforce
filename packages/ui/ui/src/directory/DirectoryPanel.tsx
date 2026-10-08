@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Lock } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
@@ -162,6 +163,7 @@ function DirectorySectionPanel({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const lockNoticeId = useId();
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -352,6 +354,7 @@ function DirectorySectionPanel({
   const requestInstall = useCallback(
     (id: string) => {
       const entry = data.entries.find((candidate) => candidate.id === id);
+      if (data.locked || entry?.connectableMode === 'coming-soon') return;
       if (entry?.connectableMode === 'api-key-form' && adapter.requestCredentials) {
         adapter.requestCredentials(section, id);
         setEntryId(id);
@@ -370,7 +373,7 @@ function DirectorySectionPanel({
         onConfirm: () => runAction(id, adapter.install),
       });
     },
-    [data.entries, adapter, section, confirm, runAction],
+    [data.entries, data.locked, adapter, section, confirm, runAction],
   );
 
   const gridActions = {
@@ -739,17 +742,48 @@ function DirectorySectionPanel({
               </button>
             ) : null}
             {adapter.createEntry && data.createLabel ? (
-              <button
-                type="button"
-                onClick={() => adapter.createEntry?.(section)}
-                className={DIRECTORY_CREATE_BUTTON}
-              >
-                {data.createLabel}
-              </button>
+              data.locked ? (
+                <button
+                  type="button"
+                  disabled
+                  aria-describedby={lockNoticeId}
+                  className={cn(
+                    DIRECTORY_CREATE_BUTTON,
+                    'cursor-not-allowed gap-1.5 text-muted-foreground hover:bg-transparent',
+                  )}
+                >
+                  <Lock aria-hidden className="size-3.5" />
+                  {data.createLabel}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => adapter.createEntry?.(section)}
+                  className={DIRECTORY_CREATE_BUTTON}
+                >
+                  {data.createLabel}
+                </button>
+              )
             ) : null}
             {headerActions}
           </div>
         </div>
+
+        {data.locked ? (
+          <div
+            id={lockNoticeId}
+            data-testid="directory-locked-notice"
+            className="flex items-start gap-3 rounded-xl border border-border bg-muted p-4"
+          >
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground">
+              <Lock aria-hidden className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">{data.locked.label}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">{data.locked.message}</p>
+            </div>
+          </div>
+        ) : null}
 
         <DirectoryToolbar
           section={section}

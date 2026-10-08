@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleCheck, Plus, Settings as SettingsIcon } from 'lucide-react';
+import { CircleCheck, Lock, Plus, Settings as SettingsIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '../cn';
@@ -106,13 +106,20 @@ export function DirectoryCard({
       ? undefined
       : onInstall;
   const TrailingIcon = entry.installed ? SettingsIcon : Plus;
+  const comingSoon = entry.connectableMode === 'coming-soon';
   const { glyphs, pills } = splitDirectoryBadges(entry.badges);
   const hasMeta = pills.length > 0 || publisher;
 
   return (
-    <div className={DIRECTORY_CARD}>
+    <div className={DIRECTORY_CARD} data-coming-soon={comingSoon || undefined}>
       <div className="flex items-start gap-3">
-        <EntryIcon entry={entry} />
+        {comingSoon ? (
+          <span className="flex shrink-0 opacity-60 grayscale">
+            <EntryIcon entry={entry} />
+          </span>
+        ) : (
+          <EntryIcon entry={entry} />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-1.5">
             <button
@@ -146,6 +153,21 @@ export function DirectoryCard({
             aria-label={CONNECTED_GLYPH_LABEL}
             className="size-5 shrink-0 text-success-text"
           />
+        ) : comingSoon ? (
+          <button
+            type="button"
+            disabled
+            aria-label={`${entry.name}, ${addLabel}`}
+            title={addLabel}
+            className={cn(
+              'relative z-[var(--z-control)]',
+              DIRECTORY_ICON_BUTTON,
+              DIRECTORY_ADD_BUTTON,
+              'cursor-not-allowed hover:bg-transparent hover:text-muted-foreground',
+            )}
+          >
+            <Lock aria-hidden className="size-4" />
+          </button>
         ) : trailingAction ? (
           <button
             type="button"

@@ -104,7 +104,7 @@ async function handlePost(request: NextRequest) {
     request,
     surface: resolveCloudChatSurface(request),
   });
-  if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
+  if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason).asUserSafe();
 
   let body: Partial<CreateCustomConnectorRequest>;
   try {

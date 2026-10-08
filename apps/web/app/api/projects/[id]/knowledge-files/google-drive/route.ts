@@ -21,6 +21,7 @@ import {
   GoogleDriveFileError,
   downloadGoogleDriveFile,
 } from '@/lib/connectors/google-drive-files';
+import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
 import { registerProjectKnowledgeFile } from '@/lib/server/project-knowledge-files';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -67,6 +68,8 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
+
+  assertConnectorsReleased();
 
   const { id: projectId } = await context.params;
 

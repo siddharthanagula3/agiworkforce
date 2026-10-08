@@ -130,6 +130,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
   canUseBillingPlanCapability,
+  connectorsReleased,
   describeCapabilityDenial,
   getModels,
   isExecutableVideoModel,
@@ -1074,7 +1075,7 @@ const ChatComposerNewComponent = ({
   }, []);
   const connectedConnectorOptions = useMemo(
     () =>
-      Array.from(connectedConnectorIds)
+      (connectorsReleased() ? Array.from(connectedConnectorIds) : [])
         .map((id) => {
           const known = CONNECTORS.find((connector) => connector.id === id);
           const label =

@@ -9,7 +9,9 @@ import {
   Spinner,
   useMenuKeyboard,
 } from '@agiworkforce/ui';
+import { connectorsReleased } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import { ConnectorsComingSoonMenuItem } from '@/features/connectors/components/ConnectorsComingSoonMenuItem';
 import { buildSettingsBrowseHash } from '@/features/directory';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { connectorToggleId, type ComposerPlusMenuConnector } from './ComposerPlusMenu';
@@ -25,6 +27,7 @@ const NO_MATCH_COPY = 'No connected connector matches that search.';
 const LOADING_LABEL = 'Loading connectors';
 const SETTINGS_SECTION = 'connectors';
 const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemcheckbox"]';
+const EMPTY_CONNECTORS: readonly ComposerPlusMenuConnector[] = [];
 
 const PANEL_CLASS = 'w-[min(20rem,calc(100vw-1rem))] rounded-xl p-1.5';
 const SEARCH_WRAP_CLASS = 'relative px-1 pb-1.5 pt-1';
@@ -67,6 +70,7 @@ export function ComposerPluginsMenu({
   const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState('');
   const { openSettings } = useSettingsModal();
+  const released = connectorsReleased();
   const isOpen = open ?? internalOpen;
   const setOpen = useCallback(
     (next: boolean) => {
@@ -78,9 +82,10 @@ export function ComposerPluginsMenu({
   );
   const close = useCallback(() => setOpen(false), [setOpen]);
 
+  const offered = released ? connectors : EMPTY_CONNECTORS;
   const visible = useMemo(
-    () => connectors.filter((connector) => matchesQuery(connector, query)),
-    [connectors, query],
+    () => offered.filter((connector) => matchesQuery(connector, query)),
+    [offered, query],
   );
 
   useMenuKeyboard({
@@ -88,7 +93,7 @@ export function ComposerPluginsMenu({
     onClose: close,
     panelRef,
     itemSelector: MENU_ITEM_SELECTOR,
-    autoFocusFirstItem: connectors.length === 0,
+    autoFocusFirstItem: offered.length === 0,
   });
 
   const browse = () => {
@@ -114,7 +119,7 @@ export function ComposerPluginsMenu({
         data-testid={COMPOSER_CONNECTORS_MENU_TESTID}
         className={PANEL_CLASS}
       >
-        {connectors.length > 0 ? (
+        {offered.length > 0 ? (
           <div className={SEARCH_WRAP_CLASS}>
             <Search
               aria-hidden
@@ -131,7 +136,7 @@ export function ComposerPluginsMenu({
           </div>
         ) : null}
 
-        {loading && connectors.length === 0 ? (
+        {!released ? null : loading && connectors.length === 0 ? (
           <div className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground">
             <Spinner size="sm" aria-label={LOADING_LABEL} />
             {LOADING_LABEL}
@@ -157,19 +162,25 @@ export function ComposerPluginsMenu({
             );
           })}
 
-          <div role="separator" className={DIVIDER_CLASS} />
-          <button
-            type="button"
-            role="menuitem"
-            onClick={browse}
-            className={cn(ROW_CLASS, ROW_BUTTON_CLASS)}
-          >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
-              <Plug aria-hidden className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 flex-1 truncate">{COMPOSER_CONNECTORS_CONNECT_LABEL}</span>
-            <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
+          {released ? (
+            <>
+              <div role="separator" className={DIVIDER_CLASS} />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={browse}
+                className={cn(ROW_CLASS, ROW_BUTTON_CLASS)}
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+                  <Plug aria-hidden className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{COMPOSER_CONNECTORS_CONNECT_LABEL}</span>
+                <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+            </>
+          ) : (
+            <ConnectorsComingSoonMenuItem label={COMPOSER_CONNECTORS_CONNECT_LABEL} />
+          )}
         </div>
       </PopoverContent>
     </Popover>

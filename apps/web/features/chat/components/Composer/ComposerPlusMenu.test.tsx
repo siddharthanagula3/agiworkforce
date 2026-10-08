@@ -8,6 +8,12 @@ import { baseInitOptions } from '@agiworkforce/i18n';
 import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
 
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 const TRIGGER_LABEL = 'Open composer menu';
 
 function baseProps(): Omit<ComposerPlusMenuProps, 'anchorRef' | 'contentRef'> {
@@ -643,5 +649,41 @@ describe('ComposerPlusMenu, desktop host', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Attach from local folder' }));
 
     expect(props.onAttachFromLocalFolder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ComposerPlusMenu while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('shows Connectors as a disabled, locked row that opens nothing', () => {
+    const { props } = renderMenu({ connectorsSubmenuOpen: true });
+
+    const row = screen.getByRole('button', { name: 'Connectors, Coming soon' });
+    expect(row).toBeDisabled();
+    fireEvent.click(row);
+    expect(props.onToggleConnectorsSubmenu).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menuitem', { name: 'Browse connectors' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Add custom connector' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Gmail' })).not.toBeInTheDocument();
+  });
+
+  it('shows the AGI Work palette a locked connectors item and no manage link', () => {
+    const { props } = renderMenu({ workPalette: true });
+
+    const item = within(palette()).getByRole('menuitem', { name: 'Connectors, Coming soon' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByTestId('composer-palette-connector-gmail')).not.toBeInTheDocument();
+    expect(
+      within(palette()).queryByRole('menuitem', { name: 'Manage in Settings' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(item);
+    expect(props.onOpenSettings).not.toHaveBeenCalled();
   });
 });

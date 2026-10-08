@@ -1,4 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 
 vi.mock('server-only', () => ({}));
 
@@ -52,8 +58,11 @@ vi.mock('@agiworkforce/mcp', () => ({
 }));
 
 import {
+  loadUserConnectorCapabilityCatalog,
+  loadUserConnectorToolCatalog,
   loadUserConnectorToolDefs,
   makeUserConnectorExecutor,
+  withUserConnectorMcpHandle,
   __resetConnectorMcpMapCacheForTests,
 } from '../user-connector-tools';
 import { EgressPolicyError } from '@/lib/egress-policy';
@@ -922,5 +931,68 @@ describe('connectors of a plugin that is turned off', () => {
     );
     expect(result.isError).toBe(true);
     expect(mockConnectMcpServer).not.toHaveBeenCalled();
+  });
+});
+
+describe('connector runtime while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+    process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+      connectors: [{ connectorId: 'notion', url: 'https://mcp.notion.example/mcp' }],
+    });
+    stubDb({
+      installations: [{ installation_id: 42, account_login: 'acme' }],
+      activeConnectors: ['notion'],
+    });
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('offers no connector tools to any caller and reads nothing to build them', async () => {
+    const catalog = await loadUserConnectorToolCatalog('user-1', { planTier: 'max' });
+
+    expect(catalog.tools).toEqual([]);
+    expect(catalog.dropped).toEqual([]);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
+  it('describes no connector capabilities and opens no MCP handle', async () => {
+    const operation = vi.fn();
+
+    await expect(loadUserConnectorCapabilityCatalog('user-1', 'notion')).resolves.toBeNull();
+    await expect(withUserConnectorMcpHandle('user-1', 'notion', operation)).resolves.toBeNull();
+    expect(operation).not.toHaveBeenCalled();
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('refuses a connector tool call as coming soon, without dialling it', async () => {
+    const exec = makeUserConnectorExecutor('user-1');
+
+    const remote = await exec('notion', 'search_pages', { q: 'roadmap' });
+    const github = await exec('github', 'get_pull_request_diff', {
+      owner: 'acme',
+      repo: 'r',
+      number: 1,
+    });
+
+    for (const result of [remote, github]) {
+      expect(result).toEqual({
+        handled: true,
+        content: 'Connectors are coming soon.',
+        isError: true,
+      });
+    }
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
+    expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('still leaves a tool that is not a connector to its own executor', async () => {
+    const exec = makeUserConnectorExecutor('user-1');
+
+    await expect(exec('operator-server', 'some_tool', {})).resolves.toMatchObject({
+      handled: false,
+    });
   });
 });

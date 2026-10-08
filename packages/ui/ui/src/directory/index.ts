@@ -49,6 +49,7 @@ export type {
   DirectoryDetail,
   DirectoryDetailFile,
   DirectoryEntry,
+  DirectoryLockNotice,
   DirectoryFilterGroup,
   DirectoryFilterOption,
   DirectoryFilterSelection,

@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => true,
+}));
+
 type ScanModule0 = typeof import('@/lib/services/active-workspace-service');
 type ScanModule1 = typeof import('@/lib/connectors/mcp-directory-targets');
 type ScanModule2 = typeof import('@/lib/connectors/mcp-custom-connections');

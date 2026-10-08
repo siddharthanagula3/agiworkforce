@@ -1,7 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WebSettingsModal } from './WebSettingsModal';
 import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
+
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -809,4 +815,39 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       'page',
     );
   });
+});
+
+describe('WebSettingsModal connectors while connectors are coming soon', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    invalidateSkillsCatalog();
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('locks the directory with a coming-soon notice and leaves nothing to connect', async () => {
+    stubFetch({ available: ['github'] });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
+
+    const notice = await screen.findByTestId('directory-locked-notice');
+    expect(within(notice).getByText('Coming soon')).toBeTruthy();
+    expect(
+      within(notice).getByText(
+        'Connecting Gmail, Google Drive, Calendar and other apps is coming soon.',
+      ),
+    ).toBeTruthy();
+    expect(
+      (await screen.findByRole('button', { name: 'GitHub, Coming soon' })).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Connect GitHub' })).toBeNull();
+    expect(screen.queryByText('Connectors are unavailable right now')).toBeNull();
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Add$/ }));
+    expect(await screen.findByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Add custom connector' })).toBeNull();
+  }, 15_000);
 });

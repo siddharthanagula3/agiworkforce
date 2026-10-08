@@ -1,5 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
 
 vi.mock('server-only', () => ({}));
 
@@ -500,5 +506,33 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
       }),
     );
     expect(mocks.buildArtifactConnectorPlan).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/artifacts/runtime/[token]/complete while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('refuses an app run that asks for connected apps as coming soon, not as a plan limit', async () => {
+    const response = await call({ prompt: 'Summarize', connectors: ['gmail'] });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: { code: 'connectors_coming_soon', message: 'Connectors are coming soon.' },
+    });
+    expect(mocks.evaluateManagedComputeAccess).not.toHaveBeenCalled();
+    expect(mocks.buildArtifactConnectorPlan).not.toHaveBeenCalled();
+    expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
+  });
+
+  it('still runs an app that uses no connected apps', async () => {
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.completeArtifactPrompt).toHaveBeenCalled();
   });
 });

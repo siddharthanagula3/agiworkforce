@@ -1,6 +1,6 @@
 'use client';
 
-import { Copy, Info, Monitor } from 'lucide-react';
+import { Copy, Info, Lock, Monitor } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -24,6 +24,7 @@ import {
   CONNECTOR_MORE_INFO_LABEL,
   CONNECTOR_NEEDS_SETUP_LABEL,
   CONNECTOR_UNAVAILABLE_LABEL,
+  CONNECTOR_COMING_SOON_LABEL,
   CONNECTOR_PRIVACY_LABEL,
   CONNECTOR_RELATED_HEADING,
   CONNECTOR_REPOSITORY_LABEL,
@@ -180,12 +181,22 @@ const PRIMARY_LABEL_BY_MODE: Record<DirectoryConnectableMode, string> = {
   'desktop-and-cli': CONNECTOR_DESKTOP_ONLY_LABEL,
   'needs-setup': CONNECTOR_NEEDS_SETUP_LABEL,
   unavailable: CONNECTOR_UNAVAILABLE_LABEL,
+  'coming-soon': CONNECTOR_COMING_SOON_LABEL,
 };
 
 const ACTIONABLE_MODES: ReadonlySet<DirectoryConnectableMode> = new Set([
   'connect',
   'api-key-form',
 ]);
+
+function ComingSoonStatus() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Lock aria-hidden className="size-4" />
+      {CONNECTOR_COMING_SOON_LABEL}
+    </span>
+  );
+}
 
 function DesktopAvailability({ href }: { href?: string }) {
   return (
@@ -248,8 +259,10 @@ export function ConnectorDetailView({
   }, [detail.id]);
 
   const connected = detail.connected === true;
-  const reconnect = connected && detail.needsReauthorization === true && onConnect !== undefined;
   const mode = resolveMode(detail);
+  const comingSoon = mode === 'coming-soon';
+  const reconnect =
+    connected && detail.needsReauthorization === true && onConnect !== undefined && !comingSoon;
   const listed = !connected && detail.listingNote !== undefined;
   const actionable = !listed && ACTIONABLE_MODES.has(mode);
   const primaryAction =
@@ -299,7 +312,13 @@ export function ConnectorDetailView({
           onPrimary={
             reconnect ? onConnect : actionable && !credentialForm ? primaryAction : undefined
           }
-          statusNote={actionable || listed ? undefined : PRIMARY_LABEL_BY_MODE[mode]}
+          statusNote={
+            comingSoon ? (
+              <ComingSoonStatus />
+            ) : actionable || listed ? undefined : (
+              PRIMARY_LABEL_BY_MODE[mode]
+            )
+          }
           {...(connected && onDisconnect
             ? { onRemove: onDisconnect, removeLabel: CONNECTOR_DISCONNECT_LABEL }
             : {})}
@@ -309,6 +328,13 @@ export function ConnectorDetailView({
       </div>
 
       {credentialForm ? <div data-testid="connector-credential-form">{credentialForm}</div> : null}
+
+      {comingSoon ? (
+        <div className={DETAIL_NOTICE} data-testid="connector-coming-soon-notice">
+          <Lock aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <p>{detail.setupNotice ?? CONNECTOR_COMING_SOON_LABEL}</p>
+        </div>
+      ) : null}
 
       {reconnect ? (
         <Notice>

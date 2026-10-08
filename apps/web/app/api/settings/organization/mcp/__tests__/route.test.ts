@@ -1,4 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => connectorRelease.released,
+}));
+
 type ScanModule0 = typeof import('@/lib/security-audit');
 type ScanModule1 = typeof import('@/lib/services/organization-permission-service');
 type ScanModule2 = typeof import('@/lib/connectors/mcp-custom-connections');
@@ -238,5 +244,49 @@ describe('PATCH /api/settings/organization/mcp', () => {
 
     const response = await PATCH(request('PATCH', { serverId: SERVER_ROW.id, published: false }));
     expect(response.status).toBe(404);
+  });
+});
+
+describe('workspace MCP servers while connectors are coming soon', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('refuses to publish a server, without contacting it or writing a row', async () => {
+    const response = await POST(
+      request('POST', { name: 'Acme Gateway', url: 'https://mcp.acme.test/mcp' }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await refusal(response)).toBe('Connectors are coming soon.');
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses to republish a server', async () => {
+    const response = await PATCH(request('PATCH', { serverId: SERVER_ROW.id, published: true }));
+
+    expect(response.status).toBe(403);
+    expect(await refusal(response)).toBe('Connectors are coming soon.');
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('still lets an administrator retire a server', async () => {
+    mocks.query
+      .mockResolvedValueOnce([{ revision: 7 }])
+      .mockResolvedValueOnce([
+        { ...SERVER_ROW, published: false, retired_at: '2026-09-18T01:00:00.000Z' },
+      ])
+      .mockResolvedValueOnce([
+        { ...SERVER_ROW, published: false, retired_at: '2026-09-18T01:00:00.000Z' },
+      ])
+      .mockResolvedValueOnce([{ revision: 8 }]);
+
+    const response = await PATCH(request('PATCH', { serverId: SERVER_ROW.id, retired: true }));
+
+    expect(response.status).toBe(200);
   });
 });
