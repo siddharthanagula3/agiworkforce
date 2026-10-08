@@ -40,7 +40,7 @@
       "tier": "frontier",
       "modelType": "reasoning",
       "lifecyclePolicy": "stable",
-      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)-sol$",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)-astra$",
       "requiredCapabilities": [
         "functionCalling",
         "imageInput",
@@ -53,6 +53,63 @@
       "minContextTokens": 1050000,
       "minMaxOutputTokens": 128000,
       "active": {
+        "modelKey": "gpt-6-astra",
+        "generation": "6",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on openai",
+            "familyIdentity": "matches gpt-frontier at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "inputPerMillion rose 150.0% over 25%; outputPerMillion rose 150.0% over 25%"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 10,
+          "outputPerMillion": 50,
+          "cacheReadPerMillion": 1,
+          "cacheWritePerMillion": 12.5
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": true,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": false,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1050000,
+          "maxInputTokens": 922000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-04-30"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "gpt-5.6-sol",
         "generation": "5.6",
         "lifecycle": "stable",
@@ -89,9 +146,15 @@
         },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-10-07",
+          "from": "gpt-5.6-sol",
+          "to": "gpt-6-astra",
+          "reason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
+        }
+      ]
     },
     "openai/gpt-balanced": {
       "provider": "openai",
@@ -99,7 +162,7 @@
       "tier": "balanced",
       "modelType": "reasoning",
       "lifecyclePolicy": "stable",
-      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)-terra$",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)-sol$",
       "requiredCapabilities": [
         "functionCalling",
         "imageInput",
@@ -112,6 +175,63 @@
       "minContextTokens": 1050000,
       "minMaxOutputTokens": 128000,
       "active": {
+        "modelKey": "gpt-6.1-sol",
+        "generation": "6.1",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on openai",
+            "familyIdentity": "matches gpt-balanced at tier balanced",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 10,
+          "cacheReadPerMillion": 0.1,
+          "cacheWritePerMillion": 2.5
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": true,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": false,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1050000,
+          "maxInputTokens": 922000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-04-30"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "gpt-5.6-terra",
         "generation": "5.6",
         "lifecycle": "stable",
@@ -148,9 +268,15 @@
         },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-10-07",
+          "from": "gpt-5.6-terra",
+          "to": "gpt-6.1-sol",
+          "reason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
+        }
+      ]
     },
     "openai/gpt-fast": {
       "provider": "openai",
@@ -171,6 +297,63 @@
       "minContextTokens": 1050000,
       "minMaxOutputTokens": 128000,
       "active": {
+        "modelKey": "gpt-6-luna",
+        "generation": "6",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on openai",
+            "familyIdentity": "matches gpt-fast at tier fast",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.1,
+          "outputPerMillion": 0.5,
+          "cacheReadPerMillion": 0.01,
+          "cacheWritePerMillion": 0.125
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": true,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": false,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1050000,
+          "maxInputTokens": 922000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-05-18"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "gpt-5.6-luna",
         "generation": "5.6",
         "lifecycle": "stable",
@@ -207,9 +390,15 @@
         },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-10-07",
+          "from": "gpt-5.6-luna",
+          "to": "gpt-6-luna",
+          "reason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
+        }
+      ]
     },
     "openai/gpt-image": {
       "provider": "openai",
@@ -217,11 +406,62 @@
       "tier": "frontier",
       "modelType": "image",
       "lifecyclePolicy": "stable",
-      "apiModelIdPattern": "^gpt-image-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "apiModelIdPattern": "^gpt-image-(?<generation>\\d+(?:\\.\\d+)*)-sunburst$",
       "requiredCapabilities": ["imageInput", "imageOutput", "textInput"],
       "minContextTokens": 4000,
       "minMaxOutputTokens": null,
       "active": {
+        "modelKey": "gpt-image-2.5-sunburst",
+        "generation": "2.5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on openai",
+            "familyIdentity": "matches gpt-image at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "context 0 below required 4000",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 8,
+          "outputPerMillion": 30,
+          "cacheReadPerMillion": 2
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": false,
+          "imageOutput": true,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": false,
+          "agentic": false,
+          "webSearch": false,
+          "deepResearch": false,
+          "codeExecution": false,
+          "promptCaching": true
+        },
+        "limitSnapshot": {},
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "gpt-image-2",
         "generation": "2",
         "lifecycle": "stable",
@@ -253,9 +493,15 @@
         "limitSnapshot": { "contextTokens": 4000 },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-10-07",
+          "from": "gpt-image-2",
+          "to": "gpt-image-2.5-sunburst",
+          "reason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
+        }
+      ]
     },
     "openai/transcribe-balanced": {
       "provider": "openai",

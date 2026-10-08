@@ -117,10 +117,10 @@ test('the backfill census is the one the compiler prints', () => {
   );
   const census = stageCensus(stages);
   assert.equal(census.get(LIFECYCLE_STAGE.discovered), 346);
-  assert.equal(census.get(LIFECYCLE_STAGE.promoted), 18);
+  assert.equal(census.get(LIFECYCLE_STAGE.promoted), 20);
   assert.equal(census.get(LIFECYCLE_STAGE.evaluated), 7);
-  assert.equal(census.get(LIFECYCLE_STAGE.registered), 29);
-  assert.equal(census.get(LIFECYCLE_STAGE.probed), 5);
+  assert.equal(census.get(LIFECYCLE_STAGE.registered), 27);
+  assert.equal(census.get(LIFECYCLE_STAGE.probed), 1);
   assert.equal(census.get(LIFECYCLE_STAGE.deprecated), 2);
   assert.equal(
     [...census.values()].reduce((total, count) => total + count, 0),
@@ -128,7 +128,7 @@ test('the backfill census is the one the compiler prints', () => {
   );
   assert.equal(
     formatStageCensus(stages),
-    'discovered 346, registered 29, probed 5, evaluated 7, promoted 18, deprecated 2',
+    'discovered 346, registered 27, probed 1, evaluated 7, promoted 20, deprecated 2',
   );
 });
 

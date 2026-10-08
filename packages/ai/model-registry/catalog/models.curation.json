@@ -463,6 +463,12 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model outside the QwenCloud free quota, the anthropic/claude-opus slot moves from claude-opus-5 to claude-opus-5-5 and the anthropic/claude-sonnet slot from claude-sonnet-5 to claude-sonnet-5-5. The eval gate was not run for either move: no Anthropic slot has a committed baseline and no run was recorded for either model, so nothing here says the new models were measured against the old ones. The catalog-side gates the family tool computes (provider, family identity, lifecycle, capability coverage, price and limit regression) were evaluated and are recorded on each slot. Claude Opus 5.5 lists at $4/$20 per million against $5/$25 for Claude Opus 5, cannot have thinking switched off and defaults to medium effort; Claude Sonnet 5.5 keeps $2/$10. claude-opus-5, claude-opus-4-8, claude-sonnet-5 and claude-haiku-4-5 leave the roster through the retire tool into retired-models.json, each naming its successor, and their route and probe records go with them. claude-haiku-5-5 takes no family slot: no routing slot names a Haiku model and the picker lists it from its own row. The successors carry only their direct Anthropic route. The marketplace routes the retired rows had (OpenRouter, Vercel AI Gateway, Cheaper Inference, Experiential Labs) were not copied, because no source read for this change states that those gateways serve the new ids or at what price; until they are added, a Claude model has no same-model fallback route and one Claude model cannot stand in for another in a fallback plan. No provider call was made."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the three OpenAI chat slots follow the tier names OpenAI uses from generation 6: the frontier slot now matches the astra name and holds gpt-6-astra, the balanced slot matches sol and holds gpt-6.1-sol, and the fast slot holds gpt-6-luna. The eval gate was not run for any of them: no OpenAI slot has a committed baseline and no run was recorded for these models. The catalog-side gates are recorded on each slot, and one of them fails: gpt-6-astra lists at $10/$50 per million against $4/$20 for gpt-5.6-sol, a 150% rise on both sides against the 25% ceiling, so the frontier slot, the OpenAI default and the flagship_general Auto slot now cost two and a half times what they did. gpt-6.1-sol lists at $2/$10 against $2/$12 for gpt-5.6-terra and gpt-6-luna at $0.10/$0.50 against $0.20/$1.20. gpt-6.1-sol moves from the Max list to the Pro list with the balanced slot it now holds, and its minTier follows; the direct entries for gpt-6-astra, gpt-6.1-sol and gpt-6-luna in tierAllowedModels are dropped because the slots now name them. The openai/gpt-image slot matches the sunburst name and holds gpt-image-2.5-sunburst, the model OpenAI describes as its most capable for generation and editing; gpt-image-2.5-flare stays as a registered row outside the slot. Both 2.5 image rows now declare image input and prompt caching, which their pricing rows (image input and cached input prices) and the edits endpoint already stated; OpenAI publishes no context limit for them, so the slot's 4,000 token minimum is unmet by data and recorded as such on the slot. gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and gpt-image-2 leave through the retire tool into retired-models.json, each naming the model that took its slot, with their route, probe and synced records. The successors carry fewer routes: gpt-6-astra keeps its Experiential Labs and Cheaper Inference routes, gpt-6.1-sol and gpt-6-luna have only the direct OpenAI route, and the OpenRouter and Vercel AI Gateway routes of the 5.6 rows were not copied because nothing read for this change says those gateways serve the new ids. The GPT-6 rows record no ultra, pro or persistent reasoning surface and gpt-6-astra and gpt-6.1-sol do not accept effort none; nothing in product code reads the three surface records. No provider call was made."
     }
   ],
   "providers": {
@@ -1022,348 +1028,9 @@
       "speedOverride": "slow",
       "releasedOverride": "September 3, 2026",
       "lifecycle": {
-        "stage": "probed",
-        "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6-astra"
-      }
-    },
-    "gpt-5.6-sol": {
-      "id": "gpt-5.6-sol",
-      "apiModelId": "gpt-5.6-sol",
-      "openRouterSlug": "openai/gpt-5.6-sol",
-      "name": "GPT-5.6 Sol",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16",
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputCost": 8,
-          "cached_input": 0.8,
-          "cached_write": 10,
-          "outputCost": 30
-        }
-      ],
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Multi-Agent"],
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "responsesEffortPath": "reasoning.effort",
-          "togglePath": null,
-          "budgetPath": null
-        },
-        "ultraMode": {
-          "enabled": false,
-          "param": "multi_agent.enabled",
-          "concurrencyParam": "multi_agent.max_concurrent_subagents",
-          "beta": "responses_multi_agent=v1",
-          "endpoint": "responses",
-          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
-        },
-        "proMode": {
-          "param": "reasoning.mode",
-          "value": "pro",
-          "endpoint": "responses"
-        },
-        "persistentReasoning": {
-          "param": "reasoning.context",
-          "values": ["auto", "all_turns", "current_turn"],
-          "continuationParam": "previous_response_id",
-          "zdrInclude": ["reasoning.encrypted_content"],
-          "endpoint": "responses"
-        }
-      },
-      "toolCalling": {
-        "programmatic": {
-          "toolType": "programmatic_tool_calling",
-          "optInParam": "allowed_callers",
-          "optInValues": ["direct", "programmatic"],
-          "runtime": "javascript-v8-isolated",
-          "responseItems": ["program", "function_call(caller)", "program_output"],
-          "endpoint": "responses"
-        }
-      },
-      "imageInput": {
-        "detailValues": ["low", "high", "original", "auto"]
-      },
-      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "cachePolicy": {
-        "writeMultiplier": 1.25,
-        "readDiscount": 0.9,
-        "minCacheLifeMin": 30,
-        "explicitBreakpoints": true
-      },
-      "reasoningDots": 5,
-      "tierPolicy": {
-        "minTier": "max"
-      },
-      "costOverride": {
-        "inputCost": 4,
-        "outputCost": 20,
-        "cached_input": 0.4,
-        "cached_write": 5
-      },
-      "contextOverride": 1050000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "July 9, 2026",
-      "lifecycle": {
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_general"
-      }
-    },
-    "gpt-5.6-terra": {
-      "id": "gpt-5.6-terra",
-      "apiModelId": "gpt-5.6-terra",
-      "openRouterSlug": "openai/gpt-5.6-terra",
-      "name": "GPT-5.6 Terra",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16",
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputCost": 4,
-          "cached_input": 0.4,
-          "cached_write": 5,
-          "outputCost": 18
-        }
-      ],
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Balanced Intelligence & Cost", "Coding", "Agentic Tasks", "General Chat"],
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "responsesEffortPath": "reasoning.effort",
-          "togglePath": null,
-          "budgetPath": null
-        },
-        "ultraMode": {
-          "enabled": false,
-          "param": "multi_agent.enabled",
-          "concurrencyParam": "multi_agent.max_concurrent_subagents",
-          "beta": "responses_multi_agent=v1",
-          "endpoint": "responses",
-          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
-        },
-        "proMode": {
-          "param": "reasoning.mode",
-          "value": "pro",
-          "endpoint": "responses"
-        },
-        "persistentReasoning": {
-          "param": "reasoning.context",
-          "values": ["auto", "all_turns", "current_turn"],
-          "continuationParam": "previous_response_id",
-          "zdrInclude": ["reasoning.encrypted_content"],
-          "endpoint": "responses"
-        }
-      },
-      "toolCalling": {
-        "programmatic": {
-          "toolType": "programmatic_tool_calling",
-          "optInParam": "allowed_callers",
-          "optInValues": ["direct", "programmatic"],
-          "runtime": "javascript-v8-isolated",
-          "responseItems": ["program", "function_call(caller)", "program_output"],
-          "endpoint": "responses"
-        }
-      },
-      "imageInput": {
-        "detailValues": ["low", "high", "original", "auto"]
-      },
-      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "cachePolicy": {
-        "writeMultiplier": 1.25,
-        "readDiscount": 0.9,
-        "minCacheLifeMin": 30,
-        "explicitBreakpoints": true
-      },
-      "reasoningDots": 4,
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "costOverride": {
-        "inputCost": 2,
-        "outputCost": 12,
-        "cached_input": 0.2,
-        "cached_write": 2.5
-      },
-      "contextOverride": 1050000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "July 9, 2026",
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_balanced"
-      }
-    },
-    "gpt-5.6-luna": {
-      "id": "gpt-5.6-luna",
-      "apiModelId": "gpt-5.6-luna",
-      "openRouterSlug": "openai/gpt-5.6-luna",
-      "name": "GPT-5.6 Luna",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16",
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputCost": 0.4,
-          "cached_input": 0.04,
-          "cached_write": 0.5,
-          "outputCost": 1.8
-        }
-      ],
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Cost-Efficient Reasoning", "Quick Tasks", "High Throughput", "Classification"],
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "responsesEffortPath": "reasoning.effort",
-          "togglePath": null,
-          "budgetPath": null
-        },
-        "ultraMode": {
-          "enabled": false,
-          "param": "multi_agent.enabled",
-          "concurrencyParam": "multi_agent.max_concurrent_subagents",
-          "beta": "responses_multi_agent=v1",
-          "endpoint": "responses",
-          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
-        },
-        "proMode": {
-          "param": "reasoning.mode",
-          "value": "pro",
-          "endpoint": "responses"
-        },
-        "persistentReasoning": {
-          "param": "reasoning.context",
-          "values": ["auto", "all_turns", "current_turn"],
-          "continuationParam": "previous_response_id",
-          "zdrInclude": ["reasoning.encrypted_content"],
-          "endpoint": "responses"
-        }
-      },
-      "toolCalling": {
-        "programmatic": {
-          "toolType": "programmatic_tool_calling",
-          "optInParam": "allowed_callers",
-          "optInValues": ["direct", "programmatic"],
-          "runtime": "javascript-v8-isolated",
-          "responseItems": ["program", "function_call(caller)", "program_output"],
-          "endpoint": "responses"
-        }
-      },
-      "imageInput": {
-        "detailValues": ["low", "high", "original", "auto"]
-      },
-      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "cachePolicy": {
-        "writeMultiplier": 1.25,
-        "readDiscount": 0.9,
-        "minCacheLifeMin": 30,
-        "explicitBreakpoints": true
-      },
-      "reasoningDots": 3,
-      "tierPolicy": {
-        "minTier": "basic"
-      },
-      "costOverride": {
-        "inputCost": 0.2,
-        "outputCost": 1.2,
-        "cached_input": 0.02,
-        "cached_write": 0.25
-      },
-      "contextOverride": 1050000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "July 9, 2026",
-      "lifecycle": {
-        "stage": "probed",
         "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#gpt-5.6-luna"
+        "source": "catalog/model-families.json#openai/gpt-frontier"
       }
     },
     "gpt-6.1-sol": {
@@ -1419,7 +1086,7 @@
       },
       "promptCacheMinimumTokens": 1024,
       "tierPolicy": {
-        "minTier": "max"
+        "minTier": "pro"
       },
       "costOverride": {
         "inputCost": 2,
@@ -1447,9 +1114,9 @@
       "speedOverride": "medium",
       "releasedOverride": "September 2026",
       "lifecycle": {
-        "stage": "probed",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6.1-sol"
+        "source": "catalog/model-families.json#openai/gpt-balanced"
       }
     },
     "gpt-6-luna": {
@@ -1533,9 +1200,9 @@
       "speedOverride": "medium",
       "releasedOverride": "September 2026",
       "lifecycle": {
-        "stage": "probed",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#gpt-6-luna"
+        "source": "catalog/model-families.json#openai/gpt-fast"
       }
     },
     "claude-fable-5-1": {
@@ -2799,29 +2466,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "gpt-image-2": {
-      "id": "gpt-image-2",
-      "apiModelId": "gpt-image-2",
-      "name": "GPT Image 2",
-      "provider": "openai",
-      "modelType": "image",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["HD Image Generation", "Image Editing", "Text Rendering in Images"],
-      "deprecation_date": null,
-      "imageApi": "openai",
-      "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high. OpenAI publishes two separate per-1M-token rows for this model: an image row at $8.00 input, $2.00 cached input, $30.00 output, and a text row at $5.00 input, $1.25 cached input, no output price. This entry carries the image row throughout, so a cache read of $2.00 is correct and a third-party snapshot reporting $1.25 is quoting the text row rather than contradicting it, litellm exposes only the text cache-read field, so it will keep reporting this row as drift. Verified against https://developers.openai.com/api/docs/pricing, retrieved 2026-09-01.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "releasedOverride": "April 21, 2026",
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
     "gpt-image-2.5-sunburst": {
       "id": "gpt-image-2.5-sunburst",
       "apiModelId": "gpt-image-2.5-sunburst",
@@ -2838,6 +2482,21 @@
         "outputCost": 30,
         "cached_input": 2
       },
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
       "pricingNote": "OpenAI describes this as its most capable model for image generation and editing. OpenAI publishes per-1M-token rows for this model: text input $5.00 and $1.25 cached, image input $8.00 and $2.00 cached, image output $30.00 ($15.00 on Batch); text output is not billed. This entry carries the image row, as the GPT Image 2 entry does. OpenAI publishes no per-image price for it. Quality levels are low, medium, high, xhigh, max and auto. Served on v1/images/generations, v1/images/edits and v1/batch. The page gives no release date; the dated snapshot is gpt-image-2.5-sunburst-2026-09-08. Verified against developers.openai.com/api/docs/models/gpt-image-2.5-sunburst, retrieved 2026-10-07.",
       "reasoning": {
         "capable": false,
@@ -2845,9 +2504,9 @@
       },
       "releasedOverride": "September 2026",
       "lifecycle": {
-        "stage": "registered",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "source": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst"
+        "source": "catalog/model-families.json#openai/gpt-image"
       }
     },
     "gpt-image-2.5-flare": {
@@ -2865,6 +2524,21 @@
         "inputCost": 8,
         "outputCost": 30,
         "cached_input": 2
+      },
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
       },
       "pricingNote": "OpenAI describes this as fast, high-quality everyday image generation. OpenAI publishes per-1M-token rows for this model: text input $5.00 and $1.25 cached, image input $8.00 and $2.00 cached, image output $30.00 ($15.00 on Batch); text output is not billed. This entry carries the image row, as the GPT Image 2 entry does. OpenAI publishes no per-image price for it. Quality levels are low, medium, high, xhigh, max and auto. Served on v1/images/generations, v1/images/edits and v1/batch. The page gives no release date; the dated snapshot is gpt-image-2.5-flare-2026-09-08. Verified against developers.openai.com/api/docs/models/gpt-image-2.5-flare, retrieved 2026-10-07.",
       "reasoning": {
@@ -4541,7 +4215,6 @@
   "tierAllowedModels": {
     "economy": [
       "family:openai/gpt-fast",
-      "gpt-6-luna",
       "family:google/gemini-flash-lite",
       "family:google/gemini-flash",
       "family:qwen/qwen-flash",
@@ -4559,8 +4232,6 @@
     ],
     "flagship_additions": [
       "family:openai/gpt-frontier",
-      "gpt-6-astra",
-      "gpt-6.1-sol",
       "family:anthropic/claude-fable",
       "family:anthropic/claude-opus",
       "family:xai/grok"
