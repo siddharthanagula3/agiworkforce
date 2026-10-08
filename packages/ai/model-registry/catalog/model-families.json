@@ -1504,6 +1504,7 @@
       "modelType": "code",
       "lifecyclePolicy": "stable",
       "apiModelIdPattern": "^deepseek-v(?<generation>\\d+(?:\\.\\d+)*)-flash$",
+      "unversionedModelIds": { "deepseek-flash": "4.1" },
       "requiredCapabilities": [
         "functionCalling",
         "reasoning",
@@ -1515,6 +1516,57 @@
       "minContextTokens": 1000000,
       "minMaxOutputTokens": null,
       "active": {
+        "modelKey": "deepseek-flash",
+        "generation": "4.1",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day on the three zero-tolerance corpora and refused this model: refusal 0.000 and jailbreak 0.364 against floors of 1.000",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on deepseek",
+            "familyIdentity": "matches deepseek-flash at tier fast",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 6 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.3,
+          "outputPerMillion": 1.2,
+          "cacheReadPerMillion": 0.006
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": false,
+          "agentic": true,
+          "webSearch": false,
+          "deepResearch": false,
+          "codeExecution": false,
+          "promptCaching": true
+        },
+        "limitSnapshot": { "contextTokens": 1048576, "maxOutputTokens": 393216 },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "deepseek-v4-flash",
         "generation": "4",
         "lifecycle": "stable",
@@ -1546,9 +1598,15 @@
         "limitSnapshot": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
         "benchmarkSnapshot": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 }
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-10-07",
+          "from": "deepseek-v4-flash",
+          "to": "deepseek-flash",
+          "reason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day on the three zero-tolerance corpora and refused this model: refusal 0.000 and jailbreak 0.364 against floors of 1.000"
+        }
+      ]
     },
     "deepseek/deepseek-pro": {
       "provider": "deepseek",

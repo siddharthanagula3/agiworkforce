@@ -14,6 +14,7 @@ import {
   familyMembers,
   inferLifecycle,
   loadFamilyCatalog,
+  matchFamilyMember,
   resolveFamilyRef,
   resolveFamilyRefsDeep,
   validateFamilyCatalog,
@@ -91,6 +92,29 @@ function decisionFor(models, snapshotOverrides = {}, familyOverrides = {}) {
   const snapshot = fixtureSnapshot(models, snapshotOverrides);
   return evaluateFamily(FAMILY, fixtureFamily(familyOverrides), snapshot, policy);
 }
+
+test('an id with no version joins its family at the generation the slot declares', () => {
+  const UNVERSIONED = 'fixture-flash';
+  const family = fixtureFamily({ unversionedModelIds: { [UNVERSIONED]: '1.5' } });
+  const models = { ...baselineModels, [UNVERSIONED]: fixtureModel({ apiModelId: UNVERSIONED }) };
+
+  const member = matchFamilyMember(family, models[UNVERSIONED], UNVERSIONED, policy);
+  assert.equal(member.generation, '1.5');
+  assert.deepEqual(
+    familyMembers(family, models, policy).map((entry) => entry.modelKey),
+    [NEWER, UNVERSIONED, ACTIVE],
+  );
+  assert.equal(matchFamilyMember(fixtureFamily(), models[UNVERSIONED], UNVERSIONED, policy), null);
+  assert.equal(
+    matchFamilyMember(
+      family,
+      fixtureModel({ apiModelId: UNVERSIONED, provider: 'other' }),
+      UNVERSIONED,
+      policy,
+    ),
+    null,
+  );
+});
 
 test('every family slot resolves to a live, non-retired catalog model', () => {
   const retired = new Set(readCatalog('retired-models.json').retiredModelIds);
