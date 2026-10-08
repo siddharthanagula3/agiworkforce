@@ -433,6 +433,69 @@ describe('NativeSignInCard', () => {
     expect(await screen.findByTestId('native-sign-in-notice')).toHaveTextContent(/sent a code/i);
   });
 
+  it('verifies a new device with an emailed code when that is all the service asks for', async () => {
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    const deviceCheck = {
+      strategy: 'email_code',
+      emailAddressId: 'idn_e',
+      safeIdentifier: 'ada@example.com',
+    };
+    clerk.attemptPassword.mockResolvedValue(
+      signIn({
+        status: 'needs_client_trust',
+        createdSessionId: null,
+        supportedSecondFactors: [deviceCheck],
+      }),
+    );
+    clerk.prepareSecondFactor.mockResolvedValue(
+      signIn({
+        status: 'needs_client_trust',
+        createdSessionId: null,
+        supportedSecondFactors: [deviceCheck],
+      }),
+    );
+    clerk.attemptSecondFactor.mockResolvedValue(signIn());
+
+    render(<NativeSignInCard />);
+    submitEmail();
+    await submitPassword();
+
+    expect(await screen.findByRole('heading', { name: 'Verify this device' })).toBeInTheDocument();
+    expect(clerk.prepareSecondFactor).toHaveBeenCalledWith('sia_1', deviceCheck);
+    expect(screen.getByText(/emailed a code to ada@example\.com/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('native-sign-in-error')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Emailed code'), { target: { value: '424242' } });
+    fireEvent.click(screen.getByRole('button', { name: CONTINUE }));
+
+    await waitFor(() =>
+      expect(clerk.attemptSecondFactor).toHaveBeenCalledWith('sia_1', 'email_code', '424242'),
+    );
+    await waitFor(() => expect(completeNativeSignIn).toHaveBeenCalled());
+  });
+
+  it('keeps an emailed code out of the choices when the account has a stronger factor', async () => {
+    clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
+    clerk.attemptPassword.mockResolvedValue(
+      signIn({
+        status: 'needs_second_factor',
+        createdSessionId: null,
+        supportedSecondFactors: [
+          { strategy: 'email_code', emailAddressId: 'idn_e' },
+          { strategy: 'totp' },
+        ],
+      }),
+    );
+
+    render(<NativeSignInCard />);
+    submitEmail();
+    await submitPassword();
+
+    expect(await screen.findByLabelText('Authenticator code')).toBeInTheDocument();
+    expect(clerk.prepareSecondFactor).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /emailed code/i })).not.toBeInTheDocument();
+  });
+
   it('refuses an unsupported second factor instead of showing a dead code box', async () => {
     clerk.createIdentifierSignIn.mockResolvedValue(passwordAccount());
     clerk.attemptPassword.mockResolvedValue(
