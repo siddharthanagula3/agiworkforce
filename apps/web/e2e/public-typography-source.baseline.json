@@ -1,6 +1,5 @@
 {
   "app/docs/byok-env/page.tsx": 11,
-  "app/pricing/page.tsx": 1,
   "features/docs/components/DocsCodeBlock.tsx": 1,
   "features/marketing/components/DeviceMockups.tsx": 8,
   "features/marketing/components/FlagshipSections.tsx": 1,
@@ -17,7 +16,7 @@
   "features/marketing/components/landing/LandingPage.tsx": 3,
   "features/marketing/components/landing/landing.css": 3,
   "features/marketing/components/legacy-landing.css": 120,
-  "features/marketing/components/legacy-pages.css": 237,
+  "features/marketing/components/legacy-pages.css": 234,
   "features/marketing/components/motion/DrawOnView.tsx": 1,
   "features/marketing/components/motion/Stage.tsx": 1,
   "features/marketing/components/pricing/pricing.css": 1,
