@@ -62,7 +62,8 @@ test('it finds every response builder the middleware declares', () => {
     'buildSignedOutRedirect',
     'identityUnconfiguredResponse',
     'apiHostRedirect',
-    'euAccessBlock',
+    'buildRegionBlockPage',
+    'buildRegionBlockJson',
   ]) {
     assert.ok(names.includes(expected), `${expected} is measured`);
   }
@@ -84,7 +85,9 @@ test('a response builder that stops setting the security header fails', () => {
 });
 
 test('the region block specifically cannot serve its page without the header', () => {
-  const block = responseBuilders(middleware).find((builder) => builder.name === 'euAccessBlock');
+  const block = responseBuilders(middleware).find(
+    (builder) => builder.name === 'buildRegionBlockPage',
+  );
   assert.ok(block, 'the region block is a response builder');
   const stripped = middleware.replace(
     "  response.headers.set('Content-Security-Policy', csp);\n  response.headers.set('x-agi-region-block'",
@@ -92,7 +95,9 @@ test('the region block specifically cannot serve its page without the header', (
   );
   assert.notEqual(stripped, middleware, 'the mutation applied');
   const errors = checkEdgeMiddleware(fixture({ source: stripped })).errors;
-  assert.ok(errors.some((error) => /euAccessBlock returns a response without setting/.test(error)));
+  assert.ok(
+    errors.some((error) => /buildRegionBlockPage returns a response without setting/.test(error)),
+  );
 });
 
 test('an exemption needs a reason, and cannot outlive the builder it covers', () => {
@@ -103,19 +108,19 @@ test('an exemption needs a reason, and cannot outlive the builder it covers', ()
   assert.deepEqual(
     errorsFor({
       source: stripped,
-      overrides: { headerExempt: [{ name: 'euAccessBlock', reason: 'it serves no body' }] },
+      overrides: { headerExempt: [{ name: 'buildRegionBlockPage', reason: 'it serves no body' }] },
     }),
     [],
   );
 
   const noReason = errorsFor({
     source: stripped,
-    overrides: { headerExempt: [{ name: 'euAccessBlock', reason: '' }] },
+    overrides: { headerExempt: [{ name: 'buildRegionBlockPage', reason: '' }] },
   });
   assert.ok(noReason.some((error) => /carries no reason/.test(error)));
 
   const stale = errorsFor({
-    overrides: { headerExempt: [{ name: 'euAccessBlock', reason: 'it serves no body' }] },
+    overrides: { headerExempt: [{ name: 'buildRegionBlockPage', reason: 'it serves no body' }] },
   });
   assert.ok(stale.some((error) => /Delete the entry/.test(error)));
 

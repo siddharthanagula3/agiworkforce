@@ -22,15 +22,35 @@ import {
 } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 import { surfaceAvailabilitySummary } from '@/lib/surface-status';
+import {
+  UNSERVED_COUNTRIES,
+  UNSERVED_SUBDIVISIONS,
+  isUnderUsSanctions,
+} from '@agiworkforce/compliance/service-regions';
 
-const INTERFACE_LANGUAGES = new Intl.ListFormat('en', { type: 'conjunction' }).format(
-  SELECTABLE_LANGUAGES.map((language) => language.name),
-);
+const listInEnglish = (names: readonly string[]) =>
+  new Intl.ListFormat('en', { type: 'conjunction' }).format(names);
+
+const INTERFACE_LANGUAGES = listInEnglish(SELECTABLE_LANGUAGES.map((language) => language.name));
+
+const UNSERVED_PLACES = [...UNSERVED_COUNTRIES, ...UNSERVED_SUBDIVISIONS];
+
+const placeNames = (sanctioned: boolean) =>
+  listInEnglish(
+    UNSERVED_PLACES.filter((place) => isUnderUsSanctions(place) === sanctioned)
+      .map((place) => place.name)
+      .sort((first, second) => first.localeCompare(second, 'en')),
+  );
+
+const NOT_OFFERED: readonly LedgerRow[] = [
+  { label: 'Barred by United States sanctions', value: `${placeNames(true)}.` },
+  { label: 'Not offered', value: `${placeNames(false)}.` },
+];
 
 export const metadata = buildMetadata({
   title: 'Supported countries and regions',
   description:
-    'Where AGI Workforce is offered, where United States sanctions law excludes it, what is the same in every country, and the languages the interface ships in.',
+    'Where AGI Workforce is offered, the countries and regions where it is not, what is the same in every country, and the languages the interface ships in.',
   path: CANONICAL_POLICY_ROUTES.supportedCountries,
 });
 
@@ -72,9 +92,9 @@ export default function SupportedCountriesPage() {
           title="Supported countries and regions."
           lede={
             <>
-              AGI Workforce is offered in every country and territory, except where United States
-              sanctions law bars {LEGAL_ENTITY} from offering it. This page says what that means,
-              what is the same everywhere, and what is not. Last updated:{' '}
+              AGI Workforce is offered in every country and territory except the ones listed on this
+              page. Some are closed to {LEGAL_ENTITY} by United States sanctions law, and the rest
+              are places where we do not offer the service. Last updated:{' '}
               {POLICY_LAST_UPDATED.supportedCountries}.{' '}
               <PolicyVersionsLink policy="supportedCountries" />
             </>
@@ -88,10 +108,10 @@ export default function SupportedCountriesPage() {
               Where it is offered.
             </h2>
             <Prose>
-              We do not publish a list of supported countries, because sign-up is not limited to a
-              list. You can create an account from any country that United States sanctions and
-              export-control law does not close to us. That includes the European Economic Area, the
-              United Kingdom, and India.
+              You can create an account and use AGI from any country or territory that is not in the
+              list below. That includes the European Economic Area, the United Kingdom, and India. A
+              territory or dependency of a country where AGI is offered is covered too, such as
+              Puerto Rico, Guam, Jersey, Gibraltar or Curaçao.
             </Prose>
             <Prose>
               Being able to open this site or create an account does not mean the service is lawful
@@ -112,20 +132,27 @@ export default function SupportedCountriesPage() {
             </h2>
             <Prose>
               {LEGAL_ENTITY} is {LEGAL_ENTITY_DESCRIPTOR}, so United States export control and
-              economic sanctions law binds it wherever you are. Section 13 of the{' '}
+              economic sanctions law binds it wherever you are. We do not offer AGI in these
+              countries and regions:
+            </Prose>
+            <Ledger caption="Countries and regions where AGI is not offered" rows={NOT_OFFERED} />
+            <Prose>
+              An organisation that is incorporated or headquartered in one of these places, or that
+              is majority owned or controlled by people or organisations there, may not use AGI from
+              anywhere. Section 13 of the{' '}
               <Link href={CANONICAL_POLICY_ROUTES.terms} className="agi-ds-link">
                 terms
               </Link>{' '}
-              says you may not use AGI if you are located in an embargoed territory or are a person
-              on a restricted-party list. We do not print the list of places here. The United States
-              government sets it and changes it, and its own published lists are the source.
+              also bars anyone on a United States restricted-party list.
             </Prose>
             <Prose>
-              <strong>What you see from one of those places.</strong> The same pages as anyone else.
-              This site has no page that turns a visitor away by country for sanctions reasons, so a
-              page that loads is not permission to use the service. Where the law requires it, the
-              terms let us suspend an account that is used from an embargoed territory or by a
-              restricted person.
+              <strong>What you see from one of those places.</strong> We judge where a request comes
+              from by its network address. A page request gets a page that reads &ldquo;Not
+              available in your region&rdquo;, and the apps and the API get the same refusal. These
+              legal pages, including this one, stay open everywhere. Judging by address is not
+              exact: a network address can be placed in the wrong country or region, and for the
+              regions of Ukraine it can only be as precise as the address data. If you are refused
+              somewhere you should not be, write to us.
             </Prose>
           </Stack>
         </Section>

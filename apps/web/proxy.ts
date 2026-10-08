@@ -11,7 +11,12 @@ import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
 import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
-import { decideEuAccess, euBlockEnabled, isServerToServerRoute } from './lib/eu-access';
+import {
+  REGION_UNAVAILABLE_BODY,
+  REGION_UNAVAILABLE_PATH,
+  decideRegionAccess,
+  isReachableFromAnyRegion,
+} from './lib/region-access';
 import { getIdentityProvider } from './lib/server/identity';
 import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/session-cookie';
 import { plaidLinkContentSecurityOrigins } from './lib/connectors/plaid-config';
@@ -20,8 +25,6 @@ const CHAT_ROOT_PATH = '/chat';
 const AGI_WORK_PATH = '/agi-work';
 const AGI_CODE_PATH = '/agi-code';
 const CLOUD_CODE_PATH = '/code';
-
-const UNAVAILABLE_PATH = '/region-unavailable';
 
 const identityMiddleware = getIdentityProvider().middleware;
 
@@ -261,16 +264,36 @@ export function buildApiHostRedirectTarget(
   }
 }
 
-function euAccessBlock(request: NextRequest): NextResponse | null {
-  const decision = decideEuAccess(
-    request.headers.get('x-vercel-ip-country'),
-    euBlockEnabled(process.env),
-  );
+function regionBlock(request: NextRequest): NextResponse | null {
+  if (isReachableFromAnyRegion(request.nextUrl.pathname)) return null;
+  const decision = decideRegionAccess(request.headers, process.env);
   if (!decision.blocked) return null;
-  if (request.nextUrl.pathname === UNAVAILABLE_PATH) return null;
-  if (isServerToServerRoute(request.nextUrl.pathname)) return null;
+  return isMachineRequest(request)
+    ? buildRegionBlockJson(decision.place)
+    : buildRegionBlockPage(request, decision.place);
+}
+
+function isMachineRequest(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  return (
+    pathname === '/api' ||
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/trpc') ||
+    pathname.startsWith('/__clerk/') ||
+    (request.headers.get('host') ?? '').startsWith('api.')
+  );
+}
+
+function buildRegionBlockJson(place: string): NextResponse {
+  const response = NextResponse.json(REGION_UNAVAILABLE_BODY, { status: 451 });
+  response.headers.set('Content-Security-Policy', buildCspWithNonce(btoa(crypto.randomUUID())));
+  response.headers.set('x-agi-region-block', place);
+  return response;
+}
+
+function buildRegionBlockPage(request: NextRequest, place: string): NextResponse {
   const target = request.nextUrl.clone();
-  target.pathname = UNAVAILABLE_PATH;
+  target.pathname = REGION_UNAVAILABLE_PATH;
   target.search = '';
   // This rewrite renders a page. Returning early past buildCspResponse left it
   // as the one page the product serves with no Content-Security-Policy.
@@ -284,13 +307,13 @@ function euAccessBlock(request: NextRequest): NextResponse | null {
     request: { headers: requestHeaders },
   });
   response.headers.set('Content-Security-Policy', csp);
-  response.headers.set('x-agi-region-block', decision.country);
+  response.headers.set('x-agi-region-block', place);
   return response;
 }
 
 export const proxy: NextMiddleware = async (request, event) => {
-  const regionBlock = euAccessBlock(request);
-  if (regionBlock) return regionBlock;
+  const refusal = regionBlock(request);
+  if (refusal) return attachApiCors(request, refusal);
 
   const apiHostBounce = apiHostRedirect(request);
   if (apiHostBounce) return apiHostBounce;

@@ -654,11 +654,14 @@ export default function TermsPage() {
                     are a person on a restricted-party list, or would be exporting the software or
                     service to such a territory or person. You must not use AGI in connection with
                     any prohibited end use, including weapons of mass destruction. Where the service
-                    is offered is set out on the{' '}
+                    is offered, and the countries and regions where it is not, are set out on the{' '}
                     <Link href={CANONICAL_POLICY_ROUTES.supportedCountries} className="agi-ds-link">
                       supported countries page
                     </Link>
-                    .
+                    . You may not use AGI while you are in a country or region where it is not
+                    offered, or use a VPN or other means to get around that. An organisation
+                    incorporated or headquartered in one of those places, or majority owned or
+                    controlled by people or organisations there, may not use AGI from anywhere.
                   </Prose>
                 </Stack>
               </Section>

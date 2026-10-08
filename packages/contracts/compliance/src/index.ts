@@ -125,3 +125,16 @@ export const Article50Marker = Object.freeze({
   wrapText: wrapTextExportWithMarker,
   isMarked: hasAiGeneratedMarker,
 });
+
+export {
+  SERVICE_REGION_SOURCES,
+  UNSERVED_COUNTRIES,
+  UNSERVED_SUBDIVISIONS,
+  decideServiceRegion,
+  isUnderUsSanctions,
+  type ServiceRegionDecision,
+  type ServiceRegionSource,
+  type UnservedCountry,
+  type UnservedReason,
+  type UnservedSubdivision,
+} from './service-regions';
