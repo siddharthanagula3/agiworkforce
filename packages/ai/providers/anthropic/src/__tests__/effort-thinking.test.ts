@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
-import { ANTHROPIC_BETWEEN_TOOLS_MODEL_ID, ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
+import {
+  ANTHROPIC_BETWEEN_TOOLS_MODEL_ID,
+  ANTHROPIC_DISABLED_THINKING_CEILING_MODEL_ID,
+  ANTHROPIC_PREMIUM_MODEL_ID,
+} from './model-fixtures';
 
 function baseReq(overrides: Partial<ChatRequest> = {}): ChatRequest {
   return {
@@ -65,7 +69,7 @@ describe('translateChatRequest · effort / output_config', () => {
 });
 
 describe('translateChatRequest · model request constraints', () => {
-  it('suppresses forbidden sampling parameters for Opus 5', () => {
+  it('suppresses forbidden sampling parameters for the premium model', () => {
     const out = translateChatRequest(
       baseReq({
         temperature: 0.2,
@@ -83,7 +87,13 @@ describe('translateChatRequest · model request constraints', () => {
     'rejects disabled thinking with %s effort before the API call',
     (effort) => {
       expect(() =>
-        translateChatRequest(baseReq({ thinking: { type: 'disabled' }, effort })),
+        translateChatRequest(
+          baseReq({
+            model: ANTHROPIC_DISABLED_THINKING_CEILING_MODEL_ID,
+            thinking: { type: 'disabled' },
+            effort,
+          }),
+        ),
       ).toThrow(/high or lower/i);
     },
   );

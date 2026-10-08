@@ -203,7 +203,7 @@
         "providerModelId": "claude-fable-5-1",
         "openRouterSlug": "anthropic/claude-fable-5.1",
         "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
+        "familyPartner": "claude-sonnet-5-5",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["anthropic/claude-fable-5.1"],
@@ -227,39 +227,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "claude-opus-5": {
-      "identity": {
-        "key": "claude-opus-5",
-        "displayName": "Claude Opus 5",
-        "provider": "anthropic",
-        "developer": "anthropic",
-        "providerModelId": "claude-opus-5",
-        "openRouterSlug": "anthropic/claude-opus-5",
-        "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["anthropic/claude-opus-5"],
-        "family": "claude-opus",
-        "version": "5"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 24, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-24",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding",
-        "replacedBy": null
-      },
-      "speed": "slow",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "claude-opus-5-5": {
       "identity": {
         "key": "claude-opus-5-5",
@@ -269,7 +236,7 @@
         "providerModelId": "claude-opus-5-5",
         "openRouterSlug": "anthropic/claude-opus-5.5",
         "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
+        "familyPartner": "claude-sonnet-5-5",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["anthropic/claude-opus-5.5"],
@@ -284,84 +251,12 @@
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "stageSource": "https://platform.claude.com/docs/en/about-claude/pricing",
-        "replacedBy": null
-      },
-      "speed": "slow",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "claude-opus-4-8": {
-      "identity": {
-        "key": "claude-opus-4-8",
-        "displayName": "Claude Opus 4.8",
-        "provider": "anthropic",
-        "developer": "anthropic",
-        "providerModelId": "claude-opus-4-8",
-        "openRouterSlug": "anthropic/claude-opus-4-8",
-        "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["anthropic/claude-opus-4-8"],
-        "family": "claude-opus",
-        "version": "4.8"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "June 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "stageSource": "https://platform.claude.com/docs/en/about-claude/pricing",
-        "replacedBy": null
-      },
-      "speed": "slow",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "claude-sonnet-5": {
-      "identity": {
-        "key": "claude-sonnet-5",
-        "displayName": "Claude Sonnet 5",
-        "provider": "anthropic",
-        "developer": "anthropic",
-        "providerModelId": "claude-sonnet-5",
-        "openRouterSlug": "anthropic/claude-sonnet-5",
-        "kind": "code",
-        "familyPartner": "claude-opus-5",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": [
-          "anthropic/claude-sonnet-5",
-          "codestral-2508",
-          "mistral-large-3",
-          "mistral-medium-3.5",
-          "mistral-small-4"
-        ],
-        "family": "claude-sonnet",
-        "version": "5"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "June 30, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-06-30",
-        "deprecatedOn": null,
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.coding_balanced",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#anthropic/claude-opus",
         "replacedBy": null
       },
-      "speed": "fast",
+      "speed": "slow",
       "residencyRegions": null,
       "evidenceRefs": []
     },
@@ -377,7 +272,13 @@
         "familyPartner": "claude-opus-5-5",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": ["anthropic/claude-sonnet-5.5"],
+        "aliases": [
+          "anthropic/claude-sonnet-5.5",
+          "codestral-2508",
+          "mistral-large-3",
+          "mistral-medium-3.5",
+          "mistral-small-4"
+        ],
         "family": "claude-sonnet",
         "version": "5.5"
       },
@@ -389,45 +290,12 @@
         "deprecated": false,
         "releasedOn": "2026-09-28",
         "deprecatedOn": null,
-        "stage": "registered",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+        "stageSource": "catalog/model-families.json#anthropic/claude-sonnet",
         "replacedBy": null
       },
       "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "claude-haiku-4-5": {
-      "identity": {
-        "key": "claude-haiku-4-5",
-        "displayName": "Claude Haiku 4.5",
-        "provider": "anthropic",
-        "developer": "anthropic",
-        "providerModelId": "claude-haiku-4-5-20251001",
-        "openRouterSlug": "anthropic/claude-haiku-4.5",
-        "kind": "chat",
-        "familyPartner": "claude-sonnet-5",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["anthropic/claude-haiku-4.5", "claude-haiku-4-5-20251001"],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "October 15, 2025",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2025-10-15",
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "very-fast",
       "residencyRegions": null,
       "evidenceRefs": []
     },
@@ -440,7 +308,7 @@
         "providerModelId": "claude-haiku-5-5",
         "openRouterSlug": "anthropic/claude-haiku-5.5",
         "kind": "chat",
-        "familyPartner": "claude-sonnet-5",
+        "familyPartner": "claude-sonnet-5-5",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["anthropic/claude-haiku-5.5"],
@@ -13104,16 +12972,7 @@
       "gpt-live-1",
       "gpt-4o-mini-transcribe"
     ],
-    "anthropic": [
-      "claude-fable-5-1",
-      "claude-opus-5",
-      "claude-opus-5-5",
-      "claude-opus-4-8",
-      "claude-sonnet-5",
-      "claude-sonnet-5-5",
-      "claude-haiku-4-5",
-      "claude-haiku-5-5"
-    ],
+    "anthropic": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
     "google": [
       "gemini-embedding-2",
       "gemini-3.1-pro-preview",
@@ -14134,112 +13993,6 @@
         "cacheWritePerMillion": 12.5
       }
     },
-    "anthropic/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "anthropic",
-      "providerModelId": "claude-opus-5",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25,
-        "cacheWrite1hPerMillion": 10
-      }
-    },
-    "open_router/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "open_router",
-      "providerModelId": "anthropic/claude-opus-5",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
-    "vercel_gateway/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "vercel_gateway",
-      "providerModelId": "anthropic/claude-opus-5",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
-    "cheaperinference_anthropic/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "cheaperinference_anthropic",
-      "providerModelId": "claude-opus-5",
-      "harnessId": "cheaperinference-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
-    "experientiallabs_anthropic/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "experientiallabs_anthropic",
-      "providerModelId": "claude-opus-5",
-      "harnessId": "experientiallabs-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
     "anthropic/claude-opus-5-5": {
       "modelKey": "claude-opus-5-5",
       "provider": "anthropic",
@@ -14262,134 +14015,6 @@
         "cacheWrite1hPerMillion": 8
       }
     },
-    "anthropic/claude-opus-4-8": {
-      "modelKey": "claude-opus-4-8",
-      "provider": "anthropic",
-      "providerModelId": "claude-opus-4-8",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25,
-        "cacheWrite1hPerMillion": 10
-      }
-    },
-    "anthropic/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "anthropic",
-      "providerModelId": "claude-sonnet-5",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5,
-        "cacheWrite1hPerMillion": 4
-      }
-    },
-    "open_router/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "open_router",
-      "providerModelId": "anthropic/claude-sonnet-5",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "vercel_gateway/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "vercel_gateway",
-      "providerModelId": "anthropic/claude-sonnet-5",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "cheaperinference_anthropic/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "cheaperinference_anthropic",
-      "providerModelId": "claude-sonnet-5",
-      "harnessId": "cheaperinference-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "experientiallabs_anthropic/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "experientiallabs_anthropic",
-      "providerModelId": "claude-sonnet-5",
-      "harnessId": "experientiallabs-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
     "anthropic/claude-sonnet-5-5": {
       "modelKey": "claude-sonnet-5-5",
       "provider": "anthropic",
@@ -14410,70 +14035,6 @@
         "cacheReadPerMillion": 0.2,
         "cacheWritePerMillion": 2.5,
         "cacheWrite1hPerMillion": 4
-      }
-    },
-    "anthropic/claude-haiku-4-5": {
-      "modelKey": "claude-haiku-4-5",
-      "provider": "anthropic",
-      "providerModelId": "claude-haiku-4-5-20251001",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 5,
-        "cacheReadPerMillion": 0.1,
-        "cacheWritePerMillion": 1.25,
-        "cacheWrite1hPerMillion": 2
-      }
-    },
-    "experientiallabs_anthropic/claude-haiku-4-5": {
-      "modelKey": "claude-haiku-4-5",
-      "provider": "experientiallabs_anthropic",
-      "providerModelId": "claude-haiku-4.5",
-      "harnessId": "experientiallabs-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 5,
-        "cacheReadPerMillion": 0.1,
-        "cacheWritePerMillion": 1.25
-      }
-    },
-    "cheaperinference_anthropic/claude-haiku-4-5": {
-      "modelKey": "claude-haiku-4-5",
-      "provider": "cheaperinference_anthropic",
-      "providerModelId": "claude-haiku-4.5",
-      "harnessId": "cheaperinference-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 5,
-        "cacheReadPerMillion": 0.1,
-        "cacheWritePerMillion": 1.25
       }
     },
     "anthropic/claude-haiku-5-5": {
@@ -25703,79 +25264,7 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "claude-opus-5": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
     "claude-opus-5-5": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "claude-opus-4-8": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "claude-sonnet-5": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25820,30 +25309,6 @@
       "agentic": true,
       "webSearch": true,
       "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "claude-haiku-4-5": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
       "codeExecution": true,
       "promptCaching": true
     },
@@ -36063,15 +35528,6 @@
       "cacheWritePerMillion": 12.5,
       "cacheWrite1hPerMillion": 20
     },
-    "claude-opus-5": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 5,
-      "outputPerMillion": 25,
-      "cacheReadPerMillion": 0.5,
-      "cacheWritePerMillion": 6.25,
-      "cacheWrite1hPerMillion": 10
-    },
     "claude-opus-5-5": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -36081,24 +35537,6 @@
       "cacheWritePerMillion": 5,
       "cacheWrite1hPerMillion": 8
     },
-    "claude-opus-4-8": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 5,
-      "outputPerMillion": 25,
-      "cacheReadPerMillion": 0.5,
-      "cacheWritePerMillion": 6.25,
-      "cacheWrite1hPerMillion": 10
-    },
-    "claude-sonnet-5": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 2,
-      "outputPerMillion": 10,
-      "cacheReadPerMillion": 0.2,
-      "cacheWritePerMillion": 2.5,
-      "cacheWrite1hPerMillion": 4
-    },
     "claude-sonnet-5-5": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -36107,15 +35545,6 @@
       "cacheReadPerMillion": 0.2,
       "cacheWritePerMillion": 2.5,
       "cacheWrite1hPerMillion": 4
-    },
-    "claude-haiku-4-5": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 1,
-      "outputPerMillion": 5,
-      "cacheReadPerMillion": 0.1,
-      "cacheWritePerMillion": 1.25,
-      "cacheWrite1hPerMillion": 2
     },
     "claude-haiku-5-5": {
       "currency": "USD",
@@ -39260,41 +38689,17 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06"
     },
-    "claude-opus-5": {
-      "contextTokens": 1000000,
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-05"
-    },
     "claude-opus-5-5": {
       "contextTokens": 1000000,
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06"
     },
-    "claude-opus-4-8": {
-      "contextTokens": 1000000,
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01"
-    },
-    "claude-sonnet-5": {
-      "contextTokens": 1000000,
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01"
-    },
     "claude-sonnet-5-5": {
       "contextTokens": 1000000,
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06"
-    },
-    "claude-haiku-4-5": {
-      "contextTokens": 200000,
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 64000,
-      "knowledgeCutoff": "2025-02"
     },
     "claude-haiku-5-5": {
       "contextTokens": 1000000,
@@ -39923,12 +39328,8 @@
     "gpt-6.1-sol": {},
     "gpt-6-luna": {},
     "claude-fable-5-1": {},
-    "claude-opus-5": {},
     "claude-opus-5-5": {},
-    "claude-opus-4-8": {},
-    "claude-sonnet-5": {},
     "claude-sonnet-5-5": {},
-    "claude-haiku-4-5": {},
     "claude-haiku-5-5": {},
     "gemini-embedding-2": {},
     "gemini-3.1-pro-preview": {
@@ -41007,6 +40408,13 @@
       "verifiedBy": "official-openai-documentation-no-live-call",
       "status": "ADDITION",
       "notes": "GPT Image 2.5 Sunburst (gpt-image-2.5-sunburst) and GPT Image 2.5 Flare (gpt-image-2.5-flare) join the catalog at lifecycle stage registered, read from their model pages on developers.openai.com on 2026-10-07: identical token prices (text input $5 and $1.25 cached, image input $8 and $2 cached, image output $30), image generation, image edit and batch endpoints, quality low to max, snapshots dated 2026-09-08. No inference call was made. The openai/gpt-image slot stays on gpt-image-2: neither id matches the slot pattern, which expects a bare version after gpt-image, and the eval harness has no measurement for image output. OpenAI lists no deprecation for gpt-image-2. gpt-transcribe is not added: OpenAI prices it at $0.0045 per minute of audio and the catalog has no per-audio-minute price field for a transcription model, so a row would bill at zero or at a guessed token rate."
+    },
+    {
+      "id": "verification/2026-10-07/77",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model outside the QwenCloud free quota, the anthropic/claude-opus slot moves from claude-opus-5 to claude-opus-5-5 and the anthropic/claude-sonnet slot from claude-sonnet-5 to claude-sonnet-5-5. The eval gate was not run for either move: no Anthropic slot has a committed baseline and no run was recorded for either model, so nothing here says the new models were measured against the old ones. The catalog-side gates the family tool computes (provider, family identity, lifecycle, capability coverage, price and limit regression) were evaluated and are recorded on each slot. Claude Opus 5.5 lists at $4/$20 per million against $5/$25 for Claude Opus 5, cannot have thinking switched off and defaults to medium effort; Claude Sonnet 5.5 keeps $2/$10. claude-opus-5, claude-opus-4-8, claude-sonnet-5 and claude-haiku-4-5 leave the roster through the retire tool into retired-models.json, each naming its successor, and their route and probe records go with them. claude-haiku-5-5 takes no family slot: no routing slot names a Haiku model and the picker lists it from its own row. The successors carry only their direct Anthropic route. The marketplace routes the retired rows had (OpenRouter, Vercel AI Gateway, Cheaper Inference, Experiential Labs) were not copied, because no source read for this change states that those gateways serve the new ids or at what price; until they are added, a Claude model has no same-model fallback route and one Claude model cannot stand in for another in a fallback plan. No provider call was made."
     }
   ],
   "retiredModels": {
@@ -41037,11 +40445,143 @@
       "metadataSource": "packages/contracts/types/src/models.json@22fa072c3",
       "metadataPreserved": true
     },
+    "claude-haiku-4-5": {
+      "id": "claude-haiku-4-5",
+      "displayName": "Claude Haiku 4.5",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "chat",
+      "contextWindow": 200000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "claude-haiku-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-haiku-4-5",
+      "metadataPreserved": true
+    },
     "claude-opus-4-6": { "id": "claude-opus-4-6", "metadataPreserved": false },
     "claude-opus-4-6-mini": { "id": "claude-opus-4-6-mini", "metadataPreserved": false },
     "claude-opus-4-7": { "id": "claude-opus-4-7", "metadataPreserved": false },
+    "claude-opus-4-8": {
+      "id": "claude-opus-4-8",
+      "displayName": "Claude Opus 4.8",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "claude-opus-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-opus-4-8",
+      "metadataPreserved": true
+    },
     "claude-opus-4.6": { "id": "claude-opus-4.6", "metadataPreserved": false },
     "claude-opus-4.7": { "id": "claude-opus-4.7", "metadataPreserved": false },
+    "claude-opus-5": {
+      "id": "claude-opus-5",
+      "displayName": "Claude Opus 5",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "claude-opus-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-opus-5",
+      "metadataPreserved": true
+    },
+    "claude-sonnet-5": {
+      "id": "claude-sonnet-5",
+      "displayName": "Claude Sonnet 5",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "claude-sonnet-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-sonnet-5",
+      "metadataPreserved": true
+    },
     "codestral-2508": {
       "id": "codestral-2508",
       "displayName": "Codestral 25.08",
@@ -41791,26 +41331,26 @@
       "canonicalFamily": "claude-opus",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "claude-opus-5",
-      "activeGeneration": "5",
+      "activeModelKey": "claude-opus-5-5",
+      "activeGeneration": "5-5",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "claude-opus-5",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "anthropic/claude-sonnet": {
       "provider": "anthropic",
       "canonicalFamily": "claude-sonnet",
       "tier": "balanced",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "claude-sonnet-5",
-      "activeGeneration": "5",
+      "activeModelKey": "claude-sonnet-5-5",
+      "activeGeneration": "5-5",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "claude-sonnet-5",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "google/gemini-flash": {
       "provider": "google",
@@ -42442,12 +41982,12 @@
           "description": "Shared escalation coding route. Model and provider are selected by the canonical registry."
         },
         "coding_balanced": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Coding Balanced",
           "description": "Shared coding balanced route. Model and provider are selected by the canonical registry."
         },
         "flagship_coding": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Flagship Coding",
           "description": "Shared flagship coding route. Model and provider are selected by the canonical registry."
         },
@@ -42467,22 +42007,22 @@
           "description": "Shared reasoning balanced route. Model and provider are selected by the canonical registry."
         },
         "creative_writing": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Creative Writing",
           "description": "Shared creative writing route. Model and provider are selected by the canonical registry."
         },
         "creative_writing_premium": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Creative Writing Premium",
           "description": "Shared creative writing premium route. Model and provider are selected by the canonical registry."
         },
         "creative_balanced": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Creative Balanced",
           "description": "Shared creative balanced route. Model and provider are selected by the canonical registry."
         },
         "creative_premium": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Creative Premium",
           "description": "Shared creative premium route. Model and provider are selected by the canonical registry."
         },
@@ -42517,22 +42057,22 @@
           "description": "Shared search premium route. Model and provider are selected by the canonical registry."
         },
         "browser_dom": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Browser Dom",
           "description": "Shared browser dom route. Model and provider are selected by the canonical registry."
         },
         "computer_use": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Computer Use",
           "description": "Shared computer use route. Model and provider are selected by the canonical registry."
         },
         "computer_use_balanced": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Computer Use Balanced",
           "description": "Shared computer use balanced route. Model and provider are selected by the canonical registry."
         },
         "computer_use_premium": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Computer Use Premium",
           "description": "Shared computer use premium route. Model and provider are selected by the canonical registry."
         },
@@ -42582,7 +42122,7 @@
           "description": "Shared general balanced pro route. Model and provider are selected by the canonical registry."
         },
         "coding_premium_pro": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Coding Premium Pro",
           "description": "Shared coding premium pro route. Model and provider are selected by the canonical registry."
         },
@@ -42602,7 +42142,7 @@
           "description": "Shared long context pro route. Model and provider are selected by the canonical registry."
         },
         "flagship_coding_pro_plus": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Flagship Coding Pro Plus",
           "description": "Shared flagship coding pro plus route. Model and provider are selected by the canonical registry."
         },
@@ -42629,7 +42169,7 @@
       ],
       "pro_additions": [
         "gpt-5.6-terra",
-        "claude-sonnet-5",
+        "claude-sonnet-5-5",
         "gemini-3.1-pro-preview",
         "deepseek-v4-flash",
         "deepseek-v4-pro",
@@ -42642,7 +42182,7 @@
         "gpt-6-astra",
         "gpt-6.1-sol",
         "claude-fable-5-1",
-        "claude-opus-5",
+        "claude-opus-5-5",
         "grok-4.6"
       ]
     },

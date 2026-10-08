@@ -12,36 +12,6 @@
       "toolOutcome": "skipped",
       "toolDetail": null
     },
-    "claude-haiku-4-5": {
-      "routeId": "anthropic/claude-haiku-4-5",
-      "probedOn": "2026-09-12",
-      "outcome": "failed",
-      "ttfbMs": 145,
-      "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyJZD7k53LdAdSLT275m\"}",
-      "toolOutcome": "skipped",
-      "toolDetail": null
-    },
-    "claude-opus-5": {
-      "routeId": "anthropic/claude-opus-5",
-      "probedOn": "2026-09-12",
-      "outcome": "failed",
-      "ttfbMs": 146,
-      "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyJZDkSxKixPaj5dHv3H\"}",
-      "toolOutcome": "skipped",
-      "toolDetail": null
-    },
-    "claude-sonnet-5": {
-      "routeId": "anthropic/claude-sonnet-5",
-      "probedOn": "2026-09-12",
-      "outcome": "failed",
-      "ttfbMs": 192,
-      "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyJZEV6WnD3RRoHNu5K6\"}",
-      "toolOutcome": "skipped",
-      "toolDetail": null
-    },
     "deepseek-flash": {
       "routeId": "deepseek/deepseek-flash",
       "probedOn": "2026-10-07",

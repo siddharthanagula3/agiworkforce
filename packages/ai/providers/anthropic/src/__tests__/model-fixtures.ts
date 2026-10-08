@@ -23,3 +23,15 @@ if (!betweenToolsModel) {
 }
 
 export const ANTHROPIC_BETWEEN_TOOLS_MODEL_ID = betweenToolsModel.id;
+
+const disabledThinkingCeilingModel = getModelsForProvider('anthropic').find(
+  (model) =>
+    model.reasoning?.maxEffortWhenThinkingDisabled !== undefined &&
+    model.reasoning.disabledThinkingType === undefined,
+);
+
+if (!disabledThinkingCeilingModel) {
+  throw new Error('An Anthropic model that caps effort while thinking is disabled must exist');
+}
+
+export const ANTHROPIC_DISABLED_THINKING_CEILING_MODEL_ID = disabledThinkingCeilingModel.id;

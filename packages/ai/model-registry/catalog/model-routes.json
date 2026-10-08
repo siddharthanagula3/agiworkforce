@@ -1,64 +1,6 @@
 {
   "schemaVersion": 1,
   "models": {
-    "claude-sonnet-5": {
-      "additionalRoutes": [
-        {
-          "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "anthropic/claude-sonnet-5",
-          "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 10,
-            "cacheReadPerMillion": 0.2,
-            "cacheWritePerMillion": 2.5
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "anthropic/claude-sonnet-5",
-          "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 10,
-            "cacheReadPerMillion": 0.2,
-            "cacheWritePerMillion": 2.5
-          }
-        },
-        {
-          "provider": "cheaperinference_anthropic",
-          "harnessId": "cheaperinference-anthropic/messages",
-          "upstreamModelId": "claude-sonnet-5",
-          "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 10,
-            "cacheReadPerMillion": 0.2,
-            "cacheWritePerMillion": 2.5
-          },
-          "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
-        },
-        {
-          "provider": "experientiallabs_anthropic",
-          "harnessId": "experientiallabs-anthropic/messages",
-          "upstreamModelId": "claude-sonnet-5",
-          "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2.0,
-            "outputPerMillion": 10.0,
-            "cacheReadPerMillion": 0.2,
-            "cacheWritePerMillion": 2.5
-          },
-          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug claude-sonnet-5 (anthropic at $2/$10, openrouter at $2/$10); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. Cache reads are the rung ceiling and the cache write is Anthropic's list write price, which every rung bills at. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/claude-sonnet-5 on 2026-09-06."
-        }
-      ]
-    },
     "gpt-5.6-sol": {
       "additionalRoutes": [
         {
@@ -212,64 +154,6 @@
             "cacheReadPerMillion": 0.02
           },
           "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gpt-5.6-luna (openai at $0.2/$1.2, openrouter at $0.2/$1.2); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gpt-5.6-luna on 2026-09-06."
-        }
-      ]
-    },
-    "claude-opus-5": {
-      "additionalRoutes": [
-        {
-          "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "anthropic/claude-opus-5",
-          "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 5,
-            "outputPerMillion": 25,
-            "cacheReadPerMillion": 0.5,
-            "cacheWritePerMillion": 6.25
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "anthropic/claude-opus-5",
-          "cacheClass": "gateway_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 5,
-            "outputPerMillion": 25,
-            "cacheReadPerMillion": 0.5,
-            "cacheWritePerMillion": 6.25
-          }
-        },
-        {
-          "provider": "cheaperinference_anthropic",
-          "harnessId": "cheaperinference-anthropic/messages",
-          "upstreamModelId": "claude-opus-5",
-          "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 5,
-            "outputPerMillion": 25,
-            "cacheReadPerMillion": 0.5,
-            "cacheWritePerMillion": 6.25
-          },
-          "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
-        },
-        {
-          "provider": "experientiallabs_anthropic",
-          "harnessId": "experientiallabs-anthropic/messages",
-          "upstreamModelId": "claude-opus-5",
-          "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 5.0,
-            "outputPerMillion": 25.0,
-            "cacheReadPerMillion": 0.5,
-            "cacheWritePerMillion": 6.25
-          },
-          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug claude-opus-5 (anthropic at $5/$25, openrouter at $5/$25); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. Cache reads are the rung ceiling and the cache write is Anthropic's list write price, which every rung bills at. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/claude-opus-5 on 2026-09-06."
         }
       ]
     },
@@ -1353,38 +1237,6 @@
         "harnessId": "open-router/chat-completions-managed",
         "commercialStatus": "authorized_marketplace"
       }
-    },
-    "claude-haiku-4-5": {
-      "additionalRoutes": [
-        {
-          "provider": "experientiallabs_anthropic",
-          "harnessId": "experientiallabs-anthropic/messages",
-          "upstreamModelId": "claude-haiku-4.5",
-          "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 1.0,
-            "outputPerMillion": 5.0,
-            "cacheReadPerMillion": 0.1,
-            "cacheWritePerMillion": 1.25
-          },
-          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug claude-haiku-4.5 (anthropic at $1/$5, openrouter at $1/$5); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. Cache reads are the rung ceiling and the cache write is Anthropic's list write price, which every rung bills at. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/claude-haiku-4.5 on 2026-09-06."
-        },
-        {
-          "provider": "cheaperinference_anthropic",
-          "harnessId": "cheaperinference-anthropic/messages",
-          "upstreamModelId": "claude-haiku-4.5",
-          "cacheClass": "provider_explicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 1,
-            "outputPerMillion": 5,
-            "cacheReadPerMillion": 0.1,
-            "cacheWritePerMillion": 1.25
-          },
-          "pricingNote": "The Anthropic Messages dialect carries no minimum-discount control in this registry, so the route is priced at the canonical list price; any marketplace discount lowers the bill but is never assumed."
-        }
-      ]
     },
     "gpt-6-astra": {
       "additionalRoutes": [

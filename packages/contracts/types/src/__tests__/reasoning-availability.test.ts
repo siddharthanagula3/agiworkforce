@@ -87,7 +87,7 @@ describe('per-model reasoning capability', () => {
     expect(r.request?.effortPath).toBe('output_config.effort');
     expect(r.thinkingDefault).toBe('adaptive');
     expect(r.supportsManualThinking).toBe(false);
-    expect(r.maxEffortWhenThinkingDisabled).toBe('high');
+    expect(r.canDisableThinking).toBe(false);
     expect(r.rejectsSamplingParameters).toBe(true);
   });
 
