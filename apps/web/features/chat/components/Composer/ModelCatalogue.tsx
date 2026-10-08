@@ -7,7 +7,6 @@ import {
   MODEL_PICKER_RELEASE_STAGE_LABEL,
   resolveModelLineLabel,
   resolveModelReleaseStage,
-  resolveModelSpeedLabel,
 } from '@agiworkforce/unified-chat/model-picker';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import type { ModelCatalogueDeveloper } from '@features/chat/lib/use-model-catalogue';
@@ -455,7 +454,6 @@ export function ModelCatalogue({
     const pricedInCredits =
       !entry.eventAccess && !entry.freePool && (messageCredits.get(entry.id) ?? null) !== null;
     const costLabel = freePoolCostLabel(entry);
-    const speedLabel = resolveModelSpeedLabel(entry.id);
     const stageLabel = hardLocked ? null : releaseStageLabel(entry);
     return (
       <div key={entry.id} className="flex items-center gap-0">
@@ -484,9 +482,7 @@ export function ModelCatalogue({
                     ? `${entry.displayName} - ${NOT_OFFERED_TEXT}`
                     : planLocked && entry.minimumPlanLabel
                       ? `${entry.displayName} - Upgrade to use, ${entry.minimumPlanLabel}`
-                      : [entry.displayName, stageLabel, speedLabel, costLabel]
-                          .filter(Boolean)
-                          .join(', ')
+                      : [entry.displayName, stageLabel, costLabel].filter(Boolean).join(', ')
           }
           onClick={() => {
             if (hardLocked) return;
@@ -513,9 +509,7 @@ export function ModelCatalogue({
             >
               {entry.displayName}
             </span>
-            <span className={ROW_GUIDANCE_CLASS}>
-              {[entry.developerLabel, speedLabel].filter(Boolean).join(' · ')}
-            </span>
+            <span className={ROW_GUIDANCE_CLASS}>{entry.developerLabel}</span>
           </span>
           <span className="ms-auto flex shrink-0 items-center gap-1.5">
             {isNewRelease(entry, now) && (
