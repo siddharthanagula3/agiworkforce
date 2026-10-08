@@ -109,3 +109,21 @@ export async function removePluginConnectors(
     });
   }
 }
+
+export async function setPluginConnectorsEnabled(
+  request: NextRequest,
+  pluginKey: string,
+  enabled: boolean,
+): Promise<void> {
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const changed = await db.query<{ id: string }>(
+    `update public.user_custom_connectors
+        set disabled_by_plugin_at = case when $3 then null else coalesce(disabled_by_plugin_at, now()) end,
+            updated_at = now()
+      where user_id = $1 and installed_by_plugin = $2
+        and (disabled_by_plugin_at is null) = $3
+      returning id`,
+    [userId, pluginKey, enabled],
+  );
+  for (const row of changed) await evictCustomConnectorCaches(userId, row.id);
+}

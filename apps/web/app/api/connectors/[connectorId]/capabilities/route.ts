@@ -13,6 +13,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { loadUserConnectorCapabilityCatalog } from '@/lib/user-connector-tools';
+import { rethrowConnectorUnreachable } from '@/lib/connectors/reachable-mcp-handle';
 import { plainMcpServerText } from '@/lib/connectors/mcp-untrusted-text';
 import { resolveConnectorToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 
@@ -56,7 +57,9 @@ async function handleGet(
   }
 
   const { userId } = await getUserScopedDb(request);
-  const resolved = await loadUserConnectorCapabilityCatalog(userId, connectorRef);
+  const resolved = await loadUserConnectorCapabilityCatalog(userId, connectorRef).catch(
+    rethrowConnectorUnreachable,
+  );
   if (!resolved) throw createError.notFound('Connected connector not found');
 
   const server = resolved.catalog.servers[resolved.connectorId];

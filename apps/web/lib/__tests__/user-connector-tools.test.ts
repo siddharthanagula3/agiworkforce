@@ -877,3 +877,50 @@ describe('makeUserConnectorExecutor', () => {
     );
   });
 });
+
+describe('connectors of a plugin that is turned off', () => {
+  const ROW = {
+    id: 'row-plugin',
+    short_id: 'cafe000000',
+    name: 'Acme: tools',
+    url: 'https://tools.acme.example/mcp',
+    transport: 'streamable-http',
+    auth_header_enc: null,
+  };
+
+  function storeHolding(row: typeof ROW, disabled: boolean) {
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (!sql.includes('user_custom_connectors')) return Promise.resolve([]);
+      const filtered = sql.includes('disabled_by_plugin_at is null');
+      return Promise.resolve(disabled && filtered ? [] : [row]);
+    });
+  }
+
+  it('does not offer or dial them while the plugin is off, and does again once it is on', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    mockBuildMcpToolCatalog.mockResolvedValue({
+      catalog: { version: 1, generatedAt: 0, servers: {}, tools: [] },
+      handles: [],
+    });
+
+    storeHolding(ROW, true);
+    await loadUserConnectorToolDefs('user-plugin-off');
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+
+    storeHolding(ROW, false);
+    await loadUserConnectorToolDefs('user-plugin-on');
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to run a tool on one while the plugin is off', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    storeHolding(ROW, true);
+    const result = await makeUserConnectorExecutor('user-plugin-off')(
+      `custom-${ROW.short_id}`,
+      'any_tool',
+      {},
+    );
+    expect(result.isError).toBe(true);
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
+  });
+});

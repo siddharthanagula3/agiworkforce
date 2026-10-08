@@ -98,11 +98,14 @@ vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
 import {
   __resetConnectorMcpMapCacheForTests,
   loadUserConnectorCapabilityCatalog,
+  withUserConnectorMcpHandle,
   loadUserConnectorToolDefs,
   makeUserConnectorExecutor,
   evictConnectorOAuthCaches,
 } from '../user-connector-tools';
 import { parseConnectorAuthorizationRequired } from '@/lib/connectors/connect-required';
+import { ConnectorUnreachableError } from '@/lib/connectors/oauth-access';
+import { withReachableMcpHandle } from '@/lib/connectors/reachable-mcp-handle';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 
 function unauthorized(): Error {
@@ -543,5 +546,33 @@ describe('OAuth connector execution, lazy authentication', () => {
     const result = await makeUserConnectorExecutor('user-1')('dropbox', 'search', {});
 
     expect(result.handled).toBe(false);
+  });
+});
+
+describe('a token refresh that failed for a moment, outside the chat catalog', () => {
+  beforeEach(() => {
+    mockResolveAccessToken.mockResolvedValue({ status: 'unreachable' });
+  });
+
+  it('reports the capability catalog unreachable rather than missing', async () => {
+    await expect(loadUserConnectorCapabilityCatalog('user-1', 'linear')).rejects.toBeInstanceOf(
+      ConnectorUnreachableError,
+    );
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 with the retry wording from a handle that serves a person', async () => {
+    const operation = vi.fn();
+
+    await expect(withReachableMcpHandle('user-1', 'linear', operation)).rejects.toMatchObject({
+      statusCode: 503,
+      message: "Couldn't reach Linear just now. It is still connected, so try again in a moment.",
+    });
+    expect(operation).not.toHaveBeenCalled();
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('keeps answering null to background callers', async () => {
+    await expect(withUserConnectorMcpHandle('user-1', 'linear', vi.fn())).resolves.toBeNull();
   });
 });

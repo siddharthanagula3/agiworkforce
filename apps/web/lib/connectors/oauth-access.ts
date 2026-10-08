@@ -454,6 +454,14 @@ export function connectorUnreachableMessage(label: string): string {
   return `Couldn't reach ${label} just now. It is still connected, so try again in a moment.`;
 }
 
+/** The grant is intact but its token could not be refreshed just now. */
+export class ConnectorUnreachableError extends Error {
+  constructor(label: string) {
+    super(connectorUnreachableMessage(label));
+    this.name = 'ConnectorUnreachableError';
+  }
+}
+
 export function vendorRevocationNotice(
   label: string,
   revocation: ConnectorVendorRevocation,

@@ -66,6 +66,7 @@ import {
   isSelfServiceConnector,
 } from '@/lib/connectors/mcp-endpoints';
 import {
+  ConnectorUnreachableError,
   connectorUnreachableMessage,
   resolveConnectorAccessToken,
   type ReadyConnectorAccess,
@@ -910,7 +911,7 @@ async function getUserCustomConnectorRows(
     const rows = await db.query<CustomConnectorRow>(
       `select id, short_id, name, url, transport, auth_header_enc
          from user_custom_connectors
-        where user_id = $1
+        where user_id = $1 and disabled_by_plugin_at is null
         order by created_at asc, id asc
         limit $2`,
       [userId, limit ?? null],
@@ -932,6 +933,7 @@ export interface UserCustomConnectorSummary {
   updatedAt: string;
   signInRequired: boolean;
   credentialUnreadable?: true;
+  disabledByPlugin?: true;
 }
 
 function credentialReadable(sealed: string | null): boolean {
@@ -957,11 +959,12 @@ export async function getUserCustomConnectorSummaries(
       transport: CustomConnectorTransport;
       auth_header_enc: string | null;
       sign_in_required: boolean;
+      disabled_by_plugin_at: string | null;
       created_at: string;
       updated_at: string;
     }>(
       `select id, short_id, name, url, transport, auth_header_enc, sign_in_required,
-              created_at, updated_at
+              disabled_by_plugin_at, created_at, updated_at
          from user_custom_connectors
         where user_id = $1
         order by created_at desc`,
@@ -976,6 +979,7 @@ export async function getUserCustomConnectorSummaries(
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       signInRequired: r.sign_in_required,
+      ...(r.disabled_by_plugin_at ? { disabledByPlugin: true as const } : {}),
       ...(credentialReadable(r.auth_header_enc) ? {} : { credentialUnreadable: true as const }),
     }));
   } catch (error) {
@@ -1071,9 +1075,7 @@ async function personalCustomRowConfig(
   const access = await resolveConnectorAccessToken(userId, customServerId(row.short_id), {
     discovered: true,
   });
-  if (access.status === 'unreachable') {
-    throw new ConnectorCredentialError(connectorUnreachableMessage(row.name));
-  }
+  if (access.status === 'unreachable') throw new ConnectorUnreachableError(row.name);
   if (access.status !== 'ready') return config;
   return {
     ...config,
@@ -1100,6 +1102,7 @@ export async function evictCustomConnectorCaches(userId: string, rowId: string):
 async function buildCustomConnectorCatalog(
   userId: string,
   row: CustomConnectorRow,
+  reportUnreachable = false,
 ): Promise<McpToolCatalog | null> {
   const now = Date.now();
   const cacheKey = customConnectorCacheKey(userId, row.id);
@@ -1138,6 +1141,7 @@ async function buildCustomConnectorCatalog(
     _customCatalogCache.set(cacheKey, { catalog, expiresAt: now + CUSTOM_CATALOG_TTL_MS });
     return catalog;
   } catch (err) {
+    if (reportUnreachable && err instanceof ConnectorUnreachableError) throw err;
     logger.warn(
       { rowId: row.id, error: err instanceof Error ? err.message : err },
       '[user-connector] failed to build custom connector catalog',
@@ -1163,7 +1167,7 @@ async function executeCustomConnectorTool(
     rows = await db.query<CustomConnectorRow>(
       `select id, short_id, name, url, transport, auth_header_enc
          from user_custom_connectors
-        where short_id = $1 and user_id = $2`,
+        where short_id = $1 and user_id = $2 and disabled_by_plugin_at is null`,
       [shortId, userId],
     );
   } catch (error) {
@@ -1209,7 +1213,7 @@ async function executeCustomConnectorTool(
         isError: true,
       };
     }
-    if (err instanceof ConnectorCredentialError) {
+    if (err instanceof ConnectorCredentialError || err instanceof ConnectorUnreachableError) {
       return { handled: true, content: err.message, isError: true };
     }
     const challenge = detectConnectorAuthChallenge(err);
@@ -1675,6 +1679,7 @@ async function getOrgSharedConnectorRows(
          join public.user_custom_connectors c on c.id = s.connector_row_id
         where s.organization_id = $1
           and c.user_id <> $2
+          and c.disabled_by_plugin_at is null
         order by s.created_at asc, s.connector_row_id asc
         limit $3`,
       [organizationId, userId, limit ?? null],
@@ -1828,6 +1833,7 @@ async function executeOrgSharedConnectorTool(
          join public.user_custom_connectors c on c.id = s.connector_row_id
         where s.organization_id = $1
           and s.org_short_id = $2
+          and c.disabled_by_plugin_at is null
         union all
        select p.id, p.short_id, p.name, p.url, p.transport, null::text as auth_header_enc,
               p.organization_id, p.short_id as org_short_id
@@ -2110,7 +2116,7 @@ export async function loadUserConnectorCapabilityCatalog(
       (candidate) => candidate.id === suffix || candidate.short_id === suffix,
     );
     if (row) {
-      const catalog = await buildCustomConnectorCatalog(userId, row);
+      const catalog = await buildCustomConnectorCatalog(userId, row, true);
       if (catalog) {
         result = {
           connectorId: customServerId(row.short_id),
@@ -2168,6 +2174,13 @@ export async function loadUserConnectorCapabilityCatalog(
       if (grants.some((grant) => grant.connectorId === connectorRef)) {
         const target = resolveConnectorMcpTarget(connectorRef);
         const access = await resolveConnectorAccessToken(userId, connectorRef);
+        if (
+          target &&
+          access.status === 'unreachable' &&
+          (await connectorPolicyAllows(connectorRef, organizationId, false))
+        ) {
+          throw new ConnectorUnreachableError(target.displayName ?? connectorRef);
+        }
         if (target && access.status === 'ready') {
           const catalog = await buildOAuthConnectorCatalog(userId, target, access);
           if (catalog) {
@@ -2181,7 +2194,7 @@ export async function loadUserConnectorCapabilityCatalog(
         }
       }
     } else {
-      result = await loadDirectoryCapabilityCatalog(userId, connectorRef);
+      result = await loadDirectoryCapabilityCatalog(userId, connectorRef, organizationId);
     }
   }
 
@@ -2205,12 +2218,13 @@ export async function loadUserConnectorCapabilityCatalog(
 async function loadDirectoryCapabilityCatalog(
   userId: string,
   connectorRef: string,
+  organizationId: string | null,
 ): Promise<UserConnectorCapabilityCatalog | null> {
   const directory = await resolveDirectoryTarget(connectorRef);
   if (!directory) return null;
   const customRow = await findCustomRowForDirectoryTarget(userId, directory);
   if (customRow) {
-    const catalog = await buildCustomConnectorCatalog(userId, customRow);
+    const catalog = await buildCustomConnectorCatalog(userId, customRow, true);
     return catalog
       ? {
           connectorId: customServerId(customRow.short_id),
@@ -2224,6 +2238,12 @@ async function loadDirectoryCapabilityCatalog(
   const access = await resolveConnectorAccessToken(userId, target.connectorId, {
     discovered: true,
   });
+  if (
+    access.status === 'unreachable' &&
+    (await connectorPolicyAllows(target.serverId, organizationId, true))
+  ) {
+    throw new ConnectorUnreachableError(target.displayName ?? target.serverId);
+  }
   if (access.status !== 'ready') return null;
   const catalog = await buildOAuthConnectorCatalog(userId, target, access);
   return catalog
@@ -2251,7 +2271,10 @@ export async function withUserConnectorMcpHandle<T>(
   userId: string,
   connectorRef: string,
   operation: (connection: UserConnectorMcpHandle) => Promise<T>,
-  options: Pick<LoadUserConnectorToolOptions, 'organizationId'> = {},
+  options: Pick<LoadUserConnectorToolOptions, 'organizationId'> & {
+    /** Throw ConnectorUnreachableError instead of answering null when a refresh failed transiently. */
+    reportUnreachable?: boolean;
+  } = {},
 ): Promise<T | null> {
   if (!userId || !connectorRef || connectorRef === GITHUB_SERVER_ID) return null;
   const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
@@ -2313,6 +2336,14 @@ export async function withUserConnectorMcpHandle<T>(
       const access = grants.some((grant) => grant.connectorId === connectorRef)
         ? await resolveConnectorAccessToken(userId, connectorRef)
         : null;
+      if (
+        options.reportUnreachable &&
+        target &&
+        access?.status === 'unreachable' &&
+        (await connectorPolicyAllows(connectorRef, organizationId, false, target.mcpUrl))
+      ) {
+        throw new ConnectorUnreachableError(target.displayName ?? connectorRef);
+      }
       if (target && access?.status === 'ready') {
         descriptor = {
           connectorId: connectorRef,
@@ -2346,6 +2377,13 @@ export async function withUserConnectorMcpHandle<T>(
         const access = await resolveConnectorAccessToken(userId, target.connectorId, {
           discovered: true,
         });
+        if (
+          options.reportUnreachable &&
+          access.status === 'unreachable' &&
+          (await connectorPolicyAllows(target.serverId, organizationId, true, target.mcpUrl))
+        ) {
+          throw new ConnectorUnreachableError(target.displayName ?? target.serverId);
+        }
         if (access.status === 'ready') {
           descriptor = {
             connectorId: target.serverId,
