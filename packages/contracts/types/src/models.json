@@ -1487,7 +1487,7 @@
         "caching": true
       },
       "benchmarks": { "swebench": 74.2, "humaneval": 93.5, "mmlu": 89.5, "gpqa": 91.9, "aime": 95 },
-      "speed": "fast",
+      "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],

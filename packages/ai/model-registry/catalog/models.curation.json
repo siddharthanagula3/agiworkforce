@@ -1621,6 +1621,7 @@
       "tierPolicy": {
         "minTier": "pro"
       },
+      "speedOverride": "medium",
       "releasedOverride": "February 19, 2026",
       "lifecycle": {
         "stage": "promoted",

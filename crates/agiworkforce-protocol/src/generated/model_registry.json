@@ -296,7 +296,7 @@
         "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced",
         "replacedBy": null
       },
-      "speed": "fast",
+      "speed": "medium",
       "residencyRegions": null,
       "evidenceRefs": []
     },
