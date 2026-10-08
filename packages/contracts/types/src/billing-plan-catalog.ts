@@ -18,10 +18,6 @@ import {
  */
 export const BILLING_PLAN_CATALOG_VERSION = 3;
 
-/**
- * `seat_upgrade` is a tier sold only as a seat type on its parent plan's
- * subscription: it has a price, and nobody can check out for it as a plan.
- */
 export type PlanSellability =
   'self_serve' | 'seat_upgrade' | 'contract_only' | 'free_of_charge' | 'withdrawn';
 

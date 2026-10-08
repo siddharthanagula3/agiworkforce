@@ -9,6 +9,7 @@ import {
   billingIntervalsForPlan,
   billingPlanCapabilities,
   billingPlanCapabilityPlanLabels,
+  billingPlanCapabilityWireTiers,
   canUseBillingPlanCapability,
   getBillingPlanProductLimits,
   getNextUpgradeTier,
@@ -24,10 +25,12 @@ import {
   isTeamSeatUpgradeTier,
   normalizeBillingPlanTier,
   normalizeTeamSeatType,
+  seatTypeField,
   subscriptionPlanTierOf,
   teamSeatPlanTier,
   teamSeatTypeOfPlan,
   totalTeamSeats,
+  wirePlanOf,
   type BillingPlanCapability,
 } from '../billing-catalog';
 import {
@@ -198,6 +201,32 @@ describe('catalogue version', () => {
       expect(resolvePlanCatalogVersion(version)).toBe(version);
       expect(MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION[version]?.team).toEqual(
         MANAGED_USAGE_LIMITS.team,
+      );
+    }
+  });
+});
+
+describe('the plan a client is told', () => {
+  it('reports a Premium seat as Team with the seat type beside it', () => {
+    expect(wirePlanOf(PREMIUM)).toEqual({ tier: 'team', seatType: 'premium' });
+    expect(wirePlanOf(STANDARD)).toEqual({ tier: 'team', seatType: 'standard' });
+    expect(wirePlanOf('max')).toEqual({ tier: 'max', seatType: null });
+    expect(wirePlanOf(null)).toEqual({ tier: 'free', seatType: null });
+  });
+
+  it('adds a seat type field only for a Team seat', () => {
+    expect(seatTypeField('premium')).toEqual({ seat_type: 'premium' });
+    expect(seatTypeField(null)).toEqual({});
+  });
+
+  it('never names the Premium seat tier in a list of plans a client reads', () => {
+    for (const capability of Object.keys(
+      BILLING_PLAN_CAPABILITY_TIERS,
+    ) as BillingPlanCapability[]) {
+      const listed = billingPlanCapabilityWireTiers(capability);
+      expect(listed).not.toContain(PREMIUM);
+      expect(listed).toEqual(
+        BILLING_PLAN_CAPABILITY_TIERS[capability].filter((plan) => plan !== PREMIUM),
       );
     }
   });

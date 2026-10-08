@@ -55,12 +55,6 @@ export type TeamSeatType = (typeof TEAM_SEAT_TYPES)[number];
 
 export const DEFAULT_TEAM_SEAT_TYPE: TeamSeatType = 'standard';
 
-/**
- * A Team subscription sells two seat types on one subscription. The tier named
- * here is what the holder of that seat is entitled to: it is never the plan a
- * subscription or an organization carries, which stays `team` whatever mix of
- * seats it bills.
- */
 export const TEAM_SEAT_PLAN_TIERS = {
   standard: 'team',
   premium: 'team_premium',
@@ -354,10 +348,30 @@ export function canUseBillingPlanCapability(
   return BILLING_PLAN_CAPABILITY_TIERS[capability].includes(plan);
 }
 
+export function billingPlanCapabilityWireTiers(
+  capability: BillingPlanCapability,
+): BillingPlanTier[] {
+  return BILLING_PLAN_CAPABILITY_TIERS[capability].filter((plan) => !isTeamSeatUpgradeTier(plan));
+}
+
+export interface WirePlan {
+  tier: BillingPlanTier;
+  seatType: TeamSeatType | null;
+}
+
+export function wirePlanOf(plan: string | null | undefined): WirePlan {
+  const tier = normalizeBillingPlanTier(plan);
+  return { tier: subscriptionPlanTierOf(tier), seatType: teamSeatTypeOfPlan(tier) };
+}
+
+export function seatTypeField(seatType: TeamSeatType | null): { seat_type?: TeamSeatType } {
+  return seatType === null ? {} : { seat_type: seatType };
+}
+
 export function billingPlanCapabilityPlanLabels(capability: BillingPlanCapability): string {
-  const labels = BILLING_PLAN_CAPABILITY_TIERS[capability]
-    .filter((plan) => !isTeamSeatUpgradeTier(plan))
-    .map((plan) => getBillingPlanPricing(plan).label);
+  const labels = billingPlanCapabilityWireTiers(capability).map(
+    (plan) => getBillingPlanPricing(plan).label,
+  );
   if (labels.length <= 2) return labels.join(' and ');
   return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 }

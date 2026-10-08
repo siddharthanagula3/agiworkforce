@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TEAM_SEAT_TYPES } from '@agiworkforce/types';
 import { EffectiveCapabilityDocumentSchema } from './capability-handshake';
 export { CLIENT_VERSION_HEADER } from './header-names';
 
@@ -14,6 +15,7 @@ export const MePlanSchema = z.object({
   cancel_at_period_end: z.boolean().optional(),
   subscription_source: MeSubscriptionSourceSchema.optional(),
   effective_tier: z.string().optional(),
+  seat_type: z.enum(TEAM_SEAT_TYPES).nullable().optional(),
 });
 
 export const MeFeatureFlagsSchema = z
