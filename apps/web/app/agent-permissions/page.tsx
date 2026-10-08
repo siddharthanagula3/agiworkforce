@@ -36,7 +36,7 @@ const SECTIONS = [
   { label: 'A block is enforced on the server', id: 'blocking' },
   { label: 'Computer use in Chrome', id: 'browser-permissions' },
   { label: 'Local execution, local approval', id: 'desktop-permissions' },
-  { label: 'What is actually requested today', id: 'connectors' },
+  { label: 'What connectors will request', id: 'connectors' },
   { label: 'Every way to take access back', id: 'revocation' },
 ] as const;
 
@@ -87,8 +87,8 @@ export default function AgentPermissionsPage() {
           lede={
             <>
               The exact default authority of the agent on each surface, the limits of the
-              protections we ship, the connector scopes actually requested today, and every way to
-              take access back.{' '}
+              protections we ship, the connector scopes requested once connectors open, and every
+              way to take access back.{' '}
               <strong>
                 Some of this is less flattering than a marketing page would write it. That is the
                 point. You cannot review a permission model you have to infer.
@@ -345,11 +345,12 @@ export default function AgentPermissionsPage() {
                   <div>
                     <Eyebrow>Connectors</Eyebrow>
                     <h2 className="agi-ds-h2" id="agi-perm-connectors-title">
-                      What is actually requested today.
+                      What connectors will request.
                     </h2>
                     <Prose>
-                      The connector directory is larger than what is connectable. This section
-                      describes the current state, not the roadmap.
+                      Connectors are coming soon, and none can be connected yet. The connector
+                      directory is larger than what will be connectable when they open. This section
+                      describes what is requested then, not the wider roadmap.
                     </Prose>
                   </div>
 

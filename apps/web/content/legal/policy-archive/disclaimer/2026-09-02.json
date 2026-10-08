@@ -1,0 +1,186 @@
+{
+  "key": "disclaimer",
+  "route": "/disclaimer",
+  "date": "2026-09-02",
+  "replacedOn": "2026-10-08",
+  "commit": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+  "committedAt": "2026-09-21T08:04:57-05:00",
+  "title": "Disclaimer.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-disclaimer-title",
+      "content": [
+        {
+          "text": "Disclaimer."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI generates text, code, and files with language models. Model output can be wrong, out of date, or confidently invented. Check anything you intend to rely on. Last updated: 2026-09-02."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "not-verified",
+      "content": [
+        {
+          "text": "Output is not verified."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Responses are produced statistically, not retrieved from a checked record. A model can state a false fact in the same tone it states a true one, cite a source that does not say what it is claimed to say, or produce code that runs and is still wrong. Where a response includes citations or search results, the underlying pages are third-party content we do not control or endorse."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "You are responsible for reviewing output before acting on it, publishing it, or putting it into production."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "not-advice",
+      "content": [
+        {
+          "text": "Not professional advice."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Nothing AGI produces is legal, medical, financial, tax, or other regulated professional advice, and using it does not create a professional relationship of any kind. For a decision with legal, health, or financial consequences, consult someone qualified and licensed in the relevant jurisdiction."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "providers",
+      "content": [
+        {
+          "text": "Third-party models and providers."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI routes requests to models operated by third parties. Their availability, behaviour, and results can change without notice, and a model named in the interface may be updated or retired by its provider. Provider names and marks belong to their respective owners and their appearance here does not imply endorsement."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "When you connect a tool or bring your own key, that provider’s own terms govern what it does with your data. See the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": " for how the trust boundaries differ."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "availability",
+      "content": [
+        {
+          "text": "Availability."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Features marked alpha or beta are unfinished, may fail or stall, and can change or be withdrawn. Current service state is published on "
+        },
+        {
+          "text": "the status page",
+          "href": "/status"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "fit",
+      "content": [
+        {
+          "text": "How this fits the rest."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "This page explains the limits of the output. The warranty disclaimers and limitation of liability that govern your use of the service are in the "
+        },
+        {
+          "text": "terms of service",
+          "href": "/terms"
+        },
+        {
+          "text": ", and what you may do with AGI is in the "
+        },
+        {
+          "text": "acceptable use policy",
+          "href": "/acceptable-use"
+        },
+        {
+          "text": ". Where this page and the terms differ, the terms control."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Questions about anything here go to "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Disclaimer%20question"
+        },
+        {
+          "text": ". AGI Automation LLC publishes this page as guidance, not as a substitute for the terms."
+        }
+      ]
+    }
+  ]
+}

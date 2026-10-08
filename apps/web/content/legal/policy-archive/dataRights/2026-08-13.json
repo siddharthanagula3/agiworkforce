@@ -1,0 +1,219 @@
+{
+  "key": "dataRights",
+  "route": "/privacy/requests",
+  "date": "2026-08-13",
+  "replacedOn": "2026-10-08",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Exercise your rights.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Your data · rights and consent"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-data-rights-title",
+      "content": [
+        {
+          "text": "Exercise your rights."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Everything on this page is a control, not a description of one. What is self-serve is self-serve; what needs a human says so and tells you exactly what happens when you press the button. Last updated: 2026-08-13. The notice that explains what we collect and why is at "
+        },
+        {
+          "text": "/privacy/india",
+          "href": "/privacy/india"
+        },
+        {
+          "text": " for India, and "
+        },
+        {
+          "text": "/privacy",
+          "href": "/privacy"
+        },
+        {
+          "text": " generally."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-01",
+      "content": [
+        {
+          "text": "01 · Consent recorded against your account."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Withdrawing has to be as easy as giving, so it is one click here: no email, no ticket, no waiting on us. Each change is appended to your consent record with the revision of the notice that was on screen."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Reading your consent record…"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-02",
+      "content": [
+        {
+          "text": "02 · What is already self-serve."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Self-serve controls",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Export your data"
+            }
+          ],
+          "value": [
+            {
+              "text": "Signed in, export the reviewed personal and account-data sections from account settings at any time. The file includes a completeness record: a complete export read every reviewed section without skipped or truncated rows; a partial export names what was unavailable, skipped, or truncated. Live secrets, credential verifiers, and product-internal cost ledgers are intentionally excluded. Exports are rate limited and recorded in the security audit log. Use the access request below if you need something the file does not contain."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Delete your account"
+            }
+          ],
+          "value": [
+            {
+              "text": "Request it from account settings. Erasure is scheduled 24 hours out and then performed by a daily job, which also deletes your identity at our authentication provider. You get no confirmation email, but cancellation is self-serve: sign back in and cancel from Settings > Account any time inside that window."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Turn analytics off"
+            }
+          ],
+          "value": [
+            {
+              "text": "The cookie preferences dialog, reachable from "
+            },
+            {
+              "text": "/cookies",
+              "href": "/cookies"
+            },
+            {
+              "text": ". Analytics is off until you turn it on, and the gate fails closed."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-03",
+      "content": [
+        {
+          "text": "03 · Everything else: make a request."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Access, correction, erasure without an account, withdrawal of consent given without an account, nomination, and grievances. You do not need an account to use this: your rights do not depend on having one."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Loading...Loading your requests"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-04",
+      "content": [
+        {
+          "text": "04 · Grievance contact."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Grievance Officer, AGI Automation LLC"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=DPDP%20grievance"
+        },
+        {
+          "text": " with the subject line “DPDP grievance”, or post to AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA. We aim to respond within 30 days, our commitment, not a statutory deadline we are quoting. If our response does not resolve it, data principals in India may complain to the Data Protection Board of India."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "India: DPDP notice",
+            "href": "/privacy/india"
+          }
+        ],
+        [
+          {
+            "text": "Privacy policy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Cookies",
+            "href": "/cookies"
+          }
+        ]
+      ]
+    }
+  ]
+}

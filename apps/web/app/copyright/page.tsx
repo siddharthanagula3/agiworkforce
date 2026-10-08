@@ -65,7 +65,7 @@ const WHAT_HAPPENS: readonly LedgerRow[] = [
   {
     label: 'We tell the user',
     value:
-      'The account that published the material is notified, with a copy of the notice, so they can counter-notify. We do not disclose your contact details beyond what the notice itself contains.',
+      'We contact the account that published the material, with a copy of the notice, so they can counter-notify. A person sends that message; the product does not send it automatically. We do not disclose your contact details beyond what the notice itself contains.',
   },
   {
     label: 'They can counter-notify',

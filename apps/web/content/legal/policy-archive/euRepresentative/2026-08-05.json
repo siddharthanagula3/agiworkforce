@@ -1,0 +1,133 @@
+{
+  "key": "euRepresentative",
+  "route": "/legal/eu-representative",
+  "date": "2026-08-05",
+  "replacedOn": "2026-10-08",
+  "commit": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+  "committedAt": "2026-09-21T08:04:57-05:00",
+  "title": "EU representative.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-eu-rep-title",
+      "content": [
+        {
+          "text": "EU representative."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI Automation LLC has not designated a representative in the European Union under Article 27 GDPR.",
+          "strong": true
+        },
+        {
+          "text": " We would rather state that than defer it. Last updated: 2026-08-05."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "status",
+      "content": [
+        {
+          "text": "Where this stands."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "No representative is currently appointed.",
+          "strong": true
+        },
+        {
+          "text": " Article 27 requires a controller or processor outside the Union that offers goods or services to people in the Union, or monitors their behaviour, to designate a representative established in a member state. AGI Managed Cloud has been open to the public since 27 June 2026, so this obligation is live and unmet. It is recorded here rather than glossed over, and appointing a representative is being progressed. We are not attaching a date, because a date we cannot keep would be worse than the admission."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "meantime",
+      "content": [
+        {
+          "text": "What to do in the meantime."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The absence of a representative does not reduce your rights or our obligations. Send privacy requests (access, correction, deletion, portability, objection) directly to AGI Automation LLC at "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Privacy%20request"
+        },
+        {
+          "text": " with the subject line “Privacy request”, or by post to AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA. We respond within 30 days. Export and account deletion are also self-serve in the product. See section 06 of the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "You retain the right to lodge a complaint with your national supervisory authority, and you may bring a claim against us directly. The transfer mechanism for EU personal data is set out in section 06 of the "
+        },
+        {
+          "text": "data processing addendum",
+          "href": "/dpa"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Send a privacy request",
+            "href": "mailto:contact@agiworkforce.com?subject=Privacy%20request"
+          }
+        ],
+        [
+          {
+            "text": "Privacy policy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "DPA",
+            "href": "/dpa"
+          }
+        ]
+      ]
+    }
+  ]
+}

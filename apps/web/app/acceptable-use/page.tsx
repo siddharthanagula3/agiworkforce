@@ -25,6 +25,13 @@ import {
   contactMailto,
 } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+import { AI_GENERATED_HEADER } from '@/lib/compliance/ai-act';
+import { helpArticlePath } from '@/lib/support/help-paths';
+
+const CRISIS_RESOURCES_ARTICLE = 'crisis-resources';
+
+const PLATFORM_FILTER_REFUSAL =
+  'This request was refused because it violates the AGI Workforce usage policy. No model request was sent.';
 
 export const metadata = buildMetadata({
   title: 'Acceptable use policy',
@@ -67,6 +74,11 @@ const SUMMARY: readonly LedgerRow[] = [
     label: 'You can revoke everything',
     value:
       "Disconnect a connector, reset a tool's saved permission, or remove a site from the browser allowlist, all listed on the agent permissions page.",
+  },
+  {
+    label: 'Some uses are off limits everywhere',
+    value:
+      'No sexual content involving minors and no sexually explicit material. No deceiving voters. No content that encourages self-harm. No attacks on critical infrastructure. No passing AI output off as human-made to deceive someone. No harvesting output to copy the models or to build a competitor. Section 02 states each rule in full.',
   },
   {
     label: 'Breaking these rules costs access',
@@ -185,6 +197,67 @@ const PROHIBITED = [
     title: '(f) The service itself',
     body: 'Do not resell, sublicense, or white-label AGI without a written agreement. Do not reverse-engineer or decompile the software except where applicable law permits, and do not conduct penetration testing or load testing against the service without our written consent. If you want to test, write to us first and we will scope it. Do not misrepresent AGI-generated output as reviewed or endorsed by AGI Automation LLC.',
   },
+  {
+    title: '(g) Competing products and model training',
+    body: 'Do not use AGI, or output you get from it, to build a product or service that competes with AGI. Do not use AGI output to train, fine-tune, or otherwise improve an AI model that competes with AGI or with a model AGI routes to. A model provider may set its own limits on training with its output. Where it does, those limits apply to your use of that model through AGI as well. This rule does not stop you from using output in your own work, or in a product that does not compete with AGI.',
+  },
+  {
+    title: '(h) Bulk harvesting, model extraction, and distillation',
+    body: "Do not collect AGI output in bulk, whether by script, by many accounts, or by any other automated means, in order to copy a model's behaviour, recover its instructions or weights, or build a training set for another model. That is what model extraction and distillation mean here. The request ceilings in section 03 apply to every caller, and staying under a ceiling does not make harvesting allowed. Automating your own tasks is expected. Harvesting output to reproduce the models is not.",
+  },
+  {
+    title: '(i) Elections and political deception',
+    body: 'Do not use AGI to deceive voters or to interfere with an election. That covers false statements about when, where, or how to vote, or about who may vote. It covers content meant to discourage or intimidate people from voting. It covers posing as a candidate, a party, an election official, or a government body. And it covers fake audio, images, or video of a real political figure made to mislead. Writing about politics, explaining a policy, drafting a speech in your own name, and clearly labelled satire are all allowed.',
+  },
+  {
+    title: '(j) Suicide, self-harm, and eating disorders',
+    body: (
+      <>
+        Do not use AGI to produce content that encourages, gives instructions for, or glorifies
+        suicide, self-harm, or disordered eating. Do not use it to push another person towards
+        harming themselves. Asking for help and talking about how you feel are allowed. So is
+        writing about these subjects for prevention, education, research, journalism, or recovery.
+        AGI is not a crisis service and cannot take the place of one. If you or someone you know may
+        be in danger, the{' '}
+        <Link href={helpArticlePath(CRISIS_RESOURCES_ARTICLE)} className="agi-ds-link">
+          crisis resources article
+        </Link>{' '}
+        lists who to call.
+      </>
+    ),
+  },
+  {
+    title: '(k) Sexual content',
+    body: 'The rules in (e) against child sexual abuse material and non-consensual intimate imagery stay as written and have no exceptions. In addition, do not use AGI to generate pornography or other sexually explicit material, including explicit sexual role-play. Do not use it to sexualise anyone under 18 in any form, real or fictional, or to sexualise a real person of any age. Sex education, sexual and reproductive health, medical questions, and fiction that is not explicit are allowed.',
+  },
+  {
+    title: '(l) Critical infrastructure',
+    body: 'Do not use AGI to plan, support, or carry out an attack on critical infrastructure, or to gain access to it without authority. That covers power and water systems, medical devices and hospital systems, telecommunications, transport and air traffic control, payment and financial market systems, voting systems, and industrial control systems. This applies on top of the sandbox rules in (b). Defensive work on systems you own, or are authorised in writing to test, is allowed.',
+  },
+  {
+    title: '(m) AI output presented as human-made, and synthetic impersonation',
+    body: (
+      <>
+        Do not pass AGI output off as written, drawn, spoken, or made by a person where that would
+        deceive someone about something that matters to them. Examples are a review, a testimonial,
+        a message that claims to come from a named person, and work you are required to produce
+        yourself. If you put AGI in front of other people as a chatbot or an agent, tell them they
+        are dealing with an AI. Do not use generated audio, images, or video to pose as a real
+        person without that person&rsquo;s consent.
+        <br />
+        <br />
+        <strong>What the product labels, and what it does not.</strong> A shared conversation opens
+        as a page headed &ldquo;Read-only shared session&rdquo; and shows the model&rsquo;s name
+        when one was recorded. A shared artifact page says &ldquo;Shared from AGI&rdquo;. Neither
+        page states that the content is AI-generated. When AGI serves an image or video it
+        generated, the response carries a machine-readable header,{' '}
+        <code>{AI_GENERATED_HEADER}</code>, that marks it as AI-generated. That mark is in the
+        response, not in the file, so a file you download and post elsewhere carries no label from
+        us. AGI adds no visible watermark of its own, though a model provider may add one. Chat text
+        carries no mark at all. Labelling what you publish is your responsibility.
+      </>
+    ),
+  },
 ];
 
 export default function AcceptableUsePage() {
@@ -270,11 +343,32 @@ export default function AcceptableUsePage() {
                       02 &middot; Prohibited uses.
                     </h2>
                     <Prose>
-                      Each rule below names the capability it constrains, so you can tell whether it
-                      applies to what you are building.
+                      Rules (a) to (d) each name the capability they constrain, so you can tell
+                      whether one applies to what you are building. Rules (e) to (m) apply to
+                      everything you do with AGI, on every surface.
                     </Prose>
                   </div>
                   <NoteList items={PROHIBITED} />
+                  <Prose size="sm">
+                    <strong>What the text filter checks, and what it does not.</strong> A rule-based
+                    filter reads chat messages, image prompts, and video prompts sent through
+                    Managed Cloud before any model sees them. The same filter runs when you publish
+                    an artifact. It refuses clear requests in five areas: sexual content involving
+                    minors; making chemical, biological, radiological, or nuclear weapons; building
+                    explosive devices or untraceable or converted firearms; stated plans of violence
+                    against a specific person or place; and sexualised or impersonating depictions
+                    of real people. A refused request gets this message: &ldquo;
+                    {PLATFORM_FILTER_REFUSAL}&rdquo; The filter matches patterns of words. It is not
+                    a review of everything you write, and it will miss things. It does not look for
+                    the other rules on this page, including the election, self-harm, competition,
+                    and harvesting rules. Those rest on your agreement to this policy, on the model
+                    providers&rsquo; own safety rules, and on what we learn from abuse reports.
+                    Settings also has a Reduce sensitive content switch, off unless you turn it on,
+                    that refuses a short list of explicit or harmful how-to prompts in chat.
+                    Scheduled runs, code sessions, and live voice do not pass through the filter.
+                    Local and BYOK requests go from your device to the model or provider and never
+                    reach these checks.
+                  </Prose>
                 </Stack>
               </Section>
 

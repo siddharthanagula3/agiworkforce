@@ -1,0 +1,596 @@
+{
+  "key": "sla",
+  "route": "/sla",
+  "date": "2026-09-04",
+  "replacedOn": "2026-10-08",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Support commitments that hold today; uptime targets we are building toward.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Service levels"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-sla-title",
+      "content": [
+        {
+          "text": "Support commitments that hold today; uptime targets we are building toward."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI Managed Cloud is in public alpha. "
+        },
+        {
+          "text": "The support response commitments below are current policy. The uptime and credit numbers are planned targets, not a binding commitment, and they take effect only when a plan agreement says so.",
+          "strong": true
+        },
+        {
+          "text": " Local and BYOK modes have no AGI service in the request path, so there is nothing for us to commit to there. Reviewed 4 September 2026."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "See the live signal",
+            "href": "/status"
+          }
+        ],
+        [
+          {
+            "text": "What this page is not",
+            "href": "#limits"
+          }
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "uptime",
+      "content": [
+        {
+          "text": "What we intend to commit to at general availability."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Planned uptime targets",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Web (agiworkforce.com)"
+            }
+          ],
+          "value": [
+            {
+              "text": "99.9% target · monthly window"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "API gateway"
+            }
+          ],
+          "value": [
+            {
+              "text": "99.9% target · monthly window"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Provider passthrough"
+            }
+          ],
+          "value": [
+            {
+              "text": "Inherits the provider's own SLA · not measured by us"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Local and BYOK modes"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not applicable: no AGI service in the path · not measured"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Below each service level names the objective, the window it is computed over, and the production table it is computed from. A domain with no instrument yet says so instead of carrying a number. The list comes from the same file the burn-rate alerting reads, so a target here and what is actually measured cannot drift apart. Current attainment is on "
+        },
+        {
+          "text": "/status",
+          "href": "/status"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Service levels by domain",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Authentication"
+            }
+          ],
+          "value": [
+            {
+              "text": "99.9% · 30-day window · measured from authentication_attempts"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Chat"
+            }
+          ],
+          "value": [
+            {
+              "text": "99% · 30-day window · measured from routing_decision_traces"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "First token"
+            }
+          ],
+          "value": [
+            {
+              "text": "95% · 30-day window · measured from routing_decision_traces"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Completion"
+            }
+          ],
+          "value": [
+            {
+              "text": "95% · 30-day window · measured from routing_decision_traces"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tool execution"
+            }
+          ],
+          "value": [
+            {
+              "text": "99% · 30-day window · measured from agent_tool_executions"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Work"
+            }
+          ],
+          "value": [
+            {
+              "text": "99% · 30-day window · measured from background_jobs"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Research"
+            }
+          ],
+          "value": [
+            {
+              "text": "95% · 30-day window · measured from research_reports"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "File upload"
+            }
+          ],
+          "value": [
+            {
+              "text": "99% · 30-day window · measured from product_analytics_events"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "File parsing"
+            }
+          ],
+          "value": [
+            {
+              "text": "99% · 30-day window · measured from product_analytics_events"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Search"
+            }
+          ],
+          "value": [
+            {
+              "text": "99% · 30-day window · measured from search_history"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Remote control"
+            }
+          ],
+          "value": [
+            {
+              "text": "95% · 30-day window · measured from product_analytics_events"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Browser"
+            }
+          ],
+          "value": [
+            {
+              "text": "95% · 30-day window · measured from product_analytics_events"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Notifications"
+            }
+          ],
+          "value": [
+            {
+              "text": "99% · 30-day window · not measured: Notification rows record what was raised, not whether delivery succeeded, and the push sender discards the per-subscription result once it has pruned dead subscriptions."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Billing events"
+            }
+          ],
+          "value": [
+            {
+              "text": "99.9% · 30-day window · measured from processed_stripe_events"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Billing usage"
+            }
+          ],
+          "value": [
+            {
+              "text": "99.9% · 30-day window · measured from managed_usage_requests"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Entitlement activation"
+            }
+          ],
+          "value": [
+            {
+              "text": "99.9% · 30-day window · measured from credit_settlement_jobs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "response",
+      "content": [
+        {
+          "text": "First response, by plan."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "These are current support commitments, not planned targets. Plan names match the billing catalogue. Plan pricing is on "
+        },
+        {
+          "text": "/pricing",
+          "href": "/pricing"
+        },
+        {
+          "text": "; it is not restated here so there is only one source of truth for it. Full detail, including how to reach us, is on "
+        },
+        {
+          "text": "/support",
+          "href": "/support"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Support response commitments",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Free, Basic, Pro, Max 5x, and Max 20x"
+            }
+          ],
+          "value": [
+            {
+              "text": "Help centre and email · no response-time commitment"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Team"
+            }
+          ],
+          "value": [
+            {
+              "text": "Email · first response within 1 business day, Central Time"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Enterprise"
+            }
+          ],
+          "value": [
+            {
+              "text": "Named contact · first response within 4 business hours (Central Time) for a service-down report, 1 business day otherwise · escalation path · status page"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Premium support add-on"
+            }
+          ],
+          "value": [
+            {
+              "text": "Faster response and on-call, negotiated as an Enterprise order-form line only"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "credits",
+      "content": [
+        {
+          "text": "What we intend to owe you when we miss."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Once paid plans reach general availability, the intended policy is a service credit equal to 10% of the monthly fee for each 0.1% below the uptime target in that month, capped at 50% of the monthly fee. To claim, email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com"
+        },
+        {
+          "text": " within 30 days of the incident. Final credit terms would be confirmed in your plan agreement; today no automated credit process exists."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "limits",
+      "content": [
+        {
+          "text": "What this page is not."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A reviewer should be able to tell the difference between a commitment and an intention without reading the fine print, so here is the difference. As of 4 September 2026:"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Limits",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Uptime targets are not contractual"
+            }
+          ],
+          "value": [
+            {
+              "text": "The uptime numbers above take effect only if and when a plan agreement says so. Until then they describe what we are building toward, and nothing on this page creates an uptime obligation. The support response commitments in the table above are current policy, not a future target."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "No published history"
+            }
+          ],
+          "value": [
+            {
+              "text": "The measured objectives below are computed over a rolling window and shown on /status; nothing older than that window is published, and we have no incident archive. Three of the fourteen domains have no instrument yet, and the table says which and why rather than reporting a number we cannot stand behind."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Support routing is manual"
+            }
+          ],
+          "value": [
+            {
+              "text": "Support requests arrive in a single email queue and are triaged by hand against the commitment above. There is no automated, plan-derived routing system."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "First response is not measured yet"
+            }
+          ],
+          "value": [
+            {
+              "text": "Tickets and their replies are stored in public.support_tickets and public.support_ticket_replies, so the elapsed time to a first staff reply is recorded per ticket. Nothing computes attainment from it and nothing on /status reports it, so treat the response commitment above as a policy we hold ourselves to, not as a number you can read back."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "No 24/7 coverage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Alerts route through an on-call rotation with escalation, but the rotation is small and there is no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "No recovery objectives"
+            }
+          ],
+          "value": [
+            {
+              "text": "No recovery point objective, recovery time objective, or restore test evidence has been published."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "No credit process yet"
+            }
+          ],
+          "value": [
+            {
+              "text": "The credit formula below describes intended policy. No automated credit issuance exists, and final terms would be confirmed in a plan agreement."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "related",
+      "content": [
+        {
+          "text": "The rest of the trust surface."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Live status",
+            "href": "/status"
+          }
+        ],
+        [
+          {
+            "text": "Security mechanisms",
+            "href": "/security"
+          }
+        ],
+        [
+          {
+            "text": "Dated posture ledger",
+            "href": "/trust"
+          }
+        ],
+        [
+          {
+            "text": "Get support",
+            "href": "/support"
+          }
+        ]
+      ]
+    }
+  ]
+}

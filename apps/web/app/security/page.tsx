@@ -23,6 +23,7 @@ import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 import { ERASED_TABLE_COUNT } from '@/lib/legal/published-counts';
 import { PUBLISHED_RETENTION_CRON_TIMES } from '@/lib/legal/published-cron-schedules';
+import { ARTIFACT_SCRIPT_CDN_HOSTS } from '@agiworkforce/types';
 
 export const metadata = buildMetadata({
   title: 'Security: three boundaries, three different answers',
@@ -31,7 +32,7 @@ export const metadata = buildMetadata({
   path: '/security',
 });
 
-const LAST_REVIEWED = POLICY_LAST_UPDATED.security;
+const LAST_UPDATED = POLICY_LAST_UPDATED.security;
 
 const SECTIONS = [
   { label: 'The mode decides the whole risk model', id: 'boundaries' },
@@ -90,7 +91,7 @@ const DATA_ROWS: { label: string; value: string }[] = [
   {
     label: 'Provider API keys',
     value:
-      'Local: not applicable. BYOK: encrypted on your device, in the OS credential store or under a device-derived key. Managed Cloud: not applicable, Managed Cloud uses our provider accounts, not yours.',
+      'Local: not applicable. BYOK: on your device, in the OS credential store, or in owner-only files on Linux or when the keyring is turned off. Managed Cloud: not applicable, Managed Cloud uses our provider accounts, not yours.',
   },
   {
     label: 'Account identity and sessions',
@@ -141,7 +142,7 @@ const AT_REST: { label: string; value: string }[] = [
   {
     label: 'CLI provider credentials',
     value:
-      'The released CLI stores provider credentials in the operating system credential store and keeps only a non-secret provider index on disk. A bare agi login signs in to managed cloud; agi login followed by a provider name is the BYOK key path.',
+      'The CLI stores provider credentials in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and keeps only a non-secret provider index on disk. A bare agi login signs in to managed cloud; agi login followed by a provider name is the BYOK key path.',
   },
   {
     label: 'Hosted API keys',
@@ -216,8 +217,7 @@ const ISOLATION: { label: string; value: string }[] = [
   },
   {
     label: 'Model-generated artifacts',
-    value:
-      "Artifacts render on a separate origin with its own policy: default-src 'none', connect-src 'none', frame-src 'self', form-action 'none', base-uri 'none', object-src 'none', Referrer-Policy no-referrer, cross-origin isolation headers, and frame-ancestors pinned to our application hosts. Code in an artifact can paint, but it cannot make a fetch, XHR or WebSocket call (connect-src is 'none'), submit a form, or reach the parent page. It is not fully network-isolated: the policy still permits images and fonts over https and scripts from two pinned CDNs, so an artifact can issue outbound GETs for those resource types. Treat an artifact as sandboxed against interaction with your session, not as an airgap. Where that origin is not configured, artifacts fall back to a same-origin frame WITHOUT allow-same-origin, which is the flag combination that would defeat the sandbox. Scripts inside an HTML artifact do not run unless the artifact is explicitly marked as needing them.",
+    value: `Artifacts render on a separate origin with its own policy: default-src 'none', connect-src 'none', frame-src 'self', form-action 'none', base-uri 'none', object-src 'none', Referrer-Policy no-referrer, cross-origin isolation headers, and frame-ancestors pinned to our application hosts. Code in an artifact can paint, but it cannot make a fetch, XHR or WebSocket call (connect-src is 'none'), submit a form, or reach the parent page. It is not fully network-isolated: the policy still permits scripts, styles, images and fonts from ${ARTIFACT_SCRIPT_CDN_HOSTS.length} pinned CDN hosts, so an artifact can issue outbound GETs to those hosts. Treat an artifact as sandboxed against interaction with your session, not as an airgap. Where that origin is not configured, artifacts fall back to a same-origin frame WITHOUT allow-same-origin, which is the flag combination that would defeat the sandbox. Scripts inside an HTML artifact do not run unless the artifact is explicitly marked as needing them.`,
   },
   {
     label: 'Server-side request forgery',
@@ -467,7 +467,7 @@ export default function SecurityPage() {
         <Section id="review" labelledBy="agi-security-review-title" rule>
           <Stack gap="tight">
             <h2 className="agi-ds-h2" id="agi-security-review-title">
-              Reviewed {LAST_REVIEWED}.
+              Last updated {LAST_UPDATED}.
             </h2>
             <Prose size="sm">
               Managed Cloud is in public alpha. No certifications are claimed.{' '}
@@ -673,7 +673,7 @@ export default function SecurityPage() {
                     </h2>
                     <Prose>
                       No dates are attached to any of these. A date we cannot keep is worse than an
-                      admission we can. As of {LAST_REVIEWED}:
+                      admission we can. The list as it stands:
                     </Prose>
                   </div>
                   <Ledger caption="What we have not done" rows={NOT_DONE} />

@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
@@ -34,6 +35,8 @@ export const metadata = buildMetadata({
     'Terms of service for AGI · eligibility, licence, your content, AI output, Managed Cloud alpha status, payment and auto-renewal, suspension, liability, and dispute resolution.',
   path: '/terms',
 });
+
+const MATERIAL_TERMS_NOTICE_DAYS = 30;
 
 const SECTIONS = [
   { label: 'Definitions', id: 's-definitions' },
@@ -94,7 +97,11 @@ const GENERAL_LEDGER: readonly LedgerRow[] = [
           /changelog
         </Link>
         . No mailing path in this product can reach an arbitrary list of customers, so we do not
-        promise emailed notice. Continued use after a revision means you accept it; if you do not,
+        promise emailed notice. A material change takes effect no sooner than{' '}
+        {MATERIAL_TERMS_NOTICE_DAYS} days after it is posted here. Until that day an account that
+        accepted the earlier version keeps working under it. From that day the product asks the
+        account to accept the new version before it can chat. Any other change takes effect when it
+        is posted. Continued use after a revision takes effect means you accept it; if you do not,
         stop using the service and cancel.
       </>
     ),
@@ -316,14 +323,16 @@ export default function TermsPage() {
                     02 · Eligibility and age
                   </h2>
                   <Prose>
-                    You must be at least 18 years old and able to form a binding contract to open an
-                    account in your own name. Users aged 13 to 17 may use AGI only through an
-                    account opened and supervised by a parent, guardian or their school, who accepts
-                    these terms on their behalf and is responsible for their use. AGI is not offered
-                    to children under 13, and in jurisdictions setting a higher digital-consent age,
-                    including the European Union and the United Kingdom, where it may be 16, and
-                    India, where processing children&rsquo;s data requires verifiable parental
-                    consent, that higher threshold applies instead.
+                    You must be at least {ACCOUNT_MINIMUM_AGE} years old to create an account. If
+                    you are under {PARENTAL_PERMISSION_BELOW_AGE}, you need permission from a parent
+                    or guardian, who accepts these terms on your behalf and is responsible for your
+                    use. Sign-up asks for your age and refuses anyone under {ACCOUNT_MINIMUM_AGE};
+                    we do not verify the age you enter or the permission, and the age you enter is
+                    not kept. AGI is not offered to children under {ACCOUNT_MINIMUM_AGE}, and in
+                    jurisdictions setting a higher digital-consent age, including the European Union
+                    and the United Kingdom, where it may be 16, and India, where processing
+                    children&rsquo;s data requires verifiable parental consent, that higher
+                    threshold applies instead.
                   </Prose>
                   <Prose>
                     If you accept these terms for an organisation, you represent that you are
@@ -345,6 +354,18 @@ export default function TermsPage() {
                     you may not redistribute, sublicence, decompile, or reverse-engineer them except
                     as applicable law expressly permits. All rights not granted are reserved.
                   </Prose>
+                  <Prose>
+                    <strong>Our name and marks.</strong> The names &ldquo;AGI Workforce&rdquo; and
+                    &ldquo;AGI&rdquo; as used for this product, the AGI mark, and our other names
+                    and logos belong to {LEGAL_ENTITY}. These terms give you no licence to use them.
+                    You need our written permission to use them, except to refer to the product
+                    accurately by name. Do not use them in a way that suggests we sponsor, endorse,
+                    or are affiliated with you or your work, and do not alter the mark. The{' '}
+                    <Link href="/press" className="agi-ds-link">
+                      press page
+                    </Link>{' '}
+                    has the logo files and the rules for using them.
+                  </Prose>
                 </Stack>
               </Section>
 
@@ -355,9 +376,10 @@ export default function TermsPage() {
                   </h2>
                   <Prose>
                     You are responsible for keeping your account credentials and provider API keys
-                    secure, and for the activity that occurs through your account. The released CLI
-                    stores provider credentials in your operating system credential store; AGI Cloud
-                    does not receive those keys. See the{' '}
+                    secure, and for the activity that occurs through your account. The CLI stores
+                    provider credentials in your operating system credential store, or in owner-only
+                    files on Linux or when the keyring is turned off; AGI Cloud does not receive
+                    those keys. See the{' '}
                     <Link href="/byok" className="agi-ds-link">
                       BYOK posture
                     </Link>
@@ -377,9 +399,10 @@ export default function TermsPage() {
                     extent it is capable of ownership. You grant {LEGAL_ENTITY} a worldwide,
                     non-exclusive, royalty-free licence to host, store, transmit, display and
                     process that content <em>solely to operate the service for you</em>, including
-                    transmitting prompt content to the model provider serving the model you select.
-                    That licence ends when the content is deleted, subject to the deletion mechanics
-                    in section 12.
+                    transmitting prompt content to the model provider serving the model you select,
+                    or, for the Free plan&rsquo;s default model, the provider AGI chooses for that
+                    turn. That licence ends when the content is deleted, subject to the deletion
+                    mechanics in section 12.
                   </Prose>
                   <Prose>
                     We do not train AGI-owned models on your content. You are responsible for having
@@ -389,11 +412,15 @@ export default function TermsPage() {
                   <Prose>
                     <strong>Managed Cloud providers.</strong> To provide inference, we send prompts
                     and attached content to the provider serving the model you select and receive
-                    its response; for routed models, the request passes through OpenRouter. Those
-                    third parties handle that content under their applicable terms and data-use
-                    policies. Our statement that AGI does not train AGI-owned models is not a
-                    promise about a third party&rsquo;s handling. The current provider list is
-                    published at{' '}
+                    its response; for routed models, the request passes through OpenRouter. On the
+                    Free plan, a chat on the default model goes to a provider AGI chooses, not one
+                    you pick: Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its
+                    international endpoint in Singapore, or OpenRouter&rsquo;s free router. Which
+                    one answers depends on what is available for that turn, and the reply shows the
+                    model that answered. Those third parties handle that content under their
+                    applicable terms and data-use policies. Our statement that AGI does not train
+                    AGI-owned models is not a promise about a third party&rsquo;s handling. The
+                    current provider list is published at{' '}
                     <Link href="/subprocessors" className="agi-ds-link">
                       /subprocessors
                     </Link>
@@ -558,6 +585,16 @@ export default function TermsPage() {
                     term. Purchases made through an app store are also subject to that store&rsquo;s
                     terms, and refunds for them are handled by the store.
                   </Prose>
+                  <Prose>
+                    <strong>If a payment fails.</strong> While a subscription payment is overdue,
+                    the paid features of your plan are switched off and your account runs with the
+                    Free plan&rsquo;s limits. There is no grace period. You see a notice in the
+                    product asking you to update your payment method, and we do not promise an
+                    email. Stripe retries the charge on its own schedule, and these terms do not
+                    promise a number of retries. When a payment succeeds, your plan comes back. If
+                    Stripe stops retrying, the subscription is cancelled and the account stays on
+                    the Free plan. A failed payment does not delete your content.
+                  </Prose>
                 </Stack>
               </Section>
 
@@ -572,7 +609,7 @@ export default function TermsPage() {
                     or where continued access presents a security risk to other customers or to the
                     service. We give notice where it is reasonable to do so, and we act with the
                     narrowest measure that addresses the problem. Suspended accounts may appeal: the
-                    route is in section 05 of the{' '}
+                    route is in section 04 of the{' '}
                     <Link href="/acceptable-use" className="agi-ds-link">
                       acceptable use policy
                     </Link>
@@ -595,12 +632,11 @@ export default function TermsPage() {
                     You can export your data at any time while your account is active. An account
                     deletion request schedules permanent erasure 24 hours later; a daily job then
                     removes your user-scoped records and stored files and deletes your identity at
-                    our authentication provider. No confirmation email is sent, because the product
-                    has no account-lifecycle mailing path, but cancellation is self-serve: sign back
-                    in and cancel from Settings &gt; Account any time within the 24-hour window.
-                    Sections that by their nature survive (licence restrictions, your content
-                    representations, intellectual property, disclaimers, limitation of liability,
-                    indemnification, governing law and disputes) survive termination.
+                    our authentication provider. No confirmation email is sent, but cancellation is
+                    self-serve: sign back in and cancel from Settings &gt; Account any time within
+                    the 24-hour window. Sections that by their nature survive (licence restrictions,
+                    your content representations, intellectual property, disclaimers, limitation of
+                    liability, indemnification, governing law and disputes) survive termination.
                   </Prose>
                 </Stack>
               </Section>
@@ -611,12 +647,18 @@ export default function TermsPage() {
                     13 · Export control and sanctions
                   </h2>
                   <Prose>
-                    You must comply with United States export control and economic sanctions laws.
-                    You may not use AGI, or permit anyone to use it, if you are located in an
-                    embargoed territory, are a person on a restricted-party list, or would be
-                    exporting the software or service to such a territory or person. You must not
-                    use AGI in connection with any prohibited end use, including weapons of mass
-                    destruction.
+                    You must comply with United States export control and economic sanctions laws,
+                    including the sanctions programmes administered by the Office of Foreign Assets
+                    Control (OFAC) of the United States Department of the Treasury. You may not use
+                    AGI, or permit anyone to use it, if you are located in an embargoed territory,
+                    are a person on a restricted-party list, or would be exporting the software or
+                    service to such a territory or person. You must not use AGI in connection with
+                    any prohibited end use, including weapons of mass destruction. Where the service
+                    is offered is set out on the{' '}
+                    <Link href={CANONICAL_POLICY_ROUTES.supportedCountries} className="agi-ds-link">
+                      supported countries page
+                    </Link>
+                    .
                   </Prose>
                 </Stack>
               </Section>

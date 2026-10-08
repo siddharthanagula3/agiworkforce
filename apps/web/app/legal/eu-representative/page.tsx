@@ -54,9 +54,9 @@ export default function EuRepresentativePage() {
               controller or processor outside the Union that offers goods or services to people in
               the Union, or monitors their behaviour, to designate a representative established in a
               member state. AGI Managed Cloud has been open to the public since 27 June 2026, so
-              this obligation is live and unmet. It is recorded here rather than glossed over, and
-              appointing a representative is being progressed. We are not attaching a date, because
-              a date we cannot keep would be worse than the admission.
+              this obligation is live and unmet. It is recorded here rather than glossed over. We
+              have not set a date to appoint one, because a date we cannot keep would be worse than
+              the admission. This page will say so when one is appointed.
             </Prose>
           </Stack>
         </Section>

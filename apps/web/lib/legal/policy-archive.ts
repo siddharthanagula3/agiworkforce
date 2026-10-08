@@ -71,6 +71,9 @@ const POLICY_LABELS: Readonly<Record<string, string>> = {
   dataUse: 'How we use your data',
   disclaimer: 'Disclaimer',
   agentPermissions: 'Approvals',
+  modelLicenses: 'Model licences',
+  supportedCountries: 'Supported countries and regions',
+  governmentRequests: 'Government and law-enforcement requests',
 };
 
 export const SUBPROCESSOR_LIST = 'subprocessors';

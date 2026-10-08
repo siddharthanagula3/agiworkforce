@@ -61,10 +61,11 @@ describe('/legal/archive', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Version history.' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Current version' })).toHaveAttribute('href', '/terms');
-    expect(screen.getByRole('link', { name: 'Read this version' })).toHaveAttribute(
-      'href',
-      '/legal/archive/terms/2026-08-11',
-    );
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Read this version' })
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/legal/archive/terms/2026-09-23', '/legal/archive/terms/2026-08-11']);
     expect(document.body.textContent).toContain('The full text of this version was not kept.');
   });
 
@@ -179,7 +180,7 @@ describe('/legal/archive', () => {
       unmount();
     }
     expect(policyHistoryForKey('referralTerms')?.versions.map((version) => version.date)).toEqual([
-      '2026-10-07',
+      '2026-10-08',
       '2026-09-27',
     ]);
   });

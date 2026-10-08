@@ -1,5 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The terms and the privacy policy can be revised on the same day, and these
+// tests need two dates that differ to tell the two markers apart.
+type LegalConstantsModule = typeof import('@/lib/legal-constants');
+
+vi.mock('@/lib/legal-constants', async (importOriginal) => {
+  const actual = await importOriginal<LegalConstantsModule>();
+  return {
+    ...actual,
+    POLICY_LAST_UPDATED: {
+      ...actual.POLICY_LAST_UPDATED,
+      terms: '2026-01-02',
+      privacy: '2026-03-04',
+    },
+  };
+});
+
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
   MARKETING_EMAIL_ATTEMPT_STORAGE_KEY,

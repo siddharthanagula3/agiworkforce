@@ -1,0 +1,257 @@
+{
+  "key": "accessibility",
+  "route": "/accessibility",
+  "date": "2026-09-27",
+  "replacedOn": "2026-10-08",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Accessibility.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-accessibility-title",
+      "content": [
+        {
+          "text": "Accessibility."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We aim for WCAG 2.1 AA across the web app and the marketing site. Below is what we’ve done, what is in flight, and the known gaps. If you hit a barrier, email contact@agiworkforce.com, and we treat it as a P0. Last updated: 2026-09-27. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/accessibility"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "done",
+      "content": [
+        {
+          "text": "What we’ve done."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Accessibility posture",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Keyboard"
+            }
+          ],
+          "value": [
+            {
+              "text": "A skip-link is mounted on every page, and keyboard reachability is a requirement we hold new interactive components to. We have not completed a keyboard-operability audit across all six surfaces and hold no VPAT, so we do not claim every element passes. If you find one that does not, it is a bug and we will treat it as one."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Screen reader"
+            }
+          ],
+          "value": [
+            {
+              "text": "Semantic HTML: landmarks, headings in order, lists, labeled controls. ARIA labels where semantics aren't enough. Verified by automated scan on the routes listed below, not by testing with an actual screen reader on every page."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Reduced motion"
+            }
+          ],
+          "value": [
+            {
+              "text": "prefers-reduced-motion: reduce",
+              "code": true
+            },
+            {
+              "text": " short-circuits decorative animations site-wide."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Contrast"
+            }
+          ],
+          "value": [
+            {
+              "text": "Body text and primary UI surfaces meet AA contrast against the page ground, in both light and dark schemes, on the routes listed below. Tertiary copy meets large-text AA."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Focus"
+            }
+          ],
+          "value": [
+            {
+              "text": "Visible focus rings are the house rule and "
+            },
+            {
+              "text": "outline: none",
+              "code": true
+            },
+            {
+              "text": " is not used without an explicit replacement. As with keyboard operability above, that is a standard we hold components to rather than a per-element audit result: we do not claim every element on every route has been checked."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The evidence behind those rows, and its limits.",
+          "strong": true
+        },
+        {
+          "text": " An automated axe scan runs against WCAG 2.0 A/AA and 2.1 A/AA and currently reports "
+        },
+        {
+          "text": "zero violations",
+          "strong": true
+        },
+        {
+          "text": ". Its scope is 5 routes: /, /login, /pricing, /features/agents and /download, each in both light and dark colour schemes. That is the whole basis for the conformance rows above, so read them as covering those routes rather than all of the site. The scan runs signed out, so no route behind the login wall is covered by it."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Two limits worth stating rather than leaving you to infer. Automated tooling catches a minority of WCAG criteria: it finds a missing label and cannot tell you whether a heading makes sense or a focus order is logical, which is why the keyboard and focus rows above describe a standard we hold components to rather than an audit result. And the scan covers 5 routes out of well over a hundred. We hold no VPAT and have commissioned no third-party accessibility audit; if either changes, this section says so on the same day."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "gaps",
+      "content": [
+        {
+          "text": "Known gaps."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Live transcripts"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Voice features in the desktop app do not yet ship live transcripts. Tracking it as a P1."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Colour-only signals"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A handful of status badges still rely on colour alone. We're adding text labels where this is the case."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Long forms"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A few legacy forms have inconsistent error-summary placement. We're standardising on a top-of-form summary."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "report",
+      "content": [
+        {
+          "text": "Report a barrier."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Signed in, open Settings, Help and choose Report an accessibility barrier; the ticket and every reply stay there. Or email contact@agiworkforce.com. Either way we treat it as a P0."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Report from Settings, Help",
+            "href": "/settings/help"
+          }
+        ],
+        [
+          {
+            "text": "Email contact@agiworkforce.com",
+            "href": "mailto:contact@agiworkforce.com"
+          }
+        ],
+        [
+          {
+            "text": "Security posture",
+            "href": "/security"
+          }
+        ]
+      ]
+    }
+  ]
+}

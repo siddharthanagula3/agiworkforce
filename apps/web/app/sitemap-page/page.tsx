@@ -102,6 +102,8 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     links: [
       { href: '/legal', label: 'Legal index' },
       { href: '/legal/eu-representative', label: 'EU representative' },
+      { href: '/legal/government-requests', label: 'Government requests' },
+      { href: '/supported-countries', label: 'Supported countries' },
       { href: '/terms', label: 'Terms' },
       { href: '/acceptable-use', label: 'Acceptable use' },
       { href: '/agent-permissions', label: 'Approvals' },

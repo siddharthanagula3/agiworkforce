@@ -35,6 +35,7 @@ import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { ProductAnalyticsConsentRow } from '../components/ProductAnalyticsConsentRow';
 import { MarketingEmailConsentRow } from '../components/MarketingEmailConsentRow';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
 const NAMESPACE = 'privacy';
 
@@ -70,7 +71,7 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     id: 'keepOutOfProviderTraining',
     label: 'Only use models that do not train on your chats',
     description:
-      'Your requests go only to models whose providers do not train on what you send. On the Free plan this replaces the free models, whose providers’ terms may allow training.',
+      'Your requests go only to models whose providers do not train on what you send. On the Free plan this keeps your chats away from free models whose providers’ terms may allow training.',
     defaultValue: false,
   },
 ];
@@ -492,11 +493,11 @@ export function PrivacySection() {
               neither, app/settings/byok says so in as many words, and the
               three trust boundaries are the one thing that must not blur.
             */}
-            In the CLI, Local Mode conversations stay on your device and are never transmitted to
-            AGI servers, and BYOK conversations go directly to your chosen provider using your own
-            API key. VS Code BYOK is coming soon. Hosted Web and Desktop have neither mode: they
-            store no provider keys of yours, so everything you send there is a Managed Cloud
-            request.
+            Local Mode and BYOK belong to the CLI. {BYOK_SURFACES.availability} In Local Mode,
+            conversations stay on your device and are never transmitted to AGI servers, and BYOK
+            conversations go directly to your chosen provider using your own API key. Hosted Web and
+            Desktop have neither mode: they store no provider keys of yours, so everything you send
+            there is a Managed Cloud request.
           </p>
           <p style={{ margin: 0 }}>
             Managed Cloud conversations are encrypted in transit and at rest. We do not sell your
@@ -510,9 +511,9 @@ export function PrivacySection() {
             >
               /subprocessors
             </SettingsPageLink>
-            . On the Free plan, requests are served by providers&rsquo; free models, and those
-            providers&rsquo; terms may allow them to train on what you send, unless you turn on Only
-            use models that do not train on your chats above.
+            . On the Free plan, AGI chooses the provider for the default model from the free
+            capacity it holds, and some of those providers&rsquo; terms may allow them to train on
+            what you send, unless you turn on Only use models that do not train on your chats above.
           </p>
           <p style={{ margin: 'var(--space-2) 0 0' }}>
             How long we keep it: a chat stays in your history until you delete it, and a deleted
