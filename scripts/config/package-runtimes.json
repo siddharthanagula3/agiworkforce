@@ -107,7 +107,8 @@
       "./waitlist": "universal"
     },
     "packages/contracts/compliance": {
-      ".": "universal"
+      ".": "universal",
+      "./service-regions": "universal"
     },
     "packages/contracts/context": {
       ".": "universal"
