@@ -55,6 +55,10 @@ const admitManagedTurnSlot = () => ({
   active: 0,
   slot: { release: async () => {} },
 });
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  connectorsReleased: () => true,
+}));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
   acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),
@@ -615,6 +619,8 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(workflowRouteMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: undefined,
       planTier: 'max',
+      organizationId: undefined,
+      isConnectorDenied: expect.any(Function),
       isToolDenied: expect.any(Function),
       googleUserDataRouted: false,
     });
