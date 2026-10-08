@@ -196,54 +196,7 @@
     "remove": "Retirer {{value}}"
   },
   "newChat": {
-    "ideasLabel": "Idées de requêtes",
-    "backToTopics": "Retour aux thèmes",
-    "agiWorkExamples": "Exemples pour AGI Work",
-    "agiWorkIntro": "AGI Work planifie une tâche en plusieurs étapes, utilise des outils et des fichiers, puis vous remet un livrable à vérifier.",
     "workspace": "Espace de travail : {{name}}",
-    "topics": {
-      "write": {
-        "label": "Écrire",
-        "p1": "Rédige un e-mail poli pour décliner une invitation à une réunion",
-        "p2": "Resserre ce paragraphe sans en perdre le sens : ",
-        "p3": "Propose trois titres pour un article sur ",
-        "p4": "Transforme ces notes en un court point d'étape pour mon équipe : "
-      },
-      "learn": {
-        "label": "Apprendre",
-        "p1": "Explique le fonctionnement des intérêts composés avec un exemple simple",
-        "p2": "Pose-moi cinq questions sur les bases de la photosynthèse",
-        "p3": "Quelle est la différence entre un virus et une bactérie ?",
-        "p4": "Prépare un programme de quatre semaines pour apprendre les bases de l'espagnol"
-      },
-      "code": {
-        "label": "Code",
-        "p1": "Vérifie cette fonction pour trouver les bugs et les cas limites : ",
-        "p2": "Écris des tests unitaires pour ce code : ",
-        "p3": "Explique ce que signifie cette erreur et comment la corriger : ",
-        "p4": "Convertis ce script Python en TypeScript : "
-      },
-      "research": {
-        "label": "Recherche",
-        "p1": "Compare les avantages et les inconvénients de la location et de l'achat d'un logement",
-        "p2": "Que dois-je savoir avant de passer à une voiture électrique ?",
-        "p3": "Résume les principaux arguments pour et contre la semaine de quatre jours",
-        "p4": "Identifie les principaux risques de ce plan : "
-      },
-      "plan": {
-        "label": "Planifier",
-        "p1": "Planifie un voyage de trois jours à Lisbonne",
-        "p2": "Aide-moi à prioriser cette liste de tâches : ",
-        "p3": "Rédige l'ordre du jour d'une réunion de lancement de 30 minutes",
-        "p4": "Prépare les menus d'une semaine pour deux personnes avec un petit budget"
-      }
-    },
-    "agiWork": {
-      "p1": "Étudie trois concurrents et rédige une comparaison d'une page",
-      "p2": "Transforme mes notes de réunion en rapport d'avancement avec les actions à mener",
-      "p3": "Élabore un plan de projet avec des jalons, des responsables et des dates",
-      "p4": "Analyse le tableur joint et résume les principales tendances"
-    },
     "connectors": {
       "label": "Connectez vos applications",
       "seeAll": "Tous les connecteurs",

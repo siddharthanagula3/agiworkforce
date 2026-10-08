@@ -196,54 +196,7 @@
     "remove": "Rimuovi {{value}}"
   },
   "newChat": {
-    "ideasLabel": "Idee per i prompt",
-    "backToTopics": "Torna agli argomenti",
-    "agiWorkExamples": "Esempi di AGI Work",
-    "agiWorkIntro": "AGI Work pianifica un'attività in più passaggi, usa strumenti e file e ti consegna un risultato da verificare.",
     "workspace": "Spazio di lavoro: {{name}}",
-    "topics": {
-      "write": {
-        "label": "Scrivere",
-        "p1": "Scrivi un'email cortese per declinare l'invito a una riunione",
-        "p2": "Rendi più conciso questo paragrafo senza perderne il senso: ",
-        "p3": "Proponi tre titoli per un articolo su ",
-        "p4": "Trasforma questi appunti in un breve aggiornamento per il mio team: "
-      },
-      "learn": {
-        "label": "Imparare",
-        "p1": "Spiegami come funziona l'interesse composto con un esempio semplice",
-        "p2": "Fammi cinque domande sulle basi della fotosintesi",
-        "p3": "Qual è la differenza tra un virus e un batterio?",
-        "p4": "Prepara un piano di studio di quattro settimane per imparare le basi dello spagnolo"
-      },
-      "code": {
-        "label": "Codice",
-        "p1": "Controlla questa funzione per trovare bug e casi limite: ",
-        "p2": "Scrivi i test unitari per questo codice: ",
-        "p3": "Spiega cosa significa questo errore e come risolverlo: ",
-        "p4": "Converti questo script Python in TypeScript: "
-      },
-      "research": {
-        "label": "Ricerca",
-        "p1": "Confronta pro e contro dell'affitto e dell'acquisto di una casa",
-        "p2": "Cosa dovrei sapere prima di passare a un'auto elettrica?",
-        "p3": "Riassumi i principali argomenti a favore e contro la settimana lavorativa di quattro giorni",
-        "p4": "Individua i rischi principali di questo piano: "
-      },
-      "plan": {
-        "label": "Pianificare",
-        "p1": "Pianifica un viaggio di tre giorni a Lisbona",
-        "p2": "Aiutami a dare priorità a questo elenco di attività: ",
-        "p3": "Prepara l'ordine del giorno di una riunione di avvio di 30 minuti",
-        "p4": "Prepara un menu settimanale economico per due persone"
-      }
-    },
-    "agiWork": {
-      "p1": "Analizza tre concorrenti e scrivi un confronto di una pagina",
-      "p2": "Trasforma i miei appunti della riunione in un report di stato con le azioni da fare",
-      "p3": "Prepara un piano di progetto con milestone, responsabili e date",
-      "p4": "Analizza il foglio di calcolo allegato e riassumi le tendenze principali"
-    },
     "connectors": {
       "label": "Collega le tue app",
       "seeAll": "Tutti i connettori",

@@ -1662,7 +1662,7 @@ export function ComposerFooter({
                   {withNameTip(<PopoverTrigger asChild>{trigger()}</PopoverTrigger>)}
                   <PopoverContent
                     ref={pickerPanelRef}
-                    side="bottom"
+                    side="top"
                     align="end"
                     sideOffset={PICKER_ANCHOR_OFFSET_PX}
                     alignOffset={

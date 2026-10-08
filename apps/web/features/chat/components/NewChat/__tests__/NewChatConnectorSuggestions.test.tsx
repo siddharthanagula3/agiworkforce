@@ -42,7 +42,6 @@ vi.mock('@/features/settings/components/SettingsModalProvider', async (importOri
 }));
 
 import { NewChatConnectorSuggestions } from '../NewChatConnectorSuggestions';
-import { NewChatStarters } from '../NewChatStarters';
 
 const LINK_NAME = 'Connect your apps (optional)';
 const DISMISS_NAME = 'Hide app suggestions';
@@ -68,17 +67,6 @@ function renderWithLocale(ui: ReactElement) {
 
 function renderRow(show = true) {
   return renderWithLocale(<NewChatConnectorSuggestions show={show} />);
-}
-
-function renderStarters(showConnectorHint: boolean) {
-  return renderWithLocale(
-    <NewChatStarters
-      workMode="chat"
-      onPrompt={() => undefined}
-      onFocusComposer={() => undefined}
-      showConnectorHint={showConnectorHint}
-    />,
-  );
 }
 
 function expectHidden() {
@@ -224,27 +212,5 @@ describe('NewChatConnectorSuggestions', () => {
     fireEvent.click(screen.getByRole('button', { name: DISMISS_NAME }));
 
     expectHidden();
-  });
-});
-
-describe('NewChatStarters connector hint', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    setConnectors();
-  });
-
-  it('shows the optional link under the topic chips for an account with no conversations', () => {
-    renderStarters(true);
-
-    expect(screen.getByRole('group', { name: 'Prompt ideas' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: LINK_NAME })).toBeInTheDocument();
-  });
-
-  it('keeps the topic chips and drops the link for an account that has conversations', () => {
-    renderStarters(false);
-
-    expect(screen.getByRole('group', { name: 'Prompt ideas' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: LINK_NAME })).toBeNull();
-    expect(screen.queryByRole('button', { name: DISMISS_NAME })).toBeNull();
   });
 });

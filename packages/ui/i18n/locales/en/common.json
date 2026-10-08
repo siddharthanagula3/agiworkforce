@@ -196,54 +196,7 @@
     "remove": "Remove {{value}}"
   },
   "newChat": {
-    "ideasLabel": "Prompt ideas",
-    "backToTopics": "Back to topics",
-    "agiWorkExamples": "AGI Work examples",
-    "agiWorkIntro": "AGI Work plans a multi-step task, uses tools and files, and hands back a deliverable you can review.",
     "workspace": "Workspace: {{name}}",
-    "topics": {
-      "write": {
-        "label": "Write",
-        "p1": "Draft a polite email declining a meeting invitation",
-        "p2": "Tighten this paragraph without losing its meaning: ",
-        "p3": "Write three headline options for a post about ",
-        "p4": "Turn these notes into a short update for my team: "
-      },
-      "learn": {
-        "label": "Learn",
-        "p1": "Explain how compound interest works with a simple example",
-        "p2": "Quiz me with five questions on the basics of photosynthesis",
-        "p3": "What is the difference between a virus and a bacterium?",
-        "p4": "Make a four-week study plan for learning basic Spanish"
-      },
-      "code": {
-        "label": "Code",
-        "p1": "Review this function for bugs and edge cases: ",
-        "p2": "Write unit tests for this code: ",
-        "p3": "Explain what this error means and how to fix it: ",
-        "p4": "Convert this Python script to TypeScript: "
-      },
-      "research": {
-        "label": "Research",
-        "p1": "Compare the pros and cons of renting and buying a home",
-        "p2": "What should I know before switching to an electric car?",
-        "p3": "Summarize the main arguments for and against a four-day work week",
-        "p4": "Find the key risks in this plan: "
-      },
-      "plan": {
-        "label": "Plan",
-        "p1": "Plan a three-day trip to Lisbon",
-        "p2": "Help me prioritize this list of tasks: ",
-        "p3": "Draft an agenda for a 30-minute kickoff meeting",
-        "p4": "Make a weekly meal plan for two people on a budget"
-      }
-    },
-    "agiWork": {
-      "p1": "Research three competitors and write a one-page comparison",
-      "p2": "Turn my meeting notes into a status report with action items",
-      "p3": "Draft a project plan with milestones, owners and dates",
-      "p4": "Analyze the attached spreadsheet and summarize the main trends"
-    },
     "connectors": {
       "label": "Connect your apps",
       "seeAll": "All connectors",
