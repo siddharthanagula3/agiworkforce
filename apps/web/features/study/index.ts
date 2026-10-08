@@ -1,4 +1,10 @@
 export { StudyPage, type StudyPageProps } from './components/StudyPage';
+export { StudyModeIndicator } from './components/StudyModeIndicator';
+export {
+  resumeStudySession,
+  useConversationStudySession,
+  type ConversationStudySession,
+} from './hooks/use-conversation-study-session';
 export {
   MAX_STUDY_TOPIC_LENGTH,
   STUDY_LEVELS,
