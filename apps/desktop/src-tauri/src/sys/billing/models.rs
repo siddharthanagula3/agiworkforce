@@ -21,6 +21,8 @@ pub enum PlanTier {
     Max15x,
     #[serde(rename = "team")]
     Team,
+    #[serde(rename = "team_premium")]
+    TeamPremium,
     #[serde(rename = "enterprise")]
     Enterprise,
     /// Legacy alias retained for backward compatibility with older rows.

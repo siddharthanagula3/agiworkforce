@@ -152,6 +152,7 @@ describe('tierAtLeast', () => {
       'pro',
       'team',
       'max',
+      'team_premium',
       'max_15x',
       'enterprise',
     ]);

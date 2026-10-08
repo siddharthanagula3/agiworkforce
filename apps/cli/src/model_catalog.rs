@@ -912,7 +912,7 @@ pub fn can_access_model_for_tier(model_id: &str, tier: &crate::tier_cache::UserT
     if in_slot("flagship_additions") {
         return matches!(
             tier,
-            UserTier::Max | UserTier::Max15x | UserTier::Enterprise
+            UserTier::Max | UserTier::Max15x | UserTier::TeamPremium | UserTier::Enterprise
         );
     }
     if in_slot("pro_additions") {
@@ -920,6 +920,7 @@ pub fn can_access_model_for_tier(model_id: &str, tier: &crate::tier_cache::UserT
             tier,
             UserTier::Pro
                 | UserTier::Team
+                | UserTier::TeamPremium
                 | UserTier::Max
                 | UserTier::Max15x
                 | UserTier::Enterprise
@@ -930,6 +931,7 @@ pub fn can_access_model_for_tier(model_id: &str, tier: &crate::tier_cache::UserT
             tier,
             UserTier::Pro
                 | UserTier::Team
+                | UserTier::TeamPremium
                 | UserTier::Max
                 | UserTier::Max15x
                 | UserTier::Enterprise

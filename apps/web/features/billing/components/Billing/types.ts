@@ -9,6 +9,7 @@ const BILLABLE_PLAN_TIERS: Record<PlanTier, true> = {
   max: true,
   max_15x: true,
   team: true,
+  team_premium: true,
   enterprise: true,
 };
 
