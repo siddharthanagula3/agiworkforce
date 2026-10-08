@@ -24,10 +24,7 @@ import type { HealthCheckResult } from '@/lib/server/health-check';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { STATUS_MIRROR_URL_ENV } from '@/lib/server/incident/out-of-band';
 import { contactMailto } from '@/lib/legal-constants';
-import {
-  SUPPORT_WIDGET_BLOCKLIST,
-  isSupportWidgetVisible,
-} from '@/features/support/lib/route-visibility';
+import { isSupportWidgetVisible } from '@/features/support/lib/route-visibility';
 
 const CHECKED_AT = '2026-09-21T12:00:00.000Z';
 const CHECKED_AT_MS = Date.parse(CHECKED_AT);
@@ -422,7 +419,6 @@ describe('/status', () => {
   });
 
   it('keeps the support bubble off the page, so it cannot cover a failing check', () => {
-    expect(SUPPORT_WIDGET_BLOCKLIST).toContain('/status');
     expect(isSupportWidgetVisible('/status')).toBe(false);
   });
 

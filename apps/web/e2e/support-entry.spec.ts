@@ -28,5 +28,5 @@ test('chat reaches the published support email in two clicks', async ({ page }) 
     'data-support-mailto',
     `mailto:${CONTACT_EMAIL}`,
   );
-  await expect(page.locator('[data-support-widget]')).toHaveCount(1);
+  await expect(page.locator('[data-support-widget]')).toHaveCount(0);
 });

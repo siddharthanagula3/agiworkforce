@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SupportWidgetMount } from '../components/SupportWidgetMount';
-import {
-  SUPPORT_WIDGET_BLOCKLIST,
-  isSupportWidgetVisible,
-  resolveSupportSurface,
-} from '../lib/route-visibility';
+import { isSupportWidgetVisible } from '../lib/route-visibility';
 
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: (headers: HeadersInit = {}) => Promise.resolve(headers),
@@ -120,79 +116,55 @@ describe('SupportWidgetMount', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('marks the marketing surface so its palette resolves, and the app surface separately', () => {
-    const { container, unmount } = render(<SupportWidgetMount />);
-    const marketingRoot = container.querySelector('[data-support-widget]');
-    expect(marketingRoot).toHaveAttribute('data-surface', 'marketing');
-    expect(marketingRoot).toHaveAttribute('data-design', 'agi');
-    unmount();
-
-    mockPathname.mockReturnValue('/settings/billing');
-    const { container: appContainer } = render(<SupportWidgetMount />);
-    const appRoot = appContainer.querySelector('[data-support-widget]');
-    expect(appRoot).toHaveAttribute('data-surface', 'app');
-    expect(appRoot).not.toHaveAttribute('data-design');
+  it('carries the public page palette on the help and support pages', () => {
+    for (const route of ['/help', '/support']) {
+      mockPathname.mockReturnValue(route);
+      const { container, unmount } = render(<SupportWidgetMount />);
+      const root = container.querySelector('[data-support-widget]');
+      expect(root).toHaveAttribute('data-surface', 'marketing');
+      expect(root).toHaveAttribute('data-design', 'agi');
+      expect(root).toHaveClass('agi-modal-scope');
+      unmount();
+    }
   });
 
-  it('pairs data-design="agi" with the agi-modal-scope opt-out', () => {
-    const { container } = render(<SupportWidgetMount />);
-    const root = container.querySelector('[data-support-widget]');
-    expect(root).toHaveAttribute('data-design', 'agi');
-    expect(root).toHaveClass('agi-modal-scope');
-  });
-
-  it('does not apply the marketing opt-out class on the product surface', () => {
-    mockPathname.mockReturnValue('/settings/billing');
-    const { container } = render(<SupportWidgetMount />);
-    const root = container.querySelector('[data-support-widget]');
-    expect(root).not.toHaveAttribute('data-design');
-    expect(root).not.toHaveClass('agi-modal-scope');
-  });
-
-  it.each(SUPPORT_WIDGET_BLOCKLIST.map((route) => [route]))('renders nothing on %s', (route) => {
+  it.each([
+    ['/chat'],
+    ['/chat/abc'],
+    ['/settings/billing'],
+    ['/pricing'],
+    ['/'],
+    ['/login'],
+    ['/status'],
+    ['/connect/vscode'],
+  ])('renders nothing on %s', (route) => {
     mockPathname.mockReturnValue(route);
-    const { container } = render(<SupportWidgetMount />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('renders nothing on a nested blocklisted route', () => {
-    mockPathname.mockReturnValue('/connect/vscode');
     const { container } = render(<SupportWidgetMount />);
     expect(container).toBeEmptyDOMElement();
   });
 });
 
 describe('route visibility rules', () => {
-  it('hides on decision-shaped routes', () => {
-    expect(isSupportWidgetVisible('/connect/vscode')).toBe(false);
-    expect(isSupportWidgetVisible('/sign-in')).toBe(false);
-    expect(isSupportWidgetVisible('/status')).toBe(false);
-    expect(isSupportWidgetVisible(null)).toBe(false);
-  });
-
-  it('shows on public pages only inside the help section', () => {
+  it('shows only inside the help and support sections', () => {
     expect(isSupportWidgetVisible('/help')).toBe(true);
     expect(isSupportWidgetVisible('/help/getting-started')).toBe(true);
+    expect(isSupportWidgetVisible('/support')).toBe(true);
     expect(isSupportWidgetVisible('/')).toBe(false);
     expect(isSupportWidgetVisible('/docs')).toBe(false);
     expect(isSupportWidgetVisible('/pricing')).toBe(false);
+    expect(isSupportWidgetVisible(null)).toBe(false);
   });
 
-  it('keeps showing on the signed-in product routes', () => {
-    expect(isSupportWidgetVisible('/chat/abc')).toBe(true);
-    expect(isSupportWidgetVisible('/settings/billing')).toBe(true);
+  it('stays off the signed-in product and every decision-shaped route', () => {
+    expect(isSupportWidgetVisible('/chat/abc')).toBe(false);
+    expect(isSupportWidgetVisible('/settings/billing')).toBe(false);
+    expect(isSupportWidgetVisible('/connect/vscode')).toBe(false);
+    expect(isSupportWidgetVisible('/sign-in')).toBe(false);
+    expect(isSupportWidgetVisible('/status')).toBe(false);
   });
 
   it('does not treat a prefix collision as a match', () => {
     expect(isSupportWidgetVisible('/helpful')).toBe(false);
-    expect(isSupportWidgetVisible('/chatter')).toBe(false);
-    expect(isSupportWidgetVisible('/statuses')).toBe(false);
-  });
-
-  it('resolves the product surface for signed-in routes only', () => {
-    expect(resolveSupportSurface('/chat/abc')).toBe('app');
-    expect(resolveSupportSurface('/settings')).toBe('app');
-    expect(resolveSupportSurface('/pricing')).toBe('marketing');
-    expect(resolveSupportSurface('/')).toBe('marketing');
+    expect(isSupportWidgetVisible('/supporting')).toBe(false);
   });
 });
