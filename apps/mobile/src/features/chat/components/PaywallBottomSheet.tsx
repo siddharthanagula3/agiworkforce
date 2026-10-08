@@ -13,13 +13,13 @@ import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openExternalUrl } from '@/lib/safeOpenURL';
-import { BILLING_PLAN_PRICING, isBillingPlanTier } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, PAYWALL_FEATURE_COPY, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
 
 const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
   video_generation: 'Video generation',
-  opus_5: 'Opus 5 access',
+  opus_5: PAYWALL_FEATURE_COPY.opus_5.upgradeLabel,
   computer_use: 'Computer use',
   deep_research: 'Deep research',
   image_quota: 'More image generation',

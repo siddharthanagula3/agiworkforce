@@ -100,13 +100,13 @@ describe('PaywallBottomSheet rendering', () => {
     expect(getByText(/Higher token limits/i)).toBeTruthy();
   });
 
-  it('uses the current Claude family paywall key and label', () => {
+  it('names the Claude Opus paywall without a model version', () => {
     const { getByText, queryByText } = render(
       <PaywallBottomSheet {...defaultProps} feature="opus_5" requiredTier="pro" />,
     );
 
-    expect(getByText(/Opus 5 access requires the Pro plan/i)).toBeTruthy();
-    expect(queryByText(/Opus 4\\.7/i)).toBeNull();
+    expect(getByText(/Claude Opus access requires the Pro plan/i)).toBeTruthy();
+    expect(queryByText(/Opus \d/i)).toBeNull();
   });
 
   it('renders the reason text when provided', () => {

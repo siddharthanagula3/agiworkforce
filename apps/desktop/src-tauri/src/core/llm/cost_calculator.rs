@@ -1281,9 +1281,9 @@ mod tests {
     }
 
     #[test]
-    fn sonnet_5_bills_the_founder_standard_rate_on_every_date() {
-        // Founder pin, Decision #22 (docs/decisions/README.md): Sonnet 5 bills
-        // users a single standard per-MTok rate on EVERY date, never a
+    fn founder_standard_model_bills_the_standard_rate_on_every_date() {
+        // Founder pin, Decision #22 (docs/decisions/README.md): the standard
+        // Sonnet model bills users one per-MTok rate on EVERY date, never a
         // provider's introductory window. What that rate currently is comes
         // from the synced catalog (it changed 2026-09-03, from the earlier
         // $3/$15 to Anthropic's now-permanent $2/$10), so this test derives
@@ -1309,7 +1309,7 @@ mod tests {
             let cost = calc.calculate(Provider::Anthropic, &model.id, 1_000_000, 1_000_000, date);
             assert!(
                 (cost - expected_cost).abs() < 1e-9,
-                "Sonnet 5 must bill the standard ${} for 1M+1M on {}, got ${}",
+                "the founder-standard model must bill ${} for 1M+1M on {}, got ${}",
                 expected_cost,
                 date,
                 cost
@@ -1326,7 +1326,7 @@ mod tests {
             );
             assert!(
                 (cached - expected_cached).abs() < 1e-9,
-                "Sonnet 5 cache rates must bill ${} + ${} = ${} on {}, got ${}",
+                "founder-standard cache rates must bill ${} + ${} = ${} on {}, got ${}",
                 cached_input,
                 cached_write,
                 expected_cached,
