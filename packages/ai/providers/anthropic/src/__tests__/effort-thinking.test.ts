@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
-import { ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
+import {
+  ANTHROPIC_BETWEEN_TOOLS_MODEL_ID,
+  ANTHROPIC_DISABLED_THINKING_CEILING_MODEL_ID,
+  ANTHROPIC_PREMIUM_MODEL_ID,
+} from './model-fixtures';
 
 function baseReq(overrides: Partial<ChatRequest> = {}): ChatRequest {
   return {
@@ -30,6 +34,18 @@ describe('translateChatRequest · adaptive thinking', () => {
   it('omits thinking entirely when unset', () => {
     expect(translateChatRequest(baseReq()).thinking).toBeUndefined();
   });
+
+  it('turns thinking off with the wire value a model declares when it rejects disabled', () => {
+    const request = baseReq({
+      model: ANTHROPIC_BETWEEN_TOOLS_MODEL_ID,
+      thinking: { type: 'disabled' },
+      effort: 'high',
+    });
+    expect(translateChatRequest(request).thinking).toEqual({ type: 'between_tools' });
+    expect(() => translateChatRequest({ ...request, effort: 'max' })).toThrow(
+      /effort must be high or lower/,
+    );
+  });
 });
 
 describe('translateChatRequest · effort / output_config', () => {
@@ -53,7 +69,7 @@ describe('translateChatRequest · effort / output_config', () => {
 });
 
 describe('translateChatRequest · model request constraints', () => {
-  it('suppresses forbidden sampling parameters for Opus 5', () => {
+  it('suppresses forbidden sampling parameters for the premium model', () => {
     const out = translateChatRequest(
       baseReq({
         temperature: 0.2,
@@ -71,7 +87,13 @@ describe('translateChatRequest · model request constraints', () => {
     'rejects disabled thinking with %s effort before the API call',
     (effort) => {
       expect(() =>
-        translateChatRequest(baseReq({ thinking: { type: 'disabled' }, effort })),
+        translateChatRequest(
+          baseReq({
+            model: ANTHROPIC_DISABLED_THINKING_CEILING_MODEL_ID,
+            thinking: { type: 'disabled' },
+            effort,
+          }),
+        ),
       ).toThrow(/high or lower/i);
     },
   );

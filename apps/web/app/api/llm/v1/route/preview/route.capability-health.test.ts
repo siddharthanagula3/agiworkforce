@@ -151,14 +151,12 @@ describe('POST /api/llm/v1/route/preview, observed capability loss', () => {
 
   it('moves the model to a sibling route when only one of its routes stopped honouring the capability', async () => {
     const baseline = await previewBody({ taskType: TASK_TYPE, capabilitiesInUse: [TOOLS] });
-    const suspect = baseline.candidates[0]!;
-    const siblings = routeIdsForModel(suspect.modelKey).filter(
-      (routeId) => routeId !== suspect.routeId,
+    const suspect = baseline.candidates.find((candidate) =>
+      routeIdsForModel(candidate.modelKey).some((routeId) => routeId !== candidate.routeId),
     );
-    expect(
-      siblings.length,
-      'the previewed model must carry a second route for the move to be testable',
-    ).toBeGreaterThan(0);
+    if (!suspect) {
+      throw new Error('a previewed model must carry a second route for the move to be testable');
+    }
 
     capabilityMocks.getUnhonouredCapabilities.mockResolvedValue({ [suspect.routeId]: [TOOLS] });
 

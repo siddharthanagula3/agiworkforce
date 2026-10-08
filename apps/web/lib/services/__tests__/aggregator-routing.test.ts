@@ -256,12 +256,16 @@ const anthropicRoutes = getRoutePricingForModel(requireProviderDefaultModel('ant
 const DEFAULT_ANTHROPIC_ROUTE_ID = anthropicRoutes.find(
   ({ registryRoute }) => registryRoute.isDefault,
 )!.routeId;
-/** Trust-mode admission needs only a route closed to byok, at any commercial status. */
-const MANAGED_ONLY_ROUTE_ID = anthropicRoutes.find(
-  ({ registryRoute }) =>
-    registryRoute.trustModes.includes('managed_cloud') &&
-    !registryRoute.trustModes.includes('byok'),
-)!.routeId;
+/**
+ * Trust-mode admission needs only a route closed to byok, at any commercial
+ * status and on any model: the default model of one vendor stopped carrying one
+ * the day its marketplace routes were not copied to its successor.
+ */
+const [MANAGED_ONLY_ROUTE_ID, MANAGED_ONLY_ROUTE] = Object.entries(modelRegistry.routes).find(
+  ([, registryRoute]) =>
+    (registryRoute.trustModes as readonly string[]).includes('managed_cloud') &&
+    !(registryRoute.trustModes as readonly string[]).includes('byok'),
+)!;
 const CATALOGUE_ROUTE_IDS = Object.keys(modelRegistry.routes);
 const FIXTURE_BLOCKED_ROUTE_ID = 'fixture_blocked_provider/fixture-blocked-model';
 /**
@@ -315,11 +319,9 @@ describe('validateRouteSelection', () => {
   });
 
   it('rejects a route not open to the request trust mode', () => {
-    const model = requireProviderDefaultModel('anthropic');
-
     expect(
       validateRouteSelection(MANAGED_ONLY_ROUTE_ID, {
-        modelId: model,
+        modelId: MANAGED_ONLY_ROUTE.modelKey,
         trustMode: 'byok',
         hasUserProviderKey: true,
       }),

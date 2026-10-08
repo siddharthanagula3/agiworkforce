@@ -6,7 +6,11 @@ import process from 'node:process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { lifecycleRefusals, stagedModel } from '../scripts/family-slots.mjs';
+import {
+  lifecycleRefusals,
+  retirementCapabilities,
+  stagedModel,
+} from '../scripts/family-slots.mjs';
 import { LIFECYCLE_STAGE } from '../scripts/lifecycle-stages.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -141,6 +145,26 @@ test('retire deprecates a promoted model, and says so before writing anything', 
   assert.equal(dryRun.status, 0);
   assert.match(dryRun.output, /would retire .*: promoted → deprecated/);
   assert.match(dryRun.output, /dry run, pass --apply/);
+});
+
+test('a retirement record carries the capabilities that are known, and no unknowns', () => {
+  const REGISTRY = JSON.parse(
+    fs.readFileSync(path.join(PACKAGE_ROOT, 'generated', 'registry.json'), 'utf8'),
+  );
+  const withUnknown = Object.entries(REGISTRY.capabilities).find(([, capabilities]) =>
+    Object.values(capabilities).some((value) => value === null),
+  );
+  assert.ok(withUnknown, 'the registry must hold a model with an unestablished capability');
+  const kept = retirementCapabilities(withUnknown[1]);
+  assert.ok(Object.keys(kept).length > 0);
+  for (const [name, value] of Object.entries(kept)) {
+    assert.equal(typeof value, 'boolean', `${name} must be a recorded fact`);
+    assert.equal(value, withUnknown[1][name]);
+  }
+  for (const [name, value] of Object.entries(withUnknown[1])) {
+    assert.equal(name in kept, value !== null);
+  }
+  assert.deepEqual(retirementCapabilities(undefined), {});
 });
 
 test('the committed probe record is the one the promotion gate reads', () => {

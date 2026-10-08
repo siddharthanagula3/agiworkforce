@@ -114,6 +114,15 @@ describe('catalogCostUsd', () => {
     );
   });
 
+  it('prices reasoning tokens only where the provider meters them beside the output', () => {
+    const usage = { inputTokens: 0, outputTokens: 1, reasoningTokens: 200 };
+    expect(catalogCostUsd(usage, pricing)).toBeCloseTo(8 / 1_000_000, 12);
+    expect(catalogCostUsd(usage, { ...pricing, reasoningBilledBesideOutput: true })).toBeCloseTo(
+      (201 * 8) / 1_000_000,
+      12,
+    );
+  });
+
   it('returns null for a route with no registry price', () => {
     expect(catalogCostUsd({ inputTokens: 1 }, {})).toBeNull();
   });

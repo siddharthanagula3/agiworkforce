@@ -114,7 +114,11 @@
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
       "note": "Checked and could not read: https://x.ai/legal/privacy-policy (403), https://x.ai/legal/privacy-statement (403), https://x.ai/legal/enterprise-privacy-policy (403), https://x.ai (403), https://docs.x.ai/ (200 but no data-policy content in the fetched nav or footer), https://docs.x.ai/docs/data-and-privacy (404), https://grok.com/privacy (403). x.ai's site returned 403 to automated fetch throughout this session; no primary source text was recoverable.",
-      "cacheTokenBillingClass": "unknown"
+      "cacheTokenBillingClass": "unknown",
+      "reasoningTokenBillingClass": "additional_to_output",
+      "reasoningTokenBillingSource": "https://docs.x.ai/developers/model-capabilities/text/reasoning",
+      "reasoningTokenBillingVerifiedOn": "2026-10-07",
+      "reasoningTokenBillingNote": "The reasoning guide says reasoning tokens are billed as part of total consumption and that usage exposes reasoning_tokens, but not whether completion_tokens contains them. Measured on 2026-10-07 with one chat completion each on the active Grok model and its successor: usage returned prompt_tokens 650, completion_tokens 1, reasoning_tokens 206, total_tokens 857 and prompt_tokens 1256, completion_tokens 1, reasoning_tokens 53, total_tokens 1310, so total is prompt plus completion plus reasoning and the reasoning count is additional to the reported output count. The cost_in_usd_ticks on the first response, 17740000 at ten billion ticks per dollar, equals uncached input, cached input and 207 tokens at the output rate, so reasoning tokens bill at the output rate."
     },
     "deepseek": {
       "dataRetentionClass": "provider_default",

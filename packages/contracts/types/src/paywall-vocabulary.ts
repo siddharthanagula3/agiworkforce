@@ -24,8 +24,8 @@ export const PAYWALL_FEATURE_COPY: Readonly<Record<PaywallFeature, PaywallFeatur
       limitHeadline: 'You have reached your video generation limit',
     },
     opus_5: {
-      upgradeLabel: 'Opus 5 access',
-      limitHeadline: 'You have reached your Opus 5 limit',
+      upgradeLabel: 'Opus access',
+      limitHeadline: 'You have reached your Opus limit',
     },
     computer_use: {
       upgradeLabel: 'computer use',

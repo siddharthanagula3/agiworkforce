@@ -12,51 +12,11 @@
       "toolOutcome": "skipped",
       "toolDetail": null
     },
-    "claude-haiku-4-5": {
-      "routeId": "anthropic/claude-haiku-4-5",
-      "probedOn": "2026-09-12",
-      "outcome": "failed",
-      "ttfbMs": 145,
-      "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyJZD7k53LdAdSLT275m\"}",
-      "toolOutcome": "skipped",
-      "toolDetail": null
-    },
-    "claude-opus-5": {
-      "routeId": "anthropic/claude-opus-5",
-      "probedOn": "2026-09-12",
-      "outcome": "failed",
-      "ttfbMs": 146,
-      "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyJZDkSxKixPaj5dHv3H\"}",
-      "toolOutcome": "skipped",
-      "toolDetail": null
-    },
-    "claude-sonnet-5": {
-      "routeId": "anthropic/claude-sonnet-5",
-      "probedOn": "2026-09-12",
-      "outcome": "failed",
-      "ttfbMs": 192,
-      "echoedModelId": null,
-      "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyJZEV6WnD3RRoHNu5K6\"}",
-      "toolOutcome": "skipped",
-      "toolDetail": null
-    },
-    "deepseek-v4-flash": {
-      "routeId": "deepseek/deepseek-v4-flash",
-      "probedOn": "2026-09-12",
+    "deepseek-flash": {
+      "routeId": "deepseek/deepseek-flash",
+      "probedOn": "2026-10-07",
       "outcome": "answered",
-      "ttfbMs": 375,
-      "echoedModelId": "deepseek-flash",
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
-    "deepseek-v4-flash-vision-exp": {
-      "routeId": "deepseek/deepseek-v4-flash-vision-exp",
-      "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 345,
+      "ttfbMs": 372,
       "echoedModelId": "deepseek-flash",
       "detail": null,
       "toolOutcome": "honoured",
@@ -122,62 +82,42 @@
       "toolOutcome": "skipped",
       "toolDetail": null
     },
-    "gpt-5.6-luna": {
-      "routeId": "openai/gpt-5.6-luna",
-      "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 675,
-      "echoedModelId": null,
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
-    "gpt-5.6-sol": {
-      "routeId": "openai/gpt-5.6-sol",
-      "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 2370,
-      "echoedModelId": null,
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
-    "gpt-5.6-terra": {
-      "routeId": "openai/gpt-5.6-terra",
-      "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 512,
-      "echoedModelId": null,
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
     "gpt-6-astra": {
       "routeId": "openai/gpt-6-astra",
-      "probedOn": "2026-09-12",
+      "probedOn": "2026-10-07",
       "outcome": "answered",
-      "ttfbMs": 1293,
+      "ttfbMs": 1457,
       "echoedModelId": null,
       "detail": null,
       "toolOutcome": "honoured",
       "toolDetail": null
     },
-    "grok-4.6": {
-      "routeId": "xai/grok-4.6",
-      "probedOn": "2026-09-12",
+    "gpt-6-luna": {
+      "routeId": "openai/gpt-6-luna",
+      "probedOn": "2026-10-07",
       "outcome": "answered",
-      "ttfbMs": 575,
-      "echoedModelId": "grok-4.6",
+      "ttfbMs": 795,
+      "echoedModelId": null,
       "detail": null,
       "toolOutcome": "honoured",
       "toolDetail": null
     },
-    "kimi-k2.7-code": {
-      "routeId": "moonshot/kimi-k2.7-code",
-      "probedOn": "2026-09-12",
+    "gpt-6.1-sol": {
+      "routeId": "openai/gpt-6.1-sol",
+      "probedOn": "2026-10-07",
       "outcome": "answered",
-      "ttfbMs": 1434,
-      "echoedModelId": "kimi-k2.7-code",
+      "ttfbMs": 993,
+      "echoedModelId": null,
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
+    },
+    "grok-4.7": {
+      "routeId": "xai/grok-4.7",
+      "probedOn": "2026-10-07",
+      "outcome": "answered",
+      "ttfbMs": 707,
+      "echoedModelId": "grok-4.7",
       "detail": null,
       "toolOutcome": "honoured",
       "toolDetail": null

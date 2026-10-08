@@ -20,6 +20,9 @@ const BILLED_OPENAI_MODEL = requireCatalogModelId(
 const PAID_OPENAI_MODEL = requireCatalogModelId(
   (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'pro',
 );
+// The Free budget below is half of one full turn at this cap, so the first
+// provider turn spends it whatever the catalogue price of the model is.
+const FREE_TURN_MAX_TOKENS = 8_192;
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -847,13 +850,18 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     const processed = makeProcessed();
     processed.chatRequest.model = BILLED_OPENAI_MODEL;
     processed.llmRequest.model = BILLED_OPENAI_MODEL;
-    processed.llmRequest.max_tokens = 8_192;
-    processed.maxTokens = 8_192;
+    processed.llmRequest.max_tokens = FREE_TURN_MAX_TOKENS;
+    processed.maxTokens = FREE_TURN_MAX_TOKENS;
+    const outputPerMillion = listCanonicalModels().find(
+      (model) => model.id === BILLED_OPENAI_MODEL,
+    )?.outputCost;
+    if (!outputPerMillion) throw new Error('Billed tool-loop fixture has no output price');
+    const reservedMicrousd = Math.floor((FREE_TURN_MAX_TOKENS * outputPerMillion) / 2);
     processed.freeTrial = {
       kind: 'free_trial',
       userId: 'free-user',
       requestId: 'free-exhausted',
-      reservedMicrousd: 5_000,
+      reservedMicrousd,
     };
 
     const providerExecutor = vi.fn<ToolLoopProviderExecutor>(async (input) => ({
@@ -886,7 +894,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
 
     expect(providerExecutor).toHaveBeenCalledOnce();
     expect(output).toContain('free_trial_token_budget_reached');
-    expect(output).not.toMatch(/microusd|reservedMicrousd|5000/i);
+    expect(output).not.toMatch(/microusd|reservedMicrousd/i);
+    expect(output).not.toContain(String(reservedMicrousd));
     expect(output).toContain('data: [DONE]');
   });
 

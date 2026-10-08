@@ -7,9 +7,10 @@
  * and never as a silent normal completion.
  */
 
-import { describe, expect, it } from 'vitest';
-import type { StreamChunk } from '@agiworkforce/types';
+import { describe, expect, it, vi } from 'vitest';
+import { getProviderDefaultModel, type StreamChunk } from '@agiworkforce/types';
 
+import { createOpenAIAdapter, providerPolicyStopCode } from '../index';
 import { translateOpenAIStream } from '../stream';
 import type { OpenAIChatCompletionChunk } from '../types';
 import { translateOpenAIResponsesStream } from '../stream-responses';
@@ -90,5 +91,75 @@ describe('translateOpenAIResponsesStream, content_filter is a first-class refusa
 
     const out = await collect(translateOpenAIResponsesStream(fromArray(events)));
     expect(out.find((c) => c.type === 'stop')).toEqual({ type: 'stop', reason: 'max_tokens' });
+  });
+});
+
+describe('providerPolicyStopCode, a policy block before any output is a refusal', () => {
+  it('names the policy when the provider error carries a policy code', () => {
+    const blocked = Object.assign(new Error('This content was flagged'), {
+      status: 400,
+      code: 'cyber_policy',
+    });
+    expect(providerPolicyStopCode(blocked)).toBe('cyber_policy');
+  });
+
+  it('leaves every other failure to the error path', () => {
+    expect(
+      providerPolicyStopCode(
+        Object.assign(new Error('slow down'), { code: 'rate_limit_exceeded' }),
+      ),
+    ).toBeUndefined();
+    expect(providerPolicyStopCode(new Error('socket hang up'))).toBeUndefined();
+    expect(providerPolicyStopCode({ code: 400 })).toBeUndefined();
+    expect(providerPolicyStopCode(null)).toBeUndefined();
+    expect(providerPolicyStopCode(undefined)).toBeUndefined();
+  });
+});
+
+describe('OpenAI adapter, a policy block on the wire ends the turn as a refusal', () => {
+  const blockMessage = 'This content was flagged for possible cybersecurity risk.';
+
+  function sse(events: Array<Record<string, unknown>>): Response {
+    const body = events
+      .map((event) => `event: ${String(event['type'])}\ndata: ${JSON.stringify(event)}\n\n`)
+      .join('');
+    return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  }
+
+  it('emits one refusal stop naming the policy, and no error to retry or rotate on', async () => {
+    const fetchMock = vi.fn(async () =>
+      sse([
+        { type: 'response.created', sequence_number: 0, response: { id: 'resp_1' } },
+        { type: 'response.in_progress', sequence_number: 1, response: { id: 'resp_1' } },
+        {
+          type: 'error',
+          sequence_number: 2,
+          error: { type: 'invalid_request', code: 'cyber_policy', message: blockMessage },
+        },
+        {
+          type: 'response.failed',
+          sequence_number: 3,
+          response: {
+            id: 'resp_1',
+            status: 'failed',
+            error: { code: 'cyber_policy', message: blockMessage },
+          },
+        },
+      ]),
+    );
+    const adapter = createOpenAIAdapter({ apiKey: 'test-key', fetch: fetchMock as typeof fetch });
+    const out = await collect(
+      adapter.stream(
+        {
+          model: getProviderDefaultModel('openai')!,
+          messages: [{ role: 'user', content: 'A request the provider blocks.' }],
+        },
+        new AbortController().signal,
+      ),
+    );
+    expect(out.filter((c) => c.type === 'error')).toEqual([]);
+    expect(out.filter((c) => c.type === 'stop')).toEqual([
+      { type: 'stop', reason: 'refusal', providerFinishReason: 'cyber_policy' },
+    ]);
   });
 });

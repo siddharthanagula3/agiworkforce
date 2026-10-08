@@ -27,7 +27,10 @@ interface AnthropicTranslatedRequest {
   top_k?: number;
   stop_sequences?: string[];
   thinking?:
-    { type: 'enabled'; budget_tokens: number } | { type: 'disabled' } | { type: 'adaptive' };
+    | { type: 'enabled'; budget_tokens: number }
+    | { type: 'disabled' }
+    | { type: 'between_tools' }
+    | { type: 'adaptive' };
   output_config?: {
     effort?: string;
     format?: { type: 'json_schema'; schema: Record<string, unknown> };
@@ -346,7 +349,7 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
             budget_tokens: req.thinking.budgetTokens ?? 8000,
           }
         : req.thinking?.type === 'disabled'
-          ? { type: 'disabled' as const }
+          ? { type: reasoning?.disabledThinkingType ?? ('disabled' as const) }
           : req.thinking?.type === 'adaptive'
             ? { type: 'adaptive' as const }
             : undefined;

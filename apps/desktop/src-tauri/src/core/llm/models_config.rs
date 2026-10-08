@@ -901,8 +901,8 @@ mod tests {
 
     #[test]
     fn founder_standard_anthropic_route_prices_the_standard_rates_on_every_date() {
-        // Founder pin, Decision #22 (docs/decisions/README.md): Sonnet 5 bills
-        // users a single standard per-MTok rate on EVERY date, never a
+        // Founder pin, Decision #22 (docs/decisions/README.md): the standard
+        // Sonnet model bills users one per-MTok rate on EVERY date, never a
         // provider's introductory window; that rate has changed before (most
         // recently 2026-09-03) and comes from the synced catalog rather than a
         // number pinned in this test, which would go stale on the next

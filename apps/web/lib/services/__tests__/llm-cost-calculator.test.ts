@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  listCanonicalModels,
-  requireProviderDefaultModel,
-  resolveEffectiveModelPricing,
-} from '@agiworkforce/types';
+import { listCanonicalModels, resolveEffectiveModelPricing } from '@agiworkforce/types';
 import { getRoutePricingForModel, modelRegistry } from '@agiworkforce/model-registry';
 
 import {
@@ -702,10 +698,10 @@ describe('LLMCostCalculator, route-aware pricing fallback tiers', () => {
 
 describe('LLMCostCalculator, live registry wiring', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
-  const LIVE_MODEL_ID = requireProviderDefaultModel('anthropic');
-  const LIVE_ROUTE_ID = getRoutePricingForModel(LIVE_MODEL_ID).find(
-    (route) => route.provider === 'open_router',
-  )!.routeId;
+  const [LIVE_ROUTE_ID, LIVE_ROUTE] = Object.entries(modelRegistry.routes).find(
+    ([, route]) => route.provider === 'open_router' && !route.isDefault,
+  )!;
+  const LIVE_MODEL_ID = LIVE_ROUTE.modelKey;
 
   afterEach(() => {
     setRouteRegistryPricingLookup(null);

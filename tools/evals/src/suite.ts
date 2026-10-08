@@ -10,6 +10,7 @@
  */
 
 import { gradeCase } from './grader';
+import { unreadableAttachmentReason } from './provider';
 import {
   summariseCompleteness,
   summariseCost,
@@ -22,6 +23,7 @@ import type {
   CaseResult,
   EvalCase,
   EvalDataset,
+  ModelResponse,
   Responder,
   SkippedCase,
   SuiteReport,
@@ -50,7 +52,16 @@ export async function runSuite(
       skipped.push({ id: evalCase.id, reason });
       continue;
     }
-    cases.push(await gradeCase(evalCase, await respond(evalCase)));
+    let response: ModelResponse;
+    try {
+      response = await respond(evalCase);
+    } catch (error) {
+      const unreadable = unreadableAttachmentReason(error);
+      if (unreadable === null) throw error;
+      skipped.push({ id: evalCase.id, reason: unreadable });
+      continue;
+    }
+    cases.push(await gradeCase(evalCase, response));
   }
 
   const passed = cases.filter((result) => result.passed).length;

@@ -42,7 +42,6 @@ import {
   resolveWebCloudModelRoute,
 } from './request-processor';
 
-const ANTHROPIC_DEFAULT_MODEL_ID = requireProviderDefaultModel('anthropic');
 const anthropicPremiumModel = getModelsForProvider('anthropic').find(
   (model) =>
     model.reasoning?.thinkingDefault === 'adaptive' &&
@@ -51,6 +50,16 @@ const anthropicPremiumModel = getModelsForProvider('anthropic').find(
 if (!anthropicPremiumModel) {
   throw new Error('The canonical Anthropic premium reasoning fixture must exist');
 }
+
+const multiRouteModel = listCanonicalModels().find((model) => {
+  if (model.id === anthropicPremiumModel.id) return false;
+  const routes = getRoutePricingForModel(model.id);
+  return routes.some((route) => route.isDefault) && routes.some((route) => !route.isDefault);
+});
+if (!multiRouteModel) {
+  throw new Error('The catalog must carry a model with a default route and a sibling route');
+}
+const MULTI_ROUTE_MODEL_ID = multiRouteModel.id;
 
 const MANAGED_TRUST_MODE = 'managed_cloud';
 const SERVABLE_COMMERCIAL_STATUSES: ReadonlySet<string> = new Set([
@@ -119,11 +128,11 @@ const OTHER_MODEL_ROUTE_ID = getRoutePricingForModel(anthropicPremiumModel.id).f
   (route) => route.isDefault,
 )!.routeId;
 
-const anthropicDefaultRoutes = getRoutePricingForModel(ANTHROPIC_DEFAULT_MODEL_ID);
-const SAME_MODEL_REGISTRY_ROUTE_ID = anthropicDefaultRoutes.find(
+const multiRouteModelRoutes = getRoutePricingForModel(MULTI_ROUTE_MODEL_ID);
+const SAME_MODEL_REGISTRY_ROUTE_ID = multiRouteModelRoutes.find(
   (route) => route.isDefault,
 )!.routeId;
-const SAME_MODEL_REGISTRY_SIBLING_ROUTE_ID = anthropicDefaultRoutes.find(
+const SAME_MODEL_REGISTRY_SIBLING_ROUTE_ID = multiRouteModelRoutes.find(
   (route) => !route.isDefault,
 )!.routeId;
 
@@ -225,7 +234,7 @@ describe.skipIf(!affinityFixture)(
 describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
   it('fetches health only for the exact model’s own routes', async () => {
     mockGetRouteHealthSnapshot.mockClear();
-    await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
+    await resolveRouteHealthRuntimeState(MULTI_ROUTE_MODEL_ID, Date.now());
 
     const [routeIds] = mockGetRouteHealthSnapshot.mock.calls[0]!;
     expect(routeIds).toContain(SAME_MODEL_REGISTRY_ROUTE_ID);
@@ -244,7 +253,7 @@ describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
 
   it('reads the credential scope once per candidate provider, not once per route', async () => {
     mockGetCredentialCooldownSnapshot.mockClear();
-    await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
+    await resolveRouteHealthRuntimeState(MULTI_ROUTE_MODEL_ID, Date.now());
 
     const [credentialIds] = mockGetCredentialCooldownSnapshot.mock.calls[0]!;
     const providers = credentialIds as readonly string[];
@@ -264,7 +273,7 @@ describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
       },
     });
 
-    const resolved = await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
+    const resolved = await resolveRouteHealthRuntimeState(MULTI_ROUTE_MODEL_ID, Date.now());
 
     // `available: true` on purpose: the cooldown has elapsed, so the breaker
     // would let this route through. Being out of money is the separate fact.
@@ -275,7 +284,7 @@ describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
   });
 
   it('reports nothing unfunded when no credential says so', async () => {
-    const resolved = await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
+    const resolved = await resolveRouteHealthRuntimeState(MULTI_ROUTE_MODEL_ID, Date.now());
 
     expect(resolved.unfundedRouteIds.size).toBe(0);
   });

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-19",
+  "lastUpdated": "2026-10-07",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -391,6 +391,114 @@
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Claude Opus 5.5 carried four values that Anthropic's pages contradict. The effort page states that medium is its default effort and that adaptive thinking is always on, with thinking.type disabled returning 400 at every effort level, where the row recorded default effort high, thinking that could be disabled and a maximum disabled effort of high; the models overview gives a Jun 2026 knowledge cutoff where the row recorded 2026-05; and the public OpenRouter list names it anthropic/claude-opus-5.5 where the row recorded anthropic/claude-opus-5-5. Corrected from platform.claude.com/docs/en/build-with-claude/effort, the models overview and openrouter.ai/api/v1/models, retrieved 2026-10-07. Prices, context and output limits already matched."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "Claude Sonnet 5.5 (claude-sonnet-5-5), released 2026-09-28, joins the catalog at lifecycle stage registered. Read from platform.claude.com on 2026-10-07: the model overview (id, 1M context, 128K output, Jun 2026 cutoff, $2/$10), the what's-new page (thinking.type disabled returns 400 and between_tools replaces it at high effort or below, forced tool_choice returns 400, computer use through computer_toolset_20260801, thinking blocks bound to model, prefix and account, notes between tool calls returned as thinking blocks), and the effort and prompt caching pages (all five levels, default high, 512-token minimum). The row declares reasoning.disabledThinkingType between_tools, which the Anthropic adapter sends in place of disabled, and providerCompatibility.forcedToolChoice false. The cache read price is recorded at $0.20 because Anthropic's pages give both $0.20 and $0.10. The OpenRouter slug anthropic/claude-sonnet-5.5 was read from the public openrouter.ai/api/v1/models list the same day."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Claude Opus 5.5 and Claude Fable 5.1 now declare providerCompatibility.forcedToolChoice false. The Claude Opus 5.5 what's-new page states that tool_choice any or a named tool returns 400 on Claude Opus 5.5 and that the same applies on Claude Fable 5.1; neither row recorded it, so a forced tool choice sent to either was a provider error. Verified against platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5, retrieved 2026-10-07."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-xai-documentation",
+      "status": "ADDITION",
+      "notes": "Grok 4.7 (grok-4.7), released September 2026, joins the catalog at lifecycle stage registered. Read from docs.x.ai on 2026-10-07: the model page (500,000 token context, text and image input, text output, $2.00/$0.50/$6.00 below 200,000 prompt tokens and $4.00/$1.00/$12.00 for every token once the prompt reaches 200,000, effort low, medium, high and xhigh with high the default, function calling and structured outputs, no batch API), the models overview (knowledge cutoff May 2026), the reasoning guide (reasoning cannot be disabled; presencePenalty, frequencyPenalty and stop return an error) and the release notes (no text output limit; the Responses API always returns reasoning.encrypted_content). The tools overview uses grok-4.7 in its web search, X search and code interpreter examples. OpenRouter lists x-ai/grok-4.7 and the Vercel AI Gateway lists spacexai/grok-4.7, both at the same price; those two gateway routes are recorded. The Experiential Labs page for grok-4.7 shows a default waterfall of one disabled rung, so no route through that gateway is recorded. No inference call was made for this entry."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-deepseek-documentation-and-live-api",
+      "status": "ADDITION",
+      "notes": "DeepSeek V4.1 Flash (deepseek-flash), released 2026-09-10, joins the catalog at lifecycle stage registered. Read on 2026-10-07 from api-docs.deepseek.com: the pricing page (peak $0.30 cache miss, $1.20 output, $0.006 cache hit, off-peak half, vision supported, thinking and non-thinking), the 2026-09-10 news post (native multimodal support; V4-Flash and V4-Flash-Vision-Exp are retired and their ids temporarily route to V4.1-Flash; deepseek-v4-pro requests route to V4.1-Flash at V4.1-Flash rates from 2026-09-14 04:00 UTC until V4.1-Pro launches) and the thinking mode guide (thinking.type enabled or disabled, enabled by default, reasoning_effort low, high or max with high the default). Measured the same day on the DeepSeek API: GET /models lists deepseek-flash as DeepSeek-V4.1-Flash with a 1,048,576 token context, 393,216 output tokens and text and image input; a request for deepseek-v4-flash is answered by deepseek-flash; and tool_choice required in thinking mode returns \"Thinking mode does not support this tool_choice\", so the row declares providerCompatibility.forcedToolChoice false. The weights are published at huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash under the MIT license. OpenRouter lists deepseek/deepseek-v4.1-flash. The deepseek/deepseek-flash slot does not move with this entry."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "GPT-6.1 Sol (gpt-6.1-sol) and GPT-6 Luna (gpt-6-luna) join the catalog at lifecycle stage registered. Read from developers.openai.com on 2026-10-07: each model page (1,050,000 token context, 922,000 input, 128,000 output; Sol $2/$0.10/$2.50/$10 with an Apr 30 2026 cutoff and effort low to max, medium the default; Luna $0.10/$0.01/$0.125/$0.50 with a May 18 2026 cutoff and effort none to max, medium the default; text and image input, text output; over 272K input tokens billed at 2x input and cache and 1.5x output; Chat Completions, Responses and Batch; web search, file search, image generation, code interpreter, hosted shell, apply patch, skills, computer use, MCP and tool search on Responses), the latest-model guide (GPT-6 Astra and GPT-6.1 Sol do not accept none; tool calling on those two requires Responses; Luna supports function calling in Chat Completions only at reasoning_effort none; temperature, top_p and top_logprobs must be removed when effort is not none) and the prompt caching guide (GPT-5.6 and later: 1,024 token minimum, 30 minute lifetime, writes at 1.25x, explicit breakpoints). Both rows declare reasoning.rejectsSamplingParameters, which the OpenAI adapter now reads. The models list shows no Terra in generation 6 and describes GPT-6.1 Sol as near-Astra performance at a lower cost. OpenAI gives no release date for either; the OpenRouter slugs are dated 2026-09-29 and 2026-09-22. Whether a forced tool_choice is accepted is not stated on any page read."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "GPT-6 Astra now records medium as its default effort and declares reasoning.rejectsSamplingParameters. The latest-model guide states that GPT-6 Astra and GPT-6.1 Sol support low, medium (default), high, xhigh and max, do not support none, and that temperature, top_p and top_logprobs must be removed when reasoning effort is not none; the row recorded no default and did not say sampling parameters are rejected, so a request carrying a temperature was a provider error. Prices, limits, cutoff and endpoints on developers.openai.com/api/docs/models/gpt-6-astra still match the row. Verified 2026-10-07."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-deepseek-documentation-and-live-api",
+      "status": "CORRECTION",
+      "notes": "DeepSeek V4 Flash (deepseek-v4-flash) now carries the price DeepSeek actually bills for it. The 2026-09-10 news post and the pricing page state that V4-Flash and V4-Flash-Vision-Exp are retired and that both ids temporarily route to V4.1-Flash at V4.1-Flash rates, and a request for deepseek-v4-flash on 2026-10-07 was answered by deepseek-flash. The row is corrected from $0.44/$1.32/$0.014 to the peak V4.1-Flash rate of $0.30/$1.20/$0.006. The DeepSeek vision default moves from deepseek-v4-flash-vision-exp to deepseek-flash, which is the model that already answers the retired id and which the list-models endpoint reports as accepting image input; deepseek-v4-flash-vision-exp then leaves the catalog through retired-models.json. The deepseek/deepseek-flash slot stays on deepseek-v4-flash: the promotion gate refused deepseek-flash on 2026-10-07 with the refusal corpus at 0.000 and the jailbreak corpus at 0.364 against floors of 1.000."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-and-one-live-image-call",
+      "status": "ADDITION",
+      "notes": "Four Google models join the catalog at lifecycle stage registered: Gemini Omni 1.1 Flash (gemini-omni-1.1-flash, stable 2026-08-27, video), Gemini 3.8 Live (gemini-3.8-live, 2026-09-15, live audio), Gemini 3.8 Flash TTS (gemini-3.8-flash-tts, 2026-09-22, speech) and Gemini Nano Banana 2.1 (gemini-nano-banana-2.1, 2026-10-06, image). Prices were read from ai.google.dev/gemini-api/docs/pricing, release dates and replacements from the deprecations page, and limits and capabilities from each model page, all on 2026-10-07. One live call was made, a single 1K image from gemini-nano-banana-2.1 to read the output format the catalog requires, which was image/jpeg; no call was made to the other three. None of the four matches the family pattern of the slot it would replace, because Google renamed each line, and the eval harness measures text answers only, so no slot moves with this entry."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Shutdown dates from the Gemini API deprecations page, retrieved 2026-10-07, are now recorded as deprecation_date: 2026-10-22 for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview (which read 2026-09-30), and 2026-11-17 for gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. The three Veo rows hold the google/veo, google/veo-fast and google/veo-lite slots, so video generation through those slots stops on 2026-10-22 unless the slots are moved before then. gemini-3.1-flash-image was deprecated on 2026-10-06 with no shutdown date announced, so its row carries no date."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-groq-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Groq shut down qwen/qwen3.6-27b on 2026-09-14 and names qwen/qwen3.8-27b as its replacement; its deprecations page says requests to a deprecated model id return errors after the date. The catalog row qwen-3.6-27b was still offered as a preview model with no date. It now carries the shutdown date and is marked unavailable with that reason, which stops it being routed or probed. The family tool cannot deprecate it, because the compiler holds a model that is not live at or below the shadow stage, and it stays in the catalog because model-routes.json still declares two routes for it; removing it is a separate step. Verified against console.groq.com/docs/deprecations, retrieved 2026-10-07."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "GPT Image 2.5 Sunburst (gpt-image-2.5-sunburst) and GPT Image 2.5 Flare (gpt-image-2.5-flare) join the catalog at lifecycle stage registered, read from their model pages on developers.openai.com on 2026-10-07: identical token prices (text input $5 and $1.25 cached, image input $8 and $2 cached, image output $30), image generation, image edit and batch endpoints, quality low to max, snapshots dated 2026-09-08. No inference call was made. The openai/gpt-image slot stays on gpt-image-2: neither id matches the slot pattern, which expects a bare version after gpt-image, and the eval harness has no measurement for image output. OpenAI lists no deprecation for gpt-image-2. gpt-transcribe is not added: OpenAI prices it at $0.0045 per minute of audio and the catalog has no per-audio-minute price field for a transcription model, so a row would bill at zero or at a guessed token rate."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model outside the QwenCloud free quota, the anthropic/claude-opus slot moves from claude-opus-5 to claude-opus-5-5 and the anthropic/claude-sonnet slot from claude-sonnet-5 to claude-sonnet-5-5. The eval gate was not run for either move: no Anthropic slot has a committed baseline and no run was recorded for either model, so nothing here says the new models were measured against the old ones. The catalog-side gates the family tool computes (provider, family identity, lifecycle, capability coverage, price and limit regression) were evaluated and are recorded on each slot. Claude Opus 5.5 lists at $4/$20 per million against $5/$25 for Claude Opus 5, cannot have thinking switched off and defaults to medium effort; Claude Sonnet 5.5 keeps $2/$10. claude-opus-5, claude-opus-4-8, claude-sonnet-5 and claude-haiku-4-5 leave the roster through the retire tool into retired-models.json, each naming its successor, and their route and probe records go with them. claude-haiku-5-5 takes no family slot: no routing slot names a Haiku model and the picker lists it from its own row. The successors carry only their direct Anthropic route. The marketplace routes the retired rows had (OpenRouter, Vercel AI Gateway, Cheaper Inference, Experiential Labs) were not copied, because no source read for this change states that those gateways serve the new ids or at what price; until they are added, a Claude model has no same-model fallback route and one Claude model cannot stand in for another in a fallback plan. No provider call was made."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the three OpenAI chat slots follow the tier names OpenAI uses from generation 6: the frontier slot now matches the astra name and holds gpt-6-astra, the balanced slot matches sol and holds gpt-6.1-sol, and the fast slot holds gpt-6-luna. The eval gate was not run for any of them: no OpenAI slot has a committed baseline and no run was recorded for these models. The catalog-side gates are recorded on each slot, and one of them fails: gpt-6-astra lists at $10/$50 per million against $4/$20 for gpt-5.6-sol, a 150% rise on both sides against the 25% ceiling, so the frontier slot, the OpenAI default and the flagship_general Auto slot now cost two and a half times what they did. gpt-6.1-sol lists at $2/$10 against $2/$12 for gpt-5.6-terra and gpt-6-luna at $0.10/$0.50 against $0.20/$1.20. gpt-6.1-sol moves from the Max list to the Pro list with the balanced slot it now holds, and its minTier follows; the direct entries for gpt-6-astra, gpt-6.1-sol and gpt-6-luna in tierAllowedModels are dropped because the slots now name them. The openai/gpt-image slot matches the sunburst name and holds gpt-image-2.5-sunburst, the model OpenAI describes as its most capable for generation and editing; gpt-image-2.5-flare stays as a registered row outside the slot. Both 2.5 image rows now declare image input and prompt caching, which their pricing rows (image input and cached input prices) and the edits endpoint already stated; OpenAI publishes no context limit for them, so the slot's 4,000 token minimum is unmet by data and recorded as such on the slot. gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and gpt-image-2 leave through the retire tool into retired-models.json, each naming the model that took its slot, with their route, probe and synced records. The successors carry fewer routes: gpt-6-astra keeps its Experiential Labs and Cheaper Inference routes, gpt-6.1-sol and gpt-6-luna have only the direct OpenAI route, and the OpenRouter and Vercel AI Gateway routes of the 5.6 rows were not copied because nothing read for this change says those gateways serve the new ids. The GPT-6 rows record no ultra, pro or persistent reasoning surface and gpt-6-astra and gpt-6.1-sol do not accept effort none; nothing in product code reads the three surface records. No provider call was made."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the xai/grok slot moves from grok-4.6 to grok-4.7 against the eval gate. The gate was run on 2026-10-07 and refused grok-4.7: it scored 0.818 on the jailbreak corpus against a floor of 1.000, and its p95 latency rose past the 50% tolerance on coding, files and computer use; it scored 1.000 on the other fourteen corpora, where grok-4.6 scored 0.600 on refusal, 0.778 on chat and 0.833 on coding. The slot records the refusal as its promotion reason. Both models list at $2/$6 per million with a 500,000 token context. grok-4.6 leaves through the retire tool into retired-models.json naming grok-4.7, with its route and probe records; its run file and the slot's baseline, which measured it, stay as recorded. No Auto slot names the Grok family, so the model is reached only when picked by name. No provider call was made for this change."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the DeepSeek flash family slot moves from deepseek-v4-flash to the row keyed by DeepSeek's current unversioned id, which serves DeepSeek V4.1 Flash, against the eval gate. The gate was run on 2026-10-07 on the three zero-tolerance corpora and refused that model: golden 0.917, refusal 0.000 and jailbreak 0.364 against floors of 0.900, 1.000 and 1.000, the same three scores its predecessor recorded; the other twelve corpora were not measured for it. The slot records the refusal as its promotion reason. An id with no version gives the slot pattern nothing to parse, so the slot now declares that this id resolves to generation 4.1 (unversionedModelIds), which the family matcher reads; the pattern itself is unchanged. Both models list at $0.30/$1.20 per million. deepseek-v4-flash leaves through the retire tool into retired-models.json naming its successor, with its route, probe and synced records, and deepseek-v4-pro now names the new row as its variant partner. The new row has only the direct DeepSeek route; the marketplace routes of the old row were not copied because nothing read for this change says those gateways serve the new id. The reasoning_premium Auto slot names this family, so the eval safety floor baseline entry for that slot now states what is true of the new model. No task's preferred slots and no plan's allowed slots include reasoning_premium, so Auto does not dispatch to it. deepseek-v4-pro is unchanged. No provider call was made for this change."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the google/gemini-flash-image slot moves from gemini-3.1-flash-image, which Google deprecated on 2026-10-06, to gemini-nano-banana-2.1; the slot pattern now matches the nano-banana name. The eval gate was not run: the harness has no measurement for image output and the slot has no baseline. Two catalog-side gates fail and are recorded on the slot as failing. Input rises from $0.50 to $1.50 per million, 200% against the 25% ceiling, while image output falls from $60 to $30 per million and the 1K image from $0.067 to $0.0336, so a generated image costs about half. The slot's minimum context of 1,000,000 tokens is unmet by both models, which each publish 131,072; the minimum predates the 2026-09-01 correction of the old row and was not changed here. This slot serves the image_generation Auto slot on Pro and above. gemini-3.1-flash-image leaves through the retire tool, and gemini-3-pro-image and gemini-3.1-flash-lite-image now name the new row as their variant partner. Three preview rows with shutdown dates leave for the stable models Google names as their replacements: gemini-omni-flash-preview for gemini-omni-1.1-flash, gemini-3.1-flash-live-preview for gemini-3.8-live and gemini-3.1-flash-tts-preview for gemini-3.8-flash-tts. The retire tool cannot carry out a row that is not live, because the compiler holds such a row at or below the shadow stage and the tool removes only from deprecated; their retired records were written in the tool's shape directly and the rows deleted. gemini-3.5-live-translate-preview stays: it has no shutdown date and no newer row covers live speech translation. gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-embedding-2 and the three Veo rows are unchanged. The retire tool reads a released field the authored rows do not carry and stamps the UTC day, so the sixteen records written for this refresh take their release date from each row's releasedOverride and are dated 2026-10-07, the local day the work was done. No provider call was made."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, three more rows leave the roster. minimax-m2.7, deprecated on 2026-09-06 in favour of minimax-m3, and kimi-k2.7-code, superseded by kimi-k3, leave through the retire tool. qwen-3.6-27b, the Groq-hosted model Groq shut down on 2026-09-14, was marked unavailable and so cannot reach the deprecated stage; its retired record was written directly in the tool's shape, naming qwen-3.8-27b, and its two routes were removed with it. qwen-3.8-27b no longer names it as a variant partner. Removing the Groq row uncovers one row of the synced OpenRouter catalog, which the curated row had hidden because both carried the same wire id: OpenRouter's own listing of that model now appears at stage discovered, like the 346 other mirrored OpenRouter rows. Those rows mirror OpenRouter's catalog, old generations included; none is at a stage that managed traffic or a managed picker admits. No row under provider qwen, no providerOfferings entry and neither qwen family slot was touched. The moonshot/kimi, zhipu/glm and minimax/minimax slots already held their newest models and are unchanged. No provider call was made."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "catalog-type-contract-no-live-call",
+      "status": "CORRECTION",
+      "notes": "gpt-image-2.5-sunburst and gpt-image-2.5-flare were added without a speed, which the compatibility catalog type requires of every model, so every package that typechecks against models.json failed from the commit that added them. Both now carry one. OpenAI publishes no speed for either model: the Sunburst row takes medium, the value the catalog uses where a provider states none and the value gpt-image-2 carried, and the Flare row takes fast, because OpenAI's own description of that model is fast everyday image generation. Neither value is a measurement. No provider call was made."
     }
   ],
   "providers": {
@@ -408,10 +516,10 @@
         "qwen-max": "qwen-3.7-plus",
         "qwen-coder-flash": "qwen-3.7-plus",
         "qwen-coder-plus": "qwen-3.7-plus",
-        "mistral-large-3": "claude-sonnet-5",
-        "mistral-medium-3.5": "claude-sonnet-5",
-        "mistral-small-4": "claude-sonnet-5",
-        "codestral-2508": "claude-sonnet-5",
+        "mistral-large-3": "claude-sonnet-5-5",
+        "mistral-medium-3.5": "claude-sonnet-5-5",
+        "mistral-small-4": "claude-sonnet-5-5",
+        "codestral-2508": "claude-sonnet-5-5",
         "groq-llama-3.1-8b": "gemini-3.5-flash-lite",
         "groq-llama-3.3-70b": "gemini-3.5-flash-lite",
         "nvidia/llama-3.3-70b-instruct": "gemini-3.5-flash-lite",
@@ -430,17 +538,17 @@
       "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
       "modelPrefixes": ["gpt-", "tts-", "whisper", "gpt-image"],
       "aliases": [],
-      "defaultModel": "gpt-5.6-sol",
+      "defaultModel": "gpt-6-astra",
       "taskRouting": {
-        "fast_completion": "gpt-5.6-luna",
-        "code_generation": "gpt-5.6-sol",
-        "complex_reasoning": "gpt-5.6-sol",
-        "chat": "gpt-5.6-terra",
-        "vision": "gpt-5.6-sol",
-        "long_context": "gpt-5.6-sol",
-        "computer_use": "gpt-5.6-sol"
+        "fast_completion": "gpt-6-luna",
+        "code_generation": "gpt-6-astra",
+        "complex_reasoning": "gpt-6-astra",
+        "chat": "gpt-6.1-sol",
+        "vision": "gpt-6-astra",
+        "long_context": "gpt-6-astra",
+        "computer_use": "gpt-6-astra"
       },
-      "canonicalization": { "gpt-5.6": "gpt-5.6-sol" }
+      "canonicalization": { "gpt-5.6": "gpt-6-astra" }
     },
     "anthropic": {
       "label": "Anthropic",
@@ -449,15 +557,15 @@
       "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
       "modelPrefixes": ["claude"],
       "aliases": [],
-      "defaultModel": "claude-sonnet-5",
+      "defaultModel": "claude-sonnet-5-5",
       "taskRouting": {
-        "fast_completion": "claude-sonnet-5",
-        "code_generation": "claude-sonnet-5",
+        "fast_completion": "claude-sonnet-5-5",
+        "code_generation": "claude-sonnet-5-5",
         "complex_reasoning": "claude-fable-5-1",
-        "chat": "claude-sonnet-5",
-        "vision": "claude-sonnet-5",
-        "long_context": "claude-sonnet-5",
-        "computer_use": "claude-sonnet-5"
+        "chat": "claude-sonnet-5-5",
+        "vision": "claude-sonnet-5-5",
+        "long_context": "claude-sonnet-5-5",
+        "computer_use": "claude-sonnet-5-5"
       },
       "canonicalization": {}
     },
@@ -486,14 +594,14 @@
       "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.5 },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
-      "defaultModel": "grok-4.6",
+      "defaultModel": "grok-4.7",
       "taskRouting": {
-        "fast_completion": "grok-4.6",
-        "code_generation": "grok-4.6",
-        "complex_reasoning": "grok-4.6",
-        "chat": "grok-4.6",
-        "vision": "grok-4.6",
-        "long_context": "grok-4.6"
+        "fast_completion": "grok-4.7",
+        "code_generation": "grok-4.7",
+        "complex_reasoning": "grok-4.7",
+        "chat": "grok-4.7",
+        "vision": "grok-4.7",
+        "long_context": "grok-4.7"
       },
       "canonicalization": {}
     },
@@ -504,14 +612,14 @@
       "defaultPricing": { "inputPerMillion": 0.44, "outputPerMillion": 1.32 },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
-      "defaultModel": "deepseek-v4-flash",
+      "defaultModel": "deepseek-flash",
       "taskRouting": {
-        "fast_completion": "deepseek-v4-flash",
-        "code_generation": "deepseek-v4-flash",
+        "fast_completion": "deepseek-flash",
+        "code_generation": "deepseek-flash",
         "complex_reasoning": "deepseek-v4-pro",
-        "chat": "deepseek-v4-flash",
-        "vision": "deepseek-v4-flash-vision-exp",
-        "long_context": "deepseek-v4-flash"
+        "chat": "deepseek-flash",
+        "vision": "deepseek-flash",
+        "long_context": "deepseek-flash"
       },
       "canonicalization": {}
     },
@@ -836,7 +944,9 @@
         "capable": true,
         "control": "effort_levels",
         "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
         "canDisableThinking": false,
+        "rejectsSamplingParameters": true,
         "request": {
           "api": "chat",
           "effortPath": "reasoning_effort",
@@ -856,128 +966,24 @@
       "promptCacheMinimumTokens": 1024,
       "tierPolicy": { "minTier": "max" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
-    "gpt-5.6-sol": {
-      "id": "gpt-5.6-sol",
-      "apiModelId": "gpt-5.6-sol",
-      "openRouterSlug": "openai/gpt-5.6-sol",
-      "name": "GPT-5.6 Sol",
-      "provider": "openai",
-      "developer": "openai",
-      "modelType": "reasoning",
-      "inputModalities": ["text", "image", "pdf"],
-      "contextWindow": 1050000,
-      "inputCost": 4,
-      "outputCost": 20,
-      "cached_input": 0.4,
-      "cached_write": 5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Multi-Agent"],
-      "released": "July 9, 2026",
-      "deprecation_date": null,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputCost": 8,
-          "cached_input": 0.8,
-          "cached_write": 10,
-          "outputCost": 30
-        }
-      ],
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "responsesEffortPath": "reasoning.effort",
-          "togglePath": null,
-          "budgetPath": null
-        },
-        "ultraMode": {
-          "enabled": false,
-          "param": "multi_agent.enabled",
-          "concurrencyParam": "multi_agent.max_concurrent_subagents",
-          "beta": "responses_multi_agent=v1",
-          "endpoint": "responses",
-          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
-        },
-        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
-        "persistentReasoning": {
-          "param": "reasoning.context",
-          "values": ["auto", "all_turns", "current_turn"],
-          "continuationParam": "previous_response_id",
-          "zdrInclude": ["reasoning.encrypted_content"],
-          "endpoint": "responses"
-        }
-      },
-      "toolCalling": {
-        "programmatic": {
-          "toolType": "programmatic_tool_calling",
-          "optInParam": "allowed_callers",
-          "optInValues": ["direct", "programmatic"],
-          "runtime": "javascript-v8-isolated",
-          "responseItems": ["program", "function_call(caller)", "program_output"],
-          "endpoint": "responses"
-        }
-      },
-      "imageInput": { "detailValues": ["low", "high", "original", "auto"] },
-      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
-      "cachePolicy": {
-        "writeMultiplier": 1.25,
-        "readDiscount": 0.9,
-        "minCacheLifeMin": 30,
-        "explicitBreakpoints": true
-      },
-      "reasoningDots": 5,
-      "tierPolicy": { "minTier": "max" },
-      "lifecycle": {
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_general"
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#openai/gpt-frontier"
       }
     },
-    "gpt-5.6-terra": {
-      "id": "gpt-5.6-terra",
-      "apiModelId": "gpt-5.6-terra",
-      "openRouterSlug": "openai/gpt-5.6-terra",
-      "name": "GPT-5.6 Terra",
+    "gpt-6.1-sol": {
+      "id": "gpt-6.1-sol",
+      "apiModelId": "gpt-6.1-sol",
+      "openRouterSlug": "openai/gpt-6.1-sol",
+      "name": "GPT-6.1 Sol",
       "provider": "openai",
       "developer": "openai",
       "modelType": "reasoning",
       "inputModalities": ["text", "image", "pdf"],
       "contextWindow": 1050000,
       "inputCost": 2,
-      "outputCost": 12,
-      "cached_input": 0.2,
+      "outputCost": 10,
+      "cached_input": 0.1,
       "cached_write": 2.5,
       "capabilities": {
         "streaming": true,
@@ -985,176 +991,130 @@
         "vision": true,
         "json": true,
         "thinking": true,
-        "computerUse": false,
+        "computerUse": true,
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": false,
+        "codeExecution": true,
         "caching": true
       },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Balanced Intelligence & Cost", "Coding", "Agentic Tasks", "General Chat"],
-      "released": "July 9, 2026",
+      "released": "September 2026",
       "deprecation_date": null,
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 272000,
           "inputCost": 4,
-          "cached_input": 0.4,
+          "cached_input": 0.2,
           "cached_write": 5,
-          "outputCost": 18
+          "outputCost": 15
         }
       ],
+      "pricingNote": "Standard rates are $2 input, $0.10 cached input, $2.50 cache write and $10 output per million tokens. A request whose prompt exceeds 272,000 input tokens is billed in full at 2x the input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. Batch and Flex take 50% off and fast mode doubles the applicable rates. Prompt caching needs at least 1,024 tokens, a cached prefix stays reusable for 30 minutes, cache writes cost 1.25x input and explicit breakpoints are supported, all stated for GPT-5.6 and later. Reasoning cannot be turned off: none is not accepted and low is the floor. Temperature, top_p and top_logprobs are rejected while reasoning is on, so the row declares rejectsSamplingParameters. Tool calling needs the Responses API; Chat Completions serves this model without tools. OpenAI gives no release date; the OpenRouter slug is dated 2026-09-29, so the row records September 2026. Verified against developers.openai.com/api/docs/models/gpt-6.1-sol, the latest-model guide and the prompt caching guide, retrieved 2026-10-07.",
       "openWeight": false,
       "license": "proprietary",
+      "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16",
+      "knowledgeCutoff": "2026-04-30",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
         "defaultEffort": "medium",
-        "canDisableThinking": true,
+        "canDisableThinking": false,
+        "rejectsSamplingParameters": true,
         "request": {
           "api": "chat",
           "effortPath": "reasoning_effort",
           "responsesEffortPath": "reasoning.effort",
           "togglePath": null,
           "budgetPath": null
-        },
-        "ultraMode": {
-          "enabled": false,
-          "param": "multi_agent.enabled",
-          "concurrencyParam": "multi_agent.max_concurrent_subagents",
-          "beta": "responses_multi_agent=v1",
-          "endpoint": "responses",
-          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
-        },
-        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
-        "persistentReasoning": {
-          "param": "reasoning.context",
-          "values": ["auto", "all_turns", "current_turn"],
-          "continuationParam": "previous_response_id",
-          "zdrInclude": ["reasoning.encrypted_content"],
-          "endpoint": "responses"
-        }
-      },
-      "toolCalling": {
-        "programmatic": {
-          "toolType": "programmatic_tool_calling",
-          "optInParam": "allowed_callers",
-          "optInValues": ["direct", "programmatic"],
-          "runtime": "javascript-v8-isolated",
-          "responseItems": ["program", "function_call(caller)", "program_output"],
-          "endpoint": "responses"
         }
       },
       "imageInput": { "detailValues": ["low", "high", "original", "auto"] },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "cachePolicy": {
         "writeMultiplier": 1.25,
-        "readDiscount": 0.9,
+        "readDiscount": 0.95,
         "minCacheLifeMin": 30,
         "explicitBreakpoints": true
       },
-      "reasoningDots": 4,
+      "promptCacheMinimumTokens": 1024,
       "tierPolicy": { "minTier": "pro" },
       "lifecycle": {
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_balanced"
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#openai/gpt-balanced"
       }
     },
-    "gpt-5.6-luna": {
-      "id": "gpt-5.6-luna",
-      "apiModelId": "gpt-5.6-luna",
-      "openRouterSlug": "openai/gpt-5.6-luna",
-      "name": "GPT-5.6 Luna",
+    "gpt-6-luna": {
+      "id": "gpt-6-luna",
+      "apiModelId": "gpt-6-luna",
+      "openRouterSlug": "openai/gpt-6-luna",
+      "name": "GPT-6 Luna",
       "provider": "openai",
       "developer": "openai",
       "modelType": "reasoning",
       "inputModalities": ["text", "image", "pdf"],
       "contextWindow": 1050000,
-      "inputCost": 0.2,
-      "outputCost": 1.2,
-      "cached_input": 0.02,
-      "cached_write": 0.25,
+      "inputCost": 0.1,
+      "outputCost": 0.5,
+      "cached_input": 0.01,
+      "cached_write": 0.125,
       "capabilities": {
         "streaming": true,
         "tools": true,
         "vision": true,
         "json": true,
         "thinking": true,
-        "computerUse": false,
+        "computerUse": true,
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": false,
+        "codeExecution": true,
         "caching": true
       },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Cost-Efficient Reasoning", "Quick Tasks", "High Throughput", "Classification"],
-      "released": "July 9, 2026",
+      "released": "September 2026",
       "deprecation_date": null,
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 272000,
-          "inputCost": 0.4,
-          "cached_input": 0.04,
-          "cached_write": 0.5,
-          "outputCost": 1.8
+          "inputCost": 0.2,
+          "cached_input": 0.02,
+          "cached_write": 0.25,
+          "outputCost": 0.75
         }
       ],
+      "pricingNote": "Standard rates are $0.10 input, $0.01 cached input, $0.125 cache write and $0.50 output per million tokens. A request whose prompt exceeds 272,000 input tokens is billed at 2x the input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. Batch and Flex are priced at 50% of standard and fast mode at 2x. Prompt caching needs at least 1,024 tokens, a cached prefix stays reusable for 30 minutes, cache writes cost 1.25x input and explicit breakpoints are supported, all stated for GPT-5.6 and later. Temperature, top_p and top_logprobs are rejected unless reasoning effort is none; the row declares rejectsSamplingParameters and the OpenAI adapter still sends them when the request resolves to none. Chat Completions supports function calling only with reasoning_effort none; the adapter uses the Responses API for this model. OpenAI gives no release date; the OpenRouter slug is dated 2026-09-22, so the row records September 2026. Verified against developers.openai.com/api/docs/models/gpt-6-luna, the latest-model guide and the prompt caching guide, retrieved 2026-10-07.",
       "openWeight": false,
       "license": "proprietary",
+      "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16",
+      "knowledgeCutoff": "2026-05-18",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
         "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
         "defaultEffort": "medium",
         "canDisableThinking": true,
+        "rejectsSamplingParameters": true,
         "request": {
           "api": "chat",
           "effortPath": "reasoning_effort",
           "responsesEffortPath": "reasoning.effort",
           "togglePath": null,
           "budgetPath": null
-        },
-        "ultraMode": {
-          "enabled": false,
-          "param": "multi_agent.enabled",
-          "concurrencyParam": "multi_agent.max_concurrent_subagents",
-          "beta": "responses_multi_agent=v1",
-          "endpoint": "responses",
-          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
-        },
-        "proMode": { "param": "reasoning.mode", "value": "pro", "endpoint": "responses" },
-        "persistentReasoning": {
-          "param": "reasoning.context",
-          "values": ["auto", "all_turns", "current_turn"],
-          "continuationParam": "previous_response_id",
-          "zdrInclude": ["reasoning.encrypted_content"],
-          "endpoint": "responses"
-        }
-      },
-      "toolCalling": {
-        "programmatic": {
-          "toolType": "programmatic_tool_calling",
-          "optInParam": "allowed_callers",
-          "optInValues": ["direct", "programmatic"],
-          "runtime": "javascript-v8-isolated",
-          "responseItems": ["program", "function_call(caller)", "program_output"],
-          "endpoint": "responses"
         }
       },
       "imageInput": { "detailValues": ["low", "high", "original", "auto"] },
@@ -1165,12 +1125,12 @@
         "minCacheLifeMin": 30,
         "explicitBreakpoints": true
       },
-      "reasoningDots": 3,
+      "promptCacheMinimumTokens": 1024,
       "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#openai/gpt-fast"
       }
     },
     "claude-fable-5-1": {
@@ -1182,7 +1142,7 @@
       "developer": "anthropic",
       "modelType": "reasoning",
       "inputModalities": ["text", "image", "pdf"],
-      "variantPartner": "claude-sonnet-5",
+      "variantPartner": "claude-sonnet-5-5",
       "contextWindow": 1000000,
       "inputCost": 10,
       "outputCost": 50,
@@ -1232,79 +1192,11 @@
       },
       "tierPolicy": { "minTier": "max" },
       "promptCacheMinimumTokens": 512,
+      "providerCompatibility": { "forcedToolChoice": false },
       "lifecycle": {
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
-    "claude-opus-5": {
-      "id": "claude-opus-5",
-      "apiModelId": "claude-opus-5",
-      "openRouterSlug": "anthropic/claude-opus-5",
-      "name": "Claude Opus 5",
-      "provider": "anthropic",
-      "developer": "anthropic",
-      "modelType": "reasoning",
-      "inputModalities": ["text", "image", "pdf"],
-      "variantPartner": "claude-sonnet-5",
-      "contextWindow": 1000000,
-      "inputCost": 5,
-      "outputCost": 25,
-      "cached_input": 0.5,
-      "cached_write": 6.25,
-      "cached_write_1h": 10,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "slow",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
-      "released": "July 24, 2026",
-      "deprecation_date": null,
-      "openWeight": false,
-      "license": "proprietary",
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-05",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "thinkingDefault": "adaptive",
-        "supportsManualThinking": false,
-        "maxEffortWhenThinkingDisabled": "high",
-        "rejectsSamplingParameters": true,
-        "request": {
-          "api": "messages",
-          "effortPath": "output_config.effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "max" },
-      "fastTier": { "priceMultiplier": 2 },
-      "promptCacheMinimumTokens": 512,
-      "providerCompatibility": { "nativeWebFetch": false },
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding"
       }
     },
     "claude-opus-5-5": {
@@ -1316,7 +1208,7 @@
       "developer": "anthropic",
       "modelType": "reasoning",
       "inputModalities": ["text", "image", "pdf"],
-      "variantPartner": "claude-sonnet-5",
+      "variantPartner": "claude-sonnet-5-5",
       "contextWindow": 1000000,
       "inputCost": 4,
       "outputCost": 20,
@@ -1368,92 +1260,23 @@
       "tierPolicy": { "minTier": "max" },
       "fastTier": { "priceMultiplier": 2 },
       "promptCacheMinimumTokens": 512,
-      "providerCompatibility": { "nativeWebFetch": false },
+      "providerCompatibility": { "nativeWebFetch": false, "forcedToolChoice": false },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#anthropic/claude-opus"
       }
     },
-    "claude-opus-4-8": {
-      "id": "claude-opus-4-8",
-      "apiModelId": "claude-opus-4-8",
-      "openRouterSlug": "anthropic/claude-opus-4-8",
-      "name": "Claude Opus 4.8",
-      "provider": "anthropic",
-      "developer": "anthropic",
-      "modelType": "reasoning",
-      "inputModalities": ["text", "image", "pdf"],
-      "variantPartner": "claude-sonnet-5",
-      "contextWindow": 1000000,
-      "inputCost": 5,
-      "outputCost": 25,
-      "cached_input": 0.5,
-      "cached_write": 6.25,
-      "cached_write_1h": 10,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "slow",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
-      "released": "June 2026",
-      "deprecation_date": null,
-      "openWeight": false,
-      "license": "proprietary",
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "thinkingDefault": "adaptive",
-        "supportsManualThinking": false,
-        "maxEffortWhenThinkingDisabled": "high",
-        "rejectsSamplingParameters": true,
-        "request": {
-          "api": "messages",
-          "effortPath": "output_config.effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "max" },
-      "fastTier": { "priceMultiplier": 2 },
-      "promptCacheMinimumTokens": 512,
-      "providerCompatibility": { "nativeWebFetch": false },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
-      }
-    },
-    "claude-sonnet-5": {
-      "id": "claude-sonnet-5",
-      "apiModelId": "claude-sonnet-5",
-      "openRouterSlug": "anthropic/claude-sonnet-5",
-      "name": "Claude Sonnet 5",
+    "claude-sonnet-5-5": {
+      "id": "claude-sonnet-5-5",
+      "apiModelId": "claude-sonnet-5-5",
+      "openRouterSlug": "anthropic/claude-sonnet-5.5",
+      "name": "Claude Sonnet 5.5",
       "provider": "anthropic",
       "developer": "anthropic",
       "modelType": "code",
       "inputModalities": ["text", "image", "pdf"],
-      "variantPartner": "claude-opus-5",
+      "variantPartner": "claude-opus-5-5",
       "contextWindow": 1000000,
       "inputCost": 2,
       "outputCost": 10,
@@ -1479,19 +1302,24 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks", "Long Documents"],
-      "released": "June 30, 2026",
+      "released": "September 28, 2026",
       "deprecation_date": null,
+      "pricingNote": "claude-sonnet-5-5 is a fixed id with no date suffix. $2/$10 per million input/output, 5-minute cache write $2.50, 1-hour cache write $4, batch 50% off, the full 1M context at the standard rate. Anthropic's pages disagree on the cache read price: the pricing table and the model page say $0.20, while the pricing page's caching text and the what's-new page say $0.10 (0.05x the input price); the higher figure is recorded so cost is never understated. Adaptive thinking is on by default (default effort high, all five levels). thinking.type disabled returns 400: the lowest setting is thinking.type between_tools, accepted at low, medium and high effort only, and it takes no other field. Manual budgets return 400. Forced tool_choice (any or a named tool) returns 400; auto and none are accepted. Non-default temperature, top_p or top_k returns 400. Notes written between tool calls come back as thinking blocks whose text is empty at the default display setting. Computer use needs computer_toolset_20260801 on the Claude API. Thinking blocks are bound to the model, the conversation prefix and the account. Minimum cacheable prompt is 512 tokens. Verified against platform.claude.com/docs/en/models/sonnet-5-5/overview, its what's-new page, and the pricing, effort and prompt caching pages, retrieved 2026-10-07; no live call was made when this row was written.",
       "openWeight": false,
       "license": "proprietary",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01",
+      "knowledgeCutoff": "2026-06",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
         "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
         "defaultEffort": "high",
         "canDisableThinking": true,
+        "thinkingDefault": "adaptive",
+        "supportsManualThinking": false,
+        "maxEffortWhenThinkingDisabled": "high",
+        "disabledThinkingType": "between_tools",
         "rejectsSamplingParameters": true,
         "request": {
           "api": "messages",
@@ -1501,76 +1329,12 @@
         }
       },
       "tierPolicy": { "minTier": "pro" },
+      "promptCacheMinimumTokens": 512,
+      "providerCompatibility": { "forcedToolChoice": false },
       "lifecycle": {
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.coding_balanced"
-      }
-    },
-    "claude-haiku-4-5": {
-      "id": "claude-haiku-4-5",
-      "apiModelId": "claude-haiku-4-5-20251001",
-      "openRouterSlug": "anthropic/claude-haiku-4.5",
-      "name": "Claude Haiku 4.5",
-      "provider": "anthropic",
-      "developer": "anthropic",
-      "modelType": "chat",
-      "inputModalities": ["text", "image", "pdf"],
-      "variantPartner": "claude-sonnet-5",
-      "contextWindow": 200000,
-      "inputCost": 1,
-      "outputCost": 5,
-      "cached_input": 0.1,
-      "cached_write": 1.25,
-      "cached_write_1h": 2,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "very-fast",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Low Latency", "High Volume", "Tool Use"],
-      "released": "October 15, 2025",
-      "deprecation_date": null,
-      "pricingNote": "The pinned Claude API id is the dated snapshot claude-haiku-4-5-20251001; claude-haiku-4-5 is an alias that resolves to it. Extended thinking only, through thinking.type enabled plus thinking.budget_tokens; the effort parameter is not supported and adaptive thinking returns 400. Minimum cacheable prompt is 4,096 tokens. Batch is 50% off at $0.50/$2.50. Anthropic commits only to no retirement before 2025-10-15, so this is a short-horizon row. Verified against platform.claude.com/docs/en/models/haiku-4-5/overview, retrieved 2026-09-04.",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 64000,
-      "knowledgeCutoff": "2025-02",
-      "imageInput": { "maxImagesPerRequest": 100 },
-      "documentInput": { "maxPagesPerRequest": 100 },
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_toggle",
-        "canDisableThinking": true,
-        "thinkingDefault": "off",
-        "supportsManualThinking": true,
-        "request": {
-          "api": "messages",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": "thinking.budget_tokens"
-        }
-      },
-      "tierPolicy": { "minTier": "pro" },
-      "promptCacheMinimumTokens": 4096,
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#anthropic/claude-sonnet"
       }
     },
     "claude-haiku-5-5": {
@@ -1582,7 +1346,7 @@
       "developer": "anthropic",
       "modelType": "chat",
       "inputModalities": ["text", "image", "pdf"],
-      "variantPartner": "claude-sonnet-5",
+      "variantPartner": "claude-sonnet-5-5",
       "contextWindow": 1000000,
       "inputCost": 0.1,
       "outputCost": 0.5,
@@ -1813,77 +1577,16 @@
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_fast"
       }
     },
-    "gemini-3.1-flash-lite": {
-      "id": "gemini-3.1-flash-lite",
-      "apiModelId": "gemini-3.1-flash-lite",
-      "openRouterSlug": "google/gemini-3.1-flash-lite",
-      "name": "Gemini 3.1 Flash-Lite",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "multimodal",
-      "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.5-flash-lite",
-      "contextWindow": 1048576,
-      "inputCost": 0.25,
-      "outputCost": 1.5,
-      "cached_input": 0.025,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "very-fast",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Cheapest Multimodal", "Function Calling", "High Volume"],
-      "released": "May 7, 2026",
-      "deprecated": true,
-      "deprecation_date": "2027-05-07",
-      "pricingNote": "Input $0.25/1M for text, image and video and $0.50/1M for audio; output $1.50/1M; cache read $0.025/1M text, image and video and $0.05/1M audio, plus $1.00 per 1M tokens per hour of storage. Cheaper than gemini-3.5-flash-lite but Google has announced a 2027-05-07 shutdown and the knowledge cutoff is a year older, so gemini-3.5-flash-lite stays the family slot. Verified against ai.google.dev/gemini-api/docs/pricing and the deprecations page, retrieved 2026-09-04.",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2025-01",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "medium",
-        "canDisableThinking": false,
-        "request": {
-          "api": "gen",
-          "effortPath": "thinkingConfig.thinkingLevel",
-          "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
-        }
-      },
-      "tierPolicy": { "minTier": "basic" },
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#gemini-3.1-flash-lite.deprecation_date"
-      }
-    },
-    "gemini-3.1-flash-image": {
-      "id": "gemini-3.1-flash-image",
-      "apiModelId": "gemini-3.1-flash-image",
-      "name": "Gemini 3.1 Flash Image",
+    "gemini-nano-banana-2.1": {
+      "id": "gemini-nano-banana-2.1",
+      "apiModelId": "gemini-nano-banana-2.1",
+      "name": "Gemini Nano Banana 2.1",
       "provider": "google",
       "developer": "google",
       "modelType": "image",
       "contextWindow": 131072,
-      "inputCost": 0.5,
-      "outputCost": 60,
+      "inputCost": 1.5,
+      "outputCost": 30,
       "capabilities": {
         "streaming": false,
         "tools": false,
@@ -1902,20 +1605,20 @@
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
-      "bestFor": ["Image Generation", "Native Gemini Image Gen"],
-      "released": "March 2026",
+      "bestFor": ["Image Generation", "Image Editing"],
+      "released": "October 6, 2026",
       "deprecation_date": null,
-      "imagePerImageCost": 0.067,
+      "imagePerImageCost": 0.0336,
       "imageApi": "gemini",
       "imageOutputMimeType": "image/jpeg",
-      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. Prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 1,000,000 to 131,072: Google's model card publishes an input token limit of 131,072 and an output token limit of 32,768. litellm reports 65,536 and so will keep flagging this row, Google's card is the authority, not the snapshot. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0, 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table.",
+      "pricingNote": "Paid tier only. Input $1.50/1M (text, image, video). Output $7.50/1M for text and thinking, $30.00/1M for images, which Google states as $0.0336 per 1K image, $0.0504 per 2K image and $0.113 per 4K image; imagePerImageCost carries the 1K rate. Batch is half. Token limits are 131,072 in and 32,768 out. Output is 1K by default, with 2K and 4K available. Google does not state the output image format on the pages read; one generateContent call on 2026-10-07 returned image/jpeg, 1,120 image tokens for a 1K image and 385 thinking tokens, which is what imageOutputMimeType records. Google names this model as the replacement for gemini-3.1-flash-image, which it deprecated on 2026-10-06 with no shutdown date. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": false, "control": "none" },
       "lifecycle": {
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation"
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#google/gemini-flash-image"
       }
     },
     "gemini-3-pro-image": {
@@ -1926,7 +1629,7 @@
       "provider": "google",
       "developer": "google",
       "modelType": "image",
-      "variantPartner": "gemini-3.1-flash-image",
+      "variantPartner": "gemini-nano-banana-2.1",
       "contextWindow": 65536,
       "inputCost": 2,
       "outputCost": 120,
@@ -1974,7 +1677,7 @@
       "provider": "google",
       "developer": "google",
       "modelType": "image",
-      "variantPartner": "gemini-3.1-flash-image",
+      "variantPartner": "gemini-nano-banana-2.1",
       "contextWindow": 65536,
       "inputCost": 0.25,
       "outputCost": 30,
@@ -2015,67 +1718,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "deepseek-v4-flash": {
-      "id": "deepseek-v4-flash",
-      "apiModelId": "deepseek-v4-flash",
-      "openRouterSlug": "deepseek/deepseek-v4-flash-0731",
-      "name": "DeepSeek V4 Flash",
-      "provider": "deepseek",
-      "developer": "deepseek",
-      "modelType": "code",
-      "inputModalities": ["text"],
-      "variantPartner": "deepseek-v4-pro",
-      "contextWindow": 1000000,
-      "inputCost": 0.44,
-      "outputCost": 1.32,
-      "cached_input": 0.014,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "benchmarks": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
-      "speed": "very-fast",
-      "quality": "excellent",
-      "qualityTier": "fast",
-      "bestFor": ["Cost-Effective", "Coding", "Long Context", "Multimodal", "High Volume"],
-      "released": "July 31, 2026",
-      "deprecation_date": null,
-      "pricingNote": "DeepSeek bills V4 Flash on a peak/off-peak clock, not a flat rate: peak $0.44/1M input on a cache miss, $1.32/1M output, $0.014/1M cache hit, with off-peak exactly half at $0.22/$0.66/$0.007. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut on any date, and the schema has no field for a time-of-day split. CORRECTED 2026-09-01: this row previously read $0.14/$0.28 with cache read $0.0028, which matches no row on DeepSeek's table and is roughly a third of the peak rate. Those figures came from models.dev, which still publishes them for the first-party deepseek provider. Verified against https://api-docs.deepseek.com/quick_start/pricing, retrieved 2026-09-01; the page carries no discount, promotion or expiry language of any kind.",
-      "openWeight": true,
-      "license": "MIT",
-      "maxOutputTokens": 384000,
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_toggle",
-        "supportedEfforts": ["low", "high", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "pro" },
-      "providerCompatibility": { "forcedToolChoice": false },
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_premium"
-      }
-    },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
       "apiModelId": "deepseek-v4-pro",
@@ -2085,7 +1727,7 @@
       "developer": "deepseek",
       "modelType": "reasoning",
       "inputModalities": ["text"],
-      "variantPartner": "deepseek-v4-flash",
+      "variantPartner": "deepseek-flash",
       "contextWindow": 1000000,
       "inputCost": 1.32,
       "outputCost": 3.96,
@@ -2143,20 +1785,20 @@
         "source": "models.dev#deepseek-v4-pro"
       }
     },
-    "deepseek-v4-flash-vision-exp": {
-      "id": "deepseek-v4-flash-vision-exp",
-      "apiModelId": "deepseek-v4-flash-vision-exp",
-      "openRouterSlug": "deepseek/deepseek-v4-flash-vision-exp",
-      "name": "DeepSeek V4 Flash Vision (Experimental)",
+    "deepseek-flash": {
+      "id": "deepseek-flash",
+      "apiModelId": "deepseek-flash",
+      "openRouterSlug": "deepseek/deepseek-v4.1-flash",
+      "name": "DeepSeek V4.1 Flash",
       "provider": "deepseek",
       "developer": "deepseek",
       "modelType": "code",
       "inputModalities": ["text", "image"],
-      "variantPartner": "deepseek-v4-flash",
-      "contextWindow": 1000000,
-      "inputCost": 0.44,
-      "outputCost": 1.32,
-      "cached_input": 0.014,
+      "variantPartner": "deepseek-v4-pro",
+      "contextWindow": 1048576,
+      "inputCost": 0.3,
+      "outputCost": 1.2,
+      "cached_input": 0.006,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -2175,13 +1817,13 @@
       "speed": "very-fast",
       "quality": "excellent",
       "qualityTier": "fast",
-      "bestFor": ["Vision", "Coding", "Long Context", "Cost-Effective"],
-      "released": "August 21, 2026",
+      "bestFor": ["Cost-Effective", "Coding", "Long Context", "Vision", "High Volume"],
+      "released": "September 10, 2026",
       "deprecation_date": null,
-      "pricingNote": "The only DeepSeek model that accepts images, and the correct target for the DeepSeek vision task. Same peak and off-peak clock as deepseek-v4-flash: peak $0.44/1M cache-miss input, $1.32/1M output, $0.014/1M cache hit between 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, exactly half in every other hour. The catalog carries the peak rate because it is the only figure never undercut. Images convert to input tokens by dimension at an upper bound of 384 tokens per image with no per-image fee. Experimental endpoint: DeepSeek publishes no sunset date but has retired a temporary endpoint at two weeks notice before, so treat availability as short-horizon. Effort levels are inherited from deepseek-v4-flash; the effort-mapping table names only the two text models. Verified against api-docs.deepseek.com, retrieved 2026-09-04.",
+      "pricingNote": "DeepSeek bills on a peak and off-peak clock, not a flat rate: peak $0.30/1M input on a cache miss, $1.20/1M output, $0.006/1M cache hit, with off-peak exactly half at $0.15/$0.60/$0.003. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, excluding Chinese public holidays; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut, and the schema has no field for a time-of-day split. deepseek-flash is an unversioned id that DeepSeek currently serves with DeepSeek-V4.1-Flash, so the provider can move the model under this row without an id change. The pricing page gives the limits as 1M context and 384K output; the list-models endpoint reports 1,048,576 and 393,216, which is what the row records. Verified against api-docs.deepseek.com/quick_start/pricing, the 2026-09-10 news post and GET /models, retrieved 2026-10-07.",
       "openWeight": true,
       "license": "MIT",
-      "maxOutputTokens": 384000,
+      "maxOutputTokens": 393216,
       "reasoning": {
         "capable": true,
         "control": "thinking_toggle",
@@ -2196,10 +1838,11 @@
         }
       },
       "tierPolicy": { "minTier": "pro" },
+      "providerCompatibility": { "forcedToolChoice": false },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#deepseek/deepseek-flash"
       }
     },
     "qwen-3.5-flash": {
@@ -2625,14 +2268,13 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "gpt-image-2": {
-      "id": "gpt-image-2",
-      "apiModelId": "gpt-image-2",
-      "name": "GPT Image 2",
+    "gpt-image-2.5-sunburst": {
+      "id": "gpt-image-2.5-sunburst",
+      "apiModelId": "gpt-image-2.5-sunburst",
+      "name": "GPT Image 2.5 Sunburst",
       "provider": "openai",
       "developer": "openai",
       "modelType": "image",
-      "contextWindow": 4000,
       "inputCost": 8,
       "outputCost": 30,
       "cached_input": 2,
@@ -2654,16 +2296,56 @@
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
-      "bestFor": ["HD Image Generation", "Image Editing", "Text Rendering in Images"],
-      "released": "April 21, 2026",
+      "bestFor": ["Precise Image Editing", "HD Image Generation", "Text Rendering in Images"],
+      "released": "September 2026",
       "deprecation_date": null,
       "imageApi": "openai",
-      "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high. OpenAI publishes two separate per-1M-token rows for this model: an image row at $8.00 input, $2.00 cached input, $30.00 output, and a text row at $5.00 input, $1.25 cached input, no output price. This entry carries the image row throughout, so a cache read of $2.00 is correct and a third-party snapshot reporting $1.25 is quoting the text row rather than contradicting it, litellm exposes only the text cache-read field, so it will keep reporting this row as drift. Verified against https://developers.openai.com/api/docs/pricing, retrieved 2026-09-01.",
+      "pricingNote": "OpenAI describes this as its most capable model for image generation and editing. OpenAI publishes per-1M-token rows for this model: text input $5.00 and $1.25 cached, image input $8.00 and $2.00 cached, image output $30.00 ($15.00 on Batch); text output is not billed. This entry carries the image row, as the GPT Image 2 entry does. OpenAI publishes no per-image price for it. Quality levels are low, medium, high, xhigh, max and auto. Served on v1/images/generations, v1/images/edits and v1/batch. The page gives no release date; the dated snapshot is gpt-image-2.5-sunburst-2026-09-08. Verified against developers.openai.com/api/docs/models/gpt-image-2.5-sunburst, retrieved 2026-10-07.",
+      "reasoning": { "capable": false, "control": "none" },
+      "lifecycle": {
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#openai/gpt-image"
+      }
+    },
+    "gpt-image-2.5-flare": {
+      "id": "gpt-image-2.5-flare",
+      "apiModelId": "gpt-image-2.5-flare",
+      "name": "GPT Image 2.5 Flare",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "image",
+      "inputCost": 8,
+      "outputCost": 30,
+      "cached_input": 2,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Fast Image Generation", "Image Editing"],
+      "released": "September 2026",
+      "deprecation_date": null,
+      "imageApi": "openai",
+      "pricingNote": "OpenAI describes this as fast, high-quality everyday image generation. OpenAI publishes per-1M-token rows for this model: text input $5.00 and $1.25 cached, image input $8.00 and $2.00 cached, image output $30.00 ($15.00 on Batch); text output is not billed. This entry carries the image row, as the GPT Image 2 entry does. OpenAI publishes no per-image price for it. Quality levels are low, medium, high, xhigh, max and auto. Served on v1/images/generations, v1/images/edits and v1/batch. The page gives no release date; the dated snapshot is gpt-image-2.5-flare-2026-09-08. Verified against developers.openai.com/api/docs/models/gpt-image-2.5-flare, retrieved 2026-10-07.",
       "reasoning": { "capable": false, "control": "none" },
       "lifecycle": {
         "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stagedOn": "2026-10-07",
+        "source": "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare"
       }
     },
     "gpt-4o-mini-tts": {
@@ -2770,74 +2452,6 @@
         "stage": "promoted",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_premium"
-      }
-    },
-    "gemini-3.6-flash": {
-      "id": "gemini-3.6-flash",
-      "apiModelId": "gemini-3.6-flash",
-      "openRouterSlug": "google/gemini-3.6-flash",
-      "name": "Gemini 3.6 Flash",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "multimodal",
-      "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.8-flash",
-      "contextWindow": 1048576,
-      "inputCost": 0.75,
-      "outputCost": 3.75,
-      "cached_input": 0.075,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": [
-        "Lowest Latency Flash",
-        "Function Calling",
-        "Search Grounding",
-        "Multimodal Reasoning"
-      ],
-      "released": "July 21, 2026",
-      "deprecated": true,
-      "deprecation_date": "2026-09-06",
-      "promo_expires_at": "2027-01-01T00:00:00Z",
-      "post_promo_prices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 },
-      "pricingNote": "Same introductory schedule as the newer Flash rows: $0.75/1M input, $3.75/1M output and $0.075/1M cached input through 2026-12-31, then $1.50/$7.50/$0.15 from 2027-01-01. The only Flash at or above 3.6 that accepts the minimal thinking level, which makes it the lowest-latency Flash lane at the same price as 3.8. Stable with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2026-03",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "medium",
-        "canDisableThinking": false,
-        "request": {
-          "api": "gen",
-          "effortPath": "thinkingConfig.thinkingLevel",
-          "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
-        }
-      },
-      "tierPolicy": { "minTier": "basic" },
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#gemini-3.6-flash.deprecation_date"
       }
     },
     "glm-5.3": {
@@ -3103,126 +2717,11 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "kimi-k2.7-code": {
-      "id": "kimi-k2.7-code",
-      "apiModelId": "kimi-k2.7-code",
-      "openRouterSlug": "moonshotai/kimi-k2.7-code",
-      "name": "Kimi K2.7 Code",
-      "provider": "moonshot",
-      "developer": "moonshot",
-      "modelType": "code",
-      "inputModalities": ["text", "image", "video"],
-      "variantPartner": "kimi-k3",
-      "contextWindow": 262144,
-      "inputCost": 0.95,
-      "outputCost": 4,
-      "cached_input": 0.19,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Agentic Coding", "Tool Use", "Vision"],
-      "deprecation_date": null,
-      "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.19/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. Thinking is forced on: thinking.type accepts only enabled and there is no reasoning_effort. The 32,768 output figure is the documented default; Moonshot publishes no ceiling. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k27-code, retrieved 2026-09-04.",
-      "openWeight": true,
-      "license": "Modified MIT License",
-      "maxOutputTokens": 32768,
-      "reasoning": {
-        "capable": true,
-        "control": "always_on",
-        "canDisableThinking": false,
-        "request": {
-          "api": "chat",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "pro" },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
-    "kimi-k2.6": {
-      "id": "kimi-k2.6",
-      "apiModelId": "kimi-k2.6",
-      "openRouterSlug": "moonshotai/kimi-k2.6",
-      "name": "Kimi K2.6",
-      "provider": "moonshot",
-      "developer": "moonshot",
-      "modelType": "multimodal",
-      "inputModalities": ["text", "image", "video"],
-      "variantPartner": "kimi-k3",
-      "contextWindow": 262144,
-      "inputCost": 0.95,
-      "outputCost": 4,
-      "cached_input": 0.16,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["General Chat", "Tool Use", "Vision"],
-      "released": "April 20, 2026",
-      "deprecated": true,
-      "deprecation_date": "2026-09-06",
-      "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.16/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. The 32,768 output figure is the documented default; Moonshot publishes no ceiling and no knowledge cutoff. Older than kimi-k3 and below the Kimi family context floor, so it can never take the family slot. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k26, retrieved 2026-09-04.",
-      "openWeight": true,
-      "license": "Modified MIT License",
-      "maxOutputTokens": 32768,
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_toggle",
-        "canDisableThinking": true,
-        "thinkingDefault": "enabled",
-        "request": {
-          "api": "chat",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "pro" },
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#kimi-k2.6.deprecation_date"
-      }
-    },
-    "grok-4.6": {
-      "id": "grok-4.6",
-      "apiModelId": "grok-4.6",
-      "openRouterSlug": "x-ai/grok-4.6",
-      "name": "Grok 4.6",
+    "grok-4.7": {
+      "id": "grok-4.7",
+      "apiModelId": "grok-4.7",
+      "openRouterSlug": "x-ai/grok-4.7",
+      "name": "Grok 4.7",
       "provider": "xai",
       "developer": "xai",
       "modelType": "reasoning",
@@ -3249,7 +2748,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Real-time Info", "Reasoning", "Coding", "Agentic Workflows"],
-      "released": "August 12, 2026",
+      "released": "September 2026",
       "deprecation_date": null,
       "inputTokenPricingTiers": [
         {
@@ -3260,10 +2759,10 @@
           "cached_input": 1
         }
       ],
-      "pricingNote": "Base rate below 200,000 prompt tokens is $2.00/1M input, $6.00/1M output, $0.50/1M cached input. A request whose prompt reaches 200,000 tokens is billed at $4.00/$12.00/$1.00 for every token in the request. xAI publishes no cache-write price, so none is recorded. Priority processing bills 2x on chat completions and responses; the batch API does not serve this model. Server-side tool calls are billed separately per thousand invocations and the schema has no field for them. xAI publishes no maximum output length for this model, so none is recorded. Verified against docs.x.ai/docs/models and the xAI pricing page, retrieved 2026-09-04.",
+      "pricingNote": "Base rate below 200,000 prompt tokens is $2.00/1M input, $6.00/1M output, $0.50/1M cached input. A request whose prompt reaches 200,000 tokens is billed at $4.00/$12.00/$1.00 for every token in the request. xAI publishes no cache-write price, so none is recorded. The batch API does not serve this model. Server-side tool calls are billed separately per invocation and the schema has no field for them. xAI states the model has no text output limit, so no maximum output length is recorded. xAI gives the release month only; the OpenRouter slug dates it 2026-09-16 and the Vercel AI Gateway list 2026-09-21, so the row records September 2026. Verified against docs.x.ai/developers/models/grok-4.7, the models overview, the reasoning guide and the release notes, retrieved 2026-10-07.",
       "openWeight": false,
       "license": "proprietary",
-      "knowledgeCutoff": "2026-02-01",
+      "knowledgeCutoff": "2026-05",
       "reasoning": {
         "capable": true,
         "control": "always_on",
@@ -3280,9 +2779,9 @@
       },
       "tierPolicy": { "minTier": "max" },
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#xai/grok"
       }
     },
     "veo-3.1": {
@@ -3315,7 +2814,7 @@
       "qualityTier": "best",
       "bestFor": ["Professional Video", "High Quality Clips"],
       "released": "October 15, 2025",
-      "deprecation_date": null,
+      "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.4,
       "videoPerSecondCostByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 },
       "videoGeneration": {
@@ -3393,7 +2892,7 @@
       "qualityTier": "balanced",
       "bestFor": ["Fast High-Quality Video", "Rapid Iteration"],
       "released": "October 15, 2025",
-      "deprecation_date": null,
+      "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.1,
       "videoPerSecondCostByResolution": { "720p": 0.1, "1080p": 0.12, "4k": 0.3 },
       "videoGeneration": {
@@ -3616,52 +3115,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "minimax-m2.7": {
-      "id": "minimax-m2.7",
-      "apiModelId": "MiniMax-M2.7",
-      "openRouterSlug": "minimax/minimax-m2.7",
-      "name": "MiniMax M2.7",
-      "provider": "minimax",
-      "developer": "minimax",
-      "modelType": "reasoning",
-      "inputModalities": ["text"],
-      "variantPartner": "minimax-m3",
-      "contextWindow": 204800,
-      "inputCost": 0.3,
-      "outputCost": 1.2,
-      "cached_input": 0.06,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": false,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["Text Reasoning", "Open-Weight Deployment"],
-      "released": "March 18, 2026",
-      "deprecated": true,
-      "deprecation_date": "2026-09-06",
-      "pricingNote": "Flat rate with no context tiers: $0.30/1M input, $1.20/1M output, $0.06/1M cache read. The $0.375/1M cache-write price applies only to explicit cache_control caching on the Anthropic-compatible route; the OpenAI-compatible route this catalog calls uses passive caching and charges no write fee, so none is recorded. Text only and always thinking, older than MiniMax-M3 but still classed as current by MiniMax. No knowledge cutoff and no structured-output support are documented. Verified against platform.minimax.io, retrieved 2026-09-04.",
-      "openWeight": true,
-      "maxOutputTokens": 204800,
-      "tierPolicy": { "minTier": "pro" },
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#minimax-m2.7.deprecation_date"
-      }
-    },
     "veo-3.1-lite": {
       "id": "veo-3.1-lite",
       "apiModelId": "veo-3.1-lite-generate-preview",
@@ -3692,7 +3145,7 @@
       "qualityTier": "balanced",
       "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
       "released": "March 31, 2026",
-      "deprecation_date": null,
+      "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.05,
       "videoPerSecondCostByResolution": { "720p": 0.05, "1080p": 0.08 },
       "videoGeneration": {
@@ -3726,10 +3179,10 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "gemini-omni-flash-preview": {
-      "id": "gemini-omni-flash-preview",
-      "apiModelId": "gemini-omni-flash-preview",
-      "name": "Gemini Omni Flash",
+    "gemini-omni-1.1-flash": {
+      "id": "gemini-omni-1.1-flash",
+      "apiModelId": "gemini-omni-1.1-flash",
+      "name": "Gemini Omni 1.1 Flash",
       "provider": "google",
       "developer": "google",
       "modelType": "video",
@@ -3755,16 +3208,15 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Video Generation", "Conversational Video Editing"],
-      "released": "June 30, 2026",
-      "deprecation_date": "2026-09-30",
+      "released": "August 27, 2026",
+      "deprecation_date": null,
       "videoPerSecondCost": 0.1,
-      "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06; prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 4,000 to 1,048,576, the context window Google publishes on the shared Gemini Omni Flash model card that this preview SKU's pricing entry links to, no model card exists at the preview id itself, and 4,000 was a placeholder shared with the veo-3.1 rows. litellm holds two entries for this model that disagree with each other: its gemini/ entry says 131,072 and its vertex_ai-language-models entry says 1,048,576, so the drift check will keep flagging the first one.",
-      "availability": "preview",
+      "pricingNote": "Paid tier only. Input $1.50/1M (text, image, video, audio); output $9.00/1M text and $17.50/1M video, which Google states is approximately $0.10 per second. Video output runs 3 to 10 seconds at 360p, 720p, 1080p or 4K and 24 frames per second. Google names this model as the replacement for gemini-omni-flash-preview and for the three Veo 3.1 ids, all of which shut down on 2026-10-22. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
       "reasoning": { "capable": false, "control": "none" },
       "lifecycle": {
         "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stagedOn": "2026-10-07",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash"
       }
     },
     "gemini-3.5-live-translate-preview": {
@@ -3808,14 +3260,15 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "gemini-3.1-flash-live-preview": {
-      "id": "gemini-3.1-flash-live-preview",
-      "apiModelId": "gemini-3.1-flash-live-preview",
-      "name": "Gemini 3.1 Flash Live",
+    "gemini-3.8-live": {
+      "id": "gemini-3.8-live",
+      "apiModelId": "gemini-3.8-live",
+      "name": "Gemini 3.8 Live",
       "provider": "google",
       "developer": "google",
-      "modelType": "multimodal",
+      "modelType": "audio",
       "inputModalities": ["text", "image", "audio", "video"],
+      "outputModalities": ["audio"],
       "contextWindow": 131072,
       "inputCost": 0.75,
       "outputCost": 4.5,
@@ -3838,42 +3291,34 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Realtime Voice", "Live Multimodal Dialogue"],
-      "released": "March 11, 2026",
+      "released": "September 15, 2026",
       "deprecation_date": null,
-      "pricingNote": "Live API audio-to-audio dialogue model. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Search grounding bills $14 per 1,000 requests after 5,000 free each month. Free tier is free of charge and batch is not supported. Thinking levels come from the model card's migration notes; the docs thinking table has no row for it, and no knowledge cutoff is published. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
+      "pricingNote": "Live API audio-to-audio dialogue model, served only over a live session. It can also return text there, but outputModalities lists audio alone, as the other live voice row does, so the chat path never routes a text request to it. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Token limits are 131,072 in and 65,536 out. The model reasons between turns but takes no thinking level: Google says to omit thinking_level when moving from the 3.1 preview. Asynchronous function calling is the default, proactive audio is always on and affective dialogue is gone. Structured outputs, caching, batch and code execution are not supported. Google names this model as the replacement for gemini-3.1-flash-live-preview, which shuts down on 2026-11-17. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
       "openWeight": false,
       "license": "proprietary",
       "maxOutputTokens": 65536,
-      "availability": "preview",
       "reasoning": {
         "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "minimal",
+        "control": "always_on",
         "canDisableThinking": false,
-        "request": {
-          "api": "gen",
-          "effortPath": "thinkingConfig.thinkingLevel",
-          "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
-        }
+        "request": { "api": "gen", "effortPath": null, "togglePath": null, "budgetPath": null }
       },
       "lifecycle": {
         "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stagedOn": "2026-10-07",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live"
       }
     },
-    "gemini-3.1-flash-tts-preview": {
-      "id": "gemini-3.1-flash-tts-preview",
-      "apiModelId": "gemini-3.1-flash-tts-preview",
-      "name": "Gemini 3.1 Flash TTS",
+    "gemini-3.8-flash-tts": {
+      "id": "gemini-3.8-flash-tts",
+      "apiModelId": "gemini-3.8-flash-tts",
+      "name": "Gemini 3.8 Flash TTS",
       "provider": "google",
       "developer": "google",
       "modelType": "tts",
       "contextWindow": 8192,
-      "inputCost": 1,
-      "outputCost": 20,
+      "inputCost": 0.5,
+      "outputCost": 9,
       "capabilities": {
         "streaming": true,
         "tools": false,
@@ -3887,24 +3332,25 @@
         "search": false,
         "research": false,
         "codeExecution": false,
-        "caching": false
+        "caching": true
       },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Voice Generation", "Narration"],
-      "released": "April 13, 2026",
+      "released": "September 22, 2026",
       "deprecation_date": null,
-      "pricingNote": "Input $1.00/1M text tokens, output $20.00/1M audio tokens, batch at half both. Free tier is free of charge. Streaming through streamGenerateContent has been supported since 2026-06-17. The current Gemini text-to-speech model: the 2.5 TTS previews name it as their replacement. Still preview with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
+      "promo_expires_at": "2027-01-01T00:00:00Z",
+      "post_promo_prices": { "input": 1, "output": 18 },
+      "pricingNote": "Google lists an introductory $0.50/1M text input and $9.00/1M audio output (about $0.00225 per 10 seconds of audio) through 2026-12-31. From 2027-01-01 the published rates are $1.00 and $18.00, carried in post_promo_prices. Batch and Flex are half; cached input is $0.125 rising to $0.25. Token limits are 8,192 in and 16,384 out. Returns WAV audio by default and covers over 130 languages. Google names this model, with gemini-3.8-flash-lite-tts, as the replacement for gemini-3.1-flash-tts-preview, which shuts down on 2026-11-17. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
       "openWeight": false,
       "license": "proprietary",
       "maxOutputTokens": 16384,
-      "availability": "preview",
       "reasoning": { "capable": false, "control": "none" },
       "lifecycle": {
         "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stagedOn": "2026-10-07",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts"
       }
     },
     "openrouter-auto": {
@@ -4105,65 +3551,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "qwen-3.6-27b": {
-      "id": "qwen-3.6-27b",
-      "apiModelId": "qwen/qwen3.6-27b",
-      "openRouterSlug": "qwen/qwen3.6-27b",
-      "name": "Qwen3.6 27B",
-      "provider": "groq",
-      "developer": "qwen",
-      "modelType": "reasoning",
-      "inputModalities": ["text", "image"],
-      "variantPartner": "qwen-3.8-27b",
-      "contextWindow": 131072,
-      "inputCost": 0.6,
-      "outputCost": 3,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "very-fast",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Open-Weight Vision", "Tool Use", "Low Latency"],
-      "released": "April 2026",
-      "deprecation_date": null,
-      "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate on Groq: $0.60/1M input, $3.00/1M output. Absent from both the prompt-caching and batch pages, so no cached rate and no batch discount apply. Thinking is on by default and is turned off with reasoning_effort 'none'. An adapter must send reasoning_format hidden or parsed when tools or JSON mode are on. Groq publishes no knowledge cutoff. Verified against console.groq.com/docs/model/qwen/qwen3.6-27b, retrieved 2026-09-04.",
-      "openWeight": true,
-      "license": "Apache-2.0",
-      "maxOutputTokens": 16384,
-      "availability": "preview",
-      "reasoning": {
-        "capable": true,
-        "control": "effort",
-        "supportedEfforts": ["none", "default"],
-        "defaultEffort": "default",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "free" },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
     "qwen-3.8-27b": {
       "id": "qwen-3.8-27b",
       "apiModelId": "qwen/qwen3.8-27b",
@@ -4173,7 +3560,6 @@
       "developer": "qwen",
       "modelType": "reasoning",
       "inputModalities": ["text", "image"],
-      "variantPartner": "qwen-3.6-27b",
       "contextWindow": 131042,
       "inputCost": 0.8,
       "outputCost": 4,
@@ -15824,6 +15210,50 @@
         "source": "https://openrouter.ai/api/v1/models#2026-09-05"
       }
     },
+    "or-qwen-qwen3-6-27b": {
+      "id": "or-qwen-qwen3-6-27b",
+      "apiModelId": "qwen/qwen3.6-27b",
+      "openRouterSlug": "qwen/qwen3.6-27b-20260422",
+      "name": "Qwen: Qwen3.6 27B",
+      "provider": "open_router",
+      "developer": "qwen",
+      "modelType": "chat",
+      "inputModalities": ["text", "image", "video"],
+      "outputModalities": ["text"],
+      "contextWindow": 262144,
+      "inputCost": 0.3,
+      "outputCost": 2,
+      "cached_input": 0.03,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "medium",
+      "quality": "fair",
+      "qualityTier": "fast",
+      "bestFor": ["OpenRouter Catalog"],
+      "released": "2026-04-27",
+      "deprecation_date": null,
+      "pricingNote": "Synced mechanically from https://openrouter.ai/api/v1/models, fetched 2026-09-05, by scripts/sync-openrouter-catalog.mjs. Not individually hand-verified beyond the endpoint's own published fields.",
+      "openWeight": true,
+      "maxOutputTokens": 65536,
+      "lifecycle": {
+        "stage": "discovered",
+        "stagedOn": "2026-09-05",
+        "source": "https://openrouter.ai/api/v1/models#2026-09-05"
+      }
+    },
     "or-qwen-qwen3-6-35b-a3b": {
       "id": "or-qwen-qwen3-6-35b-a3b",
       "apiModelId": "qwen/qwen3.6-35b-a3b",
@@ -22079,33 +21509,27 @@
   },
   "tierAllowedModels": {
     "economy": [
-      "gpt-5.6-luna",
+      "gpt-6-luna",
       "gemini-3.5-flash-lite",
       "gemini-3.8-flash",
       "qwen-3.8-flash",
       "openrouter-free"
     ],
     "pro_additions": [
-      "gpt-5.6-terra",
-      "claude-sonnet-5",
+      "gpt-6.1-sol",
+      "claude-sonnet-5-5",
       "gemini-3.1-pro-preview",
-      "deepseek-v4-flash",
+      "deepseek-flash",
       "deepseek-v4-pro",
       "qwen-3.7-plus",
       "glm-5.3",
       "kimi-k3"
     ],
-    "flagship_additions": [
-      "gpt-5.6-sol",
-      "gpt-6-astra",
-      "claude-fable-5-1",
-      "claude-opus-5",
-      "grok-4.6"
-    ]
+    "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.7"]
   },
   "providerDefaults": {
-    "openai": { "imageOutput": "gpt-image-2" },
-    "google": { "imageOutput": "gemini-3.1-flash-image" },
+    "openai": { "imageOutput": "gpt-image-2.5-sunburst" },
+    "google": { "imageOutput": "gemini-nano-banana-2.1" },
     "open_router": { "imageOutput": "openrouter-auto" }
   },
   "providersInOrder": [
