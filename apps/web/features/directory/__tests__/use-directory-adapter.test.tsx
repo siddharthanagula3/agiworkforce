@@ -783,6 +783,7 @@ function installationOf(pluginKey: string) {
 }
 
 describe('the skills installed table', () => {
+  const AUTHORING = { onCreateSkill: vi.fn() };
   function stubSkillRoutes(skills: unknown[], canAuthorSkills = true) {
     const fetchMock = vi.fn((input: string) => {
       if (input === '/api/skills/installs') {
@@ -826,20 +827,70 @@ describe('the skills installed table', () => {
     downloadable: false,
   };
 
-  it('lists what the account chose and leaves the bundled catalogue out', async () => {
-    stubSkillRoutes([bundled, authored, fromPlugin, uninstalled]);
+  it('groups every skill by how it reached the account, with a switch on the built-in ones', async () => {
+    const fromWorkspace = {
+      name: 'fixture-from-workspace',
+      description: 'Provided by the workspace.',
+      source: 'extra',
+      lifecycle: 'included',
+      downloadable: false,
+      origin: { kind: 'workspace', pluginId: 'fixture-pack', pluginName: 'Fixture pack' },
+    };
+    const draft = { ...uninstalled, name: 'fixture-draft', lifecycle: 'draft' };
+    stubSkillRoutes([bundled, authored, fromPlugin, uninstalled, fromWorkspace, draft]);
     const { result } = renderHook(() => useDirectoryAdapter());
     await act(async () => {
       await result.current.loadSection?.('skills');
     });
-    await waitFor(() => expect(result.current.skills?.manage?.rows).toHaveLength(2));
+    await waitFor(() => expect(result.current.skills?.manage?.rows).toHaveLength(5));
+    expect(result.current.skills?.manage?.groups?.map((group) => group.heading)).toEqual([
+      'Created by you',
+      'From your workspace',
+      'From plugins',
+      'From AGI Workforce',
+    ]);
     expect(result.current.skills?.manage?.rows).toEqual([
-      { id: 'fixture-authored', name: 'fixture-authored', slashName: true, author: 'You' },
-      { id: 'fixture-from-plugin', name: 'fixture-from-plugin', slashName: true, author: 'Plugin' },
+      {
+        id: 'fixture-authored',
+        name: 'fixture-authored',
+        slashName: true,
+        author: 'You',
+        groupId: 'created',
+      },
+      {
+        id: 'fixture-elsewhere',
+        name: 'fixture-elsewhere',
+        slashName: true,
+        author: 'AGI',
+        groupId: 'agi',
+        enabled: false,
+      },
+      {
+        id: 'fixture-from-plugin',
+        name: 'fixture-from-plugin',
+        slashName: true,
+        author: 'Plugin',
+        groupId: 'plugins',
+      },
+      {
+        id: 'fixture-from-workspace',
+        name: 'fixture-from-workspace',
+        slashName: true,
+        author: 'Fixture pack',
+        groupId: 'workspace',
+      },
+      {
+        id: 'fixture-installed',
+        name: 'fixture-installed',
+        slashName: true,
+        author: 'AGI',
+        groupId: 'agi',
+        enabled: true,
+      },
     ]);
   });
 
-  it('offers Create a skill only when the server allows authoring', async () => {
+  it('offers no way to make a skill until the server allows authoring', async () => {
     stubSkillRoutes([bundled]);
     const { result, rerender } = renderHook(
       (props: { onCreateSkill?: () => void }) => useDirectoryAdapter(props),
@@ -849,36 +900,103 @@ describe('the skills installed table', () => {
       await result.current.loadSection?.('skills');
     });
     await waitFor(() => expect(result.current.skills?.manage?.actions).toBeDefined());
-    expect(result.current.skills?.manage?.actions?.map((action) => action.label)).toEqual([
-      'Create with AGI',
-    ]);
+    expect(result.current.skills?.manage?.actions).toEqual([]);
+    expect(result.current.uploadSkillFile).toBeUndefined();
 
     const onCreateSkill = vi.fn();
     rerender({ onCreateSkill });
     await waitFor(() =>
       expect(result.current.skills?.manage?.actions?.map((action) => action.label)).toEqual([
-        'Create a skill',
         'Create with AGI',
+        'Create a skill',
       ]),
     );
-    result.current.skills?.manage?.actions?.[0]?.onSelect();
+    expect(result.current.uploadSkillFile).toBeDefined();
+    result.current.skills?.manage?.actions?.[1]?.onSelect();
     expect(onCreateSkill).toHaveBeenCalledTimes(1);
   });
 
-  it('sends Create with AGI to the composer with the skill prompt', async () => {
+  it('opens a new chat with skill-creator selected and a starter prompt on Create with AGI', async () => {
     routerPush.mockClear();
-    stubSkillRoutes([bundled]);
-    const { result } = renderHook(() => useDirectoryAdapter());
+    useChatStore.getState().setComposerToggles({ selectedSkillName: null }, null);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) =>
+        Promise.resolve(
+          input === '/api/skills/installs'
+            ? json({ installed: ['skill-creator'] })
+            : json({ skills: [{ ...bundled, name: 'skill-creator' }], canAuthorSkills: true }),
+        ),
+      ),
+    );
+    const { result } = renderHook(() => useDirectoryAdapter(AUTHORING));
     await act(async () => {
       await result.current.loadSection?.('skills');
     });
-    await waitFor(() => expect(result.current.skills?.manage?.actions).toBeDefined());
+    await waitFor(() => expect(result.current.skills?.manage?.actions).toHaveLength(2));
     const compose = result.current.skills?.manage?.actions?.find(
       (action) => action.label === 'Create with AGI',
     );
     act(() => compose?.onSelect());
+    expect(useChatStore.getState().getComposerToggles(null).selectedSkillName).toBe(
+      'skill-creator',
+    );
     expect(routerPush).toHaveBeenCalledWith(
-      '/chat?starterPrompt=Write%20a%20skill%20for%20me%20that%20',
+      '/chat?starterPrompt=Help%20me%20create%20a%20skill%20that%20',
+    );
+  });
+
+  it('starts Create with AGI without a skill pick when skill-creator is turned off', async () => {
+    routerPush.mockClear();
+    useChatStore.getState().setComposerToggles({ selectedSkillName: 'stale' }, null);
+    stubSkillRoutes([{ ...bundled, name: 'skill-creator' }]);
+    const { result } = renderHook(() => useDirectoryAdapter(AUTHORING));
+    await act(async () => {
+      await result.current.loadSection?.('skills');
+    });
+    await waitFor(() => expect(result.current.skills?.manage?.actions).toHaveLength(2));
+    act(() => result.current.skills?.manage?.actions?.[0]?.onSelect());
+    expect(useChatStore.getState().getComposerToggles(null).selectedSkillName).toBeNull();
+    expect(routerPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a skill file over the upload limit is too large without sending it', async () => {
+    stubSkillRoutes([bundled]);
+    const { result } = renderHook(() => useDirectoryAdapter(AUTHORING));
+    const oversized = new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'fixture.skill');
+    await expect(result.current.uploadSkillFile?.(oversized)).rejects.toThrow(
+      'This file is larger than 4 MB.',
+    );
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => input === '/api/skills')).toBe(false);
+  });
+
+  it('maps a 413 from the server to the size message', async () => {
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === '/api/skills' && init?.method === 'POST') {
+        return Promise.resolve(json({ error: { message: 'Payload too large' } }, 413));
+      }
+      return Promise.resolve(json({}, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useDirectoryAdapter(AUTHORING));
+    await expect(
+      result.current.uploadSkillFile?.(new File(['x'], 'fixture.skill')),
+    ).rejects.toThrow('This file is larger than 4 MB.');
+  });
+
+  it('passes the server reason for a refused upload through word for word', async () => {
+    const reason =
+      'The folder "fixture" does not match the skill name "other" in SKILL.md. Give the folder and the name the same value, then zip the folder again.';
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === '/api/skills' && init?.method === 'POST') {
+        return Promise.resolve(json({ error: { message: reason } }, 400));
+      }
+      return Promise.resolve(json({}, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useDirectoryAdapter(AUTHORING));
+    await expect(result.current.uploadSkillFile?.(new File(['x'], 'fixture.zip'))).rejects.toThrow(
+      reason,
     );
   });
 
@@ -915,7 +1033,9 @@ describe('the skills installed table', () => {
     stubSkillRoutes([authored]);
     const { result } = renderHook(() => useDirectoryAdapter());
     act(() => result.current.trySkillInChat?.('fixture-authored'));
-    expect(useChatStore.getState().getComposerToggles().selectedSkillName).toBe('fixture-authored');
+    expect(useChatStore.getState().getComposerToggles(null).selectedSkillName).toBe(
+      'fixture-authored',
+    );
     expect(routerPush).toHaveBeenCalledWith('/chat');
   });
 

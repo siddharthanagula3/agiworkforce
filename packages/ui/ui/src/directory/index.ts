@@ -37,7 +37,9 @@ export {
   DIRECTORY_PUBLISHER_FILTER_ID,
   DIRECTORY_CATEGORY_FILTER_ID,
   UPDATE_BADGE,
+  UNREVIEWED_BADGE,
   COMMUNITY_BADGE,
+  DIRECTORY_TRUST_COPY,
   MARKETPLACE_UNAVAILABLE_COPY,
 } from './constants';
 export type {
@@ -46,6 +48,7 @@ export type {
   DirectoryBadgeKind,
   DirectoryConnectableMode,
   DirectoryConnectorDetail,
+  DirectoryConnectorStatus,
   DirectoryDetail,
   DirectoryDetailFile,
   DirectoryEntry,

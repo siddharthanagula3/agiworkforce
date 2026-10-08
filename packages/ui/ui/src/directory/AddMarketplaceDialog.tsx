@@ -1,6 +1,6 @@
 'use client';
 
-import { GitBranch, Store } from 'lucide-react';
+import { GitBranch, ShieldAlert, Store } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '../cn';
@@ -32,10 +32,11 @@ import {
   ADD_MARKETPLACE_SUBMIT_LABEL,
   ADD_MARKETPLACE_SYNCED_LABEL,
   ADD_MARKETPLACE_URL_LABEL,
+  DIRECTORY_TRUST_COPY,
   MARKETPLACE_REMOVE_FAILED_COPY,
   MARKETPLACE_SYNC_FAILED_COPY,
 } from './constants';
-import { DIRECTORY_FOCUS_RING } from './styles';
+import { DETAIL_NOTICE, DIRECTORY_FOCUS_RING } from './styles';
 import type { DirectoryMarketplaceInput, DirectoryMarketplaceResult } from './types';
 
 type Step = 'choose' | 'form' | 'result';
@@ -194,6 +195,10 @@ export function AddMarketplaceDialog({
                 void submit();
               }}
             >
+              <p className={DETAIL_NOTICE} data-testid="marketplace-trust-notice">
+                <ShieldAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+                {DIRECTORY_TRUST_COPY}
+              </p>
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                 {ADD_MARKETPLACE_URL_LABEL}
                 <input

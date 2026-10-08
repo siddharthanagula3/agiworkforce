@@ -132,6 +132,29 @@ describe('SkillEditorDialog', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('kept-name');
   });
 
+  it('refuses an imported SKILL.md with a frontmatter key an upload would refuse', async () => {
+    render(<SkillEditorDialog open mode="create" onOpenChange={vi.fn()} onSubmit={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Import a SKILL.md file'), {
+      target: {
+        files: [
+          new File(
+            [
+              '---\nname: release-notes\ndescription: Draft release notes.\nwhen_to_use: Always.\n---\n\nSummarize the diff.\n',
+            ],
+            'SKILL.md',
+            { type: 'text/markdown' },
+          ),
+        ],
+      },
+    });
+
+    expect(
+      await screen.findByText(/Unexpected key\(s\) in SKILL.md frontmatter: when_to_use/),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Name')).toHaveValue('');
+  });
+
   it('calls onOpenChange(false) when Cancel is clicked', () => {
     const onOpenChange = vi.fn();
     render(<SkillEditorDialog open mode="create" onOpenChange={onOpenChange} onSubmit={vi.fn()} />);

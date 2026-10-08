@@ -8,6 +8,7 @@ import type {
   DirectoryEntry,
   DirectoryFilterGroup,
   DirectoryManageRow,
+  DirectoryManageSection,
   DirectoryPluginConnectorSetting,
   DirectorySection,
   DirectorySkillDetail,
@@ -30,6 +31,11 @@ import {
   SKILL_ORIGIN_MANAGED,
   SKILL_ORIGIN_PERSONAL,
   SKILL_ORIGIN_UNKNOWN_PLUGIN,
+  SKILL_GROUP_AGI,
+  SKILL_GROUP_CREATED,
+  SKILL_GROUP_PLUGINS,
+  SKILL_GROUP_WORKSPACE,
+  SKILL_MANAGE_GROUPS,
   SKILL_PUBLISHER_AGI,
   SKILL_PUBLISHER_MANAGED,
   SKILL_PUBLISHER_PLUGIN,
@@ -46,11 +52,11 @@ import {
   skillPluginPublisher,
   skillRepositoryPluginOrigin,
   skillUploadedPluginOrigin,
+  skillWorkspacePluginOrigin,
 } from '../constants';
 import { DirectoryRequestError } from './request-error';
 
 const OWNED_SOURCES = new Set(['personal', 'project', 'workspace']);
-const BUNDLED_SOURCE = 'bundled';
 const PLUGIN_SOURCE = 'extra';
 const MANAGED_LOCAL_SOURCE = 'managed-local';
 const SKILL_AUTHOR_YOU = 'You';
@@ -64,9 +70,6 @@ export function skillAuthor(source: string): string {
   return SKILL_AUTHOR_AGI;
 }
 
-export function isAccountChosenSkill(skill: ManagedSkillSummary): boolean {
-  return !isDraftSkill(skill) && skill.source !== BUNDLED_SOURCE;
-}
 const ENTRY_FILE = 'SKILL.md';
 const LICENSE_PREFIX = 'license';
 
@@ -99,6 +102,8 @@ function pluginOrigin(skill: ManagedSkillSummary): string | null {
       return skillUploadedPluginOrigin(pluginName);
     case 'authored':
       return skillAuthoredPluginOrigin(pluginName);
+    case 'workspace':
+      return skillWorkspacePluginOrigin(pluginName);
     default:
       return null;
   }
@@ -187,22 +192,47 @@ function skillFilterGroups(
   return groups;
 }
 
+export function skillManageGroup(skill: ManagedSkillSummary): string {
+  const origin = skill.origin;
+  if (origin?.kind === 'workspace' || skill.source === MANAGED_LOCAL_SOURCE) {
+    return SKILL_GROUP_WORKSPACE;
+  }
+  if (isAuthoredSkill(skill) || origin?.kind === 'authored') return SKILL_GROUP_CREATED;
+  if (skill.source === PLUGIN_SOURCE || origin?.pluginName) return SKILL_GROUP_PLUGINS;
+  return SKILL_GROUP_AGI;
+}
+
+/**
+ * Every included skill the account has, grouped the way it reached the
+ * account. Built-in skills stay listed when turned off, so their switch can
+ * turn them back on; a skill from a plugin or the workspace is switched on its
+ * plugin instead, and one the account wrote has no switch to turn.
+ */
 export function toSkillManageRows(
   skills: readonly ManagedSkillSummary[],
   installed: ReadonlySet<string>,
 ): DirectoryManageRow[] {
   return skills
-    .filter(
-      (skill) =>
-        isAccountChosenSkill(skill) && (isAuthoredSkill(skill) || installed.has(skill.name)),
-    )
-    .map((skill) => ({
-      id: skill.name,
-      name: skill.name,
-      slashName: true,
-      author: skillAuthor(skill.source),
-    }))
+    .filter((skill) => !isDraftSkill(skill))
+    .map((skill) => {
+      const groupId = skillManageGroup(skill);
+      return {
+        id: skill.name,
+        name: skill.name,
+        slashName: true,
+        author: skill.origin?.pluginName ?? skillAuthor(skill.source),
+        groupId,
+        ...(groupId === SKILL_GROUP_AGI ? { enabled: installed.has(skill.name) } : {}),
+      };
+    })
     .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function toSkillManageSection(
+  skills: readonly ManagedSkillSummary[],
+  installed: ReadonlySet<string>,
+): Pick<DirectoryManageSection, 'rows' | 'groups'> {
+  return { rows: toSkillManageRows(skills, installed), groups: SKILL_MANAGE_GROUPS };
 }
 
 export function toSkillSection(

@@ -129,7 +129,10 @@ import {
   PLUGIN_SOURCE_MARKETPLACE,
   PLUGIN_SOURCE_PARTNER,
   SKILLS_FAILED_COPY,
+  SKILL_CREATOR_SKILL_NAME,
   SKILL_INSTALL_FAILED_COPY,
+  SKILL_UPLOAD_PAYLOAD_LIMIT_BYTES,
+  skillUploadTooLargeCopy,
   SKILL_DELETE_FAILED_COPY,
   SKILL_UNINSTALL_FAILED_COPY,
 } from '../constants';
@@ -201,6 +204,7 @@ import {
   type PluginInstallState,
   type PluginInstallTarget,
   type PluginMarketplacePage,
+  pluginConnectorRows,
   pluginInstallationEnabled,
   pluginInstallationTarget,
   type PluginUninstallOutcome,
@@ -214,7 +218,7 @@ import {
   installSkill,
   removeSkill as removeSkillRequest,
   skillDescriptionsByName,
-  toSkillManageRows,
+  toSkillManageSection,
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
@@ -228,7 +232,8 @@ const COMPOSER_PROMPT_PARAM = 'starterPrompt';
 const PLUGIN_CREATE_WITH_AGI_LABEL = 'Create with AGI';
 const PLUGIN_CREATE_WITH_AGI_PROMPT = 'Build a plugin for me: ';
 const SKILL_CREATE_WITH_AGI_LABEL = 'Create with AGI';
-const SKILL_CREATE_WITH_AGI_PROMPT = 'Write a skill for me that ';
+const SKILL_CREATE_WITH_AGI_PROMPT = 'Help me create a skill that ';
+const PAYLOAD_TOO_LARGE_STATUS = 413;
 const SKILL_CREATE_LABEL = 'Create a skill';
 const SKILL_CREATE_ACTION_ID = 'create-skill';
 const SKILL_COMPOSE_ACTION_ID = 'compose-skill';
@@ -350,18 +355,31 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     ],
     [openComposerWithPrompt],
   );
-  const skillManageActions = useMemo<readonly DirectoryManageAction[]>(
-    () => [
-      ...(onCreateSkill
-        ? [{ id: SKILL_CREATE_ACTION_ID, label: SKILL_CREATE_LABEL, onSelect: onCreateSkill }]
-        : []),
+  const installedSkills = useRef<ReadonlySet<string>>(new Set<string>());
+  const createSkillWithAgi = useCallback(() => {
+    useChatStore.getState().setComposerToggles(
       {
-        id: SKILL_COMPOSE_ACTION_ID,
-        label: SKILL_CREATE_WITH_AGI_LABEL,
-        onSelect: () => openComposerWithPrompt(SKILL_CREATE_WITH_AGI_PROMPT),
+        selectedSkillName: installedSkills.current.has(SKILL_CREATOR_SKILL_NAME)
+          ? SKILL_CREATOR_SKILL_NAME
+          : null,
       },
-    ],
-    [onCreateSkill, openComposerWithPrompt],
+      null,
+    );
+    openComposerWithPrompt(SKILL_CREATE_WITH_AGI_PROMPT);
+  }, [openComposerWithPrompt]);
+  const skillManageActions = useMemo<readonly DirectoryManageAction[]>(
+    () =>
+      onCreateSkill
+        ? [
+            {
+              id: SKILL_COMPOSE_ACTION_ID,
+              label: SKILL_CREATE_WITH_AGI_LABEL,
+              onSelect: createSkillWithAgi,
+            },
+            { id: SKILL_CREATE_ACTION_ID, label: SKILL_CREATE_LABEL, onSelect: onCreateSkill },
+          ]
+        : [],
+    [onCreateSkill, createSkillWithAgi],
   );
   const skillManageActionsRef = useRef<readonly DirectoryManageAction[]>(skillManageActions);
   skillManageActionsRef.current = skillManageActions;
@@ -369,7 +387,6 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const [connectors, setConnectors] = useState<DirectorySection>(initialConnectorSection);
   const [plugins, setPlugins] = useState<DirectorySection>(initialPluginSection);
   const skillCache = useRef<readonly ManagedSkillSummary[]>([]);
-  const installedSkills = useRef<ReadonlySet<string>>(new Set<string>());
   const serverConnectedIds = useRef<ReadonlySet<string>>(new Set<string>());
   const connectorErrors = useRef<Record<string, string>>({});
   const connectorsErrorRef = useRef<string | null>(null);
@@ -441,7 +458,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       setSkills({
         ...toSkillSection(catalog, installed),
         manage: {
-          rows: toSkillManageRows(catalog, installed),
+          ...toSkillManageSection(catalog, installed),
           loading: false,
           error: null,
           actions: skillManageActionsRef.current,
@@ -979,6 +996,39 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [],
   );
 
+  const withPluginConnectors = useCallback(
+    async (
+      detail: DirectoryPluginDetail,
+      requiredConnectors: readonly string[],
+    ): Promise<DirectoryPluginDetail> => {
+      const servers = detail.components?.mcpServers ?? [];
+      if (requiredConnectors.length === 0 && servers.length === 0) return detail;
+      const snapshot = connectorsQueried.current
+        ? null
+        : await fetchConnectedConnectors().catch(() => null);
+      const reauthorizing = connectedRef.current
+        .filter((connector) => connector.needsReauthorization === true)
+        .map((connector) => connector.connectorId);
+      const connectors = pluginConnectorRows(
+        requiredConnectors,
+        servers,
+        detail.installed === true,
+        {
+          connected: new Set([...connectedIds(), ...(snapshot?.ids ?? [])]),
+          added: new Set([
+            ...connectorPending.current,
+            ...(snapshot?.pending ?? []),
+            ...reauthorizing,
+          ]),
+          nameOf: (connectorId) =>
+            curatedRef.current.find((connector) => connector.id === connectorId)?.name,
+        },
+      );
+      return { ...detail, connectors };
+    },
+    [connectedIds],
+  );
+
   const loadPluginDetail = useCallback(
     async (id: string): Promise<DirectoryDetail | null> => {
       void ensureSkillCatalog();
@@ -986,15 +1036,25 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const page = pluginPageRef.current;
       const record = findPluginRecord(id);
       selectSettingsTarget(record ?? null, id);
-      if (record) return withPluginReview(toPluginDetail(record, page.installs));
+      if (record) {
+        return withPluginReview(
+          await withPluginConnectors(
+            toPluginDetail(record, page.installs),
+            record.requiredConnectors,
+          ),
+        );
+      }
       const userEntry = findUserEntry(id);
       if (userEntry) {
         return withPluginReview(
-          toUserMarketplaceDetail(
-            userEntry,
-            page.user.sources.find((source) => source.id === userEntry.sourceId),
-            page.installs,
-            latestSubmissionFor(page.submissions, userEntry.id),
+          await withPluginConnectors(
+            toUserMarketplaceDetail(
+              userEntry,
+              page.user.sources.find((source) => source.id === userEntry.sourceId),
+              page.installs,
+              latestSubmissionFor(page.submissions, userEntry.id),
+            ),
+            userEntry.requiredConnectors,
           ),
         );
       }
@@ -1022,9 +1082,15 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       if (!fetched) return null;
       pluginDetails.current.set(id, fetched);
       selectSettingsTarget(fetched, id);
-      return withPluginReview(toPluginDetail(fetched, pluginPageRef.current.installs));
+      return withPluginReview(
+        await withPluginConnectors(
+          toPluginDetail(fetched, pluginPageRef.current.installs),
+          fetched.requiredConnectors,
+        ),
+      );
     },
     [
+      withPluginConnectors,
       primePlugins,
       findPluginRecord,
       findUserEntry,
@@ -1623,7 +1689,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const uploadSkillFile = useCallback(
     async (file: File, acknowledgedScans?: readonly string[]): Promise<DirectoryUploadResult> => {
+      if (file.size > SKILL_UPLOAD_PAYLOAD_LIMIT_BYTES) throw new Error(skillUploadTooLargeCopy());
       const response = await postFile(SKILLS_PATH, file, acknowledgedScans);
+      if (response.status === PAYLOAD_TOO_LARGE_STATUS) throw new Error(skillUploadTooLargeCopy());
       const body = (await response.json().catch(() => ({}))) as {
         skill?: { name: string };
         omittedFiles?: readonly string[];
@@ -1823,7 +1891,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const trySkillInChat = useCallback(
     (id: string) => {
-      useChatStore.getState().setComposerToggles({ selectedSkillName: id });
+      useChatStore.getState().setComposerToggles({ selectedSkillName: id }, null);
       closeSettings();
       composerHandoff.current.router.push(CHAT_PATH);
     },

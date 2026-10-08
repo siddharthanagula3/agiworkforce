@@ -36,6 +36,7 @@ import {
 } from './snapshot-cache';
 import { CLAUDE_PLUGIN_SKILLS_DIRECTORY } from './constants';
 import type { InstalledDirectorySkill, PluginSourceLocation } from './types';
+import { workspacePluginFrontmatter } from './workspace-skill';
 
 const SKILL_SOURCE_EXTRA = 'extra';
 const SKILL_FILE_PATH_PREFIX = 'plugins';
@@ -58,7 +59,11 @@ function toStringArray(value: unknown): string[] {
     : [];
 }
 
-export function toSkill(pluginKey: string, skill: InstalledDirectorySkill): Skill {
+export function toSkill(
+  pluginKey: string,
+  skill: InstalledDirectorySkill,
+  workspacePluginName?: string,
+): Skill {
   return {
     name: skill.name,
     description: skill.description,
@@ -67,7 +72,10 @@ export function toSkill(pluginKey: string, skill: InstalledDirectorySkill): Skil
     filePath: `${SKILL_FILE_PATH_PREFIX}/${pluginKey}/${skill.path}`,
     source: SKILL_SOURCE_EXTRA,
     metadata: {},
-    frontmatter: { [FRONTMATTER_PLUGIN_KEY]: pluginKey },
+    frontmatter: {
+      [FRONTMATTER_PLUGIN_KEY]: pluginKey,
+      ...(workspacePluginName ? workspacePluginFrontmatter(workspacePluginName) : {}),
+    },
   };
 }
 
@@ -99,6 +107,7 @@ interface OrganizationSkill {
   organizationId: string;
   pluginId: string;
   pluginKey: string;
+  pluginName: string;
   skill: InstalledDirectorySkill;
 }
 
@@ -122,7 +131,15 @@ async function listOrganizationSkills(
       const skill = plugin ? parseSkillFile(file.path, file.content) : null;
       if (!plugin || !skill) return [];
       if (plugin.enabledSkills && !plugin.enabledSkills.includes(skill.name)) return [];
-      return [{ organizationId, pluginId: plugin.id, pluginKey: plugin.pluginKey, skill }];
+      return [
+        {
+          organizationId,
+          pluginId: plugin.id,
+          pluginKey: plugin.pluginKey,
+          pluginName: plugin.name,
+          skill,
+        },
+      ];
     });
   } catch (error) {
     if (isMissingOrganizationPluginSchema(error)) return [];
@@ -286,10 +303,10 @@ export async function listInstalledDirectorySkills(
   );
   const seen = new Set<string>();
   const skills: Skill[] = [];
-  for (const { pluginKey, skill } of organizationSkills) {
+  for (const { pluginKey, pluginName, skill } of organizationSkills) {
     if (seen.has(skill.name)) continue;
     seen.add(skill.name);
-    skills.push(toSkill(pluginKey, skill));
+    skills.push(toSkill(pluginKey, skill, pluginName));
   }
   for (const row of rows) {
     const repositoryUrl = row.repository_url;
@@ -322,7 +339,11 @@ export async function findInstalledDirectorySkillWithFiles(
   );
   if (organizationSkill) {
     return {
-      skill: toSkill(organizationSkill.pluginKey, organizationSkill.skill),
+      skill: toSkill(
+        organizationSkill.pluginKey,
+        organizationSkill.skill,
+        organizationSkill.pluginName,
+      ),
       access: organizationSkillFileAccess(
         db,
         organizationSkill.organizationId,

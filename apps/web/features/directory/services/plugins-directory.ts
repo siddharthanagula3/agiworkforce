@@ -27,6 +27,8 @@ import {
 } from '@agiworkforce/types';
 import {
   COMMUNITY_BADGE,
+  DIRECTORY_TRUST_COPY,
+  UNREVIEWED_BADGE,
   DIRECTORY_CATEGORY_FILTER_ID,
   DIRECTORY_PUBLISHER_FILTER_ID,
   DIRECTORY_SOURCE_ALL_ID,
@@ -40,7 +42,9 @@ import {
   type DirectoryGroup,
   type DirectoryManageRow,
   type DirectoryPluginComponents,
+  type DirectoryPluginConnectorSetting,
   type DirectoryPluginDetail,
+  type DirectoryPluginMcpServer,
   type DirectoryPluginScan,
   type DirectoryPluginSubmission,
   type DirectoryPluginVersions,
@@ -733,19 +737,33 @@ export function toPluginEntry(
   };
 }
 
+function isUnreviewedSource(source: PluginMarketplaceSourceSummary | undefined): boolean {
+  return source?.kind !== PLUGIN_SOURCE_KIND_AUTHORED;
+}
+
+function unreviewedInstallNotice(permissions: readonly string[]): string {
+  return [DIRECTORY_TRUST_COPY, permissionsNotice(permissions)].filter(Boolean).join(' ');
+}
+
 export function toUserMarketplaceEntry(
   entry: PluginMarketplaceEntry,
   source: PluginMarketplaceSourceSummary | undefined,
   installs: PluginInstallState,
 ): DirectoryEntry {
   const installed = installs.byEntryId.has(entry.id);
-  const notice = installed ? null : permissionsNotice(entry.permissions);
+  const unreviewed = isUnreviewedSource(source);
+  const notice = installed
+    ? null
+    : unreviewed
+      ? unreviewedInstallNotice(entry.permissions)
+      : permissionsNotice(entry.permissions);
   return {
     id: entry.id,
     name: entry.name,
     ...(source ? { publisher: source.name } : {}),
     description: entry.description,
     monogram: monogramOf(entry.name),
+    ...(unreviewed ? { badges: [UNREVIEWED_BADGE] } : {}),
     sourceId: entry.sourceId,
     groupId: PLUGIN_USER_GROUP_ID,
     installed,
@@ -966,6 +984,7 @@ export function toUserMarketplaceDetail(
     customizable: installation?.enabled === true && !authored,
     submittable: owned && submission?.status !== 'pending',
     ...(owned && submission ? { submission: toSubmissionDetail(submission) } : {}),
+    ...(isUnreviewedSource(source) ? { unreviewed: true } : {}),
     examplePrompts: entry.examplePrompts,
     components: {
       skills: entry.declaredSkills,
@@ -982,6 +1001,53 @@ export function toUserMarketplaceDetail(
     installed: installation !== undefined,
     installable: true,
   };
+}
+
+export interface PluginConnectorAccount {
+  connected: ReadonlySet<string>;
+  added: ReadonlySet<string>;
+  nameOf: (connectorId: string) => string | undefined;
+}
+
+const BUNDLED_CONNECTOR_ID_PREFIX = 'bundled:';
+
+/**
+ * The connectors a plugin brings, each with where the account stands on it.
+ * A connector it needs from the directory is Connected, Not connected (added
+ * but its sign-in is missing, unfinished or expired) or Not added. A server the
+ * plugin ships itself only becomes a connector by installing the plugin, and
+ * this side cannot see its sign-in, so once installed it carries no status.
+ */
+export function pluginConnectorRows(
+  requiredConnectors: readonly string[],
+  servers: readonly DirectoryPluginMcpServer[],
+  installed: boolean,
+  account: PluginConnectorAccount,
+): DirectoryPluginConnectorSetting[] {
+  const connected = new Set([...account.connected].map((id) => id.toLowerCase()));
+  const added = new Set([...account.added].map((id) => id.toLowerCase()));
+  const required = [...new Set(requiredConnectors)].map((id) => {
+    const key = id.toLowerCase();
+    const isConnected = connected.has(key) && !added.has(key);
+    return {
+      id,
+      name: account.nameOf(id) ?? id,
+      connected: isConnected,
+      status: isConnected
+        ? ('connected' as const)
+        : added.has(key)
+          ? ('not-connected' as const)
+          : ('not-added' as const),
+    };
+  });
+  const bundled = servers.map((server) => ({
+    id: `${BUNDLED_CONNECTOR_ID_PREFIX}${server.name}`,
+    name: server.name,
+    connected: false,
+    bundled: true,
+    ...(installed ? {} : { status: 'not-added' as const }),
+  }));
+  return [...required, ...bundled];
 }
 
 export function pluginCountLabel(count: number): string {

@@ -8,6 +8,7 @@ import {
   isShadowSourceName,
   SHADOW_SOURCE_NAME_PREFIX,
 } from '@/features/plugins/server/directory/constants';
+import { workspacePluginNameOf } from '@/features/plugins/server/directory/workspace-skill';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 
 const PLUGIN_SKILL_SOURCE = 'extra';
@@ -121,7 +122,7 @@ export async function loadSkillOrigins(
   const marketplaceKeys = new Set<string>();
   for (const skill of skills) {
     const pluginId = skillPluginId(skill);
-    if (!pluginId) continue;
+    if (!pluginId || workspacePluginNameOf(skill)) continue;
     if (skill.source === PLUGIN_SKILL_SOURCE) marketplaceKeys.add(pluginId);
     else catalogIds.add(pluginId);
   }
@@ -132,6 +133,8 @@ export async function loadSkillOrigins(
   return (skill) => {
     const pluginId = skillPluginId(skill);
     if (!pluginId) return undefined;
+    const workspacePlugin = workspacePluginNameOf(skill);
+    if (workspacePlugin) return { kind: 'workspace', pluginId, pluginName: workspacePlugin };
     return skill.source === PLUGIN_SKILL_SOURCE ? marketplace.get(pluginId) : catalog.get(pluginId);
   };
 }

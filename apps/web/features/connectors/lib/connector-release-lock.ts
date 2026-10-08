@@ -40,14 +40,37 @@ function lockDetail(section: DirectorySectionKey, detail: DirectoryDetail): Dire
       ...(detail.related ? { related: detail.related.map(lockConnectorEntry) } : {}),
     };
   }
-  if (
-    section === 'plugins' &&
-    detail.kind === 'plugin' &&
-    (detail.components?.mcpServers.length ?? 0) > 0
-  ) {
-    return { ...detail, connectorsNote: PLUGIN_CONNECTORS_COMING_SOON_NOTE };
-  }
-  return detail;
+  if (section !== 'plugins' || detail.kind !== 'plugin') return detail;
+  const bundlesServers = (detail.components?.mcpServers.length ?? 0) > 0;
+  if (!bundlesServers && (detail.connectors?.length ?? 0) === 0) return detail;
+  return {
+    ...detail,
+    connectorsLocked: {
+      label: CONNECTORS_COMING_SOON_LABEL,
+      message: CONNECTORS_COMING_SOON_DETAIL,
+    },
+    ...(bundlesServers ? { connectorsNote: PLUGIN_CONNECTORS_COMING_SOON_NOTE } : {}),
+  };
+}
+
+type DetailLoader = NonNullable<DirectoryAdapter['loadDetail']>;
+
+/*
+ * The directory reloads a detail whenever its loader changes identity, and the
+ * adapter is re-wrapped on every state change. A fresh wrapper each time turns
+ * one detail load into an endless reload, so each loader keeps one wrapper.
+ */
+const lockedDetailLoaders = new WeakMap<DetailLoader, DetailLoader>();
+
+function lockedDetailLoader(loadDetail: DetailLoader): DetailLoader {
+  const cached = lockedDetailLoaders.get(loadDetail);
+  if (cached) return cached;
+  const locked: DetailLoader = async (section, id) => {
+    const detail = await loadDetail(section, id);
+    return detail ? lockDetail(section, detail) : detail;
+  };
+  lockedDetailLoaders.set(loadDetail, locked);
+  return locked;
 }
 
 function refuseConnectors<Args extends unknown[], Result>(
@@ -64,14 +87,7 @@ export function lockConnectorDirectory(adapter: DirectoryAdapter): DirectoryAdap
   const locked: DirectoryAdapter = {
     ...adapter,
     ...(connectors ? { connectors: lockConnectorSection(connectors) } : {}),
-    ...(loadDetail
-      ? {
-          loadDetail: async (section: DirectorySectionKey, id: string) => {
-            const detail = await loadDetail(section, id);
-            return detail ? lockDetail(section, detail) : detail;
-          },
-        }
-      : {}),
+    ...(loadDetail ? { loadDetail: lockedDetailLoader(loadDetail) } : {}),
   };
   const install = refuseConnectors(adapter.install, async () => CONNECTORS_COMING_SOON_MESSAGE);
   const requestCredentials = refuseConnectors(adapter.requestCredentials, () => undefined);

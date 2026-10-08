@@ -34,6 +34,7 @@ export const MANAGED_SKILL_ORIGIN_KINDS = [
   'repository',
   'upload',
   'authored',
+  'workspace',
 ] as const;
 
 export const ManagedSkillOriginSchema = z.object({

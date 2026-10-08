@@ -123,6 +123,27 @@ describe('GET /api/skills catalog parameter', () => {
     expect(await names(response)).toEqual(['code-review']);
   });
 
+  it('names a skill a workspace plugin provides as coming from the workspace', async () => {
+    const { listInstalledDirectorySkills } =
+      await import('@/features/plugins/server/directory/installed-skills');
+    vi.mocked(listInstalledDirectorySkills).mockResolvedValueOnce([
+      {
+        ...skill('fixture-team-brief'),
+        source: 'extra',
+        frontmatter: { plugin: 'fixture-team-pack', workspace_plugin: 'Fixture team pack' },
+      },
+    ] as never);
+    const response = await GET(get('http://localhost:3000/api/skills?catalog=all'));
+    const body = (await response.json()) as {
+      skills: { name: string; origin?: { kind: string; pluginName?: string } }[];
+    };
+    expect(body.skills.find((entry) => entry.name === 'fixture-team-brief')?.origin).toEqual({
+      kind: 'workspace',
+      pluginId: 'fixture-team-pack',
+      pluginName: 'Fixture team pack',
+    });
+  });
+
   it('keeps the authoring capability flag on both views', async () => {
     mockAuthoringEnabled.mockReturnValue(true);
     const response = await GET(get('http://localhost:3000/api/skills?catalog=all'));

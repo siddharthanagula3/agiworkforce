@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, CopyPlus, Lock, Pencil, Send, Terminal } from 'lucide-react';
+import { Check, Copy, CopyPlus, Lock, Pencil, Send, ShieldAlert, Terminal } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -15,8 +15,11 @@ import {
   PLUGIN_CONNECTORS_TAB_COPY,
   PLUGIN_CONNECTORS_TAB_EMPTY,
   PLUGIN_CONNECTORS_TAB_LABEL,
-  PLUGIN_CONNECTOR_CONNECTED_LABEL,
-  PLUGIN_CONNECTOR_MISSING_LABEL,
+  PLUGIN_CONNECTORS_HEADING,
+  PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE,
+  PLUGIN_CONNECTOR_STATUS_LABELS,
+  PLUGIN_UNREVIEWED_NOTE,
+  UNREVIEWED_BADGE,
   PLUGIN_LAST_UPDATED_LABEL,
   PLUGIN_SKILLS_TAB_COPY,
   PLUGIN_SKILLS_TAB_EMPTY,
@@ -98,7 +101,9 @@ import {
   DIRECTORY_ICON_BUTTON,
 } from './styles';
 import type {
+  DirectoryLockNotice,
   DirectoryPluginComponents,
+  DirectoryPluginConnectorSetting,
   DirectoryPluginDetail,
   DirectoryPluginRepair,
   DirectoryPluginScan,
@@ -109,6 +114,7 @@ import type {
 } from './types';
 
 const EMPTY_VALUES: readonly string[] = [];
+const EMPTY_CONNECTORS: readonly DirectoryPluginConnectorSetting[] = [];
 
 function formatUpdatedAt(value: string | undefined): string {
   if (!value) return '';
@@ -143,7 +149,6 @@ function MonoList({ values }: { values: readonly string[] }) {
 function componentRows(
   components: DirectoryPluginComponents,
   skillsListedElsewhere: boolean,
-  connectorsNote: string | undefined,
 ): { label: string; body: ReactNode }[] {
   const rows: { label: string; body: ReactNode }[] = [];
   if (components.skills.length > 0 && !skillsListedElsewhere) {
@@ -167,22 +172,11 @@ function componentRows(
     rows.push({
       label: PLUGIN_MCP_SERVERS_LABEL,
       body: (
-        <>
-          <MonoList
-            values={components.mcpServers.map(
-              (server) => `${server.name}${PLUGIN_MCP_TRANSPORT_SEPARATOR}${server.transport}`,
-            )}
-          />
-          {connectorsNote ? (
-            <span
-              className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground"
-              data-testid="plugin-connectors-note"
-            >
-              <Lock aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-              {connectorsNote}
-            </span>
-          ) : null}
-        </>
+        <MonoList
+          values={components.mcpServers.map(
+            (server) => `${server.name}${PLUGIN_MCP_TRANSPORT_SEPARATOR}${server.transport}`,
+          )}
+        />
       ),
     });
   }
@@ -199,13 +193,11 @@ function componentRows(
 function ComponentsSummary({
   components,
   skillsListedElsewhere,
-  connectorsNote,
 }: {
   components: DirectoryPluginComponents;
   skillsListedElsewhere: boolean;
-  connectorsNote?: string;
 }) {
-  const rows = componentRows(components, skillsListedElsewhere, connectorsNote);
+  const rows = componentRows(components, skillsListedElsewhere);
   if (rows.length === 0) return null;
   return (
     <section className="flex flex-col gap-3">
@@ -510,50 +502,110 @@ function SkillRows({
   );
 }
 
-function ConnectorRows({
-  settings,
+function ConnectorStatus({
+  connector,
+  locked,
   onOpenConnector,
 }: {
-  settings: DirectoryPluginSettings;
+  connector: DirectoryPluginConnectorSetting;
+  locked?: DirectoryLockNotice;
   onOpenConnector?: (connectorId: string) => void;
 }) {
-  if (settings.connectors.length === 0) {
-    return <p className="text-sm text-muted-foreground">{PLUGIN_CONNECTORS_TAB_EMPTY}</p>;
+  if (locked) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <Lock aria-hidden className="size-3.5" />
+        {locked.label}
+      </span>
+    );
+  }
+  const status =
+    connector.status ??
+    (connector.connected ? 'connected' : connector.bundled ? undefined : 'not-connected');
+  if (status === 'connected') {
+    return (
+      <span className="shrink-0 text-xs text-success-text">
+        {PLUGIN_CONNECTOR_STATUS_LABELS.connected}
+      </span>
+    );
   }
   return (
-    <ul className="flex flex-col gap-2">
-      {settings.connectors.map((connector) => (
-        <li key={connector.id} className={SETTINGS_ROW_CLASS}>
-          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{connector.name}</span>
-          {connector.connected ? (
-            <span className="shrink-0 text-xs text-success-text">
-              {PLUGIN_CONNECTOR_CONNECTED_LABEL}
-            </span>
-          ) : onOpenConnector ? (
-            <button
-              type="button"
-              onClick={() => onOpenConnector(connector.id)}
-              className={cn(DIRECTORY_CREATE_BUTTON, 'shrink-0')}
-            >
-              {CONNECT_LABEL}
-            </button>
-          ) : (
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {PLUGIN_CONNECTOR_MISSING_LABEL}
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
+    <span className="flex shrink-0 items-center gap-3">
+      {status ? (
+        <span className="text-xs text-muted-foreground">
+          {PLUGIN_CONNECTOR_STATUS_LABELS[status]}
+        </span>
+      ) : null}
+      {onOpenConnector && connector.bundled !== true ? (
+        <button
+          type="button"
+          onClick={() => onOpenConnector(connector.id)}
+          className={cn(DIRECTORY_CREATE_BUTTON, 'shrink-0')}
+        >
+          {CONNECT_LABEL}
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+function PluginConnectorList({
+  connectors,
+  locked,
+  note,
+  onOpenConnector,
+}: {
+  connectors: readonly DirectoryPluginConnectorSetting[];
+  locked?: DirectoryLockNotice;
+  note?: string;
+  onOpenConnector?: (connectorId: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3" data-testid="plugin-connectors">
+      <p className="text-xs text-muted-foreground">{PLUGIN_CONNECTORS_TAB_COPY}</p>
+      {locked || note ? (
+        <p className={DETAIL_NOTICE} data-testid="plugin-connectors-note">
+          <Lock aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+          {note ?? locked?.message}
+        </p>
+      ) : null}
+      {connectors.length === 0 ? (
+        locked || note ? null : (
+          <p className="text-sm text-muted-foreground">{PLUGIN_CONNECTORS_TAB_EMPTY}</p>
+        )
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {connectors.map((connector) => (
+            <li key={connector.id} className={SETTINGS_ROW_CLASS}>
+              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                {connector.name}
+              </span>
+              <ConnectorStatus
+                connector={connector}
+                locked={locked}
+                onOpenConnector={onOpenConnector}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-muted-foreground">{PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE}</p>
+    </div>
   );
 }
 
 function ContentsTabs({
   settings,
+  connectors,
+  connectorsLocked,
+  connectorsNote,
   onSetSkillEnabled,
   onOpenConnector,
 }: {
   settings: DirectoryPluginSettings;
+  connectors: readonly DirectoryPluginConnectorSetting[];
+  connectorsLocked?: DirectoryLockNotice;
+  connectorsNote?: string;
   onSetSkillEnabled?: (skill: string, enabled: boolean) => Promise<void> | void;
   onOpenConnector?: (connectorId: string) => void;
 }) {
@@ -574,7 +626,7 @@ function ContentsTabs({
       </p>
     );
   }
-  if (settings.skills.length === 0 && settings.connectors.length === 0) return null;
+  if (settings.skills.length === 0 && connectors.length === 0) return null;
   return (
     <Tabs defaultValue={settings.skills.length > 0 ? TAB_SKILLS : TAB_CONNECTORS}>
       <TabsList aria-label={PLUGIN_TABS_LABEL}>
@@ -585,9 +637,13 @@ function ContentsTabs({
         <p className="text-xs text-muted-foreground">{PLUGIN_SKILLS_TAB_COPY}</p>
         <SkillRows settings={settings} onSetSkillEnabled={onSetSkillEnabled} />
       </TabsContent>
-      <TabsContent value={TAB_CONNECTORS} className="flex flex-col gap-3">
-        <p className="text-xs text-muted-foreground">{PLUGIN_CONNECTORS_TAB_COPY}</p>
-        <ConnectorRows settings={settings} onOpenConnector={onOpenConnector} />
+      <TabsContent value={TAB_CONNECTORS}>
+        <PluginConnectorList
+          connectors={connectors}
+          locked={connectorsLocked}
+          note={connectorsNote}
+          onOpenConnector={onOpenConnector}
+        />
       </TabsContent>
     </Tabs>
   );
@@ -661,6 +717,7 @@ export function PluginDetailView({
   const showCli = !installed && !installable;
   const updated = formatUpdatedAt(detail.updatedAt);
   const showsTabs = installed && settings !== undefined;
+  const connectors = detail.connectors ?? settings?.connectors ?? EMPTY_CONNECTORS;
   const versionControl =
     installed && detail.versions !== undefined && onChangeVersion !== undefined
       ? { versions: detail.versions, onChangeVersion }
@@ -677,6 +734,8 @@ export function PluginDetailView({
           badge={
             detail.verified ? (
               <DirectoryBadge badge={VERIFIED_GLYPH_BADGE} />
+            ) : detail.unreviewed ? (
+              <DirectoryBadge badge={UNREVIEWED_BADGE} />
             ) : detail.community ? (
               <DirectoryBadge badge={COMMUNITY_BADGE} />
             ) : null
@@ -773,6 +832,13 @@ export function PluginDetailView({
 
       {detail.community ? <p className={DETAIL_NOTICE}>{PLUGIN_COMMUNITY_NOTE}</p> : null}
 
+      {detail.unreviewed ? (
+        <p className={DETAIL_NOTICE} data-testid="plugin-unreviewed-note">
+          <ShieldAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+          {PLUGIN_UNREVIEWED_NOTE}
+        </p>
+      ) : null}
+
       {detail.managedNote ? <p className={DETAIL_NOTICE}>{detail.managedNote}</p> : null}
 
       {installed && settings?.repairs && onRepair ? (
@@ -813,6 +879,9 @@ export function PluginDetailView({
       {showsTabs ? (
         <ContentsTabs
           settings={settings}
+          connectors={connectors}
+          connectorsLocked={detail.connectorsLocked}
+          connectorsNote={detail.connectorsNote}
           onSetSkillEnabled={locked ? undefined : onSetSkillEnabled}
           onOpenConnector={onOpenConnector}
         />
@@ -822,12 +891,20 @@ export function PluginDetailView({
         {detail.description}
       </p>
 
+      {!showsTabs && (connectors.length > 0 || detail.connectorsLocked || detail.connectorsNote) ? (
+        <section className="flex flex-col gap-3">
+          <h4 className={DETAIL_HEADING}>{PLUGIN_CONNECTORS_HEADING}</h4>
+          <PluginConnectorList
+            connectors={connectors}
+            locked={detail.connectorsLocked}
+            note={detail.connectorsNote}
+            onOpenConnector={onOpenConnector}
+          />
+        </section>
+      ) : null}
+
       {detail.components ? (
-        <ComponentsSummary
-          components={detail.components}
-          skillsListedElsewhere={showsTabs}
-          connectorsNote={detail.connectorsNote}
-        />
+        <ComponentsSummary components={detail.components} skillsListedElsewhere={showsTabs} />
       ) : null}
 
       {versionControl ? (

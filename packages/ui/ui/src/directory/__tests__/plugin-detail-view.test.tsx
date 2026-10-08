@@ -263,13 +263,13 @@ describe('PluginDetailView installed controls', () => {
     expect(screen.getByText('Create distinctive pages.')).toBeTruthy();
   });
 
-  it('offers Connect on a connector that is not connected and hands back its id', () => {
+  it('offers Connect beside the status of a connector that is not connected', () => {
     const onOpenConnector = vi.fn();
     renderDetail({ installed: true }, { settings, onOpenConnector });
     selectTab('Connectors');
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
     expect(onOpenConnector).toHaveBeenCalledExactlyOnceWith('linear');
-    expect(screen.queryByText('Not connected')).toBeNull();
+    expect(screen.getByText('Not connected')).toBeTruthy();
   });
 
   it('drops the Includes skill chips once the tabs list the same skills', () => {
@@ -323,5 +323,76 @@ describe('PluginDetailView installed controls', () => {
   it('renders the version the adapter supplies', () => {
     renderDetail({ version: '2.1.0' });
     expect(screen.getByText('2.1.0')).toBeTruthy();
+  });
+});
+
+describe('the Connectors section on a plugin page', () => {
+  const connectors = [
+    { id: 'gmail', name: 'Gmail', connected: true, status: 'connected' as const },
+    { id: 'drive', name: 'Google Drive', connected: false, status: 'not-connected' as const },
+    { id: 'slack', name: 'Slack', connected: false, status: 'not-added' as const },
+    { id: 'bundled:github', name: 'github', connected: false, bundled: true },
+  ];
+
+  it('gives each connector its own status before the plugin is installed', () => {
+    const onOpenConnector = vi.fn();
+    renderDetail({ connectors }, { onOpenConnector });
+
+    const section = screen.getByTestId('plugin-connectors');
+    expect(section.textContent).toContain('Connected');
+    expect(section.textContent).toContain('Not connected');
+    expect(section.textContent).toContain('Not added');
+    expect(section.textContent).toContain(
+      'Installing a plugin never connects a service by itself.',
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]!);
+    expect(onOpenConnector).toHaveBeenCalledWith('drive');
+    expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(2);
+  });
+
+  it('locks every row with no Connect while connectors are coming soon', () => {
+    const onOpenConnector = vi.fn();
+    renderDetail(
+      {
+        connectors,
+        connectorsLocked: { label: 'Coming soon', message: 'Connectors are coming soon.' },
+      },
+      { onOpenConnector },
+    );
+
+    expect(screen.getAllByText('Coming soon')).toHaveLength(connectors.length);
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
+    expect(screen.getByTestId('plugin-connectors-note').textContent).toBe(
+      'Connectors are coming soon.',
+    );
+    expect(screen.queryByText('Not added')).toBeNull();
+  });
+
+  it('keeps the same locked list under the Connectors tab once installed', () => {
+    renderDetail(
+      {
+        installed: true,
+        connectors,
+        connectorsLocked: { label: 'Coming soon', message: 'Connectors are coming soon.' },
+      },
+      {
+        settings: {
+          pluginId: 'frontend-design',
+          skills: [{ name: 'frontend-design', enabled: true }],
+          connectors: [],
+          loading: false,
+          saving: false,
+          error: null,
+        },
+      },
+    );
+    selectTab('Connectors');
+    expect(screen.getAllByText('Coming soon')).toHaveLength(connectors.length);
+  });
+
+  it('marks a plugin the account added itself as not reviewed', () => {
+    renderDetail({ verified: false, unreviewed: true });
+    expect(screen.getByText('Not reviewed')).toBeTruthy();
+    expect(screen.getByTestId('plugin-unreviewed-note')).toBeTruthy();
   });
 });

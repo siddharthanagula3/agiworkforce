@@ -23,7 +23,7 @@ import {
   useUnsavedChangesGuard,
 } from '@agiworkforce/ui';
 import {
-  parseSkillDraftFromMarkdown,
+  parseUploadedSkillDraft,
   validateSkillDraft,
   SKILL_DRAFT_BODY_MAX_LENGTH,
   SKILL_DRAFT_DESCRIPTION_MAX_LENGTH,
@@ -95,7 +95,7 @@ export function SkillEditorDialog({
         setImportErrors([IMPORT_UNREADABLE]);
         return;
       }
-      const parsed = parseSkillDraftFromMarkdown(reader.result);
+      const parsed = parseUploadedSkillDraft(reader.result);
       if (!parsed.ok) {
         setImportErrors(parsed.errors);
         return;

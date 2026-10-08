@@ -34,7 +34,8 @@ import {
   INSTALL_CONFIRM_CANCEL_LABEL,
   DELETE_SKILL_CONFIRM_DESCRIPTION,
   DELETE_SKILL_CONFIRM_LABEL,
-  DELETE_SKILL_CONFIRM_TITLE,
+  DIRECTORY_TRUST_COPY,
+  deleteSkillConfirmTitle,
   INSTALL_CONFIRM_TITLE_PREFIX,
   INSTALL_LABEL,
   MARKETPLACE_REFRESHING_LABEL,
@@ -432,19 +433,32 @@ function DirectorySectionPanel({
         onSelect: () => setCreatePluginOpen(true),
       });
     }
+    const trailingActions: DirectoryManageAction[] = [];
     if (section === 'skills' && adapter.uploadSkillFile) {
-      leadingActions.push({
+      trailingActions.push({
         id: UPLOAD_SKILL_ACTION_ID,
         label: UPLOAD_SKILL_LABEL,
         onSelect: () => setUploadSkillOpen(true),
       });
     }
+    const setSkillEnabled = adapter.setSkillEnabled;
     return (
       <DirectoryManageView
         section={section}
-        view={{ ...manage, actions: [...leadingActions, ...(manage.actions ?? [])] }}
+        view={{
+          ...manage,
+          actions: [...leadingActions, ...(manage.actions ?? []), ...trailingActions],
+        }}
         onBrowse={() => setBrowsing(true)}
         onOpen={setEntryId}
+        {...(section === 'skills' && setSkillEnabled
+          ? {
+              onSetEnabled: (id: string, enabled: boolean) =>
+                void runAction(id, () => setSkillEnabled(id, enabled)),
+            }
+          : {})}
+        busyId={busyId}
+        status={renderActionError()}
         headerActions={headerActions}
       />
     );
@@ -480,7 +494,7 @@ function DirectorySectionPanel({
         adapter.deleteEntry && detail.kind === 'skill' && detail.editable === true
           ? () =>
               confirm({
-                title: DELETE_SKILL_CONFIRM_TITLE,
+                title: deleteSkillConfirmTitle(detail.name),
                 description: DELETE_SKILL_CONFIRM_DESCRIPTION,
                 confirmLabel: DELETE_SKILL_CONFIRM_LABEL,
                 cancelLabel: INSTALL_CONFIRM_CANCEL_LABEL,
@@ -910,6 +924,7 @@ function DirectorySectionPanel({
           description={UPLOAD_PLUGIN_INTRO}
           accept={UPLOAD_PLUGIN_ACCEPT}
           failureCopy={UPLOAD_PLUGIN_FAILED_COPY}
+          trustNotice={DIRECTORY_TRUST_COPY}
           onClose={() => {
             setUploadPluginOpen(false);
             void adapter.loadSection?.('plugins');
@@ -950,6 +965,7 @@ function DirectorySectionPanel({
           description={UPLOAD_SKILL_INTRO}
           accept={UPLOAD_SKILL_ACCEPT}
           failureCopy={UPLOAD_SKILL_FAILED_COPY}
+          trustNotice={DIRECTORY_TRUST_COPY}
           onClose={() => {
             setUploadSkillOpen(false);
             void adapter.loadSection?.('skills');
