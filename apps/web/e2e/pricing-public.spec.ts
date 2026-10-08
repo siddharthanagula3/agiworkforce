@@ -21,7 +21,7 @@ const LOCALIZED_PRICING = {
 
 test.describe('/pricing Team billing toggle', () => {
   for (const theme of ['light', 'dark'] as const) {
-    test(`the selected Annual savings label meets the public small-text standard in ${theme} mode`, async ({
+    test(`the selected Annual label meets the public small-text standard in ${theme} mode`, async ({
       page,
     }) => {
       await mockAuthProvider(page);
@@ -37,8 +37,12 @@ test.describe('/pricing Team billing toggle', () => {
       await expect(annual).toBeVisible();
       await expect(annual).toHaveAttribute('aria-pressed', 'true');
 
-      const save = annual.locator('.agi-tier-toggle-save');
-      await expect(save).toBeVisible();
+      await expect(
+        page
+          .locator('#pricing-team-title')
+          .locator('xpath=ancestor::article')
+          .getByText(/^save \d+% annually$/i),
+      ).toBeVisible();
 
       const measure = () =>
         annual.evaluate((button) => {
@@ -59,16 +63,14 @@ test.describe('/pricing Team billing toggle', () => {
           const luminance = (c: { r: number; g: number; b: number }) =>
             0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
 
-          const label = button.querySelector('.agi-tier-toggle-save');
-          if (!label) return null;
           const fill = parse(getComputedStyle(button).backgroundColor);
-          const text = parse(getComputedStyle(label).color);
+          const text = parse(getComputedStyle(button).color);
           const a = luminance(text);
           const b = luminance(fill);
           return {
             ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
             fillAlpha: fill.a,
-            fontSize: getComputedStyle(label).fontSize,
+            fontSize: getComputedStyle(button).fontSize,
           };
         });
 

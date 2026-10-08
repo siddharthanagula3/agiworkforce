@@ -584,14 +584,6 @@
   }
 }
 
-[data-design='agi'][data-public-reference='pricing'] .agi-tier-toggle-save {
-  margin-inline: 0;
-  font-size: var(--public-text-meta);
-  line-height: var(--public-leading-control);
-  color: inherit;
-  text-wrap: wrap;
-}
-
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-badge {
   padding: 0;
   background: transparent;
