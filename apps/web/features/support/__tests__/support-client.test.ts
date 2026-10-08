@@ -6,8 +6,10 @@ import {
   type SupportTurn,
 } from '@agiworkforce/cloud-contracts/support';
 
+type ScanModule0 = typeof import('@/lib/client/csrf');
+
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
 }));
 

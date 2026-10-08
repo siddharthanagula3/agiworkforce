@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type RoutingModule = typeof import('@agiworkforce/routing');
 type RegistryModule = typeof import('@/lib/prompts/prompt-registry');
 
+type ScanModule0 = typeof import('@/lib/services/provider-adapter-service');
+type ScanModule1 = typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response');
+type ScanModule2 = typeof import('@/lib/services/cogs-ledger-service');
+
 const served = vi.hoisted(() => ({ variant: undefined as number | undefined }));
 
 vi.mock('@/lib/prompts/prompt-registry', async (importOriginal) => {
@@ -23,7 +27,7 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return {
-    ...(await importOriginal<typeof import('@/lib/services/provider-adapter-service')>()),
+    ...(await importOriginal<ScanModule0>()),
     buildServerProviderAdapter: modelMocks.buildServerProviderAdapter,
     toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
   };
@@ -31,16 +35,14 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importOriginal) => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return {
-    ...(await importOriginal<
-      typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response')
-    >()),
+    ...(await importOriginal<ScanModule1>()),
     drainToLlmResponse: modelMocks.drainToLlmResponse,
   };
 });
 
 const recordSettledProviderCost = vi.fn(async (..._args: unknown[]) => {});
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCost(...args),
 }));
 
