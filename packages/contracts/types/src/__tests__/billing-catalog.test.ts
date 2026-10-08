@@ -24,6 +24,8 @@ import {
   getPlanMaxSandboxes,
   getPlanMaxScheduledTasks,
   getPlanCodeHarnessDailyCeilingCents,
+  planIncludesAgiCode,
+  agiCodeMinimumPlan,
   ENTERPRISE_CODE_HARNESS_DAILY_CEILING_CENTS,
   getPlanSandboxTtlMs,
   canUseBillingPlanCapability,
@@ -299,6 +301,28 @@ describe('billing catalog', () => {
         expect(sandboxes[index]!).toBeGreaterThanOrEqual(sandboxes[index - 1]!);
       }
       expect(Math.max(...sandboxes)).toBe(5);
+    });
+
+    it('includes AGI Code only where the plan gives its coding agent a sandbox and a daily budget', () => {
+      for (const plan of Object.keys(BILLING_PLAN_PRICING)) {
+        expect(planIncludesAgiCode(plan), plan).toBe(
+          getPlanMaxSandboxes(plan) > 0 && getPlanCodeHarnessDailyCeilingCents(plan) > 0,
+        );
+      }
+      expect(getPlanMaxSandboxes('free')).toBeGreaterThan(0);
+      expect(planIncludesAgiCode('free')).toBe(false);
+      expect(planIncludesAgiCode('hobby')).toBe(false);
+      expect(planIncludesAgiCode(null)).toBe(false);
+      for (const plan of [...SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER, 'team', 'enterprise']) {
+        expect(planIncludesAgiCode(plan), plan).toBe(true);
+      }
+    });
+
+    it('names the first plan on the upgrade ladder that includes AGI Code', () => {
+      const minimum = agiCodeMinimumPlan();
+
+      expect(minimum).toBe(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find(planIncludesAgiCode));
+      expect(minimum).not.toBeNull();
     });
 
     it('fails unknown tiers closed and keeps Enterprise at the per-user sandbox ceiling', () => {

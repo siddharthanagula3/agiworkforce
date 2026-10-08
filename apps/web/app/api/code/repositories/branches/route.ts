@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlanMaxSandboxes } from '@agiworkforce/types';
+import { planIncludesAgiCode } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
@@ -58,7 +58,7 @@ async function handleList(request: NextRequest) {
     );
   }
   const planTier = await resolveEntitledPlanTier(db, userId);
-  if (getPlanMaxSandboxes(planTier) <= 0) {
+  if (!planIncludesAgiCode(planTier)) {
     throw createError.capabilityUnavailable(
       'Your plan does not include managed Code sessions, so branches cannot be listed.',
     );

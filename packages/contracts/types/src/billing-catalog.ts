@@ -498,6 +498,18 @@ export function getPlanCodeHarnessDailyCeilingCents(plan: string | null | undefi
   return limit;
 }
 
+/**
+ * A sandbox alone is not AGI Code: the chat code tool uses one too. A plan
+ * includes AGI Code only when its coding agent also has a daily budget to spend.
+ */
+export function planIncludesAgiCode(plan: string | null | undefined): boolean {
+  return getPlanMaxSandboxes(plan) > 0 && getPlanCodeHarnessDailyCeilingCents(plan) > 0;
+}
+
+export function agiCodeMinimumPlan(): SelfServeIndividualPlanTier | null {
+  return SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find(planIncludesAgiCode) ?? null;
+}
+
 export function getNextUpgradeTier(
   plan: string | null | undefined,
 ): SelfServeIndividualPlanTier | null {

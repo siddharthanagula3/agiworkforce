@@ -161,6 +161,11 @@ export const CODE_COPY = {
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
   storageNotReady: 'Managed environments are not available yet. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
+  upgradeHeading: 'AGI Code is on paid plans',
+  upgradeBody:
+    'Give a task to an agent that works in its own cloud environment, on your repository or from scratch.',
+  upgradeFromPlan: 'It is included from the {plan} plan.',
+  upgradeAction: 'Upgrade',
   loadFailed: 'Something went wrong. Please retry.',
   sessionNotFound: 'That session is not available. It may have been deleted.',
 

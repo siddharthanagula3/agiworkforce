@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getPlanMaxSandboxes,
+  planIncludesAgiCode,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
 } from '@agiworkforce/types';
@@ -64,12 +65,13 @@ async function handleList(request: NextRequest) {
   // Offered only to an entitled account: the catalogue is a read against the
   // team's E2B org, not public information, and an unentitled caller cannot
   // create a session with any of it.
-  const runtimes = maxSessions > 0 ? await listCloudCodeRuntimes() : [];
+  const planEntitled = planIncludesAgiCode(planTier);
+  const runtimes = planEntitled ? await listCloudCodeRuntimes() : [];
   return NextResponse.json({
     availability: {
       deploymentEnabled: e2bProvisioningReady(),
       storageReady,
-      planEntitled: maxSessions > 0,
+      planEntitled,
       planTier,
       maxSessions,
     },

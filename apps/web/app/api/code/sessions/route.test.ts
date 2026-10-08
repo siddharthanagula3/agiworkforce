@@ -61,7 +61,11 @@ vi.mock('@/lib/e2b/templates', async (importOriginal) => {
 });
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   const actual = await importOriginal<ScanModule2>();
-  return { ...actual, createCloudCodeSession: mockCreateSession };
+  return {
+    ...actual,
+    createCloudCodeSession: mockCreateSession,
+    listCloudCodeSessions: vi.fn(async () => []),
+  };
 });
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   hasServerProviderKey: mockHasServerProviderKey,
@@ -69,7 +73,8 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
-import { POST } from './route';
+import { listCloudCodeRuntimes } from '@/lib/e2b/templates';
+import { GET, POST } from './route';
 
 const db = createDatabaseAdapterFake();
 const SESSION = { id: 'session-1', title: 'workspace', state: 'ready' };
@@ -91,6 +96,37 @@ beforeEach(() => {
   mockGetUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
   mockCreateSession.mockResolvedValue({ session: SESSION, reused: false });
   mockHasServerProviderKey.mockReturnValue(true);
+});
+
+describe('GET /api/code/sessions, whether the plan includes AGI Code', () => {
+  async function availabilityFor(planTier: string) {
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
+      plan_tier: planTier,
+      status: 'active',
+    } as never);
+    const response = await GET(new NextRequest('http://localhost:3000/api/code/sessions'));
+    expect(response.status).toBe(200);
+    return (await response.json()) as {
+      availability: { planEntitled: boolean; planTier: string; maxSessions: number };
+      runtimes: unknown[];
+    };
+  }
+
+  it('tells a Free account its plan does not include it and reads no runtime catalogue', async () => {
+    const body = await availabilityFor('free');
+
+    expect(body.availability.planTier).toBe('free');
+    expect(body.availability.planEntitled).toBe(false);
+    expect(body.runtimes).toEqual([]);
+    expect(listCloudCodeRuntimes).not.toHaveBeenCalled();
+  });
+
+  it('tells a paid account its plan includes it', async () => {
+    const body = await availabilityFor('pro');
+
+    expect(body.availability.planEntitled).toBe(true);
+    expect(listCloudCodeRuntimes).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('POST /api/code/sessions, the full-network interim guard', () => {
