@@ -88,9 +88,19 @@ function routerOnlyContext(body: unknown): string | null {
     : 'earlier_attachment';
 }
 
-function conversationIdOf(body: unknown): string | null {
+// A Health space chat, or one holding Google account data, stays on the route that already
+// enforces its handling rule; the lane is for ordinary chat only.
+async function conversationStaysOnTheRouter(
+  scoped: UserScopedDb,
+  userId: string,
+  body: unknown,
+): Promise<boolean> {
   const parsed = RouterOnlyContextSchema.safeParse(body);
-  return parsed.success ? (parsed.data.conversation_id ?? null) : null;
+  const conversationId = parsed.success ? parsed.data.conversation_id : undefined;
+  return (
+    conversationId !== undefined &&
+    (await conversationKeepsOutOfTraining(scoped.db, userId, conversationId))
+  );
 }
 
 const PLATFORM_MODERATION_REFUSAL_CODE = 'content_policy_violation';
@@ -274,14 +284,8 @@ export async function serveFreeQuotaFirst(input: {
       model = null;
       return toRouter('provider_training_policy');
     }
-    // A Health space chat, or one holding Google account data, stays on the route that already
-    // enforces its handling rule; the lane is for ordinary chat only.
     const scoped = await input.scopedDb();
-    const conversationId = conversationIdOf(body);
-    if (
-      conversationId !== null &&
-      (await conversationKeepsOutOfTraining(scoped.db, input.userId, conversationId))
-    ) {
+    if (await conversationStaysOnTheRouter(scoped, input.userId, body)) {
       model = null;
       return toRouter('conversation_handling_rule');
     }
@@ -346,7 +350,8 @@ export async function serveFreeQuotaFallback(input: {
     return null;
   }
   const { reason } = refused;
-  const replayed = freeAutoTurn(await input.replay.json().catch(() => null), FallbackTurnSchema);
+  const body: unknown = await input.replay.json().catch(() => null);
+  const replayed = freeAutoTurn(body, FallbackTurnSchema);
   const requestId = input.request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim();
   if (!replayed || !requestId) return null;
   const { turn, assistantParentId } = replayed;
@@ -375,9 +380,11 @@ export async function serveFreeQuotaFallback(input: {
       ranking: ranking.offeringKeys,
     });
     if (!model) return await decline();
+    const scoped = await input.scopedDb();
+    if (await conversationStaysOnTheRouter(scoped, input.userId, body)) return null;
     const served = await serveFreeQuotaTurn(
       input.request,
-      await input.scopedDb(),
+      scoped,
       { ...turn, model },
       {
         requestId,
