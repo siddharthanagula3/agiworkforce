@@ -297,7 +297,6 @@
   "no_training_explicit|gpt-image-2.5-sunburst|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gpt-live-1|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gpt-oss-safeguard-20b|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
-  "no_training_explicit|grok-4.6|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|grok-4.7|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|kimi-k2.7-code|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|kimi-k3|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",

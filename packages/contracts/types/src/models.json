@@ -469,6 +469,12 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the three OpenAI chat slots follow the tier names OpenAI uses from generation 6: the frontier slot now matches the astra name and holds gpt-6-astra, the balanced slot matches sol and holds gpt-6.1-sol, and the fast slot holds gpt-6-luna. The eval gate was not run for any of them: no OpenAI slot has a committed baseline and no run was recorded for these models. The catalog-side gates are recorded on each slot, and one of them fails: gpt-6-astra lists at $10/$50 per million against $4/$20 for gpt-5.6-sol, a 150% rise on both sides against the 25% ceiling, so the frontier slot, the OpenAI default and the flagship_general Auto slot now cost two and a half times what they did. gpt-6.1-sol lists at $2/$10 against $2/$12 for gpt-5.6-terra and gpt-6-luna at $0.10/$0.50 against $0.20/$1.20. gpt-6.1-sol moves from the Max list to the Pro list with the balanced slot it now holds, and its minTier follows; the direct entries for gpt-6-astra, gpt-6.1-sol and gpt-6-luna in tierAllowedModels are dropped because the slots now name them. The openai/gpt-image slot matches the sunburst name and holds gpt-image-2.5-sunburst, the model OpenAI describes as its most capable for generation and editing; gpt-image-2.5-flare stays as a registered row outside the slot. Both 2.5 image rows now declare image input and prompt caching, which their pricing rows (image input and cached input prices) and the edits endpoint already stated; OpenAI publishes no context limit for them, so the slot's 4,000 token minimum is unmet by data and recorded as such on the slot. gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and gpt-image-2 leave through the retire tool into retired-models.json, each naming the model that took its slot, with their route, probe and synced records. The successors carry fewer routes: gpt-6-astra keeps its Experiential Labs and Cheaper Inference routes, gpt-6.1-sol and gpt-6-luna have only the direct OpenAI route, and the OpenRouter and Vercel AI Gateway routes of the 5.6 rows were not copied because nothing read for this change says those gateways serve the new ids. The GPT-6 rows record no ultra, pro or persistent reasoning surface and gpt-6-astra and gpt-6.1-sol do not accept effort none; nothing in product code reads the three surface records. No provider call was made."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the xai/grok slot moves from grok-4.6 to grok-4.7 against the eval gate. The gate was run on 2026-10-07 and refused grok-4.7: it scored 0.818 on the jailbreak corpus against a floor of 1.000, and its p95 latency rose past the 50% tolerance on coding, files and computer use; it scored 1.000 on the other fourteen corpora, where grok-4.6 scored 0.600 on refusal, 0.778 on chat and 0.833 on coding. The slot records the refusal as its promotion reason. Both models list at $2/$6 per million with a 500,000 token context. grok-4.6 leaves through the retire tool into retired-models.json naming grok-4.7, with its route and probe records; its run file and the slot's baseline, which measured it, stay as recorded. No Auto slot names the Grok family, so the model is reached only when picked by name. No provider call was made for this change."
     }
   ],
   "providers": {
@@ -564,14 +570,14 @@
       "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.5 },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
-      "defaultModel": "grok-4.6",
+      "defaultModel": "grok-4.7",
       "taskRouting": {
-        "fast_completion": "grok-4.6",
-        "code_generation": "grok-4.6",
-        "complex_reasoning": "grok-4.6",
-        "chat": "grok-4.6",
-        "vision": "grok-4.6",
-        "long_context": "grok-4.6"
+        "fast_completion": "grok-4.7",
+        "code_generation": "grok-4.7",
+        "complex_reasoning": "grok-4.7",
+        "chat": "grok-4.7",
+        "vision": "grok-4.7",
+        "long_context": "grok-4.7"
       },
       "canonicalization": {}
     },
@@ -2846,73 +2852,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "grok-4.6": {
-      "id": "grok-4.6",
-      "apiModelId": "grok-4.6",
-      "openRouterSlug": "x-ai/grok-4.6",
-      "name": "Grok 4.6",
-      "provider": "xai",
-      "developer": "xai",
-      "modelType": "reasoning",
-      "contextWindow": 500000,
-      "inputCost": 2,
-      "outputCost": 6,
-      "cached_input": 0.5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Real-time Info", "Reasoning", "Coding", "Agentic Workflows"],
-      "released": "August 12, 2026",
-      "deprecation_date": null,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 200000,
-          "thresholdBoundary": "inclusive",
-          "inputCost": 4,
-          "outputCost": 12,
-          "cached_input": 1
-        }
-      ],
-      "pricingNote": "Base rate below 200,000 prompt tokens is $2.00/1M input, $6.00/1M output, $0.50/1M cached input. A request whose prompt reaches 200,000 tokens is billed at $4.00/$12.00/$1.00 for every token in the request. xAI publishes no cache-write price, so none is recorded. Priority processing bills 2x on chat completions and responses; the batch API does not serve this model. Server-side tool calls are billed separately per thousand invocations and the schema has no field for them. xAI publishes no maximum output length for this model, so none is recorded. Verified against docs.x.ai/docs/models and the xAI pricing page, retrieved 2026-09-04.",
-      "openWeight": false,
-      "license": "proprietary",
-      "knowledgeCutoff": "2026-02-01",
-      "reasoning": {
-        "capable": true,
-        "control": "always_on",
-        "supportedEfforts": ["low", "medium", "high", "xhigh"],
-        "defaultEffort": "high",
-        "canDisableThinking": false,
-        "unsupportedRequestParameters": ["stop", "frequency_penalty", "presence_penalty"],
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "max" },
-      "lifecycle": {
-        "stage": "evaluated",
-        "stagedOn": "2026-10-07",
-        "source": "tools/evals/measurements/runs/grok-4.6.json"
-      }
-    },
     "grok-4.7": {
       "id": "grok-4.7",
       "apiModelId": "grok-4.7",
@@ -2975,9 +2914,9 @@
       },
       "tierPolicy": { "minTier": "max" },
       "lifecycle": {
-        "stage": "evaluated",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "source": "tools/evals/measurements/runs/grok-4.7.json"
+        "source": "catalog/model-families.json#xai/grok"
       }
     },
     "veo-3.1": {
@@ -21924,7 +21863,7 @@
       "glm-5.3",
       "kimi-k3"
     ],
-    "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.6"]
+    "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.7"]
   },
   "providerDefaults": {
     "openai": { "imageOutput": "gpt-image-2.5-sunburst" },
