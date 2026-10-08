@@ -98,7 +98,7 @@ const SCENARIOS: Scenario[] = [
       {
         label: 'Key storage',
         value:
-          'Each surface writes the key into its own platform credential store, so one engagement’s key stays on the one machine that engagement runs from.',
+          'The CLI writes the key into the operating system credential store, or into owner-only files on Linux or when the keyring is turned off, so one engagement’s key stays on the one machine that engagement runs from.',
       },
       {
         label: 'Request routing',

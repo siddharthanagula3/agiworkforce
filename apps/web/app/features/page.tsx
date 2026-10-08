@@ -14,6 +14,7 @@ import {
   type ScrollFeature,
 } from '@/features/marketing/components/system';
 import { WebWindow } from '@/features/marketing/components/DeviceMockups';
+import { BYOK_SURFACES, surfaceCta } from '@/lib/marketing-constants';
 import {
   AgentRunWindow,
   ArtifactsWindow,
@@ -28,6 +29,8 @@ export const metadata = buildMetadata({
     'Everything inside the AGI workspace: chat, artifacts, projects, tools and connectors, memory, deep research, agents, plugins, and skills. Across every surface and trust mode.',
   path: '/features',
 });
+
+const CLI_CTA = surfaceCta('cli');
 
 const IDS = {
   hero: 'agi-features-hero-title',
@@ -110,7 +113,7 @@ const EXTEND = [
   {
     meta: 'Tools',
     title: 'Tools and connectors',
-    body: 'MCP servers and OAuth apps, added one explicit permission at a time, with a default of asking first.',
+    body: 'MCP servers and OAuth apps, added one explicit permission at a time, with a default of asking first. Connectors are coming soon.',
     href: '/features/tools',
   },
   {
@@ -128,7 +131,7 @@ const EXTEND = [
   {
     meta: 'Integrations',
     title: 'Integrations',
-    body: 'MCP plugins, the native messaging bridge, and BYOK provider keys in the released CLI. VS Code BYOK is coming soon.',
+    body: `MCP plugins, the native messaging bridge, and BYOK provider keys in the CLI. ${BYOK_SURFACES.availability}`,
     href: '/integrations',
   },
 ] as const;
@@ -147,8 +150,8 @@ export default function FeaturesPage() {
               </h1>
               <ButtonRow>
                 <Button href="/login?redirectTo=%2F">Try AGI Web</Button>
-                <Button href="/download" variant="secondary">
-                  Get the CLI
+                <Button href={CLI_CTA.href} variant="secondary">
+                  {CLI_CTA.label}
                 </Button>
               </ButtonRow>
             </div>

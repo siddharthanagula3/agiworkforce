@@ -19,6 +19,7 @@ import { declaredOnlySlos, formatObjective } from '@/lib/server/slo/catalogue';
 import { CAPABILITY_DEGRADATION } from '@/lib/server/slo/degradation';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { statusMirrorUrl } from '@/lib/server/incident/out-of-band';
 import {
   formatAge,
@@ -461,7 +462,7 @@ export default async function StatusPage() {
                 {
                   meta: 'BYOK',
                   title: 'Traffic goes straight to your provider.',
-                  body: 'BYOK requests from the released CLI travel directly to the provider you chose. VS Code support is coming soon; Desktop does not accept provider keys. If a model misbehaves, the provider’s own status page is the source of truth.',
+                  body: `BYOK requests from the CLI travel directly to the provider you chose. ${BYOK_SURFACES.availability} Desktop does not accept provider keys. If a model misbehaves, the provider’s own status page is the source of truth.`,
                 },
                 {
                   meta: 'AGI Cloud',

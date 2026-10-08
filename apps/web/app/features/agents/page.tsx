@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { AgentRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { surfaceCta } from '@/lib/marketing-constants';
 import {
   Button,
   ButtonRow,
@@ -18,6 +19,8 @@ export const metadata = buildMetadata({
     'An AGI agent is a markdown file with frontmatter naming the tools it may touch. Subagents fan out through the task tool, hooks fire on the session lifecycle, and the approval dialog opens with its cursor parked on No.',
   path: '/features/agents',
 });
+
+const CLI_CTA = surfaceCta('cli');
 
 const IDS = {
   hero: 'agi-features-agents-title',
@@ -170,7 +173,7 @@ export default function FeaturesAgentsPage() {
                 the OS sandbox are all in the agi CLI source today.
               </p>
               <ButtonRow>
-                <Button href="/download">Get the CLI</Button>
+                <Button href={CLI_CTA.href}>{CLI_CTA.label}</Button>
               </ButtonRow>
             </div>
           </div>

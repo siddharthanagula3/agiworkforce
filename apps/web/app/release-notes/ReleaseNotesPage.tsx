@@ -13,9 +13,14 @@ import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/s
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 import { ATOM_MEDIA_TYPE, CHANGELOG_FEED_PATH } from './changelog-feed';
-import { FORTHCOMING, RELEASE_NOTES, releaseStateLine } from './release-notes-data';
+import {
+  FORTHCOMING,
+  RELEASE_NOTES,
+  isGenerallyAvailable,
+  releaseStateLine,
+} from './release-notes-data';
 
-const GA_COUNT = RELEASE_NOTES.filter((note) => note.maturity === 'ga').length;
+const GA_COUNT = RELEASE_NOTES.filter(isGenerallyAvailable).length;
 
 const HERO_FACTS = [
   `Dated releases: ${RELEASE_NOTES.length}`,
@@ -25,7 +30,7 @@ const HERO_FACTS = [
 ];
 
 const LEDE =
-  'Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Forthcoming items are listed separately with their target, which stays to be announced until a date is set.';
+  'Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Work on a surface with no published release is marked not yet released. Forthcoming items are listed separately with their target, which stays to be announced until a date is set.';
 
 const POLICY_CHANGES = policyChanges();
 

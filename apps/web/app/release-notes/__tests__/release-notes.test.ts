@@ -55,7 +55,10 @@ describe('release notes', () => {
 
   it('renders a state line a reader can scan', () => {
     expect(releaseStateLine(noteFor('2026-09-05'))).toBe('GA · Web');
-    expect(releaseStateLine(noteFor('2026-02 to 2026-05'))).toBe('Alpha · Desktop');
+    expect(releaseStateLine(noteFor('2026-02 to 2026-05'))).toBe('Not yet released: Desktop');
+    expect(releaseStateLine(noteFor('2026-07-31'))).toBe(
+      'GA · Web · Not yet released: CLI, Desktop',
+    );
   });
 });
 

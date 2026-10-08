@@ -13,6 +13,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { ConsoleWindow } from '@/features/marketing/components/FeatureScenes';
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Enterprise: evaluate without exposing your data',
@@ -185,8 +186,7 @@ export default function EnterprisePage() {
               rows={[
                 {
                   label: 'BYOK posture',
-                  value:
-                    'The released CLI can run fully local or on your own provider keys, so that work does not reach AGI Cloud. VS Code BYOK is coming soon, and the current public Desktop is managed-cloud only. A member who moves a CLI thread to managed cloud does so through an explicit, reviewed handoff.',
+                  value: `The CLI can run fully local or on your own provider keys, so that work does not reach AGI Cloud. ${BYOK_SURFACES.availability} The current public Desktop is managed-cloud only. A member who moves a CLI thread to managed cloud does so through an explicit, reviewed handoff.`,
                 },
                 {
                   label: 'Service levels',

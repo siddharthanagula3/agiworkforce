@@ -3,14 +3,8 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Contact Us',
   description:
-    'Get in touch with AGI Automation LLC. Have questions about AGI? Our support team in Austin, TX is ready to help you with any inquiries.',
-  keywords: [
-    'contact AGI',
-    'AGI Automation support',
-    'AI automation help',
-    'customer support',
-    'Austin TX',
-  ],
+    'Get in touch with AGI Automation LLC. Have questions about AGI? Our support team is ready to help you with any inquiries.',
+  keywords: ['contact AGI', 'AGI Automation support', 'AI automation help', 'customer support'],
   alternates: {
     canonical: 'https://agiworkforce.com/contact',
   },
@@ -51,8 +45,6 @@ const jsonLd = {
     email: 'contact@agiworkforce.com',
     address: {
       '@type': 'PostalAddress',
-      addressLocality: 'Austin',
-      addressRegion: 'TX',
       addressCountry: 'US',
     },
     contactPoint: {

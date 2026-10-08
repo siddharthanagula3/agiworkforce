@@ -7,7 +7,7 @@ import {
   FinalCta,
   FlagshipHero,
 } from '@/features/marketing/components/SurfaceSections';
-import { CATALOG_AS_OF, MARKETING } from '../../lib/marketing-constants';
+import { BYOK_SURFACES, CATALOG_AS_OF, MARKETING, surfaceCta } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI for Business: Local, BYOK, and managed-cloud workspaces',
@@ -27,7 +27,7 @@ export default function BusinessPage() {
           lede="Projects, files, artifacts, cited research and coding agents, with routing policy on top. Local work stays on the device, BYOK goes to the provider you choose, and managed cloud is in public alpha."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Get AGI Desktop' },
+            surfaceCta('desktop'),
             { href: '/pricing', label: 'See Plans' },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
@@ -64,7 +64,7 @@ export default function BusinessPage() {
             {
               meta: 'Apps',
               title: 'Tools without lost governance',
-              body: 'Apps, MCP connectors, and local desktop extensions behind explicit permission boundaries.',
+              body: 'Apps, MCP connectors, and local desktop extensions behind explicit permission boundaries. Connectors are coming soon.',
               href: '/apps',
             },
             {
@@ -82,7 +82,7 @@ export default function BusinessPage() {
           rows={[
             {
               k: 'Model choice',
-              v: `One product routes across a dated, inspectable catalog: ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. The released CLI supports BYOK plus local Ollama and LM Studio models; VS Code BYOK is coming soon, and Desktop uses managed cloud. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
+              v: `One product routes across a dated, inspectable catalog: ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. The CLI supports BYOK plus local Ollama and LM Studio models. ${BYOK_SURFACES.availability} Desktop uses managed cloud. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
             },
             {
               k: 'Cost shape',
@@ -122,7 +122,7 @@ export default function BusinessPage() {
             {
               meta: 'Local + BYOK',
               title: 'BYOK mode',
-              body: 'Bring provider keys from the released CLI and pay providers directly. VS Code support is coming soon.',
+              body: `Bring provider keys in the CLI and pay providers directly. ${BYOK_SURFACES.availability}`,
               href: '/byok',
             },
             {
@@ -140,7 +140,7 @@ export default function BusinessPage() {
           body="Begin with Local and BYOK at no platform cost, evaluate public-alpha AGI managed cloud today, and buy Team seats when you need shared workspaces. Enterprise controls are sales-assisted."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Get AGI Desktop' },
+            surfaceCta('desktop'),
             { href: '/pricing', label: 'See Plans' },
           ]}
         />

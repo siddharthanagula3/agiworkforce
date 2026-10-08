@@ -10,13 +10,15 @@ import {
   Transcript,
   type TranscriptLine,
 } from '@/features/marketing/components/system';
-import { CLI_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CLI_LOCAL_RUNTIMES, SURFACE_STATUS, surfaceCta } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Local: run AGI on your own hardware, at no cost',
   description: `Run AGI locally from the CLI with ${CLI_LOCAL_RUNTIMES.label}. No account is required for local mode, and nothing leaves the device unless you explicitly send it out.`,
   path: '/local',
 });
+
+const CLI_CTA = surfaceCta('cli');
 
 const HERO_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'cmd', text: 'ollama pull <model>' },
@@ -34,7 +36,7 @@ const SURFACE_FACTS = [
   {
     meta: `Desktop · ${SURFACE_STATUS.desktop}`,
     title: 'Managed Cloud only',
-    body: 'The current public Electron Desktop contract does not accept local-inference commands or provider keys. Use the released CLI for Local mode.',
+    body: 'The current public Electron Desktop contract does not accept local-inference commands or provider keys. Local mode belongs to the CLI.',
   },
   {
     meta: 'Mobile · not shipped',
@@ -56,7 +58,7 @@ export default function LocalPage() {
                 The runtime refuses <em className="agi-ds-accent">to move a local session.</em>
               </h1>
               <ButtonRow>
-                <Button href="/download#cli-downloads">Get the CLI</Button>
+                <Button href={CLI_CTA.href}>{CLI_CTA.label}</Button>
                 <Button href="/desktop" variant="secondary">
                   See AGI Desktop
                 </Button>
@@ -194,9 +196,9 @@ export default function LocalPage() {
                 The machine you own <em className="agi-ds-accent">can run the model.</em>
               </h2>
               <Prose size="lg">
-                The released CLI answers from {CLI_LOCAL_RUNTIMES.label} on the machine you own.
-                BYOK on the CLI is the reviewed way out on the days a local model is not enough; the
-                current public Desktop is managed-cloud only.
+                The CLI answers from {CLI_LOCAL_RUNTIMES.label} on the machine you own. BYOK on the
+                CLI is the reviewed way out on the days a local model is not enough; the current
+                public Desktop is managed-cloud only.
               </Prose>
               <ButtonRow>
                 <Button href="/desktop" variant="secondary">

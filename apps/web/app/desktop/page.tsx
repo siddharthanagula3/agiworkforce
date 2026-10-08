@@ -122,7 +122,7 @@ export default function DesktopPage() {
               points: [
                 'Approved folders are the only local files a step can reach',
                 'The selected managed model and route stay visible',
-                'Use the released CLI when you need Local or BYOK today',
+                'Local and BYOK are CLI routes, not Desktop ones',
               ],
               cta: { href: '/local', label: 'Run Local from the CLI' },
             },

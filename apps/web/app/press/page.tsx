@@ -12,7 +12,12 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { CATALOG_AS_OF, MARKETING, SURFACE_STATUS } from '../../lib/marketing-constants';
+import {
+  CATALOG_AS_OF,
+  MARKETING,
+  SURFACE_STATUS,
+  surfaceAvailabilitySummary,
+} from '../../lib/marketing-constants';
 import {
   FOUNDER_NAME,
   FOUNDER_ROLE,
@@ -38,13 +43,13 @@ const PRODUCT_FACTS: { label: string; value: string }[] = [
       'An AI assistant and agent platform: chat, code, research, files, projects, artifacts, tools and connectors, memory, and scheduled work.',
   },
   {
-    label: 'Available now',
-    value: `AGI Web, in any browser · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
+    label: SURFACE_STATUS.web,
+    value: 'AGI Web, in any browser',
   },
   {
     label: 'Built, not yet released',
     value:
-      'AGI Desktop for macOS · AGI Mobile (iOS, Android) · AGI for VS Code · AGI for Chrome. All four exist in the repository with release workflows, and none has a published release. They are not installable from any store today.',
+      'AGI CLI for macOS, Linux and Windows · AGI Desktop for macOS · AGI Mobile (iOS, Android) · AGI for VS Code · AGI for Chrome. All five exist in the repository with release workflows, and none has a published release. They are not installable from any store today.',
   },
   {
     label: 'Where inference runs',
@@ -135,9 +140,9 @@ export default function PressPage() {
               <Stack gap="tight">
                 <h3 className="agi-ds-h3">Short</h3>
                 <Prose size="sm">
-                  AGI is an AI assistant that works across the web, desktop, and terminal, and lets
-                  you choose whether each request runs on your own hardware, on your own provider
-                  key, or on AGI&rsquo;s hosted service.
+                  AGI is an AI assistant designed to work across the web, desktop, and terminal, and
+                  to let you choose whether each request runs on your own hardware, on your own
+                  provider key, or on AGI&rsquo;s hosted service. {surfaceAvailabilitySummary()}
                 </Prose>
               </Stack>
               <Stack gap="tight">
@@ -145,11 +150,11 @@ export default function PressPage() {
                 <Prose size="sm">
                   AGI is an AI assistant and agent platform built by {LEGAL_ENTITY},{' '}
                   {LEGAL_ENTITY_DESCRIPTOR}. It spans six surfaces (web, desktop, mobile, command
-                  line, VS Code, and Chrome), of which the web app, desktop app, and CLI have
-                  shipped. Its distinguishing design choice is that the user selects where inference
-                  happens: locally on their own hardware, through their own provider API key, or on
-                  AGI&rsquo;s managed cloud. Those three routes are separate trust boundaries, and
-                  work does not move between them without an explicit, labeled action.
+                  line, VS Code, and Chrome). {surfaceAvailabilitySummary()} Its distinguishing
+                  design choice is that the user selects where inference happens: locally on their
+                  own hardware, through their own provider API key, or on AGI&rsquo;s managed cloud.
+                  Those three routes are separate trust boundaries, and work does not move between
+                  them without an explicit, labeled action.
                 </Prose>
               </Stack>
             </Stack>
@@ -165,7 +170,7 @@ export default function PressPage() {
               <Prose>
                 &ldquo;Available now&rdquo; means there is a published release. &ldquo;Built, not
                 yet released&rdquo; means the code exists and nothing has shipped. Please do not
-                describe those three as products readers can get.
+                describe those as products readers can get.
               </Prose>
             </div>
             <Ledger caption="Product facts" rows={PRODUCT_FACTS} />

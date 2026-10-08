@@ -16,20 +16,21 @@ import {
   PageHero,
 } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import { CLI_AVAILABILITY_NOTE } from '@/lib/marketing-constants';
 import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: 'Partners',
   description:
-    'There is no formal partner program yet. The released CLI speaks MCP, so connectors built against the open protocol work with it now, and developers can list plugins in the reviewed community directory. Here is what we are looking for.',
+    'There is no formal partner program yet. The CLI speaks MCP, so connectors built against the open protocol work with it, and developers can list plugins in the reviewed community directory. Here is what we are looking for.',
   path: '/partners',
 });
 
 const OPPORTUNITIES = [
   {
-    meta: 'Available today',
+    meta: 'Open protocol',
     title: 'Build on MCP',
-    body: 'The released AGI CLI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with it now, behind explicit tool-approval prompts. Desktop is coming soon. You do not need an agreement with us, or our permission, to build one.',
+    body: `The AGI CLI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with it, behind explicit tool-approval prompts. ${CLI_AVAILABILITY_NOTE} Desktop is coming soon. You do not need an agreement with us, or our permission, to build one.`,
   },
   {
     meta: 'Available today',
@@ -44,7 +45,7 @@ const OPPORTUNITIES = [
   {
     meta: 'Looking for',
     title: 'Local runtime and model ecosystems',
-    body: 'The released CLI routes to Ollama and LM Studio as local runtimes. If you build a local runtime or distribute open models and want AGI to work well with yours, that is a conversation we want.',
+    body: 'The CLI routes to Ollama and LM Studio as local runtimes. If you build a local runtime or distribute open models and want AGI to work well with yours, that is a conversation we want.',
   },
 ] as const;
 

@@ -1,6 +1,13 @@
 import type { LedgerRow } from '@/features/marketing/components/system';
 import type { FactItem, PageCta } from '@/features/marketing/components/pages/surfaces/shared';
-import { MARKETING, MARKETING_FEATURE_MATRIX, POSITIONING } from '@/lib/marketing-constants';
+import {
+  BYOK_SURFACES,
+  CLI_AVAILABILITY_NOTE,
+  MARKETING,
+  MARKETING_FEATURE_MATRIX,
+  POSITIONING,
+  surfaceCta,
+} from '@/lib/marketing-constants';
 
 export interface UseCaseVisual {
   light: string;
@@ -41,14 +48,11 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     slug: 'startups',
     metaTitle: 'Startups: ship faster, spend deliberately',
     metaDescription:
-      'How startups use AGI: ship product faster with multi-provider AI, BYOK in the released CLI, upcoming VS Code support, and a CLI that fits CI.',
+      'How startups use AGI: ship product faster with multi-provider AI, BYOK in the CLI, upcoming VS Code support, and a CLI that fits CI.',
     eyebrow: 'Use case · startups',
     title: 'Ship faster. Spend deliberately.',
-    lede: 'Use the CLI in CI, the Desktop app for managed-cloud work once it ships, and the Chrome side panel for inbox and docs once it ships. Provider spend stays under your control through your own keys in the released CLI. VS Code support is coming soon.',
-    ctas: [
-      { href: '/download', label: 'Get the CLI' },
-      { href: '/pricing', label: 'See pricing', variant: 'secondary' },
-    ],
+    lede: `Use the CLI in CI, the Desktop app for managed-cloud work once it ships, and the Chrome side panel for inbox and docs once it ships. Provider spend stays under your control through your own keys in the CLI. ${BYOK_SURFACES.availability}`,
+    ctas: [surfaceCta('cli'), { href: '/pricing', label: 'See pricing', variant: 'secondary' }],
     visual: {
       light: '/product/usage-light.png',
       dark: '/product/usage-dark.png',
@@ -88,14 +92,13 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
         label: 'Providers',
         value: `${MARKETING.providers.display} providers wired in, plus any OpenAI-compatible endpoint.`,
       },
-      { label: 'Privacy', value: POSITIONING.trustBoundary },
+      { label: 'Privacy', value: POSITIONING.routeBoundary },
     ],
     closeTitle: 'Start free, route deliberately.',
-    closeBody:
-      'Run Local and BYOK from day one at no platform cost (the CLI is released) and turn on managed cloud whenever you want hosted compute.',
+    closeBody: `Run Local and BYOK in the CLI at no platform cost and turn on managed cloud whenever you want hosted compute. ${CLI_AVAILABILITY_NOTE}`,
     closeCtas: [
       { href: '/download', label: "See what's live" },
-      { href: '/cli', label: 'Install the CLI', variant: 'secondary' },
+      { ...surfaceCta('cli'), variant: 'secondary' },
       { href: '/pricing', label: 'See plans', variant: 'secondary' },
     ],
   },
@@ -106,7 +109,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       'How revenue teams use AGI: research, outreach drafts, deal-room briefings, and pipeline triage with provider choice and visible routing.',
     eyebrow: 'Use case · sales teams',
     title: 'Know the account. Own the context.',
-    lede: 'Research, outreach drafts, deal-room briefings, and pipeline triage. Provider choice through your own keys is available in the released CLI. VS Code support is coming soon, with a visible label on every route.',
+    lede: `Research, outreach drafts, deal-room briefings, and pipeline triage. Provider choice through your own keys is part of the CLI, with a visible label on every route. ${BYOK_SURFACES.availability}`,
     ctas: [
       { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
       { href: '/byok', label: 'Set up BYOK', variant: 'secondary' },
@@ -147,11 +150,12 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
       {
         label: 'BYOK',
-        value: 'Pay providers directly from the released CLI. VS Code support is coming soon.',
+        value: `Pay providers directly from the CLI. ${BYOK_SURFACES.availability}`,
       },
       {
         label: 'Tools',
-        value: 'Connect CRM and email through MCP connectors, behind explicit tool approvals.',
+        value:
+          'Connectors for CRM and email are coming soon. When they open, they run behind explicit tool approvals.',
       },
       {
         label: 'Visibility',
@@ -159,8 +163,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
     ],
     closeTitle: 'Brief better, route deliberately.',
-    closeBody:
-      'Bring your own keys in the released CLI and keep account context under your control while the team works. VS Code support is coming soon.',
+    closeBody: `Bring your own keys in the CLI and keep account context under your control while the team works. ${BYOK_SURFACES.availability}`,
     closeCtas: [
       { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
       { href: '/byok', label: 'Set up BYOK', variant: 'secondary' },
@@ -224,8 +227,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
       {
         label: 'BYOK posture',
-        value:
-          'Every seat can use the released CLI fully local or with its own provider keys, so that client work need not reach our infrastructure. VS Code BYOK is coming soon. Desktop is managed-cloud only. Requiring a route org-wide is not a shipped control, so it is scoped on an enterprise contract.',
+        value: `Every seat can use the CLI fully local or with its own provider keys, so that client work need not reach our infrastructure. ${BYOK_SURFACES.availability} Desktop is managed-cloud only. Requiring a route org-wide is not a shipped control, so it is scoped on an enterprise contract.`,
       },
     ],
     closeTitle: 'Put the agent on the bench.',
@@ -281,8 +283,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     ledgerRows: [
       {
         label: 'Provider choice',
-        value:
-          'BYOK is available in the released CLI. VS Code support is coming soon. Pay providers directly at their rates.',
+        value: `BYOK is part of the CLI. ${BYOK_SURFACES.availability} Pay providers directly at their rates.`,
       },
       {
         label: 'Confidentiality',

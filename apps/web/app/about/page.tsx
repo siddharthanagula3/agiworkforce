@@ -15,10 +15,13 @@ import {
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { FounderBlock, NoteList } from '@/features/marketing/components/pages/company/shared';
 import {
+  BYOK_SURFACES,
   CATALOG_AS_OF,
   MARKETING,
   POSITIONING,
   SURFACE_STATUS,
+  surfaceAvailabilitySummary,
+  surfaceCta,
 } from '../../lib/marketing-constants';
 import {
   FOUNDER_NAME,
@@ -28,6 +31,8 @@ import {
   REGISTERED_AGENT_ADDRESS,
 } from '../../lib/legal-constants';
 import '@/features/marketing/components/pages/company/company.css';
+
+const CLI_CTA = surfaceCta('cli');
 
 const PROGRESS_COUNT = 5;
 const PROGRESS = RELEASES.slice(0, PROGRESS_COUNT)
@@ -51,11 +56,11 @@ const PRINCIPLES = [
   },
   {
     title: 'Your keys, your bill, no markup.',
-    body: 'Bring your own provider keys from the released CLI today; VS Code support is coming soon. Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, and Desktop remains managed-cloud only.',
+    body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop remains managed-cloud only.`,
   },
   {
     title: 'One contract layer, six surfaces at different stages.',
-    body: `Web, Desktop, Mobile, CLI, Chrome, and VS Code share one contract layer: the same model catalog, the same trust-boundary rules, the same capability gates. They are not all live at once. Web and CLI: ${SURFACE_STATUS.web}. Desktop: ${SURFACE_STATUS.desktop}. Mobile, Chrome, and VS Code: ${SURFACE_STATUS.mobile}. Each surface that has shipped is native to its platform rather than a wrapped web view.`,
+    body: `Web, Desktop, Mobile, CLI, Chrome, and VS Code share one contract layer: the same model catalog, the same trust-boundary rules, the same capability gates. They are not all live at once. ${surfaceAvailabilitySummary()} Each surface that has shipped is native to its platform rather than a wrapped web view.`,
   },
 ];
 
@@ -160,7 +165,7 @@ export default function AboutPage() {
                   value: `${MARKETING.models.count} models · ${MARKETING.providers.count} provider integrations, as of ${CATALOG_AS_OF}`,
                 },
                 { label: 'Trust modes', value: 'Local · BYOK · Managed cloud' },
-                { label: 'Data policy', value: POSITIONING.trustBoundary },
+                { label: 'Data policy', value: POSITIONING.routeBoundary },
                 { label: 'Set in', value: 'Newsreader, Geist & JetBrains Mono' },
                 {
                   label: 'Compliance',
@@ -191,8 +196,8 @@ export default function AboutPage() {
             </Prose>
             <ButtonRow>
               <Button href="/login?redirectTo=%2F">Try AGI Web</Button>
-              <Button href="/download" variant="secondary">
-                Get the CLI
+              <Button href={CLI_CTA.href} variant="secondary">
+                {CLI_CTA.label}
               </Button>
               <Button href="/trust" variant="secondary">
                 See the trust posture

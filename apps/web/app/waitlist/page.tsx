@@ -63,7 +63,7 @@ const WHILE_YOU_WAIT = [
   {
     meta: 'Team',
     title: 'Team pricing',
-    body: 'Self-serve checkout for the Team tier, open today without an enterprise contract.',
+    body: 'Team is a self-serve per-seat plan with no enterprise contract. Paid upgrades are opening in stages, so checkout needs an access code or a place on the upgrade waitlist.',
     href: '/pricing',
   },
 ];

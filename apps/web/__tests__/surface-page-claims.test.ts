@@ -282,7 +282,8 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       .map(collapsed)
       .join('\n');
 
-    expect(publicContract).toMatch(/released CLI to Ollama or LM Studio on loopback/iu);
+    expect(publicContract).toMatch(/from the CLI to Ollama or LM Studio on loopback/iu);
+    expect(publicContract).not.toMatch(/released CLI/iu);
     expect(publicContract).toMatch(/Desktop and web use Managed Cloud/iu);
     expect(publicContract).toMatch(/operating system credential store/iu);
 
@@ -312,7 +313,8 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
 
     expect(localRuntimeCopy).toMatch(/current public Desktop reports no local MCP capability/iu);
     expect(localRuntimeCopy).toMatch(/Panel chat remains Managed Cloud/u);
-    expect(localRuntimeCopy).toMatch(/released CLI/iu);
+    expect(localRuntimeCopy).toMatch(/Connect it from the CLI instead/u);
+    expect(localRuntimeCopy).not.toMatch(/released CLI/iu);
 
     for (const [label, pattern] of [
       ['local-process MCP on Desktop', /added from Desktop or the CLI/iu],
@@ -913,9 +915,11 @@ describe('/vscode-extension and /solutions keep VS Code unpublished', () => {
     ).toBe(false);
   });
 
-  it('keeps the solutions index honest about which half of AGI Code is released', () => {
+  it('keeps the solutions index on the registry for the release state of AGI Code', () => {
     const page = collapsed('app/solutions/page.tsx');
-    expect(page).toMatch(/The released agi binary, and the VS Code extension/u);
+    expect(page).toMatch(/The agi binary, and the VS Code extension/u);
+    expect(page).toMatch(/\$\{BYOK_SURFACES\.availability\}/u);
+    expect(page).not.toMatch(/released agi binary/iu);
     expect(
       /The agi binary and the VS Code extension that spawns it over stdio/u.test(page),
       'solutions index still lists the unpublished extension as a route you can take today',

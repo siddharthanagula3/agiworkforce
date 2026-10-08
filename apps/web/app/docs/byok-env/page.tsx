@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Provider-key configuration',
@@ -32,8 +33,9 @@ export default function ByokEnvDocsPage() {
           <h1 className="agi-page-h1">Provider-key configuration</h1>
           <p className="agi-page-lede">
             Self-hosted AGI deployments read operator-managed provider keys from environment
-            variables. The CLI and VS Code each provide a local credential flow for user-managed
-            BYOK. Hosted Web, Mobile and the Desktop app do not expose BYOK key entry.
+            variables. The CLI has a local credential flow for user-managed BYOK, and the VS Code
+            extension hands provider keys to that CLI runtime. {BYOK_SURFACES.availability} Hosted
+            Web, Mobile and the Desktop app do not expose BYOK key entry.
           </p>
         </section>
 
@@ -113,8 +115,10 @@ GOOGLE_API_KEY=AIza...
             <p className="agi-callout-p">
               The macOS app runs on your AGI account and carries the hosted app, so it has nowhere
               private to keep a provider key and does not ask for one. On the same machine the CLI
-              stores a key in the operating system keyring, and VS Code uses SecretStorage. These
-              stores are surface-local and do not sync provider keys between apps.
+              stores a provider key in the operating system keyring, or in owner-only files on Linux
+              or when the keyring is turned off, and the VS Code extension passes provider keys to
+              that CLI runtime instead of keeping its own copy. Provider keys do not sync to Desktop
+              or the hosted apps.
             </p>
           </div>
         </section>
@@ -122,10 +126,11 @@ GOOGLE_API_KEY=AIza...
         <section className="agi-section">
           <p className="agi-section-eyebrow">Provider-key clients</p>
           <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 var(--space-4)' }}>
-            The released CLI stores provider keys in the operating system keyring. VS Code support
-            uses SecretStorage and is coming soon. Self-hosted Web deployments continue to use
-            environment variables. AGI&rsquo;s hosted Web, Mobile, Desktop, and Chrome surfaces do
-            not accept provider keys.
+            The CLI stores provider keys in the operating system keyring, or in owner-only files on
+            Linux or when the keyring is turned off. VS Code support hands keys to the CLI runtime.{' '}
+            {BYOK_SURFACES.availability} Self-hosted Web deployments continue to use environment
+            variables. AGI&rsquo;s hosted Web, Mobile, Desktop, and Chrome surfaces do not accept
+            provider keys.
           </p>
           <Link
             href="/byok"

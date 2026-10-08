@@ -30,9 +30,12 @@ import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import {
   approximateCount,
+  BYOK_SURFACES,
+  CLI_AVAILABILITY_NOTE,
   CLI_LOCAL_RUNTIMES,
   MARKETING,
   SURFACE_STATUS,
+  surfaceCta,
 } from '@/lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
@@ -57,10 +60,7 @@ export function MarketingLanding({
           eyebrow="the AI application suite"
           titleLines={[]}
           em=""
-          ctas={[
-            { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Get AGI Desktop' },
-          ]}
+          ctas={[{ href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' }, surfaceCta('desktop')]}
           modeRibbon={[]}
           visual={<MobileHeroVisual />}
           announcement={landingAnnouncement(freeMediaOffer, {
@@ -84,7 +84,10 @@ export function MarketingLanding({
               value: approximateCount(CLI_LOCAL_RUNTIMES.names.length),
               label: 'local runtimes in the CLI',
             },
-            { value: approximateCount(MARKETING.surfaces.count), label: 'surfaces, one account' },
+            {
+              value: approximateCount(MARKETING.surfaces.count),
+              label: 'surfaces built for one account',
+            },
           ]}
         />
 
@@ -216,7 +219,7 @@ export function MarketingLanding({
               body: 'Models on your hardware. Works offline. Free.',
               points: [
                 'Local chats, files, and sessions never silently leave your device',
-                `${CLI_LOCAL_RUNTIMES.label} in the released CLI`,
+                `${CLI_LOCAL_RUNTIMES.label} in the CLI`,
                 'Mobile Local mode is planned, not published',
                 'No account required',
               ],
@@ -226,9 +229,9 @@ export function MarketingLanding({
               mode: 'BYOK',
               glyph: '◇',
               title: 'Your keys, your bill.',
-              body: 'Bring provider keys in the released CLI. VS Code support is coming soon.',
+              body: `Bring provider keys in the CLI. ${BYOK_SURFACES.availability}`,
               points: [
-                'Keys stored encrypted, on your machine',
+                'Keys saved on your own machine',
                 'Traffic goes directly to your provider',
                 'Visible provider label on every route',
                 'Explicit, reviewed continuation from Local',
@@ -242,7 +245,7 @@ export function MarketingLanding({
               body: 'Hosted capacity, open by default.',
               points: [
                 'Sign in and start, no waitlist',
-                'Shared across Web, Mobile & Desktop',
+                'Designed to be shared across Web, Mobile and Desktop',
                 'AGI-owned routing with clear labels',
                 'Usage metered and transparent',
               ],
@@ -276,7 +279,7 @@ export function MarketingLanding({
             {
               meta: 'Tools',
               title: 'Tools & Connectors',
-              body: 'MCP servers and OAuth apps, behind explicit permissions.',
+              body: 'MCP servers and OAuth apps, behind explicit permissions. Connectors are coming soon.',
               href: '/apps',
             },
             {
@@ -353,12 +356,12 @@ export function MarketingLanding({
           cards={[
             {
               title: 'Start on your own',
-              body: 'AGI Web is free to try in the browser. The released CLI offers Local and BYOK routes.',
+              body: `AGI Web is free to try in the browser. The CLI offers Local and BYOK routes. ${CLI_AVAILABILITY_NOTE}`,
               points: [
                 'Every admitted model behind one selector, with Auto as the default',
                 'Projects, memory, artifacts and web search on the first day',
                 'Every reply names the model that answered it',
-                'Desktop, CLI and the extensions on the same account',
+                'The same account carries to Desktop, the CLI and the extensions once they are released',
               ],
               cta: { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
             },

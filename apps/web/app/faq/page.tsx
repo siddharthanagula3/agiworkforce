@@ -5,7 +5,12 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
-import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES, MARKETING } from '@/lib/marketing-constants';
+import {
+  BYOK_SURFACES,
+  CLI_AVAILABILITY_NOTE,
+  CLI_LOCAL_RUNTIMES,
+  MARKETING,
+} from '@/lib/marketing-constants';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -33,7 +38,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Can I run AGI fully offline?',
-    body: 'Yes in the released CLI after Ollama or LM Studio and a model are installed. Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Desktop uses managed cloud, and Mobile has no published release.',
+    body: `Yes in the CLI after Ollama or LM Studio and a model are installed. ${CLI_AVAILABILITY_NOTE} Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Desktop uses managed cloud, and Mobile has no published release.`,
   },
   {
     title: 'Can I switch models mid-conversation?',
@@ -49,7 +54,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Do you train on my data?',
-    body: 'AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. Qwen and Zhipu route through OpenRouter unless AGI holds its own key for that provider, and OpenRouter is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies, our statement about AGI-owned models is not a promise on their behalf. MiniMax models receive nothing from managed cloud and are reachable only with your own key. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.',
+    body: 'AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. On the Free plan, a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, on AGI’s own key at its international endpoint in Singapore, or OpenRouter’s free router. Which one answers depends on what is available for that turn, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training, which we rely on and cannot verify; the providers behind OpenRouter’s free models may train on what you send. Qwen and Zhipu route through OpenRouter unless AGI holds its own key for that provider, and OpenRouter is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies, our statement about AGI-owned models is not a promise on their behalf. MiniMax models receive nothing from managed cloud and are reachable only with your own key. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.',
   },
   {
     title: 'Who can read my conversations?',
@@ -77,7 +82,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Where does the CLI store my provider key?',
-    body: 'The released CLI stores provider credentials in the operating system credential store. It keeps only non-secret provider names in its local index. Desktop accepts no provider key, and VS Code BYOK remains coming soon.',
+    body: `The CLI stores provider credentials in the operating system credential store, except on Linux or when the keyring is turned off, where it uses owner-only files in its configuration directory. It keeps only non-secret provider names in its local index. Desktop accepts no provider key. ${BYOK_SURFACES.availability}`,
   },
   {
     title: 'Is there an Enterprise plan?',

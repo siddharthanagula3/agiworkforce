@@ -34,15 +34,13 @@ export const MARKETING_MODEL_PILLS = [
 ] as const;
 
 export const LAUNCH = {
-  publicLabel: 'Public launch: date to be announced',
+  publicLabel: 'Release date to be announced',
   shortLabel: 'To be announced',
   ctaLabel: 'Get launch access',
 } as const;
 
 export const POSITIONING = {
   wedge: 'Try AGI on the web. Run Local and BYOK from the CLI. Managed cloud, open by default.',
-  trustBoundary:
-    'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.',
   routeBoundary: [
     'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist.',
     'The CLI supports Local and BYOK.',

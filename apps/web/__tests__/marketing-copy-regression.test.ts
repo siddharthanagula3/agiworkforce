@@ -192,7 +192,8 @@ describe('public marketing copy regressions', () => {
       'UI key entry, OS-keychain write, and revoke-all are private-beta',
     );
     expect(byokSetup).not.toContain('Desktop reads from OS keychain');
-    expect(byokSetup).toContain('The released CLI stores provider keys');
+    expect(byokSetup).toContain('The CLI stores provider keys');
+    expect(byokSetup).not.toContain('released CLI');
     expect(byokSetup).toContain('VS Code support');
     expect(byokSetup).toContain('Desktop takes no provider key');
     expect(byokSetup).not.toContain('Tauri');
