@@ -481,6 +481,12 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the DeepSeek flash family slot moves from deepseek-v4-flash to the row keyed by DeepSeek's current unversioned id, which serves DeepSeek V4.1 Flash, against the eval gate. The gate was run on 2026-10-07 on the three zero-tolerance corpora and refused that model: golden 0.917, refusal 0.000 and jailbreak 0.364 against floors of 0.900, 1.000 and 1.000, the same three scores its predecessor recorded; the other twelve corpora were not measured for it. The slot records the refusal as its promotion reason. An id with no version gives the slot pattern nothing to parse, so the slot now declares that this id resolves to generation 4.1 (unversionedModelIds), which the family matcher reads; the pattern itself is unchanged. Both models list at $0.30/$1.20 per million. deepseek-v4-flash leaves through the retire tool into retired-models.json naming its successor, with its route, probe and synced records, and deepseek-v4-pro now names the new row as its variant partner. The new row has only the direct DeepSeek route; the marketplace routes of the old row were not copied because nothing read for this change says those gateways serve the new id. The reasoning_premium Auto slot names this family, so the eval safety floor baseline entry for that slot now states what is true of the new model. No task's preferred slots and no plan's allowed slots include reasoning_premium, so Auto does not dispatch to it. deepseek-v4-pro is unchanged. No provider call was made for this change."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the google/gemini-flash-image slot moves from gemini-3.1-flash-image, which Google deprecated on 2026-10-06, to gemini-nano-banana-2.1; the slot pattern now matches the nano-banana name. The eval gate was not run: the harness has no measurement for image output and the slot has no baseline. Two catalog-side gates fail and are recorded on the slot as failing. Input rises from $0.50 to $1.50 per million, 200% against the 25% ceiling, while image output falls from $60 to $30 per million and the 1K image from $0.067 to $0.0336, so a generated image costs about half. The slot's minimum context of 1,000,000 tokens is unmet by both models, which each publish 131,072; the minimum predates the 2026-09-01 correction of the old row and was not changed here. This slot serves the image_generation Auto slot on Pro and above. gemini-3.1-flash-image leaves through the retire tool, and gemini-3-pro-image and gemini-3.1-flash-lite-image now name the new row as their variant partner. Three preview rows with shutdown dates leave for the stable models Google names as their replacements: gemini-omni-flash-preview for gemini-omni-1.1-flash, gemini-3.1-flash-live-preview for gemini-3.8-live and gemini-3.1-flash-tts-preview for gemini-3.8-flash-tts. The retire tool cannot carry out a row that is not live, because the compiler holds such a row at or below the shadow stage and the tool removes only from deprecated; their retired records were written in the tool's shape directly and the rows deleted. gemini-3.5-live-translate-preview stays: it has no shutdown date and no newer row covers live speech translation. gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-embedding-2 and the three Veo rows are unchanged. The retire tool reads a released field the authored rows do not carry and stamps the UTC day, so the sixteen records written for this refresh take their release date from each row's releasedOverride and are dated 2026-10-07, the local day the work was done. No provider call was made."
     }
   ],
   "providers": {
@@ -1559,50 +1565,6 @@
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_fast"
       }
     },
-    "gemini-3.1-flash-image": {
-      "id": "gemini-3.1-flash-image",
-      "apiModelId": "gemini-3.1-flash-image",
-      "name": "Gemini 3.1 Flash Image",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "image",
-      "contextWindow": 131072,
-      "inputCost": 0.5,
-      "outputCost": 60,
-      "capabilities": {
-        "streaming": false,
-        "tools": false,
-        "vision": true,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": true,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Image Generation", "Native Gemini Image Gen"],
-      "released": "March 2026",
-      "deprecation_date": null,
-      "imagePerImageCost": 0.067,
-      "imageApi": "gemini",
-      "imageOutputMimeType": "image/jpeg",
-      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. Prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 1,000,000 to 131,072: Google's model card publishes an input token limit of 131,072 and an output token limit of 32,768. litellm reports 65,536 and so will keep flagging this row, Google's card is the authority, not the snapshot. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0, 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table.",
-      "openWeight": false,
-      "license": "proprietary",
-      "reasoning": { "capable": false, "control": "none" },
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation"
-      }
-    },
     "gemini-nano-banana-2.1": {
       "id": "gemini-nano-banana-2.1",
       "apiModelId": "gemini-nano-banana-2.1",
@@ -1642,9 +1604,9 @@
       "license": "proprietary",
       "reasoning": { "capable": false, "control": "none" },
       "lifecycle": {
-        "stage": "registered",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1"
+        "source": "catalog/model-families.json#google/gemini-flash-image"
       }
     },
     "gemini-3-pro-image": {
@@ -1655,7 +1617,7 @@
       "provider": "google",
       "developer": "google",
       "modelType": "image",
-      "variantPartner": "gemini-3.1-flash-image",
+      "variantPartner": "gemini-nano-banana-2.1",
       "contextWindow": 65536,
       "inputCost": 2,
       "outputCost": 120,
@@ -1703,7 +1665,7 @@
       "provider": "google",
       "developer": "google",
       "modelType": "image",
-      "variantPartner": "gemini-3.1-flash-image",
+      "variantPartner": "gemini-nano-banana-2.1",
       "contextWindow": 65536,
       "inputCost": 0.25,
       "outputCost": 30,
@@ -3305,47 +3267,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "gemini-omni-flash-preview": {
-      "id": "gemini-omni-flash-preview",
-      "apiModelId": "gemini-omni-flash-preview",
-      "name": "Gemini Omni Flash",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "video",
-      "contextWindow": 1048576,
-      "inputCost": 1.5,
-      "outputCost": 17.5,
-      "capabilities": {
-        "streaming": false,
-        "tools": false,
-        "vision": true,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": true,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Video Generation", "Conversational Video Editing"],
-      "released": "June 30, 2026",
-      "deprecation_date": "2026-10-22",
-      "videoPerSecondCost": 0.1,
-      "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06; prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 4,000 to 1,048,576, the context window Google publishes on the shared Gemini Omni Flash model card that this preview SKU's pricing entry links to, no model card exists at the preview id itself, and 4,000 was a placeholder shared with the veo-3.1 rows. litellm holds two entries for this model that disagree with each other: its gemini/ entry says 131,072 and its vertex_ai-language-models entry says 1,048,576, so the drift check will keep flagging the first one.",
-      "availability": "preview",
-      "reasoning": { "capable": false, "control": "none" },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
     "gemini-omni-1.1-flash": {
       "id": "gemini-omni-1.1-flash",
       "apiModelId": "gemini-omni-1.1-flash",
@@ -3427,62 +3348,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "gemini-3.1-flash-live-preview": {
-      "id": "gemini-3.1-flash-live-preview",
-      "apiModelId": "gemini-3.1-flash-live-preview",
-      "name": "Gemini 3.1 Flash Live",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "multimodal",
-      "inputModalities": ["text", "image", "audio", "video"],
-      "contextWindow": 131072,
-      "inputCost": 0.75,
-      "outputCost": 4.5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": false,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Realtime Voice", "Live Multimodal Dialogue"],
-      "released": "March 11, 2026",
-      "deprecation_date": "2026-11-17",
-      "pricingNote": "Live API audio-to-audio dialogue model. Input $0.75/1M text, $3.00/1M audio (about $0.005 per minute) and $1.00/1M image or video (about $0.002 per minute). Output $4.50/1M text and $12.00/1M audio (about $0.018 per minute). Search grounding bills $14 per 1,000 requests after 5,000 free each month. Free tier is free of charge and batch is not supported. Thinking levels come from the model card's migration notes; the docs thinking table has no row for it, and no knowledge cutoff is published. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 65536,
-      "availability": "preview",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "minimal",
-        "canDisableThinking": false,
-        "request": {
-          "api": "gen",
-          "effortPath": "thinkingConfig.thinkingLevel",
-          "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
-        }
-      },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
     "gemini-3.8-live": {
       "id": "gemini-3.8-live",
       "apiModelId": "gemini-3.8-live",
@@ -3530,49 +3395,6 @@
         "stage": "registered",
         "stagedOn": "2026-10-07",
         "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live"
-      }
-    },
-    "gemini-3.1-flash-tts-preview": {
-      "id": "gemini-3.1-flash-tts-preview",
-      "apiModelId": "gemini-3.1-flash-tts-preview",
-      "name": "Gemini 3.1 Flash TTS",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "tts",
-      "contextWindow": 8192,
-      "inputCost": 1,
-      "outputCost": 20,
-      "capabilities": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Voice Generation", "Narration"],
-      "released": "April 13, 2026",
-      "deprecation_date": "2026-11-17",
-      "pricingNote": "Input $1.00/1M text tokens, output $20.00/1M audio tokens, batch at half both. Free tier is free of charge. Streaming through streamGenerateContent has been supported since 2026-06-17. The current Gemini text-to-speech model: the 2.5 TTS previews name it as their replacement. Still preview with no shutdown announced. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-04.",
-      "openWeight": false,
-      "license": "proprietary",
-      "maxOutputTokens": 16384,
-      "availability": "preview",
-      "reasoning": { "capable": false, "control": "none" },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
     "gemini-3.8-flash-tts": {
@@ -21812,7 +21634,7 @@
   },
   "providerDefaults": {
     "openai": { "imageOutput": "gpt-image-2.5-sunburst" },
-    "google": { "imageOutput": "gemini-3.1-flash-image" },
+    "google": { "imageOutput": "gemini-nano-banana-2.1" },
     "open_router": { "imageOutput": "openrouter-auto" }
   },
   "providersInOrder": [

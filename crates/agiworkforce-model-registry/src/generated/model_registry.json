@@ -341,37 +341,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.1-flash-image": {
-      "identity": {
-        "key": "gemini-3.1-flash-image",
-        "displayName": "Gemini 3.1 Flash Image",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.1-flash-image",
-        "kind": "image",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": [],
-        "family": "gemini-flash-image",
-        "version": "3.1"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "March 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation",
-        "replacedBy": null
-      },
-      "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "gemini-nano-banana-2.1": {
       "identity": {
         "key": "gemini-nano-banana-2.1",
@@ -383,8 +352,8 @@
         "openWeight": false,
         "license": "proprietary",
         "aliases": [],
-        "family": null,
-        "version": null
+        "family": "gemini-flash-image",
+        "version": "2.1"
       },
       "lifecycle": {
         "status": "active",
@@ -394,9 +363,9 @@
         "deprecated": false,
         "releasedOn": "2026-10-06",
         "deprecatedOn": null,
-        "stage": "registered",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1",
+        "stageSource": "catalog/model-families.json#google/gemini-flash-image",
         "replacedBy": null
       },
       "speed": "fast",
@@ -412,7 +381,7 @@
         "providerModelId": "gemini-3-pro-image",
         "openRouterSlug": "google/gemini-3-pro-image",
         "kind": "image",
-        "familyPartner": "gemini-3.1-flash-image",
+        "familyPartner": "gemini-nano-banana-2.1",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["google/gemini-3-pro-image"],
@@ -445,7 +414,7 @@
         "providerModelId": "gemini-3.1-flash-lite-image",
         "openRouterSlug": "google/gemini-3.1-flash-lite-image",
         "kind": "image",
-        "familyPartner": "gemini-3.1-flash-image",
+        "familyPartner": "gemini-nano-banana-2.1",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["google/gemini-3.1-flash-lite-image"],
@@ -1336,35 +1305,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-omni-flash-preview": {
-      "identity": {
-        "key": "gemini-omni-flash-preview",
-        "displayName": "Gemini Omni Flash",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-omni-flash-preview",
-        "kind": "video",
-        "aliases": [],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "preview",
-        "released": "June 30, 2026",
-        "deprecationDate": "2026-10-22",
-        "deprecated": false,
-        "releasedOn": "2026-06-30",
-        "deprecatedOn": "2026-10-22",
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "gemini-omni-1.1-flash": {
       "identity": {
         "key": "gemini-omni-1.1-flash",
@@ -1423,37 +1363,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.1-flash-live-preview": {
-      "identity": {
-        "key": "gemini-3.1-flash-live-preview",
-        "displayName": "Gemini 3.1 Flash Live",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.1-flash-live-preview",
-        "kind": "multimodal",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": [],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "preview",
-        "released": "March 11, 2026",
-        "deprecationDate": "2026-11-17",
-        "deprecated": false,
-        "releasedOn": "2026-03-11",
-        "deprecatedOn": "2026-11-17",
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "gemini-3.8-live": {
       "identity": {
         "key": "gemini-3.8-live",
@@ -1479,37 +1388,6 @@
         "stage": "registered",
         "stagedOn": "2026-10-07",
         "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live",
-        "replacedBy": null
-      },
-      "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "gemini-3.1-flash-tts-preview": {
-      "identity": {
-        "key": "gemini-3.1-flash-tts-preview",
-        "displayName": "Gemini 3.1 Flash TTS",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.1-flash-tts-preview",
-        "kind": "tts",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": [],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "preview",
-        "released": "April 13, 2026",
-        "deprecationDate": "2026-11-17",
-        "deprecated": false,
-        "releasedOn": "2026-04-13",
-        "deprecatedOn": "2026-11-17",
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
         "replacedBy": null
       },
       "speed": "fast",
@@ -12783,7 +12661,6 @@
       "gemini-embedding-2",
       "gemini-3.1-pro-preview",
       "gemini-3.5-flash-lite",
-      "gemini-3.1-flash-image",
       "gemini-nano-banana-2.1",
       "gemini-3-pro-image",
       "gemini-3.1-flash-lite-image",
@@ -12791,12 +12668,9 @@
       "veo-3.1",
       "veo-3.1-fast",
       "veo-3.1-lite",
-      "gemini-omni-flash-preview",
       "gemini-omni-1.1-flash",
       "gemini-3.5-live-translate-preview",
-      "gemini-3.1-flash-live-preview",
       "gemini-3.8-live",
-      "gemini-3.1-flash-tts-preview",
       "gemini-3.8-flash-tts"
     ],
     "deepseek": ["deepseek-v4-pro", "deepseek-flash"],
@@ -13771,26 +13645,6 @@
         "outputPerMillion": 2.5,
         "cacheReadPerMillion": 0.03,
         "cacheWritePerMillion": 0.3
-      }
-    },
-    "google/gemini-3.1-flash-image": {
-      "modelKey": "gemini-3.1-flash-image",
-      "provider": "google",
-      "providerModelId": "gemini-3.1-flash-image",
-      "harnessId": "google/media",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_image",
-        "inputPerMillion": 0.5,
-        "outputPerMillion": 60,
-        "imagePerImage": 0.067
       }
     },
     "google/gemini-nano-banana-2.1": {
@@ -15681,26 +15535,6 @@
         "videoPerSecondByResolution": { "720p": 0.05, "1080p": 0.08 }
       }
     },
-    "google/gemini-omni-flash-preview": {
-      "modelKey": "gemini-omni-flash-preview",
-      "provider": "google",
-      "providerModelId": "gemini-omni-flash-preview",
-      "harnessId": "google/media",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "preview",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_second",
-        "inputPerMillion": 1.5,
-        "outputPerMillion": 17.5,
-        "videoPerSecond": 0.1
-      }
-    },
     "google/gemini-omni-1.1-flash": {
       "modelKey": "gemini-omni-1.1-flash",
       "provider": "google",
@@ -15740,25 +15574,6 @@
         "outputPerMillion": 21
       }
     },
-    "google/gemini-3.1-flash-live-preview": {
-      "modelKey": "gemini-3.1-flash-live-preview",
-      "provider": "google",
-      "providerModelId": "gemini-3.1-flash-live-preview",
-      "harnessId": "google/generate-content",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "preview",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.75,
-        "outputPerMillion": 4.5
-      }
-    },
     "google/gemini-3.8-live": {
       "modelKey": "gemini-3.8-live",
       "provider": "google",
@@ -15776,25 +15591,6 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 0.75,
         "outputPerMillion": 4.5
-      }
-    },
-    "google/gemini-3.1-flash-tts-preview": {
-      "modelKey": "gemini-3.1-flash-tts-preview",
-      "provider": "google",
-      "providerModelId": "gemini-3.1-flash-tts-preview",
-      "harnessId": "google/media",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "preview",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 20
       }
     },
     "google/gemini-3.8-flash-tts": {
@@ -24403,30 +24199,6 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "gemini-3.1-flash-image": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": false,
-      "imageOutput": true,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": false,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
-    },
     "gemini-nano-banana-2.1": {
       "textInput": true,
       "imageInput": true,
@@ -25171,30 +24943,6 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gemini-omni-flash-preview": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": false,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": true,
-      "streaming": false,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
-    },
     "gemini-omni-1.1-flash": {
       "textInput": true,
       "imageInput": true,
@@ -25243,30 +24991,6 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gemini-3.1-flash-live-preview": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": true,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": false,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
-    },
     "gemini-3.8-live": {
       "textInput": true,
       "imageInput": true,
@@ -25287,30 +25011,6 @@
       "computerUse": false,
       "agentic": false,
       "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
-    },
-    "gemini-3.1-flash-tts-preview": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": false,
-      "imageOutput": false,
-      "audioOutput": true,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": false
@@ -34175,7 +33875,7 @@
     },
     "google": {
       "imageOutput": {
-        "modelKey": "gemini-3.1-flash-image",
+        "modelKey": "gemini-nano-banana-2.1",
         "source": "packages/ai/model-registry/catalog/model-families.json#google/gemini-flash-image",
         "verifiedOn": "2026-09-05",
         "note": "Three active image families sit at the fast, balanced and best tiers. The balanced slot is the default: the fast tier trades quality a caller did not ask to give up, and the best tier costs twice as much per image. A caller wanting either names it explicitly."
@@ -34465,13 +34165,6 @@
       "outputPerMillion": 2.5,
       "cacheReadPerMillion": 0.03
     },
-    "gemini-3.1-flash-image": {
-      "currency": "USD",
-      "unit": "per_image",
-      "inputPerMillion": 0.5,
-      "outputPerMillion": 60,
-      "imagePerImage": 0.067
-    },
     "gemini-nano-banana-2.1": {
       "currency": "USD",
       "unit": "per_image",
@@ -34725,13 +34418,6 @@
       "videoPerSecond": 0.05,
       "videoPerSecondByResolution": { "720p": 0.05, "1080p": 0.08 }
     },
-    "gemini-omni-flash-preview": {
-      "currency": "USD",
-      "unit": "per_second",
-      "inputPerMillion": 1.5,
-      "outputPerMillion": 17.5,
-      "videoPerSecond": 0.1
-    },
     "gemini-omni-1.1-flash": {
       "currency": "USD",
       "unit": "per_second",
@@ -34745,23 +34431,11 @@
       "inputPerMillion": 3.5,
       "outputPerMillion": 21
     },
-    "gemini-3.1-flash-live-preview": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.75,
-      "outputPerMillion": 4.5
-    },
     "gemini-3.8-live": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 0.75,
       "outputPerMillion": 4.5
-    },
-    "gemini-3.1-flash-tts-preview": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 1,
-      "outputPerMillion": 20
     },
     "gemini-3.8-flash-tts": {
       "currency": "USD",
@@ -37537,7 +37211,6 @@
     "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
     "gemini-3.1-pro-preview": { "contextTokens": 1048576 },
     "gemini-3.5-flash-lite": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-image": { "contextTokens": 131072 },
     "gemini-nano-banana-2.1": { "contextTokens": 131072 },
     "gemini-3-pro-image": { "contextTokens": 65536, "maxOutputTokens": 32768 },
     "gemini-3.1-flash-lite-image": {
@@ -37717,12 +37390,9 @@
         "supportsSeed": true
       }
     },
-    "gemini-omni-flash-preview": { "contextTokens": 1048576 },
     "gemini-omni-1.1-flash": { "contextTokens": 1048576 },
     "gemini-3.5-live-translate-preview": { "contextTokens": 131072, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-live-preview": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "gemini-3.8-live": { "contextTokens": 131072, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-tts-preview": { "contextTokens": 8192, "maxOutputTokens": 16384 },
     "gemini-3.8-flash-tts": { "contextTokens": 8192, "maxOutputTokens": 16384 },
     "openrouter-auto": { "contextTokens": 2000000 },
     "openrouter-auto-beta": { "contextTokens": 2000000 },
@@ -38191,7 +37861,6 @@
       }
     },
     "gemini-3.5-flash-lite": {},
-    "gemini-3.1-flash-image": {},
     "gemini-nano-banana-2.1": {},
     "gemini-3-pro-image": {},
     "gemini-3.1-flash-lite-image": {},
@@ -38298,12 +37967,9 @@
     "minimax-m3": {},
     "minimax-m2.7": {},
     "veo-3.1-lite": {},
-    "gemini-omni-flash-preview": {},
     "gemini-omni-1.1-flash": {},
     "gemini-3.5-live-translate-preview": {},
-    "gemini-3.1-flash-live-preview": {},
     "gemini-3.8-live": {},
-    "gemini-3.1-flash-tts-preview": {},
     "gemini-3.8-flash-tts": {},
     "openrouter-auto": {},
     "openrouter-auto-beta": {},
@@ -39218,6 +38884,13 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the DeepSeek flash family slot moves from deepseek-v4-flash to the row keyed by DeepSeek's current unversioned id, which serves DeepSeek V4.1 Flash, against the eval gate. The gate was run on 2026-10-07 on the three zero-tolerance corpora and refused that model: golden 0.917, refusal 0.000 and jailbreak 0.364 against floors of 0.900, 1.000 and 1.000, the same three scores its predecessor recorded; the other twelve corpora were not measured for it. The slot records the refusal as its promotion reason. An id with no version gives the slot pattern nothing to parse, so the slot now declares that this id resolves to generation 4.1 (unversionedModelIds), which the family matcher reads; the pattern itself is unchanged. Both models list at $0.30/$1.20 per million. deepseek-v4-flash leaves through the retire tool into retired-models.json naming its successor, with its route, probe and synced records, and deepseek-v4-pro now names the new row as its variant partner. The new row has only the direct DeepSeek route; the marketplace routes of the old row were not copied because nothing read for this change says those gateways serve the new id. The reasoning_premium Auto slot names this family, so the eval safety floor baseline entry for that slot now states what is true of the new model. No task's preferred slots and no plan's allowed slots include reasoning_premium, so Auto does not dispatch to it. deepseek-v4-pro is unchanged. No provider call was made for this change."
+    },
+    {
+      "id": "verification/2026-10-07/81",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the google/gemini-flash-image slot moves from gemini-3.1-flash-image, which Google deprecated on 2026-10-06, to gemini-nano-banana-2.1; the slot pattern now matches the nano-banana name. The eval gate was not run: the harness has no measurement for image output and the slot has no baseline. Two catalog-side gates fail and are recorded on the slot as failing. Input rises from $0.50 to $1.50 per million, 200% against the 25% ceiling, while image output falls from $60 to $30 per million and the 1K image from $0.067 to $0.0336, so a generated image costs about half. The slot's minimum context of 1,000,000 tokens is unmet by both models, which each publish 131,072; the minimum predates the 2026-09-01 correction of the old row and was not changed here. This slot serves the image_generation Auto slot on Pro and above. gemini-3.1-flash-image leaves through the retire tool, and gemini-3-pro-image and gemini-3.1-flash-lite-image now name the new row as their variant partner. Three preview rows with shutdown dates leave for the stable models Google names as their replacements: gemini-omni-flash-preview for gemini-omni-1.1-flash, gemini-3.1-flash-live-preview for gemini-3.8-live and gemini-3.1-flash-tts-preview for gemini-3.8-flash-tts. The retire tool cannot carry out a row that is not live, because the compiler holds such a row at or below the shadow stage and the tool removes only from deprecated; their retired records were written in the tool's shape directly and the rows deleted. gemini-3.5-live-translate-preview stays: it has no shutdown date and no newer row covers live speech translation. gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-embedding-2 and the three Veo rows are unchanged. The retire tool reads a released field the authored rows do not carry and stamps the UTC day, so the sixteen records written for this refresh take their release date from each row's releasedOverride and are dated 2026-10-07, the local day the work was done. No provider call was made."
     }
   ],
   "retiredModels": {
@@ -39275,8 +38948,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "October 15, 2025",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-haiku-5-5",
       "metadataSource": "catalog/models.curation.json#claude-haiku-4-5",
       "metadataPreserved": true
@@ -39311,8 +38984,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "June 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-opus-5-5",
       "metadataSource": "catalog/models.curation.json#claude-opus-4-8",
       "metadataPreserved": true
@@ -39346,8 +39019,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 24, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-opus-5-5",
       "metadataSource": "catalog/models.curation.json#claude-opus-5",
       "metadataPreserved": true
@@ -39379,8 +39052,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "June 30, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-sonnet-5-5",
       "metadataSource": "catalog/models.curation.json#claude-sonnet-5",
       "metadataPreserved": true
@@ -39439,8 +39112,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 31, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "deepseek-flash",
       "metadataSource": "catalog/models.curation.json#deepseek-v4-flash",
       "metadataPreserved": true
@@ -39480,6 +39153,39 @@
     },
     "gemini-3-flash-preview": { "id": "gemini-3-flash-preview", "metadataPreserved": false },
     "gemini-3-pro-preview": { "id": "gemini-3-pro-preview", "metadataPreserved": false },
+    "gemini-3.1-flash-image": {
+      "id": "gemini-3.1-flash-image",
+      "displayName": "Gemini 3.1 Flash Image",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "image",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": true,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "March 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-nano-banana-2.1",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-image",
+      "metadataPreserved": true
+    },
     "gemini-3.1-flash-lite": {
       "id": "gemini-3.1-flash-lite",
       "displayName": "Gemini 3.1 Flash-Lite",
@@ -39511,6 +39217,72 @@
       "retiredOn": "2026-10-07",
       "replacedBy": "gemini-3.5-flash-lite",
       "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-lite",
+      "metadataPreserved": true
+    },
+    "gemini-3.1-flash-live-preview": {
+      "id": "gemini-3.1-flash-live-preview",
+      "displayName": "Gemini 3.1 Flash Live",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "multimodal",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": true,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "March 11, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-live",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-live-preview",
+      "metadataPreserved": true
+    },
+    "gemini-3.1-flash-tts-preview": {
+      "id": "gemini-3.1-flash-tts-preview",
+      "displayName": "Gemini 3.1 Flash TTS",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "tts",
+      "contextWindow": 8192,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": false,
+        "audioOutput": true,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "April 13, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-flash-tts",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-tts-preview",
       "metadataPreserved": true
     },
     "gemini-3.5-flash": {
@@ -39600,6 +39372,39 @@
       "metadataSource": "packages/contracts/types/src/models.json@a82e29921",
       "metadataPreserved": true
     },
+    "gemini-omni-flash-preview": {
+      "id": "gemini-omni-flash-preview",
+      "displayName": "Gemini Omni Flash",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "video",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": true,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "June 30, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-omni-1.1-flash",
+      "metadataSource": "catalog/models.curation.json#gemini-omni-flash-preview",
+      "metadataPreserved": true
+    },
     "glm-4.7": { "id": "glm-4.7", "metadataPreserved": false },
     "glm-5.2": {
       "id": "glm-5.2",
@@ -39659,8 +39464,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-6-luna",
       "metadataSource": "catalog/models.curation.json#gpt-5.6-luna",
       "metadataPreserved": true
@@ -39692,8 +39497,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-6-astra",
       "metadataSource": "catalog/models.curation.json#gpt-5.6-sol",
       "metadataPreserved": true
@@ -39725,8 +39530,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-6.1-sol",
       "metadataSource": "catalog/models.curation.json#gpt-5.6-terra",
       "metadataPreserved": true
@@ -39758,8 +39563,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "April 21, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-image-2.5-sunburst",
       "metadataSource": "catalog/models.curation.json#gpt-image-2",
       "metadataPreserved": true
@@ -39878,8 +39683,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "August 12, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "grok-4.7",
       "metadataSource": "catalog/models.curation.json#grok-4.6",
       "metadataPreserved": true
@@ -40397,13 +40202,13 @@
       "canonicalFamily": "gemini-flash-image",
       "tier": "balanced",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gemini-3.1-flash-image",
-      "activeGeneration": "3.1",
+      "activeModelKey": "gemini-nano-banana-2.1",
+      "activeGeneration": "2.1",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gemini-3.1-flash-image",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "google/gemini-embedding": {
       "provider": "google",
@@ -41078,7 +40883,7 @@
           "description": "Shared computer use premium route. Model and provider are selected by the canonical registry."
         },
         "image_generation": {
-          "modelKey": "gemini-3.1-flash-image",
+          "modelKey": "gemini-nano-banana-2.1",
           "label": "Image Generation",
           "description": "Shared image generation route. Model and provider are selected by the canonical registry."
         },
