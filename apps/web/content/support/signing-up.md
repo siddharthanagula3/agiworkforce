@@ -4,7 +4,7 @@ title: Create an account and send your first message
 path: /get-started
 category: getting-started
 tags: sign up, signup, create account, register, new account, google, github, oauth, verification code, terms, first message, first chat
-updated: 2026-09-20
+updated: 2026-10-07
 scope: public
 ---
 
@@ -16,9 +16,13 @@ scope: public
 3. If you used email, confirm the code sent to your inbox. If the code has not
    arrived, check the spam folder before requesting another.
 
-There is no checkbox to tick. The sign-up screen states that by signing up you
-agree to the Terms of Use and acknowledge the Privacy Policy, and completing
-sign-up is the agreement.
+The sign-up form asks for your age in a field labelled "Your age". You must be
+at least 13 to create an account, and if you are under 18 you need permission
+from a parent or guardian. The age is checked in your browser and is not stored
+or sent to us. There is no terms checkbox: under the button the form states "By
+creating an account, you agree to the Terms of Use and acknowledge the Privacy
+Policy." One optional box, "Email me product news, tips and offers.", starts
+unticked.
 
 ## What you can do immediately
 
@@ -40,6 +44,6 @@ pick a model for each message from the ones your plan and trust mode allow.
   address has never been registered. Sign up rather than resetting a password.
 - "That password is too common." means the password was rejected against a
   common-password list. Choose a longer, less common one.
-- A verification step the sign-up screen cannot render ends with "This account
-  needs a verification step we cannot show here yet." Email
-  contact@agiworkforce.com and a person will unblock the account.
+- A sign-up that needs a detail the screen cannot collect ends with a message
+  that starts "This sign-up also needs" and tells you to contact support. Email
+  contact@agiworkforce.com to finish creating the account.

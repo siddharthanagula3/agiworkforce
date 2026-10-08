@@ -4,11 +4,13 @@ title: Connectors and MCP
 path: /connectors
 category: connectors
 tags: connector, connectors, mcp, integration, github, tools, revoke, disconnect, permissions, always allow
-updated: 2026-09-20
+updated: 2026-10-08
 scope: public
 ---
 
 ## What connectors do
+
+Connectors are coming soon, and none can be connected until they open.
 
 Connectors let AGI call an external system on your behalf, reading a repository,
 querying a service, or running a tool exposed over MCP (Model Context Protocol).
@@ -16,7 +18,8 @@ Every connector is scoped to your own account.
 
 ## Adding a connector
 
-Open the connectors page, choose the connector, and complete its authorization flow.
+Once connectors open, open the connectors page, choose the connector, and complete
+its authorization flow.
 Custom MCP endpoints can be added with their own URL.
 
 ## Tool permissions

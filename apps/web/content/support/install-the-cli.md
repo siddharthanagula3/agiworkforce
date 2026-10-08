@@ -5,11 +5,14 @@ path: /cli
 category: surfaces
 tags: cli, install cli, install.sh, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, update, checksum, signature
 platforms: cli, macos, windows, linux
-updated: 2026-10-03
+updated: 2026-10-07
 scope: public
 ---
 
 ## Getting the binary
+
+Check [surface availability](https://agiworkforce.com/get-started) first: the
+command below installs the CLI only once a signed release is published.
 
 ```
 curl -fsSL https://agiworkforce.com/install.sh | bash

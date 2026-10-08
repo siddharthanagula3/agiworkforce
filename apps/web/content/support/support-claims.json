@@ -34,7 +34,19 @@
       "indexed": true
     },
     {
+      "doc": "configuration",
+      "indexed": true
+    },
+    {
       "doc": "connectors-and-mcp",
+      "indexed": true
+    },
+    {
+      "doc": "crisis-resources",
+      "indexed": true
+    },
+    {
+      "doc": "custom-instructions",
       "indexed": true
     },
     {
@@ -87,11 +99,11 @@
     },
     {
       "doc": "managed-cloud",
-      "sha256": "c012f2e38f659c3b85d5589691d6716303eb275cc610dd1153ba90ff99b7202c"
+      "indexed": true
     },
     {
       "doc": "mcp-connections",
-      "sha256": "ad4720c4abd3e00c786d481101da15b96995d36504b1bb383c651ccb5c3bc18d"
+      "indexed": true
     },
     {
       "doc": "memory",
@@ -115,7 +127,7 @@
     },
     {
       "doc": "schedules-and-triggers",
-      "sha256": "0da2ba8467806fa161089c4438856b1d73ec7c30db534ced4b92e6675aa4da38"
+      "indexed": true
     },
     {
       "doc": "search",
@@ -127,7 +139,11 @@
     },
     {
       "doc": "signing-up",
-      "sha256": "2d593218b37eb74eed810da6c6018d59f7cd0278b03e5694757ba1b95361b4d0"
+      "indexed": true
+    },
+    {
+      "doc": "system-requirements",
+      "indexed": true
     },
     {
       "doc": "temporary-chats",
@@ -164,14 +180,6 @@
     {
       "doc": "workspace-roles-and-groups",
       "sha256": "110f4d6032a6dbd15cd28826e2077ff2728304b193a0e1573b4885e0736b807a"
-    },
-    {
-      "doc": "configuration",
-      "indexed": true
-    },
-    {
-      "doc": "custom-instructions",
-      "indexed": true
     }
   ],
   "claims": [
@@ -389,6 +397,23 @@
           "kind": "test",
           "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
           "name": "revokes only the named account when one is given"
+        }
+      ]
+    },
+    {
+      "id": "connectors-coming-soon",
+      "doc": "connectors-and-mcp",
+      "section": "What connectors do",
+      "kind": "prose",
+      "sentence": "Connectors are coming soon, and none can be connected until they open.",
+      "implementation": [
+        "packages/contracts/types/src/connector-release.ts#CONNECTOR_RELEASE_STATE"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/connector-release.test.ts",
+          "name": "refuses a direct entry point with a plain coming-soon message, not an upgrade"
         }
       ]
     },
@@ -1466,7 +1491,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat\u2019s link from the result state"
+          "name": "revokes the chat’s link from the result state"
         },
         {
           "kind": "copy",
@@ -1552,7 +1577,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
+          "name": "updates the chat’s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -2957,7 +2982,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome \u00b7 coming soon"
+          "text": "AGI in Chrome · coming soon"
         },
         {
           "kind": "copy",
@@ -2971,7 +2996,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -3033,7 +3058,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome \u00b7 coming soon"
+          "text": "AGI in Chrome · coming soon"
         },
         {
           "kind": "copy",
@@ -3057,7 +3082,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome \u00b7 coming soon"
+          "text": "AGI in Chrome · coming soon"
         },
         {
           "kind": "copy",
@@ -3277,8 +3302,11 @@
       "doc": "glossary",
       "section": "Trust modes",
       "kind": "prose",
-      "sentence": "By default the CLI stores keys in your operating system's credential store.",
-      "implementation": ["apps/cli/src/auth.rs#AUTH_INDEX_STORAGE"],
+      "sentence": "By default the CLI stores keys in your operating system's credential store, and in owner-only files on Linux or when the keyring is turned off.",
+      "implementation": [
+        "apps/cli/src/auth.rs#AUTH_INDEX_STORAGE",
+        "apps/cli/src/secure_store.rs#uses_keychain"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -3289,6 +3317,11 @@
           "kind": "test",
           "file": "apps/cli/src/auth.rs",
           "name": "a_credential_store_denial_is_an_error_and_never_a_plaintext_fallback"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains both the keyring path and the implemented file-storage exceptions"
         }
       ]
     },
@@ -5456,6 +5489,653 @@
           "name": "sizes the meter and the cap from the same seat-aware plan of the active workspace"
         }
       ]
+    },
+    {
+      "id": "projects-drive-source-coming-soon",
+      "doc": "projects",
+      "section": "Add sources",
+      "kind": "prose",
+      "sentence": "Google Drive is listed there as **Coming soon**: connecting Gmail, Google Drive, Calendar and other apps is coming soon, and no file can be added from Drive until then.",
+      "implementation": [
+        "apps/web/features/projects/components/AddSourcesModal.tsx#ComingSoonSourceButton",
+        "packages/contracts/types/src/connector-release.ts#CONNECTORS_COMING_SOON_DETAIL"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/__tests__/AddSourcesModal.connectors.test.tsx",
+          "name": "shows Google Drive locked and coming soon, and adds nothing from it"
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud-free-plan-open-by-default",
+      "doc": "managed-cloud",
+      "section": "Open by default",
+      "kind": "prose",
+      "sentence": "The Free plan on AGI managed cloud is open by default.",
+      "implementation": ["apps/web/lib/managed-compute-gate.ts#isManagedComputePrivateBetaEnabled"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/managed-compute-gate.test.ts",
+          "name": "is open by default (public alpha, no private-beta gate)"
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud-no-waitlist-or-invite-code",
+      "doc": "managed-cloud",
+      "section": "Open by default",
+      "kind": "prose",
+      "sentence": "Sign in and start: it has no waitlist and needs no invite code.",
+      "implementation": ["apps/web/lib/managed-compute-gate.ts#isManagedComputePrivateBetaEnabled"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/managed-compute-gate.test.ts",
+          "name": "is open by default (public alpha, no private-beta gate)"
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud-paid-upgrades-need-access-code",
+      "doc": "managed-cloud",
+      "section": "Open by default",
+      "kind": "prose",
+      "sentence": "Paid upgrades are opening in stages, so every self-serve paid plan needs an access code, and without one you join the upgrade waitlist.",
+      "implementation": [
+        "apps/web/lib/server/billing-waitlist-access.ts#hasBillingWaitlistAccess",
+        "apps/web/app/api/checkout/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/billing-waitlist-access.test.ts",
+          "name": "admits only an account that redeemed an access code while staged"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/checkout/route.test.ts",
+          "name": "requires redeemed waitlist access before a free account can open checkout"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
+          "name": "joins the selected plan waitlist without opening checkout"
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud-usage-is-metered",
+      "doc": "managed-cloud",
+      "section": "How usage works",
+      "kind": "prose",
+      "sentence": "Managed cloud usage is metered.",
+      "implementation": [
+        "packages/contracts/types/src/managed-usage-limits.ts#MANAGED_USAGE_LIMITS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.budget-admission.test.ts",
+          "name": "denies deterministically when a rolling window is exhausted"
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud-requests-stop-when-allowance-exhausted",
+      "doc": "managed-cloud",
+      "section": "Running out of capacity",
+      "kind": "prose",
+      "sentence": "When your allowance is exhausted, managed cloud requests stop until the allowance resets.",
+      "implementation": [
+        "apps/web/lib/services/managed-usage-request-service.ts#reserveManagedUsageRequest"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.budget-admission.test.ts",
+          "name": "denies deterministically when a rolling window is exhausted"
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud-local-and-byok-carry-no-allowance",
+      "doc": "managed-cloud",
+      "section": "Running out of capacity",
+      "kind": "prose",
+      "sentence": "Local mode and BYOK are unaffected by managed-cloud capacity because they do not run on AGI-operated provider access.",
+      "implementation": [
+        "packages/contracts/types/src/managed-usage-limits.ts#MANAGED_USAGE_LIMITS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/billing/plan-progression.test.ts",
+          "name": "gives a local or bring-your-own-key plan no managed allowance at all"
+        }
+      ]
+    },
+    {
+      "id": "managed-cloud-no-training-on-customer-content",
+      "doc": "managed-cloud",
+      "section": "Training",
+      "kind": "prose",
+      "sentence": "AGI does not use customer conversation content to train AGI-owned models. {{POSITIONING.trustBoundary}}",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
+          "name": "states that no training opt-in exists"
+        }
+      ]
+    },
+    {
+      "id": "cli-install-command-needs-a-signed-release",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "Check [surface availability](https://agiworkforce.com/get-started) first: the command below installs the CLI only once a signed release is published.",
+      "implementation": ["apps/web/public/install.sh"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "reads the provenance gate install.sh actually enforces"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/public/install.sh",
+          "text": "RELEASE_SIGNING_KEY=''"
+        }
+      ]
+    },
+    {
+      "id": "privacy-free-plan-providers-may-train",
+      "doc": "privacy-controls",
+      "section": "What is stored where",
+      "kind": "prose",
+      "sentence": "The Free plan is served by free capacity from model providers, AGI picks the provider for the default model, and some of those providers' terms may allow training on what you send; to keep your chats out of training, turn on **Only use models that do not train on your chats** in Settings, Privacy.",
+      "implementation": [
+        "packages/contracts/compliance/src/free-plan-training-disclosure.ts#FREE_PLAN_TRAINING_SIGNUP_STATEMENT",
+        "apps/web/features/settings/sections/PrivacySection.tsx",
+        "apps/web/lib/services/free-lane/free-quota-fallback.ts#serveFreeQuotaFirst"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
+          "text": "terms may allow training on what you send"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+          "text": "Only use models that do not train on your chats"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
+          "text": "AGI picks the provider for the default model"
+        }
+      ]
+    },
+    {
+      "id": "signup-minimum-age-and-parental-permission",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "You must be at least 13 to create an account, and if you are under 18 you need permission from a parent or guardian.",
+      "implementation": [
+        "packages/contracts/types/src/account-eligibility.ts#ACCOUNT_AGE_REQUIREMENT_NOTICE"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/types/src/account-eligibility.ts",
+          "text": "export const ACCOUNT_MINIMUM_AGE = 13;"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/types/src/account-eligibility.ts",
+          "text": "export const PARENTAL_PERMISSION_BELOW_AGE = 18;"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/types/src/account-eligibility.ts",
+          "text": "return age < ACCOUNT_MINIMUM_AGE ? 'too_young' : 'eligible';"
+        }
+      ]
+    },
+    {
+      "id": "signup-agreement-statement-and-optional-email-box",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "There is no terms checkbox: under the button the form states \"By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.\" One optional box, \"Email me product news, tips and offers.\", starts unticked.",
+      "implementation": [
+        "apps/web/features/auth/AuthSignupAgreement.tsx",
+        "apps/web/features/auth/AuthMarketingEmailConsent.tsx",
+        "apps/web/features/auth/marketingEmailChoice.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/AuthSignupAgreement.tsx",
+          "text": "'By creating an account, you agree to the'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/consent-purposes.ts",
+          "text": "label: 'Email me product news, tips and offers.',"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/marketingEmailChoice.ts",
+          "text": "const [ticked, setTicked] = useState(false);"
+        }
+      ]
+    },
+    {
+      "id": "signup-free-plan-open-by-default",
+      "doc": "signing-up",
+      "section": "What you can do immediately",
+      "kind": "prose",
+      "sentence": "The Free plan is open by default.",
+      "implementation": ["apps/web/lib/managed-compute-gate.ts#isManagedComputePrivateBetaEnabled"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/managed-compute-gate.test.ts",
+          "name": "is open by default (public alpha, no private-beta gate)"
+        }
+      ]
+    },
+    {
+      "id": "signup-no-waitlist-or-invite-code",
+      "doc": "signing-up",
+      "section": "What you can do immediately",
+      "kind": "prose",
+      "sentence": "A new account can open the chat surface and send a message straight away: it has no waitlist and no invite code to redeem.",
+      "implementation": ["apps/web/lib/managed-compute-gate.ts#isManagedComputePrivateBetaEnabled"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/managed-compute-gate.test.ts",
+          "name": "is open by default (public alpha, no private-beta gate)"
+        }
+      ]
+    },
+    {
+      "id": "signup-paid-upgrades-need-access-code",
+      "doc": "signing-up",
+      "section": "What you can do immediately",
+      "kind": "prose",
+      "sentence": "Paid upgrades are opening in stages, so every self-serve paid plan needs an access code, and without one you join the upgrade waitlist.",
+      "implementation": [
+        "apps/web/lib/server/billing-waitlist-access.ts#hasBillingWaitlistAccess",
+        "apps/web/app/api/checkout/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/billing-waitlist-access.test.ts",
+          "name": "admits only an account that redeemed an access code while staged"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/checkout/route.test.ts",
+          "name": "requires redeemed waitlist access before a free account can open checkout"
+        }
+      ]
+    },
+    {
+      "id": "signup-unknown-email-offers-sign-up",
+      "doc": "signing-up",
+      "section": "If sign-up does not complete",
+      "kind": "prose",
+      "sentence": "\"No account uses this email. Sign up instead.\" on a sign-in screen means the address has never been registered.",
+      "implementation": [
+        "apps/web/lib/auth/error-taxonomy.copy.ts",
+        "apps/web/features/auth/AuthSwitchLine.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/auth/error-taxonomy.copy.ts",
+          "text": "message: 'No account uses this email.',"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/AuthSwitchLine.tsx",
+          "text": "label: 'Sign up instead.'"
+        }
+      ]
+    },
+    {
+      "id": "signup-uncollectable-requirement-message",
+      "doc": "signing-up",
+      "section": "If sign-up does not complete",
+      "kind": "prose",
+      "sentence": "A sign-up that needs a detail the screen cannot collect ends with a message that starts \"This sign-up also needs\" and tells you to contact support.",
+      "implementation": ["apps/web/features/auth/identityAuthAdapter.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/identityAuthAdapter.tsx",
+          "text": "'This sign-up also needs {{fields}}, which this page cannot collect. Contact support to finish creating your account.'"
+        }
+      ]
+    },
+    {
+      "id": "crisis-agi-is-not-a-crisis-service",
+      "doc": "crisis-resources",
+      "section": "If you are in danger now",
+      "kind": "prose",
+      "sentence": "It is not a crisis service, and it cannot call for help or send anyone to you.",
+      "implementation": [
+        "apps/web/lib/moderation/text-classifier.ts",
+        "apps/web/features/chat/pages/WebChatPage.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "prints crisis numbers and admits that no crisis feature exists"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "has no rule that matches"
+        }
+      ]
+    },
+    {
+      "id": "crisis-nothing-special-happens",
+      "doc": "crisis-resources",
+      "section": "What AGI does when a message is about self-harm",
+      "kind": "prose",
+      "sentence": "Nothing special, and you should know that before you rely on it.",
+      "implementation": [
+        "apps/web/lib/moderation/text-classifier.ts",
+        "apps/web/lib/moderation/index.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "has exactly the five categories the page lists"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "has no rule that matches"
+        }
+      ]
+    },
+    {
+      "id": "crisis-reduce-sensitive-content-refuses-methods",
+      "doc": "crisis-resources",
+      "section": "What AGI does when a message is about self-harm",
+      "kind": "prose",
+      "sentence": "When it is on, AGI refuses a short list of explicit or harmful how-to prompts before they reach a Managed Cloud model, and requests for suicide or self-harm methods are on that list.",
+      "implementation": [
+        "packages/contracts/types/src/content-safety.ts",
+        "apps/web/lib/services/managed-content-safety-service.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "refuses a request for a method only when it is on"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "answers with a refusal that names the setting and no helpline"
+        }
+      ]
+    },
+    {
+      "id": "crisis-usage-policy-bans-promoting-self-harm",
+      "doc": "crisis-resources",
+      "section": "What the rules say",
+      "kind": "prose",
+      "sentence": "The [acceptable use policy](https://agiworkforce.com/acceptable-use) does not allow using AGI to encourage, instruct or glorify suicide, self-harm or disordered eating.",
+      "implementation": ["apps/web/app/acceptable-use/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "bans encouraging, instructing or glorifying self-harm in the acceptable use policy"
+        }
+      ]
+    },
+    {
+      "id": "crisis-output-is-not-medical-advice",
+      "doc": "crisis-resources",
+      "section": "Not medical advice",
+      "kind": "prose",
+      "sentence": "Nothing a model writes is medical or mental-health advice.",
+      "implementation": ["apps/web/app/disclaimer/page.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/disclaimer/page.tsx",
+          "text": "Nothing AGI produces is legal, medical, financial, tax, or other regulated"
+        }
+      ]
+    },
+    {
+      "id": "requirements-web-has-nothing-to-install",
+      "doc": "system-requirements",
+      "section": "What you need",
+      "kind": "prose",
+      "sentence": "The web app has nothing to install.",
+      "implementation": ["apps/web/lib/surface-status.ts#SURFACE_PLATFORMS"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "publishes requirements for the web app alone because it is the only release"
+        }
+      ]
+    },
+    {
+      "id": "requirements-voice-input-unsupported-copy",
+      "doc": "system-requirements",
+      "section": "Features that ask more of the browser",
+      "kind": "prose",
+      "sentence": "**Voice input.** A browser that cannot do it shows \"Voice input is not supported in this browser. Try Chrome or Edge.\" on the microphone button.",
+      "implementation": ["apps/web/features/chat/components/Composer/VoiceInputButton.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/VoiceInputButton.tsx",
+          "text": "Voice input is not supported in this browser. Try Chrome or Edge."
+        }
+      ]
+    },
+    {
+      "id": "requirements-no-offline-mode",
+      "doc": "system-requirements",
+      "section": "Offline",
+      "kind": "prose",
+      "sentence": "Its service worker handles notifications and caches nothing, so there is no offline mode.",
+      "implementation": ["apps/web/public/sw.js"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "says there is no offline mode because the worker neither caches nor intercepts"
+        }
+      ]
+    },
+    {
+      "id": "requirements-unreleased-clients-have-no-installer",
+      "doc": "system-requirements",
+      "section": "Desktop, CLI and extensions",
+      "kind": "prose",
+      "sentence": "A client with no release has no installer, so we publish no operating system, memory or disk requirements for it.",
+      "implementation": ["apps/web/lib/surface-status.ts#SURFACE_STATUS"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "publishes requirements for the web app alone because it is the only release"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "mcp-coming-soon",
+      "doc": "mcp-connections",
+      "section": "Adding one",
+      "sentence": "Connectors are coming soon, and none can be connected until they open, a custom MCP server included.",
+      "implementation": [
+        "packages/contracts/types/src/connector-release.ts#CONNECTOR_RELEASE_STATE",
+        "apps/web/lib/connectors/custom-connector-creation.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/connector-release.test.ts",
+          "name": "refuses a custom connector before its address is looked up or the policy is read"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/custom/route.test.ts",
+          "name": "refuses on a paid plan as coming soon, before the server is contacted or a row is written"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "mcp-custom-connection-fields",
+      "doc": "mcp-connections",
+      "section": "Adding one",
+      "sentence": "A custom MCP connection needs a name to show it under and the server's URL, plus either an auth token or an OAuth client ID and secret if the server requires one.",
+      "implementation": [
+        "apps/web/lib/connectors/custom-connector-creation.ts#createCustomConnector"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/connectors/custom-connector-creation.ts",
+          "text": "name is required (1 to"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx",
+          "text": "...(input.oauthClientSecret ? { oauthClientSecret: input.oauthClientSecret } : {}),"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "mcp-discovery-no-tools",
+      "doc": "mcp-connections",
+      "section": "What the discovery results mean",
+      "sentence": "\"The server answered but lists no tools yet.\" The server is reachable but exposes nothing, which is the server's state, not a connection failure.",
+      "implementation": ["apps/web/features/connectors/components/ConnectorApiKeyForm.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/connectors/components/ConnectorApiKeyForm.tsx",
+          "text": "const NO_TOOLS_COPY = 'The server answered but lists no tools yet.';"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "mcp-connection-count-by-plan",
+      "doc": "mcp-connections",
+      "section": "Limits",
+      "sentence": "How many custom MCP connections you can keep depends on your plan; the pricing page carries the current figures.",
+      "implementation": [
+        "packages/contracts/types/src/billing-catalog.ts#BILLING_PLAN_PRODUCT_LIMITS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/custom/route.test.ts",
+          "name": "uses the Pro plan limit from the shared billing catalog"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/custom/route.test.ts",
+          "name": "rejects a second custom remote MCP for a free user before network work"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "schedules-mail-calendar-triggers-coming-soon",
+      "doc": "schedules-and-triggers",
+      "section": "Triggers instead of a clock",
+      "sentence": "Connecting Gmail, Google Drive, Calendar and other apps is coming soon, and the Gmail and Google Calendar triggers need their connector, so neither can be set up until connectors open.",
+      "implementation": [
+        "packages/contracts/types/src/connector-release.ts#CONNECTORS_COMING_SOON_DETAIL",
+        "apps/web/lib/triggers/gmail-watch.ts#registerGmailWatch"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/triggers/__tests__/gmail-watch.unreachable.test.ts",
+          "name": "records the coming-soon message and never reads the Gmail grant"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/connector-release.test.ts",
+          "name": "refuses a direct entry point with a plain coming-soon message, not an upgrade"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "schedules-delete-confirms",
+      "doc": "schedules-and-triggers",
+      "section": "Editing and deleting",
+      "sentence": "**Delete Schedule** asks first, and deleting a trigger is a separate confirmation.",
+      "implementation": [
+        "apps/web/features/schedules/components/SchedulesPage.tsx",
+        "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/schedules/components/SchedulesPage.test.tsx",
+          "name": "requires destructive confirmation and removes a deleted schedule only after success"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+          "text": "confirmText: 'Delete trigger',"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "schedules-count-by-plan",
+      "doc": "schedules-and-triggers",
+      "section": "Limits",
+      "sentence": "How many scheduled tasks you can keep depends on your plan, and free and BYOK-only accounts have none.",
+      "implementation": [
+        "packages/contracts/types/src/billing-catalog.ts#BILLING_PLAN_PRODUCT_LIMITS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/api/schedules.test.ts",
+          "name": "holds a lapsed Pro subscription to the Free schedule allowance"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/types/src/billing-catalog.ts",
+          "text": "maxScheduledTasks: 0,"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -5464,7 +6144,7 @@
       "doc": "privacy-controls",
       "section": "What is stored where",
       "kind": "prose",
-      "sentence": "Managed cloud conversations are encrypted in transit and at rest.",
+      "sentence": "Managed cloud conversations are encrypted in transit, and at rest by the database and object-storage vendors that hold them, as a property of those vendors' platforms and not a layer AGI adds.",
       "implementation": ["apps/web/lib/server/neon-db.ts"],
       "reason": "Encryption at rest is a property of the hosting provider's storage rather than of any statement this repository makes, so no assertion here can fail when it stops being true."
     },
@@ -5494,6 +6174,18 @@
       "sentence": "SMS MFA is not part of the current account contract, so it is not offered rather than silently ignored.",
       "implementation": ["apps/web/features/auth"],
       "reason": "Which second factors the identity provider offers is decided outside this repository, so nothing here can assert that SMS is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
+    },
+    {
+      "id": "signup-age-not-stored-or-sent",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "The age is checked in your browser and is not stored or sent to us.",
+      "implementation": [
+        "apps/web/features/auth/useSignupAgeGate.ts",
+        "apps/web/features/auth/AuthAgeField.tsx"
+      ],
+      "reason": "The claim is an absence: nothing stores or transmits the typed age. The sign-up form that holds it is being rebuilt and its tests are not final, so no test is cited yet; cite the one that pins the nameless field once it lands."
     }
   ],
   "narrative": [
@@ -5650,6 +6342,78 @@
       "kind": "prose",
       "sentence": "If a verification code has not arrived, check your spam folder and confirm the email address, then use **Resend code** when it becomes available.",
       "implementation": [],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "managed-cloud-residency-roadmap",
+      "doc": "managed-cloud",
+      "section": "Where AGI managed cloud data is hosted",
+      "kind": "prose",
+      "sentence": "EU and UK residency hosting is on the roadmap and is not available today.",
+      "implementation": ["apps/web/app/faq/page.tsx"],
+      "why": "roadmap-statement"
+    },
+    {
+      "id": "managed-cloud-local-never-leaves",
+      "doc": "managed-cloud",
+      "section": "Where AGI managed cloud data is hosted",
+      "kind": "prose",
+      "sentence": "Local conversations never leave your device in the first place.",
+      "implementation": ["crates/agiworkforce-llm/src/lib.rs"],
+      "why": "editorial-rule"
+    },
+    {
+      "id": "signup-code-check-spam",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "If the code has not arrived, check the spam folder before requesting another.",
+      "implementation": ["apps/web/features/auth/AuthCodeStep.tsx"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "crisis-no-line-for-your-country",
+      "doc": "crisis-resources",
+      "section": "Who to call",
+      "kind": "prose",
+      "sentence": "If you cannot find a line for your country, call your local emergency number or go to the nearest hospital.",
+      "implementation": ["apps/web/content/support/crisis-resources.md"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "crisis-number-does-not-connect",
+      "doc": "crisis-resources",
+      "section": "Who to call",
+      "kind": "prose",
+      "sentence": "If one does not connect, use the service's own website.",
+      "implementation": ["apps/web/content/support/crisis-resources.md"],
+      "why": "reader-instruction"
+    },
+    {
+      "kind": "prose",
+      "id": "mcp-what-it-is",
+      "doc": "mcp-connections",
+      "section": "What MCP is here",
+      "sentence": "MCP (Model Context Protocol) is how AGI talks to a tool server that is not one of the built-in connectors.",
+      "implementation": ["apps/web/lib/connectors/custom-connector-creation.ts"],
+      "why": "external-fact"
+    },
+    {
+      "kind": "prose",
+      "id": "mcp-connecting-is-not-granting",
+      "doc": "mcp-connections",
+      "section": "Permissions",
+      "sentence": "Connecting is not the same as granting scopes.",
+      "implementation": ["apps/web/features/connectors/components/ToolPermissionsPanel.tsx"],
+      "why": "editorial-rule"
+    },
+    {
+      "kind": "prose",
+      "id": "schedules-pricing-figures",
+      "doc": "schedules-and-triggers",
+      "section": "Limits",
+      "sentence": "The pricing page carries the current per-plan figures.",
+      "implementation": ["packages/contracts/types/src/billing-catalog.ts"],
       "why": "reader-instruction"
     }
   ]

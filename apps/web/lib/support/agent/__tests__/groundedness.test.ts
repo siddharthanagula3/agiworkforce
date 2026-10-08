@@ -22,7 +22,7 @@ const FAITHFUL_ANSWERS: readonly (readonly [docId: string, answer: string])[] = 
   ],
   [
     'projects',
-    "In a project, choose Add sources and pick Google Drive. If Google Drive isn't connected yet, you'll be taken to Connectors to set it up first. You can also get there with Set up connectors.",
+    'In a project, choose Add sources to add files from your device or text you paste or type. Google Drive is listed there as Coming soon, so no file can be added from Drive until connecting apps opens.',
   ],
   [
     'static-faq',

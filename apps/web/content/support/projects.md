@@ -4,7 +4,7 @@ title: Projects: group chats around shared context
 path: /chat/projects
 category: projects
 tags: project, projects, knowledge, sources, project instructions, project memory, knowledge files, indexing, google drive, duplicate project, delete project
-updated: 2026-10-06
+updated: 2026-10-08
 scope: public
 ---
 
@@ -33,9 +33,10 @@ Add an optional description in Project settings. Settings include:
 
 ## Add sources
 
-**Add sources** takes files from your device, text you paste or type, and Google
-Drive where that connector is set up. Choose **Set up connectors** to open
-Connectors. Choosing Google Drive while disconnected takes you there too.
+**Add sources** takes files from your device and text you paste or type. Google
+Drive is listed there as **Coming soon**: connecting Gmail, Google Drive,
+Calendar and other apps is coming soon, and no file can be added from Drive
+until then.
 
 You may see **Indexing for search**, **Keyword search only** or **Not indexed**
 beside a file. Keyword search matches words rather than using semantic search.

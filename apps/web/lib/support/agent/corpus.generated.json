@@ -1,8 +1,8 @@
 {
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
-  "documentCount": 43,
-  "chunkCount": 238,
+  "documentCount": 45,
+  "chunkCount": 250,
   "documents": [
     {
       "id": "account-security",
@@ -28,7 +28,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-28",
+      "updated": "2026-10-07",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -43,7 +43,7 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. SMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one."
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. SMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security. An account with an\nauthenticator app already set up keeps it, and the parts of this page about\nauthenticator codes and backup codes apply to those accounts.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one."
         },
         {
           "id": "account-security#2",
@@ -663,7 +663,7 @@
         "permissions",
         "always allow"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-10-08",
       "source": "content/support/connectors-and-mcp.md",
       "chunks": [
         {
@@ -671,14 +671,14 @@
           "ordinal": 0,
           "heading": "What connectors do",
           "headingPath": "Connectors and MCP › What connectors do",
-          "text": "Connectors let AGI call an external system on your behalf, reading a repository,\nquerying a service, or running a tool exposed over MCP (Model Context Protocol).\nEvery connector is scoped to your own account."
+          "text": "Connectors are coming soon, and none can be connected until they open.\n\nConnectors let AGI call an external system on your behalf, reading a repository,\nquerying a service, or running a tool exposed over MCP (Model Context Protocol).\nEvery connector is scoped to your own account."
         },
         {
           "id": "connectors-and-mcp#1",
           "ordinal": 1,
           "heading": "Adding a connector",
           "headingPath": "Connectors and MCP › Adding a connector",
-          "text": "Open the connectors page, choose the connector, and complete its authorization flow.\nCustom MCP endpoints can be added with their own URL."
+          "text": "Once connectors open, open the connectors page, choose the connector, and complete\nits authorization flow.\nCustom MCP endpoints can be added with their own URL."
         },
         {
           "id": "connectors-and-mcp#2",
@@ -700,6 +700,68 @@
           "heading": "Custom MCP connections and plans",
           "headingPath": "Connectors and MCP › Custom MCP connections and plans",
           "text": "The number of custom MCP connections available depends on your plan. Current plan\ndetails live on the pricing page."
+        }
+      ]
+    },
+    {
+      "id": "crisis-resources",
+      "title": "Crisis and self-harm resources",
+      "path": "/acceptable-use",
+      "category": "safety",
+      "tags": [
+        "crisis",
+        "suicide",
+        "self-harm",
+        "self harm",
+        "eating disorder",
+        "helpline",
+        "hotline",
+        "crisis line",
+        "988",
+        "tele manas",
+        "14416",
+        "emergency",
+        "mental health",
+        "someone in danger",
+        "safety"
+      ],
+      "updated": "2026-10-08",
+      "source": "content/support/crisis-resources.md",
+      "chunks": [
+        {
+          "id": "crisis-resources#0",
+          "ordinal": 0,
+          "heading": "If you are in danger now",
+          "headingPath": "Crisis and self-harm resources › If you are in danger now",
+          "text": "AGI is software. It is not a crisis service, and it cannot call for help or send\nanyone to you. If you or someone near you is in immediate danger, call your\nlocal emergency number now."
+        },
+        {
+          "id": "crisis-resources#1",
+          "ordinal": 1,
+          "heading": "Who to call",
+          "headingPath": "Crisis and self-harm resources › Who to call",
+          "text": "**United States.** Call or text 988 to reach the 988 Suicide & Crisis Lifeline,\nor chat at [chat.988lifeline.org](https://chat.988lifeline.org/). The service\ndescribes itself as free, confidential and open at all hours. To text in\nSpanish, send AYUDA to 988.\n\n**India.** Call Tele MANAS on 14416, or on 1-800-891-4416. It is a toll-free\nhelpline of the Ministry of Health and Family Welfare, open at all hours, and\nyou choose your language when you call.\n\n**Anywhere else.** [findahelpline.com](https://findahelpline.com/) lists free\nhelplines by country. The International Association for Suicide Prevention\npoints to the same directory. If you cannot find a line for your country, call\nyour local emergency number or go to the nearest hospital.\n\nWe checked these numbers against the services' own pages on 7 October 2026.\nNumbers change. If one does not connect, use the service's own website."
+        },
+        {
+          "id": "crisis-resources#2",
+          "ordinal": 2,
+          "heading": "What AGI does when a message is about self-harm",
+          "headingPath": "Crisis and self-harm resources › What AGI does when a message is about self-harm",
+          "text": "Nothing special, and you should know that before you rely on it.\n\n- AGI has no feature that detects a message about suicide or self-harm.\n- A chat shows no crisis banner, helpline number or pop-up.\n- A message about self-harm alerts no person at AGI.\n- The model you picked answers under its provider's own safety rules. What it\n  says, and whether it mentions a helpline, differs from one model to another.\n\nOne setting touches this subject. **Reduce sensitive content**, in Settings under\nSafety, is off unless you turn it on. When it is on, AGI refuses a short list of\nexplicit or harmful how-to prompts before they reach a Managed Cloud model, and\nrequests for suicide or self-harm methods are on that list. The refusal says the\ncontent is unavailable while the setting is on. It shows no helpline."
+        },
+        {
+          "id": "crisis-resources#3",
+          "ordinal": 3,
+          "heading": "What the rules say",
+          "headingPath": "Crisis and self-harm resources › What the rules say",
+          "text": "The [acceptable use policy](https://agiworkforce.com/acceptable-use) does not\nallow using AGI to encourage, instruct or glorify suicide, self-harm or\ndisordered eating. Asking for help and talking about how you feel are allowed."
+        },
+        {
+          "id": "crisis-resources#4",
+          "ordinal": 4,
+          "heading": "Not medical advice",
+          "headingPath": "Crisis and self-harm resources › Not medical advice",
+          "text": "Nothing a model writes is medical or mental-health advice. The\n[disclaimer](https://agiworkforce.com/disclaimer) explains the limits of model\noutput. For a decision about your health, talk to a qualified professional."
         }
       ]
     },
@@ -1111,7 +1173,7 @@
         "web",
         "windows"
       ],
-      "updated": "2026-09-27",
+      "updated": "2026-10-07",
       "source": "content/support/glossary.md",
       "chunks": [
         {
@@ -1126,7 +1188,7 @@
           "ordinal": 1,
           "heading": "Trust modes",
           "headingPath": "Glossary of AGI terms › Trust modes",
-          "text": "**Trust mode** is which machine and which provider account runs your request.\nAGI runs three and never moves work to a less private one without your approval.\n\n**Local** runs models on your own hardware through a runtime you install. It is\nfree, and inference can run offline once the runtime and model are installed.\n\n**BYOK**, \"bring your own key\", means you supply a provider API key and AGI\nsends your requests directly to that provider with it. By default the CLI stores\nkeys in your operating system's credential store. Your provider bills the usage,\nand AGI adds no markup. BYOK is free.\n\n**Managed cloud** runs on AGI-operated provider access. It is metered, and it\nrefuses BYOK credentials by design so the two trust boundaries stay separate."
+          "text": "**Trust mode** is which machine and which provider account runs your request.\nAGI runs three and never moves work to a less private one without your approval.\n\n**Local** runs models on your own hardware through a runtime you install. It is\nfree, and inference can run offline once the runtime and model are installed.\n\n**BYOK**, \"bring your own key\", means you supply a provider API key and AGI\nsends your requests directly to that provider with it. By default the CLI stores\nkeys in your operating system's credential store, and in owner-only files on\nLinux or when the keyring is turned off. Your provider bills the usage, and AGI\nadds no markup. BYOK is free.\n\n**Managed cloud** runs on AGI-operated provider access. It is metered, and it\nrefuses BYOK credentials by design so the two trust boundaries stay separate."
         },
         {
           "id": "glossary#2",
@@ -1257,7 +1319,7 @@
         "macos",
         "windows"
       ],
-      "updated": "2026-10-03",
+      "updated": "2026-10-07",
       "source": "content/support/install-the-cli.md",
       "chunks": [
         {
@@ -1265,7 +1327,7 @@
           "ordinal": 0,
           "heading": "Getting the binary",
           "headingPath": "Install and set up the CLI › Getting the binary",
-          "text": "```\ncurl -fsSL https://agiworkforce.com/install.sh | bash\n```\n\nThe installer downloads the release archive for your platform, checks the\nrelease's signed checksum manifest with `openssl`, checks the archive's SHA-256\nagainst it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot\nverify, and says so when no signed release is published yet. On Windows, run\nit in Git Bash or WSL. There is no npm package or Homebrew tap.\n\n`agi update` compares your build with the newest release, and\n`agi update --install` installs that release after verifying its signature with\nthe key built into your `agi`. AGI Cloud for desktop ships its own copy of `agi`\nfor local coding sessions, and the VS Code extension offers **Install AGI CLI**\nwhen it cannot find one.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
+          "text": "Check [surface availability](https://agiworkforce.com/get-started) first: the\ncommand below installs the CLI only once a signed release is published.\n\n```\ncurl -fsSL https://agiworkforce.com/install.sh | bash\n```\n\nThe installer downloads the release archive for your platform, checks the\nrelease's signed checksum manifest with `openssl`, checks the archive's SHA-256\nagainst it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot\nverify, and says so when no signed release is published yet. On Windows, run\nit in Git Bash or WSL. There is no npm package or Homebrew tap.\n\n`agi update` compares your build with the newest release, and\n`agi update --install` installs that release after verifying its signature with\nthe key built into your `agi`. AGI Cloud for desktop ships its own copy of `agi`\nfor local coding sessions, and the VS Code extension offers **Install AGI CLI**\nwhen it cannot find one.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
         },
         {
           "id": "install-the-cli#1",
@@ -1482,7 +1544,7 @@
         "quota",
         "limit"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-10-07",
       "source": "content/support/managed-cloud.md",
       "chunks": [
         {
@@ -1490,7 +1552,7 @@
           "ordinal": 0,
           "heading": "Open by default",
           "headingPath": "AGI managed cloud › Open by default",
-          "text": "The Free plan on AGI managed cloud is open by default. Sign in and start: it has no\nwaitlist and needs no invite code. Paid upgrades are opening in stages, so every\nself-serve paid plan needs an access code, and without one you join the upgrade\nwaitlist. Team and Enterprise tiers, with organization seats, SSO, and admin\ncontrols, are a contract conversation rather than a self-serve checkout."
+          "text": "The Free plan on AGI managed cloud is open by default. Sign in and start: it has no\nwaitlist and needs no invite code. Paid upgrades are opening in stages, so every\nself-serve paid plan needs an access code, and without one you join the upgrade\nwaitlist. Team is one of those self-serve plans, billed per seat. Enterprise,\nwith SSO and SCIM, is a contract conversation rather than a self-serve checkout."
         },
         {
           "id": "managed-cloud#1",
@@ -1540,7 +1602,7 @@
         "mcp-server",
         "scopes"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-10-08",
       "source": "content/support/mcp-connections.md",
       "chunks": [
         {
@@ -1555,7 +1617,7 @@
           "ordinal": 1,
           "heading": "Adding one",
           "headingPath": "Connect a custom MCP server › Adding one",
-          "text": "A custom MCP connection needs three things: a name to show it under, the\nserver's URL, and an auth token if the server requires one. AGI then queries the\nserver for its tools, showing \"Discovering live MCP capabilities…\" while it\ndoes.\n\nWhere a server offers an API key instead, AGI checks how that server accepts a\nkey before asking you for it, and offers **Test and save** so a bad key fails at\nthe point you paste it rather than mid-conversation."
+          "text": "Connectors are coming soon, and none can be connected until they open, a\ncustom MCP server included. The steps below apply once they open.\n\nA custom MCP connection needs a name to show it under and the server's URL,\nplus either an auth token or an OAuth client ID and secret if the server\nrequires one. AGI then queries the\nserver for its tools, showing \"Discovering live MCP capabilities…\" while it\ndoes.\n\nWhere a server offers an API key instead, AGI checks how that server accepts a\nkey before asking you for it, and offers **Test and save** so a bad key fails at\nthe point you paste it rather than mid-conversation."
         },
         {
           "id": "mcp-connections#2",
@@ -1735,7 +1797,7 @@
         "sell data",
         "anonymized usage"
       ],
-      "updated": "2026-10-02",
+      "updated": "2026-10-07",
       "source": "content/support/privacy-controls.md",
       "chunks": [
         {
@@ -1743,7 +1805,7 @@
           "ordinal": 0,
           "heading": "What is stored where",
           "headingPath": "Privacy controls in Settings › What is stored where",
-          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select; VS Code\nBYOK is coming soon. Web, Mobile, Desktop and Chrome use managed cloud and do not\naccept provider keys. Managed cloud conversations are encrypted in transit and\nat rest. AGI does not sell your data, and does not use customer conversation\ncontent to train AGI-owned models."
+          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select; VS Code\nBYOK is coming soon. Web, Mobile, Desktop and Chrome use managed cloud and do not\naccept provider keys. Managed cloud conversations are encrypted in transit, and\nat rest by the database and object-storage vendors that hold them, as a property\nof those vendors' platforms and not a layer AGI adds. AGI does not sell your\ndata, and does not use customer conversation content to train AGI-owned models.\nThe Free plan is served by free capacity from model providers, AGI picks the\nprovider for the default model, and some of those providers' terms may allow\ntraining on what you send; to keep your chats out of training, turn on\n**Only use models that do not train on your chats** in Settings, Privacy."
         },
         {
           "id": "privacy-controls#1",
@@ -1800,7 +1862,7 @@
         "duplicate project",
         "delete project"
       ],
-      "updated": "2026-10-06",
+      "updated": "2026-10-08",
       "source": "content/support/projects.md",
       "chunks": [
         {
@@ -1822,7 +1884,7 @@
           "ordinal": 2,
           "heading": "Add sources",
           "headingPath": "Projects: group chats around shared context › Add sources",
-          "text": "**Add sources** takes files from your device, text you paste or type, and Google\nDrive where that connector is set up. Choose **Set up connectors** to open\nConnectors. Choosing Google Drive while disconnected takes you there too.\n\nYou may see **Indexing for search**, **Keyword search only** or **Not indexed**\nbeside a file. Keyword search matches words rather than using semantic search."
+          "text": "**Add sources** takes files from your device and text you paste or type. Google\nDrive is listed there as **Coming soon**: connecting Gmail, Google Drive,\nCalendar and other apps is coming soon, and no file can be added from Drive\nuntil then.\n\nYou may see **Indexing for search**, **Keyword search only** or **Not indexed**\nbeside a file. Keyword search matches words rather than using semantic search."
         },
         {
           "id": "projects#3",
@@ -1922,7 +1984,7 @@
         "run history",
         "automation"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-10-08",
       "source": "content/support/schedules-and-triggers.md",
       "chunks": [
         {
@@ -1937,7 +1999,7 @@
           "ordinal": 1,
           "heading": "Triggers instead of a clock",
           "headingPath": "Schedule a task, or run it on a trigger › Triggers instead of a clock",
-          "text": "A schedule can also be attached to an event:\n\n- **Gmail**, which fires when the mailbox changes and waits until the mailbox\n  watch is registered for it.\n- **Google Calendar**, which waits until the calendar watch is registered.\n- **GitHub**, which fires for the repositories your GitHub App installation\n  covers.\n- **Anything else**, through a signed webhook addressed to its own channel.\n\nA trigger that is still waiting for its watch to register says so rather than\nreporting itself as live."
+          "text": "A schedule can also be attached to an event:\n\n- **Gmail**, which fires when the mailbox changes and waits until the mailbox\n  watch is registered for it.\n- **Google Calendar**, which waits until the calendar watch is registered.\n\nConnecting Gmail, Google Drive, Calendar and other apps is coming soon, and\nthe Gmail and Google Calendar triggers need their connector, so neither can be\nset up until connectors open.\n\n- **GitHub**, which fires for the repositories your GitHub App installation\n  covers.\n- **Anything else**, through a signed webhook addressed to its own channel.\n\nA trigger that is still waiting for its watch to register says so rather than\nreporting itself as live."
         },
         {
           "id": "schedules-and-triggers#2",
@@ -2096,7 +2158,7 @@
         "first message",
         "first chat"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-10-07",
       "source": "content/support/signing-up.md",
       "chunks": [
         {
@@ -2104,7 +2166,7 @@
           "ordinal": 0,
           "heading": "Create the account",
           "headingPath": "Create an account and send your first message › Create the account",
-          "text": "1. Open the sign-up page and enter the email address you want the account under.\n2. Choose how you sign up: **Continue with Google**, **Continue with GitHub**, or\n   an email address and a password.\n3. If you used email, confirm the code sent to your inbox. If the code has not\n   arrived, check the spam folder before requesting another.\n\nThere is no checkbox to tick. The sign-up screen states that by signing up you\nagree to the Terms of Use and acknowledge the Privacy Policy, and completing\nsign-up is the agreement."
+          "text": "1. Open the sign-up page and enter the email address you want the account under.\n2. Choose how you sign up: **Continue with Google**, **Continue with GitHub**, or\n   an email address and a password.\n3. If you used email, confirm the code sent to your inbox. If the code has not\n   arrived, check the spam folder before requesting another.\n\nThe sign-up form asks for your age in a field labelled \"Your age\". You must be\nat least 13 to create an account, and if you are under 18 you need permission\nfrom a parent or guardian. The age is checked in your browser and is not stored\nor sent to us. There is no terms checkbox: under the button the form states \"By\ncreating an account, you agree to the Terms of Use and acknowledge the Privacy\nPolicy.\" One optional box, \"Email me product news, tips and offers.\", starts\nunticked."
         },
         {
           "id": "signing-up#1",
@@ -2125,7 +2187,85 @@
           "ordinal": 3,
           "heading": "If sign-up does not complete",
           "headingPath": "Create an account and send your first message › If sign-up does not complete",
-          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"That password is too common.\" means the password was rejected against a\n  common-password list. Choose a longer, less common one.\n- A verification step the sign-up screen cannot render ends with \"This account\n  needs a verification step we cannot show here yet.\" Email\n  contact@agiworkforce.com and a person will unblock the account."
+          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"That password is too common.\" means the password was rejected against a\n  common-password list. Choose a longer, less common one.\n- A sign-up that needs a detail the screen cannot collect ends with a message\n  that starts \"This sign-up also needs\" and tells you to contact support. Email\n  contact@agiworkforce.com to finish creating the account."
+        }
+      ]
+    },
+    {
+      "id": "system-requirements",
+      "title": "System requirements and supported browsers",
+      "path": "/get-started",
+      "category": "getting-started",
+      "tags": [
+        "system requirements",
+        "supported browsers",
+        "browser support",
+        "minimum requirements",
+        "chrome",
+        "edge",
+        "firefox",
+        "safari",
+        "javascript",
+        "phone browser",
+        "mobile browser",
+        "tablet",
+        "offline",
+        "install",
+        "operating system",
+        "voice",
+        "notifications"
+      ],
+      "updated": "2026-10-08",
+      "source": "content/support/system-requirements.md",
+      "chunks": [
+        {
+          "id": "system-requirements#0",
+          "ordinal": 0,
+          "heading": "What you need",
+          "headingPath": "System requirements and supported browsers › What you need",
+          "text": "AGI runs in a web browser. You need a current version of Chrome, Edge, Firefox\nor Safari, with JavaScript turned on, and an internet connection. The web app\nhas nothing to install."
+        },
+        {
+          "id": "system-requirements#1",
+          "ordinal": 1,
+          "heading": "Supported browsers",
+          "headingPath": "System requirements and supported browsers › Supported browsers",
+          "text": "AGI names four browsers: Chrome, Edge, Firefox and Safari, each in a current\nversion. We publish no minimum version number, because the page checks features\nand not versions. When a page loads, it looks for a small set of modern\nJavaScript features. A browser that lacks one shows this notice at the top of\nthe page: \"This browser is too old to run AGI. Open it in a current version of\nChrome, Edge, Firefox or Safari.\"\n\nA browser with JavaScript turned off shows a notice that asks you to turn it on.\n\nOther browsers built on the same engines may work. We neither name them nor\ntest them."
+        },
+        {
+          "id": "system-requirements#2",
+          "ordinal": 2,
+          "heading": "What we test",
+          "headingPath": "System requirements and supported browsers › What we test",
+          "text": "Our automated browser tests run in Chromium, the engine inside Chrome and Edge.\nFirefox and Safari are outside that automated suite, so a fault that shows up\nin one of them alone reaches us through your report. The layout checks run at\nscreen widths from 320 to 1440 pixels, which covers a small phone through a\ndesktop window."
+        },
+        {
+          "id": "system-requirements#3",
+          "ordinal": 3,
+          "heading": "Phones and tablets",
+          "headingPath": "System requirements and supported browsers › Phones and tablets",
+          "text": "To use AGI on a phone or tablet, open\n[AGI Web](https://agiworkforce.com/chat) in the browser. The\n[Mobile page](https://agiworkforce.com/mobile) shows whether an app has been\nreleased."
+        },
+        {
+          "id": "system-requirements#4",
+          "ordinal": 4,
+          "heading": "Features that ask more of the browser",
+          "headingPath": "System requirements and supported browsers › Features that ask more of the browser",
+          "text": "- **Voice input.** A browser that cannot do it shows \"Voice input is not\n  supported in this browser. Try Chrome or Edge.\" on the microphone button.\n- **Voice mode.** It needs a microphone and your permission to use it.\n- **Notifications.** They need a browser with web push, and your permission."
+        },
+        {
+          "id": "system-requirements#5",
+          "ordinal": 5,
+          "heading": "Offline",
+          "headingPath": "System requirements and supported browsers › Offline",
+          "text": "The web app needs a connection to load a page and to send a message. Its\nservice worker handles notifications and caches nothing, so there is no offline\nmode."
+        },
+        {
+          "id": "system-requirements#6",
+          "ordinal": 6,
+          "heading": "Desktop, CLI and extensions",
+          "headingPath": "System requirements and supported browsers › Desktop, CLI and extensions",
+          "text": "The [download page](https://agiworkforce.com/download) shows which clients have\na release. A client with no release has no installer, so we publish no operating\nsystem, memory or disk requirements for it. Each client's requirements belong on\nits own page once there is something to install."
         }
       ]
     },

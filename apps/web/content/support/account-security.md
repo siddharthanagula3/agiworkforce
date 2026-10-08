@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, advanced account security, security key, recovery key, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-09-28
+updated: 2026-10-07
 scope: public
 ---
 
@@ -23,7 +23,9 @@ Settings, Security shows **Temporarily unavailable** where you would set one up
 or replace your backup codes, and a workspace cannot start requiring
 multi-factor authentication until they return. SMS MFA is not part of the
 current account contract, so it is not offered rather than silently ignored.
-Hardware security keys work with Advanced Account Security.
+Hardware security keys work with Advanced Account Security. An account with an
+authenticator app already set up keeps it, and the parts of this page about
+authenticator codes and backup codes apply to those accounts.
 
 No device skips the sign-in checks. Devices you linked, such as the CLI, VS
 Code, the Chrome extension or the desktop app, are listed in Settings, Account
