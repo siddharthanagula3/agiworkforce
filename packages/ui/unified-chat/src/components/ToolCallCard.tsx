@@ -64,6 +64,8 @@ export interface ToolCallCardProps {
   startedAt?: number;
   kind?: InlineToolKind;
   iconLetter?: string;
+  mark?: ReactNode;
+  failureReason?: string;
   onApprove?: (id: string) => void;
   onApproveForChat?: (id: string) => void;
   onReject?: (id: string) => void;
@@ -265,6 +267,74 @@ export function humanizeToolErrorText(raw: string): string {
     : text;
 }
 
+export type ToolFailureKind =
+  'rate-limited' | 'authorization' | 'permission-denied' | 'not-found' | 'timed-out' | 'unknown';
+
+const HOST_TOOL_TIMEOUT = /^Tool \S+ timed out after [\d.]+s and was abandoned\.$/;
+const HOST_PERMISSION_BLOCK =
+  /^Tool "[^"\n]+" is blocked by this account's connector permissions and was not executed\./;
+const UNTRUSTED_FENCE_OPEN = /<(?:mcp_tool_result|untrusted_tool_error)\b/;
+const MCP_RESULT_ENVELOPE = /<mcp_tool_result\b([^>]*)>\n[^\n]*\n([^\n]*)/;
+const MCP_ENVELOPE_STATUS = /\bstatus="([^"]*)"/;
+const MCP_ENVELOPE_CODE = /\bcode="(-?\d+)"/;
+const MCP_TRANSPORT_HTTP_STATUS = /^Error POSTing to endpoint \(HTTP (\d{3})\):/;
+const HOST_HTTP_STATUS = /\bHTTP (\d{3})\b|\brefused the request \((\d{3})\)\./;
+const MCP_RESOURCE_NOT_FOUND_CODE = '-32002';
+
+const FAILURE_KIND_BY_HTTP_STATUS: Readonly<Record<string, ToolFailureKind>> = {
+  '401': 'authorization',
+  '403': 'permission-denied',
+  '404': 'not-found',
+  '408': 'timed-out',
+  '410': 'not-found',
+  '429': 'rate-limited',
+  '504': 'timed-out',
+};
+
+function failureKindForHttpStatus(status: string | undefined): ToolFailureKind {
+  return (status && FAILURE_KIND_BY_HTTP_STATUS[status]) || 'unknown';
+}
+
+// Everything inside a fence is the remote server's own text, so only the host's
+// envelope attributes and the transport's status frame are read from it; a
+// server that writes "HTTP 429" into its message must not choose the reason.
+function classifyFencedToolFailure(text: string): ToolFailureKind {
+  const envelope = MCP_RESULT_ENVELOPE.exec(text);
+  if (!envelope) return 'unknown';
+  const attributes = envelope[1] ?? '';
+  const status = MCP_ENVELOPE_STATUS.exec(attributes)?.[1];
+  if (status === 'server_error') {
+    return MCP_ENVELOPE_CODE.exec(attributes)?.[1] === MCP_RESOURCE_NOT_FOUND_CODE
+      ? 'not-found'
+      : 'unknown';
+  }
+  if (status !== 'rejected') return 'unknown';
+  return failureKindForHttpStatus(MCP_TRANSPORT_HTTP_STATUS.exec(envelope[2] ?? '')?.[1]);
+}
+
+export function classifyToolFailure(raw: string | undefined): ToolFailureKind {
+  const text = raw?.trim();
+  if (!text) return 'unknown';
+  if (HOST_TOOL_TIMEOUT.test(text)) return 'timed-out';
+  if (HOST_PERMISSION_BLOCK.test(text)) return 'permission-denied';
+  if (UNTRUSTED_FENCE_OPEN.test(text)) return classifyFencedToolFailure(text);
+  const status = HOST_HTTP_STATUS.exec(text);
+  return failureKindForHttpStatus(status?.[1] ?? status?.[2]);
+}
+
+const TOOL_FAILURE_REASONS: Readonly<Record<ToolFailureKind, string | undefined>> = {
+  'rate-limited': 'Rate limited, try again in a minute.',
+  authorization: 'The saved credential was rejected.',
+  'permission-denied': 'Permission denied.',
+  'not-found': 'The item was not found.',
+  'timed-out': 'It took too long to respond.',
+  unknown: undefined,
+};
+
+export function toolFailureReason(kind: ToolFailureKind): string | undefined {
+  return TOOL_FAILURE_REASONS[kind];
+}
+
 const ToolCallCardComponent = ({
   id,
   name,
@@ -282,6 +352,8 @@ const ToolCallCardComponent = ({
   startedAt,
   kind,
   iconLetter,
+  mark,
+  failureReason,
   onApprove,
   onApproveForChat,
   onReject,
@@ -548,6 +620,8 @@ const ToolCallCardComponent = ({
           kind={kind}
           iconStyle="badge"
           iconLetter={iconLetter}
+          mark={mark}
+          errorReason={failureReason}
           argSummary={durationLabel}
           errorMessage={status === 'error' ? error : undefined}
           body={body}
