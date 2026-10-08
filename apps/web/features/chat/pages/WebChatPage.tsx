@@ -205,7 +205,7 @@ import {
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
-import { NewChatStarters } from '../components/NewChat/NewChatStarters';
+import { NewChatConnectorSuggestions } from '../components/NewChat/NewChatConnectorSuggestions';
 import { useNewChatDefaultModel } from '../hooks/use-new-chat-default-model';
 import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
@@ -6519,11 +6519,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       />
                     )}
                     {!compact && !voiceModeActive && (
-                      <NewChatStarters
-                        workMode={composerToggles.workMode}
-                        onPrompt={setComposerPrefill}
-                        onFocusComposer={handleFocusComposer}
-                        showConnectorHint={
+                      <NewChatConnectorSuggestions
+                        show={
                           !isConversationSidebarPending &&
                           conversations.length === 0 &&
                           !conversationListError

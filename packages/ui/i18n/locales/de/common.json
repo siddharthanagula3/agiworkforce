@@ -196,54 +196,7 @@
     "remove": "{{value}} entfernen"
   },
   "newChat": {
-    "ideasLabel": "Prompt-Ideen",
-    "backToTopics": "Zurück zu den Themen",
-    "agiWorkExamples": "Beispiele für AGI Work",
-    "agiWorkIntro": "AGI Work plant eine mehrstufige Aufgabe, nutzt Tools und Dateien und liefert ein Ergebnis, das du prüfen kannst.",
     "workspace": "Arbeitsbereich: {{name}}",
-    "topics": {
-      "write": {
-        "label": "Schreiben",
-        "p1": "Entwirf eine höfliche E-Mail, mit der ich eine Einladung zu einem Meeting absage",
-        "p2": "Straffe diesen Absatz, ohne seine Bedeutung zu verlieren: ",
-        "p3": "Schreib drei Überschriften für einen Beitrag über ",
-        "p4": "Mach aus diesen Notizen ein kurzes Update für mein Team: "
-      },
-      "learn": {
-        "label": "Lernen",
-        "p1": "Erkläre mit einem einfachen Beispiel, wie Zinseszins funktioniert",
-        "p2": "Stell mir fünf Fragen zu den Grundlagen der Photosynthese",
-        "p3": "Was ist der Unterschied zwischen einem Virus und einem Bakterium?",
-        "p4": "Erstelle einen vierwöchigen Lernplan für Spanisch-Grundlagen"
-      },
-      "code": {
-        "label": "Code",
-        "p1": "Prüfe diese Funktion auf Fehler und Randfälle: ",
-        "p2": "Schreib Unit-Tests für diesen Code: ",
-        "p3": "Erkläre, was dieser Fehler bedeutet und wie ich ihn behebe: ",
-        "p4": "Wandle dieses Python-Skript in TypeScript um: "
-      },
-      "research": {
-        "label": "Recherche",
-        "p1": "Vergleiche die Vor- und Nachteile von Mieten und Kaufen einer Wohnung",
-        "p2": "Was sollte ich wissen, bevor ich auf ein Elektroauto umsteige?",
-        "p3": "Fasse die wichtigsten Argumente für und gegen eine Viertagewoche zusammen",
-        "p4": "Finde die größten Risiken in diesem Plan: "
-      },
-      "plan": {
-        "label": "Planen",
-        "p1": "Plane eine dreitägige Reise nach Lissabon",
-        "p2": "Hilf mir, diese Aufgabenliste zu priorisieren: ",
-        "p3": "Entwirf eine Agenda für ein 30-minütiges Kick-off-Meeting",
-        "p4": "Erstelle einen günstigen Essensplan für eine Woche für zwei Personen"
-      }
-    },
-    "agiWork": {
-      "p1": "Recherchiere drei Wettbewerber und schreib einen einseitigen Vergleich",
-      "p2": "Mach aus meinen Meeting-Notizen einen Statusbericht mit Aufgaben",
-      "p3": "Entwirf einen Projektplan mit Meilensteinen, Verantwortlichen und Terminen",
-      "p4": "Analysiere die angehängte Tabelle und fasse die wichtigsten Trends zusammen"
-    },
     "connectors": {
       "label": "Verbinde deine Apps",
       "seeAll": "Alle Konnektoren",

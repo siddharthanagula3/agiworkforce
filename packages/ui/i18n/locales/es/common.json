@@ -196,54 +196,7 @@
     "remove": "Quitar {{value}}"
   },
   "newChat": {
-    "ideasLabel": "Ideas de indicaciones",
-    "backToTopics": "Volver a los temas",
-    "agiWorkExamples": "Ejemplos de AGI Work",
-    "agiWorkIntro": "AGI Work planifica una tarea de varios pasos, usa herramientas y archivos, y te entrega un resultado que puedes revisar.",
     "workspace": "Espacio de trabajo: {{name}}",
-    "topics": {
-      "write": {
-        "label": "Escribir",
-        "p1": "Redacta un correo amable para rechazar una invitación a una reunión",
-        "p2": "Haz más conciso este párrafo sin perder su sentido: ",
-        "p3": "Escribe tres opciones de titular para una publicación sobre ",
-        "p4": "Convierte estas notas en una breve actualización para mi equipo: "
-      },
-      "learn": {
-        "label": "Aprender",
-        "p1": "Explica cómo funciona el interés compuesto con un ejemplo sencillo",
-        "p2": "Hazme cinco preguntas sobre los conceptos básicos de la fotosíntesis",
-        "p3": "¿Cuál es la diferencia entre un virus y una bacteria?",
-        "p4": "Crea un plan de estudio de cuatro semanas para aprender inglés básico"
-      },
-      "code": {
-        "label": "Código",
-        "p1": "Revisa esta función en busca de errores y casos límite: ",
-        "p2": "Escribe pruebas unitarias para este código: ",
-        "p3": "Explica qué significa este error y cómo solucionarlo: ",
-        "p4": "Convierte este script de Python a TypeScript: "
-      },
-      "research": {
-        "label": "Investigar",
-        "p1": "Compara las ventajas y desventajas de alquilar y comprar una vivienda",
-        "p2": "¿Qué debo saber antes de cambiarme a un coche eléctrico?",
-        "p3": "Resume los principales argumentos a favor y en contra de la semana laboral de cuatro días",
-        "p4": "Encuentra los principales riesgos de este plan: "
-      },
-      "plan": {
-        "label": "Planificar",
-        "p1": "Planifica un viaje de tres días a Lisboa",
-        "p2": "Ayúdame a priorizar esta lista de tareas: ",
-        "p3": "Redacta la agenda de una reunión de arranque de 30 minutos",
-        "p4": "Haz un menú semanal económico para dos personas"
-      }
-    },
-    "agiWork": {
-      "p1": "Investiga a tres competidores y escribe una comparación de una página",
-      "p2": "Convierte mis notas de la reunión en un informe de estado con tareas pendientes",
-      "p3": "Elabora un plan de proyecto con hitos, responsables y fechas",
-      "p4": "Analiza la hoja de cálculo adjunta y resume las principales tendencias"
-    },
     "connectors": {
       "label": "Conecta tus apps",
       "seeAll": "Todos los conectores",
