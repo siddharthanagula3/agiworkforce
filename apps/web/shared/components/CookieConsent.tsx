@@ -30,6 +30,7 @@ import {
 const CLOSE_ICON_SIZE = 16;
 const COOKIE_ICON_SIZE = 20;
 const PROMPT_DELAY_MS = 1000;
+const ACTION_CLASS = 'h-11 rounded-full px-5 text-base';
 
 export const CookieConsent = () => {
   const reducedMotion = useReducedMotion();
@@ -125,57 +126,54 @@ export const CookieConsent = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={reducedMotion ? { opacity: 0 } : { y: 24, opacity: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--z-notification)] flex justify-center p-4 sm:justify-start sm:p-6"
+            className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--z-notification)] flex justify-center p-3 sm:justify-start sm:p-6"
             role="region"
             aria-label="Cookie consent"
           >
-            <div className="pointer-events-auto relative w-full max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-e3">
-              <div className="flex items-start gap-3 pe-8">
+            <div className="pointer-events-auto relative w-full max-w-[32rem] rounded-3xl border border-border bg-card p-5 text-card-foreground shadow-e3">
+              <div className="flex items-center gap-2.5 pe-10">
                 <Cookie
                   size={COOKIE_ICON_SIZE}
-                  className="mt-0.5 shrink-0 text-muted-foreground"
+                  className="shrink-0 text-muted-foreground"
                   aria-hidden="true"
                 />
-                <div>
-                  <h3 className="text-h5">Cookies on this site</h3>
-                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                    Cookies that keep you signed in are always on. Analytics stays off until you
-                    allow it, and we never set advertising cookies. Read the{' '}
-                    <Link
-                      href="/cookies"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-inline-link="true"
-                      className="underline underline-offset-2 hover:text-foreground"
-                    >
-                      cookie policy
-                    </Link>
-                    .
-                  </p>
-                </div>
+                <h3 className="text-base font-semibold leading-6">Cookies on this site</h3>
               </div>
+              <p className="mt-2 text-base leading-6 text-muted-foreground">
+                Cookies that keep you signed in are always on. Analytics stays off until you allow
+                it, and we never set advertising cookies. Read the{' '}
+                <Link
+                  href="/cookies"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-inline-link="true"
+                  className="text-card-foreground underline underline-offset-2"
+                >
+                  cookie policy
+                </Link>
+                .
+              </p>
 
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <Button
-                  size="sm"
                   data-variant="primary"
-                  className="bg-foreground text-background hover:bg-foreground/90"
+                  className={`${ACTION_CLASS} bg-foreground text-background hover:bg-foreground/90`}
                   onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
                 >
                   Necessary only
                 </Button>
                 <Button
                   variant="outline"
-                  size="sm"
                   data-variant="secondary"
+                  className={ACTION_CLASS}
                   onClick={() => savePreferences(ALL_ACCEPTED_PREFERENCES)}
                 >
                   Allow analytics
                 </Button>
                 <Button
                   variant="ghost"
-                  size="sm"
                   data-variant="secondary"
+                  className={`${ACTION_CLASS} col-span-2 sm:col-span-1`}
                   onClick={() => setShowSettings(true)}
                 >
                   Customise
@@ -184,7 +182,7 @@ export const CookieConsent = () => {
               <button
                 type="button"
                 onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
-                className="absolute end-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="absolute end-2 top-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Close and reject non-essential cookies"
               >
                 <X size={CLOSE_ICON_SIZE} aria-hidden="true" />
