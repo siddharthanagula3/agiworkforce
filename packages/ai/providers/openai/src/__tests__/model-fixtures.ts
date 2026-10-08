@@ -32,14 +32,17 @@ export const OPENAI_OPTIONAL_REASONING_MODEL_ID = samplingRejectingModels.find((
   model.reasoning?.supportedEfforts?.includes(NO_REASONING_EFFORT),
 )?.id;
 
-export const OPENAI_SAMPLING_ACCEPTING_MODEL_ID = getModelsForProvider('openai').find(
-  (model) => model.modelType === 'reasoning' && model.reasoning?.rejectsSamplingParameters !== true,
-)?.id;
+// Every current OpenAI reasoning model rejects sampling parameters, so the
+// accepting case is a model the catalog does not describe, which the adapter
+// treats the same way.
+const UNCATALOGUED_MODEL_ID = 'fixture-uncatalogued-openai-model';
 
-if (
-  !OPENAI_ALWAYS_REASONING_MODEL_ID ||
-  !OPENAI_OPTIONAL_REASONING_MODEL_ID ||
-  !OPENAI_SAMPLING_ACCEPTING_MODEL_ID
-) {
+export const OPENAI_SAMPLING_ACCEPTING_MODEL_ID =
+  getModelsForProvider('openai').find(
+    (model) =>
+      model.modelType === 'reasoning' && model.reasoning?.rejectsSamplingParameters !== true,
+  )?.id ?? UNCATALOGUED_MODEL_ID;
+
+if (!OPENAI_ALWAYS_REASONING_MODEL_ID || !OPENAI_OPTIONAL_REASONING_MODEL_ID) {
   throw new Error('The canonical OpenAI sampling-parameter fixtures must exist');
 }

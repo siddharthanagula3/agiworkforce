@@ -13,9 +13,9 @@
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": ["openai/gpt-6-astra"],
-        "family": null,
-        "version": null
+        "aliases": ["gpt-5.6", "openai/gpt-6-astra"],
+        "family": "gpt-frontier",
+        "version": "6"
       },
       "lifecycle": {
         "status": "active",
@@ -25,108 +25,12 @@
         "deprecated": false,
         "releasedOn": "2026-09-03",
         "deprecatedOn": null,
-        "stage": "probed",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-6-astra",
+        "stageSource": "catalog/model-families.json#openai/gpt-frontier",
         "replacedBy": null
       },
       "speed": "slow",
-      "residencyRegions": ["us", "eu", "ae"],
-      "evidenceRefs": []
-    },
-    "gpt-5.6-sol": {
-      "identity": {
-        "key": "gpt-5.6-sol",
-        "displayName": "GPT-5.6 Sol",
-        "provider": "openai",
-        "developer": "openai",
-        "providerModelId": "gpt-5.6-sol",
-        "openRouterSlug": "openai/gpt-5.6-sol",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["gpt-5.6", "openai/gpt-5.6-sol"],
-        "family": "gpt-frontier",
-        "version": "5.6"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 9, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-09",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_general",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": ["us", "eu", "ae"],
-      "evidenceRefs": []
-    },
-    "gpt-5.6-terra": {
-      "identity": {
-        "key": "gpt-5.6-terra",
-        "displayName": "GPT-5.6 Terra",
-        "provider": "openai",
-        "developer": "openai",
-        "providerModelId": "gpt-5.6-terra",
-        "openRouterSlug": "openai/gpt-5.6-terra",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["openai/gpt-5.6-terra"],
-        "family": "gpt-balanced",
-        "version": "5.6"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 9, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-09",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_balanced",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": ["us", "eu", "ae"],
-      "evidenceRefs": []
-    },
-    "gpt-5.6-luna": {
-      "identity": {
-        "key": "gpt-5.6-luna",
-        "displayName": "GPT-5.6 Luna",
-        "provider": "openai",
-        "developer": "openai",
-        "providerModelId": "gpt-5.6-luna",
-        "openRouterSlug": "openai/gpt-5.6-luna",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["openai/gpt-5.6-luna"],
-        "family": "gpt-fast",
-        "version": "5.6"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 9, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-09",
-        "deprecatedOn": null,
-        "stage": "probed",
-        "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-5.6-luna",
-        "replacedBy": null
-      },
-      "speed": "medium",
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
     },
@@ -142,7 +46,7 @@
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["openai/gpt-6.1-sol"],
-        "family": "gpt-frontier",
+        "family": "gpt-balanced",
         "version": "6.1"
       },
       "lifecycle": {
@@ -153,9 +57,9 @@
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "probed",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-6.1-sol",
+        "stageSource": "catalog/model-families.json#openai/gpt-balanced",
         "replacedBy": null
       },
       "speed": "medium",
@@ -185,9 +89,9 @@
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "probed",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#gpt-6-luna",
+        "stageSource": "catalog/model-families.json#openai/gpt-fast",
         "replacedBy": null
       },
       "speed": "medium",
@@ -911,35 +815,6 @@
       "residencyRegions": ["us", "eu"],
       "evidenceRefs": []
     },
-    "gpt-image-2": {
-      "identity": {
-        "key": "gpt-image-2",
-        "displayName": "GPT Image 2",
-        "provider": "openai",
-        "developer": "openai",
-        "providerModelId": "gpt-image-2",
-        "kind": "image",
-        "aliases": [],
-        "family": "gpt-image",
-        "version": "2"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "April 21, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-04-21",
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": ["us", "eu", "ae"],
-      "evidenceRefs": []
-    },
     "gpt-image-2.5-sunburst": {
       "identity": {
         "key": "gpt-image-2.5-sunburst",
@@ -949,8 +824,8 @@
         "providerModelId": "gpt-image-2.5-sunburst",
         "kind": "image",
         "aliases": [],
-        "family": null,
-        "version": null
+        "family": "gpt-image",
+        "version": "2.5"
       },
       "lifecycle": {
         "status": "active",
@@ -960,9 +835,9 @@
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "registered",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst",
+        "stageSource": "catalog/model-families.json#openai/gpt-image",
         "replacedBy": null
       },
       "residencyRegions": ["us", "eu", "ae"],
@@ -12959,12 +12834,8 @@
   "providerModelKeys": {
     "openai": [
       "gpt-6-astra",
-      "gpt-5.6-sol",
-      "gpt-5.6-terra",
-      "gpt-5.6-luna",
       "gpt-6.1-sol",
       "gpt-6-luna",
-      "gpt-image-2",
       "gpt-image-2.5-sunburst",
       "gpt-image-2.5-flare",
       "gpt-4o-mini-tts",
@@ -13440,390 +13311,6 @@
         },
         "source": "https://www.cheaperinference.com/docs",
         "verifiedOn": "2026-09-06"
-      }
-    },
-    "openai/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "openai",
-      "providerModelId": "gpt-5.6-sol",
-      "harnessId": "openai/responses",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 4,
-        "outputPerMillion": 20,
-        "cacheReadPerMillion": 0.4,
-        "cacheWritePerMillion": 5,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 272000,
-            "inputPerMillion": 8,
-            "outputPerMillion": 30,
-            "cacheReadPerMillion": 0.8,
-            "cacheWritePerMillion": 10
-          }
-        ]
-      }
-    },
-    "open_router/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-5.6-sol",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "vercel_gateway/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-5.6-sol",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "cheaperinference/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "cheaperinference",
-      "providerModelId": "gpt-5.6-sol",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2.8,
-        "outputPerMillion": 14,
-        "cacheReadPerMillion": 0.28,
-        "cacheWritePerMillion": 3.5
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 4,
-          "outputPerMillion": 20,
-          "cacheReadPerMillion": 0.4,
-          "cacheWritePerMillion": 5
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "experientiallabs/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "experientiallabs",
-      "providerModelId": "gpt-5.6-sol",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 4,
-        "outputPerMillion": 20,
-        "cacheReadPerMillion": 0.4,
-        "cacheWritePerMillion": 4
-      }
-    },
-    "openai/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "openai",
-      "providerModelId": "gpt-5.6-terra",
-      "harnessId": "openai/responses",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 272000,
-            "inputPerMillion": 4,
-            "outputPerMillion": 18,
-            "cacheReadPerMillion": 0.4,
-            "cacheWritePerMillion": 5
-          }
-        ]
-      }
-    },
-    "open_router/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-5.6-terra",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "vercel_gateway/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-5.6-terra",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "cheaperinference/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "cheaperinference",
-      "providerModelId": "gpt-5.6-terra",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1.4,
-        "outputPerMillion": 8.4,
-        "cacheReadPerMillion": 0.14,
-        "cacheWritePerMillion": 1.75
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 2,
-          "outputPerMillion": 12,
-          "cacheReadPerMillion": 0.2,
-          "cacheWritePerMillion": 2.5
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "experientiallabs/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "experientiallabs",
-      "providerModelId": "gpt-5.6-terra",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2
-      }
-    },
-    "openai/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "openai",
-      "providerModelId": "gpt-5.6-luna",
-      "harnessId": "openai/responses",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.25,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 272000,
-            "inputPerMillion": 0.4,
-            "outputPerMillion": 1.8,
-            "cacheReadPerMillion": 0.04,
-            "cacheWritePerMillion": 0.5
-          }
-        ]
-      }
-    },
-    "open_router/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-5.6-luna",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.25
-      }
-    },
-    "vercel_gateway/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-5.6-luna",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.25
-      }
-    },
-    "cheaperinference/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "cheaperinference",
-      "providerModelId": "gpt-5.6-luna",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.84,
-        "cacheReadPerMillion": 0.014,
-        "cacheWritePerMillion": 0.175
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 0.2,
-          "outputPerMillion": 1.2,
-          "cacheReadPerMillion": 0.02,
-          "cacheWritePerMillion": 0.25
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "experientiallabs/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "experientiallabs",
-      "providerModelId": "gpt-5.6-luna",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.2
       }
     },
     "openai/gpt-6.1-sol": {
@@ -15203,26 +14690,6 @@
           "usdPerTokenWithoutAudio": 0.0000107,
           "usdPerTokenWithVideoInput": 0.0000064
         }
-      }
-    },
-    "openai/gpt-image-2": {
-      "modelKey": "gpt-image-2",
-      "provider": "openai",
-      "providerModelId": "gpt-image-2",
-      "harnessId": "openai/media",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 8,
-        "outputPerMillion": 30,
-        "cacheReadPerMillion": 2
       }
     },
     "openai/gpt-image-2.5-sunburst": {
@@ -25120,78 +24587,6 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "gpt-5.6-sol": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "gpt-5.6-terra": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "gpt-5.6-luna": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "gpt-6.1-sol": {
       "textInput": true,
       "imageInput": true,
@@ -25768,7 +25163,7 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gpt-image-2": {
+    "gpt-image-2.5-sunburst": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25792,33 +25187,9 @@
       "codeExecution": false,
       "promptCaching": true
     },
-    "gpt-image-2.5-sunburst": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": false,
-      "imageOutput": true,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": false,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
-    },
     "gpt-image-2.5-flare": {
       "textInput": true,
-      "imageInput": false,
+      "imageInput": true,
       "audioInput": false,
       "videoInput": false,
       "textOutput": false,
@@ -25838,7 +25209,7 @@
       "webSearch": false,
       "deepResearch": false,
       "codeExecution": false,
-      "promptCaching": false
+      "promptCaching": true
     },
     "gpt-4o-mini-tts": {
       "textInput": true,
@@ -35244,7 +34615,7 @@
   "providerDefaults": {
     "openai": {
       "imageOutput": {
-        "modelKey": "gpt-image-2",
+        "modelKey": "gpt-image-2.5-sunburst",
         "source": "packages/ai/model-registry/catalog/model-families.json#openai/gpt-image",
         "verifiedOn": "2026-09-05",
         "note": "The provider's only active image family, so the slot's active model is the default by construction. Following the slot rather than naming a generation keeps a promotion from reaching this record."
@@ -35431,57 +34802,6 @@
           "outputPerMillion": 75,
           "cacheReadPerMillion": 2,
           "cacheWritePerMillion": 25
-        }
-      ]
-    },
-    "gpt-5.6-sol": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 4,
-      "outputPerMillion": 20,
-      "cacheReadPerMillion": 0.4,
-      "cacheWritePerMillion": 5,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputPerMillion": 8,
-          "outputPerMillion": 30,
-          "cacheReadPerMillion": 0.8,
-          "cacheWritePerMillion": 10
-        }
-      ]
-    },
-    "gpt-5.6-terra": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 2,
-      "outputPerMillion": 12,
-      "cacheReadPerMillion": 0.2,
-      "cacheWritePerMillion": 2.5,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputPerMillion": 4,
-          "outputPerMillion": 18,
-          "cacheReadPerMillion": 0.4,
-          "cacheWritePerMillion": 5
-        }
-      ]
-    },
-    "gpt-5.6-luna": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.2,
-      "outputPerMillion": 1.2,
-      "cacheReadPerMillion": 0.02,
-      "cacheWritePerMillion": 0.25,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputPerMillion": 0.4,
-          "outputPerMillion": 1.8,
-          "cacheReadPerMillion": 0.04,
-          "cacheWritePerMillion": 0.5
         }
       ]
     },
@@ -35701,13 +35021,6 @@
         "usdPerTokenWithoutAudio": 0.0000107,
         "usdPerTokenWithVideoInput": 0.0000064
       }
-    },
-    "gpt-image-2": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 8,
-      "outputPerMillion": 30,
-      "cacheReadPerMillion": 2
     },
     "gpt-image-2.5-sunburst": {
       "currency": "USD",
@@ -38656,21 +37969,6 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-04-30"
     },
-    "gpt-5.6-sol": {
-      "contextTokens": 1050000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16"
-    },
-    "gpt-5.6-terra": {
-      "contextTokens": 1050000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16"
-    },
-    "gpt-5.6-luna": {
-      "contextTokens": 1050000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16"
-    },
     "gpt-6.1-sol": {
       "contextTokens": 1050000,
       "maxInputTokens": 922000,
@@ -38770,7 +38068,6 @@
         "supportsSeed": true
       }
     },
-    "gpt-image-2": { "contextTokens": 4000 },
     "gpt-image-2.5-sunburst": {},
     "gpt-image-2.5-flare": {},
     "gpt-4o-mini-tts": { "contextTokens": 2000 },
@@ -39322,9 +38619,6 @@
   },
   "benchmarks": {
     "gpt-6-astra": {},
-    "gpt-5.6-sol": {},
-    "gpt-5.6-terra": {},
-    "gpt-5.6-luna": {},
     "gpt-6.1-sol": {},
     "gpt-6-luna": {},
     "claude-fable-5-1": {},
@@ -39496,7 +38790,6 @@
     },
     "runway-gen-4": {},
     "seedance-2.5": {},
-    "gpt-image-2": {},
     "gpt-image-2.5-sunburst": {},
     "gpt-image-2.5-flare": {},
     "gpt-4o-mini-tts": {},
@@ -40415,6 +39708,13 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model outside the QwenCloud free quota, the anthropic/claude-opus slot moves from claude-opus-5 to claude-opus-5-5 and the anthropic/claude-sonnet slot from claude-sonnet-5 to claude-sonnet-5-5. The eval gate was not run for either move: no Anthropic slot has a committed baseline and no run was recorded for either model, so nothing here says the new models were measured against the old ones. The catalog-side gates the family tool computes (provider, family identity, lifecycle, capability coverage, price and limit regression) were evaluated and are recorded on each slot. Claude Opus 5.5 lists at $4/$20 per million against $5/$25 for Claude Opus 5, cannot have thinking switched off and defaults to medium effort; Claude Sonnet 5.5 keeps $2/$10. claude-opus-5, claude-opus-4-8, claude-sonnet-5 and claude-haiku-4-5 leave the roster through the retire tool into retired-models.json, each naming its successor, and their route and probe records go with them. claude-haiku-5-5 takes no family slot: no routing slot names a Haiku model and the picker lists it from its own row. The successors carry only their direct Anthropic route. The marketplace routes the retired rows had (OpenRouter, Vercel AI Gateway, Cheaper Inference, Experiential Labs) were not copied, because no source read for this change states that those gateways serve the new ids or at what price; until they are added, a Claude model has no same-model fallback route and one Claude model cannot stand in for another in a fallback plan. No provider call was made."
+    },
+    {
+      "id": "verification/2026-10-07/78",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the three OpenAI chat slots follow the tier names OpenAI uses from generation 6: the frontier slot now matches the astra name and holds gpt-6-astra, the balanced slot matches sol and holds gpt-6.1-sol, and the fast slot holds gpt-6-luna. The eval gate was not run for any of them: no OpenAI slot has a committed baseline and no run was recorded for these models. The catalog-side gates are recorded on each slot, and one of them fails: gpt-6-astra lists at $10/$50 per million against $4/$20 for gpt-5.6-sol, a 150% rise on both sides against the 25% ceiling, so the frontier slot, the OpenAI default and the flagship_general Auto slot now cost two and a half times what they did. gpt-6.1-sol lists at $2/$10 against $2/$12 for gpt-5.6-terra and gpt-6-luna at $0.10/$0.50 against $0.20/$1.20. gpt-6.1-sol moves from the Max list to the Pro list with the balanced slot it now holds, and its minTier follows; the direct entries for gpt-6-astra, gpt-6.1-sol and gpt-6-luna in tierAllowedModels are dropped because the slots now name them. The openai/gpt-image slot matches the sunburst name and holds gpt-image-2.5-sunburst, the model OpenAI describes as its most capable for generation and editing; gpt-image-2.5-flare stays as a registered row outside the slot. Both 2.5 image rows now declare image input and prompt caching, which their pricing rows (image input and cached input prices) and the edits endpoint already stated; OpenAI publishes no context limit for them, so the slot's 4,000 token minimum is unmet by data and recorded as such on the slot. gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and gpt-image-2 leave through the retire tool into retired-models.json, each naming the model that took its slot, with their route, probe and synced records. The successors carry fewer routes: gpt-6-astra keeps its Experiential Labs and Cheaper Inference routes, gpt-6.1-sol and gpt-6-luna have only the direct OpenAI route, and the OpenRouter and Vercel AI Gateway routes of the 5.6 rows were not copied because nothing read for this change says those gateways serve the new ids. The GPT-6 rows record no ultra, pro or persistent reasoning surface and gpt-6-astra and gpt-6.1-sol do not accept effort none; nothing in product code reads the three surface records. No provider call was made."
     }
   ],
   "retiredModels": {
@@ -40795,6 +40095,138 @@
     "google/gemma-4-26b-a4b-it:free": {
       "id": "google/gemma-4-26b-a4b-it:free",
       "metadataPreserved": false
+    },
+    "gpt-5.6-luna": {
+      "id": "gpt-5.6-luna",
+      "displayName": "GPT-5.6 Luna",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "gpt-6-luna",
+      "metadataSource": "catalog/models.curation.json#gpt-5.6-luna",
+      "metadataPreserved": true
+    },
+    "gpt-5.6-sol": {
+      "id": "gpt-5.6-sol",
+      "displayName": "GPT-5.6 Sol",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "gpt-6-astra",
+      "metadataSource": "catalog/models.curation.json#gpt-5.6-sol",
+      "metadataPreserved": true
+    },
+    "gpt-5.6-terra": {
+      "id": "gpt-5.6-terra",
+      "displayName": "GPT-5.6 Terra",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "gpt-6.1-sol",
+      "metadataSource": "catalog/models.curation.json#gpt-5.6-terra",
+      "metadataPreserved": true
+    },
+    "gpt-image-2": {
+      "id": "gpt-image-2",
+      "displayName": "GPT Image 2",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "image",
+      "contextWindow": 4000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": true,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "gpt-image-2.5-sunburst",
+      "metadataSource": "catalog/models.curation.json#gpt-image-2",
+      "metadataPreserved": true
     },
     "gpt-oss-120b": {
       "id": "gpt-oss-120b",
@@ -41214,52 +40646,52 @@
       "canonicalFamily": "gpt-frontier",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-5.6-sol",
-      "activeGeneration": "5.6",
+      "activeModelKey": "gpt-6-astra",
+      "activeGeneration": "6",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-5.6-sol",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/gpt-balanced": {
       "provider": "openai",
       "canonicalFamily": "gpt-balanced",
       "tier": "balanced",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-5.6-terra",
-      "activeGeneration": "5.6",
+      "activeModelKey": "gpt-6.1-sol",
+      "activeGeneration": "6.1",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-5.6-terra",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/gpt-fast": {
       "provider": "openai",
       "canonicalFamily": "gpt-fast",
       "tier": "fast",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-5.6-luna",
-      "activeGeneration": "5.6",
+      "activeModelKey": "gpt-6-luna",
+      "activeGeneration": "6",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-5.6-luna",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/gpt-image": {
       "provider": "openai",
       "canonicalFamily": "gpt-image",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-image-2",
-      "activeGeneration": "2",
+      "activeModelKey": "gpt-image-2.5-sunburst",
+      "activeGeneration": "2.5",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-image-2",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/transcribe-balanced": {
       "provider": "openai",
@@ -41952,7 +41384,7 @@
           "description": "Shared workhorse general route. Model and provider are selected by the canonical registry."
         },
         "general_balanced": {
-          "modelKey": "gpt-5.6-terra",
+          "modelKey": "gpt-6.1-sol",
           "label": "General Balanced",
           "description": "Shared general balanced route. Model and provider are selected by the canonical registry."
         },
@@ -41962,7 +41394,7 @@
           "description": "Shared general premium route. Model and provider are selected by the canonical registry."
         },
         "flagship_general": {
-          "modelKey": "gpt-5.6-sol",
+          "modelKey": "gpt-6-astra",
           "label": "Flagship General",
           "description": "Shared flagship general route. Model and provider are selected by the canonical registry."
         },
@@ -41972,7 +41404,7 @@
           "description": "Shared coding fast route. Model and provider are selected by the canonical registry."
         },
         "coding_premium": {
-          "modelKey": "gpt-5.6-sol",
+          "modelKey": "gpt-6-astra",
           "label": "Coding Premium",
           "description": "Shared coding premium route. Model and provider are selected by the canonical registry."
         },
@@ -42102,7 +41534,7 @@
           "description": "Shared voice live route. Model and provider are selected by the canonical registry."
         },
         "voice_live_backend": {
-          "modelKey": "gpt-5.6-terra",
+          "modelKey": "gpt-6.1-sol",
           "label": "Voice Live Backend",
           "description": "Shared voice live backend route. Model and provider are selected by the canonical registry."
         },
@@ -42117,7 +41549,7 @@
           "description": "Shared voice speech route. Model and provider are selected by the canonical registry."
         },
         "general_balanced_pro": {
-          "modelKey": "gpt-5.6-terra",
+          "modelKey": "gpt-6.1-sol",
           "label": "General Balanced Pro",
           "description": "Shared general balanced pro route. Model and provider are selected by the canonical registry."
         },
@@ -42147,7 +41579,7 @@
           "description": "Shared flagship coding pro plus route. Model and provider are selected by the canonical registry."
         },
         "flagship_general_pro_plus": {
-          "modelKey": "gpt-5.6-sol",
+          "modelKey": "gpt-6-astra",
           "label": "Flagship General Pro Plus",
           "description": "Shared flagship general pro plus route. Model and provider are selected by the canonical registry."
         },
@@ -42160,7 +41592,6 @@
     },
     "legacyTiers": {
       "economy": [
-        "gpt-5.6-luna",
         "gpt-6-luna",
         "gemini-3.5-flash-lite",
         "gemini-3.8-flash",
@@ -42168,7 +41599,7 @@
         "openrouter-free"
       ],
       "pro_additions": [
-        "gpt-5.6-terra",
+        "gpt-6.1-sol",
         "claude-sonnet-5-5",
         "gemini-3.1-pro-preview",
         "deepseek-v4-flash",
@@ -42177,14 +41608,7 @@
         "glm-5.3",
         "kimi-k3"
       ],
-      "flagship_additions": [
-        "gpt-5.6-sol",
-        "gpt-6-astra",
-        "gpt-6.1-sol",
-        "claude-fable-5-1",
-        "claude-opus-5-5",
-        "grok-4.6"
-      ]
+      "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.6"]
     },
     "release": { "policyVersion": 19 }
   }

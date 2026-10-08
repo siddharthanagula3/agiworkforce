@@ -92,36 +92,6 @@
       "toolOutcome": "skipped",
       "toolDetail": null
     },
-    "gpt-5.6-luna": {
-      "routeId": "openai/gpt-5.6-luna",
-      "probedOn": "2026-10-07",
-      "outcome": "answered",
-      "ttfbMs": 1727,
-      "echoedModelId": null,
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
-    "gpt-5.6-sol": {
-      "routeId": "openai/gpt-5.6-sol",
-      "probedOn": "2026-10-07",
-      "outcome": "answered",
-      "ttfbMs": 1099,
-      "echoedModelId": null,
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
-    "gpt-5.6-terra": {
-      "routeId": "openai/gpt-5.6-terra",
-      "probedOn": "2026-10-07",
-      "outcome": "answered",
-      "ttfbMs": 1227,
-      "echoedModelId": null,
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
     "gpt-6-astra": {
       "routeId": "openai/gpt-6-astra",
       "probedOn": "2026-10-07",
