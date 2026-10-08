@@ -127,6 +127,11 @@ used in this order (`freeQuotaChatUseOrder` in
 An allocation is used until its allowance is spent or the provider holds it,
 then the next one starts. One turn tries one allocation.
 
+`inventory.chosenOnlyByName` lists allocations that are never chosen for
+someone, here or as the suggested alternative after a refusal
+(`resolveReadyFreeQuotaOffering`). It holds the two role-play models, which
+answer in a persona. A person can still pick them by name in the model picker.
+
 On 2026-10-07 the inventory held 168 active token allocations of 1,000,000
 tokens. 73 of them can answer chat: 90% of what is left of each is usable,
 65,677,202 tokens in all. The other 95 cannot: 37 audio and 6 embedding

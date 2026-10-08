@@ -3476,6 +3476,7 @@
       "order": "quota_first",
       "quotaFirstByteTimeoutMs": 15000
     },
+    "chosenOnlyByName": ["qwen-quota-093", "qwen-quota-118"],
     "freeAutoFallback": {
       "offeringKeys": [
         "qwen-quota-038",
