@@ -451,3 +451,65 @@ describe('KIND_TO_BADGE map', () => {
     if (cfg.kind === 'letter') expect(cfg.letter).toBe('M');
   });
 });
+
+describe('InlineToolCall, surface mark and failure reason', () => {
+  it('draws the mark in place of the glyph in the default icon style', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="mark-1"
+        label="Searched Gmail"
+        status="success"
+        kind="mcp-custom"
+        mark={<svg data-testid="mark" />}
+      />,
+    );
+    expect(within(container).getByTestId('mark')).toBeTruthy();
+    expect(container.querySelector('[data-badge-kind="mark"]')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+    expect(container.querySelector('.inline-tool-call__icon')).toBeNull();
+  });
+
+  it('keeps the glyph when no mark is supplied', () => {
+    const { container } = render(
+      <InlineToolCall id="mark-2" label="Searched Gmail" status="success" kind="mcp-custom" />,
+    );
+    expect(container.querySelector('[data-badge-kind="mark"]')).toBeNull();
+    expect(container.querySelector('.inline-tool-call__icon')).not.toBeNull();
+  });
+
+  it('reads the reason as part of the label and drops the Error suffix', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="reason-1"
+        label="Could not search Gmail"
+        status="error"
+        iconStyle="badge"
+        errorReason="It took too long to respond."
+      />,
+    );
+    expect(container.querySelector('.inline-tool-call__label')?.textContent).toBe(
+      'Could not search Gmail. It took too long to respond.',
+    );
+    expect(container.querySelector('.inline-tool-call__suffix')).toBeNull();
+    expect(container.querySelector('.inline-tool-call__bar')?.getAttribute('aria-label')).toBe(
+      'Could not search Gmail. It took too long to respond.',
+    );
+  });
+
+  it('shows no reason on a row that is still running', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="reason-2"
+        label="Searching Gmail"
+        status="running"
+        iconStyle="badge"
+        errorReason="It took too long to respond."
+      />,
+    );
+    expect(container.querySelector('.inline-tool-call__label')?.textContent).toBe(
+      'Searching Gmail',
+    );
+    expect(container.querySelector('.inline-tool-call__suffix')?.textContent).toBe('Running');
+  });
+});

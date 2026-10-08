@@ -30,4 +30,29 @@ describe('canonicalToolSummary, MCP connectors', () => {
     expect(summary).toBe('Using Notion connector');
     expect(summary).not.toMatch(/custom-|a1b2c3d4e5/i);
   });
+
+  it('keeps the name-carrying sentence when a remote tool name resembles a platform tool', () => {
+    expect(canonicalToolSummary('mcp__github__post_pull_request_review', 'connector')).toBe(
+      'Using GitHub connector',
+    );
+    expect(
+      canonicalToolSummary(
+        'mcp__custom-a1b2c3d4e5__read_file',
+        'connector',
+        undefined,
+        'Acme Logistics',
+      ),
+    ).toBe('Using Acme Logistics connector');
+    expect(canonicalToolSummary('mcp__filesystem__list_files', 'mcp')).toBe(
+      'Using Filesystem tool',
+    );
+  });
+
+  it('still words a platform tool from the phrase table', () => {
+    expect(canonicalToolSummary('read_file', 'filesystem')).toBe('Reading file');
+    expect(canonicalToolSummary('url_fetch', 'web-fetch', { url: 'https://example.com/a' })).toBe(
+      'Fetching example.com',
+    );
+    expect(canonicalToolSummary('frobnicate_widget', 'other')).toBe('Running Frobnicate Widget');
+  });
 });

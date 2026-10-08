@@ -926,15 +926,17 @@ export function canonicalToolSummary(
   args?: Record<string, unknown>,
   serverLabel?: string,
 ): string {
-  const phrase =
-    (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
-    toolStatusPhrase(toolName);
-  if (phrase) return phrase;
-
+  // The connector's display name reaches the client only inside this sentence, and the
+  // phrase table guesses from substrings of a remote server's tool name ("review" contains
+  // "view"), so a connector call always keeps the sentence that carries its name.
   const server = serverLabel ?? mcpServerLabel(toolName);
   if (category === 'connector') return server ? `Using ${server} connector` : 'Using connector';
   if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
-  return `Running ${humanizeIdentifier(toolName)}`;
+
+  const phrase =
+    (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
+    toolStatusPhrase(toolName);
+  return phrase ?? `Running ${humanizeIdentifier(toolName)}`;
 }
 
 function canonicalApprovalSummary(

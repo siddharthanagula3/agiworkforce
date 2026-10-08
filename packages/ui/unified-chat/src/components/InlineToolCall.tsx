@@ -67,6 +67,13 @@ export interface InlineToolCallProps {
   iconOverride?: ComponentType<LucideProps>;
   iconStyle?: InlineToolIconStyle;
   iconLetter?: string;
+  /**
+   * A mark the surface draws in the icon position, such as a connector's own
+   * logo. This package cannot know one surface's brand assets, so it arrives
+   * here; without it the row keeps its letter badge or glyph.
+   */
+  mark?: ReactNode;
+  errorReason?: string;
   resultLabel?: string;
   completionLabel?: string;
   trailingAction?: ReactNode;
@@ -190,6 +197,18 @@ function BadgeIcon({ config }: { config: BadgeConfig }) {
   );
 }
 
+function MarkSlot({ mark }: { mark: ReactNode }) {
+  return (
+    <span
+      className="inline-tool-call__badge inline-flex h-6 w-6 shrink-0 items-center justify-center"
+      aria-hidden="true"
+      data-badge-kind="mark"
+    >
+      {mark}
+    </span>
+  );
+}
+
 function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
   if (status === 'pending' || status === 'running') {
     return (
@@ -283,6 +302,8 @@ export function InlineToolCall({
   iconOverride,
   iconStyle = 'lucide',
   iconLetter,
+  mark,
+  errorReason,
   resultLabel = 'Result',
   completionLabel,
   trailingAction,
@@ -312,7 +333,10 @@ export function InlineToolCall({
   );
 
   const bodyId = `${id}-body`;
-  const suffix = labelSuffix(status, errorMessage);
+  const failureSentence =
+    status === 'error' && errorReason ? `${label}. ${errorReason}` : undefined;
+  const displayLabel = failureSentence ?? label;
+  const suffix = failureSentence ? '' : labelSuffix(status, errorMessage);
   const colorClass = colorClassForStatus(status);
 
   if (isBadge) {
@@ -335,7 +359,7 @@ export function InlineToolCall({
           tabIndex={isExpandable ? 0 : undefined}
           aria-expanded={isExpandable ? effectiveOpen : undefined}
           aria-controls={isExpandable ? bodyId : undefined}
-          aria-label={`${label}${suffix ? `, ${suffix}` : ''}${status === 'success' && completionLabel ? `, ${completionLabel}` : ''}`}
+          aria-label={`${displayLabel}${suffix ? `, ${suffix}` : ''}${status === 'success' && completionLabel ? `, ${completionLabel}` : ''}`}
           onClick={isExpandable ? toggle : undefined}
           onKeyDown={onKeyDown}
           className={cn(
@@ -347,7 +371,7 @@ export function InlineToolCall({
             'transition-colors duration-instant',
           )}
         >
-          <BadgeIcon config={badgeConfig} />
+          {mark ? <MarkSlot mark={mark} /> : <BadgeIcon config={badgeConfig} />}
           {/* Tool names are arbitrary-length, MCP servers namespace them
               ("mcp__filesystem__read_text_file"). shrink-0 with no ellipsis made
               the label hold its full intrinsic width and push the status dot and
@@ -360,9 +384,9 @@ export function InlineToolCall({
               status === 'error' ? 'flex-1 whitespace-normal break-words' : 'truncate',
               colorClass,
             )}
-            title={typeof label === 'string' ? label : undefined}
+            title={displayLabel}
           >
-            {label}
+            {displayLabel}
           </span>
           {argSummary ? (
             <span
@@ -457,7 +481,7 @@ export function InlineToolCall({
         tabIndex={isExpandable ? 0 : undefined}
         aria-expanded={isExpandable ? effectiveOpen : undefined}
         aria-controls={isExpandable ? bodyId : undefined}
-        aria-label={`${label}${suffix ? `, ${suffix}` : ''}`}
+        aria-label={`${displayLabel}${suffix ? `, ${suffix}` : ''}`}
         onClick={isExpandable ? toggle : undefined}
         onKeyDown={onKeyDown}
         className={cn(
@@ -468,14 +492,18 @@ export function InlineToolCall({
           'transition-colors duration-instant',
         )}
       >
-        <Icon
-          size={16}
-          strokeWidth={1.75}
-          className="inline-tool-call__icon shrink-0 text-[color:var(--chat-text-muted,#8b8680)]"
-          aria-hidden="true"
-        />
+        {mark ? (
+          <MarkSlot mark={mark} />
+        ) : (
+          <Icon
+            size={16}
+            strokeWidth={1.75}
+            className="inline-tool-call__icon shrink-0 text-[color:var(--chat-text-muted,#8b8680)]"
+            aria-hidden="true"
+          />
+        )}
         <span className={cn('inline-tool-call__label text-sm font-normal shrink-0', colorClass)}>
-          {label}
+          {displayLabel}
         </span>
         {argSummary ? (
           <span

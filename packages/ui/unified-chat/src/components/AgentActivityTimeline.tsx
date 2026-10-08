@@ -26,10 +26,16 @@ import {
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
 import { cn } from '../lib/utils';
-import { ToolCallCard, type ToolCallStatus } from './ToolCallCard';
+import {
+  ToolCallCard,
+  classifyToolFailure,
+  toolFailureReason,
+  type ToolCallStatus,
+} from './ToolCallCard';
 import type { InlineToolKind } from './InlineToolCall';
 import {
   readConnectorConnectRequest,
+  type ConnectorAuthorizationReason,
   type ConnectorConnectRequest,
 } from '../lib/connector-connect-required';
 import {
@@ -39,6 +45,12 @@ import {
   isAgiWorkPlanEntry,
 } from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
+import {
+  connectorNameFromSummary,
+  connectorStepSentence,
+  parseQualifiedConnectorTool,
+  type ConnectorStepPhase,
+} from './connector-step-sentence';
 import { translateUiPlural } from '@agiworkforce/ui';
 
 const ACTIVITY_PAGE_SIZE = 40;
@@ -87,6 +99,12 @@ export interface AgentActivityTimelineProps {
    */
   screenshotFor?: (toolCallId: string) => string | undefined;
   renderInputRequest?: (entry: AgentActivityToolEntry) => ReactNode;
+  /**
+   * The connector's own logo for a step, by its server id. Brand assets and the
+   * connector catalogue belong to one surface, so they arrive here; a surface
+   * that returns nothing keeps the letter badge.
+   */
+  renderConnectorMark?: (serverId: string) => ReactNode;
 }
 
 export function hasCanonicalToolActivity(
@@ -147,6 +165,66 @@ export function settledActivityStatus(
   return activity.status;
 }
 
+function isConnectorStep(entry: AgentActivityEntry): entry is AgentActivityToolEntry {
+  return entry.kind === 'tool' && (entry.category === 'connector' || entry.category === 'mcp');
+}
+
+function connectorStepPhase(entry: AgentActivityToolEntry): ConnectorStepPhase {
+  switch (entry.status) {
+    case 'completed':
+      return 'finished';
+    case 'cancelled':
+      return 'stopped';
+    case 'awaiting-approval':
+      return 'waiting';
+    case 'failed':
+      return entry.approval?.decision === 'denied' ? 'declined' : 'failed';
+    case 'pending':
+    case 'running':
+    case 'awaiting-device':
+      return 'running';
+  }
+}
+
+function connectRequestFor(entry: AgentActivityToolEntry): ConnectorConnectRequest | null {
+  return readConnectorConnectRequest({
+    qualifiedToolName: entry.name,
+    result: typeof entry.output === 'string' ? entry.output : undefined,
+    isError: entry.status === 'failed',
+  });
+}
+
+function connectorSentence(entry: AgentActivityEntry): string | undefined {
+  if (!isConnectorStep(entry) || entry.unavailable) return undefined;
+  const verifiedConnectorName = connectRequestFor(entry)?.connectorName;
+  return connectorStepSentence({
+    name: entry.name,
+    summary: entry.summary,
+    phase: connectorStepPhase(entry),
+    ...(verifiedConnectorName ? { verifiedConnectorName } : {}),
+  });
+}
+
+function stepSummary(entry: Extract<AgentActivityEntry, { summary: string }>): string {
+  return connectorSentence(entry) ?? entry.summary;
+}
+
+const CONNECTOR_AUTHORIZATION_REASONS: Readonly<Record<ConnectorAuthorizationReason, string>> = {
+  not_connected: 'It is not connected.',
+  authorization_expired: 'Its authorization expired or was revoked.',
+  insufficient_scope: 'It needs more permission.',
+  authorization_unavailable: 'The saved authorization was rejected.',
+};
+
+function connectorFailureReason(
+  entry: AgentActivityToolEntry,
+  connectRequest: ConnectorConnectRequest | null,
+): string | undefined {
+  if (!isConnectorStep(entry) || connectorStepPhase(entry) !== 'failed') return undefined;
+  if (connectRequest) return CONNECTOR_AUTHORIZATION_REASONS[connectRequest.reason];
+  return toolFailureReason(classifyToolFailure(entry.error));
+}
+
 function latestActiveSummary(activity: AgentActivityState): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
@@ -155,7 +233,7 @@ function latestActiveSummary(activity: AgentActivityState): string | undefined {
       (entry.kind === 'tool' || entry.kind === 'progress') &&
       (entry.status === 'running' || entry.status === 'awaiting-approval')
     ) {
-      return entry.summary;
+      return stepSummary(entry);
     }
   }
   return undefined;
@@ -187,7 +265,7 @@ function entrySummary(entry: AgentActivityEntry): string | undefined {
       return webSearchCompletedLabel(entry.sources?.length ?? 0);
     }
   }
-  return entry.summary;
+  return stepSummary(entry);
 }
 
 function lastSummary(
@@ -231,7 +309,7 @@ function labelForActivity(activity: AgentActivityState, nowMs: number): string |
       if (isGenerationProgressEntry(entry) && entry.summary === REASONING_PROGRESS_SUMMARY) {
         return thinkingLabel(entry.startedAtMs, nowMs);
       }
-      return entry.summary;
+      return stepSummary(entry);
     }
   }
   return undefined;
@@ -351,8 +429,12 @@ export function buildAgentActivitySummary(
   }
   if (status === 'paused') return active ?? 'Paused';
   if (status === 'failed') return finalSummary(activity) ?? 'Failed';
-  if (status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
-  if (status === 'cancelled') return cancelledSummary(activity) ?? STOPPED_RUN_LABEL;
+  if (status === 'partial') {
+    return finalSummary(activity) ?? 'Finished with errors';
+  }
+  if (status === 'cancelled') {
+    return cancelledSummary(activity) ?? STOPPED_RUN_LABEL;
+  }
   if (status === 'completed') {
     return isAgiWork
       ? `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`
@@ -406,26 +488,10 @@ function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
   }
 }
 
-const GENERIC_CONNECTOR_LABELS = new Set(['connector', 'mcp', 'tool', 'action']);
-
-const SUMMARY_VERBS = new Set(['using', 'review']);
-const SUMMARY_NOUNS = new Set(['connector', 'tool', 'action']);
-
-// A custom connector's qualified name is an opaque `mcp__custom-<id>__<tool>`, so the
-// user's chosen display name only reaches this component inside the server-built summary
-// ("Using <Name> connector" / "Review <Name> action" from canonicalToolSummary).
-function summaryConnectorInitial(summary: string): string | undefined {
-  const words = summary.trim().split(/\s+/);
-  if (words.length < 3) return undefined;
-  if (!SUMMARY_VERBS.has(words[0]!.toLowerCase())) return undefined;
-  if (!SUMMARY_NOUNS.has(words[words.length - 1]!.toLowerCase())) return undefined;
-  const label = words.slice(1, -1).join(' ');
-  if (GENERIC_CONNECTOR_LABELS.has(label.toLowerCase())) return undefined;
-  return label.match(/[\p{L}\p{N}]/u)?.[0]?.toUpperCase();
-}
-
 function connectorInitial(entry: AgentActivityToolEntry): string | undefined {
-  const fromSummary = summaryConnectorInitial(entry.summary);
+  const fromSummary = connectorNameFromSummary(entry.summary)
+    ?.match(/[\p{L}\p{N}]/u)?.[0]
+    ?.toUpperCase();
   if (fromSummary) return fromSummary;
   if (!/^mcp__/i.test(entry.name)) return undefined;
   const serverId = entry.name.slice('mcp__'.length).split('__')[0];
@@ -563,14 +629,6 @@ function asResult(value: unknown): string | undefined {
   }
 }
 
-function connectRequestFor(entry: AgentActivityToolEntry): ConnectorConnectRequest | null {
-  return readConnectorConnectRequest({
-    qualifiedToolName: entry.name,
-    result: typeof entry.output === 'string' ? entry.output : undefined,
-    isError: entry.status === 'failed',
-  });
-}
-
 function safeHref(value: string): string | undefined {
   if (value.startsWith('/')) return value;
   try {
@@ -589,9 +647,10 @@ const TRACE_QUERY_SEPARATOR = ' · ';
  * inside the transcript buried the answer under the same five links.
  */
 function traceRowName(entry: AgentActivityToolEntry): string {
+  const summary = stepSummary(entry);
   const query = entry.query?.trim();
-  if (!query) return entry.summary;
-  return `${entry.summary}${TRACE_QUERY_SEPARATOR}${query}`;
+  if (!query) return summary;
+  return `${summary}${TRACE_QUERY_SEPARATOR}${query}`;
 }
 
 function sourcesFoundLabel(count: number, query: string | undefined): string {
@@ -797,6 +856,7 @@ export function AgentActivityTimeline({
   failureActions,
   screenshotFor,
   renderInputRequest,
+  renderConnectorMark,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -1042,6 +1102,9 @@ export function AgentActivityTimeline({
                 );
               }
               const connectRequest = connectRequestFor(entry);
+              const connectorServerId = isConnectorStep(entry)
+                ? parseQualifiedConnectorTool(entry.name)?.serverId
+                : undefined;
               const screenAction =
                 entry.category === 'computer-use' ? screenStepAction(entry) : null;
               const screenshot = screenshotFor?.(entry.toolCallId);
@@ -1072,11 +1135,9 @@ export function AgentActivityTimeline({
                     elapsedMs={entry.elapsedMs}
                     startedAt={entry.status === 'running' ? entry.startedAtMs : undefined}
                     kind={categoryToKind(entry.category)}
-                    iconLetter={
-                      entry.category === 'connector' || entry.category === 'mcp'
-                        ? connectorInitial(entry)
-                        : undefined
-                    }
+                    iconLetter={isConnectorStep(entry) ? connectorInitial(entry) : undefined}
+                    mark={connectorServerId ? renderConnectorMark?.(connectorServerId) : undefined}
+                    failureReason={connectorFailureReason(entry, connectRequest)}
                     expired={isApprovalExpired?.(entry.toolCallId) ?? false}
                     onApprove={onApprove}
                     onApproveForChat={onApproveForChat}

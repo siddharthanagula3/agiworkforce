@@ -185,6 +185,8 @@ import {
   isInputTurnLive,
 } from '@/lib/hooks/useChatStream';
 import { ConnectorInputRequestForm } from '@/features/connectors/components/ConnectorInputRequestForm';
+import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
+import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { describeMcpTool, mcpServerLabel } from '@/features/connectors/lib/mcp-tool-name';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
@@ -341,6 +343,16 @@ interface Attachment {
 const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
 const TURN_FAILED_LEAD = 'Response failed';
 const USER_MESSAGE_COLLAPSE_HEIGHT_PX = 320;
+
+const CONNECTOR_STEP_MARK_CLASS =
+  'h-5 w-5 rounded-md shadow-none [&>img]:max-h-3.5 [&>img]:max-w-3.5 [&>svg]:h-3.5 [&>svg]:w-3.5';
+
+function renderConnectorStepMark(serverId: string) {
+  const connector = CONNECTORS.find((candidate) => candidate.id === serverId);
+  return connector ? (
+    <OfficialConnectorLogo connector={connector} className={CONNECTOR_STEP_MARK_CLASS} />
+  ) : undefined;
+}
 
 function isUnresolvedToolEntry(tool: ToolEntry): boolean {
   return (
@@ -2259,6 +2271,7 @@ const MessageBubbleComponent = function MessageBubble({
               {...(turnFailureActions ? { failureActions: turnFailureActions } : {})}
               screenshotFor={screenshotForToolCall}
               renderInputRequest={renderActivityInputRequest}
+              renderConnectorMark={renderConnectorStepMark}
               {...connectRetryHandler}
             />
           )}
