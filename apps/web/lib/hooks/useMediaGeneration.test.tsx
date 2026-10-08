@@ -54,7 +54,7 @@ describe('MediaGenerationApiError billing recovery', () => {
   });
 
   it('keeps required plan and server account evidence for the account-aware page resolver', () => {
-    const error = new MediaGenerationApiError('Max 15x is required.', {
+    const error = new MediaGenerationApiError('Max 20x is required.', {
       status: 403,
       code: 'plan_upgrade_required',
       currentPlan: 'pro',
@@ -544,7 +544,7 @@ describe('useMediaGeneration', () => {
         status: 403,
         json: async () => ({
           error: {
-            message: 'Video generation is available on Max 15x and Enterprise plans.',
+            message: 'Video generation is available on Max 20x and Enterprise plans.',
             type: 'invalid_request_error',
             code: 'plan_upgrade_required',
             current_plan: 'pro',
@@ -564,7 +564,7 @@ describe('useMediaGeneration', () => {
             err.code === 'plan_upgrade_required' &&
             err.currentPlan === 'pro' &&
             err.requiredPlans?.[0] === 'max_15x' &&
-            err.message.includes('Max 15x'),
+            err.message.includes('Max 20x'),
         );
       });
 

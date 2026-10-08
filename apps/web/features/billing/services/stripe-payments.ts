@@ -2,6 +2,7 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { loadStripe } from '@stripe/stripe-js/pure';
 import {
+  getBillingPlanPricing,
   isPerSeatBillingPlan,
   MIN_PURCHASABLE_SEATS,
   type SelfServePaidPlanTier,
@@ -236,7 +237,10 @@ async function upgradeToPlan(data: {
   if (!response.ok) {
     const error = await response.json();
     throw new Error(
-      extractErrorMessage(error, `Failed to create ${data.plan.toUpperCase()} subscription`),
+      extractErrorMessage(
+        error,
+        `Failed to create ${getBillingPlanPricing(data.plan).label} subscription`,
+      ),
     );
   }
 

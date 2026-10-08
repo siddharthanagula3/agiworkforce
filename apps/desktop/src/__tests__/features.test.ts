@@ -157,7 +157,7 @@ describe('modelStore', () => {
       expect(isModelAllowedForTier(proModel!, 'enterprise')).toBe(true);
     });
 
-    it('keeps Team on Pro model access while Max 15x inherits the flagship roster', async () => {
+    it('keeps Team on Pro model access while Max 20x inherits the flagship roster', async () => {
       const { getAllowedModelsForTier, isModelAllowedForTier } = await import('../constants/llm');
       const proModels = new Set(getAllowedModelsForTier('pro'));
       const flagshipModel = getAllowedModelsForTier('max').find(

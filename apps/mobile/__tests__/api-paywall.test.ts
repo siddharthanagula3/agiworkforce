@@ -350,7 +350,7 @@ describe('429 with paywall payload', () => {
       kind: 'paywall',
       feature: 'video_generation',
       requiredTier: 'max_15x',
-      reason: 'Video generation requires Max 15x',
+      reason: 'Video generation requires Max 20x',
     };
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(429, paywallBody));
 

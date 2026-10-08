@@ -20,7 +20,7 @@ import { buildMeCapabilityHandshake } from '@/lib/services/capability-handshake-
  *
  * The concrete failure: a Max subscriber was told, in `/api/me`, that they had
  * 300 video seconds a month, and `/api/media/video/generate` then answered with
- * a paywall naming Max 15x and Enterprise. Nothing asserted `max` in either
+ * a paywall naming Max 20x and Enterprise. Nothing asserted `max` in either
  * table's tests, which is exactly where the two crossed.
  */
 const CUSTOMER_PLANS: readonly BillingPlanTier[] = [

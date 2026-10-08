@@ -5,7 +5,7 @@ import { listCanonicalModels } from '@agiworkforce/types';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 
 /**
- * Production forensic, 2026-09-12. One "hi" on Max 15x billed $1.00.
+ * Production forensic, 2026-09-12. One "hi" on Max 20x billed $1.00.
  *
  * managed_usage_requests row 08820396-afa1-42e8-98a9-6a9215ad0d62 recorded the
  * true usage and the true cost, then settled five thousand times higher:

@@ -95,7 +95,7 @@ describe('resolveMobileVideoGenerationRequest', () => {
     expect(decision.code).toBe('auth_required');
   });
 
-  it('blocks below Max 15x, matching the billing catalog', () => {
+  it('blocks below Max 20x, matching the billing catalog', () => {
     const decision = resolveMobileVideoGenerationRequest({
       ...ENTITLED,
       subscriptionTier: 'pro',

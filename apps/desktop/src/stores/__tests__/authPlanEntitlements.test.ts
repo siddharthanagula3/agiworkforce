@@ -28,7 +28,7 @@ describe('desktop cloud plan entitlements', () => {
     },
   );
 
-  it('derives Max 15x and Team account updates from the same shared rule', () => {
+  it('derives Max 20x and Team account updates from the same shared rule', () => {
     useAuthStore.getState().setAccount({ plan: 'max_15x' });
     expect(useAuthStore.getState().isPro).toBe(true);
 

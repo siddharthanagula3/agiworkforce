@@ -1467,7 +1467,7 @@ export default function PricingPage() {
                         : 'agi-tier-toggle-btn'
                     }
                   >
-                    {t('maxVariant15x')}
+                    {t('maxVariant20x')}
                   </button>
                 </div>
               </div>

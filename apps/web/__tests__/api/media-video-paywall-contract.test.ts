@@ -34,7 +34,7 @@ describe('media paywall contract', () => {
     expect(refusalBranch).toContain(PAYWALL_CODE);
   });
 
-  it('names Max 15x and Enterprise as the plans that unlock video', () => {
+  it('names Max 20x and Enterprise as the plans that unlock video', () => {
     const video = readFileSync(VIDEO_ROUTE, 'utf8');
     expect(video).toContain("required_plans: ['max_15x', 'enterprise']");
   });
