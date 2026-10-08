@@ -15,7 +15,6 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import Link from 'next/link';
 import {
   Brain,
-  Camera,
   Check,
   ChevronRight,
   Copy,
@@ -108,8 +107,6 @@ const TEMPORARY_ATTACH_RETENTION_NOTE =
 const ROW_LABEL_LIBRARY = 'Add from library';
 const ROW_LABEL_IMAGE = 'Create image';
 const ROW_LABEL_VIDEO = 'Create video';
-const ROW_LABEL_SCREENSHOT = 'Take a screenshot';
-const ROW_LABEL_SCREENSHOT_BUSY = 'Capturing…';
 const ROW_LABEL_FOLDER = 'Add working folder';
 const ROW_LABEL_LOCAL_FOLDER = 'Attach from local folder';
 const ROW_LABEL_CLIPBOARD = 'Attach clipboard';
@@ -565,10 +562,6 @@ export interface ComposerPlusMenuProps {
   videoMode: boolean;
   onCreateVideo: () => void;
 
-  canTakeScreenshot: boolean;
-  isCapturingScreenshot: boolean;
-  onTakeScreenshot: () => void;
-
   showLocalFolderRow: boolean;
   onAttachFromLocalFolder: () => void;
 
@@ -927,23 +920,6 @@ function LibraryRows({ props }: { props: ComposerPlusMenuProps }) {
   );
 }
 
-function ScreenshotRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
-  return (
-    <button
-      type="button"
-      role={role}
-      disabled={props.isCapturingScreenshot}
-      onClick={props.onTakeScreenshot}
-      className={cn(ROW_CLASS, props.isCapturingScreenshot ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
-    >
-      <Camera className={GLYPH_CLASS} />
-      <span className="flex-1 text-start">
-        {props.isCapturingScreenshot ? ROW_LABEL_SCREENSHOT_BUSY : ROW_LABEL_SCREENSHOT}
-      </span>
-    </button>
-  );
-}
-
 function LocalFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
   return (
     <button
@@ -1132,7 +1108,6 @@ function ChatMenu(props: ComposerPlusMenuProps) {
       {props.hostCanGenerateImage && <ImageRow props={props} />}
       {props.hostCanGenerateVideo && <VideoRow props={props} />}
 
-      {props.canTakeScreenshot && <ScreenshotRow props={props} />}
       {props.showWorkingFolderRow && <WorkingFolderRow props={props} />}
 
       <MenuToggleRow
@@ -1499,9 +1474,6 @@ function WorkPalette(props: ComposerPlusMenuProps) {
     ),
     props.hostCanGenerateVideo && matches(ROW_LABEL_VIDEO) && (
       <VideoRow key="video" props={props} role="menuitem" />
-    ),
-    props.canTakeScreenshot && matches(ROW_LABEL_SCREENSHOT) && (
-      <ScreenshotRow key="screenshot" props={props} role="menuitem" />
     ),
     props.showWorkingFolderRow && matches(ROW_LABEL_FOLDER, props.folderName ?? undefined) && (
       <WorkingFolderRow key="folder" props={props} role="menuitem" />

@@ -1118,10 +1118,6 @@ const ChatComposerNewComponent = ({
   }, [billingPolicyReady, canUseAgiWork, pickerActiveProjectId, setWorkMode, conversationId]);
 
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
-  const canTakeScreenshotCap = useCapability('canTakeScreenshot');
-  const canPickDisplayCapture =
-    typeof navigator !== 'undefined' &&
-    typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 
   // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
@@ -2062,59 +2058,6 @@ const ChatComposerNewComponent = ({
     [addChatAttachments],
   );
 
-  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
-
-  const handleTakeScreenshot = useCallback(async () => {
-    setShowOverflowMenu(false);
-    setIsCapturingScreenshot(true);
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      await new Promise<void>((resolve) => {
-        video.onloadedmetadata = () => {
-          void video.play();
-          resolve();
-        };
-      });
-      // Let the first frame paint before grabbing it.
-      await new Promise<void>((resolve) => setTimeout(resolve, 150));
-
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        setLocalNotice('Could not capture the screen on this device.');
-        return;
-      }
-      context.drawImage(video, 0, 0);
-      video.srcObject = null;
-
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((result) => resolve(result), 'image/png'),
-      );
-      if (!blob) {
-        setLocalNotice('Could not capture the screen on this device.');
-        return;
-      }
-      addChatAttachments([new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' })]);
-    } catch {
-      // A refusal and a cancel arrive as the same error, so the copy has to
-      // read correctly for both. On the desktop the usual refusal is the
-      // operating system's, which the page cannot see and cannot fix.
-      setLocalNotice(
-        desktopHost
-          ? 'No screenshot was attached. If you did not cancel, allow AGI Cloud under Screen & System Audio Recording in System Settings and reopen the app.'
-          : 'No screenshot was attached.',
-      );
-    } finally {
-      stream?.getTracks().forEach((track) => track.stop());
-      setIsCapturingScreenshot(false);
-    }
-  }, [addChatAttachments, desktopHost]);
-
   /**
    * The host reads the clipboard only on this click. A page cannot ask the
    * shell for it on its own, and the shell asks the user for the clipboard
@@ -2143,7 +2086,7 @@ const ChatComposerNewComponent = ({
 
   // A capture, a clipboard read and a picture's metadata removal land their file after an
   // await; an Enter pressed meanwhile would send without it. The send waits instead.
-  const attachmentPreparing = isCapturingScreenshot || readingClipboard || preparingAttachments;
+  const attachmentPreparing = readingClipboard || preparingAttachments;
   const deferredSendRef = useRef(false);
 
   const attachmentNames = useMemo(() => attachments.map((file) => file.name), [attachments]);
@@ -5217,13 +5160,6 @@ const ChatComposerNewComponent = ({
                     }
                     videoMode={videoMode}
                     onCreateVideo={handleCreateVideoFromMenu}
-                    canTakeScreenshot={
-                      canTakeScreenshotCap || desktopHost !== null || canPickDisplayCapture
-                    }
-                    isCapturingScreenshot={isCapturingScreenshot}
-                    onTakeScreenshot={() => {
-                      void handleTakeScreenshot();
-                    }}
                     showWorkingFolderRow={!projectPicker && canUseWorkingDirectory}
                     canPickFolder={canPickFolder}
                     folderName={folderName}
