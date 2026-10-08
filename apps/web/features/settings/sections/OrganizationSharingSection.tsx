@@ -26,6 +26,7 @@ import {
   ProjectAudienceSelect,
   SharedProjectAudienceControl,
   SharedProjectMemberAccessList,
+  effectiveMemberProjectAccess,
   memberProjectAccess,
 } from '@/features/projects/components/ProjectSharingControls';
 
@@ -260,8 +261,8 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 member.userId === project.ownerUserId ||
                 memberProjectAccess(project, member.userId) !== 'none',
             );
-            const editorCount = project.memberGrants.filter(
-              (grant) => grant.access === 'write',
+            const editorCount = overview.members.filter(
+              (member) => effectiveMemberProjectAccess(project, member) === 'write',
             ).length;
             const canManageProject =
               overview.canManageSharing ||

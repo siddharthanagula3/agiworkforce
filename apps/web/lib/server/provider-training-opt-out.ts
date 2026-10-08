@@ -15,6 +15,9 @@ export const PROVIDER_TRAINING_OPT_OUT_KEY = 'keepOutOfProviderTraining';
 export const MODEL_MAY_TRAIN_MESSAGE =
   "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.";
 
+export const NO_TRAINING_MEDIA_MODEL_MESSAGE =
+  'No model for this keeps what you send out of training right now. To use one that may, turn off Only use models that do not train on your chats in Settings > Privacy.';
+
 export async function readProviderTrainingOptOut(
   db: Pick<DatabaseAdapter, 'query'>,
   userId: string,

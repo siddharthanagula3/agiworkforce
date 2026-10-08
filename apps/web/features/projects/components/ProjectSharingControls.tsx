@@ -43,6 +43,10 @@ const ACCESS_LABELS: Readonly<Record<OrgMemberProjectAccess, string>> = {
   none: 'No access',
 };
 
+const EDIT_NOT_ALLOWED_LABEL = 'Can edit (their role can only view)';
+const EDIT_NOT_ALLOWED_NOTE =
+  'People whose workspace role can only view, such as Viewer, can be given Can view but not Can edit. Change their role to Member to let them edit.';
+
 type OverviewMember = OrgSharedOverview['members'][number];
 
 export function projectShareAudience(project: OrgSharedProject): ProjectShareAudience {
@@ -56,6 +60,14 @@ export function memberProjectAccess(
   const grant = project.memberGrants.find((entry) => entry.userId === userId);
   if (grant) return grant.access;
   return project.defaultAccess === 'none' ? 'none' : 'read';
+}
+
+export function effectiveMemberProjectAccess(
+  project: OrgSharedProject,
+  member: Pick<OverviewMember, 'userId' | 'canEditProjects'>,
+): OrgMemberProjectAccess {
+  const access = memberProjectAccess(project, member.userId);
+  return access === 'write' && !member.canEditProjects ? 'read' : access;
 }
 
 export function sharingMemberName(member: OverviewMember): string {
@@ -145,11 +157,17 @@ export function SharedProjectMemberAccessList({
       member.userId !== project.ownerUserId &&
       (explicit.has(member.userId) || memberProjectAccess(project, member.userId) !== 'none'),
   );
-  const addable = members
-    .filter((member) => member.userId !== project.ownerUserId && !explicit.has(member.userId))
-    .map(toPickerMember);
   const accessFieldId = `add-access-${project.projectId}`;
   const chosenAddAccess = addChoices.includes(addAccess) ? addAccess : addChoices[0]!;
+  const uninvited = members.filter(
+    (member) => member.userId !== project.ownerUserId && !explicit.has(member.userId),
+  );
+  const addable = uninvited
+    .filter((member) => chosenAddAccess !== 'write' || member.canEditProjects)
+    .map(toPickerMember);
+  const addableIds = new Set(addable.map((member) => member.userId));
+  const chosenIds = selectedIds.filter((userId) => addableIds.has(userId));
+  const viewOnlyLeftOut = addable.length < uninvited.length;
 
   return (
     <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
@@ -182,7 +200,7 @@ export function SharedProjectMemberAccessList({
                   </label>
                   <select
                     id={controlId}
-                    value={memberProjectAccess(project, member.userId)}
+                    value={effectiveMemberProjectAccess(project, member)}
                     style={selectStyle}
                     disabled={setAccess.isPending}
                     onChange={(event) => {
@@ -200,13 +218,15 @@ export function SharedProjectMemberAccessList({
                     }}
                   >
                     <option value="read">{ACCESS_LABELS.read}</option>
-                    <option value="write">{ACCESS_LABELS.write}</option>
+                    <option value="write" disabled={!member.canEditProjects}>
+                      {member.canEditProjects ? ACCESS_LABELS.write : EDIT_NOT_ALLOWED_LABEL}
+                    </option>
                     <option value="none">{ACCESS_LABELS.none}</option>
                   </select>
                 </>
               ) : (
                 <span style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                  {ACCESS_LABELS[memberProjectAccess(project, member.userId)]}
+                  {ACCESS_LABELS[effectiveMemberProjectAccess(project, member)]}
                 </span>
               )}
             </li>
@@ -218,15 +238,20 @@ export function SharedProjectMemberAccessList({
           Everyone else in the workspace can view this project.
         </p>
       )}
-      {canManage && addable.length > 0 ? (
+      {canManage && uninvited.length > 0 ? (
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
           <MemberPicker
             label="Add people"
             members={addable}
-            selectedIds={selectedIds}
+            selectedIds={chosenIds}
             onChange={setSelectedIds}
             disabled={addPeople.isPending}
           />
+          {viewOnlyLeftOut ? (
+            <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
+              {EDIT_NOT_ALLOWED_NOTE}
+            </p>
+          ) : null}
           <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
             <label htmlFor={accessFieldId} className="sr-only">
               Access for the people you add
@@ -250,10 +275,10 @@ export function SharedProjectMemberAccessList({
             <button
               type="button"
               style={buttonStyle}
-              disabled={selectedIds.length === 0 || addPeople.isPending}
+              disabled={chosenIds.length === 0 || addPeople.isPending}
               onClick={() =>
                 addPeople.mutate(
-                  { projectId: project.projectId, userIds: selectedIds, access: chosenAddAccess },
+                  { projectId: project.projectId, userIds: chosenIds, access: chosenAddAccess },
                   { onSuccess: () => setSelectedIds([]) },
                 )
               }

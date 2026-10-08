@@ -13,6 +13,15 @@ const modelCatalogMocks = vi.hoisted(() => ({
   unpricedResolution: null as '480p' | '720p' | '1080p' | '4k' | null,
 }));
 const videoReleasePolicyMocks = vi.hoisted(() => ({ runwayEnabled: true }));
+const trainingMocks = vi.hoisted(() => ({
+  optedOut: false,
+  videoSlot: null as string | null,
+}));
+
+vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  sideCallTrainingOptOut: vi.fn(async () => trainingMocks.optedOut),
+}));
 
 vi.mock('@/lib/server/video-provider-release-policy', () => ({
   isVideoProviderReleaseEnabled: (provider: 'google' | 'runway' | 'openrouter') =>
@@ -23,6 +32,10 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
+    getRoutingSlotModel: (slot: Parameters<typeof actual.getRoutingSlotModel>[0]) =>
+      slot === 'video_generation' && trainingMocks.videoSlot
+        ? trainingMocks.videoSlot
+        : actual.getRoutingSlotModel(slot),
     getModelMetadataById: (id: string) => {
       const model = actual.getModelMetadataById(id);
       if (model?.provider === 'runway') {
@@ -465,6 +478,8 @@ describe('POST /api/media/video/generate', () => {
     durableJobMocks.markUnknown.mockResolvedValue({ status: 'outcome_unknown' });
 
     modelCatalogMocks.unpricedResolution = null;
+    trainingMocks.optedOut = false;
+    trainingMocks.videoSlot = null;
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     process.env['GOOGLE_API_KEY'] = 'test-google-key';
@@ -1380,6 +1395,72 @@ describe('POST /api/media/video/generate', () => {
       expect(durableJobMocks.create).not.toHaveBeenCalled();
       expect(durableJobMocks.beginSubmission).not.toHaveBeenCalled();
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Provider-training opt-out', () => {
+    it('refuses a chosen video model that may train before reservation or provider egress', async () => {
+      trainingMocks.optedOut = true;
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error).toMatchObject({
+        code: 'model_may_train',
+        message: expect.stringContaining('Only use models that do not train on your chats'),
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('moves the default off a provider that may train to one that keeps inputs out of training', async () => {
+      trainingMocks.optedOut = true;
+      trainingMocks.videoSlot = RUNWAY_MODEL_ID;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ name: 'operations/opted-out', done: false }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a snowy mountain' }));
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).provider).toBe('google');
+      const [{ model }] = managedUsageMocks.reserve.mock.calls[0] as [{ model: string }];
+      expect(getModelMetadataById(model)?.provider).toBe('google');
+    });
+
+    it('refuses when no video model keeps inputs out of training', async () => {
+      trainingMocks.optedOut = true;
+      trainingMocks.videoSlot = RUNWAY_MODEL_ID;
+      delete process.env['GOOGLE_API_KEY'];
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a snowy mountain' }));
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error).toMatchObject({
+        code: 'no_training_model_available',
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('serves the default that may train for an account that has not opted out', async () => {
+      trainingMocks.videoSlot = RUNWAY_MODEL_ID;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'runway-task-default', status: 'PENDING' }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cinematic sunset' }));
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).provider).toBe('runway');
     });
   });
 

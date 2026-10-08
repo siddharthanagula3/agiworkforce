@@ -77,6 +77,7 @@ function overview(overrides: Record<string, unknown> = {}) {
           joinedAt: '2026-01-01T00:00:00.000Z',
           displayName: 'Olive Owner',
           email: 'olive@example.com',
+          canEditProjects: true,
         },
         {
           userId: 'user-member',
@@ -84,6 +85,7 @@ function overview(overrides: Record<string, unknown> = {}) {
           joinedAt: '2026-01-02T00:00:00.000Z',
           displayName: 'Mina Member',
           email: 'mina@example.com',
+          canEditProjects: true,
         },
       ],
       sharedProjects: [
@@ -208,6 +210,71 @@ describe('OrganizationSharingSection', () => {
       'write',
       'none',
     ]);
+  });
+
+  it('never offers Can edit to a member whose role can only view, and shows an old edit grant as view', () => {
+    mockOverview.mockReturnValue(
+      overview({
+        members: [
+          ...overview().data.members,
+          {
+            userId: 'user-viewer',
+            role: 'viewer',
+            joinedAt: '2026-01-04T00:00:00.000Z',
+            displayName: 'Vera Viewer',
+            email: 'vera@example.com',
+            canEditProjects: false,
+          },
+        ],
+        sharedProjects: [
+          {
+            projectId: PROJECT,
+            organizationId: ORG,
+            name: 'Roadmap',
+            ownerUserId: 'user-owner',
+            sharedByUserId: 'user-owner',
+            defaultAccess: 'read',
+            createdAt: '2026-01-03T00:00:00.000Z',
+            memberGrants: [{ userId: 'user-viewer', access: 'write' }],
+          },
+        ],
+      }),
+    );
+    renderSection();
+
+    expect(screen.getByText(/Visible to 3 of 3 members · read-only/)).toBeInTheDocument();
+    const control = screen.getByLabelText('Access for Vera Viewer') as HTMLSelectElement;
+    expect(control.value).toBe('read');
+    const edit = Array.from(control.options).find((option) => option.value === 'write')!;
+    expect(edit.disabled).toBe(true);
+    expect(edit.textContent).toBe('Can edit (their role can only view)');
+  });
+
+  it('leaves a view-only member out when adding people with Can edit, and says why', async () => {
+    mockOverview.mockReturnValue(
+      overview({
+        members: [
+          ...overview().data.members,
+          {
+            userId: 'user-viewer',
+            role: 'viewer',
+            joinedAt: '2026-01-04T00:00:00.000Z',
+            displayName: 'Vera Viewer',
+            email: 'vera@example.com',
+            canEditProjects: false,
+          },
+        ],
+      }),
+    );
+    renderSection();
+
+    const addAccess = screen.getByLabelText('Access for the people you add') as HTMLSelectElement;
+    expect(addAccess.value).toBe('write');
+    const note = /can be given Can view but not Can edit/;
+    expect(screen.getByText(note)).toBeInTheDocument();
+
+    await userEvent.selectOptions(addAccess, 'none');
+    expect(screen.queryByText(note)).not.toBeInTheDocument();
   });
 
   it('counts an explicitly denied member as NOT able to see the project', () => {

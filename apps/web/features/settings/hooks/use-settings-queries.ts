@@ -1652,6 +1652,7 @@ export interface OrgSharingMember {
   joinedAt: string;
   displayName: string | null;
   email: string | null;
+  canEditProjects: boolean;
 }
 
 export interface OrgSharedOverview {

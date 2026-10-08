@@ -45,6 +45,8 @@ export interface CodeReviewOutcome {
   chunks: number;
   outputTokens: number;
   reason?: 'no-route' | 'provider-error' | 'unparsable';
+  /** The configured review model may train on inputs and the account opted out, so Auto reviewed instead. */
+  configuredModelSetAside?: boolean;
 }
 
 export interface CodeReviewModelCall {
@@ -68,36 +70,55 @@ export interface CodeReviewInput {
   signal?: AbortSignal;
 }
 
+interface ReviewRoute {
+  dispatchProvider: string;
+  modelKey: string;
+  providerModelId: string;
+}
+
+function configuredReviewRoute(preferredModel: string | null | undefined): ReviewRoute | null {
+  const normalized = preferredModel ? normalizeModelId(preferredModel) : null;
+  if (!normalized) return null;
+  try {
+    return {
+      dispatchProvider: resolveProviderFromModel(normalized),
+      modelKey: normalized,
+      providerModelId: normalized,
+    };
+  } catch (error) {
+    logger.warn({ error, preferredModel }, '[code-review] configured review model is unroutable');
+    return null;
+  }
+}
+
+function routeKeepsInputsOutOfTraining(route: ReviewRoute): boolean {
+  return (
+    modelKeepsInputsOutOfTraining(route.modelKey) &&
+    providerKeepsInputsOutOfTraining(route.dispatchProvider)
+  );
+}
+
+function configuredModelSetAside(
+  input: Pick<CodeReviewInput, 'preferredModel' | 'noTrainingOnly'>,
+): boolean {
+  if (!input.noTrainingOnly) return false;
+  const configured = configuredReviewRoute(input.preferredModel);
+  return configured !== null && !routeKeepsInputsOutOfTraining(configured);
+}
+
 /**
- * The installation's chosen model when it names one the catalogue knows, and
- * the Auto coding route otherwise. Either way the provider is resolved from the
- * catalogue, so no provider is named in this file.
+ * The installation's chosen model when it names one the catalogue knows and
+ * the account's training choice allows it, and the Auto coding route
+ * otherwise. Either way the provider is resolved from the catalogue, so no
+ * provider is named in this file.
  */
 async function resolveReviewRoute(
   input: Pick<CodeReviewInput, 'planTier' | 'preferredModel' | 'ownerUserId' | 'noTrainingOnly'>,
-): Promise<{ dispatchProvider: string; modelKey: string; providerModelId: string } | null> {
-  const { planTier, preferredModel, noTrainingOnly } = input;
-  const normalized = preferredModel ? normalizeModelId(preferredModel) : null;
-  if (normalized) {
-    try {
-      const dispatchProvider = resolveProviderFromModel(normalized);
-      if (
-        noTrainingOnly &&
-        !(
-          modelKeepsInputsOutOfTraining(normalized) &&
-          providerKeepsInputsOutOfTraining(dispatchProvider)
-        )
-      ) {
-        logger.warn(
-          { preferredModel },
-          '[code-review] configured review model may train on inputs and the account opted out',
-        );
-        return null;
-      }
-      return { dispatchProvider, modelKey: normalized, providerModelId: normalized };
-    } catch (error) {
-      logger.warn({ error, preferredModel }, '[code-review] configured review model is unroutable');
-    }
+): Promise<ReviewRoute | null> {
+  const { planTier, noTrainingOnly } = input;
+  const configured = configuredReviewRoute(input.preferredModel);
+  if (configured && (!noTrainingOnly || routeKeepsInputsOutOfTraining(configured))) {
+    return configured;
   }
   const baseRouting: AutoRoutingRequest = {
     selection: 'auto',
@@ -170,6 +191,14 @@ export async function reviewPullRequestDiff(input: CodeReviewInput): Promise<Cod
   const files: ReviewDiffFile[] = parseUnifiedDiff(input.diff);
   const chunks = chunkDiff(files, { maxBytes: CHUNK_MAX_BYTES, maxChunks: MAX_CHUNKS });
   if (chunks.length === 0) return empty;
+
+  const setAside = configuredModelSetAside(input);
+  if (setAside) {
+    logger.warn(
+      { preferredModel: input.preferredModel },
+      '[code-review] configured review model may train on inputs and the account opted out; reviewing with Auto',
+    );
+  }
 
   const callModel =
     input.callModel ??
@@ -260,6 +289,7 @@ export async function reviewPullRequestDiff(input: CodeReviewInput): Promise<Cod
     fabricated,
     chunks: chunks.length,
     outputTokens,
+    ...(setAside ? { configuredModelSetAside: true } : {}),
   };
 }
 
@@ -278,6 +308,13 @@ export function reviewLineComments(
 const SIGNATURE =
   '*Reviewed by [AGI](https://agiworkforce.com) · [Disconnect](https://agiworkforce.com/chat)*';
 
+const CONFIGURED_MODEL_SET_ASIDE_NOTE =
+  'The review model set for this installation was not used: its provider may train on what you send, and this account has Only use models that do not train on your chats turned on. This review used Auto with a model that does not train on your code.';
+
+function setAsideNote(outcome: CodeReviewOutcome): string {
+  return outcome.configuredModelSetAside ? `\n\n${CONFIGURED_MODEL_SET_ASIDE_NOTE}` : '';
+}
+
 export function reviewSummaryBody(outcome: CodeReviewOutcome): string {
   if (outcome.status === 'no-findings') {
     const scanned =
@@ -288,7 +325,7 @@ export function reviewSummaryBody(outcome: CodeReviewOutcome): string {
       outcome.duplicates > 0
         ? `Nothing new in ${scanned}. The ${outcome.duplicates} finding(s) it raised are already line comments on this pull request.`
         : `No correctness or security defect found in ${scanned}.`;
-    return `## AGI Code Review\n\n${body}\n\n---\n${SIGNATURE}`;
+    return `## AGI Code Review\n\n${body}${setAsideNote(outcome)}\n\n---\n${SIGNATURE}`;
   }
   const counts = new Map<string, number>();
   for (const finding of outcome.posted) {
@@ -299,5 +336,5 @@ export function reviewSummaryBody(outcome: CodeReviewOutcome): string {
     outcome.duplicates > 0
       ? `\n\n${outcome.duplicates} finding(s) already commented on this pull request were not repeated.`
       : '';
-  return `## AGI Code Review\n\n${outcome.posted.length} finding(s) anchored to the diff: ${tally}. Each one is a line comment with the evidence it rests on.${suppressed}\n\n---\n${SIGNATURE}`;
+  return `## AGI Code Review\n\n${outcome.posted.length} finding(s) anchored to the diff: ${tally}. Each one is a line comment with the evidence it rests on.${suppressed}${setAsideNote(outcome)}\n\n---\n${SIGNATURE}`;
 }

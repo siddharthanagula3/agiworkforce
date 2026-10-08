@@ -30,6 +30,25 @@ const VALID_JPEG_BASE64 =
 
 vi.mock('server-only', () => ({}));
 
+const trainingMocks = vi.hoisted(() => ({
+  optedOut: false,
+  mayTrain: new Set<string>(),
+}));
+
+vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  sideCallTrainingOptOut: vi.fn(async () => trainingMocks.optedOut),
+}));
+
+vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/model-registry')>();
+  return {
+    ...actual,
+    providerKeepsInputsOutOfTraining: (provider: string) =>
+      !trainingMocks.mayTrain.has(provider) && actual.providerKeepsInputsOutOfTraining(provider),
+  };
+});
+
 const mediaPersistenceMocks = vi.hoisted(() => ({
   storageConfigured: vi.fn(() => false),
   storeMedia: vi.fn(),
@@ -462,6 +481,8 @@ describe('POST /api/media/image/generate', () => {
 
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
     delete process.env['GOOGLE_API_KEY'];
+    trainingMocks.optedOut = false;
+    trainingMocks.mayTrain.clear();
   });
 
   afterEach(() => {
@@ -1863,6 +1884,60 @@ describe('POST /api/media/image/generate', () => {
         expect.objectContaining({ outcome: 'completed' }),
       );
       expect(cogsMocks.recordSettledProviderCost).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Provider-training opt-out', () => {
+    it('refuses a chosen image provider recorded as possibly training, before billing or egress', async () => {
+      trainingMocks.optedOut = true;
+      trainingMocks.mayTrain.add('openai');
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error).toMatchObject({
+        code: 'model_may_train',
+        message: expect.stringContaining('Only use models that do not train on your chats'),
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses the default when its provider may train and the account opted out', async () => {
+      trainingMocks.optedOut = true;
+      trainingMocks.mayTrain.add('openai');
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error).toMatchObject({
+        code: 'no_training_model_available',
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('serves that provider for an account that has not opted out', async () => {
+      trainingMocks.mayTrain.add('openai');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://img.example.com/1.png' }] }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
+
+      expect(response.status).toBe(200);
+    });
+
+    it('serves an opted-out account through a provider that keeps inputs out of training', async () => {
+      trainingMocks.optedOut = true;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://img.example.com/1.png' }] }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
+
+      expect(response.status).toBe(200);
     });
   });
 
