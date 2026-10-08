@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 type ScanModule0 = typeof import('@/lib/connectors/mcp-directory-targets');
+type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
 vi.mock('server-only', () => ({}));
 
@@ -50,6 +51,22 @@ vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
   findDirectoryTargetByRemoteUrl: directoryByUrl,
 }));
 
+const resolveAccess = vi.hoisted(() => ({
+  unreachable: false,
+}));
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => {
+  const actual = await importOriginal<OAuthAccessModule>();
+  return {
+    ...actual,
+    resolveConnectorAccessToken: (
+      ...args: Parameters<typeof actual.resolveConnectorAccessToken>
+    ) =>
+      resolveAccess.unreachable
+        ? Promise.resolve({ status: 'unreachable' as const })
+        : actual.resolveConnectorAccessToken(...args),
+  };
+});
+
 import { makeUserConnectorExecutor } from '../user-connector-tools';
 import { parseConnectorAuthorizationRequired } from '@/lib/connectors/connect-required';
 
@@ -66,6 +83,7 @@ function rejectedCredential(): Error {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resolveAccess.unreachable = false;
   mockNeonQuery.mockImplementation((sql: string) => {
     if (String(sql).includes('user_custom_connectors')) {
       return Promise.resolve([
@@ -125,5 +143,22 @@ describe('a rejected credential on a directory-linked connector', () => {
       connectorId: SERVER_ID,
       reason: 'not_connected',
     });
+  });
+});
+
+describe('a signed-in custom connector whose token cannot be refreshed right now', () => {
+  it('says it could not be reached, without dialling it or asking to reconnect', async () => {
+    directoryByUrl.mockResolvedValue(null);
+    resolveAccess.unreachable = true;
+
+    const result = await makeUserConnectorExecutor('user-1')(SERVER_ID, 'search_issues', {});
+
+    expect(parseConnectorAuthorizationRequired(result.content)).toBeNull();
+    expect(result).toEqual({
+      handled: true,
+      content: "Couldn't reach Sentry just now. It is still connected, so try again in a moment.",
+      isError: true,
+    });
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
   });
 });

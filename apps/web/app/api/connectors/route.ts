@@ -56,7 +56,12 @@ import {
   getUserConnectorOAuthGrantSummaries,
   listConnectorAccounts,
 } from '@/lib/connectors/oauth-store';
-import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
+import {
+  disconnectConnectorOAuthGrant,
+  vendorRevocationAuditStatus,
+  vendorRevocationNotice,
+  type ConnectorDisconnectOutcome,
+} from '@/lib/connectors/oauth-access';
 import {
   mcpAuthorizationContext,
   purgeMcpResponseCachePartitions,
@@ -813,7 +818,11 @@ async function disconnectDirectoryTarget(
   target: DirectoryConnectTarget,
 ): Promise<NextResponse> {
   const row = await findUserCustomConnectorByUrl(userId, target.mcpUrl);
+  const notices: string[] = [];
   if (row) {
+    const customDisconnect = await disconnectConnectorOAuthGrant(userId, row.connectorId);
+    const customNotice = vendorRevocationNotice(row.name, customDisconnect.vendorRevocation);
+    if (customNotice) notices.push(customNotice);
     const deleted = await deleteCustomConnectorRows(db, userId, row.id);
     for (const removed of deleted) {
       await evictCustomConnectorCaches(userId, removed.id);
@@ -832,13 +841,17 @@ async function disconnectDirectoryTarget(
           connectorId: customConnectorId(removed.short_id),
           subjectRef: target.connectorId,
           source: DIRECTORY_AUDIT_SOURCE,
+          status: vendorRevocationAuditStatus(customDisconnect.vendorRevocation),
         },
       });
     }
   }
 
   const cacheContexts = await oauthCacheContexts(userId, target.connectorId);
-  if (await disconnectConnectorOAuthGrant(userId, target.connectorId)) {
+  const disconnect = await disconnectConnectorOAuthGrant(userId, target.connectorId);
+  const notice = vendorRevocationNotice(target.name, disconnect.vendorRevocation);
+  if (notice) notices.push(notice);
+  if (disconnect.disconnected) {
     await evictConnectorOAuthCaches(userId, target.connectorId);
     await purgeMcpResponseCachePartitions(cacheContexts);
     await clearConnectorToolPermissions(db, userId, target.serverId);
@@ -850,11 +863,20 @@ async function disconnectDirectoryTarget(
         resourceType: 'connector',
         connectorId: target.connectorId,
         source: DIRECTORY_AUDIT_SOURCE,
+        status: vendorRevocationAuditStatus(disconnect.vendorRevocation),
       },
     });
   }
 
-  return NextResponse.json({ success: true } satisfies DisconnectResponse);
+  return NextResponse.json(disconnectedResponse(notices.join(' ')));
+}
+
+function disconnectedResponse(vendorNotice: string | null): DisconnectResponse {
+  return vendorNotice ? { success: true, vendorNotice } : { success: true };
+}
+
+function oauthVendorNotice(connectorId: string, disconnect: ConnectorDisconnectOutcome) {
+  return vendorRevocationNotice(connectorDisplayName(connectorId), disconnect.vendorRevocation);
 }
 
 async function handleDeleteConnector(request: NextRequest) {
@@ -880,8 +902,8 @@ async function handleDeleteConnector(request: NextRequest) {
   }
 
   const cacheContexts = await oauthCacheContexts(userId, connectorId);
-  const oauthRevoked = await disconnectConnectorOAuthGrant(userId, connectorId);
-  if (oauthRevoked) {
+  const oauthDisconnect = await disconnectConnectorOAuthGrant(userId, connectorId);
+  if (oauthDisconnect.disconnected) {
     await evictConnectorOAuthCaches(userId, connectorId);
     await purgeMcpResponseCachePartitions(cacheContexts);
     await clearConnectorToolPermissions(db, userId, connectorId);
@@ -889,10 +911,17 @@ async function handleDeleteConnector(request: NextRequest) {
       userId,
       eventType: 'connector_removed',
       request,
-      detail: { resourceType: 'connector', connectorId, source: 'oauth' },
+      detail: {
+        resourceType: 'connector',
+        connectorId,
+        source: 'oauth',
+        status: vendorRevocationAuditStatus(oauthDisconnect.vendorRevocation),
+      },
     });
     if (connectorId !== GITHUB_CONNECTOR_ID && !getOperatorMappedConnectorIds().has(connectorId)) {
-      return NextResponse.json({ success: true } satisfies DisconnectResponse);
+      return NextResponse.json(
+        disconnectedResponse(oauthVendorNotice(connectorId, oauthDisconnect)),
+      );
     }
   }
 
@@ -961,7 +990,7 @@ async function handleDeleteConnector(request: NextRequest) {
         source: 'github_installation',
       },
     });
-    return NextResponse.json({ success: true } satisfies DisconnectResponse);
+    return NextResponse.json(disconnectedResponse(oauthVendorNotice(connectorId, oauthDisconnect)));
   }
 
   try {
@@ -988,7 +1017,7 @@ async function handleDeleteConnector(request: NextRequest) {
     detail: { resourceType: 'connector', connectorId, source: 'catalog' },
   });
 
-  return NextResponse.json({ success: true } satisfies DisconnectResponse);
+  return NextResponse.json(disconnectedResponse(oauthVendorNotice(connectorId, oauthDisconnect)));
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGetConnectors));

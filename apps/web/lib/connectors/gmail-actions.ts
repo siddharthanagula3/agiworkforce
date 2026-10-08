@@ -10,7 +10,10 @@ import {
   serializeConnectorAuthorizationRequired,
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
-import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
+import {
+  connectorUnreachableMessage,
+  resolveConnectorAccessToken,
+} from '@/lib/connectors/oauth-access';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { getMediaAssetById } from '@/lib/server/media-assets';
 import { readStoredMedia } from '@/lib/server/media-storage';
@@ -18,6 +21,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createDeadline, credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
 
 export const GMAIL_CONNECTOR_ID = 'gmail';
+const GMAIL_LABEL = 'Gmail';
 export const GMAIL_SEND_DRAFT_ACTION = 'send_draft';
 export const GMAIL_READ_ATTACHMENTS_ACTION = 'read_attachments';
 export const GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION = 'create_draft_with_attachments';
@@ -435,6 +439,9 @@ export async function executeGmailAction(
   args: Record<string, unknown>,
 ): Promise<GmailActionResult> {
   const access = await resolveConnectorAccessToken(userId, GMAIL_CONNECTOR_ID);
+  if (access.status === 'unreachable') {
+    return { content: connectorUnreachableMessage(GMAIL_LABEL), isError: true };
+  }
   if (access.status !== 'ready') {
     return authorizationRequired(
       toolName,

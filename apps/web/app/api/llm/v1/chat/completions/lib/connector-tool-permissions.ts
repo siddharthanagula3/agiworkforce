@@ -31,6 +31,11 @@ export interface ConnectorToolPermissions {
   ): ConnectorToolPermissionLevel | undefined;
   isDenied(qualifiedName: string): boolean;
   isConnectorToolDenied(connectorId: string, toolName: string): boolean;
+  /**
+   * Every tool of the connector is denied whatever its name, so the catalog
+   * build does not refresh its token or list its tools at all.
+   */
+  isConnectorDenied(connectorId: string): boolean;
   readonly size: number;
 }
 
@@ -85,6 +90,7 @@ function buildPermissions(
     isDenied: (qualifiedName) => levelFor(qualifiedName) === 'deny',
     isConnectorToolDenied: (connectorId, toolName) =>
       levelForConnectorTool(connectorId, toolName) === 'deny',
+    isConnectorDenied: () => false,
     get size() {
       return levels.size;
     },
@@ -110,6 +116,7 @@ export const LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: ConnectorToolPermissions = 
   levelForConnectorTool: () => 'deny',
   isDenied: () => true,
   isConnectorToolDenied: () => true,
+  isConnectorDenied: () => true,
   size: 0,
 };
 
@@ -129,6 +136,8 @@ export function withDisabledConnectorIds(
     isConnectorToolDenied: (connectorId, toolName) =>
       disabledConnectorIds.has(connectorId) ||
       permissions.isConnectorToolDenied(connectorId, toolName),
+    isConnectorDenied: (connectorId) =>
+      disabledConnectorIds.has(connectorId) || permissions.isConnectorDenied(connectorId),
     isDenied: (qualifiedName) => {
       const parsed = parseQualifiedToolName(qualifiedName);
       return (

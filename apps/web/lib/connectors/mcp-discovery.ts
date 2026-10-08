@@ -3,11 +3,15 @@ import 'server-only';
 import {
   auth,
   AuthorizationServerMismatchError,
+  discoverAuthorizationServerMetadata,
   discoverOAuthProtectedResourceMetadata,
   discoverOAuthServerInfo,
   IssuerMismatchError,
   OAuthError,
   RegistrationRejectedError,
+  selectClientAuthMethod,
+  type AuthorizationServerMetadata,
+  type FetchLike,
 } from '@modelcontextprotocol/client';
 
 import { logger } from '@/lib/logger';
@@ -23,7 +27,7 @@ import {
   type McpSuppliedOAuthClient,
 } from '@/lib/connectors/mcp-oauth-provider';
 import { McpOAuthEgressRefusedError, mcpOAuthFetch } from '@/lib/connectors/mcp-oauth-fetch';
-import { deleteMcpOAuthClient } from '@/lib/connectors/mcp-oauth-clients';
+import { deleteMcpOAuthClient, getMcpOAuthClient } from '@/lib/connectors/mcp-oauth-clients';
 import {
   createPendingAuthorization,
   upsertConnectorOAuthGrant,
@@ -483,4 +487,126 @@ export async function refreshDiscoveredGrant(input: {
         ? new Date(Date.now() + tokens.expires_in * 1000)
         : null,
   };
+}
+
+const REVOCATION_TIMEOUT_MS = 5_000;
+
+export interface DiscoveredRevocationToken {
+  token: string;
+  tokenTypeHint: 'access_token' | 'refresh_token';
+}
+
+export type DiscoveredRevocationOutcome =
+  | { status: 'revoked' }
+  | { status: 'unsupported'; manageUrl: string | null }
+  | { status: 'failed'; manageUrl: string | null };
+
+function httpsUrlOrNull(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function revocationClient(
+  issuer: string,
+  supplied: McpSuppliedOAuthClient | null,
+): Promise<McpSuppliedOAuthClient | null> {
+  if (supplied) return supplied;
+  try {
+    const stored = await getMcpOAuthClient(issuer);
+    return stored ? { clientId: stored.clientId, clientSecret: stored.clientSecret } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function postRevocation(
+  endpoint: string,
+  metadata: AuthorizationServerMetadata,
+  client: McpSuppliedOAuthClient,
+  credential: DiscoveredRevocationToken,
+  fetchFn: FetchLike,
+): Promise<boolean> {
+  const form = new URLSearchParams({
+    token: credential.token,
+    token_type_hint: credential.tokenTypeHint,
+  });
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/x-www-form-urlencoded',
+  };
+  const method = selectClientAuthMethod(
+    {
+      client_id: client.clientId,
+      ...(client.clientSecret ? { client_secret: client.clientSecret } : {}),
+    },
+    metadata.revocation_endpoint_auth_methods_supported ??
+      metadata.token_endpoint_auth_methods_supported ??
+      [],
+  );
+  if (method === 'client_secret_basic' && client.clientSecret) {
+    headers['Authorization'] = `Basic ${Buffer.from(
+      `${encodeURIComponent(client.clientId)}:${encodeURIComponent(client.clientSecret)}`,
+    ).toString('base64')}`;
+  } else {
+    form.set('client_id', client.clientId);
+    if (method === 'client_secret_post' && client.clientSecret) {
+      form.set('client_secret', client.clientSecret);
+    }
+  }
+  try {
+    const response = await fetchFn(endpoint, { method: 'POST', headers, body: form });
+    await response.body?.cancel().catch(() => undefined);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * RFC 7009 revocation for a grant minted by MCP discovery. The first token is
+ * the one that decides the outcome: revoking the refresh token ends the grant,
+ * and an authorization server may refuse to revoke access tokens on their own
+ * (RFC 7009 §2.2.1), so a refusal of the companion access token is not a
+ * failure to disconnect.
+ */
+export async function revokeDiscoveredGrant(input: {
+  issuer: string | null;
+  client: McpSuppliedOAuthClient | null;
+  tokens: readonly DiscoveredRevocationToken[];
+}): Promise<DiscoveredRevocationOutcome> {
+  const [primary, ...companions] = input.tokens;
+  if (!input.issuer || !primary) return { status: 'failed', manageUrl: null };
+
+  const deadline = createDeadline(REVOCATION_TIMEOUT_MS);
+  const fetchFn: FetchLike = (url, init) =>
+    mcpOAuthFetch(url, {
+      ...init,
+      signal: init?.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal,
+    });
+  try {
+    let metadata: AuthorizationServerMetadata | undefined;
+    try {
+      metadata = await discoverAuthorizationServerMetadata(input.issuer, { fetchFn });
+    } catch {
+      return { status: 'failed', manageUrl: null };
+    }
+    const manageUrl = httpsUrlOrNull(metadata?.service_documentation);
+    const endpoint = httpsUrlOrNull(metadata?.revocation_endpoint);
+    if (!metadata || !endpoint) return { status: 'unsupported', manageUrl };
+
+    const client = await revocationClient(input.issuer, input.client);
+    if (!client) return { status: 'failed', manageUrl };
+
+    const revoked = await postRevocation(endpoint, metadata, client, primary, fetchFn);
+    for (const companion of companions) {
+      await postRevocation(endpoint, metadata, client, companion, fetchFn);
+    }
+    return revoked ? { status: 'revoked' } : { status: 'failed', manageUrl };
+  } finally {
+    deadline.release();
+  }
 }

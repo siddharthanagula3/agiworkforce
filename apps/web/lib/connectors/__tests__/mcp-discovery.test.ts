@@ -34,6 +34,7 @@ import {
   beginMcpAuthorization,
   completeMcpAuthorization,
   refreshDiscoveredGrant,
+  revokeDiscoveredGrant,
 } from '../mcp-discovery';
 import { resolveClientMetadataUrl, resolveClientRedirectUri } from '../mcp-client-metadata';
 import type { PendingAuthorization } from '../oauth-store';
@@ -345,5 +346,148 @@ describe('documented scope ceilings on the discovered path', () => {
 
     expect(start.status).toBe('error');
     expect(mocks.savePending).not.toHaveBeenCalled();
+  });
+});
+
+describe('revoking a discovered grant at its authorization server (RFC 7009)', () => {
+  const ISSUER = 'https://auth.vendor.test';
+  let metadata: Record<string, unknown>;
+  let revocationStatus: number;
+  let revocations: { authorization: string | null; body: URLSearchParams }[];
+  let requested: string[];
+
+  beforeEach(() => {
+    metadata = {
+      issuer: ISSUER,
+      authorization_endpoint: `${ISSUER}/authorize`,
+      token_endpoint: `${ISSUER}/token`,
+      revocation_endpoint: `${ISSUER}/revoke`,
+      response_types_supported: ['code'],
+      code_challenge_methods_supported: ['S256'],
+      token_endpoint_auth_methods_supported: ['none'],
+    };
+    revocationStatus = 200;
+    revocations = [];
+    requested = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        requested.push(url);
+        if (url === `${ISSUER}/.well-known/oauth-authorization-server`) {
+          return Response.json(metadata);
+        }
+        if (url === `${ISSUER}/revoke`) {
+          revocations.push({
+            authorization: new Headers(init?.headers).get('authorization'),
+            body: new URLSearchParams(String(init?.body)),
+          });
+          return new Response(null, { status: revocationStatus });
+        }
+        return new Response('not found', { status: 404 });
+      }),
+    );
+  });
+
+  it('revokes the refresh token, then the access token, as the client that obtained them', async () => {
+    mocks.getClient.mockResolvedValue({
+      issuer: ISSUER,
+      clientId: 'https://app.example.test/oauth/client-metadata.json',
+      clientSecret: null,
+      registrationMethod: 'cimd',
+      clientMetadataUrl: 'https://app.example.test/oauth/client-metadata.json',
+      clientSecretExpiresAt: null,
+    });
+
+    await expect(
+      revokeDiscoveredGrant({
+        issuer: ISSUER,
+        client: null,
+        tokens: [
+          { token: 'vendor-refresh', tokenTypeHint: 'refresh_token' },
+          { token: 'vendor-access', tokenTypeHint: 'access_token' },
+        ],
+      }),
+    ).resolves.toEqual({ status: 'revoked' });
+
+    expect(revocations.map(({ body }) => Object.fromEntries(body))).toEqual([
+      {
+        token: 'vendor-refresh',
+        token_type_hint: 'refresh_token',
+        client_id: 'https://app.example.test/oauth/client-metadata.json',
+      },
+      {
+        token: 'vendor-access',
+        token_type_hint: 'access_token',
+        client_id: 'https://app.example.test/oauth/client-metadata.json',
+      },
+    ]);
+    expect(revocations.every(({ authorization }) => authorization === null)).toBe(true);
+  });
+
+  it('authenticates a confidential client the way the server advertises', async () => {
+    metadata['revocation_endpoint_auth_methods_supported'] = ['client_secret_basic'];
+
+    await revokeDiscoveredGrant({
+      issuer: ISSUER,
+      client: { clientId: 'own-client', clientSecret: 'own-secret' },
+      tokens: [{ token: 'vendor-refresh', tokenTypeHint: 'refresh_token' }],
+    });
+
+    expect(revocations[0]?.authorization).toBe(
+      `Basic ${Buffer.from('own-client:own-secret').toString('base64')}`,
+    );
+    expect(revocations[0]?.body.get('client_secret')).toBeNull();
+    expect(mocks.getClient).not.toHaveBeenCalled();
+  });
+
+  it('reports no endpoint, and where to manage access, when the server advertises none', async () => {
+    delete metadata['revocation_endpoint'];
+    metadata['service_documentation'] = 'https://vendor.test/settings/apps';
+
+    await expect(
+      revokeDiscoveredGrant({
+        issuer: ISSUER,
+        client: { clientId: 'own-client', clientSecret: null },
+        tokens: [{ token: 'vendor-refresh', tokenTypeHint: 'refresh_token' }],
+      }),
+    ).resolves.toEqual({ status: 'unsupported', manageUrl: 'https://vendor.test/settings/apps' });
+    expect(revocations).toEqual([]);
+  });
+
+  it('reports a failure when the server refuses or errors', async () => {
+    revocationStatus = 503;
+
+    await expect(
+      revokeDiscoveredGrant({
+        issuer: ISSUER,
+        client: { clientId: 'own-client', clientSecret: null },
+        tokens: [{ token: 'vendor-refresh', tokenTypeHint: 'refresh_token' }],
+      }),
+    ).resolves.toEqual({ status: 'failed', manageUrl: null });
+  });
+
+  it('never sends a token to a revocation endpoint that is not HTTPS', async () => {
+    metadata['revocation_endpoint'] = 'http://auth.vendor.test/revoke';
+
+    await expect(
+      revokeDiscoveredGrant({
+        issuer: ISSUER,
+        client: { clientId: 'own-client', clientSecret: null },
+        tokens: [{ token: 'vendor-refresh', tokenTypeHint: 'refresh_token' }],
+      }),
+    ).resolves.toEqual({ status: 'unsupported', manageUrl: null });
+    expect(requested.some((url) => url.startsWith('http://'))).toBe(false);
+  });
+
+  it('does not contact anything for a grant with no recorded issuer', async () => {
+    await expect(
+      revokeDiscoveredGrant({
+        issuer: null,
+        client: null,
+        tokens: [{ token: 'vendor-refresh', tokenTypeHint: 'refresh_token' }],
+      }),
+    ).resolves.toEqual({ status: 'failed', manageUrl: null });
+    expect(requested).toEqual([]);
   });
 });

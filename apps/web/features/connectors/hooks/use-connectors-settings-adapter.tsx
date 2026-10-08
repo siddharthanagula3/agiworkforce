@@ -40,6 +40,7 @@ import {
   ConnectorScopeList,
 } from '@/features/connectors/components/ConnectorScopeList';
 import {
+  announceVendorNotice,
   brokerOutcomeMessage,
   currentConnectorReturnPath,
   withConnectorReturnPath,
@@ -792,6 +793,7 @@ export function useConnectorsSettingsAdapter({
           throw new Error('Could not remove this connector. Try again.');
         }
         setCustomConnectors((prev) => prev.filter((c) => c.id !== rowId));
+        await announceVendorNotice(res, id);
         return;
       }
       const res = await fetch(
@@ -806,6 +808,7 @@ export function useConnectorsSettingsAdapter({
         throw new Error('Could not disconnect. Try again.');
       }
       setConnectedConnectors((prev) => prev.filter((c) => c.connectorId !== id));
+      await announceVendorNotice(res, id);
     },
     [authedHeaders, githubInstallations],
   );

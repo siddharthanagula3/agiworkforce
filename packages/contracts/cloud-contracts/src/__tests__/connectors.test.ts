@@ -305,6 +305,20 @@ describe('DisconnectResponseSchema', () => {
   it('accepts { success: true } (route.ts:345, 364)', () => {
     expect(DisconnectResponseSchema.safeParse({ success: true }).success).toBe(true);
   });
+
+  it('carries a notice when the vendor did not confirm revocation', () => {
+    const body = {
+      success: true,
+      vendorNotice:
+        'Disconnected here, but Sentry did not confirm that it revoked access, so access may ' +
+        'remain until you remove it in your Sentry account settings.',
+    };
+    expect(DisconnectResponseSchema.parse(body)).toEqual(body);
+    expect(DeleteCustomConnectorResponseSchema.parse(body)).toEqual(body);
+    expect(DisconnectResponseSchema.safeParse({ success: true, vendorNotice: '' }).success).toBe(
+      false,
+    );
+  });
 });
 
 describe('custom-connector contract (apps/web/app/api/connectors/custom/route.ts)', () => {

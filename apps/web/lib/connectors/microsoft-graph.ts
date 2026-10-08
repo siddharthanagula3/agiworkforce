@@ -8,7 +8,11 @@ import {
   serializeConnectorAuthorizationRequired,
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
-import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
+import {
+  connectorUnreachableMessage,
+  resolveConnectorAccessToken,
+} from '@/lib/connectors/oauth-access';
+import { getConnectorOAuthProvider } from '@/lib/connectors/oauth-registry';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   createDeadline,
@@ -804,6 +808,11 @@ export async function executeGraphTool(
   const tool = graphTool(serverId, toolName);
   if (!tool) return invalid(`${serverId} has no tool named ${toolName}.`);
   const access = await resolveConnectorAccessToken(userId, serverId);
+  if (access.status === 'unreachable') {
+    return invalid(
+      connectorUnreachableMessage(getConnectorOAuthProvider(serverId)?.displayName ?? serverId),
+    );
+  }
   if (access.status !== 'ready') {
     return authorizationRequired(
       serverId,

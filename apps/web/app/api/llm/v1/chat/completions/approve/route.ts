@@ -260,6 +260,7 @@ async function handleToolApproval(
                   getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
                 planTier: processed.subscriptionTier,
                 isToolDenied: permissions.isConnectorToolDenied,
+                isConnectorDenied: permissions.isConnectorDenied,
                 googleUserDataRouted: processed.googleUserData === true,
               })
             : Promise.resolve([]),

@@ -5,7 +5,11 @@ import type { GoogleDrivePickerResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
+import {
+  connectorUnreachableMessage,
+  resolveConnectorAccessToken,
+} from '@/lib/connectors/oauth-access';
+import { createError } from '@/lib/errors';
 import { GOOGLE_DRIVE_CONNECTOR_ID } from '@/lib/connectors/google-drive-files';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
@@ -23,6 +27,9 @@ async function handleGetPicker(request: NextRequest): Promise<NextResponse> {
   }
 
   const access = await resolveConnectorAccessToken(userId, GOOGLE_DRIVE_CONNECTOR_ID);
+  if (access.status === 'unreachable') {
+    throw createError.serviceUnavailable(connectorUnreachableMessage('Google Drive')).asUserSafe();
+  }
   if (access.status !== 'ready') {
     return NextResponse.json(
       {

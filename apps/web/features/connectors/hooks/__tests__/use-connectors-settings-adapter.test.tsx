@@ -16,6 +16,11 @@ vi.mock('@/features/directory', () => ({
   },
 }));
 
+const toastWarning = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: toastWarning },
+}));
+
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn().mockResolvedValue('csrf-1') }));
 
@@ -332,6 +337,70 @@ describe('github disconnect partial state', () => {
     await expect(disconnect('github')).rejects.toThrow(
       'The GitHub App is still installed on your account.',
     );
+  });
+});
+
+describe('a disconnect the vendor did not confirm', () => {
+  const NOTICE =
+    'Disconnected here, but Sentry did not confirm that it revoked access, so access may remain ' +
+    'until you remove it in your Sentry account settings.';
+
+  function stubDisconnect(deleteBody: unknown) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'DELETE') {
+          return { ok: true, status: 200, json: async () => deleteBody };
+        }
+        const body = url.includes('/api/connectors/custom')
+          ? { connectors: [SELF_ADDED_ROW] }
+          : url.includes('/api/github/installations')
+            ? { installations: [] }
+            : CONNECTED_BODY;
+        return { ok: true, status: 200, json: async () => body };
+      }),
+    );
+  }
+
+  function disconnectHandler(): (id: string) => Promise<void> {
+    return directoryOptions.current?.['onDisconnectConnector'] as (id: string) => Promise<void>;
+  }
+
+  it('keeps the vendor notice on screen after disconnecting a connector', async () => {
+    stubDisconnect({ success: true, vendorNotice: NOTICE });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    await disconnectHandler()('io.sentry/mcp');
+
+    expect(toastWarning).toHaveBeenCalledWith(NOTICE, {
+      id: 'connector-vendor-notice-io.sentry/mcp',
+      duration: Infinity,
+    });
+  });
+
+  it('keeps the vendor notice on screen after removing a custom connector', async () => {
+    stubDisconnect({ success: true, vendorNotice: NOTICE });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    await disconnectHandler()(`custom-${SELF_ADDED_ROW.id}`);
+
+    expect(toastWarning).toHaveBeenCalledWith(
+      NOTICE,
+      expect.objectContaining({ duration: Infinity }),
+    );
+  });
+
+  it('says nothing more when the vendor confirmed the revocation', async () => {
+    stubDisconnect({ success: true });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    await disconnectHandler()('io.sentry/mcp');
+
+    expect(toastWarning).not.toHaveBeenCalled();
   });
 });
 

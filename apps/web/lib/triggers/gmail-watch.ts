@@ -142,6 +142,7 @@ async function gmailAccessToken(
   }
   if (access.status === 'not-configured') return { ok: false, error: WATCH_ERRORS.notConfigured };
   if (access.status === 'not-connected') return { ok: false, error: WATCH_ERRORS.notConnected };
+  if (access.status === 'unreachable') return { ok: false, error: WATCH_ERRORS.unreachable };
   return { ok: false, error: WATCH_ERRORS.reconnect };
 }
 

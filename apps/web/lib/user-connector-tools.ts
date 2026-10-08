@@ -30,6 +30,7 @@ import {
 import { logger } from '@/lib/logger';
 import { createError } from '@/lib/errors';
 import {
+  evaluateConnectorAccess,
   evaluateMcpHostAccess,
   type ConnectorAccessPolicy,
 } from '@/lib/services/connector-policy-evaluator';
@@ -65,6 +66,7 @@ import {
   isSelfServiceConnector,
 } from '@/lib/connectors/mcp-endpoints';
 import {
+  connectorUnreachableMessage,
   resolveConnectorAccessToken,
   type ReadyConnectorAccess,
 } from '@/lib/connectors/oauth-access';
@@ -1069,6 +1071,9 @@ async function personalCustomRowConfig(
   const access = await resolveConnectorAccessToken(userId, customServerId(row.short_id), {
     discovered: true,
   });
+  if (access.status === 'unreachable') {
+    throw new ConnectorCredentialError(connectorUnreachableMessage(row.name));
+  }
   if (access.status !== 'ready') return config;
   return {
     ...config,
@@ -1541,6 +1546,14 @@ function connectRequiredForTarget(
   });
 }
 
+function connectorUnreachableForTarget(target: ConnectorMcpTarget): ConnectorExecResult {
+  return {
+    handled: true,
+    content: connectorUnreachableMessage(target.displayName ?? target.connectorId),
+    isError: true,
+  };
+}
+
 async function executeOAuthConnectorTool(
   userId: string,
   connectorRef: string,
@@ -1553,6 +1566,7 @@ async function executeOAuthConnectorTool(
   const connectorId = target.connectorId;
 
   const access = await resolveTargetAccess(userId, target);
+  if (access.status === 'unreachable') return connectorUnreachableForTarget(target);
   if (access.status !== 'ready') {
     return connectRequiredForTarget(
       target,
@@ -1598,6 +1612,7 @@ async function executeOAuthConnectorTool(
     }
 
     const refreshed = await resolveTargetAccess(userId, target, true);
+    if (refreshed.status === 'unreachable') return connectorUnreachableForTarget(target);
     if (refreshed.status !== 'ready') {
       return connectRequiredForTarget(target, toolName, 'authorization_expired');
     }
@@ -1892,6 +1907,8 @@ export interface LoadUserConnectorToolOptions {
   organizationId?: string | null;
   planTier?: string | null;
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
+  /** A connector this answers true for is never contacted: no token refresh, no tool listing. */
+  isConnectorDenied?: (connectorId: string) => boolean;
   healthSpace?: boolean;
   /**
    * The caller serves this catalog only to models that keep inputs out of
@@ -1949,7 +1966,7 @@ async function applyConnectorPolicy(
   return kept;
 }
 
-async function readCustomHostPolicy(
+async function readDialPolicy(
   organizationId: string,
 ): Promise<ConnectorAccessPolicy | null | false> {
   try {
@@ -1958,7 +1975,7 @@ async function readCustomHostPolicy(
   } catch (error) {
     logger.error(
       { error, organizationId },
-      '[connector-policy] unavailable while dialling custom connectors',
+      '[connector-policy] unavailable while dialling connectors',
     );
     return false;
   }
@@ -2418,6 +2435,14 @@ export async function loadUserConnectorToolCatalog(
       ? await getOrgReachableConnectorRows(userId, organizationId, customConnectorLimit)
       : [];
 
+    const dialPolicy = organizationId ? await readDialPolicy(organizationId) : null;
+    const dialPermitted = (serverId: string, member: boolean): boolean => {
+      if (options.isConnectorDenied?.(serverId)) return false;
+      if (dialPolicy === false) return false;
+      return evaluateConnectorAccess(dialPolicy, { connectorId: serverId, isCustom: member })
+        .allowed;
+    };
+
     const dials: Array<{ member: boolean; load: () => Promise<WebMcpToolDef[]> }> = [];
     const googleHosted = (
       url: string,
@@ -2438,6 +2463,7 @@ export async function loadUserConnectorToolCatalog(
     for (const entry of map.values()) {
       if (!activeIds.has(entry.connectorId)) continue;
       if (isHealthSpaceConnector(entry.connectorId) && !offersHealthSpaceConnectors) continue;
+      if (!dialPermitted(entry.connectorId, false)) continue;
       dials.push({
         member: false,
         load:
@@ -2466,11 +2492,11 @@ export async function loadUserConnectorToolCatalog(
         );
         continue;
       }
+      const target = resolveConnectorMcpTarget(connectorId);
+      if (!target || !dialPermitted(target.serverId, false)) continue;
       dials.push({
         member: false,
         load: async () => {
-          const target = resolveConnectorMcpTarget(connectorId);
-          if (!target) return [];
           const access = await resolveConnectorAccessToken(userId, connectorId);
           const label = target.displayName ?? connectorId;
           if (access.status === 'reauthorization-required') {
@@ -2497,6 +2523,7 @@ export async function loadUserConnectorToolCatalog(
           const directory = await resolveDirectoryTarget(grant.connectorId);
           if (!directory) return [];
           const target = directoryMcpTarget(directory);
+          if (!dialPermitted(target.serverId, true)) return [];
           return googleHosted(target.mcpUrl, async () => {
             const access = await resolveConnectorAccessToken(userId, target.connectorId, {
               discovered: true,
@@ -2512,14 +2539,12 @@ export async function loadUserConnectorToolCatalog(
       });
     }
 
-    const customHostPolicy = organizationId
-      ? readCustomHostPolicy(organizationId)
-      : Promise.resolve(null);
     for (const row of customRows) {
+      if (!dialPermitted(customServerId(row.short_id), true)) continue;
       dials.push({
         member: true,
         load: async () => {
-          if (!mcpHostPermitted(await customHostPolicy, row.url)) {
+          if (!mcpHostPermitted(dialPolicy, row.url)) {
             logger.info(
               { userId, organizationId, connectorRowId: row.id },
               '[connector-policy] custom MCP host not approved; connector not dialled',
@@ -2535,10 +2560,11 @@ export async function loadUserConnectorToolCatalog(
     }
 
     for (const row of sharedRows) {
+      if (!dialPermitted(orgSharedServerId(row.org_short_id), true)) continue;
       dials.push({
         member: true,
         load: async () => {
-          if (!mcpHostPermitted(await customHostPolicy, row.url)) return [];
+          if (!mcpHostPermitted(dialPolicy, row.url)) return [];
           return googleHosted(row.url, async () => {
             const catalog = await buildOrgSharedConnectorCatalog(row);
             return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];

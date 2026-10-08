@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
+
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
@@ -36,7 +38,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<OAuthAccessModule>()),
   disconnectConnectorOAuthGrant: vi.fn(),
   resolveConnectorAccessToken: mocks.resolveConnectorAccessToken,
 }));
@@ -95,6 +98,17 @@ describe('GET /api/connectors/google-drive/picker', () => {
     const response = await GET(request());
 
     expect(await response.json()).toEqual({ status: 'reconnect-required' });
+  });
+
+  it('says Drive could not be reached, not that it needs reconnecting, after a transient failure', async () => {
+    mocks.resolveConnectorAccessToken.mockResolvedValue({ status: 'unreachable' });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.message).toBe(
+      "Couldn't reach Google Drive just now. It is still connected, so try again in a moment.",
+    );
   });
 
   it('reports not connected for any other token state', async () => {

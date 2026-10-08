@@ -10,6 +10,7 @@ type ScanModule2 = typeof import('@/lib/services/connector-policy-service');
 type ScanModule3 = typeof import('@/lib/connectors/connector-capability');
 type ScanModule4 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule5 = typeof import('@/lib/connectors/mcp-custom-connections');
+type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
 interface DirectoryTargetFixture {
   connectorId: string;
@@ -159,7 +160,8 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   ConnectorGrantLockTimeoutError: class ConnectorGrantLockTimeoutError extends Error {},
   withLockedConnectorOAuthGrant: vi.fn(),
 }));
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<OAuthAccessModule>()),
   disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnectOauth(...args),
   resolveConnectorAccessToken: vi.fn(),
 }));
@@ -235,7 +237,10 @@ function resetMocks(): void {
   mocks.oauthConfiguredIds.mockReturnValue(new Set<string>());
   mocks.oauthGrants.mockResolvedValue([]);
   mocks.pendingConnectors.mockResolvedValue([]);
-  mocks.disconnectOauth.mockResolvedValue(false);
+  mocks.disconnectOauth.mockResolvedValue({
+    disconnected: false,
+    vendorRevocation: { status: 'nothing-to-revoke' },
+  });
   mocks.evictOauthCaches.mockResolvedValue(undefined);
   mocks.describeSetup.mockReturnValue(null);
   mocks.directoryTargets.clear();
@@ -573,7 +578,10 @@ describe('/api/connectors managed-cloud capability boundary', () => {
 
   it('revokes the grant, closes the live handle, and clears saved verdicts on disconnect', async () => {
     mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
-    mocks.disconnectOauth.mockResolvedValue(true);
+    mocks.disconnectOauth.mockResolvedValue({
+      disconnected: true,
+      vendorRevocation: { status: 'revoked' },
+    });
 
     const response = await DELETE(
       new NextRequest('http://localhost:3000/api/connectors?connectorId=linear', {
@@ -926,11 +934,19 @@ describe('/api/connectors directory records', () => {
       transport: 'streamable-http',
     });
     mocks.deleteCustom.mockResolvedValue([{ id: 'row-1', short_id: 'abc123def0' }]);
-    mocks.disconnectOauth.mockResolvedValue(true);
+    mocks.disconnectOauth.mockResolvedValue({
+      disconnected: true,
+      vendorRevocation: { status: 'revoked' },
+    });
 
     const response = await DELETE(deleteRequest(OPEN_RECORD_ID));
 
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(mocks.disconnectOauth).toHaveBeenCalledWith('user-1', 'custom-abc123def0');
+    expect(mocks.disconnectOauth.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.deleteCustom.mock.invocationCallOrder[0] ?? 0,
+    );
     expect(mocks.deleteCustom).toHaveBeenCalledWith(expect.anything(), 'user-1', 'row-1');
     expect(mocks.evictCustomCaches).toHaveBeenCalledWith('user-1', 'row-1');
     expect(mocks.clearPermissions).toHaveBeenCalledWith(
@@ -940,6 +956,24 @@ describe('/api/connectors directory records', () => {
     );
     expect(mocks.disconnectOauth).toHaveBeenCalledWith('user-1', OPEN_RECORD_ID);
     expect(mocks.evictOauthCaches).toHaveBeenCalledWith('user-1', OPEN_RECORD_ID);
+  });
+
+  it('tells the user access may remain at a directory vendor that could not revoke it', async () => {
+    mocks.disconnectOauth.mockResolvedValue({
+      disconnected: true,
+      vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
+    });
+
+    const response = await DELETE(deleteRequest(OAUTH_RECORD_ID));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      success: true,
+      vendorNotice:
+        'Disconnected here, but Cowork24 did not confirm that it revoked access, so access may ' +
+        'remain until you remove it in your Cowork24 account settings.',
+    });
+    expect(mocks.evictOauthCaches).toHaveBeenCalledWith('user-1', OAUTH_RECORD_ID);
   });
 
   it('still refuses an id that is neither curated nor in the directory', async () => {

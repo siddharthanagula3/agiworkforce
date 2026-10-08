@@ -409,6 +409,25 @@ export async function updateCustomConnectorCredential(
   }
 }
 
+export async function findCustomConnectorRow(
+  db: DatabaseAdapter,
+  userId: string,
+  rowId: string,
+): Promise<{ id: string; short_id: string; name: string } | null> {
+  try {
+    const rows = await db.query<{ id: string; short_id: string; name: string }>(
+      `select id, short_id, name from user_custom_connectors where id = $1 and user_id = $2`,
+      [rowId, userId],
+    );
+    return rows[0] ?? null;
+  } catch (error) {
+    if (isUndefinedTableError(error)) {
+      throw createError.serviceUnavailable(CUSTOM_CONNECTORS_UNAVAILABLE_MESSAGE);
+    }
+    throw error;
+  }
+}
+
 export async function deleteCustomConnectorRows(
   db: DatabaseAdapter,
   userId: string,

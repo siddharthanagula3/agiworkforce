@@ -25,6 +25,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 type RouteContext = { params: Promise<{ id: string }> };
 
 const MAX_DRIVE_FILES_PER_REQUEST = 10;
+const DRIVE_UNREACHABLE_MESSAGE = "Couldn't reach Google Drive. Try again.";
 
 const ImportSchema = z
   .object({
@@ -112,6 +113,9 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
   }
 
   const access = await resolveConnectorAccessToken(userId, GOOGLE_DRIVE_CONNECTOR_ID);
+  if (access.status === 'unreachable') {
+    throw createError.serviceUnavailable(DRIVE_UNREACHABLE_MESSAGE).asUserSafe();
+  }
   if (access.status !== 'ready') {
     return NextResponse.json(
       {

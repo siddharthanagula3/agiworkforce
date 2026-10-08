@@ -20,6 +20,7 @@ import {
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 
 import {
+  scopeConnectorPermissionsToTurn,
   withoutStandingApprovals,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
@@ -41,6 +42,28 @@ export interface ResearchRunContext {
   failover: ToolLoopFailoverPlan;
   onCancellationRequested?: () => void;
   onReportStored: (report: PersistedResearchReport) => void;
+}
+
+/**
+ * The verdicts a research turn reads connectors under, and the picked
+ * connectors it may read: the same per-chat switches and temporary-chat rules
+ * as an ordinary turn, so a connector switched off for the chat is not read
+ * because the plan card still lists it.
+ */
+export function scopeResearchConnectors(
+  processed: Pick<ProcessedRequest, 'chatRequest' | 'conversationIsTemporary' | 'researchSources'>,
+  saved: ConnectorToolPermissions,
+): { permissions: ConnectorToolPermissions; connectorIds: string[] } {
+  const permissions = scopeConnectorPermissionsToTurn(saved, {
+    temporary: processed.conversationIsTemporary === true,
+    disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+  });
+  return {
+    permissions,
+    connectorIds: (processed.researchSources?.connectors ?? []).filter(
+      (connectorId) => !permissions.isConnectorDenied(connectorId),
+    ),
+  };
 }
 
 export function buildResearchRunOptions(context: ResearchRunContext): ResearchLoopOptions {
