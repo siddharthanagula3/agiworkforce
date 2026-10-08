@@ -1003,38 +1003,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "kimi-k2.7-code": {
-      "identity": {
-        "key": "kimi-k2.7-code",
-        "displayName": "Kimi K2.7 Code",
-        "provider": "moonshot",
-        "developer": "moonshot",
-        "providerModelId": "kimi-k2.7-code",
-        "openRouterSlug": "moonshotai/kimi-k2.7-code",
-        "kind": "code",
-        "familyPartner": "kimi-k3",
-        "openWeight": true,
-        "license": "Modified MIT License",
-        "aliases": ["moonshotai/kimi-k2.7-code"],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "grok-4.7": {
       "identity": {
         "key": "grok-4.7",
@@ -1239,38 +1207,6 @@
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
         "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "minimax-m2.7": {
-      "identity": {
-        "key": "minimax-m2.7",
-        "displayName": "MiniMax M2.7",
-        "provider": "minimax",
-        "developer": "minimax",
-        "providerModelId": "MiniMax-M2.7",
-        "openRouterSlug": "minimax/minimax-m2.7",
-        "kind": "reasoning",
-        "familyPartner": "minimax-m3",
-        "openWeight": true,
-        "aliases": ["MiniMax-M2.7", "minimax/minimax-m2.7"],
-        "family": "minimax",
-        "version": "2.7"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "March 18, 2026",
-        "deprecationDate": "2026-09-06",
-        "deprecated": true,
-        "releasedOn": "2026-03-18",
-        "deprecatedOn": "2026-09-06",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#minimax-m2.7.deprecation_date",
-        "replacedBy": "minimax-m3"
       },
       "speed": "medium",
       "residencyRegions": null,
@@ -1562,40 +1498,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "qwen-3.6-27b": {
-      "identity": {
-        "key": "qwen-3.6-27b",
-        "displayName": "Qwen3.6 27B",
-        "provider": "groq",
-        "developer": "qwen",
-        "providerModelId": "qwen/qwen3.6-27b",
-        "openRouterSlug": "qwen/qwen3.6-27b",
-        "kind": "reasoning",
-        "familyPartner": "qwen-3.8-27b",
-        "openWeight": true,
-        "license": "Apache-2.0",
-        "aliases": ["qwen/qwen3.6-27b"],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "unavailable",
-        "unavailableReason": "Groq shut this model down on 2026-09-14; requests to the id return an error.",
-        "released": "April 2026",
-        "deprecationDate": "2026-09-14",
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": "2026-09-14",
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "very-fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "qwen-3.8-27b": {
       "identity": {
         "key": "qwen-3.8-27b",
@@ -1605,7 +1507,6 @@
         "providerModelId": "qwen/qwen3.8-27b",
         "openRouterSlug": "qwen/qwen3.8-27b",
         "kind": "reasoning",
-        "familyPartner": "qwen-3.6-27b",
         "openWeight": true,
         "license": "Apache-2.0",
         "aliases": ["qwen/qwen3.8-27b"],
@@ -9856,6 +9757,37 @@
       "residencyRegions": ["us", "eu"],
       "evidenceRefs": []
     },
+    "or-qwen-qwen3-6-27b": {
+      "identity": {
+        "key": "or-qwen-qwen3-6-27b",
+        "displayName": "Qwen: Qwen3.6 27B",
+        "provider": "open_router",
+        "developer": "qwen",
+        "providerModelId": "qwen/qwen3.6-27b",
+        "openRouterSlug": "qwen/qwen3.6-27b-20260422",
+        "kind": "chat",
+        "openWeight": true,
+        "aliases": ["qwen/qwen3.6-27b", "qwen/qwen3.6-27b-20260422"],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2026-04-27",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-04-27",
+        "deprecatedOn": null,
+        "stage": "discovered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05",
+        "replacedBy": null
+      },
+      "speed": "medium",
+      "residencyRegions": ["us", "eu"],
+      "evidenceRefs": []
+    },
     "or-qwen-qwen3-6-35b-a3b": {
       "identity": {
         "key": "or-qwen-qwen3-6-35b-a3b",
@@ -12941,6 +12873,7 @@
       "or-qwen-qwen3-5-flash-02-23",
       "or-qwen-qwen3-5-plus-02-15",
       "or-qwen-qwen3-5-plus-20260420",
+      "or-qwen-qwen3-6-27b",
       "or-qwen-qwen3-6-35b-a3b",
       "or-qwen-qwen3-6-flash",
       "or-qwen-qwen3-6-max-preview",
@@ -13030,10 +12963,10 @@
       "or-z-ai-glm-latest"
     ],
     "zhipu": ["glm-5.3", "glm-5.3-flash"],
-    "moonshot": ["kimi-k3", "kimi-k2.7-code"],
+    "moonshot": ["kimi-k3"],
     "xai": ["grok-4.7"],
-    "minimax": ["minimax-m3", "minimax-m2.7"],
-    "groq": ["gpt-oss-safeguard-20b", "qwen-3.6-27b", "qwen-3.8-27b"]
+    "minimax": ["minimax-m3"],
+    "groq": ["gpt-oss-safeguard-20b", "qwen-3.8-27b"]
   },
   "routes": {
     "openai/gpt-6-astra": {
@@ -15126,66 +15059,6 @@
         "cacheWritePerMillion": 3.3
       }
     },
-    "moonshot/kimi-k2.7-code": {
-      "modelKey": "kimi-k2.7-code",
-      "provider": "moonshot",
-      "providerModelId": "kimi-k2.7-code",
-      "harnessId": "moonshot/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4,
-        "cacheReadPerMillion": 0.19
-      }
-    },
-    "experientiallabs/kimi-k2.7-code": {
-      "modelKey": "kimi-k2.7-code",
-      "provider": "experientiallabs",
-      "providerModelId": "kimi-k2.7-code",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4,
-        "cacheReadPerMillion": 0.19,
-        "cacheWritePerMillion": 0.95
-      }
-    },
-    "workers_ai/kimi-k2.7-code": {
-      "modelKey": "kimi-k2.7-code",
-      "provider": "workers_ai",
-      "providerModelId": "@cf/moonshotai/kimi-k2.7-code",
-      "harnessId": "workers-ai/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4
-      }
-    },
     "xai/grok-4.7": {
       "modelKey": "grok-4.7",
       "provider": "xai",
@@ -15494,26 +15367,6 @@
       },
       "responseFormats": ["json_schema"]
     },
-    "minimax/minimax-m2.7": {
-      "modelKey": "minimax-m2.7",
-      "provider": "minimax",
-      "providerModelId": "MiniMax-M2.7",
-      "harnessId": "minimax/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "customer_byok",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.3,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.06
-      }
-    },
     "google/veo-3.1-lite": {
       "modelKey": "veo-3.1-lite",
       "provider": "google",
@@ -15689,56 +15542,6 @@
         "inputPerMillion": 0.075,
         "outputPerMillion": 0.3,
         "cacheReadPerMillion": 0.0375
-      }
-    },
-    "groq/qwen-3.6-27b": {
-      "modelKey": "qwen-3.6-27b",
-      "provider": "groq",
-      "providerModelId": "qwen/qwen3.6-27b",
-      "harnessId": "groq/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "unavailable",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.6,
-        "outputPerMillion": 3
-      }
-    },
-    "cheaperinference/qwen-3.6-27b": {
-      "modelKey": "qwen-3.6-27b",
-      "provider": "cheaperinference",
-      "providerModelId": "qwen3.6-27b",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "unavailable",
-      "selectable": false,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.42,
-        "outputPerMillion": 2.1
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 0.6,
-          "outputPerMillion": 3
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
       }
     },
     "groq/qwen-3.8-27b": {
@@ -21118,6 +20921,26 @@
         ]
       }
     },
+    "open_router/or-qwen-qwen3-6-27b": {
+      "modelKey": "or-qwen-qwen3-6-27b",
+      "provider": "open_router",
+      "providerModelId": "qwen/qwen3.6-27b",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "customer_byok",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 2,
+        "cacheReadPerMillion": 0.03
+      }
+    },
     "open_router/or-qwen-qwen3-6-35b-a3b": {
       "modelKey": "or-qwen-qwen3-6-35b-a3b",
       "provider": "open_router",
@@ -24703,30 +24526,6 @@
       "codeExecution": false,
       "promptCaching": true
     },
-    "kimi-k2.7-code": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "grok-4.7": {
       "textInput": true,
       "imageInput": true,
@@ -24882,30 +24681,6 @@
       "videoOutput": false,
       "streaming": true,
       "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "minimax-m2.7": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": false,
       "functionCalling": true,
       "reasoning": true,
       "imageEditing": null,
@@ -25134,30 +24909,6 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": true
-    },
-    "qwen-3.6-27b": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
     },
     "qwen-3.8-27b": {
       "textInput": true,
@@ -31398,6 +31149,30 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": false
+    },
+    "or-qwen-qwen3-6-27b": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": true,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "or-qwen-qwen3-6-35b-a3b": {
       "textInput": true,
@@ -34329,13 +34104,6 @@
       "outputPerMillion": 15,
       "cacheReadPerMillion": 0.3
     },
-    "kimi-k2.7-code": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.95,
-      "outputPerMillion": 4,
-      "cacheReadPerMillion": 0.19
-    },
     "grok-4.7": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -34403,13 +34171,6 @@
         }
       ]
     },
-    "minimax-m2.7": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.3,
-      "outputPerMillion": 1.2,
-      "cacheReadPerMillion": 0.06
-    },
     "veo-3.1-lite": {
       "currency": "USD",
       "unit": "per_second",
@@ -34469,12 +34230,6 @@
       "inputPerMillion": 0.075,
       "outputPerMillion": 0.3,
       "cacheReadPerMillion": 0.0375
-    },
-    "qwen-3.6-27b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.6,
-      "outputPerMillion": 3
     },
     "qwen-3.8-27b": {
       "currency": "USD",
@@ -36402,6 +36157,13 @@
         }
       ]
     },
+    "or-qwen-qwen3-6-27b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 2,
+      "cacheReadPerMillion": 0.03
+    },
     "or-qwen-qwen3-6-35b-a3b": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -37277,7 +37039,6 @@
     "glm-5.3-flash": { "contextTokens": 1000000, "maxOutputTokens": 128000 },
     "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "kimi-k3": { "contextTokens": 1048576, "maxOutputTokens": 1048576 },
-    "kimi-k2.7-code": { "contextTokens": 262144, "maxOutputTokens": 32768 },
     "grok-4.7": { "contextTokens": 500000, "knowledgeCutoff": "2026-05" },
     "veo-3.1": {
       "contextTokens": 1024,
@@ -37363,7 +37124,6 @@
     "gpt-live-1": { "contextTokens": 128000, "knowledgeCutoff": "2025-07-31" },
     "gpt-4o-mini-transcribe": { "contextTokens": 16000 },
     "minimax-m3": { "contextTokens": 1000000, "maxOutputTokens": 524288 },
-    "minimax-m2.7": { "contextTokens": 204800, "maxOutputTokens": 204800 },
     "veo-3.1-lite": {
       "contextTokens": 1024,
       "videoGeneration": {
@@ -37402,7 +37162,6 @@
       "responseBudgetFloorTokens": 8192
     },
     "gpt-oss-safeguard-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
-    "qwen-3.6-27b": { "contextTokens": 131072, "maxOutputTokens": 16384 },
     "qwen-3.8-27b": { "contextTokens": 131042, "maxOutputTokens": 16384 },
     "or-aion-labs-aion-2-0": { "contextTokens": 131072, "maxOutputTokens": 32768 },
     "or-aion-labs-aion-3-0": { "contextTokens": 131072, "maxOutputTokens": 32768 },
@@ -37720,6 +37479,7 @@
     "or-qwen-qwen3-5-flash-02-23": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-5-plus-02-15": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-5-plus-20260420": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
+    "or-qwen-qwen3-6-27b": { "contextTokens": 262144, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-6-35b-a3b": { "contextTokens": 262144, "maxOutputTokens": 235929 },
     "or-qwen-qwen3-6-flash": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-6-max-preview": { "contextTokens": 262144, "maxOutputTokens": 65536 },
@@ -37957,7 +37717,6 @@
     "glm-5.3-flash": {},
     "qwen-3.7-plus": {},
     "kimi-k3": {},
-    "kimi-k2.7-code": {},
     "grok-4.7": {},
     "veo-3.1": {},
     "veo-3.1-fast": {},
@@ -37965,7 +37724,6 @@
     "gpt-live-1": {},
     "gpt-4o-mini-transcribe": {},
     "minimax-m3": {},
-    "minimax-m2.7": {},
     "veo-3.1-lite": {},
     "gemini-omni-1.1-flash": {},
     "gemini-3.5-live-translate-preview": {},
@@ -37975,7 +37733,6 @@
     "openrouter-auto-beta": {},
     "openrouter-free": {},
     "gpt-oss-safeguard-20b": {},
-    "qwen-3.6-27b": {},
     "qwen-3.8-27b": {},
     "or-aion-labs-aion-2-0": {},
     "or-aion-labs-aion-3-0": {},
@@ -38236,6 +37993,7 @@
     "or-qwen-qwen3-5-flash-02-23": {},
     "or-qwen-qwen3-5-plus-02-15": {},
     "or-qwen-qwen3-5-plus-20260420": {},
+    "or-qwen-qwen3-6-27b": {},
     "or-qwen-qwen3-6-35b-a3b": {},
     "or-qwen-qwen3-6-flash": {},
     "or-qwen-qwen3-6-max-preview": {},
@@ -38891,6 +38649,13 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the google/gemini-flash-image slot moves from gemini-3.1-flash-image, which Google deprecated on 2026-10-06, to gemini-nano-banana-2.1; the slot pattern now matches the nano-banana name. The eval gate was not run: the harness has no measurement for image output and the slot has no baseline. Two catalog-side gates fail and are recorded on the slot as failing. Input rises from $0.50 to $1.50 per million, 200% against the 25% ceiling, while image output falls from $60 to $30 per million and the 1K image from $0.067 to $0.0336, so a generated image costs about half. The slot's minimum context of 1,000,000 tokens is unmet by both models, which each publish 131,072; the minimum predates the 2026-09-01 correction of the old row and was not changed here. This slot serves the image_generation Auto slot on Pro and above. gemini-3.1-flash-image leaves through the retire tool, and gemini-3-pro-image and gemini-3.1-flash-lite-image now name the new row as their variant partner. Three preview rows with shutdown dates leave for the stable models Google names as their replacements: gemini-omni-flash-preview for gemini-omni-1.1-flash, gemini-3.1-flash-live-preview for gemini-3.8-live and gemini-3.1-flash-tts-preview for gemini-3.8-flash-tts. The retire tool cannot carry out a row that is not live, because the compiler holds such a row at or below the shadow stage and the tool removes only from deprecated; their retired records were written in the tool's shape directly and the rows deleted. gemini-3.5-live-translate-preview stays: it has no shutdown date and no newer row covers live speech translation. gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-embedding-2 and the three Veo rows are unchanged. The retire tool reads a released field the authored rows do not carry and stamps the UTC day, so the sixteen records written for this refresh take their release date from each row's releasedOverride and are dated 2026-10-07, the local day the work was done. No provider call was made."
+    },
+    {
+      "id": "verification/2026-10-07/82",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, three more rows leave the roster. minimax-m2.7, deprecated on 2026-09-06 in favour of minimax-m3, and kimi-k2.7-code, superseded by kimi-k3, leave through the retire tool. qwen-3.6-27b, the Groq-hosted model Groq shut down on 2026-09-14, was marked unavailable and so cannot reach the deprecated stage; its retired record was written directly in the tool's shape, naming qwen-3.8-27b, and its two routes were removed with it. qwen-3.8-27b no longer names it as a variant partner. Removing the Groq row uncovers one row of the synced OpenRouter catalog, which the curated row had hidden because both carried the same wire id: OpenRouter's own listing of that model now appears at stage discovered, like the 346 other mirrored OpenRouter rows. Those rows mirror OpenRouter's catalog, old generations included; none is at a stage that managed traffic or a managed picker admits. No row under provider qwen, no providerOfferings entry and neither qwen family slot was touched. The moonshot/kimi, zhipu/glm and minimax/minimax slots already held their newest models and are unchanged. No provider call was made."
     }
   ],
   "retiredModels": {
@@ -39776,6 +39541,72 @@
       "metadataSource": "catalog/models.curation.json#kimi-k2.6",
       "metadataPreserved": true
     },
+    "kimi-k2.7-code": {
+      "id": "kimi-k2.7-code",
+      "displayName": "Kimi K2.7 Code",
+      "provider": "moonshot",
+      "developer": "moonshot",
+      "modelType": "code",
+      "contextWindow": 262144,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-07",
+      "replacedBy": "kimi-k3",
+      "metadataSource": "catalog/models.curation.json#kimi-k2.7-code",
+      "metadataPreserved": true
+    },
+    "minimax-m2.7": {
+      "id": "minimax-m2.7",
+      "displayName": "MiniMax M2.7",
+      "provider": "minimax",
+      "developer": "minimax",
+      "modelType": "reasoning",
+      "contextWindow": 204800,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "March 18, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "minimax-m3",
+      "metadataSource": "catalog/models.curation.json#minimax-m2.7",
+      "metadataPreserved": true
+    },
     "mistral-large-3": {
       "id": "mistral-large-3",
       "displayName": "Mistral Large 3",
@@ -39899,6 +39730,39 @@
     "nvidia/nemotron-3-ultra-550b-a55b": {
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
       "metadataPreserved": false
+    },
+    "qwen-3.6-27b": {
+      "id": "qwen-3.6-27b",
+      "displayName": "Qwen3.6 27B",
+      "provider": "groq",
+      "developer": "qwen",
+      "modelType": "reasoning",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "April 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "qwen-3.8-27b",
+      "metadataSource": "catalog/models.curation.json#qwen-3.6-27b",
+      "metadataPreserved": true
     },
     "qwen-coder-flash": {
       "id": "qwen-coder-flash",

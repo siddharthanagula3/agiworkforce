@@ -122,16 +122,6 @@
       "toolOutcome": "honoured",
       "toolDetail": null
     },
-    "kimi-k2.7-code": {
-      "routeId": "moonshot/kimi-k2.7-code",
-      "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 1434,
-      "echoedModelId": "kimi-k2.7-code",
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
     "kimi-k3": {
       "routeId": "moonshot/kimi-k3",
       "probedOn": "2026-09-12",

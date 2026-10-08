@@ -116,19 +116,19 @@ test('the backfill census is the one the compiler prints', () => {
     Object.entries(REGISTRY.models).map(([modelKey, model]) => [modelKey, model.lifecycle.stage]),
   );
   const census = stageCensus(stages);
-  assert.equal(census.get(LIFECYCLE_STAGE.discovered), 346);
+  assert.equal(census.get(LIFECYCLE_STAGE.discovered), 347);
   assert.equal(census.get(LIFECYCLE_STAGE.promoted), 21);
   assert.equal(census.get(LIFECYCLE_STAGE.evaluated), 5);
-  assert.equal(census.get(LIFECYCLE_STAGE.registered), 23);
+  assert.equal(census.get(LIFECYCLE_STAGE.registered), 21);
   assert.equal(census.get(LIFECYCLE_STAGE.probed), 0);
-  assert.equal(census.get(LIFECYCLE_STAGE.deprecated), 2);
+  assert.equal(census.get(LIFECYCLE_STAGE.deprecated), 1);
   assert.equal(
     [...census.values()].reduce((total, count) => total + count, 0),
     Object.keys(REGISTRY.models).length,
   );
   assert.equal(
     formatStageCensus(stages),
-    'discovered 346, registered 23, evaluated 5, promoted 21, deprecated 2',
+    'discovered 347, registered 21, evaluated 5, promoted 21, deprecated 1',
   );
 });
 

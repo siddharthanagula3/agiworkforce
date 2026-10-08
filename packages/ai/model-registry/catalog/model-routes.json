@@ -934,35 +934,6 @@
         }
       ]
     },
-    "kimi-k2.7-code": {
-      "additionalRoutes": [
-        {
-          "provider": "experientiallabs",
-          "harnessId": "experientiallabs/chat-completions",
-          "upstreamModelId": "kimi-k2.7-code",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 0.95,
-            "outputPerMillion": 4.0,
-            "cacheReadPerMillion": 0.19
-          },
-          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug kimi-k2.7-code (azure_openai at $0.95/$4, fireworks at $0.95/$4, openrouter at $0.67/$3.4, tencent at $0.71/$3.5); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict zdr_enforceable. Verified against https://api.experientiallabs.ai/api/models/kimi-k2.7-code on 2026-09-06."
-        },
-        {
-          "provider": "workers_ai",
-          "harnessId": "workers-ai/chat-completions",
-          "upstreamModelId": "@cf/moonshotai/kimi-k2.7-code",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "agi_direct",
-          "pricing": {
-            "inputPerMillion": 0.95,
-            "outputPerMillion": 4.0
-          },
-          "pricingNote": "Cloudflare Workers AI per-token rate for @cf/moonshotai/kimi-k2.7-code, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
-        }
-      ]
-    },
     "qwen-3.8-27b": {
       "additionalRoutes": [
         {
@@ -1000,24 +971,6 @@
           "pricingNote": "Cloudflare Workers AI per-token rate for @cf/qwen/qwen3.8-27b, verified against https://developers.cloudflare.com/workers-ai/platform/pricing/ on 2026-09-06; no prompt-cache rate is published. Served on the direct account endpoint, billed to the company Cloudflare account after the daily free neuron allowance."
         }
       ]
-    },
-    "qwen-3.6-27b": {
-      "additionalRoutes": [
-        {
-          "provider": "cheaperinference",
-          "harnessId": "cheaperinference/chat-completions",
-          "upstreamModelId": "qwen3.6-27b",
-          "cacheClass": "no_provider_cache",
-          "commercialStatus": "authorized_marketplace",
-          "discount": "gateway",
-          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
-        }
-      ]
-    },
-    "minimax-m2.7": {
-      "defaultRoute": {
-        "commercialStatus": "customer_byok"
-      }
     },
     "gemini-embedding-2": {
       "additionalRoutes": [

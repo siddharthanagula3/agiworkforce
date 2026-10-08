@@ -487,6 +487,12 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the google/gemini-flash-image slot moves from gemini-3.1-flash-image, which Google deprecated on 2026-10-06, to gemini-nano-banana-2.1; the slot pattern now matches the nano-banana name. The eval gate was not run: the harness has no measurement for image output and the slot has no baseline. Two catalog-side gates fail and are recorded on the slot as failing. Input rises from $0.50 to $1.50 per million, 200% against the 25% ceiling, while image output falls from $60 to $30 per million and the 1K image from $0.067 to $0.0336, so a generated image costs about half. The slot's minimum context of 1,000,000 tokens is unmet by both models, which each publish 131,072; the minimum predates the 2026-09-01 correction of the old row and was not changed here. This slot serves the image_generation Auto slot on Pro and above. gemini-3.1-flash-image leaves through the retire tool, and gemini-3-pro-image and gemini-3.1-flash-lite-image now name the new row as their variant partner. Three preview rows with shutdown dates leave for the stable models Google names as their replacements: gemini-omni-flash-preview for gemini-omni-1.1-flash, gemini-3.1-flash-live-preview for gemini-3.8-live and gemini-3.1-flash-tts-preview for gemini-3.8-flash-tts. The retire tool cannot carry out a row that is not live, because the compiler holds such a row at or below the shadow stage and the tool removes only from deprecated; their retired records were written in the tool's shape directly and the rows deleted. gemini-3.5-live-translate-preview stays: it has no shutdown date and no newer row covers live speech translation. gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-embedding-2 and the three Veo rows are unchanged. The retire tool reads a released field the authored rows do not carry and stamps the UTC day, so the sixteen records written for this refresh take their release date from each row's releasedOverride and are dated 2026-10-07, the local day the work was done. No provider call was made."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, three more rows leave the roster. minimax-m2.7, deprecated on 2026-09-06 in favour of minimax-m3, and kimi-k2.7-code, superseded by kimi-k3, leave through the retire tool. qwen-3.6-27b, the Groq-hosted model Groq shut down on 2026-09-14, was marked unavailable and so cannot reach the deprecated stage; its retired record was written directly in the tool's shape, naming qwen-3.8-27b, and its two routes were removed with it. qwen-3.8-27b no longer names it as a variant partner. Removing the Groq row uncovers one row of the synced OpenRouter catalog, which the curated row had hidden because both carried the same wire id: OpenRouter's own listing of that model now appears at stage discovered, like the 346 other mirrored OpenRouter rows. Those rows mirror OpenRouter's catalog, old generations included; none is at a stage that managed traffic or a managed picker admits. No row under provider qwen, no providerOfferings entry and neither qwen family slot was touched. The moonshot/kimi, zhipu/glm and minimax/minimax slots already held their newest models and are unchanged. No provider call was made."
     }
   ],
   "providers": {
@@ -2703,62 +2709,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "kimi-k2.7-code": {
-      "id": "kimi-k2.7-code",
-      "apiModelId": "kimi-k2.7-code",
-      "openRouterSlug": "moonshotai/kimi-k2.7-code",
-      "name": "Kimi K2.7 Code",
-      "provider": "moonshot",
-      "developer": "moonshot",
-      "modelType": "code",
-      "inputModalities": ["text", "image", "video"],
-      "variantPartner": "kimi-k3",
-      "contextWindow": 262144,
-      "inputCost": 0.95,
-      "outputCost": 4,
-      "cached_input": 0.19,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Agentic Coding", "Tool Use", "Vision"],
-      "deprecation_date": null,
-      "pricingNote": "Single flat row with no input-length tiers: $0.95/1M cache-miss input, $0.19/1M cache-hit input, $4.00/1M output. Batch bills 60% of list. No cache-write fee is published and caching is automatic. Thinking is forced on: thinking.type accepts only enabled and there is no reasoning_effort. The 32,768 output figure is the documented default; Moonshot publishes no ceiling. Moonshot documents only kimi-k3 on its Messages API, so route this model through chat completions. Verified against platform.kimi.ai/docs/pricing/chat-k27-code, retrieved 2026-09-04.",
-      "openWeight": true,
-      "license": "Modified MIT License",
-      "maxOutputTokens": 32768,
-      "reasoning": {
-        "capable": true,
-        "control": "always_on",
-        "canDisableThinking": false,
-        "request": {
-          "api": "chat",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "pro" },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
     "grok-4.7": {
       "id": "grok-4.7",
       "apiModelId": "grok-4.7",
@@ -3155,52 +3105,6 @@
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
-    "minimax-m2.7": {
-      "id": "minimax-m2.7",
-      "apiModelId": "MiniMax-M2.7",
-      "openRouterSlug": "minimax/minimax-m2.7",
-      "name": "MiniMax M2.7",
-      "provider": "minimax",
-      "developer": "minimax",
-      "modelType": "reasoning",
-      "inputModalities": ["text"],
-      "variantPartner": "minimax-m3",
-      "contextWindow": 204800,
-      "inputCost": 0.3,
-      "outputCost": 1.2,
-      "cached_input": 0.06,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": false,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["Text Reasoning", "Open-Weight Deployment"],
-      "released": "March 18, 2026",
-      "deprecated": true,
-      "deprecation_date": "2026-09-06",
-      "pricingNote": "Flat rate with no context tiers: $0.30/1M input, $1.20/1M output, $0.06/1M cache read. The $0.375/1M cache-write price applies only to explicit cache_control caching on the Anthropic-compatible route; the OpenAI-compatible route this catalog calls uses passive caching and charges no write fee, so none is recorded. Text only and always thinking, older than MiniMax-M3 but still classed as current by MiniMax. No knowledge cutoff and no structured-output support are documented. Verified against platform.minimax.io, retrieved 2026-09-04.",
-      "openWeight": true,
-      "maxOutputTokens": 204800,
-      "tierPolicy": { "minTier": "pro" },
-      "lifecycle": {
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "source": "catalog/models.curation.json#minimax-m2.7.deprecation_date"
       }
     },
     "veo-3.1-lite": {
@@ -3639,66 +3543,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "qwen-3.6-27b": {
-      "id": "qwen-3.6-27b",
-      "apiModelId": "qwen/qwen3.6-27b",
-      "openRouterSlug": "qwen/qwen3.6-27b",
-      "name": "Qwen3.6 27B",
-      "provider": "groq",
-      "developer": "qwen",
-      "modelType": "reasoning",
-      "inputModalities": ["text", "image"],
-      "variantPartner": "qwen-3.8-27b",
-      "contextWindow": 131072,
-      "inputCost": 0.6,
-      "outputCost": 3,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "very-fast",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Open-Weight Vision", "Tool Use", "Low Latency"],
-      "released": "April 2026",
-      "deprecation_date": "2026-09-14",
-      "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate on Groq: $0.60/1M input, $3.00/1M output. Absent from both the prompt-caching and batch pages, so no cached rate and no batch discount apply. Thinking is on by default and is turned off with reasoning_effort 'none'. An adapter must send reasoning_format hidden or parsed when tools or JSON mode are on. Groq publishes no knowledge cutoff. Verified against console.groq.com/docs/model/qwen/qwen3.6-27b, retrieved 2026-09-04.",
-      "openWeight": true,
-      "license": "Apache-2.0",
-      "maxOutputTokens": 16384,
-      "availability": "unavailable",
-      "unavailableReason": "Groq shut this model down on 2026-09-14; requests to the id return an error.",
-      "reasoning": {
-        "capable": true,
-        "control": "effort",
-        "supportedEfforts": ["none", "default"],
-        "defaultEffort": "default",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "free" },
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
-      }
-    },
     "qwen-3.8-27b": {
       "id": "qwen-3.8-27b",
       "apiModelId": "qwen/qwen3.8-27b",
@@ -3708,7 +3552,6 @@
       "developer": "qwen",
       "modelType": "reasoning",
       "inputModalities": ["text", "image"],
-      "variantPartner": "qwen-3.6-27b",
       "contextWindow": 131042,
       "inputCost": 0.8,
       "outputCost": 4,
@@ -15352,6 +15195,50 @@
       "pricingNote": "Synced mechanically from https://openrouter.ai/api/v1/models, fetched 2026-09-05, by scripts/sync-openrouter-catalog.mjs. Not individually hand-verified beyond the endpoint's own published fields.",
       "openWeight": false,
       "license": "proprietary",
+      "maxOutputTokens": 65536,
+      "lifecycle": {
+        "stage": "discovered",
+        "stagedOn": "2026-09-05",
+        "source": "https://openrouter.ai/api/v1/models#2026-09-05"
+      }
+    },
+    "or-qwen-qwen3-6-27b": {
+      "id": "or-qwen-qwen3-6-27b",
+      "apiModelId": "qwen/qwen3.6-27b",
+      "openRouterSlug": "qwen/qwen3.6-27b-20260422",
+      "name": "Qwen: Qwen3.6 27B",
+      "provider": "open_router",
+      "developer": "qwen",
+      "modelType": "chat",
+      "inputModalities": ["text", "image", "video"],
+      "outputModalities": ["text"],
+      "contextWindow": 262144,
+      "inputCost": 0.3,
+      "outputCost": 2,
+      "cached_input": 0.03,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "medium",
+      "quality": "fair",
+      "qualityTier": "fast",
+      "bestFor": ["OpenRouter Catalog"],
+      "released": "2026-04-27",
+      "deprecation_date": null,
+      "pricingNote": "Synced mechanically from https://openrouter.ai/api/v1/models, fetched 2026-09-05, by scripts/sync-openrouter-catalog.mjs. Not individually hand-verified beyond the endpoint's own published fields.",
+      "openWeight": true,
       "maxOutputTokens": 65536,
       "lifecycle": {
         "stage": "discovered",
