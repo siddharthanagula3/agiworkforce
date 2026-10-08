@@ -335,6 +335,17 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
     retainedReason: null,
   },
   {
+    store: 'feedback screenshot objects',
+    kind: 'object_store',
+    dataClass: 'customer_content',
+    erasedWithSubject: true,
+    erasedWithTenant: false,
+    cascadesFrom: null,
+    maximumAgeDays: null,
+    deletionPath: 'lib/server/account-erasure.ts eraseUserAccountData feedback screenshot sweep',
+    retainedReason: null,
+  },
+  {
     store: 'response cache keys',
     kind: 'cache',
     dataClass: 'derived_content',
@@ -593,6 +604,7 @@ export function accountErasureProgress(
       report.knowledgeObjectsFailed +
       report.exportObjectsFailed +
       report.avatarObjectsFailed +
+      report.feedbackObjectsFailed +
       report.cacheKeysFailed,
   };
 }

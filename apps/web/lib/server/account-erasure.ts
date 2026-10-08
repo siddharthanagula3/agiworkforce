@@ -6,7 +6,9 @@ import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import {
   deleteObject,
+  deletePrivateObject,
   isObjectStorageConfigured,
+  isPrivateObjectStorageConfigured,
   objectKeyFromPublicUrl,
   objectKeyFromStorageUri,
 } from '@/lib/server/object-storage';
@@ -28,6 +30,8 @@ import {
 } from '@/lib/connectors/mcp-runtime-cache';
 import { removeBankAccountsItem } from '@/lib/connectors/bank-accounts';
 import { revokeAllConnectorTokensAtProviders } from '@/lib/connectors/oauth-access';
+
+const FEEDBACK_TABLE = 'feedback';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{
   table: string;
@@ -91,7 +95,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'agent_approval_requests', column: 'user_id' },
   { table: 'automation_audit_events', column: 'user_id' },
   { table: 'notifications', column: 'user_id' },
-  { table: 'feedback', column: 'user_id' },
+  { table: FEEDBACK_TABLE, column: 'user_id' },
   { table: 'api_keys', column: 'user_id' },
   { table: 'developer_projects', column: 'user_id' },
   { table: 'developer_webhook_deliveries', column: 'user_id' },
@@ -429,6 +433,8 @@ export interface AccountErasureReport {
   exportObjectsFailed: number;
   avatarObjectsDeleted: number;
   avatarObjectsFailed: number;
+  feedbackObjectsDeleted: number;
+  feedbackObjectsFailed: number;
   cacheKeysDeleted: number;
   cacheKeysFailed: number;
   tables: Record<
@@ -838,6 +844,31 @@ async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number;
   return deleteObjectKeys(key ? [key] : [], 'avatar');
 }
 
+async function eraseUserFeedbackScreenshots(
+  userId: string,
+): Promise<{ deleted: number; failed: number }> {
+  const db = getNeonDb();
+  let rows: Array<{ screenshot_key: string | null }> = [];
+  try {
+    rows = await db.query<{ screenshot_key: string | null }>(
+      `select metadata->>'screenshot_key' as screenshot_key
+         from public.${FEEDBACK_TABLE}
+        where user_id = $1
+          and metadata->>'screenshot_key' is not null`,
+      [userId],
+    );
+  } catch (error) {
+    if (isSchemaAbsent(error)) return { deleted: 0, failed: 0 };
+    throw error;
+  }
+
+  const keys = rows.map((row) => row.screenshot_key).filter((key): key is string => Boolean(key));
+  return deleteObjectKeys(keys, 'feedback-screenshot', {
+    configured: isPrivateObjectStorageConfigured,
+    deleteKey: deletePrivateObject,
+  });
+}
+
 async function isSubjectUnderLegalHold(userId: string): Promise<{ held: boolean; error?: string }> {
   try {
     const rows = await getNeonDb().query<{ held: boolean }>(
@@ -890,6 +921,8 @@ function heldReport(userId: string, error: string | undefined): AccountErasureRe
     exportObjectsFailed: 0,
     avatarObjectsDeleted: 0,
     avatarObjectsFailed: 0,
+    feedbackObjectsDeleted: 0,
+    feedbackObjectsFailed: 0,
     cacheKeysDeleted: 0,
     cacheKeysFailed: 0,
     tables: {
@@ -936,6 +969,8 @@ export async function eraseUserAccountData(
       exportObjectsFailed: 0,
       avatarObjectsDeleted: 0,
       avatarObjectsFailed: 0,
+      feedbackObjectsDeleted: 0,
+      feedbackObjectsFailed: 0,
       cacheKeysDeleted: 0,
       cacheKeysFailed: 0,
       tables: {
@@ -956,6 +991,7 @@ export async function eraseUserAccountData(
     const knowledge = await eraseUserKnowledgeObjects(userId);
     const exportArchives = await eraseUserDataExportArchives(db, userId);
     const avatar = await eraseUserAvatarObject(userId);
+    const feedbackScreenshots = await eraseUserFeedbackScreenshots(userId);
     const cache = await deleteE2BSessionsForUser(userId);
     const tables: AccountErasureReport['tables'] = {};
     const anonymized: AccountErasureReport['anonymized'] = {};
@@ -1015,6 +1051,10 @@ export async function eraseUserAccountData(
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
+      if (table === FEEDBACK_TABLE && feedbackScreenshots.failed > 0) {
+        tables[table] = { deleted: false, retainedForRetry: true };
+        continue;
+      }
       const subject =
         alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
       try {
@@ -1040,6 +1080,7 @@ export async function eraseUserAccountData(
       knowledge.failed === 0 &&
       exportArchives.failed === 0 &&
       avatar.failed === 0 &&
+      feedbackScreenshots.failed === 0 &&
       cache.failed === 0 &&
       Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
       Object.values(anonymized).every((result) => result.updated || result.skipped === true);
@@ -1077,6 +1118,8 @@ export async function eraseUserAccountData(
       exportObjectsFailed: exportArchives.failed,
       avatarObjectsDeleted: avatar.deleted,
       avatarObjectsFailed: avatar.failed,
+      feedbackObjectsDeleted: feedbackScreenshots.deleted,
+      feedbackObjectsFailed: feedbackScreenshots.failed,
       cacheKeysDeleted: cache.deleted,
       cacheKeysFailed: cache.failed,
       tables,
