@@ -23,7 +23,12 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async () => {
 });
 
 import { SITE_URL } from '@/lib/seo/site';
-import { armModelMocks, modelMocks, queueModelJson } from './fixtures/model-mocks';
+import {
+  admitEveryModelCall,
+  armModelMocks,
+  modelMocks,
+  queueModelJson,
+} from './fixtures/model-mocks';
 import { answerSupportQuestion } from '../answer/synthesize';
 import { retrieveSupportChunks } from '../retrieval/retrieve';
 import { classifyHardAbstain, SUPPORT_ABSTAIN_CATEGORIES } from '../policy/hard-abstain';
@@ -34,6 +39,7 @@ function ask(question: string): SupportAnswerInput {
     question,
     surface: 'app',
     viewer: { isSignedIn: true, userId: 'user_1', planTier: 'pro' },
+    admitModelCall: admitEveryModelCall,
   };
 }
 

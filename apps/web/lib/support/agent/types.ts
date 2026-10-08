@@ -10,6 +10,7 @@ export type HardAbstainCategory = 'billing' | 'data_deletion' | 'security' | 'le
 
 export type SupportAbstentionReason =
   | 'no_relevant_source'
+  | 'out_of_scope'
   | 'hard_abstain_billing'
   | 'hard_abstain_data_deletion'
   | 'hard_abstain_security'
@@ -40,7 +41,7 @@ export interface SupportAbstention {
   reason: SupportAbstentionReason;
   text: string;
   authoritativeLinks: SupportCitation[];
-  handoffOffered: true;
+  handoffOffered: boolean;
   route: SupportRoute | null;
 }
 
@@ -69,6 +70,8 @@ export interface SupportHistoryTurn {
   content: string;
 }
 
+export type SupportModelCallGate = () => Promise<boolean>;
+
 export interface SupportAnswerInput {
   question: string;
   history?: SupportHistoryTurn[];
@@ -76,6 +79,7 @@ export interface SupportAnswerInput {
   viewer: SupportViewer;
   accountFacts?: SupportAccountFact[];
   availableActions?: SupportActionOption[];
+  admitModelCall: SupportModelCallGate;
   signal?: AbortSignal;
 }
 

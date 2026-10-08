@@ -40857,6 +40857,6 @@
       ],
       "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.7"]
     },
-    "release": { "policyVersion": 19 }
+    "release": { "policyVersion": 20 }
   }
 }

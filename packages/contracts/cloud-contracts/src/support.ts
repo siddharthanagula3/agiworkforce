@@ -58,6 +58,7 @@ export interface SupportCitation {
 
 export const SUPPORT_ABSTENTION_REASONS = [
   'no_relevant_source',
+  'out_of_scope',
   'hard_abstain_billing',
   'hard_abstain_data_deletion',
   'hard_abstain_security',
@@ -93,7 +94,7 @@ export interface SupportAbstentionView {
   reason: SupportAbstentionReason;
   text: string;
   citations: SupportCitation[];
-  escalationOffered: true;
+  escalationOffered: boolean;
 }
 
 export type SupportReplyView = SupportAnswerView | SupportAbstentionView;
@@ -247,8 +248,9 @@ export interface SupportAssistantTurn {
 
 export type SupportTurn = SupportUserTurn | SupportAssistantTurn;
 
-export const SUPPORT_MAX_QUESTION_LENGTH = 2000;
+export const SUPPORT_MAX_QUESTION_LENGTH = 600;
 export const SUPPORT_HISTORY_LIMIT = 6;
+export const SUPPORT_MAX_HISTORY_TURN_LENGTH = 600;
 
 export const DIAGNOSTIC_SURFACES = [
   'web',
@@ -826,8 +828,13 @@ export const SupportAskRequestSchema = z.object({
   message: z.string().trim().min(1).max(SUPPORT_MAX_QUESTION_LENGTH),
   surface: z.enum(['marketing', 'app']),
   history: z
-    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) }))
-    .max(50)
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().max(SUPPORT_MAX_HISTORY_TURN_LENGTH),
+      }),
+    )
+    .max(SUPPORT_HISTORY_LIMIT)
     .optional(),
 });
 

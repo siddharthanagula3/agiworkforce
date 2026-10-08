@@ -3,6 +3,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute, type AutoRoutingRequest } from '@agiworkforce/routing';
+import { SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER, getRoutingSlotModel } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
@@ -23,10 +24,17 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@/shared/utils/env';
-import { buildSupportSystemPrompt } from '../prompt/system-prompt';
 import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import type { SupportModelCallGate } from '../types';
 
-const MAX_OUTPUT_TOKENS = 800;
+const MAX_OUTPUT_TOKENS = 400;
+
+/**
+ * Support is a company function, not a plan entitlement: every asker is routed
+ * on the lowest paid tier, so a signed-out visitor never lands on the zero-cost
+ * router, whose shared daily cap and unreliable JSON would fail this engine.
+ */
+const SUPPORT_ROUTING_TIER = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0];
 
 export const SUPPORT_SYSTEM_PROMPT_ID = 'support.system';
 
@@ -47,7 +55,13 @@ export type SupportModelResult =
   | { status: 'ok'; text: string; route: { provider: string; modelKey: string } }
   | {
       status: 'unavailable';
-      reason: 'disabled' | 'no_route' | 'provider_error' | 'empty_response' | 'prompt_rejected';
+      reason:
+        | 'disabled'
+        | 'no_route'
+        | 'limit_reached'
+        | 'provider_error'
+        | 'empty_response'
+        | 'prompt_rejected';
       route: { provider: string; modelKey: string } | null;
     };
 
@@ -59,10 +73,22 @@ export function isSupportAgentEnabled(): boolean {
 
 export interface SupportModelCallInput {
   userMessage: string;
-  planTier: string | null;
   userId: string | null;
   surface: 'app' | 'marketing';
+  admitModelCall: SupportModelCallGate;
   signal?: AbortSignal;
+}
+
+async function modelCallAdmitted(gate: SupportModelCallGate): Promise<boolean> {
+  try {
+    return await gate();
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      '[support-agent] model call gate failed; refusing the call',
+    );
+    return false;
+  }
 }
 
 export async function callSupportModel(input: SupportModelCallInput): Promise<SupportModelResult> {
@@ -73,7 +99,7 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   const baseRouting: AutoRoutingRequest = {
     selection: 'auto',
     taskType: 'simple_chat',
-    subscriptionTier: input.planTier ?? 'free',
+    subscriptionTier: SUPPORT_ROUTING_TIER,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
   };
@@ -86,11 +112,15 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
     logger.warn({ code: route.code }, '[support-agent] no managed route available');
     return { status: 'unavailable', reason: 'no_route', route: null };
   }
+  if (route.modelKey === getRoutingSlotModel('router_zero_cost')) {
+    logger.warn('[support-agent] only the zero-cost router is available; not answering on it');
+    return { status: 'unavailable', reason: 'no_route', route: null };
+  }
 
   const routeInfo = { provider: route.provider, modelKey: route.modelKey };
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const prompt = resolvePrompt(SUPPORT_SYSTEM_PROMPT_ID);
-  const system = buildSupportSystemPrompt();
+  const system = prompt.text;
   const cacheFields: SemanticCacheKeyFields = {
     callType: 'support-answer',
     tenantId: input.userId ?? 'anonymous',
@@ -135,6 +165,10 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
       usage: cached.entry.usage,
     });
     return { status: 'ok', text: cached.entry.content, route: routeInfo };
+  }
+
+  if (!(await modelCallAdmitted(input.admitModelCall))) {
+    return { status: 'unavailable', reason: 'limit_reached', route: routeInfo };
   }
 
   try {

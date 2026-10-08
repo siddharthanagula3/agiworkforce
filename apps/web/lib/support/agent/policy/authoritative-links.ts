@@ -1,4 +1,3 @@
-
 import { SITE_URL } from '@/lib/seo/site';
 import type { HardAbstainCategory, SupportCitation } from '../types';
 
@@ -82,6 +81,22 @@ export const STATIC_DATA_CITATION_PATHS: readonly string[] = Object.freeze([
   '/providers',
   '/support',
 ]);
+
+const HELP_CENTRE_LINK: AuthoritativeLink = Object.freeze({
+  path: '/help',
+  title: 'Help centre',
+  description: 'Every help article, searchable, with no assistant involved.',
+});
+
+export function helpCentreCitation(): SupportCitation {
+  return {
+    title: HELP_CENTRE_LINK.title,
+    url: `${SITE_URL}${HELP_CENTRE_LINK.path}`,
+    snippet: HELP_CENTRE_LINK.description,
+    docId: 'authoritative:help',
+    chunkId: `authoritative:help:${HELP_CENTRE_LINK.path}`,
+  };
+}
 
 export function authoritativeCitations(category: HardAbstainCategory): SupportCitation[] {
   return AUTHORITATIVE_LINKS[category].map((link) => ({

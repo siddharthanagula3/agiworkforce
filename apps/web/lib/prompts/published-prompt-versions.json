@@ -6,6 +6,7 @@
     "chat.system@3": "sha256:071d8d5f682fe2a404c064843e0fbcf28d7b81280539474cb916c7780882ec68",
     "chat.system@4": "sha256:21384f47a68728de04a4a43fc6215c00ee1415d9b6f7b3aee68fdfe35f95b005",
     "support.system@1": "sha256:65f97f2a7d975c6f1b0bcca82bcde0396f2dcbd5e8a032d34bb1ce3c89b12db5",
+    "support.system@2": "sha256:beba36b85809531949653ae1d1b1ebe8761261f8b028a7180d2e5fe2e2fcabd5",
     "research.system@1": "sha256:42400f39a3b99f51cc283288da94a45a5d6d0b200c0785aacdb15f26f1d91763",
     "voice.live_instructions@1": "sha256:e2383fc0f6236ee64a26be6ca1f8c384bd2e4469918743526e0ae3c0ac61509b",
     "voice.live_backend_instructions@1": "sha256:bdebcf1ebf7e63202bc23ae7ccd57a8ee333b6f25f26916598e23ad7b47eb708",

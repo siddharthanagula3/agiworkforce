@@ -54,6 +54,7 @@ export type {
   SupportAccountFact,
   SupportActionOption,
   SupportHistoryTurn,
+  SupportModelCallGate,
   SupportRoute,
   HardAbstainCategory,
   CorpusChunk,

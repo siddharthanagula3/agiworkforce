@@ -1,13 +1,14 @@
-
+import {
+  SUPPORT_HISTORY_LIMIT,
+  SUPPORT_MAX_HISTORY_TURN_LENGTH,
+  SUPPORT_MAX_QUESTION_LENGTH,
+} from '@agiworkforce/cloud-contracts/support';
 import type { RetrievedChunk, SupportAccountFact, SupportActionOption } from '../types';
 
 const FENCE = '<<<AGI_SUPPORT_DOC>>>';
 const FENCE_END = '<<<AGI_SUPPORT_DOC_END>>>';
 
 const MAX_CHUNK_CHARS = 1200;
-const MAX_HISTORY_TURNS = 6;
-const MAX_HISTORY_CHARS = 600;
-const MAX_QUESTION_CHARS = 2000;
 
 const INVISIBLE_CHARS = new RegExp(
   '[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]',
@@ -92,14 +93,14 @@ export function renderSupportContext(input: RenderContextInput): string {
     );
   }
 
-  const history = input.history.slice(-MAX_HISTORY_TURNS);
+  const history = input.history.slice(-SUPPORT_HISTORY_LIMIT);
   if (history.length > 0) {
     const rendered = history
       .map(
         (turn) =>
           `${turn.role === 'user' ? 'User' : 'Assistant'}: ${truncate(
             sanitizeUntrustedText(turn.content),
-            MAX_HISTORY_CHARS,
+            SUPPORT_MAX_HISTORY_TURN_LENGTH,
           )}`,
       )
       .join('\n');
@@ -107,7 +108,7 @@ export function renderSupportContext(input: RenderContextInput): string {
   }
 
   sections.push(
-    `USER QUESTION:\n${truncate(sanitizeUntrustedText(input.question), MAX_QUESTION_CHARS)}`,
+    `USER QUESTION:\n${truncate(sanitizeUntrustedText(input.question), SUPPORT_MAX_QUESTION_LENGTH)}`,
   );
   sections.push('Respond with the JSON object described in your instructions and nothing else.');
 
