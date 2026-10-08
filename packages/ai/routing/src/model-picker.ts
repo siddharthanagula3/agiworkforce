@@ -17,7 +17,6 @@ import {
   normalizeUIPlanTier,
   type ModelCapabilities,
   type ModelMetadata,
-  type ModelSpeed,
 } from '@agiworkforce/types';
 import { listProfileModelOrder, resolveTierMaximumProfile } from './auto';
 
@@ -154,17 +153,6 @@ export function resolveModelGuidanceKind(modelId: string): ModelPickerGuidanceKi
 
 export function resolveModelGuidance(modelId: string): string {
   return MODEL_PICKER_GUIDANCE[resolveModelGuidanceKind(modelId)];
-}
-
-export const MODEL_PICKER_SPEED_LABEL: Readonly<Partial<Record<ModelSpeed, string>>> = {
-  'very-fast': 'Very fast',
-  fast: 'Fast',
-  slow: 'Slower',
-};
-
-export function resolveModelSpeedLabel(modelId: string): string | null {
-  const speed = getModelMetadataById(modelId)?.speed;
-  return speed ? (MODEL_PICKER_SPEED_LABEL[speed] ?? null) : null;
 }
 
 export type ModelReleaseStage = 'preview' | 'experimental' | 'beta' | 'alpha';

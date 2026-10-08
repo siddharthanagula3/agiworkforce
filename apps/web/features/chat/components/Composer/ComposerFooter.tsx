@@ -105,7 +105,6 @@ import {
   MODEL_PICKER_RELEASE_STAGE_LABEL,
   buildModelPickerShortList,
   resolveModelReleaseStage,
-  resolveModelSpeedLabel,
   resolvePlanLockLabel,
   type ModelPickerAutoRow,
   type ModelPickerCapabilityKey,
@@ -335,12 +334,10 @@ function rowGuidance(
   row: ModelPickerRowModel | undefined,
   degraded: ProviderAvailability | undefined,
   deprecation: { shortLabel: string } | null,
-  speedLabel: string | null,
 ): string {
   if (degraded) return 'Unavailable right now';
   if (deprecation) return `Leaving ${deprecation.shortLabel}`;
-  const guidance = row?.guidance ?? model.provider;
-  return speedLabel ? `${speedLabel} · ${guidance}` : guidance;
+  return row?.guidance ?? model.provider;
 }
 
 function PriceBand({ band }: { band: ModelPickerPriceBand }) {
@@ -607,10 +604,9 @@ function ModelRow({
   const isHardDisabled = isEnvLocked || isComingSoon;
   const marks = capabilityMarks(row?.capabilityKeys ?? []);
   const deprecationWarning = deprecationWarningFor(model);
-  const speedLabel = resolveModelSpeedLabel(model.id);
   const releaseStage = isHardDisabled ? null : resolveModelReleaseStage(model.id, model.name);
   const releaseStageLabel = releaseStage ? MODEL_PICKER_RELEASE_STAGE_LABEL[releaseStage] : null;
-  const guidance = rowGuidance(model, row, degraded, deprecationWarning, speedLabel);
+  const guidance = rowGuidance(model, row, degraded, deprecationWarning);
 
   const handleLockedClick = () => {
     if (isHardDisabled) return;

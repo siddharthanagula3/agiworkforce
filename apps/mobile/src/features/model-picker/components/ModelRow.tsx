@@ -11,7 +11,6 @@ import {
   getModelMetadataById,
   getModelReasoning,
   resolveMaxOutputTokens,
-  type ModelSpeed,
 } from '@agiworkforce/types';
 import { formatContextWindow } from '@/lib/models';
 import {
@@ -22,12 +21,6 @@ import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
-
-const MODEL_SPEED_LABEL: Readonly<Partial<Record<ModelSpeed, string>>> = {
-  'very-fast': 'Very fast',
-  fast: 'Fast',
-  slow: 'Slower',
-};
 
 const INPUT_MODALITY_LABEL = {
   image: 'Images',
@@ -81,7 +74,6 @@ export function ModelRow({
   const outage = useProviderOutage(model.provider, !isLocal && !isLocked);
   const disabled = isDownloading || isUnavailable || outage !== null;
   const metadata = isLocal ? undefined : getModelMetadataById(model.id);
-  const speedLabel = metadata?.speed ? MODEL_SPEED_LABEL[metadata.speed] : undefined;
   const inputModalities: readonly string[] =
     metadata?.inputModalities ?? (metadata?.capabilities.vision ? ['image'] : []);
   const inputBadges = inputModalities.flatMap((modality) =>
@@ -207,21 +199,14 @@ export function ModelRow({
           >
             {model.detailLabel}
           </Text>
-          {!isLocal && (speedLabel || model.contextWindow > 0) ? (
+          {!isLocal && model.contextWindow > 0 ? (
             <Text
               numberOfLines={1}
               style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
             >
-              {[
-                speedLabel,
-                model.contextWindow > 0
-                  ? `${formatContextWindow(model.contextWindow)} context · ${formatContextWindow(
-                      resolveMaxOutputTokens(model.id),
-                    )} output`
-                  : undefined,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              {`${formatContextWindow(model.contextWindow)} context · ${formatContextWindow(
+                resolveMaxOutputTokens(model.id),
+              )} output`}
             </Text>
           ) : null}
           {inputBadges.length > 0 ? (
