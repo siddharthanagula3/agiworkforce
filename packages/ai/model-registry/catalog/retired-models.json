@@ -54,7 +54,11 @@
     "gpt-5.6-luna",
     "gpt-image-2",
     "grok-4.6",
-    "deepseek-v4-flash"
+    "deepseek-v4-flash",
+    "gemini-3.1-flash-image",
+    "gemini-omni-flash-preview",
+    "gemini-3.1-flash-live-preview",
+    "gemini-3.1-flash-tts-preview"
   ],
   "retiredModels": [
     {
@@ -680,8 +684,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 24, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-opus-5-5",
       "metadataSource": "catalog/models.curation.json#claude-opus-5"
     },
@@ -712,8 +716,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "June 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-opus-5-5",
       "metadataSource": "catalog/models.curation.json#claude-opus-4-8"
     },
@@ -744,8 +748,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "June 30, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-sonnet-5-5",
       "metadataSource": "catalog/models.curation.json#claude-sonnet-5"
     },
@@ -776,8 +780,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "October 15, 2025",
+      "retiredOn": "2026-10-07",
       "replacedBy": "claude-haiku-5-5",
       "metadataSource": "catalog/models.curation.json#claude-haiku-4-5"
     },
@@ -808,8 +812,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-6-astra",
       "metadataSource": "catalog/models.curation.json#gpt-5.6-sol"
     },
@@ -840,8 +844,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-6.1-sol",
       "metadataSource": "catalog/models.curation.json#gpt-5.6-terra"
     },
@@ -872,8 +876,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-6-luna",
       "metadataSource": "catalog/models.curation.json#gpt-5.6-luna"
     },
@@ -904,8 +908,8 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "April 21, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "gpt-image-2.5-sunburst",
       "metadataSource": "catalog/models.curation.json#gpt-image-2"
     },
@@ -936,8 +940,8 @@
         "codeExecution": true,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "August 12, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "grok-4.7",
       "metadataSource": "catalog/models.curation.json#grok-4.6"
     },
@@ -968,10 +972,138 @@
         "codeExecution": false,
         "promptCaching": true
       },
-      "released": null,
-      "retiredOn": "2026-10-08",
+      "released": "July 31, 2026",
+      "retiredOn": "2026-10-07",
       "replacedBy": "deepseek-flash",
       "metadataSource": "catalog/models.curation.json#deepseek-v4-flash"
+    },
+    {
+      "id": "gemini-3.1-flash-image",
+      "displayName": "Gemini 3.1 Flash Image",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "image",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": true,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "March 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-nano-banana-2.1",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-image"
+    },
+    {
+      "id": "gemini-omni-flash-preview",
+      "displayName": "Gemini Omni Flash",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "video",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": true,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "June 30, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-omni-1.1-flash",
+      "metadataSource": "catalog/models.curation.json#gemini-omni-flash-preview"
+    },
+    {
+      "id": "gemini-3.1-flash-live-preview",
+      "displayName": "Gemini 3.1 Flash Live",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "multimodal",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": true,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "March 11, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-live",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-live-preview"
+    },
+    {
+      "id": "gemini-3.1-flash-tts-preview",
+      "displayName": "Gemini 3.1 Flash TTS",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "tts",
+      "contextWindow": 8192,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": false,
+        "audioOutput": true,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "April 13, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-flash-tts",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-tts-preview"
     }
   ],
   "grandfatheredWithoutMetadata": [
