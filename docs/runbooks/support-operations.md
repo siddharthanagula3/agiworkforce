@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-27
+Last updated: 2026-10-08
 
 How a support request reaches a person, how it is prioritised, escalated and
 answered, and what support may say. Written for whoever answers support, and
@@ -18,16 +18,18 @@ entitlement from memory: it links the page that carries it.
 
 ## 1. Channels, and whether a person reads them
 
-| Channel                           | Who can use it              | Who reads it                                             | State today                                                                                                                                            |
-| --------------------------------- | --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Help centre and its search        | Anyone                      | Nobody; it answers from the published articles           | Always on; keyword retrieval with no model call                                                                                                        |
-| Email, `contact@agiworkforce.com` | Anyone                      | An owner-designated person, once monitoring is confirmed | The Web v1 published channel; monitoring is an external launch gate                                                                                    |
-| Support assistant                 | Anyone, signed in or not    | Nobody; it answers from the help corpus with citations   | On by default on the website and in the product; `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED=0` hides it and `SUPPORT_AGENT_ENABLED=0` stops automated answers |
-| Live handoff to a person          | Anyone the assistant serves | A platform operator who is online                        | Off unless `AGI_SUPPORT_LIVE_HANDOFF_ENABLED` is truthy; otherwise an email fallback                                                                   |
-| Ticket, in Settings, Help         | Signed-in accounts          | A platform operator, in /operator#support                | Stored; the support inbox is emailed when one is raised; replies show in Settings, Help                                                                |
+| Channel                           | Who can use it              | Who reads it                                             | State today                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------- | --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Help centre and its search        | Anyone                      | Nobody; it answers from the published articles           | Always on; keyword retrieval with no model call                                                                                                                                                                                                                                                                                                                                                  |
+| Email, `contact@agiworkforce.com` | Anyone                      | An owner-designated person, once monitoring is confirmed | The Web v1 published channel; monitoring is an external launch gate                                                                                                                                                                                                                                                                                                                              |
+| Support assistant                 | Anyone, signed in or not    | Nobody; it answers from the help corpus with citations   | On by default; its launcher shows on the help centre and the support page only. It answers questions about the product and refuses anything else, and it stops for the day at the per-visitor, per-account and whole-service ceilings (`support-agent-*` in `apps/web/lib/rate-limit.ts`). `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED=0` hides it and `SUPPORT_AGENT_ENABLED=0` stops automated answers |
+| Live handoff to a person          | Anyone the assistant serves | A platform operator who is online                        | Off unless `AGI_SUPPORT_LIVE_HANDOFF_ENABLED` is truthy; otherwise an email fallback                                                                                                                                                                                                                                                                                                             |
+| Ticket, in Settings, Help         | Signed-in accounts          | A platform operator, in /operator#support                | Stored; the support inbox is emailed when one is raised; replies show in Settings, Help                                                                                                                                                                                                                                                                                                          |
 
 Sources: `apps/web/app/support/page.tsx`,
 `apps/web/features/support/components/SupportWidgetMount.tsx`,
+`apps/web/features/support/lib/route-visibility.ts`,
+`apps/web/lib/support/agent/policy/out-of-scope.ts`,
 `apps/web/lib/support/handoff/config.ts`,
 `apps/web/lib/support/handoff/presence-service.ts`,
 `apps/web/features/settings/sections/HelpSection.tsx`.
