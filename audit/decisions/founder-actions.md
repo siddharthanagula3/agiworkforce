@@ -874,22 +874,22 @@ unset, turn it on or ask for the privacy sentence to be corrected in the same
 policy revision.
 
 Two further items ride on the same read and the same sender. First (L10-D8,
-audit row TC06): read, by name only, whether `AGI_BLOCK_EEA_TRAFFIC` is set in
-the production environment, and say whether it is meant to stay on until an EU
-representative is appointed. The default if you do not answer: the audit work
-cuts only the unprovable "being progressed" clause from the EU representative
-page and publishes nothing about the block; if the flag is on, a reconciled
-statement waits for counsel and a later revision. Second (audit row TC07): once
+audit row TC06): answered on 2026-10-07. `AGI_BLOCK_EEA_TRAFFIC` was set in the
+production environment and production refused the EEA from 2026-10-02. The owner
+decided the EEA is open at the 2026-10-08 launch, and the lead reports removing
+the variable that day, to take effect at the next deploy. No EU or UK
+representative is appointed; `/supported-countries` and
+`/legal/eu-representative` say so, and counsel's ruling on Article 27 stays open
+under the counsel entry below (TC06). Second (audit row TC07): once
 the breach-notice drill section exists in `docs/runbooks/personal-data-breach.md`,
 run the drill with recipients you control and log it. The drill records the
 selected channels, the recipient verification, the approved message, the
 delivery evidence and the escalation. No page may say the procedure was
 exercised until that log exists.
 **Where** Vercel project environment (production), `apps/web/.env.example`.
-**Needed input** Four yes or no answers (the three names above and the
-`AGI_BLOCK_EEA_TRAFFIC` value), and a sender address if one is missing. The
-drill needs your own recipient addresses.
-**How to verify completion** The four names are recorded as set or unset, and a test
+**Needed input** Three yes or no answers (the three names above), and a sender
+address if one is missing. The drill needs your own recipient addresses.
+**How to verify completion** The three names are recorded as set or unset, and a test
 trial reminder arrives with the right amount and cancel link. The drill log is
 dated and names its recipients.
 **What remains after founder action** The Stripe test-mode run that proves reminder timing, amount and cancel link needs your authorisation (audit row TC08 in `audit/prior-audits/public-website-audit-2026-10-03.md`). Counsel wording for the EEA statement is held by the counsel entry below (TC06).
