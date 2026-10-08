@@ -598,6 +598,14 @@ export function refuseUnsupportedFreeQuotaPrompt(): Response {
   return refuse('unsupported_prompt', baseCopyFor(loadFreePools().inventory));
 }
 
+export function refuseFreeQuotaKeptOutConversation(): Response {
+  return policyRefusal(
+    'Promotional free models are not used for chats in Health or chats that include data from your Google account. Choose another model. No model request was sent.',
+    'free_quota_conversation_excluded',
+    403,
+  );
+}
+
 interface TurnProject {
   context: LoadedProjectContext;
   blocks: ProjectContextBlock[];

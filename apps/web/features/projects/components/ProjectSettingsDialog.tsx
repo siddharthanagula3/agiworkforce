@@ -259,6 +259,7 @@ export function ProjectSettingsDialog({
               </Label>
               <Textarea
                 id="ps-description"
+                aria-describedby="ps-description-count"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What is this project for?"
@@ -266,6 +267,10 @@ export function ProjectSettingsDialog({
                 rows={2}
                 className="resize-y rounded-xl bg-muted/40"
               />
+              <p id="ps-description-count" className="text-end text-sm text-muted-foreground">
+                {description.length.toLocaleString()} /{' '}
+                {PROJECT_DESCRIPTION_MAX_LENGTH.toLocaleString()}
+              </p>
             </div>
 
             {/* Instructions */}

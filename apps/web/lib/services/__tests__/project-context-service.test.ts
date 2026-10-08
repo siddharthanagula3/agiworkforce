@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PROJECT_INSTRUCTIONS_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import {
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_INSTRUCTIONS_MAX_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 import {
   fitProjectContextBlocks,
   formatProjectSystemPrompt,
@@ -239,6 +242,13 @@ describe('formatProjectSystemPrompt', () => {
     const instructions = 'x'.repeat(PROJECT_INSTRUCTIONS_MAX_LENGTH);
     const prompt = formatProjectSystemPrompt(makeContext({ instructions }));
     expect(prompt).toContain(instructions);
+    expect(prompt).not.toContain('…');
+  });
+
+  it('carries a description as long as the project editor accepts', () => {
+    const description = 'd'.repeat(PROJECT_DESCRIPTION_MAX_LENGTH);
+    const prompt = formatProjectSystemPrompt(makeContext({ description }));
+    expect(prompt).toContain(`Project description: ${description}`);
     expect(prompt).not.toContain('…');
   });
 

@@ -7,7 +7,12 @@ import { assertAccountActive } from '@/lib/api-auth';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { refuseUnsupportedFreeQuotaPrompt, serveFreeQuotaTurn } from '@/lib/server/free-quota-turn';
+import {
+  refuseFreeQuotaKeptOutConversation,
+  refuseUnsupportedFreeQuotaPrompt,
+  serveFreeQuotaTurn,
+} from '@/lib/server/free-quota-turn';
+import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -21,6 +26,9 @@ async function handlePost(request: NextRequest): Promise<Response> {
   if (limit) return limit;
   const parsed = FreeOfferingRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return refuseUnsupportedFreeQuotaPrompt();
+  if (await conversationKeepsOutOfTraining(scoped.db, scoped.userId, parsed.data.conversation_id)) {
+    return refuseFreeQuotaKeptOutConversation();
+  }
   return serveFreeQuotaTurn(request, scoped, parsed.data);
 }
 
