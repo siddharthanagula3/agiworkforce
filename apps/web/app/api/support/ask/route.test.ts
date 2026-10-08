@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
+  checkRateLimit: vi.fn(),
   resolveIdentity: vi.fn(),
   answer: vi.fn(),
   enabled: vi.fn(),
@@ -25,7 +26,11 @@ vi.mock('@/lib/csrf', async (importOriginal) => ({
   ...(await importOriginal()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: mocks.withRateLimit,
+  checkRateLimit: mocks.checkRateLimit,
+  clientIpRateLimitIdentifier: () => 'ip:203.0.113.7',
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getCurrentUserRlsDb: async () => ({ db: mocks.scopedDb, userId: 'user-1' }),
 }));
@@ -49,6 +54,8 @@ vi.mock('@/lib/security/bot-challenge', () => ({
 const { createError } = await import('@/lib/errors');
 const { BOT_CHALLENGED_ENDPOINTS } = await import('@/lib/security/bot-challenge-routes');
 const { POST } = await import('./route');
+const { SUPPORT_HISTORY_LIMIT, SUPPORT_MAX_HISTORY_TURN_LENGTH, SUPPORT_MAX_QUESTION_LENGTH } =
+  await import('@agiworkforce/cloud-contracts/support');
 
 const ANSWER = {
   kind: 'answer' as const,
@@ -92,6 +99,7 @@ describe('POST /api/support/ask', () => {
     vi.clearAllMocks();
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
+    mocks.checkRateLimit.mockResolvedValue({ success: true, limit: 1 });
     mocks.resolveIdentity.mockResolvedValue({ userId: 'user-1', ownerSessionKey: 'user-1' });
     mocks.enabled.mockReturnValue(true);
     mocks.answer.mockResolvedValue(ANSWER);
@@ -180,7 +188,10 @@ describe('POST /api/support/ask', () => {
 
   it('rejects an empty or oversized question instead of calling the model', async () => {
     expect((await POST(post({ ...QUESTION, message: '   ' }))).status).toBe(400);
-    expect((await POST(post({ ...QUESTION, message: 'x'.repeat(2001) }))).status).toBe(400);
+    expect(
+      (await POST(post({ ...QUESTION, message: 'x'.repeat(SUPPORT_MAX_QUESTION_LENGTH + 1) })))
+        .status,
+    ).toBe(400);
     expect((await POST(post({ ...QUESTION, surface: 'desktop' }))).status).toBe(400);
     expect(mocks.answer).not.toHaveBeenCalled();
   });
@@ -192,5 +203,103 @@ describe('POST /api/support/ask', () => {
 
     expect(response.status).toBe(429);
     expect(mocks.answer).not.toHaveBeenCalled();
+  });
+
+  it('accepts a question at the length cap and refuses a pasted program above it', async () => {
+    const atCap = await POST(
+      post({ ...QUESTION, message: 'x'.repeat(SUPPORT_MAX_QUESTION_LENGTH) }),
+    );
+    expect(atCap.status).toBe(200);
+    expect(SUPPORT_MAX_QUESTION_LENGTH).toBeLessThanOrEqual(600);
+  });
+
+  it('refuses history the engine could never use, before any work is done', async () => {
+    const turn = { role: 'user', content: 'earlier question' };
+    const tooManyTurns = Array.from({ length: SUPPORT_HISTORY_LIMIT + 1 }, () => turn);
+    const oversizedTurn = [
+      { role: 'assistant', content: 'x'.repeat(SUPPORT_MAX_HISTORY_TURN_LENGTH + 1) },
+    ];
+
+    expect((await POST(post({ ...QUESTION, history: tooManyTurns }))).status).toBe(400);
+    expect((await POST(post({ ...QUESTION, history: oversizedTurn }))).status).toBe(400);
+    expect(mocks.answer).not.toHaveBeenCalled();
+
+    const atLimit = Array.from({ length: SUPPORT_HISTORY_LIMIT }, () => ({
+      role: 'user',
+      content: 'x'.repeat(SUPPORT_MAX_HISTORY_TURN_LENGTH),
+    }));
+    expect((await POST(post({ ...QUESTION, history: atLimit }))).status).toBe(200);
+  });
+
+  it('spends no daily budget until the engine is about to call a model', async () => {
+    await POST(post(QUESTION));
+
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+    const [input] = mocks.answer.mock.calls[0]!;
+    expect(typeof input.admitModelCall).toBe('function');
+  });
+
+  it('charges a signed-in model call to the account and then to the deployment', async () => {
+    await POST(post(QUESTION));
+    const [input] = mocks.answer.mock.calls[0]!;
+
+    await expect(input.admitModelCall()).resolves.toBe(true);
+
+    expect(mocks.checkRateLimit.mock.calls.map((call) => [call[1], call[2]])).toEqual([
+      ['support-agent-user-day', 'user:user-1'],
+      ['support-agent-global-day', 'deployment'],
+    ]);
+  });
+
+  it('charges a signed-out model call to the caller address, never to a shared bucket', async () => {
+    mocks.resolveIdentity.mockResolvedValue({ userId: null, ownerSessionKey: 'anon-1' });
+    await POST(post({ ...QUESTION, surface: 'marketing' }));
+    const [input] = mocks.answer.mock.calls[0]!;
+
+    await expect(input.admitModelCall()).resolves.toBe(true);
+
+    expect(mocks.checkRateLimit.mock.calls.map((call) => [call[1], call[2]])).toEqual([
+      ['support-agent-anon-day', 'ip:203.0.113.7'],
+      ['support-agent-global-day', 'deployment'],
+    ]);
+  });
+
+  it('refuses the model call at the asker daily ceiling without touching the deployment budget', async () => {
+    mocks.checkRateLimit.mockResolvedValue({ success: false, limit: 100 });
+    await POST(post(QUESTION));
+    const [input] = mocks.answer.mock.calls[0]!;
+
+    await expect(input.admitModelCall()).resolves.toBe(false);
+
+    expect(mocks.checkRateLimit).toHaveBeenCalledTimes(1);
+    expect(mocks.checkRateLimit.mock.calls[0]![1]).toBe('support-agent-user-day');
+  });
+
+  it('refuses the model call when the whole deployment has spent its daily ceiling', async () => {
+    mocks.checkRateLimit.mockImplementation(async (_request: unknown, key: string) => ({
+      success: key !== 'support-agent-global-day',
+      limit: 3000,
+    }));
+    await POST(post(QUESTION));
+    const [input] = mocks.answer.mock.calls[0]!;
+
+    await expect(input.admitModelCall()).resolves.toBe(false);
+  });
+
+  it('returns a daily-ceiling refusal as an ordinary answer body, not as a 429', async () => {
+    const limited = {
+      kind: 'abstention' as const,
+      reason: 'model_unavailable',
+      text: 'The assistant has reached its limit for now.',
+      authoritativeLinks: [],
+      handoffOffered: true,
+      route: null,
+    };
+    mocks.answer.mockResolvedValue(limited);
+
+    const response = await POST(post(QUESTION));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(limited);
   });
 });

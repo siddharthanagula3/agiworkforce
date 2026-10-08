@@ -1,4 +1,3 @@
-
 import { vi, type Mock } from 'vitest';
 
 export const SELECTED_ROUTE = {
@@ -22,6 +21,13 @@ interface ModelMocks {
   drainToLlmResponse: Mock;
   streamedRequests: unknown[];
 }
+
+export const admitEveryModelCall = async (): Promise<boolean> => true;
+
+export const BYOK_QUESTION = 'how do I add my anthropic api key';
+
+export const BYOK_GROUNDED_ANSWER =
+  'CLI Managed Cloud requests need an AGI account token rather than a saved provider API key.';
 
 export const modelMocks: ModelMocks = {
   resolveAutoRoute: vi.fn(),
@@ -63,8 +69,7 @@ export function armModelMocks(): void {
 
 export function lastUserPrompt(): string {
   const request = modelMocks.streamedRequests.at(-1) as
-    | { messages?: { role?: string; content?: unknown }[] }
-    | undefined;
+    { messages?: { role?: string; content?: unknown }[] } | undefined;
   const message = request?.messages?.find((entry) => entry.role === 'user');
   const content = message?.content;
   return typeof content === 'string' ? content : JSON.stringify(content ?? '');

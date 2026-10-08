@@ -18,7 +18,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async () => {
   return { drainToLlmResponse: modelMocks.drainToLlmResponse };
 });
 
-import { armModelMocks, modelMocks } from './fixtures/model-mocks';
+import { admitEveryModelCall, armModelMocks, modelMocks } from './fixtures/model-mocks';
 import { answerSupportQuestion } from '../answer/synthesize';
 import { retrieveSupportChunks } from '../retrieval/retrieve';
 import type { SupportAnswerInput } from '../types';
@@ -28,6 +28,7 @@ function ask(question: string): SupportAnswerInput {
     question,
     surface: 'marketing',
     viewer: { isSignedIn: false, userId: null, planTier: null },
+    admitModelCall: admitEveryModelCall,
   };
 }
 

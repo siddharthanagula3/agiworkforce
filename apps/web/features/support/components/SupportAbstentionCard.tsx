@@ -33,7 +33,7 @@ export function SupportAbstentionCard({
 
       <SupportCitationList citations={abstention.citations} label="Where to look" />
 
-      {onEscalate ? (
+      {onEscalate && abstention.escalationOffered ? (
         <div className={styles['cardActions']}>
           <button
             type="button"

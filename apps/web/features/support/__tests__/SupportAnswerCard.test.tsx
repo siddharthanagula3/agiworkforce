@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SupportAbstentionCard } from '../components/SupportAbstentionCard';
 import { SupportAnswerCard } from '../components/SupportAnswerCard';
-import { normalizeAnswer } from '../lib/normalize-answer';
+import {
+  ABSTENTION_FALLBACK_TEXT,
+  ABSTENTION_HEADING,
+  makeAbstention,
+  normalizeAnswer,
+} from '../lib/normalize-answer';
 import { renderSupportText } from '../lib/render-text';
-import type {
-  SupportAbstentionView,
-  SupportAnswerView,
+import {
+  SUPPORT_ABSTENTION_REASONS,
+  type SupportAbstentionView,
+  type SupportAnswerView,
 } from '@agiworkforce/cloud-contracts/support';
 
 const RAW_ANSWER = {
@@ -88,6 +94,29 @@ describe('the SAME payload without citations renders as an abstention', () => {
     };
     render(<SupportAbstentionCard abstention={abstention} onEscalate={() => undefined} />);
     expect(screen.getByRole('button', { name: /send this to a person/i })).toBeInTheDocument();
+  });
+
+  it('shows an out-of-scope refusal with no way to send it to a person', () => {
+    const { container } = render(
+      <SupportAbstentionCard
+        abstention={makeAbstention('out_of_scope', { text: 'I can only help with AGI Workforce.' })}
+        onEscalate={() => undefined}
+      />,
+    );
+
+    expect(
+      container.querySelector('[data-support-abstention-reason="out_of_scope"]'),
+    ).not.toBeNull();
+    expect(screen.getByText('Not something I can help with here')).toBeInTheDocument();
+    expect(screen.getByText('I can only help with AGI Workforce.')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('has a heading and fallback copy for every abstention reason', () => {
+    for (const reason of SUPPORT_ABSTENTION_REASONS) {
+      expect(ABSTENTION_HEADING[reason].length).toBeGreaterThan(0);
+      expect(ABSTENTION_FALLBACK_TEXT[reason].length).toBeGreaterThan(0);
+    }
   });
 });
 

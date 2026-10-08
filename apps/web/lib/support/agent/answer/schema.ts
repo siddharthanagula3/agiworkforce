@@ -1,9 +1,19 @@
-
 import { z } from 'zod';
+
+export const MAX_ANSWER_WORDS = 120;
+
+const MAX_CHARS_PER_ANSWER_WORD = 8;
+
+export const MAX_ANSWER_CHARS = MAX_ANSWER_WORDS * MAX_CHARS_PER_ANSWER_WORD;
+
+const CODE_FENCE = /```|~~~/;
 
 export const modelAnswerSchema = z
   .object({
-    answer: z.string().max(4000),
+    answer: z
+      .string()
+      .max(MAX_ANSWER_CHARS)
+      .refine((value) => !CODE_FENCE.test(value)),
     citedChunkIds: z.array(z.string().max(200)).max(12).default([]),
     abstain: z.boolean().default(false),
     abstainReason: z.string().max(200).default(''),

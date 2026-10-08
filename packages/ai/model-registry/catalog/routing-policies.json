@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 19,
+    "policyVersion": 20,
     "records": [
       {
         "version": 1,
@@ -178,6 +178,14 @@
         "channel": "internal",
         "effectiveOn": "2026-09-28",
         "reason": "adds the connectors option to window.agi.complete, which lets a published artifact read and change data in the viewer's own connected apps after the viewer approves them; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 20,
+        "artifact": "prompt",
+        "id": "support.system@2",
+        "channel": "internal",
+        "effectiveOn": "2026-10-07",
+        "reason": "adds scope rules to the support prompt: answer only questions about using the product, and decline code, prose to order, translation, rewriting, homework and role-play with abstainReason out_of_scope; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
       }
     ]
   },

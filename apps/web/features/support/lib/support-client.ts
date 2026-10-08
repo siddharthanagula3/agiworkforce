@@ -7,6 +7,7 @@ import {
 import { collectDiagnostics } from '@/lib/support/diagnostics/collect';
 import {
   SUPPORT_HISTORY_LIMIT,
+  SUPPORT_MAX_HISTORY_TURN_LENGTH,
   UNAVAILABLE_PRESENCE,
   type SupportAccountContextView,
   type SupportAccountFact,
@@ -73,7 +74,10 @@ function buildHistory(turns: SupportTurn[]): { role: 'user' | 'assistant'; conte
       history.push({ role: 'assistant', content: turn.reply.text });
     }
   }
-  return history.slice(-SUPPORT_HISTORY_LIMIT);
+  return history.slice(-SUPPORT_HISTORY_LIMIT).map((turn) => ({
+    role: turn.role,
+    content: turn.content.slice(0, SUPPORT_MAX_HISTORY_TURN_LENGTH),
+  }));
 }
 
 export async function askSupport(input: AskSupportInput): Promise<SupportReplyView> {

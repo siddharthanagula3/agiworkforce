@@ -645,8 +645,8 @@
         "completion": 1.05
       },
       "defaultPricing": {
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2
       },
       "modelPrefixes": ["deepseek"],
       "aliases": [],

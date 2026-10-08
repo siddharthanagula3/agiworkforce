@@ -802,6 +802,21 @@ export const rateLimitConfigs = {
     window: '1 h', // Authenticated in-app widget.
     failClosed: true,
   },
+  'support-agent-anon-day': {
+    limit: 25,
+    window: '1 d', // IP-bucketed. Counts model calls only, not refusals or cache hits.
+    failClosed: true,
+  },
+  'support-agent-user-day': {
+    limit: 100,
+    window: '1 d', // Per account. Counts model calls only.
+    failClosed: true,
+  },
+  'support-agent-global-day': {
+    limit: 3000,
+    window: '1 d', // One bucket for the deployment: the ceiling on support model spend.
+    failClosed: true,
+  },
   'support-tickets-read': {
     limit: 120,
     window: '1 h',

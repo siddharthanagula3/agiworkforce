@@ -2,7 +2,10 @@ import { MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT } from '@agiworkforce/agent-core';
 
 import { PRODUCT_NAME } from '@/lib/legal-constants';
 import { ROUTING_FLAG_KEYS } from '@/lib/feature-flags/routing-flags';
-import { SUPPORT_SYSTEM_PROMPT } from '@/lib/support/agent/prompt/system-prompt';
+import {
+  SUPPORT_SYSTEM_PROMPT,
+  SUPPORT_SYSTEM_PROMPT_V2,
+} from '@/lib/support/agent/prompt/system-prompt';
 
 import {
   CHAT_SYSTEM_PROMPT_MANIFEST_VERSIONS,
@@ -179,7 +182,10 @@ export const PROMPT_MANIFEST = {
   'support.system': {
     kind: 'support',
     pinnedVersion: 1,
-    versions: [{ version: 1, text: SUPPORT_SYSTEM_PROMPT }],
+    versions: [
+      { version: 1, text: SUPPORT_SYSTEM_PROMPT },
+      { version: 2, text: SUPPORT_SYSTEM_PROMPT_V2 },
+    ],
   },
   'research.system': {
     kind: 'research',

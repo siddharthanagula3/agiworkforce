@@ -75,7 +75,7 @@ describe('support agent COGS recording', () => {
   it('records a zero-charge COGS event for a signed-in caller', async () => {
     const result = await callSupportModel({
       userMessage: 'how do I reset my password',
-      planTier: 'pro',
+      admitModelCall: async () => true,
       userId: 'user_42',
       surface: 'app',
     });
@@ -98,7 +98,7 @@ describe('support agent COGS recording', () => {
   it('records a zero-charge COGS event for an anonymous caller', async () => {
     await callSupportModel({
       userMessage: 'what plans do you offer',
-      planTier: null,
+      admitModelCall: async () => true,
       userId: null,
       surface: 'marketing',
     });
@@ -120,7 +120,7 @@ describe('support agent COGS recording', () => {
 
     const result = await callSupportModel({
       userMessage: 'hello',
-      planTier: null,
+      admitModelCall: async () => true,
       userId: 'user_1',
       surface: 'app',
     });
@@ -134,7 +134,7 @@ describe('support agent COGS recording', () => {
 
     const result = await callSupportModel({
       userMessage: 'hello',
-      planTier: null,
+      admitModelCall: async () => true,
       userId: 'user_1',
       surface: 'app',
     });

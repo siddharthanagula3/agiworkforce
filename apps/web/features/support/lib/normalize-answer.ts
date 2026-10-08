@@ -103,7 +103,9 @@ function normalizeReason(raw: unknown): SupportAbstentionReason {
 
 export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> = {
   no_relevant_source:
-    'I could not find anything in the documentation that answers this, so I am not going to guess.',
+    'I only answer questions about AGI Workforce from the help articles, and I could not find anything there for this one.',
+  out_of_scope:
+    'I can only help with AGI Workforce: your account, plans, features, and fixing problems with the product.',
   hard_abstain_billing:
     'I do not answer billing questions, charges, refunds and invoices are handled by a person, not by me.',
   hard_abstain_data_deletion:
@@ -126,6 +128,7 @@ export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> =
 
 export const ABSTENTION_HEADING: Record<SupportAbstentionReason, string> = {
   no_relevant_source: "I don't have a source for this",
+  out_of_scope: 'Not something I can help with here',
   hard_abstain_billing: 'Billing, a person handles this',
   hard_abstain_data_deletion: 'Data deletion, a person handles this',
   hard_abstain_security: 'Security, a person handles this',
@@ -140,9 +143,15 @@ export const ABSTENTION_HEADING: Record<SupportAbstentionReason, string> = {
   not_available: 'Assistant unavailable',
 };
 
+const REASONS_WITHOUT_ESCALATION: ReadonlySet<SupportAbstentionReason> = new Set(['out_of_scope']);
+
 export function makeAbstention(
   reason: SupportAbstentionReason,
-  options: { text?: string | null; citations?: SupportCitation[] } = {},
+  options: {
+    text?: string | null;
+    citations?: SupportCitation[];
+    escalationWithheld?: boolean;
+  } = {},
 ): SupportAbstentionView {
   const text = firstString(options.text) ?? ABSTENTION_FALLBACK_TEXT[reason];
   return {
@@ -150,7 +159,8 @@ export function makeAbstention(
     reason,
     text,
     citations: options.citations ?? [],
-    escalationOffered: true,
+    escalationOffered:
+      options.escalationWithheld !== true && !REASONS_WITHOUT_ESCALATION.has(reason),
   };
 }
 
@@ -181,6 +191,7 @@ export function normalizeAnswer(raw: unknown): SupportReplyView {
     return makeAbstention(normalizeReason(raw['reason']), {
       text: typeof raw['text'] === 'string' ? raw['text'] : null,
       citations: deduped,
+      escalationWithheld: raw['handoffOffered'] === false,
     });
   }
 

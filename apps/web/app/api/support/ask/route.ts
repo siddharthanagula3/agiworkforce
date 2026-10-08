@@ -6,7 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { withRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, clientIpRateLimitIdentifier, withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
 import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
@@ -21,6 +21,7 @@ import {
   isSupportAgentEnabled,
   type SupportAccountFact,
   type SupportActionOption,
+  type SupportModelCallGate,
 } from '@/lib/support/agent';
 import { resolveHandoffIdentity } from '@/lib/support/handoff/request-identity';
 import { SupportAskRequestSchema } from '@agiworkforce/cloud-contracts/support';
@@ -54,6 +55,38 @@ async function resolveAccountSignals(db: DatabaseAdapter, userId: string): Promi
     );
     return ANONYMOUS_SIGNALS;
   }
+}
+
+const GLOBAL_MODEL_CALL_BUCKET = 'deployment';
+
+function modelCallGate(request: NextRequest, userId: string | null): SupportModelCallGate {
+  return async () => {
+    const asker = userId
+      ? await checkRateLimit(request, 'support-agent-user-day', `user:${userId}`)
+      : await checkRateLimit(
+          request,
+          'support-agent-anon-day',
+          clientIpRateLimitIdentifier(request),
+        );
+    if (!asker.success) {
+      logger.warn({ signedIn: userId !== null }, '[support-agent] asker reached the daily ceiling');
+      return false;
+    }
+
+    const deployment = await checkRateLimit(
+      request,
+      'support-agent-global-day',
+      GLOBAL_MODEL_CALL_BUCKET,
+    );
+    if (!deployment.success) {
+      logger.error(
+        { limit: deployment.limit },
+        '[support-agent] deployment reached the daily model-call ceiling',
+      );
+      return false;
+    }
+    return true;
+  };
 }
 
 async function handleAsk(request: NextRequest) {
@@ -99,6 +132,7 @@ async function handleAsk(request: NextRequest) {
     },
     accountFacts: signals.accountFacts,
     availableActions: signals.availableActions,
+    admitModelCall: modelCallGate(request, identity.userId),
     signal: request.signal,
   });
 

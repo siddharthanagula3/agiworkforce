@@ -144,3 +144,60 @@ describe('makeAbstention', () => {
     expect(result.text.length).toBeGreaterThan(0);
   });
 });
+
+describe('an out-of-scope refusal offers no person', () => {
+  it('keeps the reason and the server copy, and withholds escalation', () => {
+    const result = normalizeAnswer({
+      kind: 'abstention',
+      reason: 'out_of_scope',
+      text: 'I can only help with AGI Workforce.',
+      authoritativeLinks: [],
+      handoffOffered: false,
+    });
+    if (result.kind !== 'abstention') throw new Error('expected an abstention');
+    expect(result.reason).toBe('out_of_scope');
+    expect(result.text).toBe('I can only help with AGI Workforce.');
+    expect(result.escalationOffered).toBe(false);
+  });
+
+  it('withholds escalation for the reason even when a response claims a handoff', () => {
+    const result = normalizeAnswer({
+      kind: 'abstention',
+      reason: 'out_of_scope',
+      text: 'x',
+      handoffOffered: true,
+    });
+    if (result.kind !== 'abstention') throw new Error('expected an abstention');
+    expect(result.escalationOffered).toBe(false);
+    expect(makeAbstention('out_of_scope').escalationOffered).toBe(false);
+    expect(makeAbstention('out_of_scope').text.length).toBeGreaterThan(0);
+  });
+
+  it('honours a server that withholds the handoff on any other reason', () => {
+    const result = normalizeAnswer({
+      kind: 'abstention',
+      reason: 'no_relevant_source',
+      text: 'x',
+      handoffOffered: false,
+    });
+    if (result.kind !== 'abstention') throw new Error('expected an abstention');
+    expect(result.escalationOffered).toBe(false);
+  });
+
+  it('keeps the handoff and the help-centre link on a daily-ceiling refusal', () => {
+    const result = normalizeAnswer({
+      kind: 'abstention',
+      reason: 'model_unavailable',
+      text: 'The assistant has reached its limit for now.',
+      authoritativeLinks: [{ title: 'Help centre', url: 'https://agiworkforce.com/help' }],
+      handoffOffered: true,
+    });
+    if (result.kind !== 'abstention') throw new Error('expected an abstention');
+    expect(result.reason).toBe('model_unavailable');
+    expect(result.text).toBe('The assistant has reached its limit for now.');
+    expect(result.citations.map((citation) => citation.url)).toEqual([
+      'https://agiworkforce.com/help',
+    ]);
+    expect(result.escalationOffered).toBe(true);
+  });
+});

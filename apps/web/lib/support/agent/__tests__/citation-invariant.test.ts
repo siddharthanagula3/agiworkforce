@@ -24,7 +24,10 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async () => {
 
 import { SITE_URL } from '@/lib/seo/site';
 import {
+  admitEveryModelCall,
   armModelMocks,
+  BYOK_GROUNDED_ANSWER,
+  BYOK_QUESTION,
   modelMocks,
   queueModelJson,
   queueModelRawText,
@@ -34,13 +37,14 @@ import { retrieveSupportChunks } from '../retrieval/retrieve';
 import { extractJsonObject, parseModelAnswer } from '../answer/schema';
 import type { SupportAnswerInput } from '../types';
 
-const QUESTION = 'how do I add my anthropic api key';
+const QUESTION = BYOK_QUESTION;
 
 function ask(overrides: Partial<SupportAnswerInput> = {}): SupportAnswerInput {
   return {
     question: QUESTION,
     surface: 'app',
     viewer: { isSignedIn: true, userId: 'user_1', planTier: 'free' },
+    admitModelCall: admitEveryModelCall,
     ...overrides,
   };
 }
@@ -59,7 +63,7 @@ describe('citation invariant', () => {
   it('POSITIVE CONTROL: a grounded answer reaches the provider and returns real citations', async () => {
     const chunkId = topChunkId();
     queueModelJson({
-      answer: 'Open Settings, then Providers, and paste your Anthropic key.',
+      answer: BYOK_GROUNDED_ANSWER,
       citedChunkIds: [chunkId],
       abstain: false,
       abstainReason: '',
@@ -97,7 +101,7 @@ describe('citation invariant', () => {
 
   it('drops chunk ids that were not in this turn’s retrieved set', async () => {
     queueModelJson({
-      answer: 'Open Settings, then Providers.',
+      answer: BYOK_GROUNDED_ANSWER,
       citedChunkIds: ['not-a-real-chunk', topChunkId(), 'also-fake#9'],
       abstain: false,
       abstainReason: '',
@@ -114,7 +118,7 @@ describe('citation invariant', () => {
   it('de-duplicates a repeated chunk id', async () => {
     const chunkId = topChunkId();
     queueModelJson({
-      answer: 'Open Settings, then Providers.',
+      answer: BYOK_GROUNDED_ANSWER,
       citedChunkIds: [chunkId, chunkId, chunkId],
       abstain: false,
       abstainReason: '',
@@ -160,7 +164,7 @@ describe('citation invariant', () => {
   it('only echoes a proposed action id that the caller actually offered', async () => {
     const chunkId = topChunkId();
     queueModelJson({
-      answer: 'Open Settings, then Providers.',
+      answer: BYOK_GROUNDED_ANSWER,
       citedChunkIds: [chunkId],
       abstain: false,
       abstainReason: '',
@@ -175,7 +179,7 @@ describe('citation invariant', () => {
     expect(refused.proposedActionId).toBeNull();
 
     queueModelJson({
-      answer: 'Open Settings, then Providers.',
+      answer: BYOK_GROUNDED_ANSWER,
       citedChunkIds: [chunkId],
       abstain: false,
       abstainReason: '',

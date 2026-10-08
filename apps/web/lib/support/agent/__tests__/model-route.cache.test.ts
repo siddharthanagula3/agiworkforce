@@ -34,6 +34,7 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
   return { ...actual, resolveAutoRoute: () => SELECTED_ROUTE };
 });
 
+const streamedRequests: unknown[] = [];
 const drainToLlmResponseMock = vi.fn();
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: (...args: unknown[]) => drainToLlmResponseMock(...args),
@@ -41,7 +42,12 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   listAvailableManagedProviderIds: vi.fn(() => new Set<string>()),
-  buildServerProviderAdapter: () => ({ stream: () => (async function* () {})() }),
+  buildServerProviderAdapter: () => ({
+    stream: (request: unknown) => {
+      streamedRequests.push(request);
+      return (async function* () {})();
+    },
+  }),
   buildProtocolRouteAdapter: vi.fn(),
   toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
 }));
@@ -64,12 +70,14 @@ vi.mock('@/lib/server/key-value', () => ({
 }));
 
 import { callSupportModel } from '../answer/model-route';
+import { MAX_ANSWER_CHARS } from '../answer/schema';
 
 const originalEnabled = process.env['SUPPORT_AGENT_ENABLED'];
 
 beforeEach(() => {
   vi.clearAllMocks();
   store.clear();
+  streamedRequests.length = 0;
   process.env['SUPPORT_AGENT_ENABLED'] = 'true';
   drainToLlmResponseMock.mockResolvedValue({
     model: 'test.model',
@@ -88,7 +96,7 @@ afterEach(() => {
 
 const ASK = {
   userMessage: 'how do I reset my password',
-  planTier: 'pro',
+  admitModelCall: async () => true,
   userId: 'user_42',
   surface: 'app',
 } as const;
@@ -137,5 +145,40 @@ describe('support answers and the semantic cache', () => {
     await callSupportModel({ ...ASK });
     expect(drainToLlmResponseMock).toHaveBeenCalledTimes(2);
     expect(recordCacheHitCostEventMock).not.toHaveBeenCalled();
+  });
+
+  it('spends no model-call budget on a repeat served from cache', async () => {
+    const admitModelCall = vi.fn(async () => true);
+
+    await callSupportModel({ ...ASK, admitModelCall });
+    await callSupportModel({ ...ASK, admitModelCall });
+
+    expect(drainToLlmResponseMock).toHaveBeenCalledTimes(1);
+    expect(admitModelCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('caches nothing when the model call is refused at the ceiling', async () => {
+    const refused = await callSupportModel({ ...ASK, admitModelCall: async () => false });
+    expect(refused).toEqual({
+      status: 'unavailable',
+      reason: 'limit_reached',
+      route: { provider: 'anthropic', modelKey: 'test.model' },
+    });
+    expect(drainToLlmResponseMock).not.toHaveBeenCalled();
+    expect(store.size).toBe(0);
+
+    const admitted = await callSupportModel({ ...ASK });
+    expect(admitted.status).toBe('ok');
+    expect(drainToLlmResponseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends a bounded output budget sized for one short JSON answer', async () => {
+    await callSupportModel({ ...ASK });
+
+    expect(streamedRequests).toHaveLength(1);
+    const request = streamedRequests[0] as { maxOutputTokens?: number; temperature?: number };
+    expect(request.maxOutputTokens).toBeGreaterThanOrEqual(MAX_ANSWER_CHARS / 4);
+    expect(request.maxOutputTokens).toBeLessThanOrEqual(400);
+    expect(request.temperature).toBe(0);
   });
 });
