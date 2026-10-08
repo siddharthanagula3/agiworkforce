@@ -261,7 +261,9 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
 
     expect(response.status).toBe(503);
     const body = await response.json();
-    expect(body.error.message).toBe("Couldn't reach Google Drive. Try again.");
+    expect(body.error.message).toBe(
+      "Couldn't reach Google Drive just now. It is still connected, so try again in a moment.",
+    );
     expect(body.error.code).not.toBe('google_drive_reconnect_required');
     expect(mocks.downloadGoogleDriveFile).not.toHaveBeenCalled();
   });
