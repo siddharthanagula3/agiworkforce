@@ -122,7 +122,12 @@
       "asOf": null,
       "digest": "bd6b01713fa00c15",
       "implementation": ["docs/security/security.md", "docs/security/security-claims.json"],
-      "proof": [{ "kind": "guard", "file": "scripts/check-security-claims.mjs" }]
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-security-claims.mjs"
+        }
+      ]
     },
     {
       "page": "apps/web/app/trust/page.tsx",
@@ -329,7 +334,10 @@
       "scope": "Managed Cloud and the hosted web service",
       "implementation": ["apps/web/app/subprocessors/page.tsx"],
       "proof": [
-        { "kind": "guard", "file": "scripts/check-subprocessor-coverage.mjs" },
+        {
+          "kind": "guard",
+          "file": "scripts/check-subprocessor-coverage.mjs"
+        },
         {
           "kind": "test",
           "file": "apps/web/app/subprocessors/page.test.tsx",
@@ -454,17 +462,18 @@
       "ledger": "COMPLIANCE",
       "label": "DPDP (India): verifiable parental consent under s.9",
       "owner": "Founder",
-      "reviewedOn": "2026-09-21",
-      "asOf": "2026-08-14",
-      "digest": "71f51a46ef36feae",
+      "reviewedOn": "2026-10-07",
+      "asOf": "2026-10-07",
+      "digest": "9e72d70648bbc7f4",
       "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
       "scope": "The web surface and the mobile apps",
       "implementation": [
         "apps/mobile/src/features/auth/services/ageGate.ts#confirmAgeGate",
-        "apps/mobile/services/dsarExport.ts#storage.clearAll"
+        "apps/mobile/services/dsarExport.ts#storage.clearAll",
+        "packages/contracts/types/src/account-eligibility.ts#evaluateAccountAge"
       ],
       "proof": [],
-      "reason": "Clearable by the child through the in-app wipe of all local data, which empties the store the age record lives in; no test pins that path, and the web's lack of any age gate is an absence no test enumerates."
+      "reason": "Clearable by the child through the in-app wipe of all local data, which empties the store the age record lives in; no test pins that path. The web sign-up age field accepts whatever is typed and verifies neither the age nor a parent's permission, an absence no test enumerates."
     },
     {
       "page": "apps/web/app/trust/page.tsx",
@@ -513,9 +522,9 @@
       "ledger": "POSTURE",
       "label": "Local mode isolation",
       "owner": "Platform lead",
-      "reviewedOn": "2026-09-21",
+      "reviewedOn": "2026-10-07",
       "asOf": "2026-09-19",
-      "digest": "43ed742b7ba046bc",
+      "digest": "ec261c97542e25fe",
       "implementation": [
         "apps/desktop/electron/runtime/dispatcher.ts",
         "apps/desktop/electron/config.ts"
@@ -550,15 +559,20 @@
       "ledger": "POSTURE",
       "label": "CLI provider-key storage",
       "owner": "Platform lead",
-      "reviewedOn": "2026-09-21",
-      "asOf": "2026-09-19",
-      "digest": "85a73ceefda68b69",
-      "implementation": ["apps/cli/src/auth.rs"],
+      "reviewedOn": "2026-10-07",
+      "asOf": "2026-10-07",
+      "digest": "73df43c62846b786",
+      "implementation": ["apps/cli/src/auth.rs", "apps/cli/src/secure_store.rs"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "names the provider argument and the store the key lands in"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains both the keyring path and the implemented file-storage exceptions"
         }
       ]
     },
@@ -621,10 +635,13 @@
       "ledger": "POSTURE",
       "label": "Artifact sandboxing",
       "owner": "Security",
-      "reviewedOn": "2026-09-21",
-      "asOf": "2026-08-05",
-      "digest": "3f65f6753c5a675b",
-      "implementation": ["infrastructure/sandbox/vercel.json"],
+      "reviewedOn": "2026-10-07",
+      "asOf": "2026-10-07",
+      "digest": "fe04a31527e783e2",
+      "implementation": [
+        "infrastructure/sandbox/vercel.json",
+        "packages/contracts/types/src/artifact-csp.ts"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -635,6 +652,16 @@
           "kind": "test",
           "file": "apps/web/__tests__/security/iframe-sandbox-regression.test.ts",
           "name": "only the dedicated cross-origin renderer combines allow-scripts and allow-same-origin"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/artifact-csp.test.ts",
+          "name": "still loads scripts, stylesheets, images and fonts from every vetted CDN host"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/artifact-csp.test.ts",
+          "name": "locks the invariants the isolation argument depends on"
         }
       ]
     },

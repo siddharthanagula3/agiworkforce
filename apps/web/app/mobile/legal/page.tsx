@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -403,9 +404,18 @@ export default function MobileLegalPage() {
             <Stack gap="tight">
               <h3 className="agi-ds-h3">Children.</h3>
               <Prose size="sm">
-                AGI Mobile is not intended for children. We do not knowingly collect personal data
-                from children under 13 (US), under 16 (EU), or under 18 (India). If you believe a
-                child has provided personal data, contact{' '}
+                The age rule in section 02 of the{' '}
+                <Link href="/terms" className="agi-ds-link">
+                  terms
+                </Link>{' '}
+                applies to AGI Mobile: you must be at least {ACCOUNT_MINIMUM_AGE} to create an
+                account, and anyone under {PARENTAL_PERMISSION_BELOW_AGE} needs permission from a
+                parent or guardian. AGI Mobile is not offered to children under{' '}
+                {ACCOUNT_MINIMUM_AGE}, and in jurisdictions setting a higher digital-consent age,
+                including the European Union and the United Kingdom, where it may be 16, and India,
+                where processing children&rsquo;s data requires verifiable parental consent, that
+                higher threshold applies instead. We do not knowingly collect personal data from
+                children below that age. If you believe a child has provided personal data, contact{' '}
                 <a href={contactMailto(CONTACT_SUBJECTS.privacy)} className="agi-ds-link">
                   {CONTACT_EMAIL}
                 </a>

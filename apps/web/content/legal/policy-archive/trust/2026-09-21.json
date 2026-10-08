@@ -1,0 +1,1242 @@
+{
+  "key": "trust",
+  "route": "/trust",
+  "date": "2026-09-21",
+  "replacedOn": "2026-10-08",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Claims with dates, and the ones we cannot make.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Trust"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-trust-title",
+      "content": [
+        {
+          "text": "Claims with dates, and the ones we cannot make."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A posture ledger, not a badge wall. Every row says what is true today and what artifact would prove it. We hold no SOC 2 report, ISO 27001 certificate or third-party penetration test, and say so here."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Read the mechanisms",
+            "href": "/security"
+          }
+        ],
+        [
+          {
+            "text": "Verify us yourself",
+            "href": "#verify"
+          }
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "review",
+      "content": [
+        {
+          "text": "Last reviewed 2026-09-21. Next review November 2026."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Managed Cloud is in public alpha. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/trust"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "compliance",
+      "content": [
+        {
+          "text": "What we hold, and what we do not."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A certification claim is only as good as the document behind it, so each row names the document. Several of these rows say the document does not exist."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Certifications and obligations",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "SOC 2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not held. A Type I or Type II report from a licensed auditor would prove it. No report exists, no auditor is engaged, and no audit is in progress. We are not going to describe internal work as an audit programme. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ISO 27001"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not held. A certificate from an accredited certification body would prove it. None exists and no body is engaged. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "HIPAA"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not offered. A signed business associate agreement would be the artifact. We do not sign them and AGI is not offered for protected health information. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Third-party penetration test"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not performed. A dated report and remediation letter from a testing firm would prove it. Neither exists. Automated scanning in our own pipeline is described on /security and is not a substitute. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GDPR: data subject rights"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 117 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is read from the erasure list when this page is built, so a change to the list cannot leave this claim behind."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GDPR: Article 27 EU representative"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not appointed. A designation naming a representative established in the Union. It has not been made. This is a known open obligation, tracked at /legal/eu-representative, and we are listing it rather than letting you discover it. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "CCPA / CPRA: access and deletion"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. The same export and erasure paths as above. We do not sell personal information; see the privacy policy for the disclosure. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Subprocessor transparency"
+            }
+          ],
+          "value": [
+            {
+              "text": "Published: corrected 14 August and 21 September 2026. A list of processors with purpose and region is published at /subprocessors, and processing terms are at /dpa. Stating the correction rather than quietly reissuing the list: a review on 14 August found six recipients missing, including a transactional email provider that had been delisted nine days earlier on the false reasoning that no email package appeared in our dependencies: it calls the provider’s HTTP API directly, so the check could not have found it. The list is now built from egress rather than from the manifest. A second review on 21 September found five inference recipients missing and one listed that receives nothing; a check now fails our build when a provider the model registry admits for Managed Cloud traffic is not on the page. As of 2026-09-21."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): notice under s.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Published. An itemised notice at /privacy/india naming the fiduciary, each purpose, the recipients, retention, the cross-border position and every data-principal right, with what the product actually does for each. Drafted from the repository; NOT yet reviewed by Indian counsel, and it says so in its own source. As of 2026-08-14."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): consent under s.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. A per-purpose consent ledger in the database, append-only by database grant and by trigger, so a withdrawal can never overwrite the grant it withdraws. Boxes render unticked, an unticked box is recorded as a decision, and the largest anonymous intake refuses to store an address without an explicit consent row written first. Withdrawal is one click at /privacy/requests. As of 2026-08-14."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): data principal rights (ss.11–14)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Partially implemented. Export and account deletion are self-serve; consent withdrawal is self-serve at /privacy/requests; access, correction, erasure without an account, and nomination are recorded as durable requests with a reference and worked manually. Nomination has no field in the product. The gaps are stated on /privacy/india rather than implied away. As of 2026-08-14."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): grievance redressal under s.13"
+            }
+          ],
+          "value": [
+            {
+              "text": "Published, as a role. A grievance route published in the site footer, on /privacy/india and in the terms, reachable without an account. It names a role rather than an individual because no named officer has been designated: designating one is an open founder decision, not an engineering task. As of 2026-08-14."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): verifiable parental consent under s.9"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not implemented. Under this Act a child is anyone under 18 and verifiable parental consent is mandatory. The web surface has no age gate; the mobile age gate is self-declared and its minor-safe mode can be cleared by the child. This is the largest open gap in our DPDP position and we are listing it rather than letting you discover it. As of 2026-08-14."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): notice languages under s.6(4)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not provided. The Act entitles a data principal to the notice in any Eighth Schedule language. Only English is published. Translation is a commissioning decision that has not been made. As of 2026-08-14."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): Significant Data Fiduciary obligations"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not applicable unless notified. Significant Data Fiduciary status is a Central Government notification, not a self-assessment. AGI has not been notified. If it ever is, a named India-based Data Protection Officer, a data protection impact assessment and an independent audit become mandatory, and none of the three exists today. As of 2026-08-14."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DPDP (India): data residency"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not offered. All hosting is in the United States. There is no Indian region and no plan published for one, so using the service means personal data leaves India. As of 2026-08-14."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "posture",
+      "content": [
+        {
+          "text": "Control by control, dated."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Mechanisms are explained on "
+        },
+        {
+          "text": "/security",
+          "href": "/security"
+        },
+        {
+          "text": ". This table is the summary a reviewer can scan, including the rows that say a control is partial or absent."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Security posture",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Local mode isolation"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented in the released CLI for Ollama and LM Studio on loopback. AGI infrastructure and subprocessors are not in that model request path. Desktop and web use Managed Cloud and do not expose Local inference. As of 2026-09-19."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Desktop credential storage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. Electron Desktop refuses to store account credentials unless operating-system encryption is available. Desktop uses Managed Cloud and does not accept provider API keys. As of 2026-09-19."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "CLI provider-key storage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. The released CLI saves each provider credential in the operating system credential store and keeps only provider names in its on-disk index. The CLI sends BYOK traffic directly to the selected provider. As of 2026-09-19."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Transport security"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. HSTS with a two-year max-age, subdomains included, preload requested; frame denial, MIME sniffing off, and a restrictive permissions policy on every response. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Content Security Policy"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented, with one documented exemption. Per-request nonce, no 'unsafe-inline' in script-src, object-src none, frame-ancestors none except owner-scoped PDF preview. Inline styles are still permitted; that exemption is listed as an open item on /security rather than omitted. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Artifact sandboxing"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. Model-generated artifacts render on a separate origin with no network egress (connect-src 'none') and frame-ancestors pinned to our hosts. The fallback path drops allow-same-origin rather than weakening the sandbox. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Database row-level isolation"
+            }
+          ],
+          "value": [
+            {
+              "text": "Partial: 261 of 397 database-backed hosted API route files. Counted against the 397 route files that reach the database; the other 139 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 136 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. Each figure is measured from the route files when this page is built."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Authentication and CSRF"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. Sixteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-27."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Rate limiting"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. Per-endpoint limits backed by Redis, required at production runtime. Security-sensitive endpoints reject requests when the limiter is unreachable; a small number of business-critical paths are deliberately fail-open and marked so in code. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Egress and SSRF controls"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented. Private, loopback, link-local, and reserved ranges are rejected before any allowlist is consulted, including IPv4-mapped IPv6 forms. Remote MCP URLs must be HTTPS, publicly resolvable, and free of embedded credentials. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Security event logging"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented: nine event types, written by a single module. Seven are failure and abuse events: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, admin action, failed CSRF validation, and invalid signature. Two are not failures and were missing from this row until 2026-09-12: a content notice filed against a generation, and the retention purge recording its own run so a window that did not hold is visible. Separately, the hosted service logs each call a connector makes for you: which connector, which tool, when, and whether it answered, never the arguments or the result. Calls to built-in tools are not in that log. As of 2026-09-21."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Account erasure"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented and scheduled. Enumerated table sweep, stored objects deleted before their catalogue rows, a completeness flag that refuses to report partial success, erasure ordered before identity deletion, and a daily job that runs it. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Release signing"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented on macOS for the desktop app. Its release workflow fails without Apple signing and notarization credentials, builds a signed and notarized disk image for each Mac architecture, and verifies the signature and notarization of each before anything is uploaded. There is no Windows build of the desktop app, so nothing is signed for Windows. As of 2026-09-21."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Managed Cloud maturity"
+            }
+          ],
+          "value": [
+            {
+              "text": "Public alpha, open by default since 27 June 2026. Signed-in users can use managed compute now. It is not general availability, and /sla describes targets rather than commitments. Hosted code execution through E2B stays off unless an operator sets an explicit flag. As of 2026-08-05."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Production access governance"
+            }
+          ],
+          "value": [
+            {
+              "text": "Implemented, with one gap named. Support access to a workspace needs a grant naming the workspace and its scopes, requested by one operator and approved by a second, expiring within eight hours by database constraint. Grants, reads taken under them and reads refused for want of one are appended to a hash-chained log the workspace itself can read and verify, and resolving a workspace’s encryption keys as support passes the same check whether the key is ours or theirs. Offboarding from production is a written runbook. Still open: no periodic access review on a schedule. As of 2026-09-17."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Business continuity evidence"
+            }
+          ],
+          "value": [
+            {
+              "text": "Summarised, with the gaps named. docs/runbooks/business-continuity.md states the recovery mechanism for each asset, the evidence in the repository for each one, and what is not measured: no declared recovery point or recovery time objective, no scheduled restore test against the production database, and no second region or provider for serving. Of the two restore drills, the host-neutral one runs every week against a throwaway database built from the migrations, which proves the restore commands and the schema but not that this deployment’s data restores. The point-in-time drill against the real database is run by a human, so the recovery point is a property of the configuration rather than a tested outcome. As of 2026-09-21."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "verify",
+      "content": [
+        {
+          "text": "Do not take our word for it."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Most of what this page asserts is externally observable. If any of these checks disagree with the tables above, the tables are wrong and we want to know."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Check our response headers"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Request any page on agiworkforce.com and read Strict-Transport-Security, Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, and Permissions-Policy. The CSP nonce changes on every request; a repeated value would mean the claim on /security is wrong."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Check the artifact sandbox origin"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Fetch the sandbox origin directly and read its Content-Security-Policy. connect-src should be 'none' and frame-ancestors should be pinned to our application hosts, not a wildcard."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Check the macOS build signature"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Download the disk image and run codesign --verify --deep --strict, spctl --assess --type execute, and stapler validate. A notarized, stapled Developer ID signature either verifies or it does not."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Check the Windows installer signature"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "There is nothing to check yet: the desktop app is built for macOS only, and no Windows installer exists. When one ships, run Get-AuthenticodeSignature on it before you run it."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Check Local mode with a packet capture"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Run the CLI against Ollama or LM Studio and watch the network. Chat traffic should stay between the CLI and the loopback model server; the current public Desktop does not offer Local mode."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Check the live health signal"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "/status runs its checks at most once a minute and shows the time they actually ran. It is not a static badge, and it states exactly which dependencies it does and does not cover."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "evidence",
+      "content": [
+        {
+          "text": "The documents behind the rows."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A row that cites a command asks you to reproduce the evidence. These are the written documents the rows rest on. They live in the repository rather than behind a portal, and under a mutual non-disclosure agreement we will hand over the copy that applies to your review. Ask through the contact below and name the row."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Evidence documents",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Business continuity and disaster recovery"
+            }
+          ],
+          "value": [
+            {
+              "text": "docs/runbooks/business-continuity.md. The recovery mechanism per asset, the evidence for each, and the gaps: no declared objectives, no scheduled restore test against the production database, one region."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Database backup and restore"
+            }
+          ],
+          "value": [
+            {
+              "text": "docs/runbooks/database-backup-restore.md, with the two drill scripts it names. The procedure a real recovery follows, and what Neon actually retains."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Production access"
+            }
+          ],
+          "value": [
+            {
+              "text": "docs/runbooks/break-glass-production-access.md and the hash-chained grant log the workspace itself can read. The runbook is the procedure; the log is the record of every use of it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Incident handling"
+            }
+          ],
+          "value": [
+            {
+              "text": "docs/runbooks/incident-response.md and docs/runbooks/incident-postmortem-template.md. The severity ladder on this page comes from the first; no postmortem has been published, because no severity 1 has been declared."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Personal data breach"
+            }
+          ],
+          "value": [
+            {
+              "text": "docs/runbooks/personal-data-breach.md. The assessment and notification path behind the notification duty stated on /status."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Security mechanisms"
+            }
+          ],
+          "value": [
+            {
+              "text": "docs/security/security.md. The mechanism behind each control named on /security, including the encryption key ring a restore depends on."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Audit reports"
+            }
+          ],
+          "value": [
+            {
+              "text": "None exist. No SOC 2 report, ISO 27001 certificate or penetration test report can be handed over, because none has been produced. That row is not a disclosure restriction."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "changes",
+      "content": [
+        {
+          "text": "When this page last moved."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Change record",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "2026-09-28"
+            }
+          ],
+          "value": [
+            {
+              "text": "Advanced Account Security shipped. Its four tables, the enrollment, the passkeys and security keys, the session checks and the sign-in challenges, cascade from the profile row, so they are deleted with the account without joining the enumerated erasure list. Seven tables from the day’s other work did join it, taking it from 106 to 113 user-scoped tables: the storage a published app keeps for its viewers, Slack account links and assistant runs, workspace plugin membership, and community plugin submissions with their files and installs. Each is deleted with the account. Re-measured with the day’s other hosted routes: the row-level-isolation count moved from 223 to 250 of 385 database-backed routes, the owner-connection remainder from 124 to 135, and the routes that touch no database from 128 to 129. Fifteen of those routes are Advanced Account Security: eleven read as the caller, while turning it on, the two routes a browser uses to confirm an app’s sign-in without a session, and the emailed link that turns it off connect as the owner. Each figure is derived from the deciding source by a test, not maintained by hand."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-28"
+            }
+          ],
+          "value": [
+            {
+              "text": "External resource references joined the enumerated erasure list, taking it from 105 to 106 user-scoped tables: the record of the repositories, web pages, MCP servers and connector items an account reached. They are deleted with the account. Re-measured with the day’s other hosted routes: the row-level-isolation count moved from 191 to 223 of 347 database-backed routes, the owner-connection remainder from 112 to 124, and the routes that touch no database from 120 to 128. Each figure is derived from the deciding source by a test, not maintained by hand."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-28"
+            }
+          ],
+          "value": [
+            {
+              "text": "Developer webhooks joined the enumerated erasure list, taking it from 103 to 105 user-scoped tables: the endpoints a developer registers and the log of what was delivered to them. Both are deleted with the account."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-28"
+            }
+          ],
+          "value": [
+            {
+              "text": "Three tables joined the enumerated erasure list, taking it from 100 to 103 user-scoped tables: the links that share a schedule, the files a personal skill bundles, and developer projects. Each is deleted with the account."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-27"
+            }
+          ],
+          "value": [
+            {
+              "text": "Protected route groups moved from fifteen to sixteen with the developer console, which holds API keys, rate limits and a request playground and is checked at the edge before render like the rest of the signed-in app."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-27"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the credit billing work shipped. Five tables joined the enumerated erasure list, taking it from 95 to 100 user-scoped tables: auto-reload settings, bonus credit grants, referral codes, expiring credit purchases and refund requests. Each is deleted with the account. The same work added 28 hosted routes. The row-level-isolation count moved from 177 to 191 of 303 database-backed routes with the billing settings, referral and usage routes, which read as the caller. The owner-connection remainder moved from 101 to 112 with the billing crons, the emailed trial cancel link, the refund operations console and the organization member, invitation and usage report routes, and the routes that touch no database moved from 117 to 120."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-23"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the two experiential Free model routes shipped on the caller-scoped connection and the model-attestation route shipped without a database dependency. The row-level-isolation count moved from 175 to 177 of 278 database-backed routes; the owner-connection remainder stays at 101 and the routes that touch no database move from 116 to 117."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-21"
+            }
+          ],
+          "value": [
+            {
+              "text": "Three rows corrected against the code. Release signing described a retired desktop build: the desktop app is built and notarized for macOS, one disk image per Mac architecture, and has no Windows build at all, so the Windows signing it claimed signs nothing we ship. Business continuity said no restore test is scheduled, while the host-neutral restore drill has run every week since 5 September; what has no scheduled test is the production database. Security event logging said the hosted service keeps no per-tool log, while every call a connector makes has been logged since 17 September. Each row now names the owner and the test that proves it in a reviewed index, and a row whose text changes without a matching review fails the build."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-21"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the free quota model list began reading the account’s plan as the caller, which moves that route onto the database under row-level isolation, and after the operator record of the QwenCloud free-quota-only check arrived, which keeps its state in the shared cache rather than the database. The row-level-isolation count moved from 174 to 175 of 276 database-backed routes; the owner-connection remainder stays at 101 and the routes that touch no database stay at 115. Re-measured again after the two support staff ticket routes arrived, which reach the database through services rather than in the route file, and an unused route that minted a desktop sign-in link was deleted, which leaves 116 hosted routes that touch no database."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-20"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the sign-in methods route, the legal hold preservation count, the soft-deleted resource purge and the client failure ingest shipped, after connecting GitHub began checking the workspace policy, which makes that route read the database, and after the two workspace encryption key routes arrived, which need the owner connection because the key tables grant the policy-bound role read access only. The database-backed total moved from 267 to 274 and the owner-connection remainder from 95 to 101; the row-level-isolation count moved from 172 to 173. The number of hosted routes that touch no database ends the day where it began, at 115."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-20"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the deletion graph was closed over the database schema instead of a hand-kept list. Two stores had kept an erased account’s identifiers: referrals and device installations. Both joined the enumerated erasure list, which grew from 93 user-scoped tables to 95."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-20"
+            }
+          ],
+          "value": [
+            {
+              "text": "The billing waitlist access route moved onto the caller-scoped connection, which is the route that took the row-level-isolation count from 172 to 173. Each figure on this page is derived from the deciding route source by a test, not maintained independently from the implementation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-18"
+            }
+          ],
+          "value": [
+            {
+              "text": "Business continuity moved from not published to summarised with the gaps named: docs/runbooks/business-continuity.md states the recovery mechanism for each asset and the evidence for it, and says plainly that no recovery point or recovery time objective is declared, no restore test is scheduled, and there is no second region or provider. A documents section was added naming what sits behind each row, including the rows where no document exists because no audit has been performed. The review date is now a date in the source rather than a month in prose, and the honesty test fails the build once it passes, so a stale ledger cannot ship quietly."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-18"
+            }
+          ],
+          "value": [
+            {
+              "text": "Production access governance moved from not implemented to implemented with one gap named. Support access to a workspace now needs a grant that names the workspace and the scopes it opens, requested by one operator and approved by a second, with the expiry written at approval and capped at eight hours by a database constraint rather than by the code that asks. Every grant transition, every read taken under a grant and every read refused for want of one is appended to a log the workspace can read and verify: it is append-only because the application role holds no write on it, a trigger refuses updates and deletes for every role including the owner, and each row carries a hash of the one before it, so a row removed through a direct connection is detectable rather than silent. Resolving a workspace’s encryption keys as support passes the same check whether the key is customer-managed or ours, which closes the path that previously served the platform key without a grant. What is still open is a periodic access review on a schedule; the row says so rather than claiming completeness."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-18"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after a batch of hosted routes moved off the owner connection onto the policy-scoped client, among them the workspace console, the plugin and skills surfaces, analytics ingest and the account routes. One console helper was the root cause of several: it opened a caller-scoped handle, discarded it, and re-read as the owner, so every route built on it bypassed policy for no reason; it now returns the handle it opened. The row-level-isolation count moved from 128 to 164 of 267 database-backed routes and the owner-connection remainder from 112 to 103, while six new hosted routes touching no database moved the count excluded from both sides from 102 to 108. Of the 103 that remain, most are owner by design: the queue receivers and device-pairing routes that have no caller identity to bind, the tables whose policy denies the application role outright, and the reads whose whole purpose is to answer for a row the caller cannot see. Five others read the member roster to name somebody in a role or group assignment, which the roster read policy admits only for holders of the members permission, so they wait on that policy rather than on route code. Each figure is derived from the deciding source by a test, not maintained by hand."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-17"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the connector call log shipped. One table joined the enumerated erasure list, taking it from 81 to 82: every call a connector made on the account’s behalf, recording which connector, which tool, when, and whether it worked, never the arguments and never the result. It is deleted with the account and it is included in the export, because it is a record of what was done with a grant the account gave. It also decides a health state the connectors page could not show before: a connector whose recent calls have all failed is reported as not responding rather than as connected. One hosted route arrived with it, the read of that log, which reads as the caller, so the row-level-isolation count moved from 127 to 128 of 241 database-backed routes. Help search, the support ticket API and the diagnostics attachment shipped alongside it; those routes read a corpus or a ticket store rather than the tenant database, so the count of hosted routes touching no database moved from 97 to 102. Each figure is derived from the deciding source by a test, not maintained by hand."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-17"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the product analytics event stream shipped. One table joined the enumerated erasure list, taking it from 80 to 81: the product events an account produces, which record that something happened and on which client, never what was written, are collected only while the account’s consent ledger grants the product analytics purpose, are deleted with the account, and are included in the export because they are a record of what the account did. Three hosted routes arrived with it. The consent-gated ingest resolves its subject from the session and writes as the owner, so the row-level-isolation count stays at 127 while the database-backed total moved from 238 to 239 and the owner-connection remainder from 111 to 112; the operator metrics read and the daily rollup cron reach the database through services rather than in the route file, so the routes excluded from both sides moved from 95 to 97."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-17"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the background job queue, the scheduler policies and event triggers shipped. Three tables joined the enumerated erasure list in that change: the background jobs filed against an account, the event triggers it owns, and the delivery record of every event those triggers considered. Triggers and their deliveries are exported; queued jobs are withheld as transient plumbing, because what a job produces is exported in the section it belongs to. Nine hosted routes arrived with it, so the row-level-isolation count moved from 124 to 127 of 238 database-backed routes and the owner-connection remainder from 105 to 111: the three trigger routes read as the caller, while the four provider receivers, the admin dead-letter console and the drain cron resolve their subject from a signed payload or a scheduler credential and so connect as the owner."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-17"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after rollout feature flags and the routing decision trace shipped. The enumerated erasure list grew from 76 user-scoped tables to 80, the routing decision trace among them: it records which model answered a request and how that turn ended, it is deleted with the account, and it is withheld from the export because it describes this product’s routing and provider economics rather than anything the account wrote. The row-level-isolation count is now 127 of 238 database-backed routes, the owner-connection remainder 111, and 95 hosted routes touch no database, five of them the new operator and scheduled rollout routes, which read the database through services rather than in the route file. Each figure is derived from the deciding source by a test, not maintained by hand."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-17"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the retrieval index, the memory lifecycle, workspace retention and the device registry shipped. The enumerated erasure list grew from 73 user-scoped tables to 76, with the retrieval documents and passages an account owns and its registered devices. The row-level-isolation count is now 124 of 229 database-backed routes, the owner-connection remainder 105, and 90 hosted routes touch no database. Protected route groups read thirteen while the matcher enforced fourteen, the fourteenth being the shared-link opener. Each figure is derived from the deciding source by a test, not maintained by hand."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-12"
+            }
+          ],
+          "value": [
+            {
+              "text": "Pre-release claim audit of the legal surface. Two rows here were counting things that had grown since they were written. Protected route groups read six against a matcher of twelve, and /security had already been corrected to twelve while this page had not. Security event logging read seven event types against nine, omitting the content notice and the retention purge that records its own run. Both are corrected above and both counts are now derived from the deciding source by a test rather than remembered. The privacy policy was corrected in the same pass: it denied that any per-organisation conversation retention window was enforced, while a nightly job deletes workspace conversations past a window an owner sets, and it undercounted the erasure table list at 70 against 73."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-14"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after a hosted route shipped that writes follow-up questions onto the turn that earned them. It reads through the caller-scoped connection, so the row-level-isolation count moved from 119 to 120 and the database-backed total from 207 to 208. The owner-connection count and the routes excluded from both sides are unchanged at 88 each."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-12"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after four hosted routes shipped. The two live voice session routes, one to open a session and one to close it, read through the caller-scoped connection, so the row-level-isolation count moved from 114 to 116. A cron route that reconciles reported provider costs uses the owner connection, so that count moved from 87 to 88. An operator economics route touches no database, so the routes excluded from both sides moved from 87 to 88. The database-backed total moved from 201 to 204."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-08"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured again the same day, after route work that had not yet been counted and one cron route that returns quota held by a reservation whose turn is gone. The database-backed total moved from 199 to 201 and the owner-connection count from 85 to 87. The routes excluded from both sides moved from 88 to 87. The row-level-isolation count stays at 114."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-08"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after ten hosted routes nothing called were deleted and one cron route that sweeps orphaned agent runs was added. The database-backed total moved from 200 to 199, the routes excluded from both sides from 94 to 88, and the owner-connection count from 86 to 85. The row-level-isolation count stays at 114."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-06"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the operator route-economics endpoint shipped. It reads the model registry and the free-pool document and touches no database, so the routes excluded from both sides moved from 93 to 94. The row-level-isolation count stays at 114 of 200 and the owner-connection count at 86."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-06"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the plugin directory and connector routes shipped. The row-level-isolation count is now 114 of 200 database-backed routes and the owner-connection count is 86. The database-backed total moved from 201 to 200, and the routes excluded from both sides moved from 91 to 93."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-05"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after more routes shipped the same day. The row-level-isolation count is now 114 of 201 database-backed routes and the owner-connection count is 87. The database-backed total rose from 198 to 201, and the routes excluded from both sides moved from 90 to 91."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-05"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the last batch of route handlers moved onto the caller connection. The row-level-isolation count is now 112 of 198 database-backed routes and the owner-connection count is 86. The database-backed total rose from 182 to 198 as routes shipped in the same period began reading the database, so the routes excluded from both sides moved from 106 to 90."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-05"
+            }
+          ],
+          "value": [
+            {
+              "text": "Re-measured after the map card shipped. Two new hosted routes serve map tiles and place photos and touch no database, so the routes excluded from both sides moved from 104 to 106. Other routes moved off the owner connection in the same period, so the row-level-isolation count is now 90 of 182 database-backed routes and the owner-connection count is 92. The database-backed total is unchanged."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-03"
+            }
+          ],
+          "value": [
+            {
+              "text": "Restored two cross-user reads, the projects list and a shared project lookup, that the row-level-security migration below had broken. Both now read through the owner connection instead of the caller-scoped one. That moves the row-level-isolation count from 66 of 161 database-backed routes to 64 of 161, and the owner-connection count from 95 to 97."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-03"
+            }
+          ],
+          "value": [
+            {
+              "text": "Migrated roughly 30 route handlers off the owner connection onto policy-scoped RLS clients, raising the row-level-isolation count from 39 of 154 database-backed routes to 66 of 161. The database-backed total moved too, since other routes shipped the same day; the count of routes touching no database is now 98."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-09-02"
+            }
+          ],
+          "value": [
+            {
+              "text": "Corrected the database row-level isolation row: the count of hosted routes that touch no database at all was undercounted by one. The measured routes that reach the database, and the split between policy-scoped and owner-connection routes, are unchanged."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-08-14"
+            }
+          ],
+          "value": [
+            {
+              "text": "Added the DPDP (India) surface: notice, consent, data-principal rights, grievance redressal, parental consent, notice languages, Significant Data Fiduciary status, and data residency, each rated against what the product does today. Corrected the GDPR/CCPA data-subject-rights row, which had cited 34 erasure-scoped tables against an actual 66; the count is now derived from code. Corrected the subprocessor-transparency row after a review found six live processors missing from the published list, including one delisted on a manifest check that could not see its direct HTTP calls."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-08-05"
+            }
+          ],
+          "value": [
+            {
+              "text": "Rewritten as a dated ledger. Removed a claim that SOC 2 evidence collection was underway: no such programme exists. Corrected the code-signing rows, which described signing as planned when both macOS notarization and Windows signing are implemented and enforced in the release pipeline. Replaced the general database-isolation claim with the actual route coverage. Added the unappointed EU Article 27 representative, absent production access governance, and absent continuity evidence as explicit rows."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2026-07"
+            }
+          ],
+          "value": [
+            {
+              "text": "Retention consolidated to a single enforced answer, and the subprocessor list corrected to include processors that were live but unlisted."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "related",
+      "content": [
+        {
+          "text": "Go deeper on any of it."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Security mechanisms",
+            "href": "/security"
+          }
+        ],
+        [
+          {
+            "text": "Live status",
+            "href": "/status"
+          }
+        ],
+        [
+          {
+            "text": "Privacy policy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ],
+        [
+          {
+            "text": "Data processing addendum",
+            "href": "/dpa"
+          }
+        ],
+        [
+          {
+            "text": "Service levels",
+            "href": "/sla"
+          }
+        ]
+      ]
+    }
+  ]
+}

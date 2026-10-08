@@ -100,9 +100,9 @@ describe('marketing links in running text', () => {
     expect(restingBackgroundSize(screen.getByRole('link', { name: 'Current version' }))).toBe(
       '100% 1px',
     );
-    expect(restingBackgroundSize(screen.getByRole('link', { name: 'Read this version' }))).toBe(
-      '100% 1px',
-    );
+    for (const link of screen.getAllByRole('link', { name: 'Read this version' })) {
+      expect(restingBackgroundSize(link)).toBe('100% 1px');
+    }
   });
 
   it('leaves a ledger headline link that stands on its own line to underline on hover', () => {

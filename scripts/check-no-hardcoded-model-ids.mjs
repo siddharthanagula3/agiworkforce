@@ -92,6 +92,10 @@ export const MODEL_ID_OWNER_PATTERNS = Object.freeze([
   /^tools\/evals\/measurements\/ledger\.json$/u,
   // Audit evidence quotes the model ids a finding is about, as subject matter.
   /^audit\//u,
+  // Archived renderings of /model-licenses, written only by
+  // `node scripts/archive-policy-versions.mjs` from a recorded commit: the page
+  // is the published model table, so its archive names the models it named.
+  /^apps\/web\/content\/legal\/policy-archive\/modelLicenses\/\d{4}-\d{2}-\d{2}\.json$/u,
 ]);
 
 const OWNER_PATH_SET = new Set(MODEL_ID_OWNER_PATHS);

@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
@@ -17,6 +18,7 @@ import {
   CONTACT_EMAIL,
   CANONICAL_POLICY_ROUTES,
   CONTACT_SUBJECTS,
+  GRIEVANCE_RESPONSE_TARGET_DAYS,
   LEGAL_ENTITY,
   NOTICE_ADDRESS,
   POLICY_LAST_UPDATED,
@@ -138,6 +140,7 @@ const SECTIONS = [
   '02 · What we do not collect',
   '03 · How we use it, and on what basis',
   '04 · Sharing',
+  { label: 'Who at AGI can see your content', id: 's-people' },
   { label: 'Google user data', id: 's-google' },
   '05 · Retention',
   { label: 'Security incidents', id: 's-incidents' },
@@ -221,7 +224,8 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         </strong>
         <br />
         <strong>What we hold:</strong> not the provider key or prompt traffic. The CLI stores the
-        key in the operating system credential store and calls the provider directly.
+        key in the operating system credential store, or in owner-only files on Linux or when the
+        keyring is turned off, and calls the provider directly.
       </>
     ),
   },
@@ -230,7 +234,8 @@ const MODE_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Where your prompts go:</strong> through our gateway to the provider serving the
-        model you selected. Managed Cloud is in public alpha.
+        model you selected. On the Free plan&rsquo;s default model, AGI chooses the provider, as
+        section 01 sets out. Managed Cloud is in public alpha.
         <br />
         <strong>What we hold:</strong> conversations, files, projects, memories, schedules and
         settings, so they sync across your devices. This is the only mode where we act as your
@@ -250,7 +255,8 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Examples:</strong> email, account ID, authentication metadata held by our identity
-        provider.
+        provider. Sign-up also asks for your age; it is checked in your browser and is not stored,
+        sent to our servers or sent to our identity provider.
         <br />
         <strong>Why, and how it is protected:</strong> authentication, and optional marketing email
         only if you choose &ldquo;{MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; separately. We do
@@ -338,6 +344,34 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
+    label: "What the assistant's tools record",
+    value: (
+      <>
+        <strong>Examples:</strong> when the assistant searches the web, fetches a page, runs code or
+        calls a connector, the tool call and what came back are kept in the conversation. Each
+        connector call is also logged with the connector, the tool, the time and whether it worked,
+        never the arguments and never the result. A screenshot is taken only when you choose to
+        capture one in the feedback form: your browser asks which screen, window or tab to share,
+        one still picture is captured, and it is attached to your feedback.
+        <br />
+        <strong>Why, and how it is protected:</strong> doing the task you asked for. A web search
+        sends your query to Perplexity. A sandbox run sends the code and the files it works on to
+        E2B, and only where sandbox execution is switched on. Both are named on{' '}
+        <Link href="/subprocessors" className="agi-ds-link">
+          /subprocessors
+        </Link>
+        . Tool calls follow the conversation&rsquo;s retention in section 05. The web app cannot
+        watch your screen or your other tabs on its own. Browser control and computer use belong to
+        the Chrome extension, which is not released; what it captures, including screenshots of the
+        tab that cannot be redacted, is set out on{' '}
+        <Link href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
+          /agent-permissions
+        </Link>
+        .
+      </>
+    ),
+  },
+  {
     label: 'Conversations (Local)',
     value: (
       <>
@@ -353,7 +387,7 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Examples:</strong> provider credentials saved by the CLI in the operating system
-        credential store.
+        credential store, or in owner-only files on Linux or when the keyring is turned off.
         <br />
         <strong>Why, and how it is protected:</strong> the CLI reads the key locally and sends
         requests directly to the selected provider; AGI Cloud does not receive it.
@@ -414,7 +448,7 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <br />
         <strong>Why, and how it is protected:</strong> answering you and fixing what you reported. A
         support escalation emails the transcript and the contact address you gave to our support
-        inbox, which is one of the three things in this product that can send email at all.
+        inbox.
       </>
     ),
   },
@@ -497,7 +531,8 @@ const NOT_COLLECTED: readonly { title: string; body: React.ReactNode }[] = [
       <>
         AGI does not train AGI-owned models on customer prompts, responses, or files. In Managed
         Cloud, we send prompts and attached content to the provider serving the model you select and
-        receive its response; some models are reached through OpenRouter or through an inference
+        receive its response; on the Free plan’s default model that provider is chosen by AGI, as
+        section 01 sets out. Some models are reached through OpenRouter or through an inference
         gateway instead of directly, and{' '}
         <Link href="/subprocessors" className="agi-ds-link">
           /subprocessors
@@ -805,6 +840,25 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
+    label: 'Feedback and response ratings',
+    value: (
+      <>
+        <strong>Retention:</strong> kept until you delete your account. Nothing ages them out
+        earlier.
+        <br />
+        <strong>Enforced by:</strong> account deletion erases the feedback records, ratings
+        included, and deletes any screenshot you attached to feedback from storage. If a screenshot
+        cannot be deleted, the record is kept and the next run tries again. A new rating on a reply
+        replaces your earlier rating on that reply. Feedback sent without signing in is not tied to
+        an account, so account deletion does not reach it. Ask at{' '}
+        <Link href="/privacy/requests" className="agi-ds-link">
+          /privacy/requests
+        </Link>{' '}
+        and we will remove it.
+      </>
+    ),
+  },
+  {
     label: 'Security audit log',
     value: (
       <>
@@ -1096,7 +1150,22 @@ export default function PrivacyPage() {
                     and Zhipu through OpenRouter, which therefore also handles those requests,
                     unless AGI holds its own key for that provider, in which case the request goes
                     to it directly. MiniMax models receive nothing from Managed Cloud and are
-                    reachable only with your own key. Which one depends on the model you select.{' '}
+                    reachable only with your own key. Which one depends on the model you select,
+                    with one exception.{' '}
+                    <strong>
+                      On the Free plan, a chat on the default model goes to a provider AGI chooses,
+                      not one you pick
+                    </strong>
+                    : Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its international
+                    endpoint in Singapore, or OpenRouter&rsquo;s free router. At Alibaba the model
+                    that answers can be a Qwen model or another developer&rsquo;s model that Alibaba
+                    hosts; OpenRouter&rsquo;s free router picks a free model from the providers it
+                    carries. Which one answers depends on what is available for that turn, and the
+                    reply shows the model that answered. A turn that needs tools, web search or code
+                    execution is answered through OpenRouter. Alibaba&rsquo;s published privacy
+                    notice says it never uses your data for model training; we rely on that
+                    statement and cannot verify it. The providers behind OpenRouter&rsquo;s free
+                    models may train on what you send.{' '}
                     <strong>
                       OpenRouter is additionally the failover for every other chat model in the
                       catalogue
@@ -1216,6 +1285,81 @@ export default function PrivacyPage() {
                     data may transfer as part of it, and this policy continues to apply until the
                     acquirer publishes its own.
                   </Prose>
+                  <Prose>
+                    <strong>Government requests.</strong> What legal process we require, when we
+                    tell the account holder, and where a request must be sent are on the{' '}
+                    <Link href={CANONICAL_POLICY_ROUTES.governmentRequests} className="agi-ds-link">
+                      government requests page
+                    </Link>
+                    .
+                  </Prose>
+                  <Prose>
+                    <strong>Links you share yourself.</strong> A share link to a conversation, or a
+                    published artifact, is public by design: anyone who has the link can open it
+                    without signing in, unless you limited it to your workspace. A conversation link
+                    lasts 1, 7 or 30 days, as you choose, and you can revoke it sooner. A published
+                    artifact stays up until you unpublish it. Before a conversation is shared,
+                    secrets we can recognise are removed from the copy, and the shared page shows an
+                    attached file by name only. Both kinds of page tell search engines not to index
+                    them and not to follow their links. That is a request a search engine can
+                    ignore, and it does not stop a person who has the link from copying or reposting
+                    what it shows. Do not share anything you would not publish.
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-people" labelledBy="agi-privacy-people-title" rule ground="2">
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-people-title">
+                    Who at AGI can see your content
+                  </h2>
+                  <Prose>
+                    In Managed Cloud we store your conversations and files, so the honest answer is
+                    not &ldquo;nobody&rdquo;. Access to your content by people at AGI is limited to
+                    those who need it to operate or support the service, and to the cases in the
+                    table below. The text filter described in the{' '}
+                    <Link href={CANONICAL_POLICY_ROUTES.acceptableUse} className="agi-ds-link">
+                      acceptable use policy
+                    </Link>{' '}
+                    is automatic. When it refuses or flags a request, it logs the rule that matched
+                    and a one-way fingerprint of the text, not the text. Suspending or banning an
+                    account is done by a person, not by an automatic check.
+                  </Prose>
+                  <Ledger
+                    caption="When a person at AGI sees content"
+                    rows={[
+                      {
+                        label: 'What you ask us to look into',
+                        value:
+                          'Feedback and any screenshot or log you attach to it, a support ticket, a chat you escalate to a person in support, and a privacy request. Staff read these to answer you.',
+                      },
+                      {
+                        label: 'Abuse and safety reports',
+                        value:
+                          'A report someone files, with the excerpt they chose, and the shared conversation or published artifact it is about. Staff look published material up by the public link anyone already holds.',
+                      },
+                      {
+                        label: 'Workspace content, for support',
+                        value: (
+                          <>
+                            Only under a support access grant that names the workspace, what may be
+                            read, a ticket and a reason, and that expires within eight hours. The
+                            grant and every read under it are written to a log the workspace can
+                            read. The full mechanism, and its limits, are on{' '}
+                            <Link href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
+                              /security
+                            </Link>
+                            .
+                          </>
+                        ),
+                      },
+                      {
+                        label: 'Security and the law',
+                        value:
+                          'Where it is necessary to investigate abuse, a security incident or a fault, or where valid legal process compels it.',
+                      },
+                    ]}
+                  />
                 </Stack>
               </Section>
 
@@ -1227,8 +1371,10 @@ export default function PrivacyPage() {
                     </h2>
                     <Prose>
                       This covers every Google connector, including Gmail, Google Calendar, Google
-                      Drive and Google Contacts. AGI&rsquo;s use and transfer to any other app of
-                      information received from Google APIs will adhere to the{' '}
+                      Drive and Google Contacts. Connectors are coming soon and cannot be connected
+                      yet; this section says how Google data is handled once they can. AGI&rsquo;s
+                      use and transfer to any other app of information received from Google APIs
+                      will adhere to the{' '}
                       <a
                         href="https://developers.google.com/terms/api-services-user-data-policy"
                         className="agi-ds-link"
@@ -1368,8 +1514,36 @@ export default function PrivacyPage() {
                               {CONTACT_EMAIL}
                             </a>{' '}
                             from your account address with the subject line &ldquo;
-                            {CONTACT_SUBJECTS.privacy}&rdquo;. Applicable law determines the
-                            response period. You may use an authorised agent where the law allows.
+                            {CONTACT_SUBJECTS.privacy}&rdquo;, or use the form at{' '}
+                            <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+                              /privacy/requests
+                            </Link>
+                            , which gives you a reference. You may use an authorised agent where the
+                            law allows.
+                          </>
+                        ),
+                      },
+                      {
+                        label: 'How long we take',
+                        value: `We aim to answer within ${GRIEVANCE_RESPONSE_TARGET_DAYS} days. Where your law sets a period, that period applies if it is shorter. Most United States state privacy laws, California's among them, give 45 days and allow one extension of 45 more when we tell you why within the first 45. The GDPR gives one month, which can be extended by two more for a complex request. Requests are worked by a person, not by an automatic process.`,
+                      },
+                      {
+                        label: 'If we say no',
+                        value: (
+                          <>
+                            We tell you why. You can appeal by emailing{' '}
+                            <a
+                              href={contactMailto(CONTACT_SUBJECTS.privacyAppeal)}
+                              className="agi-ds-link"
+                            >
+                              {CONTACT_EMAIL}
+                            </a>{' '}
+                            with the subject line &ldquo;{CONTACT_SUBJECTS.privacyAppeal}&rdquo; and
+                            your request reference. We answer an appeal in writing, with reasons,
+                            within 45 days. We are a small company, so we cannot promise that a
+                            different person reviews the appeal from the one who made the first
+                            decision. If the appeal is refused, you may complain to the attorney
+                            general of your state, or to your data protection authority.
                           </>
                         ),
                       },
@@ -1384,6 +1558,49 @@ export default function PrivacyPage() {
                       DPA
                     </Link>
                     .
+                  </Prose>
+                  <Prose size="sm">
+                    <strong>Automated decisions.</strong> We do not make a decision that has a legal
+                    or similarly significant effect on you by automated means alone, and we build no
+                    profile of you for that purpose. Some checks do act without a person, and each
+                    affects one request or one reward, not your account: a rate limit refuses
+                    requests over a ceiling; the text filter refuses a request that matches one of
+                    its rules; and the referral checks in section 01 withhold a referral reward.
+                    Suspending or banning an account is never automatic. A person does it. If one of
+                    these checks got it wrong, write to{' '}
+                    <a href={contactMailto()} className="agi-ds-link">
+                      {CONTACT_EMAIL}
+                    </a>{' '}
+                    and a person will look at it.
+                  </Prose>
+                  <Prose size="sm">
+                    <strong>Sensitive personal information.</strong> We do not ask for it, and you
+                    can use the product without giving us any. That covers details such as your
+                    health, race or ethnic origin, religion, sexual orientation, immigration status,
+                    precise location, government identity numbers and the contents of your private
+                    messages. It reaches us only if you put it in a chat, a file or a profile field,
+                    or connect an account that holds it. When it does, we use it only to provide
+                    what you asked for, which includes memory if you turned memory on. We do not use
+                    it for advertising or to build a profile of you for any other purpose, and we do
+                    not sell or share it. Voice audio is not stored and no voiceprint is made, as
+                    section 01 says.
+                  </Prose>
+                  <Prose size="sm">
+                    <strong>Health information.</strong> AGI is not a medical service. It is not
+                    offered for protected health information under HIPAA, and we sign no business
+                    associate agreement. That is a statement about organisations sending us patient
+                    records. It does not mean health details never reach us: what you type or upload
+                    about your own health is conversation content like any other, kept and deleted
+                    as section 05 says. One connector, HealthEx, is built to read your own health
+                    records at your request. Connectors are coming soon and none can be connected
+                    yet, HealthEx included. When it opens, it is a personal feature: it is offered
+                    only in the United States and only where it is switched on, it is not available
+                    inside an organisation workspace, it can read records and cannot change them,
+                    and its tools are offered only inside your Health space. A chat in the Health
+                    space is sent only to providers we have recorded as not training on what you
+                    send; if the model you picked is not one of those, the request is refused and
+                    you are asked to choose another. AGI is not a HIPAA covered entity or business
+                    associate for this connector.
                   </Prose>
                 </Stack>
               </Section>
@@ -1418,15 +1635,18 @@ export default function PrivacyPage() {
                     09 · Children
                   </h2>
                   <Prose>
-                    AGI accounts are for people aged 18 and over; 13- to 17-year-olds may use it
-                    only under an account opened and supervised by a parent, guardian or school, as
-                    set out in section 02 of the{' '}
+                    You must be at least {ACCOUNT_MINIMUM_AGE} to create an account, and anyone
+                    under {PARENTAL_PERMISSION_BELOW_AGE} needs permission from a parent or
+                    guardian, as set out in section 02 of the{' '}
                     <Link href="/terms" className="agi-ds-link">
                       terms
                     </Link>
-                    . We do not knowingly collect personal data from children under 13, or under the
-                    higher digital-consent age where one applies. If you believe a child has
-                    provided us data, email us and we will delete it.
+                    . Sign-up asks for your age to apply that rule. The number is checked in your
+                    browser and is not stored, sent to our servers or sent to our identity provider,
+                    and we do not verify it or the permission. We do not knowingly collect personal
+                    data from children under {ACCOUNT_MINIMUM_AGE}, or under the higher
+                    digital-consent age where one applies. If you believe a child has provided us
+                    data, email us and we will delete it.
                   </Prose>
                 </Stack>
               </Section>

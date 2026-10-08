@@ -95,7 +95,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Model providers (Managed Cloud)',
     purpose:
-      'Inference for Managed Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select. This applies to Managed Cloud only: in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
+      'Inference for Managed Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select; for the Free plan’s default model AGI chooses the provider, as the OpenRouter and Qwen rows below say, and for the support assistant AGI chooses the model, as the Cheaper Inference row below says. This applies to Managed Cloud only: in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
     region: 'United States and other regions, per provider',
     registryProviderIds: [
       'anthropic',
@@ -119,21 +119,22 @@ const SUBS: Subprocessor[] = [
   {
     name: 'OpenRouter',
     purpose:
-      'Inference routing on Managed Cloud, in two situations. (1) For the Qwen and Zhipu models, when AGI holds no key of its own for that provider: prompt content for those passes through OpenRouter on its way to the model provider. When AGI does hold that provider’s key, the request goes direct instead and OpenRouter is not in the path. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
+      'Inference routing on Managed Cloud, in three situations. (1) For the Qwen and Zhipu models, when AGI holds no key of its own for that provider: prompt content for those passes through OpenRouter on its way to the model provider. When AGI does hold that provider’s key, the request goes direct instead and OpenRouter is not in the path. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise. (3) The Free plan’s default model: a Free plan chat on the default model can be answered by OpenRouter’s free router, which picks a free model from the providers it carries. AGI chooses this route, you do not; a turn that needs tools, web search or code execution takes it. Those providers’ terms may allow training on what you send.',
     region: 'United States',
     registryProviderIds: ['open_router'],
   },
   {
     name: 'Qwen (Alibaba) and Zhipu',
     purpose:
-      'Inference for their own models on Managed Cloud. Which path a request takes is decided by our server configuration, not by anything you choose: when AGI holds its own key for one of these providers the prompt goes to that provider directly, and when it does not, and the model has an OpenRouter route, it goes through OpenRouter instead.',
-    region: 'Outside the United States, per provider',
+      'Inference for their own models on Managed Cloud. Which path a request takes is decided by our server configuration, not by anything you choose: when AGI holds its own key for one of these providers the prompt goes to that provider directly, and when it does not, and the model has an OpenRouter route, it goes through OpenRouter instead. Alibaba has a second role: it can answer a Free plan chat on the default model from a promotional allowance AGI holds. That request goes on AGI’s own key to Alibaba Cloud Model Studio’s international endpoint in Singapore, and the model that answers can be a Qwen model or another developer’s model that Alibaba hosts. AGI chooses this route, you do not, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training; we rely on that statement and cannot verify it.',
+    region:
+      'Outside the United States, per provider. Singapore for the Alibaba Cloud Model Studio international endpoint',
     registryProviderIds: ['qwen', 'zhipu', 'zhipu_anthropic'],
   },
   {
     name: 'Cheaper Inference (operated by Keak)',
     purpose:
-      'An inference gateway that can serve a Managed Cloud chat request. Your prompt and any attached content go to api.cheaperinference.com, which forwards them to the provider serving the model. A request reaches it only when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked, so it is neither every request nor every model. Keak states that Cheaper Inference does not store prompt or response bodies in its application database, that temporary uploads expire after an hour, and that it does not use customer prompt or response bodies to train Keak models; its operational logs are kept up to 12 months and its account and billing records for the agreement term plus seven years (checked 2026-09-06). What is kept beyond the gateway is the practice of whichever provider serves the request.',
+      'An inference gateway that can serve a Managed Cloud chat request. Your prompt and any attached content go to api.cheaperinference.com, which forwards them to the provider serving the model. A request reaches it only when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked, so it is neither every request nor every model. The support assistant on the help and support pages is the one case where you pick no model: AGI chooses a fast model for it, and while gateway routing is on that route runs through this gateway, including for a visitor who is not signed in. What it sends is your question, the help-article excerpts it found for it and, if you are signed in, a short list of facts about your account: your plan and subscription status, how much of your usage allowance is used, which connectors are connected, how many API keys you hold and whether your email is verified. It does not send your chats or files. Keak states that Cheaper Inference does not store prompt or response bodies in its application database, that temporary uploads expire after an hour, and that it does not use customer prompt or response bodies to train Keak models; its operational logs are kept up to 12 months and its account and billing records for the agreement term plus seven years (checked 2026-09-06). What is kept beyond the gateway is the practice of whichever provider serves the request.',
     region: 'United States, Canada, Europe and other countries where Keak operates',
     registryProviderIds: ['cheaperinference', 'cheaperinference_anthropic'],
   },
@@ -160,7 +161,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Resend',
     purpose:
-      'Transactional email, in three narrow paths and no others. (1) Support escalation: when a live-support session is escalated, the conversation transcript and the contact email you gave are emailed to our support address (lib/support/handoff/escalation-email.ts). (2) Scheduled-task notifications: if you enable them in Settings, the task name and your email address are used to tell you a run finished; the body carries no task output (lib/services/notification-email-service.ts). (3) Operational alerts to us, carrying user-linked job identifiers (lib/services/video-incident-alert-service.ts). There is no account-lifecycle email: no signup, deletion-confirmation, breach or policy-change mail is sent by anything.',
+      'Transactional email, sent to one address at a time. To you or your workspace: security alerts about your account and its sign-in methods, and the code and follow-up notice for Advanced Account Security (lib/services/notification-email-service.ts); a notice that a data export is ready; spend alerts and trial, billing, credit-expiry and auto-reload notices (lib/services/billing-notice-service.ts, lib/services/auto-reload-service.ts); workspace invitations, sent to the address the inviter enters (app/api/settings/team/invitations/invitation-email.ts); scheduled-task notifications if you enable them in Settings, carrying the task name and no task output; and staff replies to a support ticket you raised (lib/support/handoff/escalation-email.ts). To us: support escalations, with the conversation transcript and the contact email you gave; data-rights requests and copyright notices, with what you entered on the form; and operational alerts carrying user-linked job identifiers (lib/services/video-incident-alert-service.ts). No deletion-confirmation email is sent, and nothing in the product mails a breach or policy-change notice to a list of customers.',
     region: 'United States',
     registryProviderIds: [],
   },
@@ -302,12 +303,12 @@ export default function SubprocessorsPage() {
                 /changelog
               </Link>
               , which you can subscribe to. <strong>We do not promise emailed notice.</strong> The
-              product can send email in three narrow paths (support escalation, scheduled-task
-              notifications, and operational alerts to us) and none of them can mail an arbitrary
-              list of customers. Until something can, a commitment to email you about a subprocessor
-              change is one we could not perform. To object to a new subprocessor on reasonable data
-              protection grounds, write to us within 30 days of publication. The objection and
-              termination route is in section 05 of the{' '}
+              product sends email to one address at a time, the messages listed in the Resend row
+              above, and none of those paths mails an arbitrary list of customers. Until something
+              can, a commitment to email you about a subprocessor change is one we could not
+              perform. To object to a new subprocessor on reasonable data protection grounds, write
+              to us within 30 days of publication. The objection and termination route is in section
+              05 of the{' '}
               <Link href="/dpa#s-05" className="agi-ds-link">
                 DPA
               </Link>
@@ -345,7 +346,7 @@ export default function SubprocessorsPage() {
             </Prose>
             <Prose>
               <strong>Which surface that applies to, precisely.</strong> BYOK is a capability of the
-              released CLI. The VS Code extension is coming soon.{' '}
+              CLI. The VS Code extension is coming soon.{' '}
               <strong>
                 The web app at agiworkforce.com and the current Desktop app are cloud-only: neither
                 has a user-supplied-key path.

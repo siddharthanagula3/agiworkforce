@@ -1,0 +1,671 @@
+{
+  "key": "acceptableUse",
+  "route": "/acceptable-use",
+  "date": "2026-09-27",
+  "replacedOn": "2026-10-08",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Acceptable use.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-acceptable-use-title",
+      "content": [
+        {
+          "text": "Acceptable use."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI ships an agent that can search and fetch the web, run code in a cloud sandbox, drive a browser tab, and call tools on accounts you connect. "
+        },
+        {
+          "text": "That capability set needs rules that name the capability, not a generic template. This page is those rules.",
+          "strong": true
+        },
+        {
+          "text": " It sits alongside the "
+        },
+        {
+          "text": "terms of service",
+          "href": "/terms"
+        },
+        {
+          "text": "; where they overlap, both apply. Last updated: 2026-09-27. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/acceptable-use"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "summary",
+      "content": [
+        {
+          "text": "The short version."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Summary",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Only your own accounts"
+            }
+          ],
+          "value": [
+            {
+              "text": "Point the agent at systems and accounts you are authorized to use. Not someone else's inbox, not a site you were asked to stay off, not an account you share credentials into."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "The sandbox is for your work"
+            }
+          ],
+          "value": [
+            {
+              "text": "Code runs in an isolated cloud sandbox. Use it for your own compute. Not for mining, scanning, flooding, or building malware."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tool approvals"
+            }
+          ],
+          "value": [
+            {
+              "text": "Your Tool Approvals setting decides, and it governs our own tools as well as connectors. The website starts with Skip approvals for eligible actions, including reads inside AGI, web search, page fetch and code in the AGI sandbox. Destructive or unknown actions still ask, as do tools you marked Needs approval; blocked tools stay blocked. You can switch to Ask before every action or read-only auto-approval. Workspace restrictions may require more approval. See the full authority map on agent permissions."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "A block is absolute"
+            }
+          ],
+          "value": [
+            {
+              "text": "A tool you block is refused on the server before it runs. Nothing in the app or the API can override that."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "You can revoke everything"
+            }
+          ],
+          "value": [
+            {
+              "text": "Disconnect a connector, reset a tool's saved permission, or remove a site from the browser allowlist, all listed on the agent permissions page."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Breaking these rules costs access"
+            }
+          ],
+          "value": [
+            {
+              "text": "The ladder is rate limiting, then server-side tool refusal, then account suspension or ban, then termination. Suspension is enforced on every request."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The precise default authority for every tool (what asks, which settings let a tool run without asking, and how to revoke) is on "
+        },
+        {
+          "text": "/agent-permissions",
+          "href": "/agent-permissions"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-01",
+      "content": [
+        {
+          "text": "01 · What this covers."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "These rules apply to every AGI surface (web, desktop, mobile, the Chrome extension, the VS Code extension, and the CLI) and to all three trust boundaries: Local on-device execution, BYOK using your own provider keys, and Managed Cloud that AGI hosts and meters."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Managed Cloud is in public alpha and open by default.",
+          "strong": true
+        },
+        {
+          "text": " Read this page as the rules for an alpha service, not as a general-availability contract. Where you use BYOK, the provider whose key you supply also applies their own terms to your usage, and those govern that traffic. See “Third-party services and connectors” in the "
+        },
+        {
+          "text": "terms",
+          "href": "/terms"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-02",
+      "content": [
+        {
+          "text": "02 · Prohibited uses."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Each rule below names the capability it constrains, so you can tell whether it applies to what you are building."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "(a) Browser control: systems you are not authorized to use"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The Chrome extension can drive a browser tab through the Chrome debugger on sites you both add to your allowlist and separately grant browser control to. The same attachment reads that page's console messages and the requests it makes, and downloads a file when you ask for one, under those same two grants and no others. Do not use it to access accounts or systems you are not authorized to access; to bypass authentication, access controls, paywalls, CAPTCHAs, or bot detection; to scrape a site at a rate or in a manner the site prohibits; or to take actions in another person's account. Adding a site to your own allowlist is a statement about what you want the agent to reach. It is not permission from that site."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "(b) The code sandbox"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Model-authored code runs in an isolated ephemeral cloud sandbox with a bounded lifetime and a per-plan concurrency allowance. A code session carries one of three outbound network policies: "
+        },
+        {
+          "text": "none",
+          "code": true
+        },
+        {
+          "text": " (no outbound access beyond our own provider-credential proxy), "
+        },
+        {
+          "text": "trusted",
+          "code": true
+        },
+        {
+          "text": " (a fixed allowlist of package and source hosts, everything else denied), or "
+        },
+        {
+          "text": "full",
+          "code": true
+        },
+        {
+          "text": " (unrestricted outbound access). Under "
+        },
+        {
+          "text": "none",
+          "code": true
+        },
+        {
+          "text": " or "
+        },
+        {
+          "text": "trusted",
+          "code": true
+        },
+        {
+          "text": ", you may add up to ten of your own hostnames to that allowlist; our provider-credential proxy stays reachable at every setting, including "
+        },
+        {
+          "text": "none",
+          "code": true
+        },
+        {
+          "text": ", so a proxied model credential still works with no other egress granted. Choosing "
+        },
+        {
+          "text": "full",
+          "code": true
+        },
+        {
+          "text": " does not widen what these rules permit: the restrictions below apply at every network setting. Do not use it for cryptocurrency mining or other resource-arbitrage workloads; for denial-of-service traffic, port scanning, or vulnerability scanning against systems you do not own; for developing or distributing malware, ransomware, or credential-cracking tooling; or to attempt to escape the sandbox, reach our internal network, or reach another customer’s workload."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "(c) Connected accounts"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Connectors let the agent act inside third-party systems on your behalf. Do not connect an account you do not own or administer, or one you are not permitted to automate. Do not use a connected account to read, send, post, or comment on behalf of people who have not authorized it, including sending mail from a connected mailbox to recipients who did not consent, or posting into a shared workspace under a colleague's identity. Do not use connectors to collect or move a third party's data out of a system that party controls."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "(d) Custom MCP servers"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "You can point AGI at a remote MCP server you choose and optionally give it a bearer token. AGI does not vet those servers. Do not point one at an endpoint you do not control or trust, use one to relay another party’s data, or use one to circumvent a limit, gate, or prohibition in this policy. A custom MCP server is an extension of "
+        },
+        {
+          "text": "your",
+          "em": true
+        },
+        {
+          "text": " trust boundary, and its operator sees the conversation context you send to its tools."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "(e) Content and conduct"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Do not use AGI to break the law; to harass, threaten, defame, or stalk anyone; to generate child sexual abuse material; to produce non-consensual intimate imagery; to develop weapons, including chemical, biological, radiological, nuclear, or high-yield explosives; to build tooling for unlawful surveillance; or to generate fraud, phishing, or impersonation material. Do not use output to make automated decisions about a person (employment, credit, housing, insurance, medical, education, or legal status) without meaningful human review. Do not use AGI for practices prohibited under Art. 5 of the EU AI Act (Regulation (EU) 2024/1689): biometric categorisation to infer protected or sensitive attributes, real-time remote biometric identification in public spaces, social scoring, emotion inference in workplace or educational settings, or predictive policing based solely on automated profiling."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "(f) The service itself"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Do not resell, sublicense, or white-label AGI without a written agreement. Do not reverse-engineer or decompile the software except where applicable law permits, and do not conduct penetration testing or load testing against the service without our written consent. If you want to test, write to us first and we will scope it. Do not misrepresent AGI-generated output as reviewed or endorsed by AGI Automation LLC."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-03",
+      "content": [
+        {
+          "text": "03 · Automated access and limits."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Programmatic use is expected and supported. These are the rules it operates under. The specific numbers below reflect the limits configured at the time of writing and may change; the enforced values are the ones in the product, and exceeding them returns an error rather than degrading quietly."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Automated access limits",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Per-user request ceiling"
+            }
+          ],
+          "value": [
+            {
+              "text": "Chat completions are rate limited per authenticated user: 30 requests per minute at the time of writing. The limiter is fail-closed: if the rate-limit store is unavailable, requests are refused rather than allowed through."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Per-IP request ceiling"
+            }
+          ],
+          "value": [
+            {
+              "text": "A separate, broader pre-authentication ceiling applies per IP address (1,500 requests per minute at the time of writing) so a shared network cannot consume one user's quota. It is also fail-closed."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Conversation operations"
+            }
+          ],
+          "value": [
+            {
+              "text": "Conversation create/update/delete operations are limited to 60 per minute per user."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "API key scopes"
+            }
+          ],
+          "value": [
+            {
+              "text": "The public API supports exactly three scopes: models:read, inference:write, and usage:read. There is no scope that grants connector access, sandbox control, or administrative action. Do not represent otherwise to your own users."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Key handling"
+            }
+          ],
+          "value": [
+            {
+              "text": "API keys are issued to one account. Do not share, resell, sublicense, or embed a key in a distributed client where a third party can extract it. Activity through your key is your responsibility."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Connector and sandbox ceilings"
+            }
+          ],
+          "value": [
+            {
+              "text": "The number of connector tools available to your account and the number of concurrent sandboxes you may hold are capped by plan. Do not run multiple accounts to defeat a cap."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Crawling this site"
+            }
+          ],
+          "value": [
+            {
+              "text": "Our crawler policy is published at /robots.txt and is part of these rules. Application routes are disallowed for all crawlers, and Common Crawl (CCBot) is disallowed entirely."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Do not attempt to evade a limit by rotating accounts, addresses, or keys. Retry with backoff when you receive a rate-limit response rather than retrying immediately in a loop."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-04",
+      "content": [
+        {
+          "text": "04 · What happens on a violation."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Enforcement is a ladder, not a single switch. Which rung applies depends on severity and on whether the behaviour continues. Severe abuse (CSAM, credible threats, active attack traffic) goes straight to the top of the ladder."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Enforcement ladder",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "1 · Rate limiting"
+            }
+          ],
+          "value": [
+            {
+              "text": "Requests over a published ceiling are refused. On the security-sensitive limiters, an unavailable rate-limit store also results in refusal rather than access."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2 · Server-side tool refusal"
+            }
+          ],
+          "value": [
+            {
+              "text": "A tool you have blocked is refused on the server before execution, on both the streaming tool loop and the approval-resume path. This applies to a request from our own app and to a request you construct yourself against the API."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "3 · Account suspension or ban"
+            }
+          ],
+          "value": [
+            {
+              "text": "An account status of suspended or banned is checked on every authenticated request and returns a 403. The check fails closed by default: if the status cannot be read after a retry, the request is refused with a 503 rather than allowed through."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "4 · Termination"
+            }
+          ],
+          "value": [
+            {
+              "text": "Material breach may end your access entirely under the termination section of the terms of service, which also states what happens to your data and which clauses survive."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Appeals.",
+          "strong": true
+        },
+        {
+          "text": " If your account is suspended or banned and you believe it was wrong, sign in and appeal from the notice you see, or use the "
+        },
+        {
+          "text": "appeal form",
+          "href": "/appeal"
+        },
+        {
+          "text": " with the email address on the account if you cannot sign in. You can also email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Suspension%20appeal"
+        },
+        {
+          "text": " with the subject “Suspension appeal”. Each appeal gets a reference and a person replies. A suspension can be reversed by reinstatement; we will tell you what triggered it unless doing so would compromise an investigation or another person’s safety."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "s-05",
+      "content": [
+        {
+          "text": "05 · Reporting abuse."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "If an AGI agent is acting against you or your systems",
+          "strong": true
+        },
+        {
+          "text": " (unwanted automated traffic, messages from a connected account, or activity you did not authorize), email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Abuse%20report"
+        },
+        {
+          "text": " with the subject “Abuse report”. Include the affected domain or account, timestamps with timezone, and any request identifiers, log lines, or message headers you have. You do not need an AGI account to report abuse."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "If you found a security vulnerability",
+          "strong": true
+        },
+        {
+          "text": ", use the subject line “Security” and follow the guidance on "
+        },
+        {
+          "text": "/security",
+          "href": "/security"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA. We may update this policy with notice posted on this page; material changes are recorded on "
+        },
+        {
+          "text": "/changelog",
+          "href": "/changelog"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Approvals",
+            "href": "/agent-permissions"
+          }
+        ],
+        [
+          {
+            "text": "Terms",
+            "href": "/terms"
+          }
+        ],
+        [
+          {
+            "text": "Privacy",
+            "href": "/privacy"
+          }
+        ]
+      ]
+    }
+  ]
+}

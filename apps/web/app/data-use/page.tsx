@@ -23,8 +23,12 @@ const QUESTIONS = [
         <strong>No.</strong> AGI does not train AGI-owned models on your prompts, responses or
         files. That is a flat answer with one thing worth understanding behind it: in Managed Cloud
         we send your prompt to the model provider serving the model you picked, and what{' '}
-        <em>they</em> do with it is governed by their terms, not ours. We are not making a promise
-        on their behalf, and section 02 of the{' '}
+        <em>they</em> do with it is governed by their terms, not ours. On the Free plan, a chat on
+        the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model
+        Studio, on AGI&rsquo;s own key at its international endpoint in Singapore, or
+        OpenRouter&rsquo;s free router. Which one answers depends on what is available for that
+        turn, and the reply shows the model that answered. We are not making a promise on their
+        behalf, and section 02 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
@@ -60,9 +64,9 @@ const QUESTIONS = [
         machine and we receive nothing. In <strong>BYOK</strong>, the request goes from your client
         straight to the provider on your own key and we are not in the path. In{' '}
         <strong>Managed Cloud</strong>, it goes through us and we store it. One caveat people get
-        wrong: Local is available in the released CLI, while BYOK is available in the CLI and is
-        coming soon to VS Code. <strong>Web and Desktop are cloud-only</strong>, so work on those
-        surfaces uses Managed Cloud. The full comparison is section 00 of the{' '}
+        wrong: Local is part of the CLI, while BYOK is part of the CLI and is coming soon to VS
+        Code. <strong>Web and Desktop are cloud-only</strong>, so work on those surfaces uses
+        Managed Cloud. The full comparison is section 00 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>

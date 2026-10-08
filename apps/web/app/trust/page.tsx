@@ -14,6 +14,11 @@ import {
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
+import {
+  ACCOUNT_MINIMUM_AGE,
+  ARTIFACT_SCRIPT_CDN_HOSTS,
+  PARENTAL_PERMISSION_BELOW_AGE,
+} from '@agiworkforce/types';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 import {
@@ -29,7 +34,7 @@ export const metadata = buildMetadata({
   path: '/trust',
 });
 
-const LAST_REVIEWED = POLICY_LAST_UPDATED.trust;
+const LAST_UPDATED = POLICY_LAST_UPDATED.trust;
 
 /** Machine-checkable so the honesty test can fail the build once it passes. */
 const NEXT_REVIEW_DATE = '2026-11-30';
@@ -149,8 +154,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   },
   {
     label: 'DPDP (India): verifiable parental consent under s.9',
-    value:
-      'Not implemented. Under this Act a child is anyone under 18 and verifiable parental consent is mandatory. The web surface has no age gate; the mobile age gate is self-declared and its minor-safe mode can be cleared by the child. This is the largest open gap in our DPDP position and we are listing it rather than letting you discover it. As of 2026-08-14.',
+    value: `Not implemented. Under this Act a child is anyone under 18 and verifiable parental consent is mandatory. Web sign-up asks for an age and refuses anyone under ${ACCOUNT_MINIMUM_AGE}, but the age is self-declared, checked once in the browser and not stored, and the permission the terms require below ${PARENTAL_PERMISSION_BELOW_AGE} is not verified; the mobile age gate is self-declared and its minor-safe mode can be cleared by the child. This is the largest open gap in our DPDP position and we are listing it rather than letting you discover it. As of 2026-10-07.`,
   },
   {
     label: 'DPDP (India): notice languages under s.6(4)',
@@ -173,7 +177,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Local mode isolation',
     value:
-      'Implemented in the released CLI for Ollama and LM Studio on loopback. AGI infrastructure and subprocessors are not in that model request path. Desktop and web use Managed Cloud and do not expose Local inference. As of 2026-09-19.',
+      'Implemented in the CLI for Ollama and LM Studio on loopback. AGI infrastructure and subprocessors are not in that model request path. Desktop and web use Managed Cloud and do not expose Local inference. As of 2026-09-19.',
   },
   {
     label: 'Desktop credential storage',
@@ -183,7 +187,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'CLI provider-key storage',
     value:
-      'Implemented. The released CLI saves each provider credential in the operating system credential store and keeps only provider names in its on-disk index. The CLI sends BYOK traffic directly to the selected provider. As of 2026-09-19.',
+      'Implemented. The CLI saves each provider credential in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and keeps only provider names in its on-disk index. The CLI sends BYOK traffic directly to the selected provider. As of 2026-10-07.',
   },
   {
     label: 'Transport security',
@@ -197,8 +201,7 @@ const POSTURE: { label: string; value: string }[] = [
   },
   {
     label: 'Artifact sandboxing',
-    value:
-      "Implemented. Model-generated artifacts render on a separate origin with no network egress (connect-src 'none') and frame-ancestors pinned to our hosts. The fallback path drops allow-same-origin rather than weakening the sandbox. As of 2026-08-05.",
+    value: `Implemented. Model-generated artifacts render on a separate origin whose policy blocks fetch, XHR and WebSocket calls (connect-src 'none') and pins frame-ancestors to our hosts. It is not full network isolation: scripts, styles, images and fonts can still load from ${ARTIFACT_SCRIPT_CDN_HOSTS.length} pinned CDN hosts. The fallback path drops allow-same-origin rather than weakening the sandbox. As of 2026-10-07.`,
   },
   {
     label: 'Database row-level isolation',
@@ -297,7 +300,7 @@ export default function TrustPage() {
         <Section id="review" labelledBy="agi-trust-review-title" rule>
           <Stack gap="tight">
             <h2 className="agi-ds-h2" id="agi-trust-review-title">
-              Last reviewed {LAST_REVIEWED}. Next review {NEXT_REVIEW}.
+              Last updated {LAST_UPDATED}. Next review {NEXT_REVIEW}.
             </h2>
             <Prose size="sm">
               Managed Cloud is in public alpha. <PolicyVersionsLink policy="trust" />
@@ -387,6 +390,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-10-08',
+                        value:
+                          'Four rows corrected, with no review of the rest of the page. Artifact sandboxing said no network egress; the policy blocks fetch, XHR and WebSocket calls and still lets scripts, styles, images and fonts load from pinned CDN hosts. The Local mode and CLI key rows called the CLI released, and it has no published release. The CLI key row now says the keys go to owner-only files on Linux or when the keyring is turned off. The DPDP parental consent row said the web surface has no age gate; web sign-up now asks for an age, which is self-declared and not stored, and no parental permission is verified.',
+                      },
                       {
                         label: '2026-09-28',
                         value:

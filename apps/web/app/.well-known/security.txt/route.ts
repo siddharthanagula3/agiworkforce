@@ -10,7 +10,7 @@ export function GET(): Response {
 
   const body = [
     '# Coordinated vulnerability disclosure for AGI Workforce.',
-    '# Full policy, including scope, safe harbour and response targets:',
+    '# Full policy, including scope, safe harbour and how reports are handled:',
     `# ${SITE_URL}/security#report`,
     '',
     `Contact: mailto:${CONTACT_EMAIL}`,

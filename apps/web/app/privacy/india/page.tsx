@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -25,6 +26,7 @@ import {
   contactMailto,
 } from '@/lib/legal-constants';
 import { CONSENT_PURPOSES, MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
+import { PUBLISHED_RETENTION_CRON_TIMES } from '@/lib/legal/published-cron-schedules';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
@@ -54,8 +56,8 @@ const MODES: readonly LedgerRow[] = [
     label: 'Local',
     value: (
       <>
-        Where it goes: from the released CLI to Ollama or LM Studio on loopback. Nothing is
-        transmitted to us and nothing is silently routed to BYOK or Managed Cloud.
+        Where it goes: from the CLI to Ollama or LM Studio on loopback. Nothing is transmitted to us
+        and nothing is silently routed to BYOK or Managed Cloud.
         <br />
         What we hold: nothing about the local model request. The current Desktop and web apps use
         Managed Cloud and do not expose Local inference.
@@ -69,10 +71,10 @@ const MODES: readonly LedgerRow[] = [
         Where it goes: from your client straight to the provider you targeted, on your own API key.
         We are not in that request path.
         <br />
-        What we hold: not the provider key or prompt traffic. BYOK is available in the released CLI,
-        which stores provider credentials in the operating system credential store and calls the
-        provider directly. The VS Code extension is coming soon; Desktop and web do not expose
-        provider-key entry.
+        What we hold: not the provider key or prompt traffic. BYOK is part of the CLI, which stores
+        provider credentials in the operating system credential store, or in owner-only files on
+        Linux or when the keyring is turned off, and calls the provider directly. The VS Code
+        extension is coming soon; Desktop and web do not expose provider-key entry.
       </>
     ),
   },
@@ -80,7 +82,8 @@ const MODES: readonly LedgerRow[] = [
     label: 'Managed Cloud',
     value: (
       <>
-        Where it goes: through our gateway to the provider serving the model you selected.
+        Where it goes: through our gateway to the provider serving the model you selected, or, on
+        the Free plan&rsquo;s default model, the provider AGI chooses for that turn.
         <br />
         What we hold: conversations, files, projects, memories, schedules and settings, so they sync
         across your devices.
@@ -97,7 +100,8 @@ const PROCESSING: readonly LedgerRow[] = [
         Purpose: creating and securing your account. Optionally, the account choice &ldquo;
         {MARKETING_EMAIL_CONSENT_PURPOSE.label}&rdquo; is a separate box at sign-up that you can
         leave unticked or turn off on its own. Held by our identity provider. We do not store your
-        password. Basis: your request for the account; your consent for marketing email.
+        password. Sign-up also asks for your age; it is checked in your browser and is not stored or
+        sent to us. Basis: your request for the account; your consent for marketing email.
       </>
     ),
   },
@@ -171,8 +175,7 @@ const RETENTION: readonly LedgerRow[] = [
   },
   {
     label: 'Security audit log',
-    value:
-      '90 days as a policy. The routine that enforces it is run by an administrator, not on a schedule, so treat it as the policy rather than an automatic guarantee.',
+    value: `90 days. A scheduled job deletes older entries every night at ${PUBLISHED_RETENTION_CRON_TIMES.securityAuditLogs}.`,
   },
   {
     label: 'Consent records',
@@ -218,7 +221,7 @@ const RIGHTS: readonly LedgerRow[] = [
   {
     label: 'Erasure',
     value:
-      'Request account deletion in the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email, because the only email this product sends is support-escalation and scheduled-task notification: there is no account-lifecycle email path. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins.',
+      'Request account deletion in the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins.',
   },
   {
     label: 'Withdraw consent',
@@ -384,26 +387,29 @@ export default function IndiaDpdpNoticePage() {
                   </Prose>
                   <Prose size="sm">
                     <strong>
-                      That published list is currently incomplete, and we would rather say so here
-                      than let you rely on it.
+                      An earlier version of this notice said that list was incomplete.
                     </strong>{' '}
-                    A review completed on {POLICY_LAST_UPDATED.indiaPrivacy} found recipients that
-                    receive personal data and are not on it: an email provider used for support
-                    escalations and scheduled-task notifications, a video-generation provider that
-                    receives the prompt text you type, a geocoding service that receives location
-                    queries you make, and the Apple and Google store APIs that receive purchase
-                    identifiers on mobile. Correcting that page is a tracked open item. If your
-                    decision to use this service depends on the full recipient list, ask the
-                    grievance contact in section 08 before you sign up.
+                    It named an email provider, a video-generation provider, a geocoding service and
+                    the Apple and Google store APIs as recipients missing from it. The email,
+                    video-generation and geocoding providers and Google&rsquo;s purchase
+                    verification API are on the list now, and the corrections are recorded on that
+                    page. Apple was named in error: purchases on iOS are verified on our own servers
+                    and nothing is sent to Apple. If your decision to use this service depends on
+                    the full recipient list, ask the grievance contact in section 08 before you sign
+                    up.
                   </Prose>
                   <Prose size="sm">
                     <strong>Model providers.</strong> In Managed Cloud, the prompt and any attached
                     content go to the provider serving the model you selected, and for routed models
-                    the request passes through OpenRouter. Those providers handle that content under
-                    their own terms and data-use policies; our no-training statement is about
-                    AGI-owned models and is not a promise on their behalf. In BYOK the request goes
-                    from your client straight to the provider on your key, governed by your own
-                    account with them. In Local, none of them are contacted.
+                    the request passes through OpenRouter. On the Free plan, a chat on the default
+                    model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model
+                    Studio, on AGI&rsquo;s own key at its international endpoint in Singapore, or
+                    OpenRouter&rsquo;s free router. Which one answers depends on what is available
+                    for that turn, and the reply shows the model that answered. Those providers
+                    handle that content under their own terms and data-use policies; our no-training
+                    statement is about AGI-owned models and is not a promise on their behalf. In
+                    BYOK the request goes from your client straight to the provider on your key,
+                    governed by your own account with them. In Local, none of them are contacted.
                   </Prose>
                 </Stack>
               </Section>
@@ -502,21 +508,25 @@ export default function IndiaDpdpNoticePage() {
                   </h2>
                   <Prose>
                     Under this Act a child is anyone under 18, and processing a child&rsquo;s data
-                    requires verifiable consent from a parent or guardian. AGI accounts are for
-                    people aged 18 and over, and the{' '}
+                    requires verifiable consent from a parent or guardian. Sign-up asks for your age
+                    and refuses anyone under {ACCOUNT_MINIMUM_AGE}, and the{' '}
                     <Link href={CANONICAL_POLICY_ROUTES.terms} className="agi-ds-link">
                       terms
                     </Link>{' '}
-                    permit 13- to 17-year-olds only under an account opened and supervised by a
-                    parent, guardian or school.{' '}
+                    require anyone under {PARENTAL_PERMISSION_BELOW_AGE} to have permission from a
+                    parent or guardian.{' '}
                     <strong>
                       We do not currently perform verifiable parental consent or age verification.
                     </strong>{' '}
-                    That is a gap against this Act, we are naming it rather than implying otherwise,
-                    and it is tracked as an open item. We do not knowingly collect a child&rsquo;s
-                    personal data; if you believe we have, use the grievance contact above and we
-                    will delete it. We do not run behavioural advertising or tracking directed at
-                    children in any mode.
+                    The age is whatever is typed, it is checked once in the browser and not kept,
+                    and nobody checks the permission. That is a gap against this Act, we are naming
+                    it rather than implying otherwise, and it is tracked as an open item. Because an
+                    account can be created from the age of {ACCOUNT_MINIMUM_AGE}, people this Act
+                    treats as children can hold accounts here, and we cannot tell which accounts
+                    those are. If you believe we hold a child&rsquo;s personal data without a
+                    parent&rsquo;s consent, use the grievance contact above and we will delete it.
+                    We do not run behavioural advertising or tracking directed at children in any
+                    mode.
                   </Prose>
                 </Stack>
               </Section>
@@ -535,8 +545,8 @@ export default function IndiaDpdpNoticePage() {
                     </Link>
                     . The internal procedure for a breach (who declares it, what goes in the Board
                     notification, and what you would receive) is written down and rehearsed against
-                    a 72-hour clock. The email this product can send today is support-escalation and
-                    scheduled-task notification; there is no account-lifecycle mailing path, so a
+                    a 72-hour clock. The product sends email to one account at a time, and no
+                    procedure for emailing a set of affected users has been built or exercised, so a
                     user-facing breach notice would be delivered in-product and at a public URL
                     rather than by email. We would rather tell you that now than discover it during
                     an incident.

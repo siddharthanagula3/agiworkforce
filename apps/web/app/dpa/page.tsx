@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
@@ -50,7 +51,7 @@ const ANNEX_I: readonly LedgerRow[] = [
   {
     label: 'Nature and purpose',
     value:
-      'Storing and retrieving conversations, projects, files, memories, schedules and settings; transmitting prompt content to the model provider serving the model the Customer selects; executing code and processing files in a managed sandbox when the Customer invokes a tool and the operator has enabled sandbox execution; authentication, billing, rate limiting, abuse prevention and support.',
+      'Storing and retrieving conversations, projects, files, memories, schedules and settings; transmitting prompt content to the model provider serving the model the Customer selects, or, for the Free plan’s default model, the provider AGI chooses for that turn; executing code and processing files in a managed sandbox when the Customer invokes a tool and the operator has enabled sandbox execution; authentication, billing, rate limiting, abuse prevention and support.',
   },
   {
     label: 'Categories of data subjects',
@@ -65,7 +66,7 @@ const ANNEX_I: readonly LedgerRow[] = [
   {
     label: 'Special categories',
     value:
-      'None are requested and none are required to use the service. The Customer must not submit special-category personal data under GDPR Art. 9, criminal-conviction data under Art. 10, payment card numbers, or records subject to HIPAA or comparable regimes. AGI is not configured for those regimes and makes no representation that it is.',
+      'None are requested and none are required to use the service. The Customer must not submit special-category personal data under GDPR Art. 9, criminal-conviction data under Art. 10, payment card numbers, or records subject to HIPAA or comparable regimes. AGI is not configured for those regimes and makes no representation that it is. This exclusion governs what a Customer submits under this DPA. The HealthEx connector is a separate, personal feature: an individual may choose to connect it to read their own health records. Like every connector it is coming soon and cannot be connected yet. When it opens, it is offered only in the United States and is not available inside an organisation workspace, so it is outside this DPA, and AGI is not a HIPAA covered entity or business associate for it.',
   },
   {
     label: 'Frequency',
@@ -353,8 +354,7 @@ const DPDP_DUTIES: readonly LedgerRow[] = [
   },
   {
     label: 'Children (s. 9)',
-    value:
-      'AGI performs no age verification and no verifiable parental consent. Accounts are for adults, and the Terms of Service permit 13- to 17-year-olds only under an account opened and supervised by a parent, guardian or school. This is named as a gap against the Act rather than implied away.',
+    value: `AGI performs no age verification and no verifiable parental consent. Sign-up asks for an age and refuses anyone under ${ACCOUNT_MINIMUM_AGE}; the age is self-declared, checked in the browser and not stored, and the Terms of Service require anyone under ${PARENTAL_PERMISSION_BELOW_AGE} to have permission from a parent or guardian, which AGI does not verify. This is named as a gap against the Act rather than implied away.`,
   },
 ];
 
@@ -717,10 +717,9 @@ export default function DpaPage() {
                     <strong>Deletion.</strong> An account deletion request records a deletion
                     timestamp and schedules erasure 24 hours later. A daily job then erases
                     user-scoped records and the stored objects belonging to that account and deletes
-                    the identity at the authentication provider. No confirmation email is sent,
-                    because the product has no account-lifecycle mailing path. Cancellation is
-                    self-serve: a user who changes their mind can sign back in and cancel from
-                    Settings &gt; Account any time within the 24-hour window.
+                    the identity at the authentication provider. No confirmation email is sent.
+                    Cancellation is self-serve: a user who changes their mind can sign back in and
+                    cancel from Settings &gt; Account any time within the 24-hour window.
                   </Prose>
                   <Prose>
                     <strong>Backups.</strong> Database and object-storage snapshots are governed by
@@ -769,9 +768,9 @@ export default function DpaPage() {
                     stand in for individual intimation where the individuals are identifiable.
                   </Prose>
                   <Prose>
-                    <strong>How that notice is delivered, honestly.</strong> The product sends
-                    support-escalation and scheduled-task email, and nothing in it can mail an
-                    arbitrary list of affected users. A notice to individuals is therefore delivered
+                    <strong>How that notice is delivered, honestly.</strong> The product sends email
+                    to one account at a time, and no procedure for emailing a set of affected users
+                    has been built or exercised. A notice to individuals is therefore delivered
                     in-product on next sign-in and as a dated public notice at a stable URL, with
                     direct email only where an address is held and someone sends it. That is a limit
                     of the product today, published here so no incident response is planned around a

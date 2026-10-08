@@ -6,13 +6,19 @@
     "terms": {
       "route": "/terms",
       "slug": "terms",
-      "current": "2026-09-23",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "The date moves to 2026-10-08, the public launch day. Corrects three statements without changing your rights or obligations. The CLI is no longer described as released, and the terms say it keeps provider keys in owner-only files on Linux or when the keyring is turned off. Deleting an account still sends no confirmation email; the terms no longer say that is because the product sends no account email, which was not true. The appeal route for a suspended account is in section 04 of the acceptable use policy, not section 05. The age rule changes: you must be at least 13 to create an account, and if you are under 18 you need permission from a parent or guardian, who accepts the terms on your behalf. It used to require an account holder to be 18, with younger users only under a supervised account. Sign-up asks for your age and refuses anyone under 13; we do not verify the age or the permission, and the age is not kept. Four additions. You need our written permission to use our names and logos, and may not use them to suggest we endorse you. While a subscription payment is overdue, paid features are switched off and the account runs with the Free plan’s limits; there is no grace period, and a failed payment does not delete your content. The sanctions section now names the United States Office of Foreign Assets Control. A material change to these terms takes effect no sooner than 30 days after it is posted. Also states that on the Free plan a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router, depending on what is available for that turn.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-23",
           "summary": "Links each provider's current terms and explains how the gateway's, the serving provider's and your own key's terms apply to the route you choose.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-09-22",
@@ -31,11 +37,11 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-10-07",
+      "current": "2026-10-08",
       "versions": [
         {
-          "date": "2026-10-07",
-          "summary": "Adds an optional marketing email choice, asked in a separate unticked box and withdrawable in Settings or on the data rights page; no marketing email is sent yet. Corrects where files are stored: new uploads and generated files are written to a private bucket, while profile pictures and files stored before that move can be opened by anyone who has their address, and a data export is downloaded through a short-lived link. MiniMax models receive nothing from Managed Cloud and are reachable only with your own key; Qwen and Zhipu requests go through OpenRouter unless AGI holds its own key for that provider. Says how a notice about an incident would reach you.",
+          "date": "2026-10-08",
+          "summary": "Adds an optional marketing email choice, asked in a separate unticked box and withdrawable in Settings or on the data rights page; no marketing email is sent yet. Corrects where files are stored: new uploads and generated files are written to a private bucket, while profile pictures and files stored before that move can be opened by anyone who has their address, and a data export is downloaded through a short-lived link. MiniMax models receive nothing from Managed Cloud and are reachable only with your own key; Qwen and Zhipu requests go through OpenRouter unless AGI holds its own key for that provider. Says how a notice about an incident would reach you. Removes a statement that only three things in the product can send email, which was not true, and says the CLI keeps provider keys in owner-only files on Linux or when the keyring is turned off. The age rule changes: you must be at least 13 to create an account, and anyone under 18 needs permission from a parent or guardian. Sign-up asks for your age; it is checked in your browser and is not stored or sent to us or to our identity provider, and we do not verify it.",
           "status": "current",
           "published": null
         },
@@ -74,13 +80,19 @@
     "acceptableUse": {
       "route": "/acceptable-use",
       "slug": "acceptable-use",
-      "current": "2026-09-27",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Section 02 adds seven rules: no using the service or its output to build a competing product or train a competing model; no bulk harvesting of output to copy or distil a model; no deceiving voters or impersonating candidates and officials; no content that encourages or glorifies suicide, self-harm or eating disorders; no sexually explicit content; no attacks on critical infrastructure; and no passing AI output off as human-made to deceive someone. It also says plainly what the automatic text filter checks and what it does not, and that shared pages are not labelled as AI-generated.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-27",
           "summary": "Appeals can be filed in the product or through the appeal form, each with a reference, as well as by email.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-09-22",
@@ -96,14 +108,33 @@
         }
       ]
     },
+    "dpa": {
+      "route": "/dpa",
+      "slug": "dpa",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Corrects two statements about email. Deleting an account sends no confirmation email, and the addendum no longer gives as the reason that the product sends no account email. The breach-notice paragraph now says the product emails one account at a time and that no procedure for emailing a set of affected users has been built or exercised. The age rule changes: the children row no longer says accounts are for adults. Sign-up asks for an age and refuses anyone under 13, anyone under 18 needs permission from a parent or guardian, and we still perform no age verification and no verifiable parental consent. Annex I now says the ban on submitting health records applies to what a business customer submits under the DPA, and that the HealthEx connector is a separate personal feature, offered only in the United States and not inside an organisation workspace, which the DPA does not cover. Also states that on the Free plan a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router, depending on what is available for that turn.",
+          "status": "current",
+          "published": null
+        },
+        {
+          "date": "2026-08-17",
+          "summary": null,
+          "status": "archived",
+          "published": true
+        }
+      ]
+    },
     "cookies": {
       "route": "/cookies",
       "slug": "cookies",
-      "current": "2026-10-07",
+      "current": "2026-10-08",
       "versions": [
         {
-          "date": "2026-10-07",
-          "summary": "Lists two new browser storage entries used only when you tick the marketing email box at sign-up: the privacy notice revision and a random identifier for that sign-up attempt. Explains Global Privacy Control in more detail: with the signal on, new optional choices such as marketing email and waitlist product updates are recorded as refusals and analytics stays off, while a marketing email choice already saved on your account stays until you withdraw it in Settings or the consent centre.",
+          "date": "2026-10-08",
+          "summary": "Lists two new browser storage entries used only when you tick the marketing email box at sign-up: the privacy notice revision and a random identifier for that sign-up attempt. Explains Global Privacy Control in more detail: with the signal on, new optional choices such as marketing email and waitlist product updates are recorded as refusals and analytics stays off, while a marketing email choice already saved on your account stays until you withdraw it in Settings or the consent centre. Adds the referral cookie, set only when you open a referral link and kept for up to 30 days, and names the file that sets the signed-out session cookie correctly.",
           "status": "current",
           "published": null
         },
@@ -124,13 +155,19 @@
     "subprocessors": {
       "route": "/subprocessors",
       "slug": "subprocessors",
-      "current": "2026-09-28",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Corrects what email we send through our email provider. The list said three kinds and no others; it now names them all: security alerts, account security codes, export-ready notices, billing and spend notices, workspace invitations, scheduled-task notifications and support replies to you, and support escalations, data-rights requests, copyright notices and operational alerts to us. No recipient was added or removed. The CLI is no longer described as released. The OpenRouter row and the Qwen (Alibaba) and Zhipu row now say that either can answer a Free plan chat on the default model, that AGI chooses which, and that the Alibaba path uses its international endpoint in Singapore. No subprocessor is added or removed. It also says where a question to the support assistant on the help pages is sent, and exactly which account facts go with it.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-28",
           "summary": "Fly.io now also runs our malware scanner, which every uploaded file passes through and which keeps no copy.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-09-22",
@@ -155,11 +192,11 @@
     "security": {
       "route": "/security",
       "slug": "security",
-      "current": "2026-10-07",
+      "current": "2026-10-08",
       "versions": [
         {
-          "date": "2026-10-07",
-          "summary": "Restates how deletion works in narrower, verified terms: stored media is deleted before its catalogue record and retried if deletion fails, erasure reports list what was deleted, skipped or failed, and the scheduled purge erases account data before the sign-in identity and stops if erasure is incomplete.",
+          "date": "2026-10-08",
+          "summary": "Restates how deletion works in narrower, verified terms: stored media is deleted before its catalogue record and retried if deletion fails, erasure reports list what was deleted, skipped or failed, and the scheduled purge erases account data before the sign-in identity and stops if erasure is incomplete. Corrects three statements: the CLI is no longer described as released, it keeps provider keys in owner-only files on Linux or when the keyring is turned off, and an artifact can load scripts, styles, images and fonts from four pinned CDN hosts, where the page said images and fonts over https and scripts from two. The provider API keys row no longer says keys are encrypted under a device-derived key.",
           "status": "current",
           "published": null
         },
@@ -171,16 +208,41 @@
         }
       ]
     },
+    "sla": {
+      "route": "/sla",
+      "slug": "sla",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Corrects two statements. One of the sixteen service domains has no measurement yet, where the page said three of fourteen. Alerts go by email to an on-call rotation when one is configured and otherwise to a single monitored mailbox; there is still no round-the-clock coverage. No commitment, credit or exclusion changed. The date is now labelled Last updated, not Reviewed.",
+          "status": "current",
+          "published": null
+        },
+        {
+          "date": "2026-09-04",
+          "summary": null,
+          "status": "archived",
+          "published": true
+        }
+      ]
+    },
     "refunds": {
       "route": "/refund-policy",
       "slug": "refund-policy",
-      "current": "2026-09-27",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-27",
           "summary": "Adds the signed-in refund request; a refund, once per account, of an unused plan payment or of unspent top-up credits asked for within 7 days; the 14-day withdrawal in the EU, EEA and UK, prorated by the credits used when you asked at checkout for immediate access; and the hold on your plan and credits while a payment dispute is open. Corrects how plan upgrades are billed: an upgrade starts a new billing period on the day you upgrade.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-08-13",
@@ -193,11 +255,11 @@
     "referralTerms": {
       "route": "/referral-terms",
       "slug": "referral-terms",
-      "current": "2026-10-07",
+      "current": "2026-10-08",
       "versions": [
         {
-          "date": "2026-10-07",
-          "summary": "A referral trial that converts to a paid plan is billed every month; the earlier text also mentioned yearly billing, which the trial does not offer.",
+          "date": "2026-10-08",
+          "summary": "A referral trial that converts to a paid plan is billed every month; the earlier text also mentioned yearly billing, which the trial does not offer. The age to take part changes: you must be at least 13, where the terms said 18, and anyone under 18 needs permission from a parent or guardian.",
           "status": "current",
           "published": null
         },
@@ -212,13 +274,19 @@
     "accessibility": {
       "route": "/accessibility",
       "slug": "accessibility",
-      "current": "2026-09-27",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-27",
           "summary": "Adds the in-product Report an accessibility barrier ticket beside the email address.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-08-05",
@@ -231,13 +299,19 @@
     "trust": {
       "route": "/trust",
       "slug": "trust",
-      "current": "2026-09-21",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Corrects three rows. Artifact sandboxing blocks fetch, XHR and WebSocket calls but is not full network isolation: scripts, styles, images and fonts can still load from four pinned CDN hosts. The CLI is no longer described as released. The CLI keeps provider keys in owner-only files on Linux or when the keyring is turned off. The DPDP parental consent row is corrected for the new age rule: web sign-up now asks for an age and refuses anyone under 13, but the age is self-declared and no parental permission is verified, so the row still reads Not implemented. The date at the top is now labelled Last updated, not Last reviewed. The next review date is unchanged.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-21",
           "summary": "Corrects three rows against the code: release signing covers the macOS desktop app only, as there is no Windows build; business continuity says the host-neutral restore drill runs every week and only the production database has no scheduled restore test; and security event logging adds the log of each call a connector makes. Records the 21 September review of the subprocessor list, re-measures row-level isolation and the protected route groups, and says /status runs its checks at most once a minute.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-09-12",
@@ -247,16 +321,41 @@
         }
       ]
     },
+    "euRepresentative": {
+      "route": "/legal/eu-representative",
+      "slug": "legal-eu-representative",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text.",
+          "status": "current",
+          "published": null
+        },
+        {
+          "date": "2026-08-05",
+          "summary": null,
+          "status": "archived",
+          "published": true
+        }
+      ]
+    },
     "mobile": {
       "route": "/mobile/legal",
       "slug": "mobile-legal",
-      "current": "2026-09-29",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Re-issued on the public launch date, 2026-10-08, with the new age rule: you must be at least 13 to create an account, anyone under 18 needs permission from a parent or guardian, and a higher digital-consent age applies where the law sets one.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-29",
           "summary": "Adds product usage events, sent only in managed-cloud mode and only after you allow product analytics, as a data category, and removes the statement that no usage event leaves your device.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-09-21",
@@ -275,11 +374,36 @@
     "copyright": {
       "route": "/copyright",
       "slug": "copyright",
-      "current": "2026-09-27",
+      "current": "2026-10-08",
       "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Says plainly that when a link is disabled, a person contacts the account that published the material, with a copy of the notice; the product does not send that message automatically.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-09-27",
           "summary": "Adds the Impersonation section and an impersonation option on the report form.",
+          "status": "archived",
+          "published": true
+        },
+        {
+          "date": "2026-08-06",
+          "summary": null,
+          "status": "archived",
+          "published": true
+        }
+      ]
+    },
+    "modelLicenses": {
+      "route": "/model-licenses",
+      "slug": "model-licenses",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "This page now carries its own date, 2026-10-08, the public launch day. The date it printed before was the day the model list was last synced, and it is still shown under that name. No licence text changed.",
           "status": "current",
           "published": null
         },
@@ -294,11 +418,11 @@
     "indiaPrivacy": {
       "route": "/privacy/india",
       "slug": "privacy-india",
-      "current": "2026-10-07",
+      "current": "2026-10-08",
       "versions": [
         {
-          "date": "2026-10-07",
-          "summary": "Adds the optional marketing email choice at sign-up, which rests on your consent and can be turned off on its own. Clarifies that leaving that box unticked at sign-up records no decision, while the early-access forms record the boxes you leave unticked.",
+          "date": "2026-10-08",
+          "summary": "Adds the optional marketing email choice at sign-up, which rests on your consent and can be turned off on its own. Clarifies that leaving that box unticked at sign-up records no decision, while the early-access forms record the boxes you leave unticked. Corrects five statements: the security audit log is deleted by a scheduled job every night, not by hand; account deletion sends no confirmation email, and the notice no longer says the product sends only two kinds of email; the recipients an earlier version listed as missing from the subprocessor list are on it now, and Apple was named in error; the CLI is no longer described as released; and the CLI keeps provider keys in owner-only files on Linux or when the keyring is turned off. The age rule changes: an account can be created from the age of 13, and anyone under 18 needs permission from a parent or guardian. We still perform no age verification and no verifiable parental consent, so people this Act treats as children can hold accounts here; the notice says so in place of saying we do not knowingly collect a child’s data. The age asked at sign-up is not kept.",
           "status": "current",
           "published": null
         },
@@ -310,13 +434,70 @@
         }
       ]
     },
+    "dataRights": {
+      "route": "/privacy/requests",
+      "slug": "privacy-requests",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text.",
+          "status": "current",
+          "published": null
+        },
+        {
+          "date": "2026-08-13",
+          "summary": null,
+          "status": "archived",
+          "published": true
+        }
+      ]
+    },
+    "dataUse": {
+      "route": "/data-use",
+      "slug": "data-use",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "The CLI is no longer described as released. Nothing about how your data is used changed. Also states that on the Free plan a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router, depending on what is available for that turn.",
+          "status": "current",
+          "published": null
+        },
+        {
+          "date": "2026-08-14",
+          "summary": null,
+          "status": "archived",
+          "published": true
+        }
+      ]
+    },
+    "disclaimer": {
+      "route": "/disclaimer",
+      "slug": "disclaimer",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text.",
+          "status": "current",
+          "published": null
+        },
+        {
+          "date": "2026-09-02",
+          "summary": null,
+          "status": "archived",
+          "published": true
+        }
+      ]
+    },
     "agentPermissions": {
       "route": "/agent-permissions",
       "slug": "agent-permissions",
-      "current": "2026-10-07",
+      "current": "2026-10-08",
       "versions": [
         {
-          "date": "2026-10-07",
+          "date": "2026-10-08",
           "summary": "Adds connectors you sign in to at the provider. For those, AGI stores the access token and any refresh token encrypted in your account, together with the scopes granted and a label for the connected account. When you disconnect, or your account is deleted, AGI deletes its copy and asks the provider to revoke the tokens where it can; otherwise remove AGI in that provider account settings. Connectors whose provider registration is not in place are marked Needs setup and cannot be connected.",
           "status": "current",
           "published": null
@@ -338,6 +519,32 @@
           "summary": null,
           "status": "archived",
           "published": true
+        }
+      ]
+    },
+    "supportedCountries": {
+      "route": "/supported-countries",
+      "slug": "supported-countries",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "A new page: where AGI is offered, where United States sanctions law excludes it, what is the same in every country and what is not, and which languages the interface comes in. It states that sign-up is open in the European Economic Area and the United Kingdom and that no representative has been appointed in either.",
+          "status": "current",
+          "published": null
+        }
+      ]
+    },
+    "governmentRequests": {
+      "route": "/legal/government-requests",
+      "slug": "legal-government-requests",
+      "current": "2026-10-08",
+      "versions": [
+        {
+          "date": "2026-10-08",
+          "summary": "A new page: what legal process we require before giving account data to a government, when we tell the account holder, how emergencies are handled, and where to send a request. No transparency report has been published yet.",
+          "status": "current",
+          "published": null
         }
       ]
     }

@@ -1,0 +1,222 @@
+{
+  "key": "refunds",
+  "route": "/refund-policy",
+  "date": "2026-09-27",
+  "replacedOn": "2026-10-08",
+  "commit": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
+  "committedAt": "2026-10-05T04:14:50-05:00",
+  "title": "Refunds.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-refund-title",
+      "content": [
+        {
+          "text": "Refunds."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We review billing problems promptly. Eligibility depends on the type of charge, account usage, applicable law, and any contract-specific terms. Last updated: 2026-09-27. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/refund-policy"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "when",
+      "content": [
+        {
+          "text": "When we refund."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Refund eligibility",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Paid subscriptions"
+            }
+          ],
+          "value": [
+            {
+              "text": "Cancellation stops the next renewal and access continues through the paid term. A plan payment you have not used is refunded if you ask within 7 days of the charge, once per account, and the plan ends when it is refunded. Otherwise a current-period charge is not refunded, except where the law requires it or when we confirm a duplicate, unauthorized, or billing-error charge."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Plan upgrades"
+            }
+          ],
+          "value": [
+            {
+              "text": "An upgrade starts a new billing period today: you pay the new plan's price, minus a credit for the unused time on your current plan. Your renewal date moves to the day you upgrade, and the credits you already used this period count against the new plan's allowance. Adding seats to a Team plan keeps the renewal date and charges only for the rest of the current period. Neither is a refund."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Credit top-ups"
+            }
+          ],
+          "value": [
+            {
+              "text": "Credits you have not spent are refunded if you ask within 7 days of the purchase, once per account. Spent credits are not refundable except where the law requires it or when we confirm a duplicate, mistaken, or unauthorized purchase. A refunded top-up leaves your balance."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Payment disputes"
+            }
+          ],
+          "value": [
+            {
+              "text": "While a dispute you opened with your bank is open, the plan and the credit balance are on hold. If the dispute closes in our favor they are restored as they were; if it closes in yours, the hold is final."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "App Store and Play purchases"
+            }
+          ],
+          "value": [
+            {
+              "text": "Subscriptions bought inside the mobile apps are charged by Apple or Google, not by us. We cannot refund them. Request those through the store that took the payment; its own refund rules and windows apply."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Enterprise contracts"
+            }
+          ],
+          "value": [
+            {
+              "text": "Refund terms are part of the MSA negotiated with each customer."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "BYOK usage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Provider charges (Anthropic, OpenAI, Google, etc.) are billed directly by the provider. Refunds for those go through the provider, not us."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "statutory",
+      "content": [
+        {
+          "text": "Statutory withdrawal rights."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "EU, EEA and UK:",
+          "strong": true
+        },
+        {
+          "text": " if you live there, you may withdraw from a plan payment or a credit purchase within 14 days of paying, without giving a reason, by requesting a refund below. Before you pay, checkout asks you to confirm: “I ask for immediate access. I understand that if I withdraw within 14 days, my refund is reduced in proportion to the credits I have used.” (wording of 2026-09-27)."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "When you confirmed it, the refund is prorated by the credits you have used: for a plan payment you get back the share of the period’s plan credits you have not used, and for a credit purchase the share of those credits you have not spent. When we hold no record that you confirmed it, for example for a purchase made before checkout asked, you get the whole payment back. The refund goes to the card you paid with as soon as you confirm, and in any case within 14 days of your request. A withdrawn plan ends that day, and the unused credits from a withdrawn payment leave your balance. We go by the country of the payment’s billing address, or of your billing details when the payment has none. A statutory right that applies where you live applies alongside this page, and nothing here reduces it."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "how",
+      "content": [
+        {
+          "text": "How to request."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Signed in, choose the payment and the reason below. A 14-day withdrawal, and an unused payment inside the 7-day window on an account’s first such refund, are refunded as soon as you confirm. Anything else waits for a person, who answers within the support response target for your plan, published at "
+        },
+        {
+          "text": "/sla",
+          "href": "/sla"
+        },
+        {
+          "text": ", and you get a notification with the decision. If you cannot sign in, email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Refund%20request"
+        },
+        {
+          "text": " with the email on your account, the charge date, and a brief reason. Refunds go back to the card you paid with, and your bank usually shows them within 5 to 10 business days."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Loading..."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Terms of service",
+            "href": "/terms"
+          }
+        ]
+      ]
+    }
+  ]
+}

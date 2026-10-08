@@ -3,13 +3,20 @@ import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Eyebrow, Prose, Section } from '@/features/marketing/components/system';
-import { CONTACT_EMAIL, LEGAL_ENTITY, contactMailto } from '@/lib/legal-constants';
+import {
+  CANONICAL_POLICY_ROUTES,
+  CONTACT_EMAIL,
+  CONTACT_SUBJECTS,
+  LEGAL_ENTITY,
+  contactMailto,
+} from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Not available in your region',
   description:
-    'AGI Workforce is not currently offered in the European Economic Area. This page explains why and how to reach us.',
+    'The page a visitor sees when AGI Workforce refuses access from their region. It says what that means and where availability is published.',
   path: '/region-unavailable',
+  robots: { index: false, follow: false },
 });
 
 const STATEMENT_MAX_WIDTH = '32rem';
@@ -36,19 +43,23 @@ export default function RegionUnavailablePage() {
               <h1 className="agi-ds-h1">Not available in your region.</h1>
             </div>
             <Prose>
-              {LEGAL_ENTITY} does not currently offer AGI Workforce to people in the European
-              Economic Area.
+              You see this page when {LEGAL_ENTITY} refuses access to AGI Workforce from the region
+              a request comes from. If you opened this address yourself, nothing has been refused.
             </Prose>
             <Prose size="sm">
-              Article 27 of the GDPR requires a company outside the EU that offers services to
-              people in the EU to appoint a representative established in the Union. We have not
-              appointed one, so rather than serve the EEA without meeting that obligation, we do not
-              serve it at all. This is a deliberate decision, not an outage: if you reached this
-              page while travelling, the service should work again from a non-EEA location. Your
-              data and your rights over it are unaffected either way.
+              A refusal by region is a decision about where we offer the service, not an outage. If
+              you reached this page while travelling, the service should work again from a place
+              where it is offered. Where that is, and where it is not, is published on the supported
+              countries page. A refusal here does not change your data or your rights over it.
             </Prose>
             <ButtonRow>
-              <Button href={contactMailto('privacy')}>Email {CONTACT_EMAIL}</Button>
+              <Button href={CANONICAL_POLICY_ROUTES.supportedCountries}>Supported countries</Button>
+              <Button
+                href={contactMailto(CONTACT_SUBJECTS.countryAvailability)}
+                variant="secondary"
+              >
+                Email {CONTACT_EMAIL}
+              </Button>
             </ButtonRow>
           </div>
         </Section>

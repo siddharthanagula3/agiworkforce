@@ -11,7 +11,6 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import modelRegistry from '@agiworkforce/types/models.json';
 
 export const metadata = buildMetadata({
   title: 'Legal',
@@ -20,17 +19,14 @@ export const metadata = buildMetadata({
   path: '/legal',
 });
 
-const REVISED: Readonly<Record<string, string>> = {
-  ...Object.fromEntries(
-    (Object.keys(CANONICAL_POLICY_ROUTES) as (keyof typeof CANONICAL_POLICY_ROUTES)[])
-      .filter((key) => key in POLICY_LAST_UPDATED)
-      .map((key) => [
-        CANONICAL_POLICY_ROUTES[key],
-        POLICY_LAST_UPDATED[key as keyof typeof POLICY_LAST_UPDATED],
-      ]),
-  ),
-  [CANONICAL_POLICY_ROUTES.modelLicenses]: modelRegistry.lastUpdated,
-};
+const REVISED: Readonly<Record<string, string>> = Object.fromEntries(
+  (Object.keys(CANONICAL_POLICY_ROUTES) as (keyof typeof CANONICAL_POLICY_ROUTES)[])
+    .filter((key) => key in POLICY_LAST_UPDATED)
+    .map((key) => [
+      CANONICAL_POLICY_ROUTES[key],
+      POLICY_LAST_UPDATED[key as keyof typeof POLICY_LAST_UPDATED],
+    ]),
+);
 
 const DOCS: { href: string; label: string; body: string }[] = [
   {
@@ -103,12 +99,22 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/security',
     label: 'Security',
-    body: 'Operational posture across the trust boundaries, plus the coordinated vulnerability disclosure policy: scope, safe harbour, and response targets.',
+    body: 'Operational posture across the trust boundaries, plus the coordinated vulnerability disclosure policy: scope, safe harbour, and how reports are handled.',
   },
   {
     href: '/legal/eu-representative',
     label: 'EU representative',
     body: 'Our position under GDPR Art. 27, stated plainly rather than deferred to a launch.',
+  },
+  {
+    href: '/supported-countries',
+    label: 'Supported countries and regions',
+    body: 'Where the service is offered, where United States sanctions law excludes it, what is the same in every country, and the interface languages.',
+  },
+  {
+    href: '/legal/government-requests',
+    label: 'Government and law-enforcement requests',
+    body: 'What legal process we require before disclosing account data, when we tell the account holder, how emergencies are handled, and where to send process.',
   },
   {
     href: '/mobile/legal',

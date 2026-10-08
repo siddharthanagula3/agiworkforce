@@ -1,0 +1,5222 @@
+{
+  "key": "modelLicenses",
+  "route": "/model-licenses",
+  "date": "2026-08-06",
+  "replacedOn": "2026-10-08",
+  "commit": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+  "committedAt": "2026-09-21T08:04:57-05:00",
+  "title": "Model licences.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-model-licenses-title",
+      "content": [
+        {
+          "text": "Model licences."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "This product routes to models from several vendors, some proprietary and some shipping open weights. "
+        },
+        {
+          "text": "The licence attached to the model that produced your output governs what you may do with it, and that is not the same for every model in the picker.",
+          "strong": true
+        },
+        {
+          "text": " This table is generated from the same model registry the router reads, so it cannot drift from what actually runs. Last updated: 2026-09-19."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "columns",
+      "content": [
+        {
+          "text": "What the columns mean."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Column definitions",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Proprietary"
+            }
+          ],
+          "value": [
+            {
+              "text": "The provider licenses the model to us and to you under their own terms. Those terms travel with the output. The providers themselves are listed on "
+            },
+            {
+              "text": "/subprocessors",
+              "href": "/subprocessors"
+            },
+            {
+              "text": "."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Open weights"
+            }
+          ],
+          "value": [
+            {
+              "text": "The model's weights are published under a named licence (for example MIT). That licence governs the weights. It does not by itself grant rights in anything the model reproduces."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Not recorded"
+            }
+          ],
+          "value": [
+            {
+              "text": "Our registry does not carry a licence for this entry yet. Treat it as unknown and check the provider's own terms before relying on the output commercially. We would rather say this than guess."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-qwen",
+      "content": [
+        {
+          "text": "Alibaba Model Studio"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Alibaba Model Studio",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Qwen 3.5 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen 3.7 Plus"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen 3.8 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-anthropic",
+      "content": [
+        {
+          "text": "Anthropic"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Anthropic",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Claude Fable 5.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Haiku 4.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Haiku 5.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Opus 4.8"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Opus 5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Opus 5.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Sonnet 5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-deepseek",
+      "content": [
+        {
+          "text": "DeepSeek"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "DeepSeek",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "DeepSeek V4 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "MIT · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek V4 Flash Vision (Experimental)"
+            }
+          ],
+          "value": [
+            {
+              "text": "MIT · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek V4 Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "MIT · Open weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-google",
+      "content": [
+        {
+          "text": "Google"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Google",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Gemini 3 Pro Image"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.1 Flash Image"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.1 Flash Live"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.1 Flash TTS"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.1 Flash-Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.1 Flash-Lite Image"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.1 Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.5 Flash-Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.5 Live Translate"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.6 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini 3.8 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini Embedding 2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Gemini Omni Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Veo 3.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Veo 3.1 Fast"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Veo 3.1 Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-groq",
+      "content": [
+        {
+          "text": "Groq"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Groq",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "GPT-OSS Safeguard 20B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Apache-2.0 · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen3.6 27B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Apache-2.0 · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen3.8 27B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Apache-2.0 · Open weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-minimax",
+      "content": [
+        {
+          "text": "MiniMax"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "MiniMax",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "MiniMax M2.7"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax M3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-moonshot",
+      "content": [
+        {
+          "text": "Moonshot AI"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Moonshot AI",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Kimi K2.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Modified MIT License · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Kimi K2.7 Code"
+            }
+          ],
+          "value": [
+            {
+              "text": "Modified MIT License · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Kimi K3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Kimi K3 License · Open weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-openai",
+      "content": [
+        {
+          "text": "OpenAI"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "OpenAI",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "GPT Image 2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT Live 1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT-4o Mini Transcribe"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT-4o Mini TTS"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT-4o Transcribe"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT-5.6 Luna"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT-5.6 Sol"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT-5.6 Terra"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GPT-6 Astra"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-open_router",
+      "content": [
+        {
+          "text": "OpenRouter"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "OpenRouter",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "AionLabs: Aion-2.0"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "AionLabs: Aion-3.0"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "AionLabs: Aion-3.0-Mini"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "AionLabs: Aion-RP 1.0 (8B)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Amazon: Nova 2 Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Amazon: Nova Lite 1.0"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Amazon: Nova Micro 1.0"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Amazon: Nova Premier 1.0"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Amazon: Nova Pro 1.0"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic Claude Haiku Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic Claude Sonnet Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude 3 Haiku"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Fable 5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Fable 5 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Fable 5.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Fable 5.1 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Fable Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Haiku 4.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Haiku 4.5 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.1 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.5 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.6 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.7"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.7 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.8"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus 4.8 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Opus Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Sonnet 4"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Sonnet 4.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Sonnet 4.5 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Sonnet 4.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Sonnet 4.6 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Sonnet 5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Anthropic: Claude Sonnet 5 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Arcee AI: Trinity Large Thinking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Baidu: ERNIE 4.5 VL 424B A47B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Body Builder (beta)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance Seed: Seed 1.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance Seed: Seed 1.6 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance Seed: Seed 2.1 Turbo"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance Seed: Seed-2.0-Code"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance Seed: Seed-2.0-Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance Seed: Seed-2.0-Mini"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance: Seedance 2.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ByteDance: UI-TARS 7B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Opus 5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Claude Opus 5 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Cohere: Command A"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Cohere: Command R (08-2024)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Cohere: Command R+ (08-2024)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Cohere: Command R7B (12-2024)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Cohere: North Mini Code (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek V4 Flash Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V3 0324"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V3.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V3.1 Terminus"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V3.2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V3.2 Exp"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V4 Flash 0423"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V4 Flash 0731"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V4 Flash 0731 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V4 Flash Vision Exp"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V4 Pro 0423"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V4 Pro 0813"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: DeepSeek V4 Pro 0813 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: R1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: R1 0528"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "DeepSeek: R1 Distill Llama 70B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Dots Studio: Dots3-Note Preview (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google Gemini Flash Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google Gemini Pro Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Flash (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Flash Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Flash Lite (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Pro (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Pro Preview 05-06"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 2.5 Pro Preview 06-05"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3 Flash Preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3 Flash Preview (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.1 Flash Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.1 Flash Lite (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.1 Flash Lite Preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.1 Pro Preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.1 Pro Preview (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.1 Pro Preview Custom Tools"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.5 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.5 Flash (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.5 Flash Lite"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.5 Flash Lite (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.6 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.6 Flash (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.7 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.7 Flash (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.8 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemini 3.8 Flash (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 2 27B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 3 12B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 3 27B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 3 4B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 4 26B A4B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 4 31B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 4 31B (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Gemma 4 31B (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Lyria 3 Clip Preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Lyria 3 Pro Preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Nano Banana (Gemini 2.5 Flash Image)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Nano Banana 2 (Gemini 3.1 Flash Image Preview)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Nano Banana 2 (Gemini 3.1 Flash Image)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Nano Banana Pro (Gemini 3 Pro Image Preview)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Google: Nano Banana Pro (Gemini 3 Pro Image)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "IBM: Granite 4.0 Micro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "IBM: Granite 4.2 8B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Inception: Mercury 2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Inception: Mercury 2.5 Preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "inclusionAI: Ling 3.0 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "inclusionAI: Ling 3.0 Flash Fin"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "inclusionAI: Ling 3.0 Flash Fin (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "inclusionAI: Ling 3.0 Flash Sante (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Kwaipilot: KAT-Coder-Pro V2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Kwaipilot: KAT-Coder-Pro V2.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "LiquidAI: LFM2.5-2.6B (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Magnum v4 72B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mancer: Weaver (alpha)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meituan: LongCat 2.0"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama 3.1 70B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama 3.1 8B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama 3.2 1B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama 3.2 3B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama 3.3 70B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama 4 Maverick"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama 4 Scout"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Llama Guard 4 12B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Muse Glimmer 30B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Muse Glimmer 30B (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Muse Spark 1.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Muse Spark 1.2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Muse Spark 1.2 Contributor"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Muse Spark 1.3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Meta: Muse Spark 1.3 Contributor"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Microsoft: Phi 4"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M2-her"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M2.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M2.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M2.7"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M2.7 (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M3 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax M3 (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MiniMax: MiniMax-01"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral Large"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral Large 2407"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Codestral 2508"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Devstral 2 2512"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Ministral 3 14B 2512"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Ministral 3 3B 2512"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Ministral 3 8B 2512"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Large 3 2512"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Medium 3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Medium 3.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Medium 3.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Medium 3.5 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Nemo"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Small 3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Small 3.1 24B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Small 3.2 24B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mistral Small 4"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Mixtral 8x22B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Saba"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Mistral: Voxtral Small 24B 2507"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI Kimi Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K2 0711"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K2 0905"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K2 Thinking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K2.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K2.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K2.7 Code"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MoonshotAI: Kimi K3 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Morph: Morph V3 Fast"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Morph: Morph V3 Large"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "MythoMax 13B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Nex AGI: Nex-N2-Mini"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Nex AGI: Nex-N2-Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Nous: Hermes 3 405B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Nous: Hermes 3 70B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Nous: Hermes 4 405B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Nous: Hermes 4 70B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "NVIDIA: Nemotron 3 Nano Omni (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "NVIDIA: Nemotron 3 Ultra (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "NVIDIA: Nemotron 3.5 Content Safety"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "NVIDIA: Nemotron 3.5 Content Safety (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "NVIDIA: Nemotron 3.5 Lightning"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "NVIDIA: Nemotron 3.5 Lightning (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI GPT Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI GPT Mini Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: GPT Audio"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: GPT Audio Mini"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: GPT Chat Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: gpt-oss-120b"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: gpt-oss-120b (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: gpt-oss-20b"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: gpt-oss-20b (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o1-pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o3 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o3 Mini"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o3 Mini (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o3 Mini High"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o3 Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o4 Mini"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o4 Mini (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenAI: o4 Mini High"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenRouter Auto"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenRouter Auto (Beta)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenRouter Free Auto"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "OpenRouter: Fusion"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Pareto Code Router"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Perceptron: Perceptron Mk1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Perplexity: Sonar"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Perplexity: Sonar Deep Research"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Perplexity: Sonar Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Perplexity: Sonar Pro Search"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Perplexity: Sonar Reasoning Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Poolside: Laguna S 2.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Poolside: Laguna S 2.1 (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Poolside: Laguna XS 2.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Poolside: Laguna XS 2.1 (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen Plus 0728"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen-Plus"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen2.5 7B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen2.5 VL 72B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 14B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 235B A22B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 235B A22B Instruct 2507"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 235B A22B Thinking 2507"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 30B A3B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 30B A3B Instruct 2507"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 30B A3B Thinking 2507"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 32B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 8B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Coder 30B A3B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Coder 480B A35B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Coder Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Coder Next"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Coder Plus"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Max"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Max Thinking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Next 80B A3B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 Next 80B A3B Thinking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 VL 235B A22B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 VL 235B A22B Thinking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 VL 30B A3B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 VL 30B A3B Thinking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 VL 32B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 VL 8B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3 VL 8B Thinking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5 397B A17B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5 Plus 2026-02-15"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5 Plus 2026-04-20"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5-122B-A10B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5-27B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5-35B-A3B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5-9B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5-9B (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.5-Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.6 35B A3B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.6 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.6 Max Preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.6 Plus"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.7 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.7 Max"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.7 Plus"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.8 2.4T A95B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.8 2.4T A95B (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.8 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen: Qwen3.8 Max (0902)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen2.5 72B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Qwen2.5 Coder 32B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Reka Edge"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Reka Flash 3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Relace: Relace Apply 3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Relace: Relace Search"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "ReMM SLERP 13B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sakana: Fugu Ultra"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sakana: Sakana Namazu"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sao10K: Llama 3 8B Lunaris"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sao10K: Llama 3.1 Euryale 70B v2.2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sao10K: Llama 3.3 Euryale 70B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "SpaceXAI: Grok 4.20"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "SpaceXAI: Grok 4.20 Multi-Agent"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "SpaceXAI: Grok 4.3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "SpaceXAI: Grok 4.3 (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "SpaceXAI: Grok 4.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "SpaceXAI: Grok 4.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "SpaceXAI: Grok Build 0.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "StepFun: Step 3.5 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "StepFun: Step 3.7 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tencent: Hunyuan A13B Instruct"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tencent: Hy-MT2-1.8B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tencent: Hy-MT2-30B-A3B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tencent: Hy-MT2-7B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tencent: Hy3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tencent: Hy3 preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Tencent: Hy4 preview"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "TheDrummer: Cydonia 24B V4.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "TheDrummer: Skyfall 36B V2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "TheDrummer: UnslopNemo 12B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Thinking Machines: Inkling"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Thinking Machines: Inkling (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Thinking Machines: Inkling (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Thinking Machines: Inkling Small"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Thinking Machines: Inkling Small (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Thinking Machines: Inkling Small (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Upstage: Solar Pro 3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Upstage: Solar Pro 4"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Venice: Uncensored"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "WizardLM-2 8x22B"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Writer: Palmyra X5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "xAI: Grok Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Xiaomi: MiMo-V2.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Xiaomi: MiMo-V2.5-Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 4.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 4.5 Air"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 4.5V"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 4.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 4.6V"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 4.7"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 4.7 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5 Turbo"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5.1"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5.2"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5.2 (free)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5.3"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5.3 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5.3 Flash (batch)"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM 5V Turbo"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM Flash Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Z.ai: GLM Latest"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-perplexity",
+      "content": [
+        {
+          "text": "Perplexity"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Perplexity",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Sonar"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sonar Deep Research"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sonar Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Sonar Reasoning Pro"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-runway",
+      "content": [
+        {
+          "text": "Runway"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Runway",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Runway Gen-4.5"
+            }
+          ],
+          "value": [
+            {
+              "text": "Not recorded in the registry · Not recorded"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-xai",
+      "content": [
+        {
+          "text": "xAI"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "xAI",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Grok 4.6"
+            }
+          ],
+          "value": [
+            {
+              "text": "Proprietary (provider terms) · Closed weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "provider-zhipu",
+      "content": [
+        {
+          "text": "ZhipuAI"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "ZhipuAI",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "GLM-5.3"
+            }
+          ],
+          "value": [
+            {
+              "text": "GLM-5.3 License · Open weights"
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "GLM-5.3 Flash"
+            }
+          ],
+          "value": [
+            {
+              "text": "MIT · Open weights"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "your-output",
+      "content": [
+        {
+          "text": "Your output."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We do not claim ownership of what you generate. What you may do with it depends on the licence above, the provider’s terms, and the law where you are: a model licence cannot grant you rights in material the model reproduces from its training data. If you believe a generation reproduces work you own, the notice route is on "
+        },
+        {
+          "text": "/copyright",
+          "href": "/copyright"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA. Model availability changes; this page regenerates from the registry, and material policy changes are recorded on "
+        },
+        {
+          "text": "/changelog",
+          "href": "/changelog"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Copyright",
+            "href": "/copyright"
+          }
+        ],
+        [
+          {
+            "text": "Subprocessors",
+            "href": "/subprocessors"
+          }
+        ],
+        [
+          {
+            "text": "Terms",
+            "href": "/terms"
+          }
+        ]
+      ]
+    }
+  ]
+}

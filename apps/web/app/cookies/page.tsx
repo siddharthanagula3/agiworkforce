@@ -25,6 +25,7 @@ import {
   TERMS_GATE_STORAGE_KEY,
 } from '@/app/signup/signupAttemptMarkers';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+import { REFERRAL_ATTRIBUTION_COOKIE, REFERRAL_PROGRAM } from '@/lib/services/referral-program';
 
 export const metadata = buildMetadata({
   title: 'Cookie policy',
@@ -67,7 +68,16 @@ const COOKIES: CookieRow[] = [
     purpose:
       'Identifies a signed-out browser so rate limits and request-integrity checks can be applied without an account. HttpOnly, Secure and SameSite=Strict, and the __Host- prefix means the browser refuses to set it from JavaScript or from another subdomain.',
     duration: '24 hours.',
-    source: 'lib/csrf.ts',
+    source: 'lib/anonymous-session.ts',
+  },
+  {
+    name: REFERRAL_ATTRIBUTION_COOKIE,
+    category: 'Functional',
+    controller: LEGAL_ENTITY,
+    purpose:
+      'Set only when you open a referral link. Remembers the referral code so that, if you then create an account, the referral can be applied to it. HttpOnly and SameSite=Lax, and cleared once the referral has been evaluated for your new account.',
+    duration: `${REFERRAL_PROGRAM.attributionDays} days, or until it has been applied.`,
+    source: 'app/r/[code]/route.ts',
   },
   {
     name: 'agiworkforce-language',
@@ -369,7 +379,8 @@ export default function CookiesPage() {
                     We set no advertising or cross-site tracking cookies, and we do not sell or
                     share personal information for cross-context behavioural advertising. Only the
                     analytics row needs your consent; the rest are necessary to keep you signed in,
-                    keep the site functional, or complete a payment you asked for.
+                    keep the site functional, apply a referral link you opened, or complete a
+                    payment you asked for.
                   </Prose>
                 </Stack>
               </Section>

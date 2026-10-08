@@ -18,6 +18,10 @@ vi.mock('next/navigation', () => ({
   redirect: () => {},
   notFound: () => {},
 }));
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers(),
+  cookies: async () => ({ get: () => undefined, getAll: () => [] }),
+}));
 
 const TARGETS = JSON.parse(process.env['POLICY_ARCHIVE_TARGETS'] ?? '[]');
 

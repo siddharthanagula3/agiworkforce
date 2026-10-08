@@ -505,6 +505,27 @@ test('allows live eval measurement files but not other files beside them', () =>
   ]);
 });
 
+test('allows an archived model licences rendering but not other policy archives', () => {
+  const sandbox = createSandbox();
+  const filePaths = writeFiles(sandbox, {
+    'apps/web/content/legal/policy-archive/modelLicenses/2026-08-06.json': JSON.stringify({
+      rows: [canonicalId],
+    }),
+    'apps/web/content/legal/policy-archive/modelLicenses/notes.json': JSON.stringify({
+      rows: [canonicalId],
+    }),
+    'apps/web/content/legal/policy-archive/privacy/2026-08-06.json': JSON.stringify({
+      rows: [canonicalId],
+    }),
+  });
+  const { violations } = scanModelIdFiles({ repoRoot: sandbox, filePaths, tokens });
+
+  assert.deepEqual(violations.map(({ file }) => file).sort(), [
+    'apps/web/content/legal/policy-archive/modelLicenses/notes.json',
+    'apps/web/content/legal/policy-archive/privacy/2026-08-06.json',
+  ]);
+});
+
 test('allows the compiler-owned skill analyzer registry but not sibling YAML files', () => {
   const sandbox = createSandbox();
   const generatedRegistry = MODEL_ID_OWNER_PATHS.find((relativePath) =>

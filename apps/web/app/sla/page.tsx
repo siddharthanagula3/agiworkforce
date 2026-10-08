@@ -25,7 +25,7 @@ export const metadata = buildMetadata({
   path: '/sla',
 });
 
-const LAST_REVIEWED = new Date(`${POLICY_LAST_UPDATED.sla}T00:00:00Z`).toLocaleDateString('en-GB', {
+const LAST_UPDATED = new Date(`${POLICY_LAST_UPDATED.sla}T00:00:00Z`).toLocaleDateString('en-GB', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
@@ -54,6 +54,9 @@ const SERVICE_LEVELS: readonly LedgerRow[] = SLO_CATALOGUE.map((slo) => ({
     : `${formatObjective(slo.objective)} · ${slo.windowDays}-day window · not measured: ${slo.missingInstrument ?? ''}`,
   quiet: slo.source === null,
 }));
+
+const UNMEASURED_COUNT = SLO_CATALOGUE.filter((slo) => slo.source === null).length;
+const UNMEASURED_DOMAINS = `${UNMEASURED_COUNT} of the ${SLO_CATALOGUE.length} domains ${UNMEASURED_COUNT === 1 ? 'has' : 'have'} no instrument yet`;
 
 const INDIVIDUAL_PLAN_LABELS = new Intl.ListFormat('en', {
   style: 'long',
@@ -93,8 +96,7 @@ const NOT_YET: readonly LedgerRow[] = [
   },
   {
     label: 'No published history',
-    value:
-      'The measured objectives below are computed over a rolling window and shown on /status; nothing older than that window is published, and we have no incident archive. Three of the fourteen domains have no instrument yet, and the table says which and why rather than reporting a number we cannot stand behind.',
+    value: `The measured objectives below are computed over a rolling window and shown on /status; nothing older than that window is published, and we have no incident archive. ${UNMEASURED_DOMAINS}, and the table says which and why rather than reporting a number we cannot stand behind.`,
   },
   {
     label: 'Support routing is manual',
@@ -109,7 +111,7 @@ const NOT_YET: readonly LedgerRow[] = [
   {
     label: 'No 24/7 coverage',
     value:
-      'Alerts route through an on-call rotation with escalation, but the rotation is small and there is no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above.',
+      'Alerts go by email to the on-call rotation when one is configured, and otherwise to a single monitored mailbox, and escalate while an alert keeps firing; there is no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above.',
   },
   {
     label: 'No recovery objectives',
@@ -141,7 +143,8 @@ export default function SlaPage() {
                 when a plan agreement says so.
               </strong>{' '}
               Local and BYOK modes have no AGI service in the request path, so there is nothing for
-              us to commit to there. Reviewed {LAST_REVIEWED}. <PolicyVersionsLink policy="sla" />
+              us to commit to there. Last updated {LAST_UPDATED}.{' '}
+              <PolicyVersionsLink policy="sla" />
             </>
           }
           ctas={[
@@ -221,8 +224,7 @@ export default function SlaPage() {
               </h2>
               <Prose>
                 A reviewer should be able to tell the difference between a commitment and an
-                intention without reading the fine print, so here is the difference. As of{' '}
-                {LAST_REVIEWED}:
+                intention without reading the fine print, so here is the difference:
               </Prose>
             </div>
             <Ledger caption="Limits" rows={NOT_YET} />

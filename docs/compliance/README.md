@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-10-03
+Last updated: 2026-10-07
 
 Verified platform and legal obligations: Apple, Google Play, Microsoft, Chrome
 Web Store, VS Code Marketplace, privacy regimes, and regional requirements.
@@ -15,22 +15,24 @@ The customer-facing legal set is **code, not markdown**. Every policy is a
 Next.js app-router page under `apps/web/app/`, and `/legal` is the index a
 procurement or security reviewer starts from.
 
-| Document                  | Route                       | Source                                           |
-| ------------------------- | --------------------------- | ------------------------------------------------ |
-| Terms of service          | `/terms`                    | `apps/web/app/terms/page.tsx`                    |
-| Acceptable use policy     | `/acceptable-use`           | `apps/web/app/acceptable-use/page.tsx`           |
-| Privacy policy            | `/privacy`                  | `apps/web/app/privacy/page.tsx`                  |
-| Data processing addendum  | `/dpa`                      | `apps/web/app/dpa/page.tsx`                      |
-| Subprocessors (Annex III) | `/subprocessors`            | `apps/web/app/subprocessors/page.tsx`            |
-| Cookie policy             | `/cookies`                  | `apps/web/app/cookies/page.tsx`                  |
-| Security + disclosure     | `/security`                 | `apps/web/app/security/page.tsx`                 |
-| `security.txt`            | `/.well-known/security.txt` | `apps/web/app/.well-known/security.txt/route.ts` |
-| SLA                       | `/sla`                      | `apps/web/app/sla/page.tsx`                      |
-| Refunds                   | `/refund-policy`            | `apps/web/app/refund-policy/page.tsx`            |
-| Referral program terms    | `/referral-terms`           | `apps/web/app/referral-terms/page.tsx`           |
-| Accessibility             | `/accessibility`            | `apps/web/app/accessibility/page.tsx`            |
-| EU representative         | `/legal/eu-representative`  | `apps/web/app/legal/eu-representative/page.tsx`  |
-| Mobile surface terms      | `/mobile/legal`             | `apps/web/app/mobile/legal/page.tsx`             |
+| Document                  | Route                        | Source                                            |
+| ------------------------- | ---------------------------- | ------------------------------------------------- |
+| Terms of service          | `/terms`                     | `apps/web/app/terms/page.tsx`                     |
+| Acceptable use policy     | `/acceptable-use`            | `apps/web/app/acceptable-use/page.tsx`            |
+| Privacy policy            | `/privacy`                   | `apps/web/app/privacy/page.tsx`                   |
+| Data processing addendum  | `/dpa`                       | `apps/web/app/dpa/page.tsx`                       |
+| Subprocessors (Annex III) | `/subprocessors`             | `apps/web/app/subprocessors/page.tsx`             |
+| Cookie policy             | `/cookies`                   | `apps/web/app/cookies/page.tsx`                   |
+| Security + disclosure     | `/security`                  | `apps/web/app/security/page.tsx`                  |
+| `security.txt`            | `/.well-known/security.txt`  | `apps/web/app/.well-known/security.txt/route.ts`  |
+| SLA                       | `/sla`                       | `apps/web/app/sla/page.tsx`                       |
+| Refunds                   | `/refund-policy`             | `apps/web/app/refund-policy/page.tsx`             |
+| Referral program terms    | `/referral-terms`            | `apps/web/app/referral-terms/page.tsx`            |
+| Accessibility             | `/accessibility`             | `apps/web/app/accessibility/page.tsx`             |
+| EU representative         | `/legal/eu-representative`   | `apps/web/app/legal/eu-representative/page.tsx`   |
+| Government requests       | `/legal/government-requests` | `apps/web/app/legal/government-requests/page.tsx` |
+| Supported countries       | `/supported-countries`       | `apps/web/app/supported-countries/page.tsx`       |
+| Mobile surface terms      | `/mobile/legal`              | `apps/web/app/mobile/legal/page.tsx`              |
 
 Entity facts (legal name, notice address, governing law, venue, contact mailbox,
 per-document revision dates, canonical routes and their aliases) come from
@@ -69,11 +71,11 @@ per-document revision dates, canonical routes and their aliases) come from
    (`apps/web/lib/managed-compute-gate.ts`). Say so where it bears on a
    commitment.
 7. Version the published text in `policy-versions.json` in the same change.
-   Update its `POLICY_LAST_UPDATED` date when the policy is revised. The
-   `/security` page labels its date as the last full-page review; a targeted
-   factual correction that does not re-review every row keeps that date and
-   records why in a same-date version entry. Do not present a targeted check as
-   a fresh review of the whole page.
+   Update its `POLICY_LAST_UPDATED` date when the policy is revised. `/security`,
+   `/trust` and `/sla` label that date Last updated, like every other policy,
+   because a targeted correction moves it without re-reviewing every row. A
+   same-date correction records why in the existing version entry. Do not
+   present a targeted check as a fresh review of the whole page.
 8. Keep the replaced version readable. When a date moves, give the first entry
    of the new date a public `summary` of what changed, then run
    `node scripts/archive-policy-versions.mjs`. It renders the last text

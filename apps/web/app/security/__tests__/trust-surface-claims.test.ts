@@ -84,7 +84,8 @@ describe('trust surface, the honest-gap sections stay present', () => {
 
   it('/trust carries dates, which is what its headline promises', () => {
     const source = read('trust');
-    expect(source).toContain('LAST_REVIEWED');
+    expect(source).toContain('Last updated {LAST_UPDATED}.');
+    expect(source).not.toContain('Last reviewed');
     expect(source).toContain('NEXT_REVIEW');
     expect(source.match(/As of \d{4}-\d{2}-\d{2}/gu)?.length ?? 0).toBeGreaterThan(10);
   });
