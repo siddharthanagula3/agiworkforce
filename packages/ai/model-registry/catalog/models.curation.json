@@ -457,6 +457,12 @@
       "verifiedBy": "official-openai-documentation-no-live-call",
       "status": "ADDITION",
       "notes": "GPT Image 2.5 Sunburst (gpt-image-2.5-sunburst) and GPT Image 2.5 Flare (gpt-image-2.5-flare) join the catalog at lifecycle stage registered, read from their model pages on developers.openai.com on 2026-10-07: identical token prices (text input $5 and $1.25 cached, image input $8 and $2 cached, image output $30), image generation, image edit and batch endpoints, quality low to max, snapshots dated 2026-09-08. No inference call was made. The openai/gpt-image slot stays on gpt-image-2: neither id matches the slot pattern, which expects a bare version after gpt-image, and the eval harness has no measurement for image output. OpenAI lists no deprecation for gpt-image-2. gpt-transcribe is not added: OpenAI prices it at $0.0045 per minute of audio and the catalog has no per-audio-minute price field for a transcription model, so a row would bill at zero or at a guessed token rate."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model outside the QwenCloud free quota, the anthropic/claude-opus slot moves from claude-opus-5 to claude-opus-5-5 and the anthropic/claude-sonnet slot from claude-sonnet-5 to claude-sonnet-5-5. The eval gate was not run for either move: no Anthropic slot has a committed baseline and no run was recorded for either model, so nothing here says the new models were measured against the old ones. The catalog-side gates the family tool computes (provider, family identity, lifecycle, capability coverage, price and limit regression) were evaluated and are recorded on each slot. Claude Opus 5.5 lists at $4/$20 per million against $5/$25 for Claude Opus 5, cannot have thinking switched off and defaults to medium effort; Claude Sonnet 5.5 keeps $2/$10. claude-opus-5, claude-opus-4-8, claude-sonnet-5 and claude-haiku-4-5 leave the roster through the retire tool into retired-models.json, each naming its successor, and their route and probe records go with them. claude-haiku-5-5 takes no family slot: no routing slot names a Haiku model and the picker lists it from its own row. The successors carry only their direct Anthropic route. The marketplace routes the retired rows had (OpenRouter, Vercel AI Gateway, Cheaper Inference, Experiential Labs) were not copied, because no source read for this change states that those gateways serve the new ids or at what price; until they are added, a Claude model has no same-model fallback route and one Claude model cannot stand in for another in a fallback plan. No provider call was made."
     }
   ],
   "providers": {
@@ -1541,7 +1547,7 @@
       "modelType": "reasoning",
       "openWeight": false,
       "license": "proprietary",
-      "variantPartner": "claude-sonnet-5",
+      "variantPartner": "claude-sonnet-5-5",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06",
@@ -1603,80 +1609,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "claude-opus-5": {
-      "id": "claude-opus-5",
-      "apiModelId": "claude-opus-5",
-      "openRouterSlug": "anthropic/claude-opus-5",
-      "name": "Claude Opus 5",
-      "provider": "anthropic",
-      "modelType": "reasoning",
-      "openWeight": false,
-      "license": "proprietary",
-      "variantPartner": "claude-sonnet-5",
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-05",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "thinkingDefault": "adaptive",
-        "supportsManualThinking": false,
-        "maxEffortWhenThinkingDisabled": "high",
-        "rejectsSamplingParameters": true,
-        "request": {
-          "api": "messages",
-          "effortPath": "output_config.effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "max"
-      },
-      "costOverride": {
-        "inputCost": 5,
-        "outputCost": 25,
-        "cached_input": 0.5,
-        "cached_write": 6.25,
-        "cached_write_1h": 10
-      },
-      "fastTier": { "priceMultiplier": 2 },
-      "contextOverride": 1000000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "promptCacheMinimumTokens": 512,
-      "providerCompatibility": {
-        "nativeWebFetch": false
-      },
-      "speedOverride": "slow",
-      "releasedOverride": "July 24, 2026",
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding"
-      }
-    },
     "claude-opus-5-5": {
       "id": "claude-opus-5-5",
       "apiModelId": "claude-opus-5-5",
@@ -1686,7 +1618,7 @@
       "modelType": "reasoning",
       "openWeight": false,
       "license": "proprietary",
-      "variantPartner": "claude-sonnet-5",
+      "variantPartner": "claude-sonnet-5-5",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06",
@@ -1746,149 +1678,9 @@
       "speedOverride": "slow",
       "releasedOverride": "September 2026",
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
-      }
-    },
-    "claude-opus-4-8": {
-      "id": "claude-opus-4-8",
-      "apiModelId": "claude-opus-4-8",
-      "openRouterSlug": "anthropic/claude-opus-4-8",
-      "name": "Claude Opus 4.8",
-      "provider": "anthropic",
-      "modelType": "reasoning",
-      "openWeight": false,
-      "license": "proprietary",
-      "variantPartner": "claude-sonnet-5",
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "thinkingDefault": "adaptive",
-        "supportsManualThinking": false,
-        "maxEffortWhenThinkingDisabled": "high",
-        "rejectsSamplingParameters": true,
-        "request": {
-          "api": "messages",
-          "effortPath": "output_config.effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "max"
-      },
-      "costOverride": {
-        "inputCost": 5,
-        "outputCost": 25,
-        "cached_input": 0.5,
-        "cached_write": 6.25,
-        "cached_write_1h": 10
-      },
-      "fastTier": { "priceMultiplier": 2 },
-      "contextOverride": 1000000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "promptCacheMinimumTokens": 512,
-      "providerCompatibility": {
-        "nativeWebFetch": false
-      },
-      "speedOverride": "slow",
-      "releasedOverride": "June 2026",
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
-      }
-    },
-    "claude-sonnet-5": {
-      "id": "claude-sonnet-5",
-      "apiModelId": "claude-sonnet-5",
-      "openRouterSlug": "anthropic/claude-sonnet-5",
-      "name": "Claude Sonnet 5",
-      "provider": "anthropic",
-      "modelType": "code",
-      "openWeight": false,
-      "license": "proprietary",
-      "variantPartner": "claude-opus-5",
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks", "Long Documents"],
-      "inputModalities": ["text", "image", "pdf"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "rejectsSamplingParameters": true,
-        "request": {
-          "api": "messages",
-          "effortPath": "output_config.effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "costOverride": {
-        "inputCost": 2,
-        "outputCost": 10,
-        "cached_input": 0.2,
-        "cached_write": 2.5,
-        "cached_write_1h": 4
-      },
-      "contextOverride": 1000000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "June 30, 2026",
-      "lifecycle": {
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.coding_balanced"
+        "stagedOn": "2026-10-07",
+        "source": "catalog/model-families.json#anthropic/claude-opus"
       }
     },
     "claude-sonnet-5-5": {
@@ -1961,78 +1753,9 @@
       "speedOverride": "fast",
       "releasedOverride": "September 28, 2026",
       "lifecycle": {
-        "stage": "registered",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "source": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview"
-      }
-    },
-    "claude-haiku-4-5": {
-      "id": "claude-haiku-4-5",
-      "apiModelId": "claude-haiku-4-5-20251001",
-      "openRouterSlug": "anthropic/claude-haiku-4.5",
-      "name": "Claude Haiku 4.5",
-      "provider": "anthropic",
-      "modelType": "chat",
-      "openWeight": false,
-      "license": "proprietary",
-      "variantPartner": "claude-sonnet-5",
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 64000,
-      "knowledgeCutoff": "2025-02",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Low Latency", "High Volume", "Tool Use"],
-      "inputModalities": ["text", "image", "pdf"],
-      "imageInput": { "maxImagesPerRequest": 100 },
-      "documentInput": { "maxPagesPerRequest": 100 },
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_toggle",
-        "canDisableThinking": true,
-        "thinkingDefault": "off",
-        "supportsManualThinking": true,
-        "request": {
-          "api": "messages",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": "thinking.budget_tokens"
-        }
-      },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "costOverride": {
-        "inputCost": 1,
-        "outputCost": 5,
-        "cached_input": 0.1,
-        "cached_write": 1.25,
-        "cached_write_1h": 2
-      },
-      "contextOverride": 200000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      },
-      "promptCacheMinimumTokens": 4096,
-      "pricingNote": "The pinned Claude API id is the dated snapshot claude-haiku-4-5-20251001; claude-haiku-4-5 is an alias that resolves to it. Extended thinking only, through thinking.type enabled plus thinking.budget_tokens; the effort parameter is not supported and adaptive thinking returns 400. Minimum cacheable prompt is 4,096 tokens. Batch is 50% off at $0.50/$2.50. Anthropic commits only to no retirement before 2025-10-15, so this is a short-horizon row. Verified against platform.claude.com/docs/en/models/haiku-4-5/overview, retrieved 2026-09-04.",
-      "speedOverride": "very-fast",
-      "releasedOverride": "October 15, 2025",
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "source": "catalog/model-families.json#anthropic/claude-sonnet"
       }
     },
     "claude-haiku-5-5": {
@@ -2044,7 +1767,7 @@
       "modelType": "chat",
       "openWeight": false,
       "license": "proprietary",
-      "variantPartner": "claude-sonnet-5",
+      "variantPartner": "claude-sonnet-5-5",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06",

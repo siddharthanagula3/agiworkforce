@@ -5,6 +5,7 @@ import {
   getModelMetadataById,
   getRoutingSlotModel,
   getTaskModelForProvider,
+  listManagedRoutesForModel,
   requireProviderDefaultModel,
   resolveEffectiveModelPricingForInputTokens,
   type PlatformCapability,
@@ -256,10 +257,17 @@ describe('resolveAutoRoute', () => {
     const sameModel = fallbacks.filter((entry) => entry.modelKey === CODING_PREMIUM_MODEL_ID);
     const substitutes = fallbacks.filter((entry) => entry.modelKey !== CODING_PREMIUM_MODEL_ID);
     expect(fallbacks.indexOf(substitutes[0]!)).toBe(sameModel.length);
-    expect(substitutes.slice(0, 2).map((entry) => entry.modelKey)).toEqual([
-      CODING_BALANCED_MODEL_ID,
-      CODING_ESCALATION_MODEL_ID,
-    ]);
+    // A fallback never repeats a provider, so a preferred substitute is offered
+    // only when some managed route serves it from outside the selected one.
+    const selectedProvider = result.status === 'selected' ? result.provider : null;
+    const reachableSubstitutes = [CODING_BALANCED_MODEL_ID, CODING_ESCALATION_MODEL_ID].filter(
+      (modelKey) =>
+        listManagedRoutesForModel(modelKey).some((route) => route.provider !== selectedProvider),
+    );
+    expect(reachableSubstitutes.length).toBeGreaterThan(0);
+    expect(
+      substitutes.slice(0, reachableSubstitutes.length).map((entry) => entry.modelKey),
+    ).toEqual(reachableSubstitutes);
   });
 
   it('uses the provider-native premium research route without a duplicate fallback', () => {

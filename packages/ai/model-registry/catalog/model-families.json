@@ -576,6 +576,64 @@
       "minContextTokens": 1000000,
       "minMaxOutputTokens": 128000,
       "active": {
+        "modelKey": "claude-opus-5-5",
+        "generation": "5-5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on anthropic",
+            "familyIdentity": "matches claude-opus at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 4,
+          "outputPerMillion": 20,
+          "cacheReadPerMillion": 0.2,
+          "cacheWritePerMillion": 5,
+          "cacheWrite1hPerMillion": 8
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": true,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": true,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-06"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "claude-opus-5",
         "generation": "5",
         "lifecycle": "stable",
@@ -612,9 +670,15 @@
         },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-10-07",
+          "from": "claude-opus-5",
+          "to": "claude-opus-5-5",
+          "reason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
+        }
+      ]
     },
     "anthropic/claude-sonnet": {
       "provider": "anthropic",
@@ -635,6 +699,64 @@
       "minContextTokens": 1000000,
       "minMaxOutputTokens": 128000,
       "active": {
+        "modelKey": "claude-sonnet-5-5",
+        "generation": "5-5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on anthropic",
+            "familyIdentity": "matches claude-sonnet at tier balanced",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 10,
+          "cacheReadPerMillion": 0.2,
+          "cacheWritePerMillion": 2.5,
+          "cacheWrite1hPerMillion": 4
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": true,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": true,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-06"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "claude-sonnet-5",
         "generation": "5",
         "lifecycle": "stable",
@@ -671,9 +793,15 @@
         },
         "benchmarkSnapshot": {}
       },
-      "previous": null,
       "fallbackChain": [],
-      "history": []
+      "history": [
+        {
+          "promotedAt": "2026-10-07",
+          "from": "claude-sonnet-5",
+          "to": "claude-sonnet-5-5",
+          "reason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
+        }
+      ]
     },
     "google/gemini-flash": {
       "provider": "google",
