@@ -23,6 +23,8 @@ import {
 } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
+import { resolveOwnerSeatPlanTier } from '@/lib/services/team-seat-entitlement';
+import { primarySeatLineItem } from '@/lib/billing/team-seat-items';
 
 export interface SubscriptionInfo {
   id: string;
@@ -70,7 +72,7 @@ async function resolveAllowance(
   options: CreditAllocationOptions,
 ): Promise<VersionedPlanTier> {
   return {
-    tier: planTier,
+    tier: await resolveOwnerSeatPlanTier(options.db, userId, planTier, null),
     catalogVersion:
       options.catalogVersion !== undefined
         ? options.catalogVersion
@@ -441,7 +443,7 @@ export class SubscriptionService {
         return null;
       }
 
-      const stripePriceId = stripeSubscription.items.data[0]?.price.id;
+      const stripePriceId = primarySeatLineItem(stripeSubscription.items.data)?.price.id;
       if (!stripePriceId) {
         logger.warn(
           { subscriptionId: stripeSubscription.id },

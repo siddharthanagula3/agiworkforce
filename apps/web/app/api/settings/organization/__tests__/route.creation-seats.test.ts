@@ -110,7 +110,7 @@ describe('POST /api/settings/organization, purchased seats', () => {
     expect(mockRetrieveSubscription).toHaveBeenCalledWith('sub_live123');
     const [sql, params] = insertCall() ?? [];
     expect(String(sql)).toContain('licensed_seats');
-    expect(params).toEqual(['Demo Team', 'demo-team', 'team-owner', 5, 'team']);
+    expect(params).toEqual(['Demo Team', 'demo-team', 'team-owner', 5, 'team', 0]);
     expect(String(sql)).not.toContain('stripe_subscription_id');
     expect(String(sql)).not.toContain('stripe_customer_id');
   });
@@ -150,7 +150,7 @@ describe('POST /api/settings/organization, purchased seats', () => {
     expect(response.status).toBe(201);
     expect(mockRetrieveSubscription).not.toHaveBeenCalled();
     const [, params] = insertCall() ?? [];
-    expect(params).toEqual(['Demo Team', 'demo-team', 'team-owner', 1, null]);
+    expect(params).toEqual(['Demo Team', 'demo-team', 'team-owner', 1, null, 0]);
   });
 
   it('ignores a seat quantity carried by a lapsed subscription', async () => {

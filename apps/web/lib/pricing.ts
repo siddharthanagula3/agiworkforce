@@ -3,11 +3,14 @@ import {
   BILLING_PLAN_PRICING,
   getPlanPriceUsd,
   getPlanPriceInr,
+  subscriptionPlanTierOf,
   type BillingInterval,
   type SelfServePaidPlanTier,
+  type TeamSeatUpgradeTier,
 } from '@agiworkforce/types';
 
 export type ConfiguredCheckoutPlan = SelfServePaidPlanTier;
+export type ConfiguredPricePlan = ConfiguredCheckoutPlan | TeamSeatUpgradeTier;
 
 function validatePriceId(priceId: string | undefined, name: string): string | undefined {
   const normalizedPriceId = priceId?.trim();
@@ -42,7 +45,7 @@ export const DEFAULT_CHECKOUT_CURRENCY: CheckoutCurrency = 'usd';
  * named here, and nothing else in the app may key off the raw id.
  */
 export interface StripePricePoint {
-  plan: ConfiguredCheckoutPlan;
+  plan: ConfiguredPricePlan;
   interval: BillingInterval;
   currency: CheckoutCurrency;
   envVar: string;
@@ -57,6 +60,18 @@ export const STRIPE_PRICE_POINTS: readonly StripePricePoint[] = [
   { plan: 'team', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_TEAM_MONTHLY_USD' },
   { plan: 'team', interval: 'monthly', currency: 'inr', envVar: 'STRIPE_PRICE_TEAM_MONTHLY_INR' },
   { plan: 'team', interval: 'yearly', currency: 'usd', envVar: 'STRIPE_PRICE_TEAM_YEARLY_USD' },
+  {
+    plan: 'team_premium',
+    interval: 'monthly',
+    currency: 'usd',
+    envVar: 'STRIPE_PRICE_TEAM_PREMIUM_MONTHLY_USD',
+  },
+  {
+    plan: 'team_premium',
+    interval: 'yearly',
+    currency: 'usd',
+    envVar: 'STRIPE_PRICE_TEAM_PREMIUM_YEARLY_USD',
+  },
 ];
 
 export function normalizeCheckoutCurrency(currency: string | undefined): CheckoutCurrency {
@@ -64,7 +79,7 @@ export function normalizeCheckoutCurrency(currency: string | undefined): Checkou
 }
 
 function pricePointKey(
-  plan: ConfiguredCheckoutPlan,
+  plan: ConfiguredPricePlan,
   interval: BillingInterval,
   currency: CheckoutCurrency,
 ): string {
@@ -83,7 +98,7 @@ const CONFIGURED_PRICE_IDS: ReadonlyMap<string, string> = new Map(
 );
 
 function priceIdAt(
-  plan: ConfiguredCheckoutPlan,
+  plan: ConfiguredPricePlan,
   interval: BillingInterval,
   currency: CheckoutCurrency,
 ): string | undefined {
@@ -109,6 +124,10 @@ export const STRIPE_PRICE_IDS = {
     monthlyInr: priceIdAt('team', 'monthly', 'inr'),
     yearlyUsd: priceIdAt('team', 'yearly', 'usd'),
   },
+  team_premium: {
+    monthlyUsd: priceIdAt('team_premium', 'monthly', 'usd'),
+    yearlyUsd: priceIdAt('team_premium', 'yearly', 'usd'),
+  },
 };
 
 export function arePriceIdsConfigured(): boolean {
@@ -117,7 +136,7 @@ export function arePriceIdsConfigured(): boolean {
 }
 
 export function getConfiguredPriceId(
-  plan: ConfiguredCheckoutPlan,
+  plan: ConfiguredPricePlan,
   interval: BillingInterval,
   currency?: string,
 ): string | undefined {
@@ -189,6 +208,8 @@ export const PRICING_CONFIG = {
       stripe_price_ids: STRIPE_PRICE_IDS.team,
     },
   ],
-  getPlanFromPriceId: (priceId: string): ConfiguredCheckoutPlan | null =>
-    getPricePointForPriceId(priceId)?.plan ?? null,
+  getPlanFromPriceId: (priceId: string): ConfiguredCheckoutPlan | null => {
+    const plan = getPricePointForPriceId(priceId)?.plan;
+    return plan ? (subscriptionPlanTierOf(plan) as ConfiguredCheckoutPlan) : null;
+  },
 };

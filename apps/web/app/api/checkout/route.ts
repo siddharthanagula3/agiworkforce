@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 import {
   CheckoutRequestSchema,
   PlanTierSchema,
-  resolveCheckoutQuantity,
+  resolveCheckoutSeatQuantities,
 } from '@/lib/validations/checkout';
 import { resolveCheckoutPlan } from '@/lib/services/plan-catalog-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -27,7 +27,13 @@ import {
   withdrawalConsentMessage,
   withdrawalConsentMetadata,
 } from '@/lib/billing/withdrawal-consent';
-import { BILLING_PLAN_CATALOG_VERSION, getPlanTrialDays } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_CATALOG_VERSION,
+  TEAM_SEAT_TYPE_LABELS,
+  getPlanTrialDays,
+  teamSeatPlanTier,
+  totalTeamSeats,
+} from '@agiworkforce/types';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -208,7 +214,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     );
   }
   const plan = purchasable.data;
-  const quantity = resolveCheckoutQuantity({ ...validationResult.data, plan });
+  const seatQuantities = resolveCheckoutSeatQuantities({ ...validationResult.data, plan });
+  const quantity = totalTeamSeats(seatQuantities);
   const requestIdempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() || null;
   const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
   const priceSelection = await getCheckoutPriceSelection(plan, billingInterval, country);
@@ -218,6 +225,32 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     );
   }
   const { priceId, currency } = priceSelection;
+
+  const premiumSelection =
+    seatQuantities.premium > 0
+      ? await getCheckoutPriceSelection(teamSeatPlanTier('premium'), billingInterval, country)
+      : null;
+  if (seatQuantities.premium > 0 && !premiumSelection) {
+    throw createError.validation(
+      `${TEAM_SEAT_TYPE_LABELS.premium} seats are not available for ${plan} ${billingInterval} checkout yet. Choose ${TEAM_SEAT_TYPE_LABELS.standard} seats.`,
+    );
+  }
+  if (premiumSelection && premiumSelection.currency !== currency) {
+    throw createError.validation(
+      `${TEAM_SEAT_TYPE_LABELS.premium} seats are not sold in ${currency.toUpperCase()}. Choose ${TEAM_SEAT_TYPE_LABELS.standard} seats.`,
+    );
+  }
+  const lineItems = [
+    ...(seatQuantities.standard > 0 ? [{ price: priceId, quantity: seatQuantities.standard }] : []),
+    ...(premiumSelection
+      ? [{ price: premiumSelection.priceId, quantity: seatQuantities.premium }]
+      : []),
+  ];
+  const seatKey =
+    seatQuantities.premium > 0 ? `${quantity}p${seatQuantities.premium}` : String(quantity);
+  const recurringAmountMinor =
+    priceSelection.amountMinor * seatQuantities.standard +
+    (premiumSelection?.amountMinor ?? 0) * seatQuantities.premium;
 
   let stripeCustomerId: string;
   const stripe = getStripeClient();
@@ -407,7 +440,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
               message: trialDisclosure({
                 trialDays,
                 startedAt: checkoutStartedAt,
-                amountMinor: priceSelection.amountMinor * quantity,
+                amountMinor: recurringAmountMinor,
                 currency,
                 billingInterval,
                 referral: getPlanTrialDays(plan) === null,
@@ -421,6 +454,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     plan_tier: plan,
     plan_catalog_version: String(BILLING_PLAN_CATALOG_VERSION),
     requested_seats: String(quantity),
+    requested_premium_seats: String(seatQuantities.premium),
   };
 
   let earlierCheckoutsSettled: boolean;
@@ -455,12 +489,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       locale: 'auto', // Auto-detect browser locale to prevent i18n module errors
       currency,
       customer: stripeCustomerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity,
-        },
-      ],
+      line_items: lineItems,
       success_url: `${returnOrigin}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${returnOrigin}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
@@ -487,7 +516,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     };
     const checkoutSession = requestIdempotencyKey
       ? await stripe.checkout.sessions.create(checkoutSessionParams, {
-          idempotencyKey: `checkout:${user.id}:${plan}:${billingInterval}:${quantity}:${requestIdempotencyKey}`,
+          idempotencyKey: `checkout:${user.id}:${plan}:${billingInterval}:${seatKey}:${requestIdempotencyKey}`,
         })
       : await stripe.checkout.sessions.create(checkoutSessionParams);
 

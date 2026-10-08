@@ -6,8 +6,10 @@ import {
   type BillingInterval,
   type BillingPlanTier,
 } from '@agiworkforce/types';
+import { primarySeatLineItem } from '@/lib/billing/team-seat-items';
 import { logger } from '@/lib/logger';
 import { getTierMapping } from '@/lib/price-tier-mapping';
+import { getPricePointForPriceId } from '@/lib/pricing';
 import {
   STRIPE_RECONCILIATION_ALERT_RATIO,
   STRIPE_RECONCILIATION_MIN_SAMPLE,
@@ -121,8 +123,11 @@ export function compareBilledPrice(observation: BillingPriceObservation): {
     fields.push('interval');
   }
 
+  const pricedTier =
+    (observation.priceId ? getPricePointForPriceId(observation.priceId)?.plan : undefined) ??
+    entry.tier;
   const expected = observation.currency
-    ? expectedUnitAmount(entry.tier, entry.interval, observation.currency)
+    ? expectedUnitAmount(pricedTier, entry.interval, observation.currency)
     : null;
   if (expected !== null && observation.unitAmount !== null && observation.unitAmount !== expected) {
     fields.push('unit_amount');
@@ -136,7 +141,7 @@ function firstRecurringItem(subscription: BillingSubscription): {
   unitAmount: number | null;
   currency: string | null;
 } {
-  const price = subscription.items.data[0]?.price;
+  const price = primarySeatLineItem(subscription.items.data)?.price;
   return {
     priceId: price?.id ?? null,
     unitAmount: price?.unit_amount ?? null,

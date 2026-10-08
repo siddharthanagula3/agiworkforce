@@ -28,8 +28,13 @@ import {
   applySubscriptionOwnerHandoff,
   subscriptionOwnerHandoffConflictMessage,
 } from '@/lib/server/subscription-owner-handoff';
-import { purchasedCreditMetadata, topUpChargedCents } from '@agiworkforce/types';
+import {
+  isPerSeatBillingPlan,
+  purchasedCreditMetadata,
+  topUpChargedCents,
+} from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
+import { primarySeatLineItem } from '@/lib/billing/team-seat-items';
 import { catalogVersionAtRenewal, catalogVersionSold } from '@/lib/services/plan-catalog-service';
 import {
   auditUnknownStripePriceIfEnterpriseConfigured,
@@ -39,6 +44,7 @@ import {
   buildPurchasedSeatRecord,
   persistPurchasedSeatsOnOrganization,
   resolveCheckoutSessionSeats,
+  resolveSubscriptionPremiumSeats,
   resolveSubscriptionSeats,
 } from './seats';
 import { toStoredSubscriptionStatus } from './subscription-status';
@@ -625,14 +631,14 @@ export async function upsertSubscriptionFromSession(
 
   let stripePriceId: string | null = null;
   if (session.line_items?.data && session.line_items.data.length > 0) {
-    stripePriceId = session.line_items.data[0]?.price?.id || null;
+    stripePriceId = primarySeatLineItem(session.line_items.data)?.price?.id || null;
   } else if (session.id) {
     try {
       const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
         expand: ['line_items'],
       });
       if (expandedSession.line_items?.data && expandedSession.line_items.data.length > 0) {
-        stripePriceId = expandedSession.line_items.data[0]?.price?.id || null;
+        stripePriceId = primarySeatLineItem(expandedSession.line_items.data)?.price?.id || null;
       }
     } catch (error) {
       logger.error({ error, sessionId: session.id }, 'Failed to retrieve expanded session');
@@ -646,6 +652,7 @@ export async function upsertSubscriptionFromSession(
   let canceledAt: Date | null = null;
   let stripeCouponId: string | null = null;
   let billedSeats: number | null = resolveCheckoutSessionSeats(session);
+  let billedPremiumSeats = 0;
 
   if (!stripeSubId) {
     logger.error(
@@ -668,8 +675,9 @@ export async function upsertSubscriptionFromSession(
     cancelAtPeriodEnd = subscription.cancel_at_period_end;
     canceledAt = subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null;
     billedSeats = resolveSubscriptionSeats(subscription);
+    billedPremiumSeats = resolveSubscriptionPremiumSeats(subscription);
 
-    const firstItem = subscription.items?.data?.[0];
+    const firstItem = primarySeatLineItem(subscription.items?.data);
     if (!stripePriceId && firstItem) {
       stripePriceId = firstItem.price.id;
       logger.info(
@@ -719,7 +727,7 @@ export async function upsertSubscriptionFromSession(
       const subscription = await stripe.subscriptions.retrieve(stripeSubId, {
         expand: ['items.data.price'],
       });
-      const retryItem = subscription.items.data[0];
+      const retryItem = primarySeatLineItem(subscription.items.data);
       if (retryItem) {
         stripePriceId = retryItem.price.id;
         logger.info(
@@ -741,7 +749,7 @@ export async function upsertSubscriptionFromSession(
       const finalSubscription = await stripe.subscriptions.retrieve(stripeSubId, {
         expand: ['items.data.price', 'items.data.plan'],
       });
-      const finalItem = finalSubscription.items.data[0];
+      const finalItem = primarySeatLineItem(finalSubscription.items.data);
       if (finalItem) {
         stripePriceId = finalItem.price?.id || finalItem.plan?.id || null;
         if (stripePriceId) {
@@ -859,6 +867,9 @@ export async function upsertSubscriptionFromSession(
     await persistPurchasedSeatsOnOrganization(db, {
       ownerUserId: resolvedUserId,
       seats: purchasedSeats.seats,
+      premiumSeats: isPerSeatBillingPlan(planTier)
+        ? Math.min(billedPremiumSeats, purchasedSeats.seats)
+        : 0,
       planTier,
       stripeSubscriptionId: stripeSubId,
       stripeCustomerId,
@@ -1066,7 +1077,7 @@ export async function updateSubscriptionFromStripeSubscription(
   const stripeCustomerId = subscription.customer as string | null;
 
   let stripePriceId: string | null = null;
-  const firstSubItem = subscription.items.data[0];
+  const firstSubItem = primarySeatLineItem(subscription.items.data);
   if (firstSubItem) {
     stripePriceId = firstSubItem.price.id;
   }
@@ -1285,6 +1296,7 @@ export async function updateSubscriptionFromStripeSubscription(
         await persistPurchasedSeatsOnOrganization(db, {
           ownerUserId: resolvedUserId,
           seats: purchasedSeats.seats,
+          premiumSeats: purchasedSeats.premiumSeats,
           planTier,
           stripeSubscriptionId: stripeSubId,
           stripeCustomerId,
@@ -1552,6 +1564,7 @@ export async function updateSubscriptionFromStripeSubscription(
           await persistPurchasedSeatsOnOrganization(db, {
             ownerUserId: resolvedUserId,
             seats: purchasedSeats.seats,
+            premiumSeats: purchasedSeats.premiumSeats,
             planTier,
             stripeSubscriptionId: stripeSubId,
             stripeCustomerId,
