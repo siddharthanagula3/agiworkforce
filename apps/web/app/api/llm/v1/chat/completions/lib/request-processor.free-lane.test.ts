@@ -31,11 +31,15 @@ const FREE_SLOTS = [
  * calls its absence from the pool file the deliberate state. So no pool record
  * claims a free slot today, and the lane cannot look at one. A terms review
  * that admits a free-slot route is what puts them back here.
+ *
+ * `reasoning_premium` left this list on 2026-10-07. Its pool is the Model
+ * Studio allocation for the DeepSeek flash model that held the slot until the
+ * slot moved to that family's current model, which Model Studio's allocation
+ * does not serve. The pool record is still in the file and now claims no slot.
  */
 const POOL_CLAIMED_SLOTS = [
   'reasoning_balanced',
   'reasoning_economy',
-  'reasoning_premium',
 ] as const satisfies readonly RoutingSlot[];
 
 /** The models behind the claimed slots: what the preference can reach. */

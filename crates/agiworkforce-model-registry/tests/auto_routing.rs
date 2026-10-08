@@ -34,6 +34,29 @@ fn managed_provider_model_id(model_key: &str) -> String {
         .to_owned()
 }
 
+const MANAGED_TRAFFIC_COMMERCIAL_STATUSES: [&str; 3] =
+    ["agi_direct", "authorized_marketplace", "free_commercial"];
+
+fn has_managed_route_outside(model_key: &str, provider: &str) -> bool {
+    generated_registry()["routes"]
+        .as_object()
+        .expect("generated registry should expose routes")
+        .values()
+        .any(|route| {
+            route["modelKey"].as_str() == Some(model_key)
+                && route["provider"].as_str() != Some(provider)
+                && route["selectable"].as_bool() == Some(true)
+                && route["trustModes"].as_array().is_some_and(|modes| {
+                    modes
+                        .iter()
+                        .any(|mode| mode.as_str() == Some("managed_cloud"))
+                })
+                && route["commercialStatus"]
+                    .as_str()
+                    .is_some_and(|status| MANAGED_TRAFFIC_COMMERCIAL_STATUSES.contains(&status))
+        })
+}
+
 #[test]
 fn distinguishes_auto_profiles_from_concrete_model_ids() {
     assert!(is_auto_routing_selection("auto"));
@@ -273,16 +296,23 @@ fn uses_premium_coding_slot_when_permitted() {
         .iter()
         .filter(|route| route.model_key != selected.model_key)
         .collect();
+    // A fallback never repeats a provider, so a preferred substitute is offered
+    // only when some managed route serves it from outside the selected one.
+    let reachable_substitutes: Vec<_> = [
+        slot_model("coding_balanced"),
+        slot_model("escalation_coding"),
+    ]
+    .into_iter()
+    .filter(|model_key| has_managed_route_outside(model_key, &selected.provider))
+    .collect();
+    assert!(!reachable_substitutes.is_empty());
     assert_eq!(
         substitutes
             .iter()
-            .take(2)
+            .take(reachable_substitutes.len())
             .map(|route| route.model_key.clone())
             .collect::<Vec<_>>(),
-        vec![
-            slot_model("coding_balanced"),
-            slot_model("escalation_coding"),
-        ]
+        reachable_substitutes
     );
 }
 

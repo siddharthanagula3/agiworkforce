@@ -36,11 +36,13 @@ describe('live voice delegation tools', () => {
    * `container` on the chat path: the toggle was lit and the turn died.
    */
   it('resolves search through the same resolver the chat completions route uses', () => {
-    expect(resolveLiveVoiceDelegationTools(BACKEND_MODEL, POLICY).tools).toEqual(
+    const searchOnly = model({ codeExecution: false });
+
+    expect(resolveLiveVoiceDelegationTools(searchOnly, POLICY).tools).toEqual(
       appendWebSearchTool(
-        String(BACKEND_MODEL.provider).toLowerCase(),
+        String(searchOnly.provider).toLowerCase(),
         undefined,
-        BACKEND_MODEL.capabilities,
+        searchOnly.capabilities,
       ),
     );
   });
@@ -63,7 +65,9 @@ describe('live voice delegation tools', () => {
   });
 
   it('offers no search to a model the catalog says cannot search', () => {
-    expect(resolveLiveVoiceDelegationTools(model({ search: false }), POLICY).tools).toEqual([]);
+    expect(
+      resolveLiveVoiceDelegationTools(model({ search: false, codeExecution: false }), POLICY).tools,
+    ).toEqual([]);
   });
 
   /**

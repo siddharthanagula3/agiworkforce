@@ -2,9 +2,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 import {
+  CHAT_MODEL_TYPES,
   GATEWAY_BACKED_HARNESS_IDS,
   getDefaultModelFor,
   getEconomyFallbackModels,
+  getModelsForTierAndSurface,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule1 = typeof import('./chat-attachment-hydration');
@@ -280,22 +282,24 @@ describe('workspace model policy is re-checked on every model this request can r
   });
 
   it('answers with the policy refusal, not route ineligibility, when the model also carries a route the runtime does not admit', async () => {
-    const baseline = await run('policy-precedence-baseline', PRO_CHAT_MODEL);
+    const gatewayBacked = new Set(GATEWAY_BACKED_HARNESS_IDS);
+    const gatewayBackedModel = getModelsForTierAndSurface('pro', 'web/cloud-chat', {
+      modelTypes: [...CHAT_MODEL_TYPES],
+    }).find((model) =>
+      getRoutePricingForModel(model.id).some((route) => gatewayBacked.has(route.harnessId)),
+    );
+    if (!gatewayBackedModel) {
+      throw new Error('a Pro chat model must carry a gateway-backed route for this precedence');
+    }
+
+    const baseline = await run('policy-precedence-baseline', gatewayBackedModel.id);
     expect(baseline.ok).toBe(true);
     if (!baseline.ok) return;
-
-    const gatewayBacked = new Set(GATEWAY_BACKED_HARNESS_IDS);
-    const unadmittedRoutes = getRoutePricingForModel(baseline.chatRequest.model).filter((route) =>
-      gatewayBacked.has(route.harnessId),
-    );
-    expect(
-      unadmittedRoutes.length,
-      'the fixture model must carry a gateway-backed route for this precedence to be testable',
-    ).toBeGreaterThan(0);
+    expect(baseline.chatRequest.model).toBe(gatewayBackedModel.id);
 
     serveModelPolicy({ blockedModels: [baseline.chatRequest.model] });
 
-    const result = await run('policy-precedence-blocked', PRO_CHAT_MODEL);
+    const result = await run('policy-precedence-blocked', gatewayBackedModel.id);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.response.status).toBe(403);

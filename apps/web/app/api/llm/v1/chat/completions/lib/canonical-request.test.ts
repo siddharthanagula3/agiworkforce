@@ -30,6 +30,17 @@ function requireCatalogModel(predicate: (model: ModelMetadata) => boolean): Mode
 const ANTHROPIC_ADAPTIVE_MODEL = requireCatalogModel(
   (model) => model.provider === 'anthropic' && model.reasoning?.thinkingDefault === 'adaptive',
 );
+function isPricedOpenRouterRoute(route: ReturnType<typeof getRoutePricingForModel>[number]) {
+  return (
+    route.provider === 'open_router' &&
+    !route.isDefault &&
+    !!route.inputPerMillion &&
+    !!route.outputPerMillion
+  );
+}
+const OPENROUTER_PRICED_MODEL = requireCatalogModel((model) =>
+  getRoutePricingForModel(model.id).some(isPricedOpenRouterRoute),
+);
 const DISTINCT_API_MODEL = requireCatalogModel(
   (model) => !!model.apiModelId && model.apiModelId !== model.id && model.modelType !== 'video',
 );
@@ -183,13 +194,14 @@ describe('toCanonicalChatRequest', () => {
   });
 
   it('sends the registry OpenRouter route price as the max_price ceiling on an OpenRouter dispatch', () => {
-    const sheet = getRoutePricingForModel(ANTHROPIC_ADAPTIVE_MODEL.id).find(
-      (route) => route.provider === 'open_router',
-    );
+    const sheet = getRoutePricingForModel(OPENROUTER_PRICED_MODEL.id).find(isPricedOpenRouterRoute);
     if (!sheet?.inputPerMillion || !sheet.outputPerMillion) {
       throw new Error('Canonical request test needs a priced OpenRouter route');
     }
-    const processed = makeProcessed({ messages: [{ role: 'user', content: 'hi' }] }, 'openrouter');
+    const processed = makeProcessed(
+      { model: OPENROUTER_PRICED_MODEL.id, messages: [{ role: 'user', content: 'hi' }] },
+      'openrouter',
+    );
     const chatRequest = toCanonicalChatRequest(processed);
     expect(chatRequest.metadata).toEqual({
       openRouterProviderRouting: {
