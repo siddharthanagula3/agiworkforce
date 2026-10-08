@@ -76,8 +76,8 @@
       "scanner": "zap",
       "owner": "@siddharthanagula3",
       "expires": "2027-03-31",
-      "locations": ["http://127.0.0.1:3000/login"],
-      "reason": "The sign-in form declares method=\"post\" only so that a submission no script handled can never write the password into the address bar (apps/web/features/auth/AuthEmailStep.tsx). The page has no POST handler: every credential goes from the browser to the identity provider through its own SDK, which carries its own request protection, so there is no state-changing request to this origin for a forged form to trigger. Scoped to /login, so the same alert on any other form still fails."
+      "locations": ["http://127.0.0.1:3000/login", "http://127.0.0.1:3000/signup"],
+      "reason": "The sign-in and sign-up pages render the same form (apps/web/features/auth/AuthFlow.tsx), which declares method=\"post\" only so that a submission no script handled can never write the password into the address bar (apps/web/features/auth/AuthEmailStep.tsx). Neither route has a POST handler: every credential goes from the browser to the identity provider through its own SDK, which carries its own request protection, so there is no state-changing request to this origin for a forged form to trigger. Scoped to /login and /signup, so the same alert on any other form still fails."
     }
   ]
 }
