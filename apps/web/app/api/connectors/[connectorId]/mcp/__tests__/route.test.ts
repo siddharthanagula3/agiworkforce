@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
   getUserScopedDb: vi.fn(),
   loadConnectorToolPermissions: vi.fn(),
-  withUserConnectorMcpHandle: vi.fn(),
+  withReachableMcpHandle: vi.fn(),
   bindMcpTask: vi.fn(),
   isMcpTaskBound: vi.fn(),
   recordAuditEvent: vi.fn(),
@@ -103,7 +103,11 @@ vi.mock('@/lib/user-connector-tools', () => ({
   loadUserConnectorToolDefs: vi.fn(),
   makeUserConnectorExecutor: vi.fn(),
   researchConnectorSources: vi.fn(),
-  withUserConnectorMcpHandle: mocks.withUserConnectorMcpHandle,
+  withUserConnectorMcpHandle: vi.fn(),
+}));
+vi.mock('@/lib/connectors/reachable-mcp-handle', () => ({
+  rethrowConnectorUnreachable: vi.fn(),
+  withReachableMcpHandle: mocks.withReachableMcpHandle,
 }));
 vi.mock('@/lib/connectors/mcp-state-store', () => ({
   loadMcpAppPayload: vi.fn(),
@@ -150,7 +154,7 @@ beforeEach(() => {
     levelForConnectorTool: mocks.levelForConnectorTool,
   });
   mocks.levelForConnectorTool.mockReturnValue('allow');
-  mocks.withUserConnectorMcpHandle.mockImplementation(
+  mocks.withReachableMcpHandle.mockImplementation(
     async (_userId: string, _ref: string, run: (c: typeof connection) => Promise<unknown>) =>
       run(connection),
   );
@@ -174,7 +178,7 @@ describe('POST /api/connectors/[connectorId]/mcp', () => {
   it('rejects an invalid connector id and an unknown operation', async () => {
     expect((await call({ operation: 'readResource', uri: 'x' }, '../etc')).status).toBe(400);
     expect((await call({ operation: 'deleteEverything' })).status).toBe(400);
-    expect(mocks.withUserConnectorMcpHandle).not.toHaveBeenCalled();
+    expect(mocks.withReachableMcpHandle).not.toHaveBeenCalled();
   });
 
   it('rejects a payload over the operation size cap', async () => {
@@ -185,7 +189,7 @@ describe('POST /api/connectors/[connectorId]/mcp', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(mocks.withUserConnectorMcpHandle).not.toHaveBeenCalled();
+    expect(mocks.withReachableMcpHandle).not.toHaveBeenCalled();
   });
 
   it('rejects a signed-out caller with 401', async () => {
@@ -194,15 +198,29 @@ describe('POST /api/connectors/[connectorId]/mcp', () => {
     const response = await call({ operation: 'readResource', uri: 'notion://page/1' });
 
     expect(response.status).toBe(401);
-    expect(mocks.withUserConnectorMcpHandle).not.toHaveBeenCalled();
+    expect(mocks.withReachableMcpHandle).not.toHaveBeenCalled();
   });
 
   it('answers 404 when the caller has no such connected connector', async () => {
-    mocks.withUserConnectorMcpHandle.mockResolvedValue(null);
+    mocks.withReachableMcpHandle.mockResolvedValue(null);
 
     const response = await call({ operation: 'readResource', uri: 'notion://page/1' });
 
     expect(response.status).toBe(404);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 with a retry message, not 404, when the connector could not be reached', async () => {
+    const message =
+      "Couldn't reach Notion just now. It is still connected, so try again in a moment.";
+    mocks.withReachableMcpHandle.mockRejectedValue(
+      createError.serviceUnavailable(message).asUserSafe(),
+    );
+
+    const response = await call({ operation: 'readResource', uri: 'notion://page/1' });
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.message).toBe(message);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
@@ -261,7 +279,7 @@ describe('POST /api/connectors/[connectorId]/mcp', () => {
       result: { content: [{ type: 'text', text: 'done' }] },
     });
     expect(mocks.loadConnectorToolPermissions).toHaveBeenCalledWith(mocks.db, 'user-1', 'org-1');
-    expect(mocks.withUserConnectorMcpHandle).toHaveBeenCalledWith(
+    expect(mocks.withReachableMcpHandle).toHaveBeenCalledWith(
       'user-1',
       CONNECTOR,
       expect.any(Function),

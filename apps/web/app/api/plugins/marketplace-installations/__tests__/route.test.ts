@@ -20,7 +20,9 @@ const {
   marketplaceEntryMock,
   listMarketplaceDependentsMock,
   getMarketplaceInstallationMock,
+  setPluginConnectorsEnabledMock,
 } = vi.hoisted(() => ({
+  setPluginConnectorsEnabledMock: vi.fn(),
   listMarketplaceDependentsMock: vi.fn(),
   getMarketplaceInstallationMock: vi.fn(),
   pluginPolicyMock: vi.fn(),
@@ -94,6 +96,7 @@ vi.mock('@/features/plugins/server/directory/memory-cache', () => ({
 vi.mock('@/lib/connectors/plugin-connectors', () => ({
   registerPluginConnectors: async () => ({ added: [], failed: [] }),
   removePluginConnectors: removePluginConnectorsMock,
+  setPluginConnectorsEnabled: setPluginConnectorsEnabledMock,
 }));
 
 import { NextRequest } from 'next/server';
@@ -365,6 +368,34 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
     const response = await POST(post('/api/plugins/marketplace-installations', { pluginId: 'x' }));
     expect(response.status).toBe(503);
     expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
+  });
+});
+
+describe('PATCH /api/plugins/marketplace-installations/[id] connectors', () => {
+  it('takes the plugin connectors out of use when it is turned off and back when turned on', async () => {
+    setMarketplaceInstallationEnabledMock.mockResolvedValueOnce({
+      ...INSTALLATION,
+      enabled: false,
+    });
+    await PATCH(
+      patch(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`, { enabled: false }),
+      params(INSTALLATION_ID),
+    );
+    expect(setPluginConnectorsEnabledMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'acme-support-bundle',
+      false,
+    );
+    setMarketplaceInstallationEnabledMock.mockResolvedValueOnce({ ...INSTALLATION, enabled: true });
+    await PATCH(
+      patch(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`, { enabled: true }),
+      params(INSTALLATION_ID),
+    );
+    expect(setPluginConnectorsEnabledMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'acme-support-bundle',
+      true,
+    );
   });
 });
 

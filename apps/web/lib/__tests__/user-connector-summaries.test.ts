@@ -65,6 +65,20 @@ beforeEach(() => {
   openCredential.mockReturnValue({ headerName: 'Authorization', headerValue: 'Bearer x' });
 });
 
+describe('getUserCustomConnectorSummaries plugin state', () => {
+  it('keeps a connector of a turned-off plugin in the list and says why it is off', async () => {
+    const [off, on] = await getUserCustomConnectorSummaries(
+      dbReturning([
+        { ...ROW, disabled_by_plugin_at: '2026-10-08T00:00:00.000Z' },
+        { ...ROW, id: 'row-2', disabled_by_plugin_at: null },
+      ]),
+      'user-1',
+    );
+    expect(off?.disabledByPlugin).toBe(true);
+    expect(on?.disabledByPlugin).toBeUndefined();
+  });
+});
+
 describe('getUserCustomConnectorSummaries credential state', () => {
   it('flags a row whose sealed credential no longer opens', async () => {
     openCredential.mockImplementation(() => {

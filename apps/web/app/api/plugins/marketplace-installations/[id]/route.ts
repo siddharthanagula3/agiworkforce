@@ -15,7 +15,10 @@ import {
 } from '@/lib/services/plugin-marketplace-installation-service';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { uninstallDirectoryInstallation } from '@/features/plugins/server/directory/install';
-import { removePluginConnectors } from '@/lib/connectors/plugin-connectors';
+import {
+  removePluginConnectors,
+  setPluginConnectorsEnabled,
+} from '@/lib/connectors/plugin-connectors';
 import {
   installsDisabledResponse,
   pluginHasDependentsResponse,
@@ -77,7 +80,8 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
         );
       }
       for (const dependent of dependents) {
-        await setMarketplaceInstallationEnabled(db, userId, dependent.id, false);
+        const turnedOff = await setMarketplaceInstallationEnabled(db, userId, dependent.id, false);
+        if (turnedOff) await setPluginConnectorsEnabled(request, turnedOff.pluginKey, false);
       }
     }
     const installation = await setMarketplaceInstallationEnabled(
@@ -87,6 +91,7 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
       body.data.enabled,
     );
     if (!installation) return notInstalled();
+    await setPluginConnectorsEnabled(request, installation.pluginKey, installation.enabled);
     await recordWorkspaceAuditEvent(db, request, {
       userId: userId,
       eventType: 'plugin_setting_changed',

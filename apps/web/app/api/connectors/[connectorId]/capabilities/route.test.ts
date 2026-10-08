@@ -12,11 +12,13 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/user-connector-tools', () => ({
   loadUserConnectorCapabilityCatalog: (...args: unknown[]) => mocks.loadCatalog(...args),
+  withUserConnectorMcpHandle: vi.fn(),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { ConnectorUnreachableError } from '@/lib/connectors/oauth-access';
 import { GET } from './route';
 
 const CONNECTOR_REF = 'dir-abc123def456';
@@ -101,5 +103,26 @@ describe('GET /api/connectors/<ref>/capabilities serves display text, not model 
     expect(body.resources[0]?.title).toBe('A resource');
     expect(body.resourceTemplates[0]?.title).toBe('A template');
     expect(body.prompts[0]?.title).toBe('A prompt');
+  });
+});
+
+describe('GET /api/connectors/<ref>/capabilities when the token refresh failed for a moment', () => {
+  it('says the connector could not be reached instead of that it is not connected', async () => {
+    mocks.loadCatalog.mockRejectedValue(new ConnectorUnreachableError('Microsoft Learn'));
+
+    const response = await GET(request(), context());
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.message).toBe(
+      "Couldn't reach Microsoft Learn just now. It is still connected, so try again in a moment.",
+    );
+  });
+
+  it('still answers 404 for a connector that is not connected', async () => {
+    mocks.loadCatalog.mockResolvedValue(null);
+
+    const response = await GET(request(), context());
+
+    expect(response.status).toBe(404);
   });
 });
