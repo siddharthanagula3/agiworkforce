@@ -255,7 +255,7 @@ async function directoryNode(
   const checked = installableSource(record);
   if (!checked.ok) {
     throw new PluginDependencyError(
-      `Dependency "${label}" (required by ${requiredBy}) cannot be installed in the web app, so install ${rootLabel} from the released CLI.`,
+      `Dependency "${label}" (required by ${requiredBy}) cannot be installed in the web app, so install ${rootLabel} from the CLI.`,
     );
   }
   const dependencies = await directoryDependencies(
@@ -430,7 +430,7 @@ async function listedOutsideRange(
     return `Dependency "${dependency.label}" has no git tag satisfying ${constraint.range} (required by ${constraint.requiredBy}), so ${rootLabel} was not installed.`;
   }
   if (release.status === 'found') {
-    return `Dependency "${dependency.label}" (required by ${constraint.requiredBy}) requires ${constraint.range}, and its marketplace lists ${listed}. The web app installs only the version its marketplace lists, so install ${rootLabel} from the released CLI, which installs ${release.tag}.`;
+    return `Dependency "${dependency.label}" (required by ${constraint.requiredBy}) requires ${constraint.range}, and its marketplace lists ${listed}. The web app installs only the version its marketplace lists, so install ${rootLabel} from the CLI, which installs ${release.tag}.`;
   }
   return listedOutsideRangeMessage(dependency.label, constraint, listed, rootLabel);
 }

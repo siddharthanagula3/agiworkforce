@@ -159,10 +159,10 @@ describe('CRIT-001 guard, present-tense copy requires a shipped adapter', () => 
     );
   });
 
-  it('names the released owning surface for a device-local connector', () => {
+  it('names the owning surface for a device-local connector', () => {
     const terminal = CONNECTORS.find((c) => c.id === 'terminal');
     expect(terminal?.description).toBe(
-      'Released CLI device runtime only, command execution, scripts, and process management.',
+      'CLI device runtime only, command execution, scripts, and process management.',
     );
   });
 

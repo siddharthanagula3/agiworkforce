@@ -343,7 +343,7 @@ export async function installDirectoryPlugin(
       rootDependencies = await directoryDependencies(
         root,
         context.fetchImpl,
-        `${rootLabel} declares dependencies the web app cannot read, so install it from the released CLI.`,
+        `${rootLabel} declares dependencies the web app cannot read, so install it from the CLI.`,
         INSTALL_MANIFEST_UNAVAILABLE_MESSAGE,
       );
       return {
