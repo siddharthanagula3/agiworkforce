@@ -3403,6 +3403,68 @@ describe('useChatStream', () => {
       );
     });
 
+    it("carries the conversation's memory and connector opt-outs on Continue", async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        memoryDisabledByConversation: { [PERSISTED_CONV.id]: true },
+        disabledConnectorIdsByConversation: { [PERSISTED_CONV.id]: ['gmail'] },
+        messages: [
+          { id: 'user-1', role: 'user', content: 'go on', createdAt: '2026-07-01T00:00:00.000Z' },
+          {
+            id: '0190a000-0000-7000-8000-0000000000cc',
+            role: 'assistant',
+            content: 'part one',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            metadata: { finishReason: 'length' },
+          },
+        ],
+      });
+      const { llmBodies } = mockRoutedFetch(
+        sse([{ choices: [{ delta: { content: ' part two' }, finish_reason: 'stop' }] }]),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('0190a000-0000-7000-8000-0000000000cc');
+      });
+
+      expect(llmBodies[0]).toMatchObject({
+        memory_enabled: false,
+        disabled_connector_ids: ['gmail'],
+      });
+      expect(llmBodies[0]).not.toHaveProperty('personalization');
+    });
+
+    it('keeps personalization off on Continue in an unpersonalized temporary chat', async () => {
+      const temporary = { ...PERSISTED_CONV, id: 'conv-continue-temp', isTemporary: true };
+      useChatStore.setState({
+        conversations: [temporary],
+        activeConversationId: temporary.id,
+        temporaryChatPersonalized: false,
+        messages: [
+          { id: 'user-1', role: 'user', content: 'go on', createdAt: '2026-07-01T00:00:00.000Z' },
+          {
+            id: '0190a000-0000-7000-8000-0000000000dd',
+            role: 'assistant',
+            content: 'part one',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            metadata: { finishReason: 'length' },
+          },
+        ],
+      });
+      const { llmBodies } = mockRoutedFetch(
+        sse([{ choices: [{ delta: { content: ' part two' }, finish_reason: 'stop' }] }]),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('0190a000-0000-7000-8000-0000000000dd');
+      });
+
+      expect(llmBodies[0]).toMatchObject({ personalization: false });
+    });
+
     it('re-offers Continue when the continuation truncates again', async () => {
       useChatStore.setState({
         conversations: [PERSISTED_CONV],
