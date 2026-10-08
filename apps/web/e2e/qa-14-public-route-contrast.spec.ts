@@ -90,6 +90,8 @@ const DEFAULT_ROUTES = [
   '/invite',
   '/legal',
   '/legal/eu-representative',
+  '/legal/government-requests',
+  '/supported-countries',
   '/local',
   '/login',
   '/login/complete',
