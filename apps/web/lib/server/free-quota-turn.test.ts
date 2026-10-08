@@ -670,37 +670,68 @@ describe('a chat inside a project on a free model', () => {
   const FILE_ID = '2f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
   const SIBLING_ID = '3f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
 
-  function inProject(project: () => unknown[] = () => []) {
+  const PRICING_FILE = {
+    id: FILE_ID,
+    file_name: 'pricing.md',
+    summary: 'Tier table',
+    extracted_text: 'Pro costs $20 per month.',
+    extracted_anchors: null,
+  };
+  const PRICING_CHAT = [
+    {
+      id: SIBLING_ID,
+      title: 'Pricing chat',
+      updated_at: '2026-10-01T12:00:00.000Z',
+      role: 'user',
+      content: 'Should Pro stay at twenty dollars?',
+      created_at: '2026-10-01T11:59:00.000Z',
+    },
+  ];
+
+  interface ProjectFixture {
+    temporary?: boolean;
+    organizationId?: string | null;
+    workspaceAllowsMemory?: boolean;
+    files?: unknown[];
+    siblingRows?: unknown[];
+    memories?: unknown[];
+    memorySettingsUnreadable?: boolean;
+  }
+
+  function inProject(project: () => unknown[] = () => [], fixture: ProjectFixture = {}) {
     mocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from web_conversations c left join organizations')) {
         return [
-          { id: 'conversation', data_region: null, project_id: PROJECT_ID, is_temporary: false },
+          {
+            id: 'conversation',
+            data_region: null,
+            project_id: PROJECT_ID,
+            is_temporary: fixture.temporary ?? false,
+          },
         ];
       }
       if (sql.includes('from user_projects') && sql.includes('is_archived = false'))
         return project();
-      if (sql.includes('from project_knowledge_files')) {
+      if (sql.includes('from project_knowledge_files')) return fixture.files ?? [PRICING_FILE];
+      if (sql.includes('sibling_candidates')) return fixture.siblingRows ?? PRICING_CHAT;
+      if (sql.includes('from organization_admin_policies')) {
+        const allow = fixture.workspaceAllowsMemory ?? true;
         return [
           {
-            id: FILE_ID,
-            file_name: 'pricing.md',
-            summary: 'Tier table',
-            extracted_text: 'Pro costs $20 per month.',
-            extracted_anchors: null,
+            allow_memory: allow,
+            allow_connector_context: true,
+            allow_web_result_context: true,
+            retention_days: null,
+            retention_enforced: false,
           },
         ];
       }
-      if (sql.includes('sibling_candidates')) {
-        return [
-          {
-            id: SIBLING_ID,
-            title: 'Pricing chat',
-            updated_at: '2026-10-01T12:00:00.000Z',
-            role: 'user',
-            content: 'Should Pro stay at twenty dollars?',
-            created_at: '2026-10-01T11:59:00.000Z',
-          },
-        ];
+      if (fixture.memories && sql.includes("settings -> 'capabilities'")) {
+        return [{ capabilities: { memory: true } }];
+      }
+      if (fixture.memories && sql.includes('from user_memories')) return fixture.memories;
+      if (fixture.memorySettingsUnreadable && sql.includes("settings -> 'memory'")) {
+        throw new Error('connection reset');
       }
       return [];
     });
@@ -716,13 +747,17 @@ describe('a chat inside a project on a free model', () => {
     },
   ];
 
-  function sendInProject(turn: string, request: Record<string, unknown> = {}) {
+  function sendInProject(
+    turn: string,
+    request: Record<string, unknown> = {},
+    as: UserScopedDb = scoped,
+  ) {
     return serveFreeQuotaTurn(
       new NextRequest('https://agiworkforce.com/api/models/free-quota/completions', {
         method: 'POST',
         headers: { 'Idempotency-Key': turn },
       }),
-      scoped,
+      as,
       FreeOfferingRequestSchema.parse({
         model: chatModel,
         conversation_id: '52d14f7e-0b3d-40c7-952d-987e841033c5',
@@ -757,8 +792,18 @@ describe('a chat inside a project on a free model', () => {
     );
   });
 
-  it('sends the project instructions, knowledge and other chats, and names the files it used', async () => {
-    inProject(LAUNCH_PLAN);
+  it('sends the project instructions, knowledge, other chats and memory, and names the files it used', async () => {
+    inProject(LAUNCH_PLAN, {
+      memories: [
+        {
+          id: 'memory-1',
+          content: 'Quotes prices in euros.',
+          category: null,
+          pinned: false,
+          updated_at: '2026-10-01T12:00:00.000Z',
+        },
+      ],
+    });
 
     const response = await sendInProject('project-chat');
     await response.text();
@@ -768,9 +813,86 @@ describe('a chat inside a project on a free model', () => {
     expect(system).toContain('Answer in Spanish.');
     expect(system).toContain('Pro costs $20 per month.');
     expect(system).toContain('Should Pro stay at twenty dollars?');
+    expect(system).toContain('Quotes prices in euros.');
     expect(
       readProjectSourcesHeaderValue(response.headers.get(PROJECT_FILE_CITATIONS_HEADER)),
     ).toEqual([expect.objectContaining({ fileName: 'pricing.md', projectId: PROJECT_ID })]);
+  });
+
+  it.each([
+    ['with what was said in them', PRICING_CHAT],
+    [
+      'when only their titles are known',
+      [
+        {
+          id: SIBLING_ID,
+          title: 'Pricing chat',
+          updated_at: '2026-10-01T12:00:00.000Z',
+          role: null,
+          content: null,
+          created_at: null,
+        },
+      ],
+    ],
+  ])('keeps other chats in the project out of a temporary chat, %s', async (_, siblingRows) => {
+    inProject(LAUNCH_PLAN, { temporary: true, siblingRows });
+
+    await (await sendInProject(`temporary-project-chat-${siblingRows[0]!.role}`)).text();
+
+    const system = systemMessages().join('\n');
+    expect(system).toContain('Answer in Spanish.');
+    expect(system).toContain('Pro costs $20 per month.');
+    expect(system).not.toContain('Pricing chat');
+    expect(system).not.toContain('Should Pro stay at twenty dollars?');
+  });
+
+  it('withdraws other chats a workspace keeps out of memory before the project budget is spent', async () => {
+    const quoted = (marker: string) =>
+      `${marker} Pro costs $20 per month. ${'"'.repeat(8_300)}`.padEnd(15_000, 'x');
+    const siblingRows = Array.from({ length: 10 }, (_, index) => {
+      const id = `4f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e${String(index).padStart(2, '0')}`;
+      return ['user', 'assistant'].map((role) => ({
+        id,
+        title: `Older thread ${index}`,
+        updated_at: '2026-10-01T12:00:00.000Z',
+        role,
+        content: `Earlier pricing talk ${index}. ${'y'.repeat(790)}`,
+        created_at: '2026-10-01T11:59:00.000Z',
+      }));
+    }).flat();
+    inProject(
+      () => [
+        {
+          ...LAUNCH_PLAN()[0],
+          instructions: `Answer in Spanish. ${'z'.repeat(9_000)}`,
+          organization_id: 'workspace-1',
+        },
+      ],
+      {
+        organizationId: 'workspace-1',
+        workspaceAllowsMemory: false,
+        files: ['alpha', 'beta', 'gamma'].map((name, index) => ({
+          ...PRICING_FILE,
+          id: `5f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e${String(index).padStart(2, '0')}`,
+          file_name: `${name}.md`,
+          extracted_text: quoted(`${name}-marker`),
+        })),
+        siblingRows,
+      },
+    );
+
+    await (
+      await sendInProject('workspace-without-memory', {}, {
+        ...scoped,
+        organizationId: 'workspace-1',
+      } as UserScopedDb)
+    ).text();
+
+    const system = systemMessages().join('\n');
+    expect(system).toContain('Answer in Spanish.');
+    expect(system).not.toContain('Earlier pricing talk');
+    expect(system).toContain('alpha-marker');
+    expect(system).toContain('gamma-marker');
   });
 
   it('keeps the project instructions when personalization is off', async () => {
@@ -788,6 +910,16 @@ describe('a chat inside a project on a free model', () => {
 
     expect(response.status).toBe(409);
     expect((await response.json()).error.code).toBe('project_context_unavailable');
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('refuses before any model request when what the project may carry cannot be decided', async () => {
+    inProject(LAUNCH_PLAN, { memories: [], memorySettingsUnreadable: true });
+
+    const response = await sendInProject('undecided-project');
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('project_context_load_failed');
     expect(mocks.stream).not.toHaveBeenCalled();
   });
 

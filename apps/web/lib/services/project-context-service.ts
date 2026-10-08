@@ -544,7 +544,8 @@ export function projectContextLoaders(context: LoadedProjectContext): ContextSou
       const passages = file?.selection?.passages.map((passage) => passage.text).join('\n');
       return passages || file?.extractedText?.trim() || file?.summary?.trim() || '';
     }
-    return context.siblingChats[siblingSources.indexOf(source)]?.preview?.trim() ?? '';
+    const chat = context.siblingChats[siblingSources.indexOf(source)];
+    return chat?.preview?.trim() || chat?.title.trim() || '';
   };
 
   return [...new Set(context.sources.map((source) => source.sourceClass))].map((sourceClass) => ({

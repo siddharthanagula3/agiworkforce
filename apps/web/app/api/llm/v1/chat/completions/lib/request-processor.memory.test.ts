@@ -54,7 +54,6 @@ function turnContextInput(
     policy: MEMORY_ONLY_POLICY,
     query: 'Plan my day.',
     projectContext: null,
-    projectBlocks: [],
     ...overrides,
   };
 }
