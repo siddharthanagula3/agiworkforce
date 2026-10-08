@@ -77,6 +77,10 @@ export type LibraryTab =
   'all' | 'images' | 'videos' | 'documents' | 'artifacts' | 'uploaded' | 'generated';
 export type LibraryViewMode = 'grid' | 'list';
 
+export function isLibraryTab(value: string | null | undefined): value is LibraryTab {
+  return TABS.some((tab) => tab.id === value);
+}
+
 export interface LibraryFolder {
   id: string;
   name: string;
@@ -351,6 +355,8 @@ export interface LibraryViewProps {
   initialQuery?: string;
   /** Preselected surface tab, so `/chat/library?surface=artifact` opens on Artifacts. */
   initialSurface?: SurfaceFilter;
+  /** Preselected tab by id, so `/chat/library?tab=images` opens on Images. Wins over `initialSurface`. */
+  initialTab?: LibraryTab | null;
   /** Opens this item once it appears in the loaded page, for a deep link that names one. */
   initialItemId?: string | null;
   overlayContainerId?: string;
@@ -360,12 +366,13 @@ export function LibraryView({
   transport,
   initialQuery = '',
   initialSurface = 'all',
+  initialTab = null,
   initialItemId = null,
   overlayContainerId,
 }: LibraryViewProps) {
   const { isSignedIn } = transport;
   const isAuthReady = transport.isAuthReady !== false;
-  const [tab, setTab] = useState<LibraryTab>(() => initialTabFor(initialSurface));
+  const [tab, setTab] = useState<LibraryTab>(() => initialTab ?? initialTabFor(initialSurface));
   const [sort, setSort] = useState<LibrarySort>(LIBRARY_DEFAULT_SORT);
   const [viewMode, setViewMode] = useState<LibraryViewMode>('grid');
   const [searchInput, setSearchInput] = useState(initialQuery);

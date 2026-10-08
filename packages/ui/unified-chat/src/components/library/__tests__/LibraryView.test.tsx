@@ -13,7 +13,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { LIBRARY_DEFAULT_PAGE_SIZE } from '@agiworkforce/cloud-contracts';
-import { LibraryView, type LibraryTransport } from '../LibraryView';
+import { LibraryView, isLibraryTab, type LibraryTransport } from '../LibraryView';
 
 function jsonResponse(body: unknown, ok = true): Response {
   return {
@@ -235,6 +235,23 @@ describe('shared LibraryView', () => {
         'true',
       );
       expect(lastParams(transport).get('surface')).toBe('artifact');
+    });
+
+    it('opens on the tab the host names, ahead of the surface', async () => {
+      const transport = makeTransport();
+      render(<LibraryView transport={transport} initialSurface="artifact" initialTab="images" />);
+      await waitFor(() => expect(transport.listPage).toHaveBeenCalled());
+
+      expect(screen.getByRole('tab', { name: 'Images' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      expect(lastParams(transport).get('kind')).toBe('image');
+    });
+
+    it('accepts only real tab ids from a URL', () => {
+      expect(isLibraryTab('images')).toBe(true);
+      expect(isLibraryTab('Images')).toBe(false);
+      expect(isLibraryTab(null)).toBe(false);
     });
 
     it('marks exactly one tab selected', async () => {

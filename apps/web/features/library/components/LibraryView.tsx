@@ -9,6 +9,7 @@ import { Lock } from 'lucide-react';
 import { publishArtifact } from '@agiworkforce/artifacts';
 import {
   LibraryView as SharedLibraryView,
+  isLibraryTab,
   artifactTypeForLibraryItem,
   generatedFileFromLibraryItem,
   type LibraryFolder,
@@ -134,6 +135,8 @@ export function LibraryView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialSurface = surfaceFromParam(searchParams?.get('surface') ?? null);
+  const tabParam = searchParams?.get('tab') ?? null;
+  const initialTab = isLibraryTab(tabParam) ? tabParam : null;
   const initialItemId = searchParams?.get(LIBRARY_ITEM_QUERY_PARAM) ?? null;
   const initialQuery = searchParams?.get(LIBRARY_QUERY_PARAM) ?? '';
 
@@ -276,6 +279,7 @@ export function LibraryView() {
     <SharedLibraryView
       transport={transport}
       initialSurface={initialSurface}
+      initialTab={initialTab}
       initialItemId={initialItemId}
       initialQuery={initialQuery}
       overlayContainerId={CONTENT_OVERLAY_ROOT_ID}
