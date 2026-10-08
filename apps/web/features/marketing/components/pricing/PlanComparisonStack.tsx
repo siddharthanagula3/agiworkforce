@@ -3,26 +3,22 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-export interface PlanComparisonStackRow {
-  planId: string;
-  label: string;
+import {
+  PlanComparisonValue,
+  type PlanComparisonGroup,
+  type PlanComparisonPlan,
+} from './PlanComparisonValue';
+
+export interface PlanComparisonStackProps {
+  plans: ReadonlyArray<PlanComparisonPlan>;
+  groups: ReadonlyArray<PlanComparisonGroup>;
 }
 
-export interface PlanComparisonStackProps<Row extends PlanComparisonStackRow> {
-  rows: ReadonlyArray<Row>;
-  columns: ReadonlyArray<readonly [string, string]>;
-  cellValue: (column: string, row: Row) => string;
-}
-
-export function PlanComparisonStack<Row extends PlanComparisonStackRow>({
-  rows,
-  columns,
-  cellValue,
-}: PlanComparisonStackProps<Row>) {
+export function PlanComparisonStack({ plans, groups }: PlanComparisonStackProps) {
   const { t } = useTranslation('pricing');
   const selectId = useId();
-  const [planId, setPlanId] = useState(rows[0]?.planId ?? '');
-  const selected = rows.find((row) => row.planId === planId) ?? rows[0];
+  const [planId, setPlanId] = useState(plans[0]?.planId ?? '');
+  const selected = plans.find((plan) => plan.planId === planId) ?? plans[0];
   if (!selected) return null;
 
   return (
@@ -36,20 +32,39 @@ export function PlanComparisonStack<Row extends PlanComparisonStackRow>({
         value={selected.planId}
         onChange={(event) => setPlanId(event.target.value)}
       >
-        {rows.map((row) => (
-          <option key={row.planId} value={row.planId}>
-            {row.label}
+        {plans.map((plan) => (
+          <option key={plan.planId} value={plan.planId}>
+            {plan.label}
           </option>
         ))}
       </select>
-      <dl className="agi-compare-stack-list" aria-label={selected.label}>
-        {columns.map(([column, label]) => (
-          <div key={column} className="agi-compare-stack-item">
-            <dt>{label}</dt>
-            <dd>{cellValue(column, selected)}</dd>
-          </div>
-        ))}
-      </dl>
+      <p className="agi-compare-stack-price">
+        <span>{selected.price}</span>
+        {selected.billing ? <span>{selected.billing}</span> : null}
+      </p>
+      {groups.map((group) => {
+        const headingId = `${selectId}-${group.id}`;
+        return (
+          <section key={group.id} className="agi-compare-stack-group" aria-labelledby={headingId}>
+            <h3 id={headingId} className="agi-compare-stack-heading">
+              {group.label}
+            </h3>
+            <dl className="agi-compare-stack-list">
+              {group.rows.map((row) => (
+                <div key={row.id} className="agi-compare-stack-item">
+                  <dt>
+                    <span className="agi-compare-row-label">{row.label}</span>
+                    {row.note ? <span className="agi-compare-row-note">{row.note}</span> : null}
+                  </dt>
+                  <dd>
+                    <PlanComparisonValue cell={row.cells[selected.planId]} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import type { TFunction } from 'i18next';
-import { isByokPlanTier, isLocalOnlyPlanTier, type BillingPlanTier } from '@agiworkforce/types';
 import {
   isReleased,
   SURFACE_NAMES,
@@ -16,24 +15,37 @@ export function pricingSurfaceStatus(
   return isReleased(surface, statuses) ? t('surfaceAvailableNow') : t('models:selector.comingSoon');
 }
 
-export function pricingDeveloperSurfaceCell(
-  plan: BillingPlanTier,
-  entitlement: string,
+export function pricingDeveloperSurfaceNote(
   t: TFunction<'pricing'>,
   statuses: SurfaceStatusMap = SURFACE_STATUS,
 ): string {
-  if (isLocalOnlyPlanTier(plan) || isByokPlanTier(plan)) {
-    return t(
-      isLocalOnlyPlanTier(plan) ? 'compareLocalDeveloperSurfaces' : 'compareByokDeveloperSurfaces',
-      { surface: SURFACE_NAMES.cli, status: pricingSurfaceStatus('cli', t, statuses) },
-    );
-  }
-  if (entitlement !== 'Yes') return entitlement;
-  return t('compareManagedDeveloperSurfaces', {
-    entitlement,
+  return t('compareDeveloperSurfaceStatus', {
     cli: SURFACE_NAMES.cli,
     cliStatus: pricingSurfaceStatus('cli', t, statuses),
     vscode: SURFACE_NAMES.vscode,
     vscodeStatus: pricingSurfaceStatus('vscode', t, statuses),
   });
+}
+
+const MANAGED_CHAT_SURFACES = [
+  'web',
+  'desktop',
+  'mobile',
+  'chrome',
+] as const satisfies readonly SurfaceId[];
+
+export function pricingManagedChatSurfaceNote(
+  t: TFunction<'pricing'>,
+  statuses: SurfaceStatusMap = SURFACE_STATUS,
+): string | undefined {
+  const pending = MANAGED_CHAT_SURFACES.filter((surface) => !isReleased(surface, statuses));
+  if (pending.length === 0) return undefined;
+  return pending
+    .map((surface) =>
+      t('localFeature4', {
+        surface: SURFACE_NAMES[surface],
+        status: pricingSurfaceStatus(surface, t, statuses),
+      }),
+    )
+    .join('; ');
 }
