@@ -95,7 +95,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'agent_approval_requests', column: 'user_id' },
   { table: 'automation_audit_events', column: 'user_id' },
   { table: 'notifications', column: 'user_id' },
-  { table: FEEDBACK_TABLE, column: 'user_id' },
+  { table: 'feedback', column: 'user_id' },
   { table: 'api_keys', column: 'user_id' },
   { table: 'developer_projects', column: 'user_id' },
   { table: 'developer_webhook_deliveries', column: 'user_id' },
