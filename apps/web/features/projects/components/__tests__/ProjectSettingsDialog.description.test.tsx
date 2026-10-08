@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import {
+  ManagedCloudProjectUpdateRequestSchema,
+  PROJECT_INSTRUCTIONS_MAX_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 
 const updateProject = vi.hoisted(() => vi.fn());
 
@@ -59,6 +63,30 @@ describe('ProjectSettingsDialog description', () => {
       'proj_desc',
       expect.objectContaining({ instructions: undefined }),
     );
+  });
+
+  it('stops instructions at the length the server accepts and counts toward it', () => {
+    renderDialog();
+
+    expect(screen.getByLabelText('Instructions')).toHaveAttribute(
+      'maxLength',
+      String(PROJECT_INSTRUCTIONS_MAX_LENGTH),
+    );
+    expect(
+      screen.getByText(
+        `${'Always cite project sources.'.length} / ${PROJECT_INSTRUCTIONS_MAX_LENGTH.toLocaleString()}`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      ManagedCloudProjectUpdateRequestSchema.safeParse({
+        instructions: 'x'.repeat(PROJECT_INSTRUCTIONS_MAX_LENGTH),
+      }).success,
+    ).toBe(true);
+    expect(
+      ManagedCloudProjectUpdateRequestSchema.safeParse({
+        instructions: 'x'.repeat(PROJECT_INSTRUCTIONS_MAX_LENGTH + 1),
+      }).success,
+    ).toBe(false);
   });
 
   it('shows the saved description and persists an edit', async () => {

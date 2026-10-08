@@ -12,6 +12,10 @@ import {
   usableAllowance,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
+import {
+  PROJECT_FILE_CITATIONS_HEADER,
+  readProjectSourcesHeaderValue,
+} from '@/lib/chat-project-sources';
 import { logger } from '@/lib/logger';
 import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
@@ -658,5 +662,144 @@ describe('the cached catalogue the picker reads, after a provider answer', () =>
     await (await send(chatModel, 'spent-without-scope')).text();
 
     expect(mocks.expireCatalogue).toHaveBeenCalledOnce();
+  });
+});
+
+describe('a chat inside a project on a free model', () => {
+  const PROJECT_ID = '1f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
+  const FILE_ID = '2f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
+  const SIBLING_ID = '3f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
+
+  function inProject(project: () => unknown[] = () => []) {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from web_conversations c left join organizations')) {
+        return [
+          { id: 'conversation', data_region: null, project_id: PROJECT_ID, is_temporary: false },
+        ];
+      }
+      if (sql.includes('from user_projects') && sql.includes('is_archived = false'))
+        return project();
+      if (sql.includes('from project_knowledge_files')) {
+        return [
+          {
+            id: FILE_ID,
+            file_name: 'pricing.md',
+            summary: 'Tier table',
+            extracted_text: 'Pro costs $20 per month.',
+            extracted_anchors: null,
+          },
+        ];
+      }
+      if (sql.includes('sibling_candidates')) {
+        return [
+          {
+            id: SIBLING_ID,
+            title: 'Pricing chat',
+            updated_at: '2026-10-01T12:00:00.000Z',
+            role: 'user',
+            content: 'Should Pro stay at twenty dollars?',
+            created_at: '2026-10-01T11:59:00.000Z',
+          },
+        ];
+      }
+      return [];
+    });
+  }
+
+  const LAUNCH_PLAN = () => [
+    {
+      id: PROJECT_ID,
+      name: 'Launch plan',
+      description: null,
+      instructions: 'Answer in Spanish.',
+      organization_id: null,
+    },
+  ];
+
+  function sendInProject(turn: string, request: Record<string, unknown> = {}) {
+    return serveFreeQuotaTurn(
+      new NextRequest('https://agiworkforce.com/api/models/free-quota/completions', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': turn },
+      }),
+      scoped,
+      FreeOfferingRequestSchema.parse({
+        model: chatModel,
+        conversation_id: '52d14f7e-0b3d-40c7-952d-987e841033c5',
+        assistant_message_id: '62d14f7e-0b3d-40c7-952d-987e841033c5',
+        messages: [{ role: 'user', content: 'What does Pro cost?' }],
+        ...request,
+      }),
+    );
+  }
+
+  function systemMessages(): string[] {
+    const [, , , turn] = mocks.stream.mock.calls[0] as [
+      string,
+      string,
+      unknown,
+      { messages: Array<{ role: string; content: unknown }> },
+    ];
+    return turn.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => String(message.content));
+  }
+
+  beforeEach(() => {
+    mocks.stream.mockReset();
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({
+          choices: [{ index: 0, delta: { content: 'Veinte' }, finish_reason: null }],
+        }),
+        '[DONE]',
+      ),
+    );
+  });
+
+  it('sends the project instructions, knowledge and other chats, and names the files it used', async () => {
+    inProject(LAUNCH_PLAN);
+
+    const response = await sendInProject('project-chat');
+    await response.text();
+
+    expect(response.status).toBe(200);
+    const system = systemMessages().join('\n');
+    expect(system).toContain('Answer in Spanish.');
+    expect(system).toContain('Pro costs $20 per month.');
+    expect(system).toContain('Should Pro stay at twenty dollars?');
+    expect(
+      readProjectSourcesHeaderValue(response.headers.get(PROJECT_FILE_CITATIONS_HEADER)),
+    ).toEqual([expect.objectContaining({ fileName: 'pricing.md', projectId: PROJECT_ID })]);
+  });
+
+  it('keeps the project instructions when personalization is off', async () => {
+    inProject(LAUNCH_PLAN);
+
+    await (await sendInProject('project-chat-unpersonalized', { personalization: false })).text();
+
+    expect(systemMessages().join('\n')).toContain('Answer in Spanish.');
+  });
+
+  it('refuses before any model request when the project is archived or gone', async () => {
+    inProject(() => []);
+
+    const response = await sendInProject('archived-project');
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.code).toBe('project_context_unavailable');
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('refuses before any model request when the project cannot be read', async () => {
+    inProject(() => {
+      throw new Error('connection reset');
+    });
+
+    const response = await sendInProject('unreadable-project');
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('project_context_load_failed');
+    expect(mocks.stream).not.toHaveBeenCalled();
   });
 });

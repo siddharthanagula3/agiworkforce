@@ -7,6 +7,7 @@ import {
   CONVERSATION_TITLE_MAX_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH,
 } from './conversations';
+import { PROJECT_INSTRUCTIONS_MAX_LENGTH } from './projects';
 
 export const ServerVersionSchema = z
   .string()
@@ -358,7 +359,7 @@ export const ProjectSyncPushItemSchema = z.object({
   id: z.string().uuid(),
   name: z.string().max(200),
   description: z.string().max(2_000).nullable().optional(),
-  instructions: z.string().max(10_000).nullable().optional(),
+  instructions: z.string().max(PROJECT_INSTRUCTIONS_MAX_LENGTH).nullable().optional(),
   color: z.string().max(50).nullable().optional(),
   isArchived: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),

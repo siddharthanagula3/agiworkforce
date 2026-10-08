@@ -54,10 +54,11 @@ export const ManagedCloudProjectListResponseSchema = z.object({
 });
 
 export const PROJECT_DESCRIPTION_MAX_LENGTH = 2_000;
+export const PROJECT_INSTRUCTIONS_MAX_LENGTH = 10_000;
 
 const ManagedCloudProjectWriteFields = {
   description: z.string().max(PROJECT_DESCRIPTION_MAX_LENGTH).nullable().optional(),
-  instructions: z.string().max(10_000).nullable().optional(),
+  instructions: z.string().max(PROJECT_INSTRUCTIONS_MAX_LENGTH).nullable().optional(),
   color: z.string().optional(),
   iconEmoji: z.string().max(16).nullable().optional(),
   accentColor: ProjectAccentColorSchema.nullable().optional(),

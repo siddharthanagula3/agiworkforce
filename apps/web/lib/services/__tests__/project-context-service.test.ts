@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PROJECT_INSTRUCTIONS_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import {
   fitProjectContextBlocks,
   formatProjectSystemPrompt,
@@ -234,11 +235,17 @@ describe('formatProjectSystemPrompt', () => {
     );
   });
 
+  it('carries instructions as long as the project editor accepts', () => {
+    const instructions = 'x'.repeat(PROJECT_INSTRUCTIONS_MAX_LENGTH);
+    const prompt = formatProjectSystemPrompt(makeContext({ instructions }));
+    expect(prompt).toContain(instructions);
+    expect(prompt).not.toContain('…');
+  });
+
   it('caps oversized instructions deterministically', () => {
     const prompt = formatProjectSystemPrompt(makeContext({ instructions: 'x'.repeat(20_000) }));
-    expect(prompt).not.toBeNull();
-    expect(prompt!.length).toBeLessThan(10_000);
-    expect(prompt).toContain('…');
+    expect(prompt).toContain(`${'x'.repeat(PROJECT_INSTRUCTIONS_MAX_LENGTH)}…`);
+    expect(prompt).not.toContain('x'.repeat(PROJECT_INSTRUCTIONS_MAX_LENGTH + 1));
   });
 
   it('renders sibling chats for cross-reference as untrusted data', () => {

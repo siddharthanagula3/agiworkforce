@@ -29,6 +29,7 @@ export async function retrieveIndexedKnowledgeHits(input: {
   userId: string;
   organizationId: string | null;
   query: string;
+  semantic: boolean;
   files: readonly IndexedKnowledgeFile[];
 }): Promise<Map<string, SearchHit[]>> {
   const byFile = new Map<string, SearchHit[]>();
@@ -40,7 +41,7 @@ export async function retrieveIndexedKnowledgeHits(input: {
       db: input.db,
       userId: input.userId,
       organizationId: input.organizationId,
-      semantic: true,
+      semantic: input.semantic,
       includeHealthSpaces: true,
       googleUserData: 'include',
     }).search({
