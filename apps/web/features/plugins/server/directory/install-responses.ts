@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { AppError, createError } from '@/lib/errors';
 import { INSTALLS_DISABLED_MESSAGE, MARKETPLACE_UNAVAILABLE_MESSAGE } from './constants';
 import type { DirectoryInstallRefusal } from './install';
+import type { PluginDependent } from './installed-dependents';
 
 const INSTALLS_DISABLED_CODE = 'PLUGIN_INSTALLS_DISABLED';
 const INSTALLS_DISABLED_STATUS = 503;
@@ -11,6 +12,25 @@ export function installsDisabledResponse(): NextResponse {
   return NextResponse.json(
     { error: { code: INSTALLS_DISABLED_CODE, message: INSTALLS_DISABLED_MESSAGE } },
     { status: INSTALLS_DISABLED_STATUS },
+  );
+}
+
+const PLUGIN_HAS_DEPENDENTS_CODE = 'PLUGIN_HAS_DEPENDENTS';
+const PLUGIN_HAS_DEPENDENTS_STATUS = 409;
+
+export function pluginHasDependentsResponse(
+  message: string,
+  dependents: readonly PluginDependent[],
+): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: PLUGIN_HAS_DEPENDENTS_CODE,
+        message,
+        dependents: dependents.map(({ id, name }) => ({ id, name })),
+      },
+    },
+    { status: PLUGIN_HAS_DEPENDENTS_STATUS },
   );
 }
 

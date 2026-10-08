@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DirectoryActionNotice } from '../action-notice';
+import { DirectoryActionConfirmation, DirectoryActionNotice } from '../action-notice';
 import { DirectoryPanel } from '../DirectoryPanel';
 import type {
   DirectoryAdapter,
@@ -470,6 +470,64 @@ describe('DirectoryPanel plugins', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Uninstall' }));
     await waitFor(() => expect(uninstall).toHaveBeenCalledWith('plugins', 'productivity'));
+  });
+
+  it('asks before removing a plugin together with the ones that need it, and runs it only on confirm', async () => {
+    const run = vi.fn();
+    const uninstall = vi
+      .fn()
+      .mockRejectedValue(
+        new DirectoryActionConfirmation(
+          'Remove these plugins together?',
+          'Removing it together with Review Kit deletes Review Kit.',
+          'Remove together',
+          run,
+        ),
+      );
+    renderPanel(
+      'plugins',
+      {
+        uninstall,
+        loadDetail: () =>
+          Promise.resolve({ ...DETAILS.plugins, installed: true } as DirectoryDetail),
+      },
+      { openEntryId: 'productivity' },
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Uninstall' }));
+    expect(
+      await screen.findByText('Removing it together with Review Kit deletes Review Kit.'),
+    ).toBeTruthy();
+    expect(run).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove together' }));
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+  });
+
+  it('runs nothing when the together confirmation is cancelled', async () => {
+    const run = vi.fn();
+    const uninstall = vi
+      .fn()
+      .mockRejectedValue(
+        new DirectoryActionConfirmation(
+          'Remove these plugins together?',
+          'Needs Review Kit.',
+          'Remove together',
+          run,
+        ),
+      );
+    renderPanel(
+      'plugins',
+      {
+        uninstall,
+        loadDetail: () =>
+          Promise.resolve({ ...DETAILS.plugins, installed: true } as DirectoryDetail),
+      },
+      { openEntryId: 'productivity' },
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Uninstall' }));
+    await screen.findByText('Needs Review Kit.');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByText('Needs Review Kit.')).toBeNull());
+    expect(run).not.toHaveBeenCalled();
   });
 
   it('offers Uninstall, never a dead settings gear, on an installed plugin when the adapter edits skills', async () => {

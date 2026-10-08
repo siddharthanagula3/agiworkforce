@@ -30,6 +30,7 @@ import {
   listInstalledDirectorySkills,
 } from '@/features/plugins/server/directory/installed-skills';
 import { logger } from '@/lib/logger';
+import { disabledPluginSkillNames } from './enabled-plugin-ids';
 import {
   findUserSkillByName,
   findUserSkillWithFiles,
@@ -246,9 +247,10 @@ function filterSkillsForPlugins(
   directory: readonly Skill[],
   enabledPluginIds: ReadonlySet<string>,
 ): Skill[] {
+  const disabledSkillNames = disabledPluginSkillNames(enabledPluginIds);
   return directory.filter((skill) => {
     const owner = skillPluginOwner(skill);
-    return owner === null || enabledPluginIds.has(owner);
+    return owner === null || (enabledPluginIds.has(owner) && !disabledSkillNames.has(skill.name));
   });
 }
 
@@ -569,10 +571,14 @@ export async function loadSelectableSkillCatalog(
       readOptionalSkillSource('user-skills', NO_SKILLS, () =>
         listUserSkillsAsManagedSkills(params.db, params.userId),
       ),
-      params.includeNetworkBackedDirectorySkills === false || params.pluginsAllowed === false
+      params.pluginsAllowed === false
         ? Promise.resolve(NO_SKILLS)
         : readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
-            listInstalledDirectorySkills(params.db, params.userId),
+            params.includeNetworkBackedDirectorySkills === false
+              ? listInstalledDirectorySkills(params.db, params.userId, undefined, {
+                  cachedOnly: true,
+                })
+              : listInstalledDirectorySkills(params.db, params.userId),
           ),
     ]);
   const managed = filterSkillsByInstallOverrides(

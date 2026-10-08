@@ -27,6 +27,7 @@ import type {
 } from '@/features/plugins/server/directory/types';
 
 import {
+  DirectoryActionConfirmation,
   DirectoryActionNotice,
   type ConnectedConnector,
   type DirectoryAdapter,
@@ -61,6 +62,7 @@ import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalo
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { PluginDependentsError } from '@features/plugins/client/installation-settings';
 import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import {
@@ -89,6 +91,10 @@ import {
   pluginConnectorsLines,
   pluginDependenciesInstalledLine,
   uploadDependenciesInstalledLine,
+  PLUGIN_REMOVE_TOGETHER_LABEL,
+  PLUGIN_REMOVE_TOGETHER_TITLE,
+  PLUGIN_TURN_OFF_TOGETHER_LABEL,
+  PLUGIN_TURN_OFF_TOGETHER_TITLE,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_ENABLE_FAILED_COPY,
   CREATE_PLUGIN_DONE_TITLE,
@@ -184,6 +190,7 @@ import {
   toCommunityPluginDetail,
   toUserMarketplaceDetail,
   toWorkspacePluginDetail,
+  dependentNames,
   uninstallPlugin as requestPluginUninstall,
   updateCommunityPlugin,
   updateWorkspacePlugin,
@@ -507,6 +514,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         connectorConnectionState(connectorQueryRef.current) !== 'connected';
       const indexing = catalogueDependent && connectorDirectoryIndexing(page.stats);
       const notice = [
+        section.notice,
         connectorsNoticeRef.current,
         catalogueDependent ? connectorRegistryNotice.current : null,
         indexing ? CONNECTOR_INDEXING_NOTICE : null,
@@ -1306,7 +1314,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const removePlugin = useCallback(
-    async (id: string) => {
+    async (id: string, withDependents = false): Promise<void> => {
       if (findCommunityPlugin(id)) {
         await changeCommunityPlugin(id, { installed: false }, PLUGIN_UNINSTALL_FAILED_COPY);
         return;
@@ -1327,7 +1335,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       if (!target) throw new Error(PLUGIN_UNINSTALL_FAILED_COPY);
       let outcome: PluginUninstallOutcome;
       try {
-        outcome = await requestPluginUninstall(target, await getCsrfToken());
+        outcome = await requestPluginUninstall(target, await getCsrfToken(), withDependents);
       } catch (caught: unknown) {
         throw describeActionFailure(
           caught,
@@ -1335,6 +1343,15 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         );
       }
       if (outcome.status === 'disabled') throw new DirectoryActionNotice(outcome.message);
+      if (outcome.status === 'has-dependents') {
+        const names = dependentNames(outcome.dependents);
+        throw new DirectoryActionConfirmation(
+          PLUGIN_REMOVE_TOGETHER_TITLE,
+          `${outcome.message} Removing it together with ${names} deletes ${names} and their skills, and their connectors stop working. This cannot be undone.`,
+          PLUGIN_REMOVE_TOGETHER_LABEL,
+          () => removePlugin(id, true),
+        );
+      }
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
       await refreshPluginInstalls();
@@ -1717,9 +1734,20 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const setPluginEnabled = useCallback(
-    async (id: string, enabled: boolean) => {
+    async (id: string, enabled: boolean, withDependents = false): Promise<void> => {
       if (settingsPluginId !== id || !settingsTarget) throw new Error(PLUGIN_ENABLE_FAILED_COPY);
-      await pluginSettingsState.setEnabled(enabled);
+      try {
+        await pluginSettingsState.setEnabled(enabled, withDependents);
+      } catch (caught: unknown) {
+        if (!(caught instanceof PluginDependentsError)) throw caught;
+        const names = dependentNames(caught.dependents);
+        throw new DirectoryActionConfirmation(
+          PLUGIN_TURN_OFF_TOGETHER_TITLE,
+          `${caught.message} Turning it off together with ${names} stops their skills and commands being offered until you turn them back on.`,
+          PLUGIN_TURN_OFF_TOGETHER_LABEL,
+          () => setPluginEnabled(id, false, true),
+        );
+      }
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
       if (settingsTarget.kind === PLUGIN_TARGET_WORKSPACE) await refreshWorkspacePlugins();

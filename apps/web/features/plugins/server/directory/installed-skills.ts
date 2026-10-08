@@ -210,10 +210,15 @@ interface PlannedSkills {
   skills: readonly InstalledDirectorySkill[];
 }
 
+export interface InstalledSkillsReadOptions {
+  cachedOnly?: boolean;
+}
+
 async function plannedSkillsForRow(
   row: InstalledEntryRow,
   repositoryUrl: string,
   fetchImpl: DirectoryFetch | undefined,
+  options: InstalledSkillsReadOptions = {},
 ): Promise<PlannedSkills | null> {
   const sha = shaFromInstalledVersion(row.installed_version);
   const plan = sha ? await directorySourcePlan(row, sha) : await ownSourcePlan(row, repositoryUrl);
@@ -225,6 +230,7 @@ async function plannedSkillsForRow(
     plan.location.sha ?? plan.location.ref,
   );
   let cached = await readInstalledSkills(params);
+  if (!cached && options.cachedOnly) return null;
   if (!cached) {
     const fetched = await fetchPluginSkillFiles(plan.location, plan.skillPaths, fetchImpl);
     if (fetched.length > 0) await writeInstalledSkills(params, fetched);
@@ -238,8 +244,9 @@ async function skillsForRow(
   row: InstalledEntryRow,
   repositoryUrl: string,
   fetchImpl: DirectoryFetch | undefined,
+  options: InstalledSkillsReadOptions,
 ): Promise<Skill[]> {
-  const planned = await plannedSkillsForRow(row, repositoryUrl, fetchImpl);
+  const planned = await plannedSkillsForRow(row, repositoryUrl, fetchImpl, options);
   return planned ? planned.skills.map((skill) => toSkill(row.plugin_key, skill)) : [];
 }
 
@@ -265,6 +272,7 @@ export async function listInstalledDirectorySkills(
   db: DatabaseAdapter,
   userId: string,
   fetchImpl?: DirectoryFetch,
+  options: InstalledSkillsReadOptions = {},
 ): Promise<Skill[]> {
   const [organizationSkills, communitySkills, rows] = await Promise.all([
     listOrganizationSkills(db, userId),
@@ -288,7 +296,7 @@ export async function listInstalledDirectorySkills(
     const rowSkills =
       repositoryUrl === null
         ? storedSkills(row, stored.get(row.entry_id) ?? [])
-        : await skillsForRow(row, repositoryUrl, fetchImpl);
+        : await skillsForRow(row, repositoryUrl, fetchImpl, options);
     for (const skill of rowSkills) {
       if (seen.has(skill.name)) continue;
       seen.add(skill.name);

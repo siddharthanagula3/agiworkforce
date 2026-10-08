@@ -155,6 +155,7 @@ describe('installDirectoryPlugin', () => {
       JSON.stringify([]),
       JSON.stringify([]),
       'a'.repeat(64),
+      JSON.stringify([]),
     ]);
     const installInsert = db.query.mock.calls.find(([text]) =>
       (text as string).includes('insert into public.plugin_marketplace_installations'),
@@ -201,6 +202,31 @@ describe('installDirectoryPlugin', () => {
     );
     expect(entryInsert?.[0]).toContain('required_connectors = excluded.required_connectors');
     expect(entryInsert?.[0]).toContain('permissions = excluded.permissions');
+  });
+
+  it('records the dependencies of the plugin and of each dependency it installs', async () => {
+    const db = database();
+    const helperReference = { name: 'helper-tools', marketplace: null, version: null };
+    mocks.findRecord.mockImplementation(async (id: string) =>
+      id === 'helper-tools'
+        ? directoryEntry({ id: 'helper-tools', name: 'Helper Tools' })
+        : directoryEntry({ dependencies: [helperReference] }),
+    );
+
+    await installDirectoryPlugin(db, 'user-1', 'adobe-for-creativity', { fetchImpl: fetchSkill });
+
+    const stored = db.query.mock.calls
+      .filter(([text]) =>
+        (text as string).includes('insert into public.plugin_marketplace_entries'),
+      )
+      .map(([, params]) => ({
+        key: (params as string[])[1],
+        dependencies: (params as string[])[11],
+      }));
+    expect(stored).toEqual([
+      { key: 'helper-tools', dependencies: JSON.stringify([]) },
+      { key: 'adobe-for-creativity', dependencies: JSON.stringify([helperReference]) },
+    ]);
   });
 
   it('reports an unknown id and a built-in pack without touching the database', async () => {

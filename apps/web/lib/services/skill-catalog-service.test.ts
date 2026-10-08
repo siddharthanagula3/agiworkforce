@@ -26,9 +26,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
+import { withDisabledPluginSkills } from './enabled-plugin-ids';
 import {
   executeManagedSkillTool,
+  executeManagedSkillToolForPlugins,
   findManagedSkillByName,
+  findManagedSkillWithFiles,
   getBundledSkillDownload,
   getBundledSkillDownloadForPlugins,
   getManagedSkillCatalog,
@@ -326,6 +329,32 @@ describe('managed Skill catalog service', () => {
 
     const afterUninstall = await getManagedSkillDirectoryForPlugins(new Set());
     expect(afterUninstall.some((skill) => skill.name === 'literature-review')).toBe(false);
+  });
+
+  it('drops a plugin skill the member switched off while the plugin stays enabled', async () => {
+    const switchedOff = withDisabledPluginSkills(['research-pack'], ['literature-review']);
+    const directory = await getManagedSkillDirectoryForPlugins(switchedOff);
+    expect(directory.some((skill) => skill.name === 'literature-review')).toBe(false);
+    await expect(
+      getBundledSkillDownloadForPlugins(switchedOff, 'literature-review'),
+    ).resolves.toBeNull();
+    await expect(findManagedSkillWithFiles('literature-review', switchedOff)).resolves.toBeNull();
+    const refused = await executeManagedSkillToolForPlugins(
+      switchedOff,
+      { action: 'load', name: 'literature-review' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(refused.isError).toBe(true);
+
+    const switchedOn = withDisabledPluginSkills(['research-pack'], []);
+    const back = await getManagedSkillDirectoryForPlugins(switchedOn);
+    expect(back.some((skill) => skill.name === 'literature-review')).toBe(true);
+    const loaded = await executeManagedSkillToolForPlugins(
+      switchedOn,
+      { action: 'load', name: 'literature-review' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(loaded.isError).toBe(false);
   });
 
   it('never gates an engineering-pack skill behind install, since it owns no skill', async () => {
@@ -660,6 +689,43 @@ describe('loadSelectableSkillCatalog directory cost', () => {
     await loadSelectableSkillCatalog({
       ...params,
       includeNetworkBackedDirectorySkills: false,
+    });
+
+    expect(directorySkills.listInstalledDirectorySkills).toHaveBeenCalledWith(
+      params.db,
+      'user-1',
+      undefined,
+      { cachedOnly: true },
+    );
+  });
+
+  it('keeps installed plugin skills in the implicit catalog without fetching them', async () => {
+    directorySkills.listInstalledDirectorySkills.mockResolvedValueOnce([
+      {
+        name: 'installed-only',
+        description: 'From an installed plugin.',
+        body: 'Body',
+        contentHash: 'sha256:'.padEnd(7 + 64, '6'),
+        filePath: 'plugins/pack/skills/installed-only/SKILL.md',
+        source: 'extra',
+        metadata: {},
+        frontmatter: { plugin: 'pack' },
+      },
+    ] as never);
+
+    const skills = await loadSelectableSkillCatalog({
+      ...params,
+      includeNetworkBackedDirectorySkills: false,
+    });
+
+    expect(skills.map((skill) => skill.name)).toContain('installed-only');
+  });
+
+  it('offers no installed plugin skill when the workspace has plugins off', async () => {
+    await loadSelectableSkillCatalog({
+      ...params,
+      includeNetworkBackedDirectorySkills: false,
+      pluginsAllowed: false,
     });
 
     expect(directorySkills.listInstalledDirectorySkills).not.toHaveBeenCalled();

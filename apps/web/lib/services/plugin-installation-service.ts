@@ -19,6 +19,7 @@ import {
 
 import { AppError, ErrorCode } from '@/lib/errors';
 
+import { withDisabledPluginSkills } from './enabled-plugin-ids';
 import { getPluginRegistryEntry } from './plugin-registry-service';
 import {
   assertPluginPackageInstallable,
@@ -488,8 +489,12 @@ export async function listEnabledPluginIds(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<Set<string>> {
-  const rows = await db.query<{ plugin_id: string }>(
-    `select installation.plugin_id
+  const rows = await db.query<{
+    plugin_id: string;
+    enabled_skills: unknown;
+    declared_skills: unknown;
+  }>(
+    `select installation.plugin_id, installation.enabled_skills, registry.declared_skills
        from public.plugin_installations installation
        join public.plugin_registry_entries registry on registry.id = installation.plugin_id
        left join public.plugin_registry_versions pinned
@@ -503,7 +508,14 @@ export async function listEnabledPluginIds(
         and coalesce(pinned.status, 'published') <> 'suspended'`,
     [userId],
   );
-  return new Set(rows.map((row) => row.plugin_id));
+  const disabledSkillNames = rows.flatMap((row) => {
+    const enabled = new Set(toStringArray(row.enabled_skills));
+    return toStringArray(row.declared_skills).filter((skill) => !enabled.has(skill));
+  });
+  return withDisabledPluginSkills(
+    rows.map((row) => row.plugin_id),
+    disabledSkillNames,
+  );
 }
 
 /**

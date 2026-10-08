@@ -135,13 +135,15 @@ async function upsertShadowEntry(
   sha: string,
   skills: readonly InstalledDirectorySkill[],
   contentHash: string,
+  dependencies: readonly PluginDependencyRef[],
 ): Promise<string> {
   const rows = await tx.query<{ id: string }>(
     `insert into public.plugin_marketplace_entries
        (source_id, plugin_key, name, description, version,
         declared_skills, required_connectors, agents, example_prompts, permissions,
-        content_hash, updated_at)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11, now())
+        content_hash, dependencies, updated_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11,
+             $12::jsonb, now())
      on conflict (source_id, plugin_key) do update
        set name = excluded.name,
            description = excluded.description,
@@ -152,6 +154,7 @@ async function upsertShadowEntry(
            example_prompts = excluded.example_prompts,
            permissions = excluded.permissions,
            content_hash = excluded.content_hash,
+           dependencies = excluded.dependencies,
            updated_at = now()
      returning id`,
     [
@@ -166,6 +169,7 @@ async function upsertShadowEntry(
       JSON.stringify(record.examplePrompts),
       JSON.stringify(record.permissions),
       contentHash,
+      JSON.stringify(dependencies),
     ],
   );
   return rows[0]!.id;
@@ -198,6 +202,7 @@ async function writeDirectoryInstall(
   userId: string,
   source: InstallableSource,
   skills: readonly InstalledDirectorySkill[],
+  dependencies: readonly PluginDependencyRef[],
 ): Promise<string> {
   const contentHash = contentHashFor(source.record, source.sha);
   const sourceId = await ensureShadowSource(tx, userId, source.record, contentHash);
@@ -208,6 +213,7 @@ async function writeDirectoryInstall(
     source.sha,
     skills,
     contentHash,
+    dependencies,
   );
   return upsertInstallation(
     tx,
@@ -242,8 +248,11 @@ export async function writeDependencyPlan(
     const installationId = entryInstallations.get(found.entry.id);
     if (installationId) installationIds.set(resolved.label, installationId);
   }
-  for (const { resolved, source, skills } of plan.directory) {
-    installationIds.set(resolved.label, await writeDirectoryInstall(tx, userId, source, skills));
+  for (const { resolved, source, skills, dependencies } of plan.directory) {
+    installationIds.set(
+      resolved.label,
+      await writeDirectoryInstall(tx, userId, source, skills, dependencies),
+    );
   }
   for (const { resolved, installationId } of plan.enable) {
     await tx.execute(
@@ -327,19 +336,23 @@ export async function installDirectoryPlugin(
   }
 
   const rootLabel = pluginLabel(record.id, root.marketplaceName);
+  let rootDependencies: readonly PluginDependencyRef[] = [];
   const planned = await planDependencies(
     context,
-    async () => ({
-      name: record.id,
-      marketplace: root.marketplaceName,
-      allowlist: record.marketplace?.allowCrossMarketplaceDependenciesOn ?? [],
-      dependencies: await directoryDependencies(
+    async () => {
+      rootDependencies = await directoryDependencies(
         root,
         context.fetchImpl,
         `${rootLabel} declares dependencies the web app cannot read, so install it from the released CLI.`,
         INSTALL_MANIFEST_UNAVAILABLE_MESSAGE,
-      ),
-    }),
+      );
+      return {
+        name: record.id,
+        marketplace: root.marketplaceName,
+        allowlist: record.marketplace?.allowCrossMarketplaceDependenciesOn ?? [],
+        dependencies: rootDependencies,
+      };
+    },
     record.installCommand,
   );
   if ('refused' in planned) return planned.refused;
@@ -355,7 +368,7 @@ export async function installDirectoryPlugin(
 
   const written = await db.transaction(async (tx) => {
     const installationIds = await writeDependencyPlan(tx, userId, plan);
-    const installationId = await writeDirectoryInstall(tx, userId, root, skills);
+    const installationId = await writeDirectoryInstall(tx, userId, root, skills, rootDependencies);
     return { installationId, installationIds };
   });
 

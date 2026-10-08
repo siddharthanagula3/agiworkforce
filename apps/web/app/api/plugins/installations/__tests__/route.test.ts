@@ -13,7 +13,9 @@ const {
   uninstallWebPluginMock,
   recordWorkspaceAuditEventMock,
   pluginPolicyMock,
+  listRegistryDependentsMock,
 } = vi.hoisted(() => ({
+  listRegistryDependentsMock: vi.fn(),
   pluginPolicyMock: vi.fn(),
   authUserMock: vi.fn(),
   csrfMock: vi.fn(),
@@ -46,6 +48,11 @@ vi.mock('@/lib/workspace-audit', () => ({
 vi.mock('@/lib/services/connector-policy-gate', () => ({
   evaluateConnectorPolicyForUser: vi.fn(),
   evaluatePluginPolicyForUser: pluginPolicyMock,
+}));
+type DependentsModule = typeof import('@/features/plugins/server/directory/installed-dependents');
+vi.mock('@/features/plugins/server/directory/installed-dependents', async (importOriginal) => ({
+  ...(await importOriginal<DependentsModule>()),
+  listRegistryDependents: listRegistryDependentsMock,
 }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   installWebPlugin: installWebPluginMock,
@@ -102,6 +109,7 @@ function params(id: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listRegistryDependentsMock.mockResolvedValue([]);
   authUserMock.mockResolvedValue({ userId: 'user-1' });
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
@@ -296,5 +304,65 @@ describe('DELETE /api/plugins/installations/[id] (uninstall)', () => {
     const response = await DELETE(del(), params('../../etc/passwd'));
     expect(response.status).toBe(404);
     expect(uninstallWebPluginMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('plugins that another installed plugin needs', () => {
+  const DEPENDENT = { id: 'review-pack', label: 'review-pack', name: 'Review Pack' };
+
+  it('refuses to turn a plugin off and names the plugin that needs it', async () => {
+    listRegistryDependentsMock.mockResolvedValue([DEPENDENT]);
+    const response = await PATCH(patch({ enabled: false }), params('research-pack'));
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('PLUGIN_HAS_DEPENDENTS');
+    expect(error.message).toContain('Review Pack');
+    expect(error.dependents).toEqual([{ id: 'review-pack', name: 'Review Pack' }]);
+    expect(setWebPluginEnabledMock).not.toHaveBeenCalled();
+  });
+
+  it('turns the dependents off first when asked to turn them off together', async () => {
+    listRegistryDependentsMock.mockResolvedValue([DEPENDENT]);
+    setWebPluginEnabledMock.mockResolvedValue({ ...INSTALLATION, enabled: false });
+    const response = await PATCH(
+      patch({ enabled: false, withDependents: true }),
+      params('research-pack'),
+    );
+    expect(response.status).toBe(200);
+    expect(setWebPluginEnabledMock.mock.calls.map((call) => call[2])).toEqual([
+      'review-pack',
+      'research-pack',
+    ]);
+  });
+
+  it('does not look for dependents when turning a plugin on', async () => {
+    setWebPluginEnabledMock.mockResolvedValue(INSTALLATION);
+    await PATCH(patch({ enabled: true }), params('research-pack'));
+    expect(listRegistryDependentsMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to remove a plugin that another installed plugin needs', async () => {
+    listRegistryDependentsMock.mockResolvedValue([DEPENDENT]);
+    const response = await DELETE(del(), params('research-pack'));
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.message).toContain('Review Pack');
+    expect(uninstallWebPluginMock).not.toHaveBeenCalled();
+  });
+
+  it('removes the dependents before the plugin when asked to remove them together', async () => {
+    listRegistryDependentsMock.mockResolvedValue([DEPENDENT]);
+    uninstallWebPluginMock.mockResolvedValue(true);
+    const response = await DELETE(
+      new NextRequest(
+        'https://agiworkforce.com/api/plugins/installations/research-pack?withDependents=true',
+        { method: 'DELETE', headers: { origin: 'https://agiworkforce.com' } },
+      ),
+      params('research-pack'),
+    );
+    expect(response.status).toBe(204);
+    expect(uninstallWebPluginMock.mock.calls.map((call) => call[2])).toEqual([
+      'review-pack',
+      'research-pack',
+    ]);
   });
 });
