@@ -4,7 +4,7 @@ title: Plans, upgrading, and cancelling
 path: /pricing
 category: billing
 tags: billing, plan, upgrade, downgrade, waitlist, access code, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
-updated: 2026-09-27
+updated: 2026-10-08
 scope: public
 ---
 
@@ -33,6 +33,23 @@ in usage capacity and in which features they include: projects, custom MCP
 connections, concurrent responses, sandboxes, connector tools and scheduled
 tasks all scale with the plan. The pricing page carries the current prices,
 regional prices and per-plan limits.
+
+## Team seat types
+
+A Team plan sells two seat types on one subscription, Standard and Premium, and
+one team can hold both. A Premium seat carries the usage limits and model access
+of Max 5x, which is five times the usage of a Standard seat, and keeps every
+Team feature.
+
+An owner or admin sets each member's seat type in Settings, Team. Moving a
+member to Premium charges the difference for the rest of the current period
+straight away and keeps the renewal date; a Premium seat the team already pays
+for and has not assigned is used first, at no extra charge. Moving a member back
+to Standard bills the Standard price from the next renewal: the current period
+is not refunded, and the member keeps Premium usage until it ends.
+
+Premium seats are priced in US dollars only. The pricing page carries the price
+of each seat type.
 
 ## Monthly and yearly billing
 
