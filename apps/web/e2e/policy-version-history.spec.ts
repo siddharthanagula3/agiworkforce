@@ -13,7 +13,11 @@ test.describe('/legal/archive', () => {
     await expect(versions.getByText('2026-08-11')).toBeVisible();
     await expect(versions.getByText('The full text of this version was not kept.')).toBeVisible();
 
-    await versions.getByRole('link', { name: 'Read this version' }).click();
+    await versions
+      .getByRole('listitem')
+      .filter({ hasText: '2026-08-11' })
+      .getByRole('link', { name: 'Read this version' })
+      .click();
     await expect(page).toHaveURL(/\/legal\/archive\/terms\/2026-08-11$/);
     await expect(
       page.getByText(
