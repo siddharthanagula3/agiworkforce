@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { translateUiPlural } from '@agiworkforce/ui';
 import { Check, ChevronLeft, CircleHelp, Lock, Star } from '@agiworkforce/icons';
 import {
@@ -59,7 +59,6 @@ const CHIP_CLASS =
   'rounded-full border px-2 py-0.5 text-xs transition-colors focus-visible:outline-none';
 const CARD_LABEL_CLASS = 'text-xs text-muted-foreground';
 const CARD_VALUE_CLASS = 'text-sm text-foreground';
-const LINE_GROUP_LABEL_CLASS = 'px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 
 interface ModelLineGroup {
   key: string;
@@ -403,7 +402,6 @@ export function ModelCatalogue({
     [entries],
   );
 
-  const listId = useId();
   const lineGroups = useMemo(
     () =>
       railKey === FAVOURITES_RAIL_KEY || railKey === RECENTS_RAIL_KEY
@@ -732,17 +730,8 @@ export function ModelCatalogue({
               <p className="px-3 py-4 text-center text-xs text-muted-foreground">
                 {EMPTY_LIST_TEXT}
               </p>
-            ) : lineGroups && lineGroups.length > 1 ? (
-              lineGroups.map((group, index) => (
-                <div key={group.key} role="group" aria-labelledby={`${listId}-line-${index}`}>
-                  <p id={`${listId}-line-${index}`} className={LINE_GROUP_LABEL_CLASS}>
-                    {group.label}
-                  </p>
-                  {group.entries.map(renderEntry)}
-                </div>
-              ))
             ) : (
-              (lineGroups?.[0]?.entries ?? visible).map(renderEntry)
+              (lineGroups?.flatMap((group) => group.entries) ?? visible).map(renderEntry)
             )}
           </div>
         </div>
