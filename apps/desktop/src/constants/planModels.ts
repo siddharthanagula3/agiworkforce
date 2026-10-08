@@ -1,4 +1,3 @@
-
 import {
   BILLING_PLAN_PRICING,
   canUseBillingPlanCapability,
@@ -59,6 +58,12 @@ export const TIER_FEATURES: Readonly<Record<SubscriptionTier, TierFeatures>> = {
     hasOllama: true,
     hasImageGen: canUseBillingPlanCapability('team', 'image_generation'),
     hasVideoGen: canUseBillingPlanCapability('team', 'video_generation'),
+  },
+  team_premium: {
+    maxMessagesPerDay: -1,
+    hasOllama: true,
+    hasImageGen: canUseBillingPlanCapability('team_premium', 'image_generation'),
+    hasVideoGen: canUseBillingPlanCapability('team_premium', 'video_generation'),
   },
   enterprise: {
     maxMessagesPerDay: -1,

@@ -7,6 +7,11 @@ import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { CreditService } from '@/lib/services/credit-service';
 import { isSeatBearingBillingPlan } from '@/lib/services/entitlement-resolution';
+import {
+  SEAT_ASSIGNMENT_COLUMNS_SQL,
+  seatHolderPlanTier,
+  type SeatAssignmentColumns,
+} from '@/lib/services/team-seat-entitlement';
 
 // Entitlement itself resolves in `entitlement-resolution.ts`, the single entry
 // point. This module keeps the seat ledger sweep and re-exports that surface so
@@ -26,7 +31,7 @@ const SEAT_MEMBERS_SQL = `
   select
     organization.id as organization_id,
     organization.billing_plan_tier as billing_plan_tier,
-    membership.user_id as user_id
+    membership.user_id as user_id,${SEAT_ASSIGNMENT_COLUMNS_SQL}
   from public.organizations organization
   join public.organization_members membership
     on membership.organization_id = organization.id
@@ -56,11 +61,13 @@ export async function provisionSeatMemberCreditAccounts(
   db: DatabaseAdapter,
   input: SeatMemberLedgerProvisioning,
 ): Promise<number> {
-  const rows = await db.query<{
-    organization_id: string;
-    billing_plan_tier: string | null;
-    user_id: string;
-  }>(SEAT_MEMBERS_SQL, [input.ownerUserId]);
+  const rows = await db.query<
+    {
+      organization_id: string;
+      billing_plan_tier: string | null;
+      user_id: string;
+    } & SeatAssignmentColumns
+  >(SEAT_MEMBERS_SQL, [input.ownerUserId]);
 
   const period = resolveManagedUsagePeriod({
     subscriptionPeriodStart: input.periodStart,
@@ -71,8 +78,9 @@ export async function provisionSeatMemberCreditAccounts(
   for (const row of rows) {
     const orgTier = normalizeBillingPlanTier(row.billing_plan_tier);
     if (!isSeatBearingBillingPlan(orgTier)) continue;
+    const seatTier = seatHolderPlanTier(orgTier, row, input.periodEnd);
     const budgetCents = getPlanUsageBudgetCents(
-      { tier: orgTier, catalogVersion: input.catalogVersion },
+      { tier: seatTier, catalogVersion: input.catalogVersion },
       'monthly',
     );
     if (budgetCents <= 0) continue;
@@ -90,7 +98,7 @@ export async function provisionSeatMemberCreditAccounts(
       provisioned += 1;
     } catch (error) {
       logger.error(
-        { error, userId: row.user_id, organizationId: row.organization_id, planTier: orgTier },
+        { error, userId: row.user_id, organizationId: row.organization_id, planTier: seatTier },
         'Seat member usage ledger could not be provisioned during the credit sweep',
       );
     }

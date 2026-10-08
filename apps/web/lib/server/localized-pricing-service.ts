@@ -2,11 +2,12 @@ import 'server-only';
 
 import {
   SELF_SERVE_PAID_PLAN_TIERS,
+  TEAM_SEAT_UPGRADE_TIERS,
   billingIntervalsForPlan,
   type BillingInterval,
 } from '@agiworkforce/types';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
-import { getConfiguredPriceId, type ConfiguredCheckoutPlan } from '@/lib/pricing';
+import { getConfiguredPriceId, type ConfiguredPricePlan } from '@/lib/pricing';
 import {
   getCurrencyForCountry,
   resolveLocalizedPlanPrice,
@@ -26,7 +27,7 @@ export interface LocalizedPlanPrices {
 export interface LocalizedPricingCatalog {
   country: string;
   requestedCurrency: string;
-  plans: Record<ConfiguredCheckoutPlan, LocalizedPlanPrices>;
+  plans: Record<ConfiguredPricePlan, LocalizedPlanPrices>;
 }
 
 export interface CheckoutPriceSelection {
@@ -78,10 +79,14 @@ export async function getLocalizedPricingCatalog(
 ): Promise<LocalizedPricingCatalog> {
   const country = countryCode.trim().toUpperCase() || 'US';
   const requestedCurrency = getCurrencyForCountry(country);
-  const plans = {} as Record<ConfiguredCheckoutPlan, LocalizedPlanPrices>;
+  const plans = {} as Record<ConfiguredPricePlan, LocalizedPlanPrices>;
+  const pricedPlans: readonly ConfiguredPricePlan[] = [
+    ...SELF_SERVE_PAID_PLAN_TIERS,
+    ...TEAM_SEAT_UPGRADE_TIERS,
+  ];
 
   await Promise.all(
-    SELF_SERVE_PAID_PLAN_TIERS.map(async (plan) => {
+    pricedPlans.map(async (plan) => {
       const entries: LocalizedPlanPrices = {};
       await Promise.all(
         billingIntervalsForPlan(plan).map(async (interval) => {
@@ -112,7 +117,7 @@ export async function getLocalizedPricingCatalog(
 }
 
 export async function getCheckoutPriceSelection(
-  plan: ConfiguredCheckoutPlan,
+  plan: ConfiguredPricePlan,
   interval: BillingInterval,
   countryCode: string,
 ): Promise<CheckoutPriceSelection | null> {
@@ -120,7 +125,7 @@ export async function getCheckoutPriceSelection(
 }
 
 export async function getPriceSelectionForCurrency(
-  plan: ConfiguredCheckoutPlan,
+  plan: ConfiguredPricePlan,
   interval: BillingInterval,
   requestedCurrency: string,
 ): Promise<CheckoutPriceSelection | null> {

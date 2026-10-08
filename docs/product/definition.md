@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-04
+Last updated: 2026-10-08
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -295,6 +295,17 @@ Billing plan lock (founder decision, 2026-07-18):
 Basic, Pro, Max 5x and Max 20x are billed monthly only; Team is billed monthly
 or yearly (founder decision 2026-09-27, D-2026-09-27-01 in
 `docs/decisions/2026-09-27-founder-decisions.md`).
+
+Team sells two seat types on one subscription (founder decision 2026-10-08). The
+Team row above is the Standard seat. A Premium seat is $125/seat/month or
+$1,200/seat/year in US dollars only, carries the Max 5x usage, projects, custom
+MCP and model access, and keeps the Team shared controls. A team may mix both;
+only the workspace owner makes a seat change that alters the bill, an admin may
+assign a Premium seat that is already paid for, and the seat minimum applies to
+the total. The wire plan of a Premium holder stays `team` with `seat_type`
+beside it. The catalogue entry is `team_premium` in
+`packages/contracts/types/src/billing-catalog.ts`; it is a seat on a Team
+subscription and cannot be checked out as a plan of its own.
 
 The Image generation and Video generation columns state what each plan includes
 as a paid capability. Separately, and only while it is configured and free

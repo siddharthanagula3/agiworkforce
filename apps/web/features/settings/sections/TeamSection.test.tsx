@@ -1,6 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const SeatPaymentError = vi.hoisted(
+  () =>
+    class SeatTypePaymentRequiredError extends Error {
+      readonly paymentUrl: string | null;
+      constructor(message: string, paymentUrl: string | null) {
+        super(message);
+        this.paymentUrl = paymentUrl;
+      }
+    },
+);
+
 const state = vi.hoisted(() => ({
   seatDataAvailable: true,
   organization: null as null | {
@@ -42,7 +53,16 @@ const state = vi.hoisted(() => ({
     lastActiveAt: string | null;
     permissions: string[];
     isCurrentUser: boolean;
+    seatType?: 'standard' | 'premium';
+    premiumPaidThrough?: string | null;
   }>,
+  seatTypes: null as null | {
+    licensedPremiumSeats: number;
+    premiumSeatsAssigned: number;
+    billing: { interval: 'monthly' | 'yearly'; currency: string; premiumSeatsSold: boolean };
+  },
+  updateSeatType: vi.fn(async () => ({})),
+  seatError: null as Error | null,
   create: vi.fn(),
   switchWorkspace: vi.fn(),
   updateOrganization: vi.fn(),
@@ -87,6 +107,19 @@ vi.mock('../hooks/use-settings-queries', () => ({
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
+  }),
+  useTeamSeatTypes: () => ({
+    data: state.seatTypes,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  SeatTypePaymentRequiredError: SeatPaymentError,
+  useUpdateTeamMemberSeatType: () => ({
+    mutate: state.updateSeatType,
+    mutateAsync: state.updateSeatType,
+    isPending: false,
+    error: state.seatError,
   }),
   useTeamInvitations: () => ({
     data: {
@@ -181,6 +214,8 @@ describe('TeamSection', () => {
       seatSource: 'unknown',
     };
     state.members = [];
+    state.seatTypes = null;
+    state.seatError = null;
     state.invitations = [];
     state.inviteError = null;
     vi.clearAllMocks();
@@ -804,5 +839,244 @@ describe('TeamSection', () => {
     render(<TeamSection />);
 
     expect(screen.queryByTestId('transfer-ownership-submit')).toBeNull();
+  });
+
+  describe('seat types', () => {
+    function teamWorkspace(role: 'owner' | 'admin' | 'member') {
+      state.organization = {
+        id: 'org-1',
+        name: 'Acme',
+        slug: 'acme',
+        plan: 'team',
+        memberCount: 2,
+        maxMembers: 4,
+        currentUserRole: role,
+      };
+      state.access = { ...state.access, maxMembers: 4, seatsConsumed: 2, seatsAvailable: 2 };
+      state.members = [
+        seatMember('owner-1', 'Ada Owner', 'owner', 'standard', role === 'owner'),
+        seatMember('member-1', 'Grace Member', 'member', 'standard', role !== 'owner'),
+      ];
+    }
+
+    function seatMember(
+      userId: string,
+      name: string,
+      role: 'owner' | 'admin' | 'member',
+      seatType: 'standard' | 'premium',
+      isCurrentUser: boolean,
+    ) {
+      return {
+        id: `org-1:${userId}`,
+        userId,
+        organizationId: 'org-1',
+        email: `${userId}@example.com`,
+        name,
+        avatarUrl: null,
+        role,
+        status: 'active' as const,
+        provisionedAt: null,
+        joinedAt: '2026-10-01T00:00:00.000Z',
+        lastActiveAt: null,
+        permissions: [],
+        isCurrentUser,
+        seatType,
+        premiumPaidThrough: null,
+      };
+    }
+
+    function sellPremiumSeats(overrides: Partial<NonNullable<typeof state.seatTypes>> = {}): void {
+      state.seatTypes = {
+        licensedPremiumSeats: 0,
+        premiumSeatsAssigned: 0,
+        billing: { interval: 'monthly', currency: 'usd', premiumSeatsSold: true },
+        ...overrides,
+      };
+    }
+
+    it('names the price change and waits for the answer before a Premium seat is charged', async () => {
+      teamWorkspace('owner');
+      sellPremiumSeats();
+      render(<TeamSection />);
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Seat type for Grace Member' }), {
+        target: { value: 'premium' },
+      });
+
+      expect(await screen.findByText('Move Grace Member to a Premium seat?')).toBeVisible();
+      expect(
+        screen.getByText(/This seat changes from \$25\/month to \$125\/month\./),
+      ).toBeVisible();
+      expect(screen.getByText(/charged to the workspace payment method now/)).toBeVisible();
+      expect(state.updateSeatType).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Keep Standard seat' }));
+      expect(state.updateSeatType).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Seat type for Grace Member' }), {
+        target: { value: 'premium' },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Move to Premium' }));
+
+      await waitFor(() =>
+        expect(state.updateSeatType).toHaveBeenCalledWith({
+          memberId: 'org-1:member-1',
+          organizationId: 'org-1',
+          seatType: 'premium',
+        }),
+      );
+    });
+
+    it('quotes yearly prices to a workspace billed yearly', async () => {
+      teamWorkspace('owner');
+      sellPremiumSeats({
+        billing: { interval: 'yearly', currency: 'usd', premiumSeatsSold: true },
+      });
+      render(<TeamSection />);
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Seat type for Grace Member' }), {
+        target: { value: 'premium' },
+      });
+
+      expect(
+        await screen.findByText(/This seat changes from \$240\/year to \$1,200\/year\./),
+      ).toBeVisible();
+    });
+
+    it('says nothing more is charged when a paid Premium seat is unassigned', async () => {
+      teamWorkspace('owner');
+      sellPremiumSeats({ licensedPremiumSeats: 2, premiumSeatsAssigned: 1 });
+      render(<TeamSection />);
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Seat type for Grace Member' }), {
+        target: { value: 'premium' },
+      });
+
+      expect(
+        await screen.findByText(/already pays for 1 Premium seat that is not assigned/),
+      ).toBeVisible();
+      expect(screen.getByText(/nothing more is charged/)).toBeVisible();
+    });
+
+    it('says a move to Standard keeps Premium usage until the paid period ends, with no refund', async () => {
+      teamWorkspace('owner');
+      sellPremiumSeats({ licensedPremiumSeats: 1, premiumSeatsAssigned: 1 });
+      state.members = [
+        seatMember('owner-1', 'Ada Owner', 'owner', 'standard', true),
+        seatMember('member-1', 'Grace Member', 'member', 'premium', false),
+      ];
+      render(<TeamSection />);
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Seat type for Grace Member' }), {
+        target: { value: 'standard' },
+      });
+
+      expect(await screen.findByText('Move Grace Member to a Standard seat?')).toBeVisible();
+      expect(
+        screen.getByText(
+          /billed \$25\/month instead of \$125\/month\. The current billing period is not refunded/,
+        ),
+      ).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: 'Move to Standard' }));
+      await waitFor(() =>
+        expect(state.updateSeatType).toHaveBeenCalledWith(
+          expect.objectContaining({ memberId: 'org-1:member-1', seatType: 'standard' }),
+        ),
+      );
+    });
+
+    it('lets an admin assign only a Premium seat that is already paid for', () => {
+      teamWorkspace('admin');
+      state.members = [
+        seatMember('owner-1', 'Ada Owner', 'owner', 'premium', false),
+        seatMember('member-1', 'Grace Member', 'member', 'standard', false),
+        seatMember('admin-1', 'Alan Admin', 'admin', 'standard', true),
+      ];
+      sellPremiumSeats({ licensedPremiumSeats: 1, premiumSeatsAssigned: 1 });
+      const { unmount } = render(<TeamSection />);
+
+      expect(screen.getByRole('combobox', { name: 'Seat type for Grace Member' })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Alan Admin' })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Ada Owner' })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Grace Member' })).toHaveAttribute(
+        'title',
+        expect.stringContaining('Only the workspace owner'),
+      );
+      unmount();
+
+      sellPremiumSeats({ licensedPremiumSeats: 2, premiumSeatsAssigned: 1 });
+      render(<TeamSection />);
+
+      expect(screen.getByRole('combobox', { name: 'Seat type for Grace Member' })).toBeEnabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Ada Owner' })).toBeDisabled();
+    });
+
+    it('shows the invoice link and asks for the seat to be assigned again when the charge needs payment', () => {
+      teamWorkspace('owner');
+      sellPremiumSeats();
+      state.seatError = new SeatPaymentError(
+        'The charge for the Premium seat has not completed. Pay the invoice, then assign the Premium seat again.',
+        'https://invoice.stripe.test/in_1',
+      );
+      render(<TeamSection />);
+
+      const alert = screen.getByTestId('team-seat-payment-pending');
+      expect(alert).toHaveTextContent('assign the Premium seat again');
+      expect(screen.getByRole('link', { name: 'Pay the invoice' })).toHaveAttribute(
+        'href',
+        'https://invoice.stripe.test/in_1',
+      );
+    });
+
+    it('lets the owner set their own seat type', () => {
+      teamWorkspace('owner');
+      sellPremiumSeats();
+      render(<TeamSection />);
+
+      expect(screen.getByRole('combobox', { name: 'Seat type for Ada Owner' })).toBeEnabled();
+    });
+
+    it('shows a member each seat type without any control to change it', () => {
+      teamWorkspace('member');
+      sellPremiumSeats({ licensedPremiumSeats: 1, premiumSeatsAssigned: 1 });
+      state.members = [
+        seatMember('owner-1', 'Ada Owner', 'owner', 'premium', false),
+        seatMember('member-1', 'Grace Member', 'member', 'standard', true),
+      ];
+      render(<TeamSection />);
+
+      expect(screen.queryByRole('combobox', { name: /Seat type for/ })).toBeNull();
+      expect(screen.getByText('Premium seat')).toBeVisible();
+      expect(screen.getByText('Standard seat')).toBeVisible();
+    });
+
+    it('offers no Premium seat where the workspace is billed in a currency that has none', () => {
+      teamWorkspace('owner');
+      sellPremiumSeats({
+        billing: { interval: 'monthly', currency: 'inr', premiumSeatsSold: false },
+      });
+      render(<TeamSection />);
+
+      expect(screen.getByRole('combobox', { name: 'Seat type for Grace Member' })).toBeDisabled();
+    });
+
+    it('shows how many paid Premium seats are assigned', () => {
+      teamWorkspace('owner');
+      sellPremiumSeats({ licensedPremiumSeats: 3, premiumSeatsAssigned: 1 });
+      render(<TeamSection />);
+
+      expect(screen.getByTestId('team-premium-seats')).toHaveTextContent('1 of 3');
+      expect(
+        screen.getByText(/A Standard seat is \$25\/month and a Premium seat is \$125\/month\./),
+      ).toBeVisible();
+    });
+
+    it('shows no seat types on a workspace that has none to assign', () => {
+      teamWorkspace('owner');
+      render(<TeamSection />);
+
+      expect(screen.queryByRole('combobox', { name: /Seat type for/ })).toBeNull();
+      expect(screen.queryByTestId('team-premium-seats')).toBeNull();
+    });
   });
 });

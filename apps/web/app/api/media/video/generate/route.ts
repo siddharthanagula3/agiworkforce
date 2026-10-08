@@ -35,6 +35,8 @@ import {
   getBillingPlanPricing,
   resolveVideoGenerationOutputSize,
   type ModelMetadata,
+  billingPlanCapabilityWireTiers,
+  wirePlanOf,
 } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -805,7 +807,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
           message: 'No active subscription found. Please subscribe to use video generation.',
           type: 'invalid_request_error',
           code: 'subscription_required',
-          required_plans: ['max_15x', 'enterprise'],
+          required_plans: billingPlanCapabilityWireTiers('video_generation'),
         },
       },
       {
@@ -827,8 +829,8 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
           message: subscriptionAccess.reason,
           type: 'invalid_request_error',
           code: subscriptionAccess.code,
-          current_plan: subscription.plan_tier?.toLowerCase() || 'free',
-          required_plans: ['max_15x', 'enterprise'],
+          current_plan: wirePlanOf(subscription.plan_tier).tier,
+          required_plans: billingPlanCapabilityWireTiers('video_generation'),
         },
       },
       {
@@ -847,7 +849,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
           type: 'invalid_request_error',
           code: 'plan_upgrade_required',
           current_plan: userTier,
-          required_plans: [...BILLING_PLAN_CAPABILITY_TIERS.video_generation],
+          required_plans: billingPlanCapabilityWireTiers('video_generation'),
         },
       },
       {

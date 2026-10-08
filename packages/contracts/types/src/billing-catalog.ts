@@ -1,5 +1,14 @@
 export type BillingPlanTier =
-  'local-only' | 'byok' | 'free' | 'basic' | 'pro' | 'max' | 'max_15x' | 'team' | 'enterprise';
+  | 'local-only'
+  | 'byok'
+  | 'free'
+  | 'basic'
+  | 'pro'
+  | 'max'
+  | 'max_15x'
+  | 'team'
+  | 'team_premium'
+  | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
 
 export const BILLING_INTERVALS = [
@@ -39,6 +48,86 @@ export function isSelfServeIndividualPlanTier(
     typeof value === 'string' &&
     (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).includes(value)
   );
+}
+
+export const TEAM_SEAT_TYPES = ['standard', 'premium'] as const;
+export type TeamSeatType = (typeof TEAM_SEAT_TYPES)[number];
+
+export const DEFAULT_TEAM_SEAT_TYPE: TeamSeatType = 'standard';
+
+export const TEAM_SEAT_PLAN_TIERS = {
+  standard: 'team',
+  premium: 'team_premium',
+} as const satisfies Record<TeamSeatType, BillingPlanTier>;
+export type TeamSeatPlanTier = (typeof TEAM_SEAT_PLAN_TIERS)[TeamSeatType];
+export type TeamSeatUpgradeTier = Exclude<TeamSeatPlanTier, 'team'>;
+
+export const TEAM_SEAT_UPGRADE_TIERS = [
+  'team_premium',
+] as const satisfies readonly TeamSeatUpgradeTier[];
+
+export const TEAM_SEAT_TYPE_LABELS: Readonly<Record<TeamSeatType, string>> = Object.freeze({
+  standard: 'Standard',
+  premium: 'Premium',
+});
+
+export function isTeamSeatType(value: unknown): value is TeamSeatType {
+  return typeof value === 'string' && (TEAM_SEAT_TYPES as readonly string[]).includes(value);
+}
+
+export function normalizeTeamSeatType(value: unknown): TeamSeatType {
+  return isTeamSeatType(value) ? value : DEFAULT_TEAM_SEAT_TYPE;
+}
+
+export function teamSeatPlanTier(seatType: TeamSeatType): TeamSeatPlanTier {
+  return TEAM_SEAT_PLAN_TIERS[seatType];
+}
+
+export function teamSeatTypeOfPlan(plan: string | null | undefined): TeamSeatType | null {
+  return TEAM_SEAT_TYPES.find((seatType) => TEAM_SEAT_PLAN_TIERS[seatType] === plan) ?? null;
+}
+
+export function isTeamSeatUpgradeTier(
+  value: string | null | undefined,
+): value is TeamSeatUpgradeTier {
+  return (
+    typeof value === 'string' && (TEAM_SEAT_UPGRADE_TIERS as readonly string[]).includes(value)
+  );
+}
+
+export function subscriptionPlanTierOf(plan: BillingPlanTier): BillingPlanTier {
+  return isTeamSeatUpgradeTier(plan) ? TEAM_SEAT_PLAN_TIERS[DEFAULT_TEAM_SEAT_TYPE] : plan;
+}
+
+export interface TeamSeatQuantities {
+  standard: number;
+  premium: number;
+}
+
+export function totalTeamSeats(quantities: TeamSeatQuantities): number {
+  return quantities.standard + quantities.premium;
+}
+
+export interface TeamSeatBilling {
+  interval: BillingInterval;
+  currency: string;
+  premiumSeatsSold: boolean;
+}
+
+export interface TeamSeatTypeSummary {
+  licensedPremiumSeats: number;
+  premiumSeatsAssigned: number;
+  billing: TeamSeatBilling;
+}
+
+export type TeamSeatBillingEffect =
+  'none' | 'uses_paid_seat' | 'charged_now' | 'restored_paid_seat' | 'reduced_at_renewal';
+
+export interface TeamSeatTypeChange {
+  seatType: TeamSeatType;
+  billing: TeamSeatBillingEffect;
+  premiumPaidThrough: string | null;
+  seats: TeamSeatQuantities;
 }
 
 export function hasSelfServeUpgradePath(value: string | null | undefined): boolean {
@@ -120,6 +209,13 @@ export const BILLING_PLAN_PRICING = {
     monthlyPriceInr: 1999,
     perSeat: true,
   },
+  team_premium: {
+    id: 'team_premium',
+    label: 'Team Premium',
+    monthlyPriceUsd: 125,
+    yearlyPriceUsd: 1200,
+    perSeat: true,
+  },
   enterprise: {
     id: 'enterprise',
     label: 'Enterprise',
@@ -139,6 +235,7 @@ export const PLAN_SURFACE_VISIBILITY: Record<BillingPlanTier, readonly BillingSu
   max: ['web', 'desktop', 'mobile'],
   max_15x: ['web', 'desktop', 'mobile'],
   team: ['web', 'desktop', 'mobile'],
+  team_premium: ['web', 'desktop', 'mobile'],
   enterprise: ['web', 'desktop', 'mobile'],
 };
 
@@ -162,8 +259,8 @@ export function isBasicPlanTier(value: string | null | undefined): value is 'bas
   return value === 'basic';
 }
 
-export function isTeamPlanTier(value: string | null | undefined): value is 'team' {
-  return value === 'team';
+export function isTeamPlanTier(value: string | null | undefined): value is TeamSeatPlanTier {
+  return teamSeatTypeOfPlan(value) !== null;
 }
 
 export function isProPlanTier(value: string | null | undefined): value is 'pro' {
@@ -210,8 +307,17 @@ export type BillingPlanCapability =
   | 'team_admin'
   | 'enterprise_controls';
 
-const CLOUD_CHAT_TIERS = ['free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'] as const;
-const PRO_TIERS = ['pro', 'max', 'max_15x', 'team', 'enterprise'] as const;
+const CLOUD_CHAT_TIERS = [
+  'free',
+  'basic',
+  'pro',
+  'max',
+  'max_15x',
+  'team',
+  'team_premium',
+  'enterprise',
+] as const;
+const PRO_TIERS = ['pro', 'max', 'max_15x', 'team', 'team_premium', 'enterprise'] as const;
 
 export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
   Record<BillingPlanCapability, readonly BillingPlanTier[]>
@@ -230,7 +336,7 @@ export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
   developer_surfaces: PRO_TIERS,
   slack_app: PRO_TIERS,
   artifact_connectors: PRO_TIERS,
-  team_admin: ['team', 'enterprise'],
+  team_admin: ['team', 'team_premium', 'enterprise'],
   enterprise_controls: ['enterprise'],
 });
 
@@ -242,8 +348,28 @@ export function canUseBillingPlanCapability(
   return BILLING_PLAN_CAPABILITY_TIERS[capability].includes(plan);
 }
 
+export function billingPlanCapabilityWireTiers(
+  capability: BillingPlanCapability,
+): BillingPlanTier[] {
+  return BILLING_PLAN_CAPABILITY_TIERS[capability].filter((plan) => !isTeamSeatUpgradeTier(plan));
+}
+
+export interface WirePlan {
+  tier: BillingPlanTier;
+  seatType: TeamSeatType | null;
+}
+
+export function wirePlanOf(plan: string | null | undefined): WirePlan {
+  const tier = normalizeBillingPlanTier(plan);
+  return { tier: subscriptionPlanTierOf(tier), seatType: teamSeatTypeOfPlan(tier) };
+}
+
+export function seatTypeField(seatType: TeamSeatType | null): { seat_type?: TeamSeatType } {
+  return seatType === null ? {} : { seat_type: seatType };
+}
+
 export function billingPlanCapabilityPlanLabels(capability: BillingPlanCapability): string {
-  const labels = BILLING_PLAN_CAPABILITY_TIERS[capability].map(
+  const labels = billingPlanCapabilityWireTiers(capability).map(
     (plan) => getBillingPlanPricing(plan).label,
   );
   if (labels.length <= 2) return labels.join(' and ');
@@ -328,6 +454,18 @@ export interface BillingPlanProductLimits {
   codeHarnessDailyCeilingCents: BillingPlanLimit;
 }
 
+const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
+  projects: 'unlimited',
+  knowledgeStorageBytes: 'unlimited',
+  customMcpServers: 'unlimited',
+  maxConcurrentTurns: 8,
+  maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
+  sandboxTtlMs: 30 * MINUTE_MS,
+  maxConnectorTools: 300,
+  maxScheduledTasks: 10,
+  codeHarnessDailyCeilingCents: 2500,
+};
+
 export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   Record<BillingPlanTier, BillingPlanProductLimits>
 > = Object.freeze({
@@ -386,17 +524,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
   },
-  max: {
-    projects: 'unlimited',
-    knowledgeStorageBytes: 'unlimited',
-    customMcpServers: 'unlimited',
-    maxConcurrentTurns: 8,
-    maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
-    sandboxTtlMs: 30 * MINUTE_MS,
-    maxConnectorTools: 300,
-    maxScheduledTasks: 10,
-    codeHarnessDailyCeilingCents: 2500,
-  },
+  max: MAX_PLAN_PRODUCT_LIMITS,
   max_15x: {
     projects: 'unlimited',
     knowledgeStorageBytes: 'unlimited',
@@ -419,6 +547,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
   },
+  team_premium: MAX_PLAN_PRODUCT_LIMITS,
   enterprise: {
     projects: 'custom',
     knowledgeStorageBytes: 'custom',
@@ -518,7 +647,7 @@ export function getNextUpgradeTier(
     current,
   );
   if (index === -1) {
-    return current === 'team' || current === 'enterprise'
+    return isTeamPlanTier(current) || current === 'enterprise'
       ? null
       : (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0] ?? null);
   }

@@ -7,7 +7,7 @@ import {
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
 import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
-import { canUseBillingPlanCapability } from '@agiworkforce/types';
+import { billingPlanCapabilityWireTiers, canUseBillingPlanCapability } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey, type ManagedMediaSurface } from '@agiworkforce/utils';
 import { aiGeneratedHeaders, type AiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { logger } from '@/lib/logger';
@@ -178,7 +178,7 @@ export async function generateManagedImage(
           type: 'invalid_request_error',
           code: 'plan_upgrade_required',
           current_plan: userTier,
-          required_plans: ['pro', 'max', 'max_15x', 'team', 'enterprise'],
+          required_plans: billingPlanCapabilityWireTiers('image_generation'),
         },
       },
       {

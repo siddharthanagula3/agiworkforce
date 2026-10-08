@@ -2,7 +2,12 @@
 
 import { useCallback, useState } from 'react';
 import { Check } from 'lucide-react';
-import { getPublishedPlanPricePerMonthUsd, isPlanSelectableOnSurface } from '@agiworkforce/types';
+import {
+  getPublishedPlanPricePerMonthUsd,
+  isBillingPlanTier,
+  isPlanSelectableOnSurface,
+  subscriptionPlanTierOf,
+} from '@agiworkforce/types';
 import {
   Dialog,
   DialogContent,
@@ -223,11 +228,14 @@ export function UpgradePlanDialog({
   // "the user is on Free". Defaulting here is what previously showed a Max 15x
   // subscriber a Free card marked "Your current plan" next to an
   // "Upgrade to Basic, $7/month" button.
-  currentTier,
+  currentTier: reportedTier,
   targetTier = null,
   onUpgrade,
 }: UpgradePlanDialogProps) {
   const [expanded, setExpanded] = useState(false);
+  const currentTier = isBillingPlanTier(reportedTier)
+    ? subscriptionPlanTierOf(reportedTier)
+    : reportedTier;
   const tierKnown = typeof currentTier === 'string' && currentTier.length > 0;
 
   const handleOpenChange = useCallback(

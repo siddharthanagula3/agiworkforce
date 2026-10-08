@@ -5,6 +5,7 @@ import {
   isFreeBillingPlanTier,
   isLocalOnlyPlanTier,
   isTeamPlanTier,
+  isTeamSeatUpgradeTier,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 
@@ -57,7 +58,9 @@ export const RELEASED_DOC_PLATFORMS = Object.freeze(
 ) as readonly DocPlatform[];
 
 export const ALL_DOC_PLANS = Object.freeze(
-  Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[],
+  (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).filter(
+    (plan) => !isTeamSeatUpgradeTier(plan),
+  ),
 ) as readonly BillingPlanTier[];
 
 export const WORKSPACE_DOC_PLANS = Object.freeze([

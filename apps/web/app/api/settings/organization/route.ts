@@ -300,9 +300,10 @@ async function handleCreate(request: NextRequest) {
 
       const [created] = await tx.query<OrganizationRow>(
         `insert into public.organizations
-           (name, slug, created_by, licensed_seats, billing_plan_tier, seat_billing_updated_at)
+           (name, slug, created_by, licensed_seats, billing_plan_tier, seat_billing_updated_at,
+            licensed_premium_seats)
          values ($1, $2, $3, $4, $5,
-                 case when $5::text is null then null else now() end)
+                 case when $5::text is null then null else now() end, $6)
          returning id, name, slug, created_by, created_at, updated_at`,
         [
           parsed.data.name,
@@ -310,6 +311,7 @@ async function handleCreate(request: NextRequest) {
           userId,
           purchasedSeats?.seats ?? 1,
           purchasedSeats?.planTier ?? null,
+          purchasedSeats?.premiumSeats ?? 0,
         ],
       );
 

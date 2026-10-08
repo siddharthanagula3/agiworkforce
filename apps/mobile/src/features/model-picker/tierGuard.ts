@@ -66,6 +66,7 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
       return 'pro';
     case 'max':
     case 'max_15x':
+    case 'team_premium':
       return 'max';
     case 'enterprise':
       return 'max';

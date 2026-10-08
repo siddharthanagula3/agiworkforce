@@ -27,10 +27,13 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import {
   assertUpgradeBillingInterval,
   classifyPlanChange,
-  currentSeatsFromStripeItem,
   isUpgrade,
   planChangeAnchor,
+  planChangeApplied,
+  planChangeItems,
   planChangeProration,
+  seatChangeBasis,
+  type SeatChangeBasis,
 } from '@/lib/server/stripe-plan-change';
 import { isPerSeatBillingPlan } from '@agiworkforce/types';
 import {
@@ -136,6 +139,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
 
   let stripeSubId = sub.stripe_subscription_id;
   let stripeItem: Stripe.SubscriptionItem | null = null;
+  let seatBasis: SeatChangeBasis | null = null;
   let subscriptionCurrency = 'usd';
   let cancelAtPeriodEnd = false;
   let subscriptionEndsAt: number | null = null;
@@ -168,7 +172,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     if (resolved.recovered) {
       const recoveredCustomerId =
         typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
-      const recoveredPriceId = stripeSub.items.data[0]?.price.id ?? null;
+      const recoveredPriceId = seatChangeBasis(stripeSub)?.item.price.id ?? null;
       await db.execute(
         `update subscriptions
          set stripe_subscription_id = $1, stripe_customer_id = $2, stripe_price_id = $3
@@ -176,7 +180,8 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         [stripeSub.id, recoveredCustomerId, recoveredPriceId, userId],
       );
     }
-    stripeItem = stripeSub.items.data[0] ?? null;
+    seatBasis = seatChangeBasis(stripeSub);
+    stripeItem = seatBasis?.item ?? null;
     subscriptionCurrency = stripeSub.currency;
     cancelAtPeriodEnd = stripeSub.cancel_at_period_end === true;
     subscriptionEndsAt = stripeSub.cancel_at ?? stripeItem?.current_period_end ?? null;
@@ -185,7 +190,9 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for item ID');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
-  if (!stripeItem || !liveSubscription) throw createError.internal('Subscription has no items');
+  if (!stripeItem || !seatBasis || !liveSubscription) {
+    throw createError.internal('Subscription has no items');
+  }
 
   if (cancelAtPeriodEnd) {
     return NextResponse.json(
@@ -240,7 +247,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     currentTier: effectiveCurrentTier,
     targetPlan,
     requestedSeats,
-    currentSeats: currentSeatsFromStripeItem(stripeItem.quantity),
+    currentSeats: seatBasis.currentSeats,
   });
   if (!planChange.allowed) {
     throw createError.validation(planChange.reason);
@@ -323,7 +330,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     updatedSubscription = await stripe.subscriptions.update(
       stripeSubId,
       {
-        items: [{ id: stripeItem.id, price: newPriceId, quantity: requestedSeats }],
+        items: planChangeItems(seatBasis, newPriceId, requestedSeats),
         ...planChangeProration(planChangeAnchor(planChange.kind), prorationDate),
         ...(promotion ? { discounts: upgradeDiscounts(liveSubscription, promotion) } : {}),
         payment_behavior: 'pending_if_incomplete',
@@ -363,19 +370,15 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const appliedItem = updatedSubscription.items.data[0];
-  const appliedPriceId = appliedItem?.price.id;
-  const appliedSeats = currentSeatsFromStripeItem(appliedItem?.quantity);
-  if (appliedPriceId !== newPriceId || appliedSeats !== requestedSeats) {
+  if (!planChangeApplied(updatedSubscription, newPriceId, requestedSeats)) {
     logger.error(
       {
         userId,
         stripeSubId,
         targetPlan,
         expectedPriceId: newPriceId,
-        appliedPriceId,
         expectedSeats: requestedSeats,
-        appliedSeats,
+        appliedSeats: seatChangeBasis(updatedSubscription)?.currentSeats ?? null,
       },
       'Stripe returned an upgrade without the target price and seat count applied',
     );

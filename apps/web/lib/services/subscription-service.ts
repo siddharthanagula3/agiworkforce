@@ -23,6 +23,8 @@ import {
 } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
+import { resolveOwnerSeatPlanTier } from '@/lib/services/team-seat-entitlement';
+import { primarySeatLineItem } from '@/lib/billing/team-seat-items';
 
 export interface SubscriptionInfo {
   id: string;
@@ -67,10 +69,11 @@ async function resolveAllowance(
   userId: string,
   planTier: string,
   subscriptionId: string,
+  periodEnd: Date,
   options: CreditAllocationOptions,
 ): Promise<VersionedPlanTier> {
   return {
-    tier: planTier,
+    tier: await resolveOwnerSeatPlanTier(options.db, userId, planTier, null, periodEnd),
     catalogVersion:
       options.catalogVersion !== undefined
         ? options.catalogVersion
@@ -129,7 +132,7 @@ export class SubscriptionService {
     periodEnd: Date,
     options: CreditAllocationOptions,
   ): Promise<string> {
-    const allowance = await resolveAllowance(userId, planTier, subscriptionId, options);
+    const allowance = await resolveAllowance(userId, planTier, subscriptionId, periodEnd, options);
     const creditsCents = getPlanUsageBudgetCents(allowance, 'monthly');
 
     if (creditsCents === 0) {
@@ -183,7 +186,7 @@ export class SubscriptionService {
     periodEnd: Date,
     options: CreditAllocationOptions,
   ): Promise<string> {
-    const allowance = await resolveAllowance(userId, planTier, subscriptionId, options);
+    const allowance = await resolveAllowance(userId, planTier, subscriptionId, periodEnd, options);
     const creditsCents = getPlanUsageBudgetCents(allowance, 'monthly');
 
     if (creditsCents === 0) {
@@ -441,7 +444,7 @@ export class SubscriptionService {
         return null;
       }
 
-      const stripePriceId = stripeSubscription.items.data[0]?.price.id;
+      const stripePriceId = primarySeatLineItem(stripeSubscription.items.data)?.price.id;
       if (!stripePriceId) {
         logger.warn(
           { subscriptionId: stripeSubscription.id },

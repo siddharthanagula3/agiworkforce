@@ -88,7 +88,18 @@ describe('PLAN_CREDIT_ALLOWANCES', () => {
 
   it('covers every plan tier exactly once', () => {
     expect(Object.keys(PLAN_CREDIT_ALLOWANCES).sort()).toEqual(
-      ['local-only', 'byok', 'free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'].sort(),
+      [
+        'local-only',
+        'byok',
+        'free',
+        'basic',
+        'pro',
+        'max',
+        'max_15x',
+        'team',
+        'team_premium',
+        'enterprise',
+      ].sort(),
     );
   });
 });

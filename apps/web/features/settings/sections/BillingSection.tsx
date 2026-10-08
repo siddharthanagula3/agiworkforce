@@ -32,6 +32,9 @@ import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   getBillingPlanPricing,
   getPlanPriceUsd,
+  isTeamPlanTier,
+  subscriptionPlanTierOf,
+  teamSeatPlanTier,
   isBillingPlanTier,
   isContractPricedPlan,
   isPerSeatBillingPlan,
@@ -347,17 +350,25 @@ export function BillingSection() {
     });
   }
 
-  const tier: string = String(subscription?.tier ?? 'free').toLowerCase();
+  const entitledTier: string = String(subscription?.tier ?? 'free').toLowerCase();
+  const tier: string = isBillingPlanTier(entitledTier)
+    ? subscriptionPlanTierOf(entitledTier)
+    : entitledTier;
   const planLabel = isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : undefined;
   const displayPlanLabel = planLabel ?? subscription?.display_name ?? '';
   const listPriceUsd = getPlanPriceUsd(tier, 'monthly');
+  const premiumSeatPriceUsd = isTeamPlanTier(tier)
+    ? getPlanPriceUsd(teamSeatPlanTier('premium'), 'monthly')
+    : null;
   const yearlyPrice = planState?.price?.interval === 'yearly' ? planState.price : null;
   const planPriceLabel = isContractPricedPlan(tier)
     ? 'Custom, set by your contract'
     : yearlyPrice
       ? formatRecurringMoney(yearlyPrice.amountCents, yearlyPrice.currency, yearlyPrice.interval)
       : listPriceUsd !== null && listPriceUsd > 0
-        ? `${formatUsdAmount(listPriceUsd)}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
+        ? premiumSeatPriceUsd !== null
+          ? `${formatUsdAmount(listPriceUsd)}/mo per Standard seat, ${formatUsdAmount(premiumSeatPriceUsd)}/mo per Premium seat`
+          : `${formatUsdAmount(listPriceUsd)}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
         : null;
 
   const isFreeTier = isFreeBillingPlanTier(tier);
