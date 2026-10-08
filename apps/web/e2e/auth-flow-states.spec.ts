@@ -98,6 +98,14 @@ function watchOutboundRequests(page: Page): string[] {
   return outbound;
 }
 
+function namesAnAge(key: string): boolean {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .some((word) => /^(?:age[ds]?|birth\w*|dob)$/.test(word));
+}
+
 async function expectRefused(page: Page, message: RegExp = AGE_REQUIRED): Promise<void> {
   const field = ageField(page);
   const alert = ageAlert(page);
@@ -517,13 +525,17 @@ test.describe('auth flow states', () => {
       signUpSso: 0,
     });
     expect(
-      await page.evaluate(() => [
-        window.localStorage.getItem('agi.terms-accepted-version'),
-        window.localStorage.getItem('agiworkforce-auth-last-method'),
-        ...[...Object.keys(window.localStorage), ...Object.keys(window.sessionStorage)].filter(
-          (key) => /age/i.test(key),
-        ),
-      ]),
+      await page
+        .evaluate(() => [
+          window.localStorage.getItem('agi.terms-accepted-version'),
+          window.localStorage.getItem('agiworkforce-auth-last-method'),
+          ...[...Object.keys(window.localStorage), ...Object.keys(window.sessionStorage)],
+        ])
+        .then(([terms, lastMethod, ...keys]) => [
+          terms,
+          lastMethod,
+          ...keys.filter((key) => key !== null && namesAnAge(key)),
+        ]),
       'a refused age leaves no marker and no stored key that names an age',
     ).toEqual([null, null]);
     expect(outbound, 'a refused attempt sends nothing to the identity provider').toEqual([]);
@@ -549,11 +561,12 @@ test.describe('auth flow states', () => {
     expect(carriedAnAge, 'no request names an age').toEqual([]);
     expect(new URL(page.url()).search).not.toMatch(/age/i);
     expect(
-      await page.evaluate(() =>
-        [...Object.keys(window.localStorage), ...Object.keys(window.sessionStorage)].filter((key) =>
-          /age/i.test(key),
-        ),
-      ),
+      await page
+        .evaluate(() => [
+          ...Object.keys(window.localStorage),
+          ...Object.keys(window.sessionStorage),
+        ])
+        .then((keys) => keys.filter(namesAnAge)),
       'no stored key names an age',
     ).toEqual([]);
     await expect(ageField(page)).toHaveCount(0);
