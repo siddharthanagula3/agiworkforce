@@ -31,17 +31,15 @@ nothing is left.
 ## S53.03: Personal Skills.
 
 - Done when: A user can own personal skills that only they have and that they created or added.
-- Wave: 2
-- Already works on: cli, vscode
+- Wave: 3
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| mobile | partial | mobile New skill is built (POST /api/skills, shown when canAuthorSkills); same switch-on as web: AGI_USER_SKILL_AUTHORING=1 in production after migration 0157 | ui, flag-off |
+| mobile | partial | mobile New skill is built (POST /api/skills, shown when canAuthorSkills) | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/features/skills/SkillsScreen.tsx:789-789`, `apps/web/lib/services/user-skill-authoring.ts:5-5`
+Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:789-789`, `apps/web/lib/services/user-skill-authoring.ts:11-11`
 
 ## S53.04: Project Skills.
 
@@ -93,17 +91,14 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/fe
 ## S53.09: Instruction editor.
 
 - Done when: A user can write and edit a skill's instructions in an editor in the product.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S53.10: Reference-file bundle.
 
@@ -174,18 +169,14 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 ## S53.21: Upload/import.
 
 - Done when: A user can upload or import a skill file/package and use it.
-- Wave: 2
-- Already works on: cli
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S53.22: Export.
 

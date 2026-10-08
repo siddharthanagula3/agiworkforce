@@ -14,7 +14,7 @@ import {
   PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
 } from '@agiworkforce/cloud-contracts';
 import { SkillDraftBodySchema } from './skill-draft-schema';
-import { parseSkillDraftFromMarkdown, type SkillDraft } from '@agiworkforce/skills';
+import { parseUploadedSkillDraft, type SkillDraft } from '@agiworkforce/skills';
 import { PayloadCeilingExceededError } from '@/lib/payload-ceiling';
 import {
   PluginArchiveError,
@@ -24,7 +24,13 @@ import {
   PLUGIN_UPLOAD_FILE_FIELD,
   SKILL_UPLOAD_NOT_UTF8_MESSAGE,
   SKILL_UPLOAD_UNREADABLE_MESSAGE,
+  UPLOAD_NOT_AN_ARCHIVE_MESSAGE,
 } from '@/features/plugins/server/directory/constants';
+import {
+  namesSkillArchive,
+  skillArchiveFolder,
+  skillUploadFolderMismatchMessage,
+} from './skill-upload-rules';
 import {
   dedupeByFirstClaimedName,
   findManagedDirectorySkillByName,
@@ -40,7 +46,10 @@ import {
   type UserSkillFileInput,
   type UserSkillUpload,
 } from '@/lib/services/user-skill-service';
-import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
+import {
+  requireUserSkillAuthoring,
+  userSkillAuthoringEnabled,
+} from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
@@ -89,11 +98,15 @@ async function readUploadedSkillDraft(request: NextRequest): Promise<UploadedSki
   });
 
   let source: string;
+  let folder: string | null = null;
   let files: UserSkillFileInput[] = [];
   let omittedFiles: string[] = [];
   if (isZipArchive(bytes)) {
     try {
       const skill = await readSingleSkillFromArchive(bytes);
+      const layout = skillArchiveFolder(skill.archivePath);
+      if ('problem' in layout) throw createError.validation(layout.problem);
+      folder = layout.folder;
       source = skill.content;
       files = skill.files;
       omittedFiles = skill.omittedFiles;
@@ -101,6 +114,8 @@ async function readUploadedSkillDraft(request: NextRequest): Promise<UploadedSki
       if (error instanceof PluginArchiveError) throw createError.validation(error.message);
       throw error;
     }
+  } else if (namesSkillArchive(fileName)) {
+    throw createError.validation(UPLOAD_NOT_AN_ARCHIVE_MESSAGE);
   } else {
     try {
       source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -109,8 +124,11 @@ async function readUploadedSkillDraft(request: NextRequest): Promise<UploadedSki
     }
   }
 
-  const parsed = parseSkillDraftFromMarkdown(source);
+  const parsed = parseUploadedSkillDraft(source);
   if (!parsed.ok) throw createError.validation(parsed.errors.join(' '));
+  if (folder !== null && folder !== parsed.draft.name) {
+    throw createError.validation(skillUploadFolderMismatchMessage(folder, parsed.draft.name));
+  }
   const acknowledgedScans = form
     .getAll(PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD)
     .filter((value): value is string => isPluginMarketplaceContentHash(value));
@@ -181,6 +199,7 @@ async function handleCreateSkill(request: NextRequest) {
 
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
+  requireUserSkillAuthoring();
 
   const { db, userId } = await getUserScopedDb(request);
   const featureGate = await buildWorkspaceFeatureGateResponse(

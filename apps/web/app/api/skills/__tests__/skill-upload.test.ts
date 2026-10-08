@@ -20,7 +20,10 @@ vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }))
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
 
 import { NextRequest } from 'next/server';
-import { USER_SKILL_AUTHORING_ENV_VAR } from '@/lib/services/user-skill-authoring';
+import {
+  USER_SKILL_AUTHORING_ENV_VAR,
+  USER_SKILL_AUTHORING_OFF,
+} from '@/lib/services/user-skill-authoring';
 import { DEFAULT_API_PAYLOAD_CEILING_BYTES } from '@/lib/payload-ceiling';
 import { POST } from '../route';
 
@@ -222,5 +225,95 @@ describe('POST /api/skills with an uploaded file', () => {
     expect(response.status).toBe(201);
     const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(params).toEqual(['user-owner', SKILL_NAME, SKILL_DESCRIPTION, SKILL_BODY]);
+  });
+});
+
+describe('POST /api/skills upload rules Claude applies', () => {
+  async function refusal(response: Response): Promise<string> {
+    expect(response.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+    const body = (await response.json()) as { error: { message: string } };
+    return body.error.message;
+  }
+
+  it('is on when the switch is unset', async () => {
+    delete process.env[USER_SKILL_AUTHORING_ENV_VAR];
+    mockQuery.mockResolvedValueOnce([createdRow()]);
+    const response = await POST(uploadReq('SKILL.md', SKILL_FILE));
+    expect(response.status).toBe(201);
+  });
+
+  it('answers 404 before reading the upload when the switch is off', async () => {
+    process.env[USER_SKILL_AUTHORING_ENV_VAR] = USER_SKILL_AUTHORING_OFF;
+    const response = await POST(uploadReq('skill.zip', new Uint8Array([0x50, 0x4b, 0x03, 0x04])));
+    expect(response.status).toBe(404);
+    expect(mockGetUserScopedDb).not.toHaveBeenCalled();
+    expect(featureGateMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts a .skill file, which is a zip of the skill folder', async () => {
+    mockQuery.mockResolvedValueOnce([createdRow()]);
+    const archive = await skillZip({ [`${SKILL_NAME}/SKILL.md`]: SKILL_FILE });
+    const response = await POST(uploadReq(`${SKILL_NAME}.skill`, archive));
+    expect(response.status).toBe(201);
+  });
+
+  it('accepts a zip made by Finder, which adds a __MACOSX folder beside the skill', async () => {
+    mockQuery.mockResolvedValueOnce([createdRow()]);
+    const archive = await skillZip({
+      [`${SKILL_NAME}/SKILL.md`]: SKILL_FILE,
+      [`__MACOSX/${SKILL_NAME}/._SKILL.md`]: 'resource fork',
+    });
+    const response = await POST(uploadReq('skill.zip', archive));
+    expect(response.status).toBe(201);
+  });
+
+  it('says a .skill or .zip file that is not a zip is not a readable archive', async () => {
+    const message = await refusal(await POST(uploadReq('notes.skill', SKILL_FILE)));
+    expect(message).toBe('That file is not a readable zip archive.');
+  });
+
+  it('refuses a zip with SKILL.md at its top, as Claude does', async () => {
+    const archive = await skillZip({ 'SKILL.md': SKILL_FILE });
+    const message = await refusal(await POST(uploadReq('skill.zip', archive)));
+    expect(message).toContain('Zip the skill folder itself, not the files in it');
+  });
+
+  it('refuses a zip with SKILL.md nested below the skill folder', async () => {
+    const archive = await skillZip({
+      [`outer/${SKILL_NAME}/SKILL.md`]: SKILL_FILE,
+      'loose.txt': 'x',
+    });
+    const message = await refusal(await POST(uploadReq('skill.zip', archive)));
+    expect(message).toContain(`This zip has it at outer/${SKILL_NAME}/SKILL.md.`);
+  });
+
+  it('refuses a folder whose name is not the skill name', async () => {
+    const archive = await skillZip({ 'release-notes-v2/SKILL.md': SKILL_FILE });
+    const message = await refusal(await POST(uploadReq('skill.zip', archive)));
+    expect(message).toBe(
+      `The folder "release-notes-v2" does not match the skill name "${SKILL_NAME}" in SKILL.md. Give the folder and the name the same value, then zip the folder again.`,
+    );
+  });
+
+  it('refuses frontmatter keys Claude does not accept on upload', async () => {
+    const message = await refusal(
+      await POST(
+        uploadReq(
+          'SKILL.md',
+          `---\nname: ${SKILL_NAME}\ndescription: d\ncontext: fork\n---\n\nbody\n`,
+        ),
+      ),
+    );
+    expect(message).toContain('Unexpected key(s) in SKILL.md frontmatter: context.');
+  });
+
+  it('accepts a description of 1,024 characters', async () => {
+    const description = 'd'.repeat(1024);
+    mockQuery.mockResolvedValueOnce([{ ...createdRow(), description }]);
+    const response = await POST(
+      uploadReq('SKILL.md', `---\nname: ${SKILL_NAME}\ndescription: ${description}\n---\n\nbody\n`),
+    );
+    expect(response.status).toBe(201);
   });
 });

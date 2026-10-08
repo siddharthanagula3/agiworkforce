@@ -2,8 +2,35 @@ import { FrontmatterError, parseFrontmatter } from './frontmatter';
 
 export const SKILL_DRAFT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const SKILL_DRAFT_NAME_MAX_LENGTH = 64;
-export const SKILL_DRAFT_DESCRIPTION_MAX_LENGTH = 1000;
+export const SKILL_DRAFT_DESCRIPTION_MAX_LENGTH = 1024;
 export const SKILL_DRAFT_BODY_MAX_LENGTH = 60000;
+
+export const SKILL_UPLOAD_STANDARD_FRONTMATTER_KEYS = [
+  'name',
+  'description',
+  'license',
+  'compatibility',
+  'metadata',
+  'allowed-tools',
+] as const;
+
+/**
+ * Keys the bundled skills in this repository carry. A bundled skill can be
+ * downloaded, so uploading it again must not be refused for its own frontmatter.
+ */
+export const SKILL_UPLOAD_BUNDLED_FRONTMATTER_KEYS = [
+  'version',
+  'requires',
+  'plugin',
+  'argument-hint',
+  'disable-model-invocation',
+  'acknowledgments',
+] as const;
+
+const SKILL_UPLOAD_FRONTMATTER_KEYS: ReadonlySet<string> = new Set([
+  ...SKILL_UPLOAD_STANDARD_FRONTMATTER_KEYS,
+  ...SKILL_UPLOAD_BUNDLED_FRONTMATTER_KEYS,
+]);
 
 export interface SkillDraft {
   name: string;
@@ -24,25 +51,56 @@ export function buildSkillMarkdown(draft: SkillDraft): string {
 }
 
 export type SkillDraftParseResult =
-  | { ok: true; draft: SkillDraft }
-  | { ok: false; errors: string[] };
+  { ok: true; draft: SkillDraft } | { ok: false; errors: string[] };
 
 function frontmatterString(data: Record<string, unknown>, key: string): string | null {
   const value = data[key];
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-export function parseSkillDraftFromMarkdown(source: string): SkillDraftParseResult {
-  let parsed: { data: Record<string, unknown>; body: string };
+function parseSkillSource(
+  source: string,
+): { ok: true; data: Record<string, unknown>; body: string } | { ok: false; errors: string[] } {
   try {
-    parsed = parseFrontmatter(source);
+    return { ok: true, ...parseFrontmatter(source) };
   } catch (error) {
     return {
       ok: false,
       errors: [error instanceof FrontmatterError ? error.message : 'Invalid SKILL.md content.'],
     };
   }
+}
 
+export function parseSkillDraftFromMarkdown(source: string): SkillDraftParseResult {
+  const parsed = parseSkillSource(source);
+  if (!parsed.ok) return parsed;
+  return draftFromFrontmatter(parsed);
+}
+
+export function unexpectedSkillFrontmatterKeys(data: Record<string, unknown>): string[] {
+  return Object.keys(data).filter((key) => !SKILL_UPLOAD_FRONTMATTER_KEYS.has(key));
+}
+
+export function unexpectedSkillFrontmatterKeysMessage(keys: readonly string[]): string {
+  return `Unexpected key(s) in SKILL.md frontmatter: ${keys.join(', ')}. Allowed keys are ${SKILL_UPLOAD_STANDARD_FRONTMATTER_KEYS.join(', ')}.`;
+}
+
+export function parseUploadedSkillDraft(source: string): SkillDraftParseResult {
+  const parsed = parseSkillSource(source);
+  if (!parsed.ok) return parsed;
+  const unexpected = unexpectedSkillFrontmatterKeys(parsed.data);
+  const draft = draftFromFrontmatter(parsed);
+  if (unexpected.length === 0) return draft;
+  return {
+    ok: false,
+    errors: [unexpectedSkillFrontmatterKeysMessage(unexpected), ...(draft.ok ? [] : draft.errors)],
+  };
+}
+
+function draftFromFrontmatter(parsed: {
+  data: Record<string, unknown>;
+  body: string;
+}): SkillDraftParseResult {
   const name = frontmatterString(parsed.data, 'name');
   const description = frontmatterString(parsed.data, 'description');
   if (name === null && description === null) {

@@ -34,21 +34,19 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-75 open items.
+67 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
 | 4. Signed-in application destinations | 1 | [partial/004-signed-in-application-destinations.md](../partial/004-signed-in-application-destinations.md) |
 | 5. Application shell and navigation components | 1 | [partial/005-application-shell-and-navigation-components.md](../partial/005-application-shell-and-navigation-components.md) |
 | 9. Compound interface components | 2 | [partial/009-compound-interface-components.md](../partial/009-compound-interface-components.md) |
-| 10. Modal and dialog inventory | 5 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
+| 10. Modal and dialog inventory | 3 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
 | 13. Composer text interaction | 1 | [partial/013-composer-text-interaction.md](../partial/013-composer-text-interaction.md) |
 | 17. Assistant-message components | 1 | [partial/017-assistant-message-components.md](../partial/017-assistant-message-components.md) |
 | 28. Code Canvas and application preview | 2 | [partial/028-code-canvas-and-application-preview.md](../partial/028-code-canvas-and-application-preview.md) |
 | 31. PDF and document-transformation products | 1 | [partial/031-pdf-and-document-transformation-products.md](../partial/031-pdf-and-document-transformation-products.md) |
 | 43. Image and visual understanding | 11 | [partial/043-image-and-visual-understanding.md](../partial/043-image-and-visual-understanding.md) |
-| 53. Skill creation and management | 3 | [partial/053-skill-creation-and-management.md](../partial/053-skill-creation-and-management.md) |
-| 54. Plugin marketplace and customization | 3 | [partial/054-plugin-marketplace-and-customization.md](../partial/054-plugin-marketplace-and-customization.md) |
 | 56. Concrete integration families | 17 | [partial/056-concrete-integration-families.md](../partial/056-concrete-integration-families.md) |
 | 57. Tool catalog and invocation experience | 4 | [partial/057-tool-catalog-and-invocation-experience.md](../partial/057-tool-catalog-and-invocation-experience.md) |
 | 68. Session continuity and remote-session product | 1 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
@@ -66,7 +64,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1107 open items.
+1115 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -77,7 +75,7 @@ Nothing left in this wave.
 | 7. Layout systems | 5 | [partial/007-layout-systems.md](../partial/007-layout-systems.md) |
 | 8. Basic interactive elements | 18 | [partial/008-basic-interactive-elements.md](../partial/008-basic-interactive-elements.md) |
 | 9. Compound interface components | 21 | [partial/009-compound-interface-components.md](../partial/009-compound-interface-components.md) |
-| 10. Modal and dialog inventory | 28 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
+| 10. Modal and dialog inventory | 30 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
 | 11. Accessibility and localization components | 10 | [partial/011-accessibility-and-localization-components.md](../partial/011-accessibility-and-localization-components.md) |
 | 12. New-chat experience | 12 | [partial/012-new-chat-experience.md](../partial/012-new-chat-experience.md) |
 | 13. Composer text interaction | 24 | [partial/013-composer-text-interaction.md](../partial/013-composer-text-interaction.md) |
@@ -118,8 +116,8 @@ Nothing left in this wave.
 | 49. Dictation, transcription, and recording | 13 | [partial/049-dictation-transcription-and-recording.md](../partial/049-dictation-transcription-and-recording.md) |
 | 50. Audio overviews, speech generation, and music | 3 | [partial/050-audio-overviews-speech-generation-and-music.md](../partial/050-audio-overviews-speech-generation-and-music.md) |
 | 52. Custom-assistant builder | 13 | [partial/052-custom-assistant-builder.md](../partial/052-custom-assistant-builder.md) |
-| 53. Skill creation and management | 14 | [partial/053-skill-creation-and-management.md](../partial/053-skill-creation-and-management.md) |
-| 54. Plugin marketplace and customization | 30 | [partial/054-plugin-marketplace-and-customization.md](../partial/054-plugin-marketplace-and-customization.md) |
+| 53. Skill creation and management | 17 | [partial/053-skill-creation-and-management.md](../partial/053-skill-creation-and-management.md) |
+| 54. Plugin marketplace and customization | 33 | [partial/054-plugin-marketplace-and-customization.md](../partial/054-plugin-marketplace-and-customization.md) |
 | 55. Connector setup and account management | 14 | [partial/055-connector-setup-and-account-management.md](../partial/055-connector-setup-and-account-management.md) |
 | 56. Concrete integration families | 21 | [partial/056-concrete-integration-families.md](../partial/056-concrete-integration-families.md) |
 | 57. Tool catalog and invocation experience | 11 | [partial/057-tool-catalog-and-invocation-experience.md](../partial/057-tool-catalog-and-invocation-experience.md) |

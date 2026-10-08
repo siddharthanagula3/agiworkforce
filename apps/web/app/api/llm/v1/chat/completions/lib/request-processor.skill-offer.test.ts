@@ -220,6 +220,35 @@ describe('progressive-disclosure skill offer', () => {
     );
   });
 
+  it('lists a personal skill and a plugin skill on a prompt that matches neither', async () => {
+    mocks.managedSkillCatalog.mockResolvedValue([
+      ...CATALOG,
+      { ...catalogSkill('weekly-digest', 'Summarize my week.'), source: 'personal' },
+      {
+        ...catalogSkill('plugin-review', 'Review plugin output.'),
+        frontmatter: { plugin: 'demo-plugin' },
+      },
+    ]);
+    const result = await processRequest(
+      chatRequestFor('skill-offer-always-listed', 'What time does the museum close tomorrow?'),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.chatRequest.tools?.map((tool) => tool.function.name) ?? []).toContain(
+      SKILL_TOOL_NAME,
+    );
+    const catalog = result.chatRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => String(message.content))
+      .find((content) => content.includes('<available_skills>'));
+    expect(catalog).toContain('<name>weekly-digest</name>');
+    expect(catalog).toContain('<name>plugin-review</name>');
+    expect(catalog).not.toContain('design-review');
+    expect(result.chatRequest.tool_choice).toBeUndefined();
+  });
+
   it('does not inject an unrequested tool into a developer API request', async () => {
     const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
       method: 'POST',

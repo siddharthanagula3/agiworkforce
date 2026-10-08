@@ -383,10 +383,10 @@ import type { PastChatCitation } from '@/lib/past-chat-citation';
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
-  matchSkillsForPrompt,
   SKILL_TOOL_NAME,
   type Skill,
 } from '@agiworkforce/skills';
+import { selectOfferedSkills } from './skill-offer';
 import {
   loadSelectableSkillCatalog,
   memoizeAsync,
@@ -835,10 +835,9 @@ export async function applyImplicitManagedSkillOffer(
     throw error;
   }
 
-  const matches = matchSkillsForPrompt(catalog, context.prompt);
-  if (matches.length === 0) return [];
+  const relevant = selectOfferedSkills(catalog, context.prompt);
+  if (relevant.length === 0) return [];
 
-  const relevant = matches.map((match) => match.skill);
   request.messages.unshift({ role: 'system', content: formatSkillsForToolPrompt(relevant) });
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== SKILL_TOOL_NAME),

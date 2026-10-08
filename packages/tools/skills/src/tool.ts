@@ -142,16 +142,24 @@ export function formatSkillsForToolPrompt(
     );
   }
   for (const skill of catalog) {
-    lines.push(
-      '  <skill>',
-      `    <name>${escapeXmlText(skill.name)}</name>`,
-      `    <description>${escapeXmlText(oneLine(skill.description))}</description>`,
-      `    <selected>${skill.name === options.selectedSkillName ? 'true' : 'false'}</selected>`,
-      '  </skill>',
-    );
+    lines.push(...skillCatalogEntry(skill, skill.name === options.selectedSkillName));
   }
   lines.push('</available_skills>');
   return lines.join('\n');
+}
+
+function skillCatalogEntry(skill: Skill, selected: boolean): string[] {
+  return [
+    '  <skill>',
+    `    <name>${escapeXmlText(skill.name)}</name>`,
+    `    <description>${escapeXmlText(oneLine(skill.description))}</description>`,
+    `    <selected>${selected ? 'true' : 'false'}</selected>`,
+    '  </skill>',
+  ];
+}
+
+export function skillCatalogEntryLength(skill: Skill): number {
+  return skillCatalogEntry(skill, false).reduce((total, line) => total + line.length + 1, 0);
 }
 
 function hasAll(values: readonly string[] | undefined, available: ReadonlySet<string>): boolean {

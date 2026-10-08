@@ -126,17 +126,13 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: After a task completes, the user saves it as a reusable Skill that then appears in their Skills and can be invoked later.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first |  |
-| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:42-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4382-4382`, `apps/web/features/chat/components/PluginDraftCard.tsx:20-20`
 
 ## S110.15: Completed task → scheduled routine.
 

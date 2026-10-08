@@ -20,7 +20,10 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
 
 import { POST } from '../route';
 import { PUT, DELETE } from '../[name]/route';
-import { USER_SKILL_AUTHORING_ENV_VAR } from '@/lib/services/user-skill-authoring';
+import {
+  USER_SKILL_AUTHORING_ENV_VAR,
+  USER_SKILL_AUTHORING_OFF,
+} from '@/lib/services/user-skill-authoring';
 
 const DRAFT = {
   name: 'release-notes',
@@ -183,7 +186,7 @@ describe('/api/skills create, edit, delete', () => {
 describe('/api/skills create, edit, delete when authoring is disabled', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env[USER_SKILL_AUTHORING_ENV_VAR];
+    process.env[USER_SKILL_AUTHORING_ENV_VAR] = USER_SKILL_AUTHORING_OFF;
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: mockQuery, execute: mockExecute },
       userId: 'user-owner',
