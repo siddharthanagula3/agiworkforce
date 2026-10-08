@@ -962,6 +962,28 @@ const SEAT_TYPE_CHANGE_MESSAGES: Readonly<Record<TeamSeatBillingEffect, string>>
   reduced_at_renewal: 'Seat moves to Standard. Premium usage stays until this period ends.',
 };
 
+export class SeatTypePaymentRequiredError extends Error {
+  readonly paymentUrl: string | null;
+
+  constructor(message: string, paymentUrl: string | null) {
+    super(message);
+    this.name = 'SeatTypePaymentRequiredError';
+    this.paymentUrl = paymentUrl;
+  }
+}
+
+const SEAT_PAYMENT_REQUIRED_MESSAGE =
+  'The charge for the Premium seat has not completed, so the member is still on a Standard seat. Pay the invoice, then assign the Premium seat again: the paid seat is used and nothing is charged twice.';
+
+function securePaymentUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    return new URL(value).protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useUpdateTeamMemberSeatType(): UseMutationResult<
   TeamSeatTypeChange,
   Error,
@@ -991,10 +1013,10 @@ export function useUpdateTeamMemberSeatType(): UseMutationResult<
       });
 
       if (res.status === 402) {
-        const pending = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(
-          pending.message ??
-            'The charge for the Premium seat did not complete. The seat is unchanged.',
+        const pending = (await res.json().catch(() => ({}))) as { paymentUrl?: unknown };
+        throw new SeatTypePaymentRequiredError(
+          SEAT_PAYMENT_REQUIRED_MESSAGE,
+          securePaymentUrl(pending.paymentUrl),
         );
       }
       if (!res.ok) {
@@ -1009,6 +1031,7 @@ export function useUpdateTeamMemberSeatType(): UseMutationResult<
     },
     onError: (error: Error) => {
       logger.error('Failed to change team member seat type:', error);
+      if (error instanceof SeatTypePaymentRequiredError) return;
       toast.error(toUserMessage(error, 'The seat type was not changed.'));
     },
   });
