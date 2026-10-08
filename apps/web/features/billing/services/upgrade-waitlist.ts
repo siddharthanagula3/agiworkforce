@@ -5,6 +5,7 @@ export interface UpgradeWaitlistRequest {
   plan: SelfServePaidPlanTier;
   billingInterval: BillingInterval;
   seats?: number;
+  premiumSeats?: number;
 }
 
 function apiErrorMessage(body: unknown, fallback: string): string {
