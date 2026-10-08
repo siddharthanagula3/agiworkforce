@@ -297,6 +297,8 @@ describe('useTeamMembers · renderHook (GET /api/settings/team)', () => {
         name: 'Alice',
         avatarUrl: null,
         role: 'admin',
+        seatType: 'premium',
+        premiumPaidThrough: null,
         status: 'active',
         invitedAt: null,
         joinedAt: '2026-01-01T00:00:00Z',
@@ -320,6 +322,27 @@ describe('useTeamMembers · renderHook (GET /api/settings/team)', () => {
       }),
     );
     expect(result.current.data).toEqual(members);
+  });
+
+  it('reads a member whose seat type is missing or unknown as a Standard seat', async () => {
+    fetchMock.mockResolvedValue(
+      makeResponse({
+        members: [
+          { id: 'org-1:u1', userId: 'u1', role: 'member' },
+          { id: 'org-1:u2', userId: 'u2', role: 'member', seatType: 'gold' },
+        ],
+      }),
+    );
+
+    const { useTeamMembers } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useTeamMembers('org-1'), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.map((member) => member.seatType)).toEqual(['standard', 'standard']);
+    expect(result.current.data?.map((member) => member.premiumPaidThrough)).toEqual([null, null]);
   });
 
   it('surfaces error when server returns 403 · old queryFn returned [] silently', async () => {

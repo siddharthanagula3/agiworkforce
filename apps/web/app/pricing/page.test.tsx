@@ -795,6 +795,7 @@ describe('PricingPage', () => {
     await showTeamAndEnterprise();
     expect(comparisonRow('Deep Research').cells).toEqual({
       Team: INCLUDED,
+      'Team Premium': INCLUDED,
       Enterprise: INCLUDED,
     });
   });
@@ -864,7 +865,7 @@ describe('PricingPage', () => {
     expect(table.textContent).not.toMatch(/BestFor|credit/i);
 
     await showTeamAndEnterprise();
-    expect(comparisonPlans()).toEqual(['Team', 'Enterprise']);
+    expect(comparisonPlans()).toEqual(['Team', 'Team Premium', 'Enterprise']);
     expect(comparisonPlanHeader('Enterprise')).toHaveTextContent('custom customPricingSub');
     expect(comparisonPlanHeader('Enterprise')).toHaveTextContent('annualContract');
   });
@@ -938,10 +939,12 @@ describe('PricingPage', () => {
     matchesCatalog();
     expect(comparisonRow('compareModelsBalanced').cells).toEqual({
       Team: INCLUDED,
+      'Team Premium': INCLUDED,
       Enterprise: INCLUDED,
     });
     expect(comparisonRow('compareModelsFlagship').cells).toEqual({
       Team: NOT_INCLUDED,
+      'Team Premium': INCLUDED,
       Enterprise: INCLUDED,
     });
   });
@@ -1455,6 +1458,132 @@ describe('PricingPage', () => {
     await showTeamAndEnterprise();
     expect(comparisonPlanHeader('Team')).toHaveTextContent('£18 perSeatPricingSub');
     expect(comparisonPlanHeader('Team')).toHaveTextContent('billedMonthly');
+  });
+
+  describe('Team seat types', () => {
+    const TEAM_PRICES = {
+      monthly: { amountMinor: 2_500, currency: 'usd', localized: false, checkoutReady: true },
+    };
+    const PREMIUM_PRICES = {
+      monthly: { amountMinor: 12_500, currency: 'usd', localized: false, checkoutReady: true },
+    };
+
+    function mockSeatTypePrices(team: unknown, teamPremium?: unknown) {
+      vi.mocked(global.fetch).mockImplementation(async (input) => {
+        if (!String(input).includes('/api/pricing/localized')) {
+          return new Promise<Response>(() => undefined);
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            country: 'US',
+            requestedCurrency: 'usd',
+            plans: {
+              basic: {},
+              pro: {},
+              max: {},
+              max_15x: {},
+              team,
+              ...(teamPremium ? { team_premium: teamPremium } : {}),
+            },
+          }),
+        } as Response;
+      });
+    }
+
+    function teamCard() {
+      return within(screen.getByRole('heading', { name: 'Team' }).closest('article')!);
+    }
+
+    it('prices both seat types on the Team card from the catalog', async () => {
+      render(<PricingPage />);
+      await showTeamAndEnterprise();
+
+      const card = teamCard();
+      expect(card.getByText('$25')).toBeVisible();
+      expect(card.getByText('seatTypeStandardLine')).toBeVisible();
+      expect(card.getByText('seatTypePremiumLine')).toBeVisible();
+      expect(card.getByText('seatTypesNote')).toBeVisible();
+    });
+
+    it('gives the Premium seat its own comparison column, priced per seat with the Max 5x limits', async () => {
+      render(<PricingPage />);
+      await showTeamAndEnterprise();
+
+      expect(comparisonPlanHeader('Team Premium')).toHaveTextContent('$125');
+      expect(comparisonPlanHeader('Team Premium')).toHaveTextContent('perSeatPricingSub');
+      expect(comparisonPlanHeader('Team')).toHaveTextContent('$25');
+      const premium = comparisonColumn('Team Premium');
+      const standard = comparisonColumn('Team');
+      expect(premium['compareRowManagedUsage']).toBe('usageMultiplierAllPerSeat');
+      expect(premium['Team administration']).toBe(INCLUDED);
+      expect(premium['compareModelsFlagship']).toBe(INCLUDED);
+      expect(standard['compareModelsFlagship']).toBe(NOT_INCLUDED);
+      expect(premium['Projects']).not.toBe(standard['Projects']);
+    });
+
+    it('totals a mixed team from both seat prices and keeps Premium seats inside the seat count', async () => {
+      mockSeatTypePrices(TEAM_PRICES, PREMIUM_PRICES);
+      render(<PricingPage />);
+      await showTeamAndEnterprise();
+
+      const card = teamCard();
+      fireEvent.change(card.getByRole('spinbutton', { name: 'seatCountLabel' }), {
+        target: { value: '5' },
+      });
+      fireEvent.change(await card.findByRole('spinbutton', { name: 'premiumSeatCountLabel' }), {
+        target: { value: '9' },
+      });
+
+      expect(card.getByRole('spinbutton', { name: 'premiumSeatCountLabel' })).toHaveValue(5);
+
+      fireEvent.change(card.getByRole('spinbutton', { name: 'premiumSeatCountLabel' }), {
+        target: { value: '2' },
+      });
+      expect(card.getByText('seatTotalMixed')).toBeVisible();
+    });
+
+    it('carries the Premium seat count into checkout after waitlist-code access', async () => {
+      testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+      mockSeatTypePrices(TEAM_PRICES, PREMIUM_PRICES);
+      render(<PricingPage />);
+      await showTeamAndEnterprise();
+
+      const card = teamCard();
+      fireEvent.change(await card.findByRole('spinbutton', { name: 'seatCountLabel' }), {
+        target: { value: '6' },
+      });
+      fireEvent.change(await card.findByRole('spinbutton', { name: 'premiumSeatCountLabel' }), {
+        target: { value: '2' },
+      });
+
+      const teamCta = screen.getByRole('button', { name: 'teamCta' });
+      await waitFor(() => expect(teamCta).toBeEnabled());
+      fireEvent.click(teamCta);
+
+      expect(await screen.findByText('Waitlist for team')).toBeVisible();
+      expect(stripeMocks.upgradeToTeamPlan).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with code' }));
+
+      await waitFor(() =>
+        expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({ seats: 6, premiumSeats: 2 }),
+      );
+    });
+
+    it('offers no Premium seat count where the Team seat is priced in another currency', async () => {
+      mockSeatTypePrices(
+        {
+          monthly: { amountMinor: 199_900, currency: 'inr', localized: true, checkoutReady: true },
+        },
+        PREMIUM_PRICES,
+      );
+      render(<PricingPage />);
+      await showTeamAndEnterprise();
+
+      const card = teamCard();
+      expect(await card.findByText('premiumSeatsUnavailable')).toBeVisible();
+      expect(card.queryByRole('spinbutton', { name: 'premiumSeatCountLabel' })).toBeNull();
+    });
   });
 
   it('does not render the obsolete managed-cloud access waitlist before an upgrade choice', () => {
