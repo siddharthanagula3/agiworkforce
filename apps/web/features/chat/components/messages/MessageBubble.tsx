@@ -101,6 +101,12 @@ import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import { describeAttachmentTruncation } from '@agiworkforce/cloud-contracts';
 import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
+import {
+  hasKnownMediaFrame,
+  mediaFrameStyle,
+  mediaTurn,
+  mediaTurnProse,
+} from '@/features/chat/lib/media-turn';
 import { VoiceActivityAffordance } from '@/features/chat/components/Voice/VoiceActivityAffordance';
 import {
   useVoiceModeActive,
@@ -231,7 +237,7 @@ import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOpt
 import { CodeExecutionBlock } from './CodeExecutionBlock';
 import { detectCardType } from '../cards';
 import { MessageFormatCard } from '../cards/MessageFormatCard';
-import { VideoGenerationPlaceholder } from './VideoGenerationPlaceholder';
+import { MediaGenerationPlaceholder } from './MediaGenerationPlaceholder';
 import { EditableMessage } from './EditableMessage';
 
 /**
@@ -1764,13 +1770,20 @@ const MessageBubbleComponent = function MessageBubble({
     [searchSources, citationsByMarker],
   );
 
+  const media = mediaTurn(message);
+  const proseContent = mediaTurnProse(message);
+  const videoFrame =
+    media?.category === 'video' && hasKnownMediaFrame(media.aspectRatio)
+      ? mediaFrameStyle(media.frame, media.aspectRatio)
+      : undefined;
+
   const { cleanedContent, canLinkNumericCitations } = useMemo(() => {
     // While an artifact block is streaming into the panel, hide the growing
     // raw fence from the chat body (a compact "Writing…" chip renders instead)
     //, mirroring how completed artifact blocks are stripped below.
     const base = streamingBlock
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
-      : message.content;
+      : proseContent;
     const stripped =
       artifacts.length === 0
         ? base
@@ -1793,6 +1806,7 @@ const MessageBubbleComponent = function MessageBubble({
     };
   }, [
     message.content,
+    proseContent,
     artifacts,
     streamingBlock,
     artifactDerivationPolicy,
@@ -2426,12 +2440,7 @@ const MessageBubbleComponent = function MessageBubble({
               toolTimeline.length === 0 &&
               !message.metadata?.isExecutingCode &&
               !message.metadata?.codeExecutionResult &&
-              message.metadata?.toolType !== 'image-generation' &&
-              // Same reason as image: the media card below IS the progress
-              // indicator. Observed live, the video shimmer rendered with a
-              // "Thinking..." line stacked on top of it, claiming a reasoning
-              // step that is not happening.
-              message.metadata?.toolType !== 'video-generation' ? (
+              !media ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                   <span className="text-sm">Thinking...</span>
@@ -2769,8 +2778,19 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {/* Image generation card (states A/B/C/D) */}
-          {!isUser && message.metadata?.toolType === 'image-generation' && (
+          {media?.generating && !videoError && (
+            <MediaGenerationPlaceholder
+              category={media.category}
+              frame={media.frame}
+              startedAt={message.timestamp.toISOString()}
+              className={media.category === 'video' ? 'mt-4' : undefined}
+              {...(media.aspectRatio ? { aspectRatio: media.aspectRatio } : {})}
+              {...(media.progress === undefined ? {} : { progress: media.progress })}
+              {...(media.taskId ? { taskId: media.taskId } : {})}
+            />
+          )}
+
+          {!isUser && message.metadata?.toolType === 'image-generation' && !media?.generating && (
             <div className="mt-4">
               <ImageGenerationCard
                 imageUrl={message.metadata.imageUrl as string | undefined}
@@ -2784,38 +2804,6 @@ const MessageBubbleComponent = function MessageBubble({
               />
             </div>
           )}
-
-          {/* Video generation in flight. Veo takes 1-2 minutes, so the slot the
-              video will occupy is reserved with a shimmering placeholder rather
-              than left empty: the thread does not jump when the result lands,
-              and an empty gap for two minutes is indistinguishable from a
-              silent failure.
-
-              `isStreaming` is the in-flight signal, NOT "no URL yet". When the
-              only condition was a missing videoUrl, a FAILED generation, which
-              also has no URL, kept shimmering forever directly above its own
-              "Video generation failed" text, so a dead turn was indistinguishable
-              from a live one. Observed against the real route (503, no provider
-              key configured) on 2026-07-27. The writer clears `isStreaming` on
-              every exit, success or failure. */}
-          {!isUser &&
-            message.metadata?.toolType === 'video-generation' &&
-            message.isStreaming === true &&
-            !message.metadata?.videoUrl &&
-            !videoError && (
-              <VideoGenerationPlaceholder
-                startedAt={message.timestamp.toISOString()}
-                aspectRatio={message.metadata?.videoAspect}
-                {...(typeof message.metadata?.videoProgress === 'number'
-                  ? { progress: message.metadata.videoProgress }
-                  : {})}
-                taskId={
-                  typeof message.metadata?.videoTaskId === 'string'
-                    ? message.metadata.videoTaskId
-                    : undefined
-                }
-              />
-            )}
 
           {!isUser &&
             message.metadata?.toolType === 'video-generation' &&
@@ -2924,8 +2912,14 @@ const MessageBubbleComponent = function MessageBubble({
                   </div>
                 ) : (
                   <>
-                    <span className="text-sm text-foreground">Your video is ready!</span>
-                    <div className="group relative w-fit overflow-hidden rounded-xl">
+                    <span className="text-sm text-foreground">Your video is ready.</span>
+                    <div
+                      className={cn(
+                        'group relative overflow-hidden rounded-xl',
+                        !videoFrame && 'w-fit',
+                      )}
+                      style={videoFrame}
+                    >
                       {/* The native controls carry their own names; the player
                           itself otherwise reads as a bare "video". */}
                       <video
@@ -2934,7 +2928,7 @@ const MessageBubbleComponent = function MessageBubble({
                         playsInline
                         preload="metadata"
                         aria-label="Generated video"
-                        className="max-h-96 rounded-xl"
+                        className={cn('rounded-xl', videoFrame ? 'h-full w-full' : 'max-h-96')}
                         poster={message.metadata.thumbnailUrl}
                         onError={() => setVideoError(true)}
                       />

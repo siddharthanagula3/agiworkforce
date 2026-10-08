@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import {
   getModelMetadataById,
   getModels,
+  getProviderOfferings,
   isExecutableImageModel,
   isModelLive,
 } from '@agiworkforce/types';
@@ -29,6 +30,18 @@ const CHAT_MODEL_ID = getModels({ requireCapabilities: { streaming: true } }).fi
 if (!IMAGE_MODEL_ID || !CHAT_MODEL_ID) {
   throw new Error('The canonical model catalog must expose live chat and image fixtures');
 }
+
+function freeOfferingKey(protocol: string): string {
+  const entry = Object.entries(getProviderOfferings()).find(
+    ([, offering]) =>
+      offering.identityStatus === 'exact' && offering.quotaProbeProtocol === protocol,
+  );
+  if (!entry) throw new Error(`The catalog must expose a free ${protocol} offering`);
+  return entry[0];
+}
+const FREE_VIDEO_KEY = freeOfferingKey('video-async');
+const FREE_IMAGE_KEY = freeOfferingKey('image-sync');
+const FREE_CHAT_KEY = freeOfferingKey('chat');
 
 // Inline stub for the dynamically-imported markdown renderer so tests don't
 // depend on next/dynamic async resolution. importOriginal preserves every
@@ -153,6 +166,10 @@ describe('MessageBubble', () => {
 
   describe('assistant messages', () => {
     const assistantMsg = () => makeMessage({ role: 'assistant', content: 'I can help' });
+
+    beforeEach(() => {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    });
 
     it('renders message content', () => {
       render(<MessageBubble message={assistantMsg()} />);
@@ -481,7 +498,7 @@ describe('MessageBubble', () => {
       ).toHaveAttribute('href', '/chat/conversation-1?highlightMessage=message-1');
     });
 
-    it('uses the image provider progress card without a duplicate Thinking indicator', () => {
+    it('shows the image placeholder without a duplicate Thinking indicator', () => {
       render(
         <MessageBubble
           message={makeMessage({
@@ -498,8 +515,15 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.getByLabelText('Generating image')).toBeInTheDocument();
-      expect(screen.getByText(/waiting for the image provider/i)).toBeInTheDocument();
+      expect(screen.getByText('Creating your image')).toHaveAttribute('role', 'status');
+      expect(screen.getByTestId('media-generation-placeholder')).toHaveAttribute(
+        'data-category',
+        'image',
+      );
+      expect(screen.getByTestId('media-generation-frame').getAttribute('style')).toContain(
+        `aspect-ratio: ${16 / 9}`,
+      );
+      expect(screen.queryByLabelText('Generating image')).toBeNull();
       expect(screen.queryByText('Thinking...')).toBeNull();
     });
 
@@ -509,10 +533,10 @@ describe('MessageBubble', () => {
      * asserts the exact metadata transition the composer flow performs
      * (WebChatPage's handleGenerateVideo): the in-flight turn carries the tool
      * type and NO videoUrl, and completion adds videoUrl/thumbnailUrl. If the
-     * in-flight patch ever gains a videoUrl, the shimmer is skipped and this
-     * fails.
+     * in-flight patch ever gains a videoUrl, the placeholder is skipped and
+     * this fails.
      */
-    it('shows the shimmer while a video is in flight and the player once it lands', () => {
+    it('shows the placeholder while a video is in flight and the player once it lands', () => {
       const inFlight = makeMessage({
         role: 'assistant',
         content: '',
@@ -521,11 +545,14 @@ describe('MessageBubble', () => {
       });
       const { rerender } = render(<MessageBubble message={inFlight} />);
 
-      expect(screen.getByLabelText('Generating your video')).toBeInTheDocument();
-      expect(screen.getByLabelText('Generating your video')).toHaveAttribute('role', 'status');
-      expect(screen.queryByText('Your video is ready!')).toBeNull();
+      expect(screen.getByText('Creating your video')).toHaveAttribute('role', 'status');
+      expect(screen.getByTestId('media-generation-placeholder')).toHaveAttribute(
+        'data-category',
+        'video',
+      );
+      expect(screen.queryByText('Your video is ready.')).toBeNull();
       expect(document.querySelector('video')).toBeNull();
-      // The shimmer IS the progress indicator; a stacked "Thinking..." would
+      // The placeholder IS the progress indicator; a stacked "Thinking..." would
       // claim a reasoning step that is not happening (same rule as image).
       expect(screen.queryByText('Thinking...')).toBeNull();
 
@@ -544,8 +571,8 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.queryByLabelText('Generating your video')).toBeNull();
-      expect(screen.getByText('Your video is ready!')).toBeInTheDocument();
+      expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
+      expect(screen.getByText('Your video is ready.')).toBeInTheDocument();
       const video = document.querySelector('video');
       expect(video).toHaveAttribute('src', 'https://cdn.example.com/clip.mp4');
       expect(video).toHaveAttribute('poster', 'https://cdn.example.com/clip.jpg');
@@ -561,7 +588,7 @@ describe('MessageBubble', () => {
      * above its own failure text, because "no videoUrl" is true for a dead
      * task as well as a live one. The in-flight signal is `isStreaming`.
      */
-    it('stops the shimmer once a failed video turn settles', () => {
+    it('removes the placeholder once a failed video turn settles', () => {
       render(
         <MessageBubble
           message={makeMessage({
@@ -573,10 +600,107 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.queryByLabelText('Generating your video')).toBeNull();
+      expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
       expect(
         screen.getByText(/Video generation failed: Service temporarily unavailable/),
       ).toBeInTheDocument();
+    });
+
+    /**
+     * A free-quota media turn goes through the chat stream, which creates its
+     * pending assistant message with no tool type. The route answers only when
+     * the media is finished, so that message sat on "Thinking..." for the whole
+     * generation.
+     */
+    it.each([
+      ['video', FREE_VIDEO_KEY, 'Creating your video'],
+      ['image', FREE_IMAGE_KEY, 'Creating your image'],
+    ] as const)(
+      'shows the %s placeholder for a pending free-quota turn that carries no tool type',
+      (category, model, label) => {
+        render(
+          <MessageBubble
+            message={makeMessage({
+              role: 'assistant',
+              content: '',
+              isStreaming: true,
+              model,
+              metadata: { model, requestedModel: model },
+            })}
+          />,
+        );
+
+        expect(screen.getByText(label)).toHaveAttribute('role', 'status');
+        expect(screen.getByTestId('media-generation-placeholder')).toHaveAttribute(
+          'data-category',
+          category,
+        );
+        expect(screen.queryByText('Thinking...')).toBeNull();
+        expect(screen.queryByRole('progressbar')).toBeNull();
+        expect(screen.queryByRole('button', { name: /stop generating/i })).toBeNull();
+      },
+    );
+
+    it('keeps "Thinking..." for a pending free-quota chat turn', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            model: FREE_CHAT_KEY,
+            metadata: { model: FREE_CHAT_KEY, requestedModel: FREE_CHAT_KEY },
+          })}
+        />,
+      );
+
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
+    });
+
+    it('removes the free-quota placeholder when the turn ends without media', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'The free video could not be generated.',
+            isStreaming: false,
+            model: FREE_VIDEO_KEY,
+            metadata: { model: FREE_VIDEO_KEY, requestedModel: FREE_VIDEO_KEY },
+          })}
+        />,
+      );
+
+      expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
+      expect(screen.getByText('The free video could not be generated.')).toBeInTheDocument();
+    });
+
+    it('says a finished free-quota video is ready once, not twice', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Video generated.',
+            isStreaming: false,
+            model: FREE_VIDEO_KEY,
+            metadata: {
+              model: FREE_VIDEO_KEY,
+              requestedModel: FREE_VIDEO_KEY,
+              toolType: 'video-generation',
+              videoStatus: 'completed',
+              videoUrl: '/api/files/11111111-1111-4111-8111-111111111111',
+            },
+          })}
+        />,
+      );
+
+      expect(screen.getByText('Your video is ready.')).toBeInTheDocument();
+      expect(screen.queryByText('Video generated.')).toBeNull();
+      expect(screen.queryByText(/finished without returning a response/i)).toBeNull();
+      expect(document.querySelector('video')).toHaveAttribute(
+        'src',
+        '/api/files/11111111-1111-4111-8111-111111111111',
+      );
     });
 
     it('offers status resumption when a durable video outlives the client observation window', () => {
@@ -599,7 +723,7 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.queryByLabelText('Generating your video')).toBeNull();
+      expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
       expect(screen.getByText('Your video is still being generated')).toBeInTheDocument();
       expect(screen.getByText(/42% complete/)).toBeInTheDocument();
 
@@ -675,7 +799,7 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.queryByLabelText('Generating your video')).toBeNull();
+      expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Resume checking' })).toBeNull();
       expect(screen.getByText('Video start was not confirmed')).toBeInTheDocument();
       expect(screen.getByText(/you can safely try again/i)).toBeInTheDocument();
