@@ -12,7 +12,11 @@ import {
 } from '@/lib/connectors/directory/hosts';
 import { deriveMonogram, deriveMonogramHue } from '@/lib/connectors/directory/monogram';
 import { selectDescriptionSource, summarizeDescription } from '@/lib/connectors/directory/summary';
-import type { RegistryEntry, RegistryRemote } from '@/lib/connectors/directory/registry-client';
+import {
+  registryEntryPublishedAt,
+  type RegistryEntry,
+  type RegistryRemote,
+} from '@/lib/connectors/directory/registry-client';
 import type {
   DirectoryAuthMode,
   DirectoryConnectableMode,
@@ -88,6 +92,7 @@ export function normalizeRegistryEntry(entry: RegistryEntry): DirectoryRecord | 
     connectable = 'needs-setup';
   }
 
+  const publishedAt = registryEntryPublishedAt(entry);
   const title = deriveDisplayTitle(server.name, server.title);
   const displayName = title.name;
   const publisher = derivePublisherFromNamespace(server.name);
@@ -136,5 +141,6 @@ export function normalizeRegistryEntry(entry: RegistryEntry): DirectoryRecord | 
     websiteUrl,
     supportUrl: null,
     privacyPolicyUrl: null,
+    ...(publishedAt ? { publishedAt } : {}),
   };
 }

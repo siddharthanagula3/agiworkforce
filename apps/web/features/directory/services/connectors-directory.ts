@@ -57,6 +57,8 @@ import {
   CURATED_CATEGORY_TO_DIRECTORY,
   CURATED_SIGN_IN_AUTH_TYPES,
   DESKTOP_DOWNLOAD_PATH,
+  MS_PER_DAY,
+  NEW_ENTRY_WINDOW_DAYS,
   DIRECTORY_DEFAULT_SORT,
   DIRECTORY_PAGE_SIZE,
   DIRECTORY_QUERY_BADGE,
@@ -83,7 +85,7 @@ const BADGE_TO_KIND: Record<DirectoryBadge, DirectoryBadgeKind> = {
   community: 'community',
 };
 
-const CURATED_BADGE: DirectoryBadgeKind = 'verified';
+const CURATED_BADGE: DirectoryBadgeKind = 'first-party';
 const SELF_ADDED_BADGE: DirectoryBadgeKind = 'custom';
 
 function curatedBadge(connector: SettingsConnector): DirectoryBadgeKind {
@@ -225,10 +227,21 @@ function withStateLabel(label: string | undefined): { statusLabel?: string } {
   return label ? { statusLabel: label } : {};
 }
 
+function withinNewWindow(timestamp: string | undefined, nowMs: number): boolean {
+  if (!timestamp) return false;
+  const age = nowMs - Date.parse(timestamp);
+  return age >= 0 && age <= NEW_ENTRY_WINDOW_DAYS * MS_PER_DAY;
+}
+
+export function isNewConnectorRecord(record: DirectoryRecord, nowMs: number): boolean {
+  return withinNewWindow(record.publishedAt, nowMs) || withinNewWindow(record.firstSeenAt, nowMs);
+}
+
 export function toConnectorEntry(
   record: DirectoryRecord,
   connectedIds: ReadonlySet<string>,
   popular = false,
+  nowMs: number = Date.now(),
 ): DirectoryEntry {
   const connected = connectedIds.has(record.id);
   return {
@@ -242,6 +255,7 @@ export function toConnectorEntry(
     badges: [BADGE_TO_KIND[record.badge]],
     sourceId: record.badge,
     popular,
+    ...(isNewConnectorRecord(record, nowMs) ? { isNew: true } : {}),
     installed: connected,
     installable: !CONNECTABLE_BLOCKED.has(record.connectable),
     connectableMode: record.connectable,
@@ -513,7 +527,6 @@ export function toConnectorSection({
     ...categories,
     ...curated.map((connector) => curatedDirectoryCategory(connector)),
   ]);
-  const totalRecords = stats?.totalRecords;
   const loaded = [...curatedEntries, ...registryEntries];
   /*
    * The directory request has no connected facet, so this is decided here.
@@ -536,7 +549,7 @@ export function toConnectorSection({
       : connectionState === CONNECTOR_STATE_NOT_CONNECTED
         ? Math.max(0, catalogueTotal - connectedEntries.length)
         : catalogueTotal;
-  const showCount = connectionState === CONNECTOR_STATE_ALL && typeof totalRecords === 'number';
+  const showCount = connectionState === CONNECTOR_STATE_ALL && stats !== undefined;
   const connectedEmpty = connectionState === CONNECTOR_STATE_CONNECTED;
   return {
     ...initialConnectorSection(),
@@ -547,7 +560,7 @@ export function toConnectorSection({
     total: filteredTotal,
     hasMore: connectionState === CONNECTOR_STATE_CONNECTED ? false : nextCursor !== null,
     ...(showCount
-      ? { countLabel: connectorCountLabel(totalRecords, !connectorDirectoryIndexing(stats)) }
+      ? { countLabel: connectorCountLabel(catalogueTotal, !connectorDirectoryIndexing(stats)) }
       : {}),
     ...(connectedEmpty
       ? { emptyCopy: CONNECTOR_NONE_CONNECTED_COPY, emptyHint: CONNECTOR_NONE_CONNECTED_HINT }

@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
-import { ConnectorLogo } from '../settings-modal/ConnectorLogo';
+import { ConnectorLogo, hasConnectorLogo } from '../settings-modal/ConnectorLogo';
 import {
   CARD_INSTALL_LABELS,
   MANAGE_LABEL,
@@ -53,7 +53,7 @@ function Monogram({ entry }: { entry: DirectoryEntry }) {
 function EntryIcon({ entry }: { entry: DirectoryEntry }) {
   const [iconFailed, setIconFailed] = useState(false);
   if (entry.slashName) return null;
-  if (entry.brandId) {
+  if (entry.brandId && (hasConnectorLogo(entry.brandId) || !entry.iconUrl)) {
     return (
       <ConnectorLogo
         connectorId={entry.brandId}

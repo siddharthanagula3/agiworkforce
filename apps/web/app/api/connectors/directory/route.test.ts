@@ -250,9 +250,23 @@ describe('GET /api/connectors/directory', () => {
       'io.github.acme/bare',
     ]);
     await expect(ids('?badge=community')).resolves.toEqual([
+      'io.github.someone/tool',
+      'io.github.acme/bare',
       'com.example/notes',
       'com.example/cli-only',
     ]);
+  });
+
+  it('returns every record the card labels Community when filtering by community', async () => {
+    const labelledCommunity = (await ids('')).filter((id) =>
+      [
+        'io.github.someone/tool',
+        'io.github.acme/bare',
+        'com.example/notes',
+        'com.example/cli-only',
+      ].includes(id),
+    );
+    await expect(ids('?badge=community')).resolves.toEqual(labelledCommunity);
   });
 
   it('lists a registry record persisted without a badge under community', async () => {
@@ -261,6 +275,8 @@ describe('GET /api/connectors/directory', () => {
     );
 
     await expect(ids('?badge=community')).resolves.toEqual([
+      'io.github.someone/tool',
+      'io.github.acme/bare',
       'com.example/notes',
       'com.example/cli-only',
       'io.github.legacy/tool',
@@ -297,6 +313,7 @@ describe('GET /api/connectors/directory', () => {
 
   it('combines filters', async () => {
     await expect(ids('?badge=community&connectableOnly=true')).resolves.toEqual([
+      'io.github.someone/tool',
       'com.example/notes',
     ]);
   });
@@ -350,7 +367,7 @@ describe('GET /api/connectors/directory', () => {
     const body = await response.json();
 
     expect(body.entries).toHaveLength(1);
-    expect(body.total).toBe(2);
+    expect(body.total).toBe(4);
     expect(body.stats).toEqual({
       totalRecords: 7,
       remoteRecords: 6,

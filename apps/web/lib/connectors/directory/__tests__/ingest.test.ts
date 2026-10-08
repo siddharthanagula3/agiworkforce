@@ -318,6 +318,49 @@ describe('ingestConnectorDirectory', () => {
     expect(mocks.writeSnapshotRecords).toHaveBeenCalledTimes(1);
   });
 
+  it('stamps a first-seen date only on records first stored after the bootstrap finished', async () => {
+    mocks.readSyncState.mockResolvedValueOnce(
+      syncState({ bootstrapComplete: true, lastSyncAt: T0 }),
+    );
+    mocks.readSnapshotRecords.mockResolvedValue([registryRecord('known')]);
+    mocks.fetchRegistryPage.mockResolvedValueOnce(
+      page([activeEntry('known'), activeEntry('fresh')]),
+    );
+
+    await run();
+
+    const byId = new Map(writtenSnapshot().map((record) => [record.id, record]));
+    expect(byId.get('fresh')?.firstSeenAt).toEqual(expect.any(String));
+    expect(byId.get('known')).not.toHaveProperty('firstSeenAt');
+  });
+
+  it('keeps the stored first-seen date when a later sync updates the record', async () => {
+    mocks.readSyncState.mockResolvedValueOnce(
+      syncState({ bootstrapComplete: true, lastSyncAt: T0 }),
+    );
+    mocks.readSnapshotRecords.mockResolvedValue([
+      registryRecord('known', { firstSeenAt: '2026-08-01T00:00:00.000Z' }),
+    ]);
+    mocks.fetchRegistryPage.mockResolvedValueOnce(page([activeEntry('known')]));
+
+    await run();
+
+    expect(writtenSnapshot().find((record) => record.id === 'known')?.firstSeenAt).toBe(
+      '2026-08-01T00:00:00.000Z',
+    );
+  });
+
+  it('does not stamp first-seen while the first full sync is still crawling', async () => {
+    mocks.readSyncState.mockResolvedValueOnce(syncState());
+    mocks.fetchRegistryPage.mockResolvedValueOnce(page([activeEntry('one')]));
+
+    await run();
+
+    expect(writtenSnapshot().find((record) => record.id === 'one')).not.toHaveProperty(
+      'firstSeenAt',
+    );
+  });
+
   it('always writes during bootstrap even on a page with nothing new', async () => {
     mocks.readSyncState.mockResolvedValueOnce(syncState());
     mocks.fetchRegistryPage.mockResolvedValueOnce(page([]));

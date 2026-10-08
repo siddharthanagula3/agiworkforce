@@ -75,6 +75,21 @@ describe('derivePublisherFromNamespace', () => {
 });
 
 describe('normalizeRegistryEntry', () => {
+  it('keeps the registry publishedAt and omits it when the registry sends none', () => {
+    const published: RegistryEntry = {
+      ...WEATHER_ENTRY,
+      _meta: {
+        'io.modelcontextprotocol.registry/official': {
+          status: 'active',
+          isLatest: true,
+          publishedAt: '2026-07-29T13:00:17.314082Z',
+        },
+      },
+    };
+    expect(normalizeRegistryEntry(published)?.publishedAt).toBe('2026-07-29T13:00:17.314082Z');
+    expect(normalizeRegistryEntry(WEATHER_ENTRY)).not.toHaveProperty('publishedAt');
+  });
+
   it('reads a secret header as api-key auth routed to the credential form', () => {
     const record = normalizeRegistryEntry(SMITHERY_SLACK_ENTRY);
     expect(record).toMatchObject({

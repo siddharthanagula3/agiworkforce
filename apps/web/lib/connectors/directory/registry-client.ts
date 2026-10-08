@@ -47,6 +47,7 @@ export interface RegistryServer {
 export interface RegistryOfficialMeta {
   readonly status?: string;
   readonly isLatest?: boolean;
+  readonly publishedAt?: string;
 }
 
 export interface RegistryEntry {
@@ -102,6 +103,10 @@ export function isLatestEntry(entry: RegistryEntry): boolean {
 
 export function registryEntryStatus(entry: RegistryEntry): string | undefined {
   return entry._meta?.[MCP_REGISTRY_OFFICIAL_META_KEY]?.status;
+}
+
+export function registryEntryPublishedAt(entry: RegistryEntry): string | undefined {
+  return entry._meta?.[MCP_REGISTRY_OFFICIAL_META_KEY]?.publishedAt;
 }
 
 export function isLatestActiveEntry(entry: RegistryEntry): boolean {

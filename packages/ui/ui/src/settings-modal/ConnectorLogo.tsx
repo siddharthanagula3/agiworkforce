@@ -212,6 +212,15 @@ function getLogoUrl(id: string): string | null {
   return CONNECTOR_LOGO_URLS[id.toLowerCase()] ?? null;
 }
 
+function normalizeLogoId(connectorId: string): string {
+  return connectorId.toLowerCase().replace(/_/g, '-');
+}
+
+export function hasConnectorLogo(connectorId: string): boolean {
+  const id = normalizeLogoId(connectorId);
+  return getIcon(id) !== null || getLogoUrl(id) !== null;
+}
+
 function fillColor(icon: SimpleIconData): string {
   const hex = icon.hex.toUpperCase();
   if (hex === '000000' || hex === '181717' || hex === '181818') return 'currentColor';
@@ -245,7 +254,7 @@ export function ConnectorLogo({
 }: ConnectorLogoProps) {
   const [urlFailed, setUrlFailed] = useState(false);
 
-  const id = connectorId.toLowerCase().replace(/_/g, '-');
+  const id = normalizeLogoId(connectorId);
   const icon = getIcon(id);
   const logoUrl = getLogoUrl(id);
   const { wrapper, svg, img } = SIZE[size];

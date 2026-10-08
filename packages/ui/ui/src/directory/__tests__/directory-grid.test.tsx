@@ -354,6 +354,24 @@ describe('DirectoryGrid', () => {
     expect(screen.queryByText('CU')).toBeNull();
   });
 
+  it('draws the fetched icon when the named brand has no drawing', () => {
+    const { container } = renderGrid({
+      section: 'connectors',
+      entries: [
+        {
+          id: 'nowhere',
+          name: 'Nowhere',
+          description: 'Nothing',
+          brandId: 'nowhere',
+          iconUrl: 'https://cdn.invalid/nowhere.png',
+          monogram: 'NW',
+        },
+      ],
+    });
+    expect(container.querySelector('img[src="https://cdn.invalid/nowhere.png"]')).toBeTruthy();
+    expect(screen.queryByText('NW')).toBeNull();
+  });
+
   it('falls back to the monogram when a named brand has no mark', () => {
     renderGrid({
       section: 'connectors',

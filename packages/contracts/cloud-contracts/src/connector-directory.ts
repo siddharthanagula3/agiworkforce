@@ -136,6 +136,8 @@ export const ConnectorDirectoryEntrySchema = z.object({
   privacyPolicyUrl: z.string().nullable(),
   toolCount: z.number().int().nonnegative(),
   connectorUrl: z.string().nullable(),
+  publishedAt: z.string().optional(),
+  firstSeenAt: z.string().optional(),
 });
 export type ConnectorDirectoryEntry = z.infer<typeof ConnectorDirectoryEntrySchema>;
 

@@ -21,7 +21,7 @@ import {
   isConnectableNow,
 } from '@/lib/connectors/directory/snapshot-view';
 import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
-import type { DirectoryRecord } from '@/lib/connectors/directory/types';
+import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,9 +43,17 @@ function searchRank(record: DirectoryRecord, needle: string): number {
   return SEARCH_MATCHERS.findIndex((matches) => matches(record, needle));
 }
 
+const BADGE_FILTER_MEMBERS: Partial<Record<DirectoryBadge, ReadonlySet<DirectoryBadge>>> = {
+  community: new Set<DirectoryBadge>(['community', 'registry']),
+};
+
+function matchesBadge(record: DirectoryRecord, badge: DirectoryBadge): boolean {
+  return (BADGE_FILTER_MEMBERS[badge] ?? new Set([badge])).has(record.badge);
+}
+
 function matchesFilters(record: DirectoryRecord, query: ConnectorDirectoryQuery): boolean {
   if (query.category && !record.categories.includes(query.category)) return false;
-  if (query.badge && record.badge !== query.badge) return false;
+  if (query.badge && !matchesBadge(record, query.badge)) return false;
   if (query.connectable && record.connectable !== query.connectable) return false;
   if (query.connectableOnly && !isConnectableNow(record)) return false;
   if (query.authMode && record.authMode !== query.authMode) return false;
