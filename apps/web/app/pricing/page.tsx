@@ -58,7 +58,6 @@ import {
 } from '@agiworkforce/types';
 import {
   freeMediaAccess,
-  freeMediaLastDayLabel,
   freeMediaPlanStanding,
   type FreeMediaCategoryOffer,
 } from '@/features/models/lib/free-media-offer';
@@ -292,22 +291,10 @@ function capabilityCell(plan: BillingPlanTier, capability: BillingPlanCapability
 
 const NO_FREE_MEDIA_OFFER: FreeQuotaMediaOffer = { image: null, video: null };
 const LIMITED_PREVIEW_CELL = 'Limited preview';
-const FREE_MEDIA_COPY = {
-  both: {
-    line: 'freeMediaLineBoth',
-    undated: 'freeMediaLineBothUndated',
-    feature: 'freeMediaFeatureBoth',
-  },
-  image: {
-    line: 'freeMediaLineImage',
-    undated: 'freeMediaLineImageUndated',
-    feature: 'freeMediaFeatureImage',
-  },
-  video: {
-    line: 'freeMediaLineVideo',
-    undated: 'freeMediaLineVideoUndated',
-    feature: 'freeMediaFeatureVideo',
-  },
+const FREE_MEDIA_FEATURE = {
+  both: 'freeMediaFeatureBoth',
+  image: 'freeMediaFeatureImage',
+  video: 'freeMediaFeatureVideo',
 } as const;
 
 function mediaCapabilityCell(
@@ -324,20 +311,11 @@ function mediaCapabilityCell(
   return access.label === 'limited' ? LIMITED_PREVIEW_CELL : 'No';
 }
 
-function freeMediaPreview(offer: FreeQuotaMediaOffer): {
-  copy: (typeof FREE_MEDIA_COPY)[keyof typeof FREE_MEDIA_COPY];
-  lastDay: string | null;
-} | null {
-  const offered = [offer.image, offer.video].filter((kind) => kind !== null);
-  if (offered.length === 0) return null;
-  const lastDays = offered.flatMap((kind) => (kind.lastDay === null ? [] : [kind.lastDay]));
-  return {
-    copy: FREE_MEDIA_COPY[offer.image && offer.video ? 'both' : offer.image ? 'image' : 'video'],
-    lastDay:
-      lastDays.length === offered.length
-        ? lastDays.reduce((latest, candidate) => (candidate > latest ? candidate : latest))
-        : null,
-  };
+function freeMediaFeatureKey(
+  offer: FreeQuotaMediaOffer,
+): (typeof FREE_MEDIA_FEATURE)[keyof typeof FREE_MEDIA_FEATURE] | null {
+  if (!offer.image && !offer.video) return null;
+  return FREE_MEDIA_FEATURE[offer.image && offer.video ? 'both' : offer.image ? 'image' : 'video'];
 }
 
 const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en', {
@@ -939,16 +917,9 @@ export default function PricingPage() {
     percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
   })}`;
 
-  const mediaPreview = freeMediaPreview(freeMediaOffer);
-  const freeMediaLine = mediaPreview
-    ? mediaPreview.lastDay
-      ? t(mediaPreview.copy.line, {
-          date: freeMediaLastDayLabel(mediaPreview.lastDay, priceLocale),
-        })
-      : t(mediaPreview.copy.undated)
-    : null;
+  const freeMediaFeature = freeMediaFeatureKey(freeMediaOffer);
   const freeFeatures = presentCopy([
-    mediaPreview ? t(mediaPreview.copy.feature) : null,
+    freeMediaFeature ? t(freeMediaFeature) : null,
     t('freeFeature1'),
     t('freeFeature2'),
     t('freeFeature3'),
@@ -1127,11 +1098,6 @@ export default function PricingPage() {
           <h1 id="pricing-hero-title" className="agi-pricing-title">
             {t('pageTitle')}
           </h1>
-          {freeMediaLine ? (
-            <p className="agi-fl-section-lede" style={{ marginTop: 'var(--space-2)' }}>
-              {freeMediaLine}
-            </p>
-          ) : null}
           {!CHECKOUT_ENABLED ? (
             <p
               role="status"
@@ -1190,9 +1156,39 @@ export default function PricingPage() {
           >
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
-              <h3 id="pricing-team-title" className="agi-tier-name">
-                {team.label}
-              </h3>
+              <div className="agi-tier-head">
+                <h3 id="pricing-team-title" className="agi-tier-name">
+                  {team.label}
+                </h3>
+                {teamYearlyAvailable ? (
+                  <div className="agi-tier-toggle" role="group" aria-label="Team billing cadence">
+                    <button
+                      type="button"
+                      aria-pressed={!teamAnnual}
+                      onClick={() => setTeamAnnualChoice(false)}
+                      className={
+                        teamAnnual
+                          ? 'agi-tier-toggle-btn'
+                          : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                      }
+                    >
+                      {t('monthly')}
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={teamAnnual}
+                      onClick={() => setTeamAnnualChoice(true)}
+                      className={
+                        teamAnnual
+                          ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                          : 'agi-tier-toggle-btn'
+                      }
+                    >
+                      {t('annual')}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <div className="agi-tier-price">
                 <span className="agi-tier-price-num">
                   {teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice}
@@ -1201,45 +1197,15 @@ export default function PricingPage() {
                 <span className="agi-tier-price-sub">
                   {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
                 </span>
+                {teamYearlyAvailable && teamSavingsPct > 0 ? (
+                  <>
+                    {' '}
+                    <span className="agi-tier-price-sub">
+                      {t('annualSave', { pct: teamSavingsPct })}
+                    </span>
+                  </>
+                ) : null}
               </div>
-              {teamYearlyAvailable ? (
-                <div
-                  className="agi-tier-toggle"
-                  role="group"
-                  aria-label="Team billing cadence"
-                  style={{ marginBottom: 'var(--space-4)' }}
-                >
-                  <button
-                    type="button"
-                    aria-pressed={!teamAnnual}
-                    onClick={() => setTeamAnnualChoice(false)}
-                    className={
-                      teamAnnual
-                        ? 'agi-tier-toggle-btn'
-                        : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                    }
-                  >
-                    {t('monthly')}
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={teamAnnual}
-                    onClick={() => setTeamAnnualChoice(true)}
-                    className={
-                      teamAnnual
-                        ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                        : 'agi-tier-toggle-btn'
-                    }
-                  >
-                    {t('annual')}{' '}
-                    {teamSavingsPct > 0 ? (
-                      <span className="agi-tier-toggle-save">
-                        {t('annualSave', { pct: teamSavingsPct })}
-                      </span>
-                    ) : null}
-                  </button>
-                </div>
-              ) : null}
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
                 {teamFeatures.map((feature) => (
@@ -1467,7 +1433,7 @@ export default function PricingPage() {
                         : 'agi-tier-toggle-btn'
                     }
                   >
-                    {t('maxVariant15x')}
+                    {t('maxVariant20x')}
                   </button>
                 </div>
               </div>

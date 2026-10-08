@@ -91,7 +91,7 @@ export function MarketingLanding({
         <RouteFlow
           eyebrow="Routing"
           title="Every model. One router. Your call."
-          lede="Ask for a model by name and that model answers. Leave it on Auto and the router reads the intent of each request, takes the cheapest route that fits it, and prints the label under the answer. Run it local, on your keys, or in AGI Cloud."
+          lede="Ask for a model by name and that model answers. Leave it on Auto and the router reads each request, picks a model suited to the task and your plan while weighing cost, and prints the label under the answer. Run it local, on your keys, or in AGI Cloud."
         />
 
         <LandingSurfaceIndex
@@ -297,7 +297,7 @@ export function MarketingLanding({
         <LandingDevBand
           eyebrow="For developers"
           title="Serious about coding."
-          body="AGI Code spans the CLI and VS Code. Sessions resume and fork. Execution is sandboxed. It all runs offline on local models."
+          body="AGI Code spans the CLI and VS Code. Sessions resume and fork. Execution is sandboxed. The CLI can run offline on local models."
           ctas={[
             { href: '/agi-code', label: 'Explore AGI Code' },
             { href: '/cli', label: 'See the CLI' },

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
 import type { AuthProviderId } from '@agiworkforce/client-runtime';
 import { Spinner } from '@/ui/Spinner';
 import { WEB_APP_URL } from '../../api/config';
@@ -31,7 +32,6 @@ import {
   configuredSocialProviders,
   socialSignInStrategy,
 } from '../../services/desktopSocialSignIn';
-import { AuthDivider } from './AuthDivider';
 import { AuthField } from './AuthField';
 import { AuthLegalFooter } from './AuthLegalFooter';
 import { AuthPasswordField } from './AuthPasswordField';
@@ -43,6 +43,7 @@ import {
   AUTH_DETAIL_ROW_CLASS,
   AUTH_ERROR_CLASS,
   AUTH_FOOTER_LINK_CLASS,
+  AUTH_PROVIDERS_AFTER_ACTION_CLASS,
   AUTH_QUIET_BUTTON_CLASS,
   AUTH_QUIET_LINKS_CLASS,
   AUTH_STEP_LINKS_CLASS,
@@ -64,9 +65,16 @@ interface SsoPending {
 
 const SUPPORTED_SECOND_FACTORS = new Set(['totp', 'phone_code', 'backup_code']);
 const PASSWORD_FACTOR = 'password';
+const DEVICE_CHECK_FACTOR = 'email_code';
+const DEVICE_CHECK_HEADING = 'Verify this device';
+const SECOND_STEP_STATUSES: ReadonlySet<string> = new Set([
+  'needs_second_factor',
+  'needs_client_trust',
+]);
 const WEB_SIGNUP_PATH = '/signup';
 const DESKTOP_SURFACE_QUERY = 'surface=desktop';
 
+const SIGN_IN_DETAIL = 'Log in to AGI Workforce.';
 const HEADINGS: Readonly<Record<Step, string>> = {
   email: 'Welcome back',
   password: 'Enter your password',
@@ -90,6 +98,8 @@ function secondFactorLabel(factor: ClerkSecondFactor): string {
         : 'Text message code';
     case 'backup_code':
       return 'Backup code';
+    case DEVICE_CHECK_FACTOR:
+      return 'Emailed code';
     default:
       return factor.strategy;
   }
@@ -128,6 +138,18 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
 
   const displayedError = error ?? storeAuthError;
   const isBusy = busy !== null;
+  const scene = useAuthSceneBridge();
+
+  useEffect(() => {
+    if (displayedError) scene.setMood('error');
+    else if (isBusy || ssoPending !== null) scene.setMood('pending');
+    else scene.setMood('neutral');
+  }, [displayedError, isBusy, scene, ssoPending]);
+
+  const finish = useCallback(() => {
+    scene.celebrate();
+    onSuccess?.();
+  }, [onSuccess, scene]);
 
   useEffect(() => {
     return () => {
@@ -154,9 +176,9 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         setError(result.error);
         return;
       }
-      onSuccess?.();
+      finish();
     },
-    [completeNativeSignIn, onSuccess],
+    [completeNativeSignIn, finish],
   );
 
   const sendEmailCodeFor = useCallback(
@@ -184,15 +206,25 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         return;
       }
 
-      if (next.status === 'needs_second_factor') {
+      if (SECOND_STEP_STATUSES.has(next.status)) {
         const usable = next.supportedSecondFactors.filter((factor) =>
           SUPPORTED_SECOND_FACTORS.has(factor.strategy),
         );
         const chosen = usable.find((factor) => factor.strategy === 'totp') ?? usable[0] ?? null;
         if (!chosen) {
-          setError(
-            'This account requires a second factor AGI Desktop cannot collect yet. Finish signing in through your browser.',
+          const deviceCheck = next.supportedSecondFactors.find(
+            (factor) => factor.strategy === DEVICE_CHECK_FACTOR,
           );
+          if (!deviceCheck) {
+            setError(
+              'This account requires a second factor AGI Desktop cannot collect yet. Finish signing in through your browser.',
+            );
+            return;
+          }
+          setSecondFactor(deviceCheck);
+          setCode('');
+          setStep('second_factor');
+          setSignIn(await prepareSecondFactor(next.id, deviceCheck));
           return;
         }
         setSecondFactor(chosen);
@@ -374,7 +406,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
             setError(result.error);
             return;
           }
-          onSuccess?.();
+          finish();
         } catch (callbackError) {
           setSsoPending(null);
           setNotice(null);
@@ -400,7 +432,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       window.removeEventListener('cloud-sso-callback', onCallback);
       window.removeEventListener('cloud-sso-error', onCallbackError);
     };
-  }, [completeNativeSignIn, onSuccess]);
+  }, [completeNativeSignIn, finish]);
 
   const signInThroughBrowser = useCallback(async () => {
     if (isBusy) return;
@@ -412,13 +444,13 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         setError(result.error);
         return;
       }
-      onSuccess?.();
+      finish();
     } catch (fallbackError) {
       setError(describeFailure(fallbackError));
     } finally {
       setBusy(null);
     }
-  }, [beginAttempt, browserFallbackSignIn, isBusy, onSuccess]);
+  }, [beginAttempt, browserFallbackSignIn, finish, isBusy]);
 
   const restart = useCallback(() => {
     setStep('email');
@@ -440,7 +472,11 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         </button>
       </div>
     ) : step === 'second_factor' && secondFactor ? (
-      <p className="text-center">{secondFactorLabel(secondFactor)}</p>
+      <p className="text-center">
+        {secondFactor.strategy === DEVICE_CHECK_FACTOR
+          ? `You are signing in on a new device. We emailed a code to ${secondFactor.safeIdentifier ?? email.trim()}.`
+          : secondFactorLabel(secondFactor)}
+      </p>
     ) : undefined;
 
   const messages = (
@@ -552,7 +588,13 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
 
   if (step === 'second_factor' && secondFactor) {
     return (
-      <AuthStepFrame heading={HEADINGS[step]} detail={detail} footer={footer}>
+      <AuthStepFrame
+        heading={
+          secondFactor.strategy === DEVICE_CHECK_FACTOR ? DEVICE_CHECK_HEADING : HEADINGS[step]
+        }
+        detail={detail}
+        footer={footer}
+      >
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -563,6 +605,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
             label={secondFactorLabel(secondFactor)}
             inputMode={secondFactor.strategy === 'backup_code' ? 'text' : 'numeric'}
             autoComplete="one-time-code"
+            sensitive="readable"
             autoFocus
             value={code}
             disabled={isBusy}
@@ -622,6 +665,7 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
             label={CODE_FIELD_LABEL}
             inputMode="numeric"
             autoComplete="one-time-code"
+            sensitive="readable"
             autoFocus
             value={code}
             disabled={isBusy}
@@ -679,19 +723,27 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
   }
 
   return (
-    <AuthStepFrame heading={HEADINGS.email} footer={footer}>
-      <AuthProviderButtons
-        providers={providers}
-        pending={null}
-        disabled={isBusy}
-        onStart={(provider) => {
-          const chosen = providers.find((candidate) => candidate.id === provider);
-          if (chosen) void startSocial(chosen.id, chosen.label);
-        }}
-      />
-
-      <AuthDivider />
-
+    <AuthStepFrame
+      heading={HEADINGS.email}
+      detail={SIGN_IN_DETAIL}
+      footer={
+        <>
+          <p className={AUTH_SWITCH_CLASS}>
+            Don&apos;t have an account?{' '}
+            <button
+              type="button"
+              className={AUTH_QUIET_BUTTON_CLASS}
+              onClick={() =>
+                void openExternalUrl(`${WEB_APP_URL}${WEB_SIGNUP_PATH}?${DESKTOP_SURFACE_QUERY}`)
+              }
+            >
+              Sign up
+            </button>
+          </p>
+          {footer}
+        </>
+      }
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -712,18 +764,17 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         <AuthSubmitButton label={CONTINUE_LABEL} busy={busy === 'email'} disabled={isBusy} />
       </form>
 
-      <p className={AUTH_SWITCH_CLASS}>
-        Don&apos;t have an account?{' '}
-        <button
-          type="button"
-          className={AUTH_QUIET_BUTTON_CLASS}
-          onClick={() =>
-            void openExternalUrl(`${WEB_APP_URL}${WEB_SIGNUP_PATH}?${DESKTOP_SURFACE_QUERY}`)
-          }
-        >
-          Sign up
-        </button>
-      </p>
+      <div className={AUTH_PROVIDERS_AFTER_ACTION_CLASS}>
+        <AuthProviderButtons
+          providers={providers}
+          pending={null}
+          disabled={isBusy}
+          onStart={(provider) => {
+            const chosen = providers.find((candidate) => candidate.id === provider);
+            if (chosen) void startSocial(chosen.id, chosen.label);
+          }}
+        />
+      </div>
     </AuthStepFrame>
   );
 }

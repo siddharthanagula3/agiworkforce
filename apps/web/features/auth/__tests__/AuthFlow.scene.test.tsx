@@ -29,11 +29,15 @@ vi.mock('../useCountdown', () => ({
   useCountdown: () => [0, () => undefined],
 }));
 
+import {
+  AuthSceneBridgeProvider,
+  createSceneStore,
+  SCENE_SERVER_SNAPSHOT,
+} from '@agiworkforce/ui/auth-scene';
+
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 
 import { AuthFlow } from '../AuthFlow';
-import { AuthSceneBridgeProvider } from '../scene/AuthSceneContext';
-import { createSceneStore, SCENE_SERVER_SNAPSHOT } from '../scene/sceneStore';
 import type { AuthProvider, AuthResult } from '../authContract';
 
 const PROVIDERS: readonly AuthProvider[] = [{ id: 'google', label: 'Google' }];

@@ -203,7 +203,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
       paywall: {
         feature: 'video_generation',
         requiredTier: 'max_15x',
-        reason: 'Video generation requires Max 15x.',
+        reason: 'Video generation requires Max 20x.',
         recoveryAction: 'upgrade',
         showUpgradeCta: true,
         showResetTime: false,

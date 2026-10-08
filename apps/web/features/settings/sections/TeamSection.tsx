@@ -1,6 +1,10 @@
 'use client';
 
-import { isContractPricedPlan, isOrganizationAdminRole } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  isContractPricedPlan,
+  isOrganizationAdminRole,
+} from '@agiworkforce/types';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Building2, Copy, Mail, RefreshCw, RotateCw, Trash2, Users, X } from 'lucide-react';
 import {
@@ -91,6 +95,10 @@ function titleCase(value: string): string {
     .filter(Boolean)
     .map((part) => `${part[0]!.toUpperCase()}${part.slice(1)}`)
     .join(' ');
+}
+
+function planLabel(plan: string): string {
+  return getBillingPlanPricing(plan).label;
 }
 
 function formatDate(value: string): string {
@@ -442,7 +450,7 @@ export function TeamSection() {
             <div style={{ padding: 'var(--space-5)' }}>
               <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>
                 Workspace administration requires a Team or Enterprise plan. Choose at least 2 Team
-                seats to create a workspace. Your current plan is {titleCase(access.plan)}.
+                seats to create a workspace. Your current plan is {planLabel(access.plan)}.
               </p>
               <SettingsPageLink
                 href="/pricing#pricing-team-title"
@@ -555,12 +563,12 @@ export function TeamSection() {
           role="alert"
           style={{ color: 'var(--text-3)', fontSize: 12, margin: 0, padding: 'var(--space-1) 0' }}
         >
-          This workspace is on the {titleCase(access.plan)} plan. Workspace administration needs a
+          This workspace is on the {planLabel(access.plan)} plan. Workspace administration needs a
           Team or Enterprise workspace plan.
         </p>
       ) : null}
 
-      <SectionCard title="Workspace details" description={`Plan: ${titleCase(access.plan)}`}>
+      <SectionCard title="Workspace details" description={`Plan: ${planLabel(access.plan)}`}>
         <form
           onSubmit={handleSaveWorkspace}
           style={{

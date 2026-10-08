@@ -190,7 +190,7 @@ describe('POST /api/checkout', () => {
     expect(mockCheckoutCreate).not.toHaveBeenCalled();
   });
 
-  it('supports Max 15x through the canonical plan schema', async () => {
+  it('supports Max 20x through the canonical plan schema', async () => {
     mockGetCheckoutPriceSelection.mockResolvedValueOnce({
       priceId: 'price_max_15x_monthly',
       currency: 'usd',

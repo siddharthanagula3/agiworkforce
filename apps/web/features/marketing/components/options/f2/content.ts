@@ -84,7 +84,7 @@ export const MODELS = {
   title: MODELS_SECTION.title,
   lead: firstSentence(MODELS_SECTION.lede),
   points: MODELS_SECTION.points,
-  autoNote: 'The lowest-cost route whose terms allow it',
+  autoNote: 'A model picked for the task, your plan and cost',
 } as const;
 
 const modelByProvider = new Map<string, string>();

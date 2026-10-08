@@ -789,7 +789,7 @@ describe('POST /api/media/video/generate', () => {
       expect(response.status).toBe(403);
     });
 
-    it('should allow a trialing Max 15x subscription', async () => {
+    it('should allow a trialing Max 20x subscription', async () => {
       mockGetSubscription.mockResolvedValue({
         ...VIDEO_SUBSCRIPTION,
         plan_tier: 'max_15x',
@@ -813,7 +813,7 @@ describe('POST /api/media/video/generate', () => {
       expect(response.status).toBe(403);
     });
 
-    it('should allow Max 15x tier subscription', async () => {
+    it('should allow Max 20x tier subscription', async () => {
       mockGetSubscription.mockResolvedValue({ ...VIDEO_SUBSCRIPTION, plan_tier: 'max_15x' });
       mockFetch.mockResolvedValueOnce({
         ok: true,

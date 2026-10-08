@@ -1516,22 +1516,34 @@ mod tests {
             entry.cached_write.is_some() && entry.output_cost > 0.0
         });
         let pricing = model.effective_pricing(standard_window_date());
+        // A model with long-context tiers bills a request above its lowest
+        // threshold at the tier rate, so the write stays at that threshold,
+        // which is still base-priced, to pin the base cache-write rate.
+        let cache_write_tokens = model
+            .input_token_pricing_tiers
+            .iter()
+            .chain(model.long_context.iter())
+            .map(|tier| tier.threshold_tokens)
+            .min()
+            .map_or(1_000_000, |threshold| threshold.min(1_000_000));
         let cost = calc.calculate_with_cache(
             Provider::Anthropic,
             &model.id,
             0, // Anthropic reports cache tokens separately from input_tokens
             1, // keep the request non-empty
             0,
-            1_000_000,
+            u32::try_from(cache_write_tokens).expect("at most one million tokens"),
             standard_window_date(),
         );
         let expected = pricing
             .cached_write
             .expect("selected catalog model must price cache writes")
+            * (cache_write_tokens as f64 / 1_000_000.0)
             + pricing.output_cost / 1_000_000.0;
         assert!(
             (cost - expected).abs() < 1e-9,
-            "1M cache-write tokens must bill the catalog-derived rate, got ${}",
+            "{} cache-write tokens must bill the catalog-derived base rate, got ${}",
+            cache_write_tokens,
             cost
         );
     }

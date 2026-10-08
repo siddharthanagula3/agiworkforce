@@ -16,6 +16,7 @@ import { getRequestIdentity } from '@/lib/server/identity';
 import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
 import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
 import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
+import { AccountPolicyLinks } from '@/features/auth/AccountDataDisclosure';
 import { ConfirmEmailStep } from '@/features/auth/ConfirmEmailStep';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
@@ -61,7 +62,11 @@ export default async function LoginCompletePage({
     const loginUrl = `/login?redirectTo=${encodeURIComponent(redirectTo)}${
       isDesktopSurface ? '&surface=desktop' : ''
     }&authRetry=1`;
-    return <StaleSessionRecovery loginUrl={loginUrl} alreadyRetried={params.authRetry === '1'} />;
+    return (
+      <AuthLayout embedded={isDesktopSurface} scene>
+        <StaleSessionRecovery loginUrl={loginUrl} alreadyRetried={params.authRetry === '1'} />
+      </AuthLayout>
+    );
   }
 
   // Correct credentials do not mean the account may be used: say why here
@@ -93,7 +98,11 @@ export default async function LoginCompletePage({
       ? !(await hasAcceptedCurrentTerms(userId).catch(() => true))
       : await mustAcceptTerms(userId, 'login-complete');
   if (!mustAccept) {
-    return <ContinueWithCurrentTerms redirectTo={redirectTo} />;
+    return (
+      <AuthLayout embedded={isDesktopSurface} scene>
+        <ContinueWithCurrentTerms redirectTo={redirectTo} />
+      </AuthLayout>
+    );
   }
   const firstAcceptance = !(await hasAcceptedAnyTerms(userId));
   const offerMarketingEmail = firstAcceptance && (await neverAskedAboutMarketingEmail(userId));
@@ -103,8 +112,13 @@ export default async function LoginCompletePage({
     <AuthLayout embedded={isDesktopSurface} scene>
       <AuthStepFrame
         heading="Finish signing in"
-        detail={<p>Review and accept our terms to continue to your account.</p>}
-        footer={<TermsReviewSignOut />}
+        detail={<p>Review the details below to continue.</p>}
+        footer={
+          <>
+            <TermsReviewSignOut />
+            <AccountPolicyLinks />
+          </>
+        }
       >
         <TermsGate
           restorePreAuthMarker={false}

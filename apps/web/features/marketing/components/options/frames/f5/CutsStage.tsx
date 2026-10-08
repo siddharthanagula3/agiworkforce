@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { Pause, Play, RotateCcw } from 'lucide-react';
 import { stagger, useAnimate, type AnimationSequence } from 'framer-motion';
 import { AgiMark } from '@shared/components/agi/AgiMark';
-import { useReducedMotionFlag } from '@/features/auth/scene/useSceneMotion';
+import { useReducedMotionFlag } from '@agiworkforce/ui/auth-scene';
+
 import {
   ANSWER_HEADING,
   ANSWER_LINE,

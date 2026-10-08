@@ -37,7 +37,7 @@ describe('marketing plan matrix', () => {
     );
   });
 
-  it('does not expose a retired Hobby plan or the retired Max 15x name', () => {
+  it('does not expose a retired Hobby plan or the retired Max 20x name', () => {
     const serialized = JSON.stringify(MARKETING_FEATURE_MATRIX);
     expect(serialized).not.toMatch(/hobby/i);
     expect(serialized).not.toMatch(/max 15x/i);

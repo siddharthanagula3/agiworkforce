@@ -16,7 +16,7 @@ function refusal(overrides: Partial<MediaBillingRefusal> = {}): MediaBillingRefu
 }
 
 describe('resolveMediaPaywallSlot', () => {
-  it('never tells a Max 15x account with exhausted credits to upgrade to Max 15x or lower', () => {
+  it('never tells a Max 20x account with exhausted credits to upgrade to Max 20x or lower', () => {
     const slot = resolveMediaPaywallSlot({
       feature: 'video',
       currentTier: 'max_15x',
@@ -55,7 +55,7 @@ describe('resolveMediaPaywallSlot', () => {
       currentTier: 'pro',
       refusal: refusal({
         code: 'plan_upgrade_required',
-        message: 'Video generation is available on Max 15x and Enterprise plans.',
+        message: 'Video generation is available on Max 20x and Enterprise plans.',
         requiredPlans: ['enterprise', 'max_15x'],
       }),
       usage: null,

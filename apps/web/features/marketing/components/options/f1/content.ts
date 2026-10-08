@@ -82,7 +82,7 @@ export const CHAPTERS: readonly Chapter[] = [
   {
     id: 'chat',
     title: 'Chat',
-    body: 'Ask for a model by name and that model answers. Leave it on Auto and the router takes the lowest-cost route whose terms allow it, then names its choice on the receipt.',
+    body: 'Ask for a model by name and that model answers. Leave it on Auto and the router picks a model suited to the task and your plan, then names its choice on the receipt.',
   },
   {
     id: 'research',

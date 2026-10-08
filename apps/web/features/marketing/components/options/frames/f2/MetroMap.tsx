@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from 'react';
 
-import { useReducedMotionFlag } from '@/features/auth/scene/useSceneMotion';
+import { useReducedMotionFlag } from '@agiworkforce/ui/auth-scene';
+
 import { LANE_IDS, type LaneId } from '@/features/marketing/components/system/lanes';
 
 import {

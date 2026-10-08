@@ -74,7 +74,7 @@ describe('media API service idempotency', () => {
       status: 403,
       json: async () => ({
         error: {
-          message: 'Video generation requires Max 15x.',
+          message: 'Video generation requires Max 20x.',
           code: 'plan_upgrade_required',
           type: 'invalid_request_error',
           current_plan: 'pro',

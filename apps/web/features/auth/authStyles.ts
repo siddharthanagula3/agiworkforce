@@ -71,7 +71,12 @@ export const AUTH_FOOTER_LINK_CLASS =
   'auth-inline rounded-compact text-text-secondary underline-offset-4 hover:underline';
 export const AUTH_FOOTER_NAV_LINK_CLASS = `${AUTH_FOOTER_LINK_CLASS} ${TOUCH_TARGET} px-2`;
 export const AUTH_DISCLOSURE_CLASS =
-  'mt-7 flex flex-col gap-2 text-pretty text-sm leading-normal text-text-secondary';
+  'mt-5 flex flex-col gap-1 rounded-xl bg-surface-elevated p-4 text-base leading-normal text-text-secondary';
+export const AUTH_DISCLOSURE_TITLE_CLASS = 'font-semibold text-text-primary';
+export const AUTH_CHECK_NOTE_CLASS = `ms-8 mt-1 pb-3 ${SMALL_SECONDARY_TEXT}`;
+export const AUTH_OPTIONAL_ROW_CLASS = 'flex items-start justify-between gap-3';
+export const AUTH_OPTIONAL_TAG_CLASS = `shrink-0 pt-2.5 ${SMALL_SECONDARY_TEXT}`;
+export const AUTH_POLICY_LINKS_CLASS = `mt-1 flex flex-wrap items-center justify-center gap-x-2 ${SMALL_SECONDARY_TEXT}`;
 export const AUTH_STEP_LINKS_CLASS = 'mt-2.5 flex flex-col items-center';
 export const AUTH_STATUS_CLASS = `text-center ${SMALL_SECONDARY_TEXT}`;
 export const AUTH_STATUS_SPOKEN_CLASS = `mt-3 ${AUTH_STATUS_CLASS}`;

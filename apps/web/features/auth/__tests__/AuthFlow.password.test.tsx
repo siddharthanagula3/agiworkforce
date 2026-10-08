@@ -31,9 +31,14 @@ vi.mock('../useCountdown', () => ({
   useCountdown: () => [0, () => undefined],
 }));
 
+import {
+  AuthSceneBridgeProvider,
+  createSceneStore,
+  SCENE_SERVER_SNAPSHOT,
+  type SceneStore,
+} from '@agiworkforce/ui/auth-scene';
+
 import { AuthFlow } from '../AuthFlow';
-import { AuthSceneBridgeProvider } from '../scene/AuthSceneContext';
-import { createSceneStore, SCENE_SERVER_SNAPSHOT, type SceneStore } from '../scene/sceneStore';
 import { AUTH_ERROR_SOURCE_COPY } from '@/lib/auth/error-taxonomy.copy';
 import type { AuthMode, AuthProvider, AuthResult } from '../authContract';
 

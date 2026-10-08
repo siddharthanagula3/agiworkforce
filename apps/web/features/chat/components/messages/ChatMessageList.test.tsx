@@ -635,7 +635,7 @@ describe('ChatMessageList actions', () => {
           paywall: {
             feature: 'token_cap',
             requiredTier: 'max_15x',
-            reason: 'Your Max 15x usage for this billing period is used up.',
+            reason: 'Your Max 20x usage for this billing period is used up.',
             recoveryAction: 'view_usage',
             showUpgradeCta: true,
           },
@@ -652,7 +652,7 @@ describe('ChatMessageList actions', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'View usage' })).toBeNull();
-    expect(screen.queryByText('Your Max 15x usage for this billing period is used up.')).toBeNull();
+    expect(screen.queryByText('Your Max 20x usage for this billing period is used up.')).toBeNull();
   });
 
   // The other half of the same rule: a refusal a different request can answer

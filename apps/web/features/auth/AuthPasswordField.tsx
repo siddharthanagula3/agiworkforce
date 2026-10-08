@@ -3,9 +3,10 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+
 import { useAuthCopy } from './authCopy';
 import { AuthField } from './AuthField';
-import { useAuthSceneBridge } from './scene/AuthSceneContext';
 
 const TOGGLE_CLASS =
   'auth-inline absolute end-0 bottom-1 flex size-11 items-center justify-center rounded-compact text-text-secondary transition-colors hover:text-text-primary';

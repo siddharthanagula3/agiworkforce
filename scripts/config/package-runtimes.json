@@ -244,6 +244,8 @@
     "packages/ui/ui": {
       ".": "universal",
       "./agi-mark": "universal",
+      "./auth-scene": "universal",
+      "./auth-scene.css": "asset",
       "./button": "universal",
       "./cn": "universal",
       "./dialog": "universal",

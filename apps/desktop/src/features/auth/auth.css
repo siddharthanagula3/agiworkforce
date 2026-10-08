@@ -1,18 +1,99 @@
-[data-auth-column] .auth-field:focus-visible {
-  outline: none;
-  box-shadow: none;
-  border-color: var(--accent-text);
-  border-radius: var(--corner-pill);
-}
-
 [data-auth-column] .auth-control:focus-visible {
-  outline: 2px solid var(--accent-text);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: var(--corner-pill);
 }
 
 [data-auth-column] .auth-inline:focus-visible {
-  outline: 2px solid var(--accent-text);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: var(--corner-control);
+}
+
+[data-auth-column] .auth-field {
+  border-bottom-color: var(--auth-field-line);
+  transition:
+    border-color var(--duration-quick) var(--curve-standard),
+    box-shadow var(--duration-quick) var(--curve-standard);
+}
+
+[data-auth-column] .auth-field:focus-visible {
+  outline: none;
+  border-bottom-color: var(--text-primary);
+  box-shadow: 0 1px 0 0 var(--text-primary);
+}
+
+[data-auth-column] .auth-field[aria-invalid='true'] {
+  border-bottom-color: var(--danger-text);
+  box-shadow: 0 1px 0 0 var(--danger-text);
+}
+
+[data-auth-column] .auth-field-float {
+  height: 3.75rem;
+  padding-top: 1.75rem;
+}
+
+[data-auth-column] .auth-field-float::placeholder {
+  color: transparent;
+}
+
+[data-auth-column] .auth-field-label {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 1.75rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+  transform-origin: 0 0;
+  transition:
+    transform var(--duration-quick) var(--curve-standard),
+    color var(--duration-quick) var(--curve-standard);
+}
+
+[data-auth-column] .auth-field-float:focus ~ .auth-field-label,
+[data-auth-column] .auth-field-float:not(:placeholder-shown) ~ .auth-field-label {
+  transform: translateY(-1.5rem) scale(0.9375);
+}
+
+[data-auth-column] .auth-field-float:focus ~ .auth-field-label {
+  color: var(--text-primary);
+}
+
+[data-auth-column] .auth-field-float[aria-invalid='true'] ~ .auth-field-label {
+  color: var(--danger-text);
+}
+
+[data-auth-column] .auth-scene-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: clamp(13.75rem, 28vh, 20rem);
+  padding: 1.5rem 1.5rem 0;
+  overflow: hidden;
+}
+
+[data-auth-column] .auth-scene {
+  display: block;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  overflow: visible;
+}
+
+@media (min-width: 48rem) {
+  [data-auth-column] .auth-form-panel {
+    padding-block: clamp(1.5rem, 4vh, 3.5rem);
+  }
+
+  [data-auth-column] .auth-scene-panel {
+    height: 100%;
+    padding: 0 clamp(2rem, 6vw, 6rem) 16vh;
+  }
+
+  [data-auth-column] .auth-scene {
+    width: min(100%, 41rem);
+    height: auto;
+    max-height: 60vh;
+  }
 }

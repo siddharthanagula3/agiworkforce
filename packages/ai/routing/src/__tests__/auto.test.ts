@@ -334,7 +334,7 @@ describe('resolveAutoRoute', () => {
     );
   });
 
-  it('admits Max 15x exactly like Max for Auto routing', () => {
+  it('admits Max 20x exactly like Max for Auto routing', () => {
     const args = {
       selection: 'auto',
       taskType: 'coding',
