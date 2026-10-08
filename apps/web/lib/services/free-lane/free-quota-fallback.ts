@@ -27,6 +27,7 @@ import {
   resolveReadyFreeQuotaOffering,
 } from '@/lib/server/free-quota-catalogue';
 import { serveFreeQuotaTurn } from '@/lib/server/free-quota-turn';
+import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-service';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 
 import { FREE_CAPACITY_UNAVAILABLE_CODE } from './stage';
@@ -61,6 +62,7 @@ const FallbackTurnSchema = FreeOfferingRequestSchema.omit({ user_message: true }
 type FallbackTurn = z.infer<typeof FallbackTurnSchema>;
 
 const RouterOnlyContextSchema = z.looseObject({
+  conversation_id: z.string().optional(),
   connector_tools_enabled: z.unknown(),
   messages: z.array(
     z.looseObject({
@@ -84,6 +86,11 @@ function routerOnlyContext(body: unknown): string | null {
   )
     ? null
     : 'earlier_attachment';
+}
+
+function conversationIdOf(body: unknown): string | null {
+  const parsed = RouterOnlyContextSchema.safeParse(body);
+  return parsed.success ? (parsed.data.conversation_id ?? null) : null;
 }
 
 const PLATFORM_MODERATION_REFUSAL_CODE = 'content_policy_violation';
@@ -267,9 +274,20 @@ export async function serveFreeQuotaFirst(input: {
       model = null;
       return toRouter('provider_training_policy');
     }
+    // A Health space chat, or one holding Google account data, stays on the route that already
+    // enforces its handling rule; the lane is for ordinary chat only.
+    const scoped = await input.scopedDb();
+    const conversationId = conversationIdOf(body);
+    if (
+      conversationId !== null &&
+      (await conversationKeepsOutOfTraining(scoped.db, input.userId, conversationId))
+    ) {
+      model = null;
+      return toRouter('conversation_handling_rule');
+    }
     const served = await serveFreeQuotaTurn(
       input.request,
-      await input.scopedDb(),
+      scoped,
       { ...turn, model },
       {
         requestId,

@@ -47,6 +47,11 @@ const mocks = vi.hoisted(() => ({
   route: undefined as FreeAutoRoute | null | undefined,
   termsReviewExpired: false,
   providerMayTrain: false,
+  conversationKeptToItsRoute: vi.fn(async (..._args: unknown[]) => false),
+}));
+
+vi.mock('@/lib/services/health-space-service', () => ({
+  conversationKeepsOutOfTraining: (...args: unknown[]) => mocks.conversationKeptToItsRoute(...args),
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
@@ -301,6 +306,7 @@ beforeEach(async () => {
   mocks.store = createMemoryKeyValueStore();
   mocks.query.mockReset().mockResolvedValue([{ id: 'conversation', data_region: null }]);
   mocks.plan.mockReset().mockResolvedValue('free');
+  mocks.conversationKeptToItsRoute.mockReset().mockResolvedValue(false);
   mocks.stream.mockReset();
   mocks.media.mockReset();
   mocks.otherProvider.mockReset();
@@ -521,6 +527,34 @@ describe('a Free Auto turn the free quota lane leaves to the free router', () =>
     expect(tried).toBeNull();
     expectLaneUntouched();
     expect(await metered(FIRST)).toBe(0);
+  });
+
+  it('leaves a Health space chat, or one holding Google account data, on the free router', async () => {
+    mocks.stream.mockResolvedValue(answered());
+    mocks.conversationKeptToItsRoute.mockResolvedValue(true);
+
+    const { response, tried } = await tryFirst();
+
+    expect(response).toBeNull();
+    expect(tried).toBeNull();
+    expect(mocks.conversationKeptToItsRoute).toHaveBeenCalledWith(
+      expect.anything(),
+      'fixture-user',
+      CONVERSATION_ID,
+    );
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.moderate).not.toHaveBeenCalled();
+    expect(mocks.persistUser).not.toHaveBeenCalled();
+    expect(mocks.persistAnswer).not.toHaveBeenCalled();
+    expect(await metered(FIRST)).toBe(0);
+  });
+
+  it('does not look the conversation up while the route is configured router first', async () => {
+    mocks.route = { order: 'router_first', quotaFirstByteTimeoutMs: 15_000 };
+
+    await tryFirst();
+
+    expect(mocks.conversationKeptToItsRoute).not.toHaveBeenCalled();
   });
 
   it('never starts while the route is configured router first, or not configured', async () => {
