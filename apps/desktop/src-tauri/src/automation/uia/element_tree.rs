@@ -276,9 +276,9 @@ mod element_availability_tests {
             .context("CurrentControlType");
         assert!(element_no_longer_available(&vanished));
 
-        let access_denied = anyhow::Error::new(windows::core::Error::from(
-            windows::core::HRESULT(0x8007_0005_u32 as i32),
-        ))
+        let access_denied = anyhow::Error::new(windows::core::Error::from(windows::core::HRESULT(
+            0x8007_0005_u32 as i32,
+        )))
         .context("CurrentControlType");
         assert!(!element_no_longer_available(&access_denied));
 
