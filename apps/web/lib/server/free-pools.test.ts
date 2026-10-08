@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getProviderOffering } from '@agiworkforce/types';
 
 import {
+  FREE_AUTO_ROUTE_ORDERS,
   eligibleFreeEligibility,
   evaluateFreePoolEntry,
+  freeAutoQuotaFirstRoute,
   limitedMediaDailyCap,
   loadFreePools,
   parseFreePoolsDocument,
@@ -193,6 +195,49 @@ describe('the shipped configuration', () => {
         }),
       ).toThrow();
     }
+  });
+
+  it('names which of the free quota lane and the free router a Free Auto turn tries first', () => {
+    const pools = loadFreePools();
+    const inventory = pools.inventory!;
+    const route = inventory.freeAutoRoute!;
+    expect(FREE_AUTO_ROUTE_ORDERS).toContain(route.order);
+    expect(route.quotaFirstByteTimeoutMs).toBeGreaterThan(0);
+    for (const order of FREE_AUTO_ROUTE_ORDERS) {
+      expect(
+        parseFreePoolsDocument({
+          ...pools,
+          inventory: { ...inventory, freeAutoRoute: { ...route, order } },
+        }).inventory?.freeAutoRoute?.order,
+      ).toBe(order);
+    }
+    for (const freeAutoRoute of [
+      { ...route, order: 'qwen_first' },
+      { ...route, order: undefined },
+      { order: route.order },
+      { ...route, quotaFirstByteTimeoutMs: 0 },
+      { ...route, quotaFirstByteTimeoutMs: 1.5 },
+      { ...route, firstByteTimeoutMs: 1000 },
+    ]) {
+      expect(() =>
+        parseFreePoolsDocument({ ...pools, inventory: { ...inventory, freeAutoRoute } }),
+      ).toThrow();
+    }
+  });
+
+  it('tries the free quota lane first only when the order says so, and the free router otherwise', () => {
+    const { freeAutoRoute: route, ...unordered } = loadFreePools().inventory!;
+    expect(freeAutoQuotaFirstRoute(undefined)).toBeNull();
+    expect(freeAutoQuotaFirstRoute(unordered)).toBeNull();
+    expect(
+      freeAutoQuotaFirstRoute({
+        ...unordered,
+        freeAutoRoute: { ...route!, order: 'router_first' },
+      }),
+    ).toBeNull();
+    expect(
+      freeAutoQuotaFirstRoute({ ...unordered, freeAutoRoute: { ...route!, order: 'quota_first' } }),
+    ).toEqual({ ...route!, order: 'quota_first' });
   });
 
   it('clears only named offerings during a favorable, current review window', () => {

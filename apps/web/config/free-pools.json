@@ -3472,6 +3472,10 @@
         "quotaOnlyObserved": true
       }
     ],
+    "freeAutoRoute": {
+      "order": "quota_first",
+      "quotaFirstByteTimeoutMs": 15000
+    },
     "freeAutoFallback": {
       "offeringKeys": [
         "qwen-quota-038",
@@ -3492,8 +3496,8 @@
   },
   "limitedMediaOffer": {
     "dailyCapPerUser": {
-      "image": 5,
-      "video": 1
+      "image": 10,
+      "video": 5
     }
   },
   "quotaExperimentPolicy": {
