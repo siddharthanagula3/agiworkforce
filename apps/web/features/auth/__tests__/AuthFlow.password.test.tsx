@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 const client = vi.hoisted(() => ({
   isReady: true,
@@ -340,7 +342,10 @@ describe('sign-in with the address and the password on one screen', () => {
       field: 'password',
     });
     renderFlow('signup');
-    await userEvent.click(within(screen.getByTestId('auth-signup-consent')).getByRole('checkbox'));
+    await userEvent.type(
+      screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL),
+      String(ACCOUNT_MINIMUM_AGE),
+    );
 
     await userEvent.type(emailField(), EMAIL);
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));

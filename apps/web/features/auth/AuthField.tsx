@@ -1,7 +1,7 @@
 'use client';
 
-import type { FocusEvent, InputHTMLAttributes, ReactNode, SyntheticEvent } from 'react';
-import { useCallback, useEffect, useId, useRef } from 'react';
+import type { FocusEvent, InputHTMLAttributes, ReactNode, Ref, SyntheticEvent } from 'react';
+import { useCallback, useEffect, useId, useImperativeHandle, useRef } from 'react';
 
 import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
 
@@ -28,9 +28,12 @@ export function AuthField({
   description,
   trailing,
   sensitive,
+  ref,
+  'aria-describedby': describedByCaller,
   ...input
 }: {
   label: string;
+  ref?: Ref<HTMLInputElement>;
   error?: ReactNode;
   /** A condition of the input itself, announced beside it rather than as a failure. */
   hint?: ReactNode;
@@ -52,10 +55,12 @@ export function AuthField({
     error ? errorId : null,
     hint ? hintId : null,
     description ? descriptionId : null,
+    describedByCaller,
   ]
     .filter(Boolean)
     .join(' ');
   const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => inputRef.current as HTMLInputElement, []);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const wasErrored = useRef(false);
   const holdsAttention = useRef(false);

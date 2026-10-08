@@ -2,11 +2,21 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-04
+Last updated: 2026-10-07
 
-Free users chat with Qwen models paid for by the provider's free quota. A free
-quota model serves only while two gates hold, and either one lapsing turns every
-free quota model off at once:
+A free quota model is a QwenCloud model served from the promotional free quota
+on the company's QwenCloud account. Free plan accounts reach one in two ways:
+
+- **Free Auto.** The Free plan's default model. Which of the free quota lane and
+  the OpenRouter free router answers a Free Auto turn first is a configuration
+  value; see Free Auto: which route answers first.
+- **Picked by name.** Every free quota chat model that is ready is listed in the
+  model picker's Free section, and a turn sent to one goes to
+  `apps/web/app/api/models/free-quota/completions/route.ts`.
+
+Both end in `serveFreeQuotaTurn` in `apps/web/lib/server/free-quota-turn.ts`. A
+free quota model serves only while two gates hold, and either one lapsing turns
+every free quota model off at once:
 
 1. **A terms review** recorded in code, in `apps/web/config/free-pools.json`.
 2. **A console check**: a platform admin confirmed that Free quota only is on,
@@ -20,14 +30,162 @@ The gate logic is `decideFreeQuotaOffering` in
 
 ## Before anything can serve
 
-The deployment needs `QWEN_API_KEY`, a shared state store (Upstash or Redis) and
-the inventory in `apps/web/config/free-pools.json`. The panel names whichever is
-missing. Only a platform admin, a Clerk user id listed in
-`AGI_PLATFORM_ADMIN_USER_IDS`, can open the panel or call
+Every one of these has to hold in the deployment, or no free quota model serves
+and every Free Auto turn is answered by the free router:
+
+1. `QWEN_API_KEY` is set. It must be a general-purpose pay-as-you-go key: Model
+   Studio states that "Token Plan or Coding Plan dedicated API keys do not
+   consume free quota".
+2. A shared state store, Upstash or Redis, is configured. A memory or local
+   store counts as none outside development (`sharedFreeQuotaStore` in
+   `apps/web/lib/server/free-quota-catalogue.ts`).
+3. The inventory and a current terms review are in
+   `apps/web/config/free-pools.json` (see Terms review).
+4. A platform admin has recorded a console check for the current key within the
+   last 30 days, and it names the models to serve (see Console check). Nothing
+   records it automatically: a fresh deployment, a rotated key or a flushed
+   store serves nothing until someone records one.
+
+The panel names whichever is missing. Only a platform admin, a Clerk user id
+listed in `AGI_PLATFORM_ADMIN_USER_IDS`, can open the panel or call
 `apps/web/app/api/models/free-quota/attestation/route.ts`.
 
-The key must be a general-purpose pay-as-you-go key: Model Studio states that
-"Token Plan or Coding Plan dedicated API keys do not consume free quota".
+## Free Auto: which route answers first
+
+The owner decided on 2026-10-07 that a Free Auto turn tries the free quota lane
+first and the OpenRouter free router second, so the allocations that are about
+to expire are spent before they lapse. Free quota chat has no cap per account:
+each allocation's shared allowance is the limit.
+
+### The setting
+
+`inventory.freeAutoRoute` in `apps/web/config/free-pools.json`, beside
+`freeAutoFallback`:
+
+```json
+"freeAutoRoute": {
+  "order": "quota_first",
+  "quotaFirstByteTimeoutMs": 15000
+}
+```
+
+- `order` is `quota_first` or `router_first`. The schema in
+  `apps/web/lib/server/free-pools.ts` refuses any other value, and a file
+  without the block is read as `router_first`.
+- `quotaFirstByteTimeoutMs` is how long the provider has, from the moment the
+  request is sent to it, to return the first frame of its answer.
+
+To go back to the free router first, change the one line to
+`"order": "router_first"` and deploy. No code changes with it. Under
+`router_first` the lane is tried only after the free router refuses a turn
+because its shared pool is spent, on the first ready model of
+`freeAutoFallback.offeringKeys`, and the reply carries the notice that another
+model answered.
+
+### Which turns the lane takes first
+
+Only a turn that all of these describe; every other turn goes to the free router
+exactly as under `router_first`:
+
+- a Free plan account signed in to the web app, not an API key, the browser
+  extension or the desktop app (`freeQuotaFallbackReplay`, and the
+  `x_free_quota_fallback` flag only the web client sends);
+- the model is Free Auto and the reply is streamed;
+- plain chat: no web search or page fetch (switched on or asked for in the
+  message), no code execution, research, AGI Work, skill, client tool, MCP
+  context, memory command or research resume (`ReplayedFreeAutoTurnSchema` and
+  `freeAutoTurn` in `apps/web/lib/services/free-lane/free-quota-fallback.ts`);
+- the composer reported no connector switched on for the chat
+  (`connector_tools_enabled` is `false`), since the lane offers no tools;
+- no earlier message carries an attachment, since the lane would replace it
+  with a note; an image on the current message is taken only by an allocation
+  that reads images.
+
+The attempt runs inside `dispatchChatCompletions` in
+`apps/web/app/api/llm/v1/chat/completions/route.ts`, after the sign-in, rate
+limit, terms, concurrent-turn, managed compute kill-switch, workspace policy and
+workspace budget checks, and before the free router's own request processing.
+`serveFreeQuotaTurn` then applies the same gates as a model picked by name:
+plan, conversation ownership, workspace privacy, model policy and retention,
+moderation, the content safety preference, secret handling, the provider egress
+gate, the once-only turn claim and the allowance reservation.
+
+### Which allocation answers
+
+Every chat allocation that `decideFreeQuotaOffering` reports ready is a
+candidate, not only the ones `freeAutoFallback.offeringKeys` ranks. They are
+used in this order (`freeQuotaChatUseOrder` in
+`apps/web/lib/server/free-quota-catalogue.ts`):
+
+1. the allocation whose free quota ends soonest, counting a model's retirement
+   date when that comes first;
+2. among those ending the same day, the ones `freeAutoFallback.offeringKeys`
+   ranks, in that order;
+3. then the ones it does not rank: models that answer without a required
+   thinking pass first, then by offering key.
+
+An allocation is used until its allowance is spent or the provider holds it,
+then the next one starts. One turn tries one allocation.
+
+On 2026-10-07 the inventory held 168 active token allocations of 1,000,000
+tokens. 73 of them can answer chat: 90% of what is left of each is usable,
+65,677,202 tokens in all. The other 95 cannot: 37 audio and 6 embedding
+allocations and 45 chat allocations have no serving integration, 4 chat models
+also have a paid route and so would spend the allowance unmetered, and 3 are
+preview models the terms review leaves out. Of the 73:
+
+| Free quota ends                         | Allocations | Usable tokens |
+| --------------------------------------- | ----------- | ------------- |
+| 2026-10-09 16:00 UTC (model retirement) | 30          | 26,996,067    |
+| 2026-10-21 00:00 UTC                    | 33          | 29,684,004    |
+| 2026-10-23 00:00 UTC                    | 2           | 1,800,000     |
+| 2026-10-31 to 2026-12-13                | 8           | 7,197,131     |
+
+An allocation stops serving at 00:00 UTC on the day its quota ends. From
+2026-12-13 none is left and every Free Auto turn is the free router's.
+
+### What ends the attempt
+
+| Outcome                                                                                       | What happens                                                                  |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| The first frame of the answer arrives                                                         | The lane answers. A later failure follows the lane's own error handling.      |
+| Platform moderation refuses the message                                                       | The refusal is returned. No provider is asked.                                |
+| The lane already took a turn with the same message id and idempotency key                     | The duplicate refusal is returned. The turn is not answered twice.            |
+| No allocation is ready, a gate refuses, or the provider refuses or fails before a first frame | The free router takes the turn, with its own checks, as under `router_first`. |
+
+The allowance reserved for a turn the provider refused with an answer (an HTTP
+error) is given back before the free router is tried. When the provider request
+failed with no answer, timed out, or was cut off, how much it spent is unknown,
+so the reservation stands and the meter errs toward stopping that allocation
+early.
+
+If the free router then refuses because its shared pool is spent, the refusal
+is returned with a ready free quota model to switch to when there is one. The
+turn is not sent to the lane a second time.
+
+### What the reader sees
+
+- The picker entry is the catalogue's name for Free Auto. A reply the lane
+  answered is labelled with the model that answered and "via free pool", and
+  carries no notice.
+- A reply the free router answered after the lane handed the turn on is
+  labelled as the free router's replies always are, with no notice: it is the
+  model the reader picked.
+- The notice that another model answered appears only when the free router
+  refused and a free quota model then answered.
+
+### Telling which route is answering
+
+Each attempt logs one line: `[free-lane] a free quota model answered a Free Auto
+turn first`, or `[free-lane] the free quota lane did not answer a Free Auto
+turn; the free router takes it` with a `cause`: `no_ready_offering`, a refusal
+code such as `provider_rate_limited` or `free_quota_exhausted`,
+`failed_before_first_frame`, `connector_tools_not_off` or `earlier_attachment`.
+`no_ready_offering` on every turn means a gate under Before anything can serve
+has lapsed; the panel names it. `connector_tools_not_off` on every turn means
+the web composer is not reporting its connectors as loaded, so check
+`/api/connectors`. A turn the lane never considers, such as one with web search
+on, logs nothing.
 
 ## Terms review
 
@@ -425,9 +583,12 @@ deployment may lack them, so those answer 200.
 
 ## What users see when a gate lapses
 
+- A Free Auto turn is answered by the free router. Nothing tells the reader the
+  lane was skipped.
 - The model picker marks every free quota model "Not available right now"
   (`apps/web/features/models/lib/free-quota-types.ts`).
-- A message sent to one is refused before any provider request with HTTP 503,
+- A message sent to one picked by name is refused before any provider request
+  with HTTP 503,
   code `free_quota_unavailable`, and "{model} from {issuer} is not available
   right now. Choose {alternative} or another free model, then send your message
   again." (`apps/web/features/models/lib/free-quota-copy.ts`, applied in
@@ -452,7 +613,7 @@ routes.
 
 The `limitedMediaOffer` block in `apps/web/config/free-pools.json`, beside the
 inventory, holds one daily cap per account for each kind:
-`dailyCapPerUser.image` and `dailyCapPerUser.video`, 5 and 1 at launch.
+`dailyCapPerUser.image` and `dailyCapPerUser.video`, 10 and 5 since 2026-10-07.
 
 - A cap above zero turns the offer on for that kind. A cap of 0 turns that kind
   off, and removing the block turns both off. Each is a change to the file and a
@@ -500,8 +661,8 @@ inventory, holds one daily cap per account for each kind:
   user to wait a moment and send again.
 - The count is kept when the provider was asked and failed for that turn only,
   or when the outcome is unknown (a timeout or an interrupted status check), so
-  a failing prompt cannot be repeated without limit. With the video cap at 1,
-  such a failure ends that account's free video for the day.
+  a failing prompt cannot be repeated without limit, and each such failure
+  uses one of that account's free requests for the day.
 - A media task the provider accepted is never settled as failed because a status
   poll was refused (429, 5xx or an error body): polling continues to its limit
   and the turn ends as interrupted with the reservation kept.

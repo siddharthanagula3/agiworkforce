@@ -94,6 +94,54 @@ describe('presentFreeModels', () => {
     }
   });
 
+  it('puts the allowance that ends soonest on top, in the featured row and behind More models', () => {
+    const endDates = ['2026-12-01', '2026-10-09', '2026-10-21'];
+    const dated = [...familyA!, ...familyB!].map((key, index) => ({
+      ...model(key),
+      expiresOn: endDates[index % endDates.length]!,
+    }));
+    const listed = [...dated].sort((left, right) => left.expiresOn.localeCompare(right.expiresOn));
+    const [pool] = presentFreeModels([catalogue(listed)], {
+      category: null,
+      selectedId: 'auto',
+    }).pools;
+    const endsOf = (entries: readonly { model: FreeQuotaModel }[]) =>
+      entries.map((entry) => entry.model.expiresOn!);
+
+    expect(pool!.featured).toHaveLength(2);
+    expect(pool!.more).toHaveLength(dated.length - 2);
+    expect(endsOf(pool!.featured)).toEqual([...endsOf(pool!.featured)].sort());
+    expect(endsOf(pool!.more)).toEqual([...endsOf(pool!.more)].sort());
+    for (const featured of pool!.featured) {
+      const family = dated.filter(
+        (candidate) => providerOfferingLabel(candidate.key)!.family === featured.label.family,
+      );
+      const soonest = family.map((candidate) => candidate.expiresOn).sort()[0];
+      expect(featured.model.expiresOn).toBe(soonest);
+    }
+  });
+
+  it('lists unavailable models soonest-ending first as well', () => {
+    const [first, second, third] = familyA!.length >= 3 ? familyA! : [...familyA!, ...familyB!];
+    const view = presentFreeModels(
+      [
+        catalogue([
+          model(familyB![0]!),
+          { ...model(first!, 'expired'), expiresOn: '2026-10-09' },
+          { ...model(second!, 'unavailable'), expiresOn: '2026-10-21' },
+          { ...model(third!, 'exhausted'), expiresOn: '2026-12-01' },
+        ]),
+      ],
+      { category: null, selectedId: 'auto' },
+    );
+
+    expect(view.pools[0]!.unavailable.map((entry) => entry.model.expiresOn)).toEqual([
+      '2026-10-09',
+      '2026-10-21',
+      '2026-12-01',
+    ]);
+  });
+
   it('keeps unavailable models out of the main list', () => {
     const ready = familyA!.map((key) => model(key));
     const unavailable = familyB!.map((key) => model(key, 'unavailable'));

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
   clearAgeGate,
   confirmAgeGate,
@@ -30,8 +30,9 @@ jest.mock('@/lib/mmkv', () => ({
 
 // The gate reads the device zone, so the fixture states one rather than
 // inheriting whatever the machine running the suite is set to. New York
-// matches no rule, which is the default 13 threshold.
-const FIXTURE_TIME_ZONE = 'America/New_York';
+// matches no rule, which leaves the account minimum as the threshold.
+const DEFAULT_TIME_ZONE = 'America/New_York';
+let mockTimeZone = DEFAULT_TIME_ZONE;
 const realIntl = global.Intl;
 
 const mockReplace = jest.fn();
@@ -65,7 +66,7 @@ beforeAll(() => {
     value: {
       ...realIntl,
       DateTimeFormat: function DateTimeFormat() {
-        return { resolvedOptions: () => ({ timeZone: FIXTURE_TIME_ZONE }) };
+        return { resolvedOptions: () => ({ timeZone: mockTimeZone }) };
       },
     },
   });
@@ -153,6 +154,7 @@ describe('the age screen when the answer does not work', () => {
     mockSignOut.mockClear();
     mockSignedIn = false;
     mockSearchParams = {};
+    mockTimeZone = DEFAULT_TIME_ZONE;
   });
 
   it('returns to Local chat when Cloud sign-in needs age verification', () => {
@@ -210,10 +212,10 @@ describe('the age screen when the answer does not work', () => {
     expect(screen.queryByTestId('age-gate-error')).toBeNull();
   });
 
-  it('refuses anyone under 18 with the Terms wording and moves them nowhere', () => {
+  it('refuses anyone under the account minimum with the Terms wording and moves them nowhere', () => {
     render(<AgeGateScreen />);
 
-    fireEvent.changeText(screen.getByTestId('age-gate-input'), '17');
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), String(ACCOUNT_MINIMUM_AGE - 1));
     fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
 
     expect(screen.getByTestId('age-gate-refusal')).toHaveTextContent(
@@ -225,8 +227,45 @@ describe('the age screen when the answer does not work', () => {
     expect(isAgeGateConfirmed()).toBe(false);
   });
 
+  it.each([ACCOUNT_MINIMUM_AGE, 17])(
+    'lets a %i year old through where no regional age is higher',
+    (age) => {
+      render(<AgeGateScreen />);
+
+      fireEvent.changeText(screen.getByTestId('age-gate-input'), String(age));
+      fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+      expect(screen.queryByTestId('age-gate-refusal')).toBeNull();
+      expect(mockReplace).toHaveBeenCalledWith('/(public)/onboarding');
+      expect(isMinorMode()).toBe(false);
+      expect(isAgeGateConfirmed()).toBe(true);
+    },
+  );
+
+  it.each([
+    ['Europe/Berlin', 15, 16],
+    ['Asia/Kolkata', 17, 18],
+  ])(
+    'refuses under the regional age in %s by naming that age, not the lower account minimum',
+    (zone, age, regionalAge) => {
+      mockTimeZone = zone;
+      render(<AgeGateScreen />);
+
+      fireEvent.changeText(screen.getByTestId('age-gate-input'), String(age));
+      fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+      const refusal = screen.getByTestId('age-gate-refusal');
+      expect(refusal).toHaveTextContent(
+        `AGI accounts are for people ${regionalAge} and older in your region.`,
+      );
+      expect(refusal).not.toHaveTextContent(ACCOUNT_AGE_REQUIREMENT_NOTICE);
+      expect(mockReplace).not.toHaveBeenCalled();
+      expect(isMinorMode()).toBe(true);
+    },
+  );
+
   it('keeps Cloud sign-in closed to a device that was refused', () => {
-    confirmAgeGate(15);
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
     mockSearchParams = { returnTo: '/(auth)/login' };
     render(<AgeGateScreen />);
 
@@ -240,7 +279,7 @@ describe('the age screen when the answer does not work', () => {
 
   it('lets a signed-in person refused an account sign out to Local chat', async () => {
     mockSignedIn = true;
-    confirmAgeGate(16);
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
     render(<AgeGateScreen />);
 
     fireEvent.press(screen.getByTestId('age-gate-refused-sign-out-btn'));

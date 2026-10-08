@@ -68,14 +68,28 @@ function groupBy(
   return [...groups.values()];
 }
 
+function byEndDateAsListed(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
+  return groupBy(entries, (entry) => entry.model.expiresOn ?? '');
+}
+
 function byFamily(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
   return groupBy(entries, (entry) => entry.label.family).map((family) =>
-    family.sort(compareWithinFamily),
+    byEndDateAsListed(family).flatMap((ending) => ending.sort(compareWithinFamily)),
   );
 }
 
 function byLine(family: readonly FreeModelEntry[]): FreeModelEntry[] {
   return groupBy(family, (entry) => entry.label.line).flat();
+}
+
+function endingSoonestOnTop(
+  families: readonly FreeModelEntry[][],
+  listed: readonly FreeModelEntry[],
+): FreeModelEntry[] {
+  return byEndDateAsListed(listed).flatMap((ending) => {
+    const sameDate = new Set(ending);
+    return families.flatMap((family) => byLine(family.filter((entry) => sameDate.has(entry))));
+  });
 }
 
 function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeModelPool {
@@ -85,13 +99,16 @@ function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeMo
     return { issuer, featured: [], more: [], unavailable: [], pause: spent ? 'used_up' : 'paused' };
   }
   const families = byFamily(ready);
+  const featured = families.map((family) => family[0]!);
+  const notReady = entries.filter((entry) => entry.model.status !== 'ready');
   return {
     issuer,
-    featured: families.map((family) => family[0]!),
-    more: families.flatMap((family) => byLine(family.slice(1))),
-    unavailable: byFamily(entries.filter((entry) => entry.model.status !== 'ready')).flatMap(
-      byLine,
+    featured,
+    more: endingSoonestOnTop(
+      families,
+      ready.filter((entry) => !featured.includes(entry)),
     ),
+    unavailable: endingSoonestOnTop(byFamily(notReady), notReady),
     pause: null,
   };
 }

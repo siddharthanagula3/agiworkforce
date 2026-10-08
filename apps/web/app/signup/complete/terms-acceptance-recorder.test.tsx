@@ -38,7 +38,7 @@ vi.mock('@/lib/client/csrf', () => ({
   })),
 }));
 
-import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
+import { ACCOUNT_AGE_FIELD_LABEL } from '@agiworkforce/types';
 
 import { MarketingEmailGrantProvider } from '@/features/auth/marketingEmailChoice';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
@@ -260,9 +260,7 @@ describe('signup terms recorder', () => {
       '/api/terms/accept',
       expect.objectContaining({ body: expect.stringContaining('"web-login"') }),
     );
-    expect(
-      screen.queryByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(ACCOUNT_AGE_FIELD_LABEL)).not.toBeInTheDocument();
   });
 
   it('consumes the pre-auth marker without rewriting a current acceptance', async () => {

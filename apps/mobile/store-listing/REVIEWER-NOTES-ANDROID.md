@@ -79,10 +79,11 @@ there is no data subject to protect and the gate would only be a wall. That
 boundary is pinned by a test that fails if anyone reintroduces it:
 `__tests__/age-gate-guards-cloud-not-local.test.ts`.
 
-**Threshold: 18 everywhere.** `getAgeThreshold` takes the larger of the device
-time zone's regional age and `ACCOUNT_HOLDER_MINIMUM_AGE` (18, in
-`packages/contracts/types/src/account-eligibility.ts`), so every region asks for
-18 before Cloud sign-in. The region comes from the device's IANA time zone
+**Threshold: 13, or the regional age where that is higher.** `getAgeThreshold`
+takes the larger of the device time zone's regional age and `ACCOUNT_MINIMUM_AGE`
+(13, in `packages/contracts/types/src/account-eligibility.ts`), so Cloud sign-in
+asks for the regional age in the table below and never for less than 13. The
+region comes from the device's IANA time zone
 (`Intl.DateTimeFormat().resolvedOptions().timeZone`), no location permission, no
 IP geolocation, no network call, and no regional age is above 18:
 
@@ -98,8 +99,8 @@ flag, timestamp, region code, threshold. It is on-device only and is never sent
 anywhere. The screen says so verbatim: "Your age is stored only on this device
 and never shared."
 
-**Minor-safe mode is one-way.** If the entered age is under 18, `confirmAgeGate`
-records `isMinor: true` and thereafter refuses to accept a higher age, nothing in
+**Minor-safe mode is one-way.** If the entered age is under the device's
+threshold, `confirmAgeGate` records `isMinor: true` and thereafter refuses to accept a higher age, nothing in
 the app verifies a typed age, so accepting one would let the protected user
 switch the protection off. Only `clearAgeGate` lifts it, and the refusal screen
 tells the user the honest way to do that: reinstall the app. The screen is
@@ -112,7 +113,7 @@ is synchronous and purely client-side. A blocked prompt gets the fixed
 (`src/features/settings/parental-controls/index.tsx`) shows the state and can
 review, but explicitly cannot turn it off.
 
-**To exercise it:** tap Cloud sign-in, enter an age under 18, and the "Age
+**To exercise it:** tap Cloud sign-in, enter an age under 13, and the "Age
 requirement" screen appears; Settings → Parental Controls then reads "Minor-safe
 mode is active". Only a reinstall lets that device sign in to Cloud again.
 

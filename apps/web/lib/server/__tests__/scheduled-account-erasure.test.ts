@@ -134,6 +134,8 @@ describe('eraseScheduledAccount', () => {
       exportObjectsDeleted: 0,
       exportObjectsFailed: 0,
       avatarObjectsFailed: 0,
+      feedbackObjectsDeleted: 0,
+      feedbackObjectsFailed: 0,
       cacheKeysFailed: 0,
     });
 

@@ -21,6 +21,7 @@ import {
 import {
   buildFreeQuotaCatalogue,
   freeMediaOfferFor,
+  freeQuotaChatUseOrder,
   freeQuotaContextFor,
   freeQuotaMediaUseOrder,
   freeQuotaPlanAdmission,
@@ -435,12 +436,35 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     );
     const catalogue = buildFreeQuotaCatalogue(decisions!);
     expect(catalogue.issuer).toBe(inventory.issuer);
-    expect(catalogue.models.map((model) => model.key)).toEqual(
-      inventory.entries.map((entry) => entry.offeringKey),
-    );
+    const inventoryOrder = inventory.entries.map((entry) => entry.offeringKey);
+    const listed = catalogue.models.map((model) => model.key);
+    expect([...listed].sort()).toEqual([...inventoryOrder].sort());
     expect(new Set(catalogue.models.map((model) => model.status))).toEqual(
       new Set(['ready', 'expired', 'unavailable']),
     );
+  });
+
+  it('lists the allowance that ends soonest first and keeps inventory order within a day', async () => {
+    const decisions = await resolveFreeQuotaDecisions(
+      context({ store: await attested(createMemoryKeyValueStore()) }),
+      { inventory: reviewedInventory },
+    );
+    const { models } = buildFreeQuotaCatalogue(decisions!);
+    const ends = models.map((model) => model.expiresOn);
+    const dated = ends.filter((end): end is string => end !== null);
+
+    expect(new Set(dated).size).toBeGreaterThan(1);
+    expect(dated).toEqual([...dated].sort());
+    expect(ends.slice(dated.length).every((end) => end === null)).toBe(true);
+    const inventoryIndex = new Map(
+      inventory.entries.map((entry, index) => [entry.offeringKey, index]),
+    );
+    for (let index = 1; index < models.length; index += 1) {
+      if (models[index]!.expiresOn !== models[index - 1]!.expiresOn) continue;
+      expect(inventoryIndex.get(models[index]!.key)!).toBeGreaterThan(
+        inventoryIndex.get(models[index - 1]!.key)!,
+      );
+    }
   });
 
   it('lets the laptop evidence file stand in only on a loopback development request', async () => {
@@ -736,6 +760,102 @@ describe('which free media offering is used first', () => {
       expect(freeMediaOfferFor(unattested, offer, category)).toBeNull();
     },
   );
+});
+
+describe('which free chat allocation a Free Auto turn spends first', () => {
+  const ranking = inventory.freeAutoFallback!.offeringKeys;
+
+  async function readyChat(store: KeyValueStore = createMemoryKeyValueStore()) {
+    const decisions = await resolveFreeQuotaDecisions(context({ store: await attested(store) }), {
+      inventory: reviewedInventory,
+    });
+    return decisions!.offerings.filter(
+      ({ offering, decision }) => decision.status === 'ready' && offering.category === 'chat',
+    );
+  }
+
+  function endsOn(candidate: Awaited<ReturnType<typeof readyChat>>[number]): string {
+    const retiresOn = candidate.offering.retiresAt?.slice(0, 10);
+    const allocationEnds = candidate.entry.expiresOn!;
+    return retiresOn && retiresOn < allocationEnds ? retiresOn : allocationEnds;
+  }
+
+  it('orders every ready chat allocation by the day it ends, soonest first', async () => {
+    const ready = await readyChat();
+    const order = freeQuotaChatUseOrder(ready, ranking);
+
+    expect(order.length).toBeGreaterThan(ranking.length);
+    expect(order.map(({ entry }) => entry.offeringKey).sort()).toEqual(
+      ready.map(({ entry }) => entry.offeringKey).sort(),
+    );
+    const ends = order.map(endsOn);
+    expect(new Set(ends).size).toBeGreaterThan(1);
+    expect(ends).toEqual([...ends].sort());
+  });
+
+  it('keeps the configured ranking among allocations that end on the same day, ahead of the ones it leaves out', async () => {
+    const order = freeQuotaChatUseOrder(await readyChat(), ranking);
+    const days = [...new Set(order.map(endsOn))];
+    let rankedDays = 0;
+
+    for (const day of days) {
+      const keys = order
+        .filter((item) => endsOn(item) === day)
+        .map((item) => item.entry.offeringKey);
+      const ranked = ranking.filter((key) => keys.includes(key));
+      if (ranked.length > 0) rankedDays += 1;
+      expect(keys.slice(0, ranked.length), day).toEqual(ranked);
+    }
+    expect(rankedDays).toBeGreaterThan(1);
+  });
+
+  it('puts an unranked allocation that must think after the ones that need not, each group in inventory order', async () => {
+    const order = freeQuotaChatUseOrder(await readyChat(), ranking);
+    const days = [...new Set(order.map(endsOn))];
+    let mixedDays = 0;
+
+    for (const day of days) {
+      const unranked = order.filter(
+        (item) => endsOn(item) === day && !ranking.includes(item.entry.offeringKey),
+      );
+      const thinks = unranked.map((item) => item.offering.quotaThinkingRequired === true);
+      if (new Set(thinks).size > 1) mixedDays += 1;
+      expect(thinks, day).toEqual([...thinks].sort((left, right) => Number(left) - Number(right)));
+      for (const mustThink of [false, true]) {
+        const keys = unranked
+          .filter((_, index) => thinks[index] === mustThink)
+          .map((item) => item.entry.offeringKey);
+        expect(keys, day).toEqual([...keys].sort());
+      }
+    }
+    expect(mixedDays).toBeGreaterThan(0);
+  });
+
+  it('stays on the allocation it started until that one can take no more', async () => {
+    const store = createMemoryKeyValueStore();
+    const [first, second] = freeQuotaChatUseOrder(await readyChat(store), ranking);
+    const usable = first!.decision.status === 'ready' ? first!.decision.usable : 0;
+    const spend = (units: number) =>
+      reserveFreeQuotaAllowance(store, {
+        apiKey: API_KEY,
+        observedOn: inventory.observedOn,
+        offeringKey: first!.entry.offeringKey,
+        expiresOn: first!.entry.expiresOn,
+        units,
+        usable,
+        nowMs: NOW,
+      });
+
+    await spend(Math.floor(usable / 2));
+    expect(freeQuotaChatUseOrder(await readyChat(store), ranking)[0]!.entry.offeringKey).toBe(
+      first!.entry.offeringKey,
+    );
+
+    await spend(usable - Math.floor(usable / 2));
+    expect(freeQuotaChatUseOrder(await readyChat(store), ranking)[0]!.entry.offeringKey).toBe(
+      second!.entry.offeringKey,
+    );
+  });
 });
 
 describe('how a free image or video offering is described and matched', () => {

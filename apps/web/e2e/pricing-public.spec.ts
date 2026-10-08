@@ -39,8 +39,8 @@ test.describe('/pricing Team billing toggle', () => {
 
       await expect(
         page
-          .locator('#pricing-team-title')
-          .locator('xpath=ancestor::article')
+          .locator('article')
+          .filter({ has: page.locator('#pricing-team-title') })
           .getByText(/^save \d+% annually$/i),
       ).toBeVisible();
 
@@ -102,21 +102,21 @@ test.describe('/pricing Team billing toggle', () => {
   }
 });
 
-const COMPARISON_VIEWPORTS = [
-  { width: 1180, height: 757 },
+const TABLE_VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 1100, height: 757 },
+] as const;
+
+const STACK_VIEWPORTS = [
+  { width: 1099, height: 757 },
   { width: 390, height: 844 },
   { width: 360, height: 800 },
 ] as const;
 
-type RegionGeometry = {
-  regionLeft: number;
-  regionTop: number;
-  lastRowHeaderLeft: number;
-  headerTop: number;
-  scrollLeft: number;
-  scrollTop: number;
-  pageOverflow: number;
-};
+const INDIVIDUAL_PLANS = ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x'];
+const BUSINESS_PLANS = ['Team', 'Enterprise'];
+const COMPARISON_GROUPS = ['Usage', 'Models', 'Features', 'Admin and data'];
+const TOUCH_TARGET = 44;
 
 async function openPricingComparison(page: Page) {
   await mockAuthProvider(page);
@@ -125,16 +125,13 @@ async function openPricingComparison(page: Page) {
   );
   const response = await page.goto('/pricing#pricing-compare-title');
   expect(response?.status()).toBe(200);
-}
-
-async function openComparison(page: Page) {
-  await openPricingComparison(page);
-  const reveal = page.getByRole('button', { name: 'Show the full table' });
-  if (await reveal.isVisible()) await reveal.click();
-  const region = page.getByRole('region', { name: 'Scrollable plan comparison' });
-  await expect(region).toBeVisible();
-  await region.scrollIntoViewIfNeeded();
-  return region;
+  const section = page.locator('section[aria-labelledby="pricing-compare-title"]');
+  await expect(section.getByRole('heading', { name: 'Compare plans' })).toBeVisible();
+  return {
+    section,
+    table: section.getByRole('table', { name: 'Compare plans' }),
+    select: section.getByRole('combobox', { name: 'Plan' }),
+  };
 }
 
 function pageOverflow(page: Page) {
@@ -143,170 +140,180 @@ function pageOverflow(page: Page) {
   );
 }
 
-test.describe('/pricing comparison shows one plan at a time on narrow screens', () => {
-  for (const viewport of COMPARISON_VIEWPORTS.filter((v) => v.width < 760)) {
-    test(`the stack is the only view at ${viewport.width}x${viewport.height} until the table is opted in`, async ({
+function rightmostEdge(items: Locator) {
+  return items.evaluateAll((elements) =>
+    Math.max(...elements.map((element) => element.getBoundingClientRect().right)),
+  );
+}
+
+async function expectNoDisclosureOrToggle(section: Locator) {
+  await expect(section.locator('details')).toHaveCount(0);
+  await expect(section.getByRole('button')).toHaveCount(0);
+  await expect(section.getByRole('region')).toHaveCount(0);
+  await expect(section.getByText(/scroll sideways/i)).toHaveCount(0);
+}
+
+test.describe('/pricing comparison stacks one plan at a time under 1100px', () => {
+  for (const viewport of STACK_VIEWPORTS) {
+    test(`the plan stack is the only comparison at ${viewport.width}x${viewport.height}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await openPricingComparison(page);
+      const { section, table, select } = await openPricingComparison(page);
 
-      const select = page.getByRole('combobox', { name: 'Plan' });
-      const table = page.getByRole('table', { name: 'Plan capabilities' });
-      const toggle = page.getByRole('button', { name: 'Show the full table' });
       await expect(select).toBeVisible();
       await expect(table).toBeHidden();
-      await expect(toggle).toBeVisible();
-      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expectNoDisclosureOrToggle(section);
       expect(await pageOverflow(page)).toBe(0);
+      expect((await select.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
-      const selectBox = await select.boundingBox();
-      expect(selectBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-      const toggleBox = await toggle.boundingBox();
-      expect(toggleBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-
+      await expect(select.locator('option')).toHaveText(INDIVIDUAL_PLANS);
+      await expect(section.locator('.agi-compare-stack-heading')).toHaveText(COMPARISON_GROUPS);
+      const items = section.locator('.agi-compare-stack-item');
+      const terms = items.locator('dt .agi-compare-row-label');
+      await expect(terms.first()).toHaveText('Managed usage');
+      expect(await terms.count()).toBeGreaterThan(15);
       const firstPlan = await select.inputValue();
-      const list = page.locator('.agi-compare-stack-list');
-      const terms = list.locator('dt');
-      await expect(terms.first()).toHaveText('Price');
-      expect(await terms.count()).toBeGreaterThan(10);
-      const firstValues = await list.locator('dd').allTextContents();
+      const firstValues = await items.locator('dd').allTextContents();
       expect(firstValues).toHaveLength(await terms.count());
+      expect(await rightmostEdge(items)).toBeLessThanOrEqual(viewport.width);
 
       await select.focus();
       await expect(select).toBeFocused();
-      await page.keyboard.press('t');
+      await page.keyboard.press('p');
       await expect.poll(() => select.inputValue()).not.toBe(firstPlan);
-      const secondPlan = await select.inputValue();
-      const secondLabel = await select.locator(`option[value="${secondPlan}"]`).textContent();
-      await expect(list).toHaveAttribute('aria-label', secondLabel ?? '');
-      expect(await list.locator('dd').allTextContents()).not.toEqual(firstValues);
+      await expect(select.locator('option:checked')).toHaveText('Pro');
+      expect(await items.locator('dd').allTextContents()).not.toEqual(firstValues);
+      expect(await rightmostEdge(items)).toBeLessThanOrEqual(viewport.width);
       expect(await pageOverflow(page)).toBe(0);
 
-      await toggle.click();
-      await expect(page.getByRole('button', { name: 'Hide the full table' })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      );
-      await expect(select).toBeHidden();
-      await expect(table).toBeVisible();
-      const region = page.getByRole('region', { name: 'Scrollable plan comparison' });
-      await expect(region).toBeVisible();
-      await expect(region.locator('tbody th[scope="row"]').first()).toHaveCSS('position', 'sticky');
+      await page.getByRole('button', { name: 'Team & Enterprise' }).click();
+      await expect(select.locator('option')).toHaveText(BUSINESS_PLANS);
+      await expect(select.locator('option:checked')).toHaveText('Team');
+      await expect(section.locator('.agi-compare-stack-price')).toContainText('per seat / month');
+      expect(await rightmostEdge(items)).toBeLessThanOrEqual(viewport.width);
       expect(await pageOverflow(page)).toBe(0);
-
-      const summary = page.locator('#pricing-compare-table summary');
-      await summary.focus();
-      await summary.press('Enter');
-      await expect(select).toBeVisible();
-      await expect(table).toBeHidden();
-      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      await expect(toggle).toBeFocused();
-      await toggle.press('Enter');
-      await expect(table).toBeVisible();
-      await expect(select).toBeHidden();
-
-      const hide = page.getByRole('button', { name: 'Hide the full table' });
-      await hide.click();
-      await expect(select).toBeVisible();
-      await expect(select).toHaveValue(secondPlan);
-      await expect(table).toBeHidden();
-      await expect(hide).toBeHidden();
-      await expect(toggle).toBeFocused();
     });
   }
-
-  test('only the table is exposed at 1180x757', async ({ page }) => {
-    await page.setViewportSize({ width: 1180, height: 757 });
-    await openPricingComparison(page);
-
-    await expect(page.getByRole('table', { name: 'Plan capabilities' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Plan' })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Show the full table' })).toBeHidden();
-    await expect(page.locator('.agi-compare-stack-list')).toBeHidden();
-  });
-
-  test('the desktop disclosure closes and reopens without moving focus', async ({ page }) => {
-    await page.setViewportSize({ width: 1180, height: 757 });
-    await openPricingComparison(page);
-
-    const summary = page.locator('#pricing-compare-table summary');
-    const table = page.getByRole('table', { name: 'Plan capabilities' });
-    await summary.focus();
-    await summary.press('Enter');
-
-    await expect(table).toBeHidden();
-    await expect(summary).toBeFocused();
-
-    await summary.press('Enter');
-
-    await expect(table).toBeVisible();
-    await expect(summary).toBeFocused();
-  });
 });
 
-function regionGeometry(region: Locator): Promise<RegionGeometry> {
-  return region.evaluate((el) => {
-    const bounds = el.getBoundingClientRect();
-    const rows = el.querySelectorAll('tbody tr');
-    const lastRowHeader = rows[rows.length - 1]?.querySelector('th[scope="row"]');
-    const lastHeader = el.querySelector('thead th:last-child');
-    if (!lastRowHeader || !lastHeader) throw new Error('comparison table is missing headers');
-    return {
-      regionLeft: bounds.left + el.clientLeft,
-      regionTop: bounds.top + el.clientTop,
-      lastRowHeaderLeft: lastRowHeader.getBoundingClientRect().left,
-      headerTop: lastHeader.getBoundingClientRect().top,
-      scrollLeft: el.scrollLeft,
-      scrollTop: el.scrollTop,
-      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    };
-  });
-}
-
-test.describe('/pricing comparison keeps plan names and capability headers pinned', () => {
-  for (const viewport of COMPARISON_VIEWPORTS) {
-    test(`row headers and the header row stay visible at ${viewport.width}x${viewport.height}`, async ({
+test.describe('/pricing comparison is one table from 1100px', () => {
+  for (const viewport of TABLE_VIEWPORTS) {
+    test(`plans run across the top with no sideways scroll at ${viewport.width}x${viewport.height}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      const region = await openComparison(page);
+      const { section, table, select } = await openPricingComparison(page);
 
-      await region.evaluate((el) => {
-        el.scrollLeft = el.scrollWidth;
-        el.scrollTop = el.scrollHeight;
+      await expect(table).toBeVisible();
+      await expect(select).toBeHidden();
+      await expect(page.locator('table')).toHaveCount(1);
+      await expectNoDisclosureOrToggle(section);
+
+      const planNames = table.locator('thead th .agi-compare-plan-name');
+      await expect(planNames).toHaveText(INDIVIDUAL_PLANS);
+      for (const header of await table.locator('thead th').all()) {
+        await expect(header.locator('.agi-compare-plan-price').first()).toContainText('/month');
+      }
+      await expect(table.locator('tr.agi-compare-group th')).toHaveText(COMPARISON_GROUPS);
+      await expect(table.locator('tbody th[scope="row"]').first()).toContainText('Managed usage');
+
+      const fits = () =>
+        table.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const scrollers: string[] = [];
+          for (let node = element.parentElement; node; node = node.parentElement) {
+            if (node.scrollWidth > node.clientWidth) scrollers.push(node.className || node.tagName);
+          }
+          return {
+            left: bounds.left,
+            right: bounds.right,
+            viewport: document.documentElement.clientWidth,
+            scrollers,
+          };
+        });
+      const individual = await fits();
+      expect(individual.left).toBeGreaterThanOrEqual(0);
+      expect(individual.right).toBeLessThanOrEqual(individual.viewport);
+      expect(individual.scrollers).toEqual([]);
+      expect(await pageOverflow(page)).toBe(0);
+
+      await page.getByRole('button', { name: 'Team & Enterprise' }).click();
+      await expect(planNames).toHaveText(BUSINESS_PLANS);
+      const team = table.locator('thead th').first();
+      await expect(team).toContainText('$20 per seat / month');
+      await expect(team).toContainText('billed yearly');
+      await page.getByRole('button', { name: /^Monthly/ }).click();
+      await expect(team).toContainText('$25 per seat / month');
+      await expect(team).toContainText('billed monthly');
+      await expect(table.locator('thead th').last()).toContainText('Custom pricing');
+
+      const business = await fits();
+      expect(business.right).toBeLessThanOrEqual(business.viewport);
+      expect(business.scrollers).toEqual([]);
+      expect(await pageOverflow(page)).toBe(0);
+    });
+
+    test(`plan names stay pinned under the site header while rows scroll at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const { table } = await openPricingComparison(page);
+      await expect(table).toBeVisible();
+
+      const lastRow = table.locator('tbody tr').last();
+      await lastRow.evaluate((row) => row.scrollIntoView({ block: 'center' }));
+
+      const pinned = await table.evaluate((element) => {
+        const siteHeader = document.querySelector('.agi-ds-header-surface');
+        const headers = [...element.querySelectorAll('thead th')];
+        const rows = element.querySelectorAll('tbody tr');
+        const last = rows[rows.length - 1];
+        if (!siteHeader || headers.length === 0 || !last) {
+          throw new Error('comparison table or site header is missing');
+        }
+        return {
+          siteHeaderBottom: siteHeader.getBoundingClientRect().bottom,
+          lastRowTop: last.getBoundingClientRect().top,
+          tableTop: element.getBoundingClientRect().top,
+          headers: headers.map((header) => {
+            const bounds = header.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              bounds.left + bounds.width / 2,
+              bounds.top + bounds.height / 2,
+            );
+            return {
+              top: bounds.top,
+              bottom: bounds.bottom,
+              position: getComputedStyle(header).position,
+              onTop: hit !== null && header.contains(hit),
+            };
+          }),
+        };
       });
-      const geometry = await regionGeometry(region);
-      expect(geometry.scrollLeft).toBeGreaterThan(0);
-      expect(geometry.scrollTop).toBeGreaterThan(0);
-      expect(Math.abs(geometry.lastRowHeaderLeft - geometry.regionLeft)).toBeLessThanOrEqual(1);
-      expect(Math.abs(geometry.headerTop - geometry.regionTop)).toBeLessThanOrEqual(1);
-      expect(geometry.pageOverflow).toBe(0);
 
-      await expect(region.locator('tbody tr:last-child th[scope="row"]')).toBeInViewport();
-      await expect(region.locator('thead th:last-child')).toBeInViewport();
+      expect(pinned.tableTop).toBeLessThan(0);
+      for (const header of pinned.headers) {
+        expect(header.position).toBe('sticky');
+        expect(Math.abs(header.top - pinned.siteHeaderBottom)).toBeLessThanOrEqual(1);
+        expect(header.onTop).toBe(true);
+        expect(pinned.lastRowTop).toBeGreaterThanOrEqual(header.bottom);
+      }
+      await expect(table.locator('thead th').last()).toBeInViewport();
+      await expect(lastRow).toBeInViewport();
     });
   }
 
-  test('the region scrolls with the keyboard once focused', async ({ page }) => {
-    await page.setViewportSize({ width: 1180, height: 757 });
-    const region = await openComparison(page);
-    await expect(region).toHaveAttribute('tabindex', '0');
-    await region.focus();
-    await expect(region).toBeFocused();
-    await page.keyboard.press('ArrowRight');
-    await expect.poll(() => region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
-    await page.keyboard.press('ArrowDown');
-    await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-  });
-
   for (const theme of ['light', 'dark'] as const) {
-    test(`sticky plan cells are opaque and clear AA in ${theme} mode`, async ({ page }) => {
+    test(`pinned plan cells are opaque and every comparison text clears AA in ${theme} mode`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: 1180, height: 757 });
       await page.emulateMedia({ colorScheme: theme });
-      const region = await openComparison(page);
+      const { table } = await openPricingComparison(page);
+      await expect(table).toBeVisible();
 
-      const measured = await region.evaluate((el) => {
+      const measured = await table.evaluate((element) => {
         const canvas = document.createElement('canvas');
         canvas.width = 1;
         canvas.height = 1;
@@ -326,31 +333,59 @@ test.describe('/pricing comparison keeps plan names and capability headers pinne
         };
         const luminance = (c: { r: number; g: number; b: number }) =>
           0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
-        const ratio = (fg: string, bg: string) => {
-          const a = luminance(parse(fg));
-          const b = luminance(parse(bg));
-          return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        const backdrop = (node: Element) => {
+          for (let current: Element | null = node; current; current = current.parentElement) {
+            const fill = getComputedStyle(current).backgroundColor;
+            if (parse(fill).a === 1) return fill;
+          }
+          return getComputedStyle(document.documentElement).backgroundColor;
         };
-        const cells = [...el.querySelectorAll('tbody th[scope="row"], thead th')];
-        return cells.map((cell) => {
-          const style = getComputedStyle(cell);
-          return {
-            text: cell.textContent?.trim() ?? '',
-            highlighted: cell.parentElement?.classList.contains('agi-compare-row--highlighted'),
-            position: style.position,
-            fillAlpha: parse(style.backgroundColor).a,
-            ratio: ratio(style.color, style.backgroundColor),
-          };
-        });
+        const texts = [
+          ...element.querySelectorAll(
+            [
+              '.agi-compare-plan-name',
+              '.agi-compare-plan-price',
+              '.agi-compare-group th',
+              '.agi-compare-row-label',
+              '.agi-compare-row-note',
+              '.agi-compare-value--text',
+              '.agi-compare-value--excluded',
+              '.agi-compare-value--included svg',
+            ].join(', '),
+          ),
+        ];
+        return {
+          pinned: [...element.querySelectorAll('thead th, thead td')].map((cell) => ({
+            position: getComputedStyle(cell).position,
+            fillAlpha: parse(getComputedStyle(cell).backgroundColor).a,
+          })),
+          texts: texts.map((node) => {
+            const style = getComputedStyle(node);
+            const fill = parse(backdrop(node));
+            const a = luminance(parse(style.color));
+            const b = luminance(fill);
+            return {
+              text: `${node.getAttribute('class') ?? node.tagName}: ${node.textContent?.trim() ?? ''}`,
+              fontSize: Number.parseFloat(style.fontSize),
+              fillAlpha: fill.a,
+              ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+            };
+          }),
+        };
       });
 
-      expect(measured.length).toBeGreaterThan(1);
-      const team = measured.find((cell) => cell.text === 'Team');
-      expect(team?.highlighted).toBe(true);
-      for (const cell of measured) {
-        expect(cell.position, cell.text).toBe('sticky');
-        expect(cell.fillAlpha, cell.text).toBe(1);
-        expect(cell.ratio, cell.text).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      expect(measured.pinned.length).toBeGreaterThan(1);
+      for (const cell of measured.pinned) {
+        expect(cell.position).toBe('sticky');
+        expect(cell.fillAlpha).toBe(1);
+      }
+      expect(measured.texts.length).toBeGreaterThan(50);
+      for (const node of measured.texts) {
+        expect(node.fillAlpha, node.text).toBe(1);
+        expect(node.ratio, node.text).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        if (!node.text.includes('svg')) {
+          expect(node.fontSize, node.text).toBeGreaterThanOrEqual(14);
+        }
       }
     });
   }

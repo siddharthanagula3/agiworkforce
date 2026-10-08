@@ -3,13 +3,25 @@
 import { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@/lib/compliance/free-plan-training-disclosure';
 import '@/features/marketing/components/pricing/pricing.css';
 import { PlanComparisonStack } from '@/features/marketing/components/pricing/PlanComparisonStack';
+import { PlanComparisonTable } from '@/features/marketing/components/pricing/PlanComparisonTable';
 import {
-  pricingDeveloperSurfaceCell,
+  CheckIcon,
+  EXCLUDED_CELL,
+  INCLUDED_CELL,
+  textCell,
+  type PlanComparisonCell,
+  type PlanComparisonGroup,
+  type PlanComparisonPlan,
+  type PlanComparisonRow,
+} from '@/features/marketing/components/pricing/PlanComparisonValue';
+import {
+  pricingDeveloperSurfaceNote,
+  pricingManagedChatSurfaceNote,
   pricingSurfaceStatus,
 } from '@/features/marketing/components/pricing/developer-surface-presentation';
 import { SURFACE_NAMES } from '@/lib/surface-status';
 import type { TFunction } from 'i18next';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
@@ -32,6 +44,7 @@ import {
   formatPrivacyModeLabel,
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
+  getMinimumRequiredTier,
   getModelMetadataById,
   getPlanContextWindowTokens,
   isPlanSelectableOnSurface,
@@ -45,8 +58,6 @@ import {
   isSelfServeIndividualPlanTier,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
-  PROVIDERS_IN_ORDER,
-  providerLabels,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
   type BillingInterval,
@@ -63,6 +74,7 @@ import {
 } from '@/features/models/lib/free-media-offer';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useMounted } from '@shared/hooks/useMounted';
+import { formatBytes } from '@shared/utils/format';
 import {
   upgradeToBasicPlan,
   upgradeToProPlan,
@@ -161,136 +173,50 @@ function formatLocalizedAmount(
   );
 }
 
-/**
- * Columns of the full comparison. Declared once so the disclosure summary can
- * count the same list the table renders, rather than a number that drifts.
- */
-const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
-  ['plan', 'Plan'],
-  ['price', 'Price'],
-  ['billingInterval', 'Billing'],
-  ['usageCapacity', 'Managed usage'],
-  ['trainingData', 'Trains on your content'],
-  ['teamAdmin', BILLING_PLAN_CAPABILITY_LABELS.team_admin],
-  ['enterpriseControls', BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls],
-  ['contextWindow', 'Context window'],
-  ['managedChat', BILLING_PLAN_CAPABILITY_LABELS.managed_chat],
-  ['projects', 'Projects'],
-  ['customMcp', 'Custom MCP'],
-  ['skillsConnectors', BILLING_PLAN_CAPABILITY_LABELS.skills_connectors],
-  ['agiWork', BILLING_PLAN_CAPABILITY_LABELS.agi_work],
-  ['deepResearch', BILLING_PLAN_CAPABILITY_LABELS.deep_research],
-  ['imageGeneration', BILLING_PLAN_CAPABILITY_LABELS.image_generation],
-  ['videoGeneration', BILLING_PLAN_CAPABILITY_LABELS.video_generation],
-  ['apiAccess', BILLING_PLAN_CAPABILITY_LABELS.managed_api],
-  ['developerSurfaces', BILLING_PLAN_CAPABILITY_LABELS.developer_surfaces],
-  ['bestFor', 'Best for'],
-];
-
-const COMPARISON_IDENTITY_COLUMNS: ReadonlySet<string> = new Set([
-  'plan',
-  'price',
-  'billingInterval',
-  'bestFor',
-]);
-
-const COMPARISON_CAPABILITY_COUNT = COMPARISON_COLUMNS.filter(
-  ([column]) => !COMPARISON_IDENTITY_COLUMNS.has(column),
-).length;
-
-const COMPARISON_VALUE_COLUMNS = COMPARISON_COLUMNS.filter(([column]) => column !== 'plan');
-
-function CheckIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="agi-tier-check-icon"
-    >
-      <path
-        d="M2 7L5.5 10.5L12 3.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 /** Annual savings vs monthly billing, from the canonical billing catalog. */
 function annualSavingsPct(plan: { monthlyPriceUsd: number; yearlyPriceUsd: number }): number {
   if (plan.monthlyPriceUsd <= 0 || plan.yearlyPriceUsd <= 0) return 0;
   return Math.round((1 - plan.yearlyPriceUsd / 12 / plan.monthlyPriceUsd) * 100);
 }
 
-interface CompareRow {
-  planId: BillingPlanTier;
-  label: string;
-  price: string;
-  billingInterval: string;
-  usageCapacity: string;
-  contextWindow: string;
-  managedChat: string;
-  projects: string;
-  customMcp: string;
-  skillsConnectors: string;
-  agiWork: string;
-  deepResearch: string;
-  imageGeneration: string;
-  videoGeneration: string;
-  apiAccess: string;
-  developerSurfaces: string;
-  teamAdmin: string;
-  enterpriseControls: string;
-  trainingData: string;
-  bestFor: string;
-  highlighted?: boolean;
-}
+type PricingAudience = 'individual' | 'business';
 
-const WRAPPING_COMPARISON_COLUMNS: ReadonlySet<string> = new Set([
-  'price',
-  'billingInterval',
-  'usageCapacity',
-  'bestFor',
-]);
+const COMPARED_PLANS = {
+  individual: ['free', ...SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER],
+  business: ['team', 'enterprise'],
+} as const satisfies Record<PricingAudience, readonly BillingPlanTier[]>;
 
-function comparisonCellClass(column: string): string {
-  if (column === 'price') return 'agi-compare-cell--ink';
-  if (WRAPPING_COMPARISON_COLUMNS.has(column)) return 'agi-compare-cell--wrap';
-  return 'agi-compare-cell--quiet';
-}
+type ComparedPlan = (typeof COMPARED_PLANS)[PricingAudience][number];
 
-function comparisonCellValue(column: string, row: CompareRow, t: TFunction<'pricing'>): string {
-  const value = String(
-    row[column as Exclude<keyof CompareRow, 'planId' | 'label' | 'highlighted'>],
-  );
-  return column === 'developerSurfaces' ? pricingDeveloperSurfaceCell(row.planId, value, t) : value;
-}
+const USAGE_WITHOUT_BASELINE_KEY: Partial<Record<ComparedPlan, string>> = {
+  free: 'compareFreeUsage',
+  enterprise: 'compareEnterpriseUsage',
+};
 
 // AGI trains on no plan's content. The Free plan is served by providers' free
 // models, whose own terms may allow training, so its cell says so.
 const UPGRADE_SETTLE_ATTEMPTS = 6;
 const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
 
-const TRAINING_DATA_DISCLOSURE = 'No';
-
-function formatLimit(limit: BillingPlanLimit, singular: string, plural: string): string {
-  if (limit === 'unlimited') return 'Unlimited';
-  if (limit === 'custom') return 'Custom';
-  return `${limit} ${limit === 1 ? singular : plural}`;
+function limitCell(
+  limit: BillingPlanLimit | undefined,
+  t: TFunction<'pricing'>,
+  formatCount: (count: number) => string = String,
+): PlanComparisonCell {
+  if (limit === undefined) return EXCLUDED_CELL;
+  if (limit === 'unlimited') return textCell(t('unlimited'));
+  if (limit === 'custom') return textCell(t('custom'));
+  return textCell(formatCount(limit));
 }
 
-function capabilityCell(plan: BillingPlanTier, capability: BillingPlanCapability): string {
-  return canUseBillingPlanCapability(plan, capability) ? 'Yes' : 'No';
+function capabilityCell(
+  plan: BillingPlanTier,
+  capability: BillingPlanCapability,
+): PlanComparisonCell {
+  return canUseBillingPlanCapability(plan, capability) ? INCLUDED_CELL : EXCLUDED_CELL;
 }
 
 const NO_FREE_MEDIA_OFFER: FreeQuotaMediaOffer = { image: null, video: null };
-const LIMITED_PREVIEW_CELL = 'Limited preview';
 const FREE_MEDIA_FEATURE = {
   both: 'freeMediaFeatureBoth',
   image: 'freeMediaFeatureImage',
@@ -301,14 +227,15 @@ function mediaCapabilityCell(
   plan: BillingPlanTier,
   category: FreeQuotaMediaCategory,
   offer: FreeMediaCategoryOffer | null,
-): string {
+  limitedPreview: string,
+): PlanComparisonCell {
   const standing = freeMediaPlanStanding(plan, category);
   const access = freeMediaAccess({
     planIncludes: standing === 'included',
     offer: standing === 'offer_eligible' ? offer : null,
   });
-  if (access.label === 'included') return 'Yes';
-  return access.label === 'limited' ? LIMITED_PREVIEW_CELL : 'No';
+  if (access.label === 'included') return INCLUDED_CELL;
+  return access.label === 'limited' ? textCell(limitedPreview) : EXCLUDED_CELL;
 }
 
 function freeMediaFeatureKey(
@@ -323,114 +250,47 @@ const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en', {
   maximumFractionDigits: 2,
 });
 
-function contextWindowCell(plan: BillingPlanTier): string {
+function contextWindowCell(plan: BillingPlanTier, t: TFunction<'pricing'>): PlanComparisonCell {
   const tokens = getPlanContextWindowTokens(plan);
   return tokens === null
-    ? 'Model-dependent'
-    : `Up to ${CONTEXT_WINDOW_FORMAT.format(tokens)} tokens`;
+    ? EXCLUDED_CELL
+    : textCell(t('compareContextTokens', { tokens: CONTEXT_WINDOW_FORMAT.format(tokens) }));
 }
-
-function managedPlanCapabilities(plan: BillingPlanTier, freeMedia: FreeQuotaMediaOffer) {
-  const limits = getBillingPlanProductLimits(plan);
-  return {
-    contextWindow: contextWindowCell(plan),
-    managedChat: capabilityCell(plan, 'managed_chat'),
-    projects: limits ? formatLimit(limits.projects, 'project', 'projects') : ', ',
-    customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : ', ',
-    skillsConnectors: capabilityCell(plan, 'skills_connectors'),
-    agiWork: capabilityCell(plan, 'agi_work'),
-    deepResearch: capabilityCell(plan, 'deep_research'),
-    imageGeneration: mediaCapabilityCell(plan, 'image', freeMedia.image),
-    videoGeneration: mediaCapabilityCell(plan, 'video', freeMedia.video),
-    apiAccess: capabilityCell(plan, 'managed_api'),
-    developerSurfaces: capabilityCell(plan, 'developer_surfaces'),
-    teamAdmin: capabilityCell(plan, 'team_admin'),
-    enterpriseControls: capabilityCell(plan, 'enterprise_controls'),
-    trainingData: isFreeOfChargePlanTier(plan)
-      ? FREE_PLAN_TRAINING_DATA_DISCLOSURE
-      : TRAINING_DATA_DISCLOSURE,
-  };
-}
-
-/**
- * A per-provider "models included" matrix generated live from the canonical
- * catalog
- * (packages/contracts/types/src/models.json's `tierAllowedModels`), through
- * the SAME `canAccessModelForSubscriptionTier` gate the in-app model picker
- * enforces (apps/web/features/chat/components/Composer/ComposerFooter.tsx's
- * `modelLock` -> `isModelSelectableForTier` -> that function). Grouped by
- * provider rather than one row per model, models.json's own verificationLog
- * notes the roster changes weekly, and a
- * hand-typed per-model table would rot the moment it did. Team and Enterprise
- * are folded onto Pro's and Max's columns respectively because
- * `canAccessModelForSubscriptionTier` normalizes them to the same access
- * level (`normalizeSubscriptionAccessTier`: team -> pro, and max/enterprise
- * both unlock the full flagship roster), the column headers say so plainly
- * rather than implying four identical columns are different.
- */
-const MODEL_ACCESS_COLUMNS: ReadonlyArray<{ label: string; plan: BillingPlanTier }> = [
-  { label: BILLING_PLAN_PRICING.free.label, plan: 'free' },
-  { label: BILLING_PLAN_PRICING.basic.label, plan: 'basic' },
-  { label: `${BILLING_PLAN_PRICING.pro.label} & ${BILLING_PLAN_PRICING.team.label}`, plan: 'pro' },
-  {
-    label: [
-      `${BILLING_PLAN_PRICING.max.label}, ${BILLING_PLAN_PRICING.max_15x.label}`,
-      BILLING_PLAN_PRICING.enterprise.label,
-    ].join(' & '),
-    plan: 'max',
-  },
-];
 
 const FLAGSHIP_MODEL_COUNT = getAllowedModelsForTier('flagship_additions').length;
 
-interface ModelAccessRow {
-  provider: string;
-  label: string;
-  total: number;
-  accessByColumn: number[];
-}
+const MODEL_TIER_LABEL_KEYS = {
+  free: 'compareModelsFree',
+  basic: 'compareModelsFast',
+  pro: 'compareModelsBalanced',
+  max: 'compareModelsFlagship',
+} as const satisfies Record<NonNullable<ReturnType<typeof getMinimumRequiredTier>>, string>;
 
-function modelAccessByProvider(): ModelAccessRow[] {
-  const rosterModelIds = Array.from(
-    new Set([
-      ...getAllowedModelsForTier('economy'),
-      ...getAllowedModelsForTier('pro_additions'),
-      ...getAllowedModelsForTier('flagship_additions'),
-    ]),
-  );
+type ModelTierFloor = keyof typeof MODEL_TIER_LABEL_KEYS;
 
-  const modelIdsByProvider = new Map<string, string[]>();
-  for (const modelId of rosterModelIds) {
-    const metadata = getModelMetadataById(modelId);
-    if (!metadata) continue;
-    const bucket = modelIdsByProvider.get(metadata.provider) ?? [];
-    bucket.push(modelId);
-    modelIdsByProvider.set(metadata.provider, bucket);
-  }
+const PLAN_ROSTER_MODEL_IDS = Array.from(
+  new Set([
+    ...getAllowedModelsForTier('economy'),
+    ...getAllowedModelsForTier('pro_additions'),
+    ...getAllowedModelsForTier('flagship_additions'),
+  ]),
+);
 
-  return PROVIDERS_IN_ORDER.filter((provider) => modelIdsByProvider.has(provider)).map(
-    (provider) => {
-      const providerModelIds = modelIdsByProvider.get(provider) ?? [];
-      return {
-        provider,
-        label: providerLabels[provider] ?? provider,
-        total: providerModelIds.length,
-        accessByColumn: MODEL_ACCESS_COLUMNS.map(
-          (column) =>
-            providerModelIds.filter((modelId) =>
-              canAccessModelForSubscriptionTier(modelId, column.plan),
-            ).length,
-        ),
-      };
-    },
-  );
-}
-
-function formatModelAccess(accessibleCount: number, total: number): string {
-  if (accessibleCount === 0) return 'None';
-  if (accessibleCount === total) return total === 1 ? 'Included' : `All ${total}`;
-  return `${accessibleCount} of ${total}`;
-}
+const MODEL_TIERS = (Object.keys(MODEL_TIER_LABEL_KEYS) as ModelTierFloor[])
+  .map((floor) => {
+    const modelIds = PLAN_ROSTER_MODEL_IDS.filter(
+      (modelId) => getMinimumRequiredTier(modelId) === floor,
+    );
+    return {
+      floor,
+      modelIds,
+      modelNames: modelIds
+        .map((modelId) => getModelMetadataById(modelId)?.name)
+        .filter((name): name is string => Boolean(name))
+        .join(', '),
+    };
+  })
+  .filter((tier) => tier.modelIds.length > 0);
 
 export default function PricingPage() {
   const { t } = useTranslation('pricing');
@@ -462,11 +322,8 @@ export default function PricingPage() {
     }
   }, [billing?.plan, refetchBilling]);
 
-  const [audience, setAudience] = useState<'individual' | 'business'>('individual');
+  const [audience, setAudience] = useState<PricingAudience>('individual');
   const [maxVariant, setMaxVariant] = useState<'max' | 'max_15x'>('max');
-  const [fullTableShown, setFullTableShown] = useState(false);
-  const [comparisonOpen, setComparisonOpen] = useState(true);
-  const comparisonToggleRef = useRef<HTMLButtonElement>(null);
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [freeMediaOffer, setFreeMediaOffer] = useState<FreeQuotaMediaOffer>(NO_FREE_MEDIA_OFFER);
@@ -908,10 +765,6 @@ export default function PricingPage() {
     return parts.filter((part): part is string => Boolean(part));
   }
 
-  function usageCapacityCopy(plan: BillingPlanTier): string {
-    return usageComparisonCopy(plan).join(' · ');
-  }
-
   const usageExplainer = `${t('usageWindowsExplainer')} ${t('flagshipShare', {
     baseline: pro.label,
     percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
@@ -964,131 +817,128 @@ export default function PricingPage() {
           t('max15xFeature6'),
         ]);
 
-  const compareRows: CompareRow[] = [
+  const comparedPlanIds = COMPARED_PLANS[audience].filter((plan) =>
+    isPlanSelectableOnSurface(plan, 'web'),
+  );
+  const perMonthPrice = (price: string) => `${price}${t('perMonth')}`;
+  const comparedPlanPrices: Record<ComparedPlan, Pick<PlanComparisonPlan, 'price' | 'billing'>> = {
+    free: { price: perMonthPrice(freePrice) },
+    basic: { price: perMonthPrice(basicPrice) },
+    pro: { price: perMonthPrice(proPrice) },
+    max: { price: perMonthPrice(maxPrice) },
+    max_15x: { price: perMonthPrice(max15xPrice) },
+    team: {
+      price: `${teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice} ${t('perSeatPricingSub')}`,
+      billing: teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly'),
+    },
+    enterprise: {
+      price: `${t('custom')} ${t('customPricingSub')}`,
+      billing: t('annualContract'),
+    },
+  };
+  const comparisonPlans: PlanComparisonPlan[] = comparedPlanIds.map((plan) => ({
+    planId: plan,
+    label: BILLING_PLAN_PRICING[plan].label,
+    ...comparedPlanPrices[plan],
+  }));
+
+  const comparisonRow = (
+    id: string,
+    label: string,
+    cell: (plan: ComparedPlan) => PlanComparisonCell,
+    note?: string,
+  ): PlanComparisonRow => ({
+    id,
+    label,
+    ...(note ? { note } : {}),
+    cells: Object.fromEntries(comparedPlanIds.map((plan) => [plan, cell(plan)])),
+  });
+  const capabilityRow = (capability: BillingPlanCapability, note?: string) =>
+    comparisonRow(
+      capability,
+      BILLING_PLAN_CAPABILITY_LABELS[capability],
+      (plan) => capabilityCell(plan, capability),
+      note,
+    );
+  const mediaRow = (
+    capability: 'image_generation' | 'video_generation',
+    category: FreeQuotaMediaCategory,
+  ) =>
+    comparisonRow(capability, BILLING_PLAN_CAPABILITY_LABELS[capability], (plan) =>
+      mediaCapabilityCell(plan, category, freeMediaOffer[category], t('compareLimitedPreview')),
+    );
+  const usageCell = (plan: ComparedPlan): PlanComparisonCell => {
+    const lines = usageComparisonCopy(plan);
+    if (lines.length > 0) return textCell(...lines);
+    const withoutBaseline = USAGE_WITHOUT_BASELINE_KEY[plan];
+    return withoutBaseline ? textCell(t(withoutBaseline)) : EXCLUDED_CELL;
+  };
+
+  const comparisonGroups: PlanComparisonGroup[] = [
     {
-      planId: 'local-only',
-      label: localLabel,
-      price: t('free'),
-      billingInterval: t('foreverLabel'),
-      usageCapacity: t('compareLocalUsage'),
-      contextWindow: 'Model-dependent',
-      managedChat: 'No',
-      projects: 'Device-bound',
-      customMcp: 'Unlimited local',
-      skillsConnectors: 'Local',
-      agiWork: 'Local',
-      deepResearch: capabilityCell('local-only', 'deep_research'),
-      imageGeneration: 'Model-dependent',
-      videoGeneration: 'Model-dependent',
-      apiAccess: 'No',
-      developerSurfaces: 'Local in the CLI',
-      teamAdmin: 'No',
-      enterpriseControls: 'No',
-      trainingData: TRAINING_DATA_DISCLOSURE,
-      bestFor: t('compareLocalBestFor'),
+      id: 'usage',
+      label: t('compareGroupUsage'),
+      rows: [
+        comparisonRow('managedUsage', t('compareRowManagedUsage'), usageCell),
+        comparisonRow('contextWindow', t('compareRowContextWindow'), (plan) =>
+          contextWindowCell(plan, t),
+        ),
+      ],
     },
     {
-      planId: 'byok',
-      label: byokLabel,
-      price: t('free'),
-      billingInterval: t('foreverLabel'),
-      usageCapacity: t('compareByokUsage'),
-      contextWindow: 'Provider-dependent',
-      managedChat: 'No',
-      projects: 'Device-bound',
-      customMcp: 'Unlimited custom',
-      skillsConnectors: 'Local',
-      agiWork: 'Local',
-      deepResearch: capabilityCell('byok', 'deep_research'),
-      imageGeneration: 'Provider-dependent',
-      videoGeneration: 'Provider-dependent',
-      apiAccess: 'Your provider API',
-      developerSurfaces: 'Your keys in the CLI',
-      teamAdmin: 'No',
-      enterpriseControls: 'No',
-      trainingData: TRAINING_DATA_DISCLOSURE,
-      bestFor: t('compareByokBestFor'),
+      id: 'models',
+      label: t('compareGroupModels'),
+      rows: MODEL_TIERS.map((tier) =>
+        comparisonRow(
+          `models-${tier.floor}`,
+          t(MODEL_TIER_LABEL_KEYS[tier.floor]),
+          (plan) =>
+            tier.modelIds.every((modelId) => canAccessModelForSubscriptionTier(modelId, plan))
+              ? INCLUDED_CELL
+              : EXCLUDED_CELL,
+          tier.modelNames,
+        ),
+      ),
     },
     {
-      planId: 'free',
-      label: BILLING_PLAN_PRICING.free.label,
-      price: t('free'),
-      billingInterval: t('foreverLabel'),
-      usageCapacity: t('compareFreeUsage'),
-      ...managedPlanCapabilities('free', freeMediaOffer),
-      bestFor: t('compareFreeBestFor'),
+      id: 'features',
+      label: t('features'),
+      rows: [
+        capabilityRow('managed_chat', pricingManagedChatSurfaceNote(t)),
+        comparisonRow('projects', BILLING_PLAN_CAPABILITY_LABELS.projects, (plan) =>
+          limitCell(getBillingPlanProductLimits(plan)?.projects, t),
+        ),
+        comparisonRow('knowledgeStorage', t('compareRowKnowledgeStorage'), (plan) =>
+          limitCell(getBillingPlanProductLimits(plan)?.knowledgeStorageBytes, t, (bytes) =>
+            formatBytes(bytes, 0),
+          ),
+        ),
+        comparisonRow('customMcp', t('compareRowCustomMcp'), (plan) =>
+          limitCell(getBillingPlanProductLimits(plan)?.customMcpServers, t),
+        ),
+        capabilityRow('skills_connectors'),
+        capabilityRow('agi_work'),
+        capabilityRow('deep_research'),
+        mediaRow('image_generation', 'image'),
+        mediaRow('video_generation', 'video'),
+        capabilityRow('managed_api'),
+        capabilityRow('developer_surfaces', pricingDeveloperSurfaceNote(t)),
+      ],
     },
     {
-      planId: 'basic',
-      label: basic.label,
-      price: `${basicPrice}/mo`,
-      billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('basic'),
-      ...managedPlanCapabilities('basic', freeMediaOffer),
-      bestFor: t('compareBasicBestFor'),
-    },
-    {
-      planId: 'pro',
-      label: pro.label,
-      price: `${proPrice}/mo`,
-      billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('pro'),
-      ...managedPlanCapabilities('pro', freeMediaOffer),
-      bestFor: t('compareProBestFor'),
-    },
-    {
-      planId: 'max',
-      label: max.label,
-      price: `${maxPrice}/mo`,
-      billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('max'),
-      ...managedPlanCapabilities('max', freeMediaOffer),
-      bestFor: t('compareMaxBestFor'),
-    },
-    {
-      planId: 'max_15x',
-      label: max15x.label,
-      price: `${max15xPrice}/mo`,
-      billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('max_15x'),
-      ...managedPlanCapabilities('max_15x', freeMediaOffer),
-      bestFor: 'Highest-capacity work and video generation',
-    },
-    {
-      planId: 'team',
-      label: team.label,
-      price: teamYearlyAvailable
-        ? t('compareTeamPriceYearly', {
-            yearly: teamYearlySeatPricePerMonth,
-            monthly: teamSeatPrice,
-          })
-        : t('perSeatPrice', { price: teamSeatPrice }),
-      billingInterval: teamYearlyAvailable
-        ? t('compareTeamBillingYearly')
-        : t('compareTeamBilling'),
-      usageCapacity: usageCapacityCopy('team'),
-      ...managedPlanCapabilities('team', freeMediaOffer),
-      bestFor: t('compareTeamBestFor'),
-      highlighted: true,
-    },
-    {
-      planId: 'enterprise',
-      label: BILLING_PLAN_PRICING.enterprise.label,
-      price: t('custom'),
-      billingInterval: t('annualContract'),
-      usageCapacity: t('compareEnterpriseUsage'),
-      ...managedPlanCapabilities('enterprise', freeMediaOffer),
-      bestFor: t('compareEnterpriseBestFor'),
-      highlighted: true,
+      id: 'admin',
+      label: t('compareGroupAdmin'),
+      rows: [
+        capabilityRow('team_admin'),
+        capabilityRow('enterprise_controls'),
+        comparisonRow('trainingData', t('compareRowTrainsOnContent'), (plan) =>
+          textCell(
+            isFreeOfChargePlanTier(plan) ? FREE_PLAN_TRAINING_DATA_DISCLOSURE : t('compareNo'),
+          ),
+        ),
+      ],
     },
   ];
-
-  // Filtered once: the table renders these and the disclosure summary counts
-  // them, so the two can never disagree about how many plans are compared.
-  const comparableRows = compareRows.filter((row) => isPlanSelectableOnSurface(row.planId, 'web'));
-  const comparablePlanCount = comparableRows.length;
-  const presentedComparisonCellValue = (column: string, row: CompareRow) =>
-    comparisonCellValue(column, row, t);
 
   return (
     <div data-design="agi" data-public-reference="pricing">
@@ -1479,140 +1329,24 @@ export default function PricingPage() {
           <h2 id="pricing-compare-title" className="agi-fl-h2">
             {t('compareHeading')}
           </h2>
-          <div
-            className={
-              fullTableShown ? 'agi-compare-views agi-compare-views--table' : 'agi-compare-views'
-            }
-          >
-            <div className="agi-compare-narrow">
-              <button
-                ref={comparisonToggleRef}
-                type="button"
-                className="agi-tier-cta agi-tier-cta--ghost agi-compare-table-toggle"
-                aria-expanded={fullTableShown}
-                aria-controls="pricing-compare-table"
-                onClick={() => {
-                  if (!fullTableShown) setComparisonOpen(true);
-                  setFullTableShown((shown) => !shown);
-                }}
-              >
-                {t(fullTableShown ? 'compareHideFullTable' : 'compareShowFullTable')}
-              </button>
-              <PlanComparisonStack
-                rows={comparableRows}
-                columns={COMPARISON_VALUE_COLUMNS}
-                cellValue={presentedComparisonCellValue}
-              />
-            </div>
-            <details
-              id="pricing-compare-table"
-              className="agi-compare-disclosure"
-              open={comparisonOpen}
-              onToggle={(event) => {
-                const open = event.currentTarget.open;
-                const hidesFocus = !open && event.currentTarget.contains(document.activeElement);
-                setComparisonOpen(open);
-                if (!open) {
-                  setFullTableShown(false);
-                  const toggle = comparisonToggleRef.current;
-                  if (hidesFocus && toggle?.getClientRects().length) toggle.focus();
-                }
-              }}
-            >
-              <summary className="agi-compare-summary">
-                <span>{t('compareTableTitle')}</span>
-                <span className="agi-compare-summary-hint agi-compare-count">
-                  {t('compareTableHint', {
-                    plans: comparablePlanCount,
-                    capabilities: COMPARISON_CAPABILITY_COUNT,
-                  })}
-                </span>
-              </summary>
-              <div>
-                <p className="agi-compare-cue">{t('compareScrollCue')}</p>
-                <div
-                  aria-label="Scrollable plan comparison"
-                  role="region"
-                  tabIndex={0}
-                  className="agi-compare-scroll"
-                >
-                  <table aria-label="Plan capabilities" className="agi-compare-table">
-                    <thead>
-                      <tr>
-                        {COMPARISON_COLUMNS.map(([col, label]) => (
-                          <th key={col} scope="col">
-                            {label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {comparableRows.map((row) => (
-                        <tr
-                          key={row.planId}
-                          className={row.highlighted ? 'agi-compare-row--highlighted' : undefined}
-                        >
-                          <th scope="row">{row.label}</th>
-                          {COMPARISON_VALUE_COLUMNS.map(([col]) => (
-                            <td key={`${row.planId}-${col}`} className={comparisonCellClass(col)}>
-                              {presentedComparisonCellValue(col, row)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </details>
+          <div className="agi-compare-wide">
+            <PlanComparisonTable
+              labelledBy="pricing-compare-title"
+              plans={comparisonPlans}
+              groups={comparisonGroups}
+            />
           </div>
-        </section>
-
-        <section className="agi-fl-section" aria-labelledby="pricing-models-title">
-          <h2 id="pricing-models-title" className="agi-fl-h2">
-            Model eligibility by plan
-          </h2>
-          <p className="agi-fl-section-lede">
-            Counts show plan eligibility for models in the plan catalog. Availability also depends
-            on the route and environment.
+          <div className="agi-compare-narrow">
+            <PlanComparisonStack plans={comparisonPlans} groups={comparisonGroups} />
+          </div>
+          <p className="agi-compare-footnote">
+            {t('compareLocalByokNote', {
+              localLabel,
+              byokLabel,
+              surface: SURFACE_NAMES.cli,
+              status: pricingSurfaceStatus('cli', t),
+            })}
           </p>
-          <div
-            aria-label="Scrollable model access by plan"
-            role="region"
-            tabIndex={0}
-            className="agi-compare-scroll agi-compare-scroll--models"
-          >
-            <table
-              aria-label="Model access by plan"
-              className="agi-compare-table agi-compare-table--models"
-            >
-              <thead>
-                <tr>
-                  <th scope="col">Provider</th>
-                  {MODEL_ACCESS_COLUMNS.map((column) => (
-                    <th key={column.label} scope="col">
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {modelAccessByProvider().map((row) => (
-                  <tr key={row.provider}>
-                    <th scope="row">{row.label}</th>
-                    {row.accessByColumn.map((accessibleCount, columnIndex) => (
-                      <td
-                        key={`${row.provider}-${MODEL_ACCESS_COLUMNS[columnIndex]?.label}`}
-                        className="agi-compare-cell--quiet"
-                      >
-                        {formatModelAccess(accessibleCount, row.total)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="pricing-faq-title">
