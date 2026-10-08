@@ -4,7 +4,7 @@ title: Privacy controls in Settings
 path: /privacy
 category: privacy
 tags: privacy, data controls, telemetry, crash reports, training, retention, where is my data, encryption, sell data, anonymized usage
-updated: 2026-10-02
+updated: 2026-10-07
 scope: public
 ---
 
@@ -13,9 +13,14 @@ scope: public
 In Local mode on the CLI, conversations stay on your device and are never
 uploaded. CLI BYOK sends requests directly to the provider you select; VS Code
 BYOK is coming soon. Web, Mobile, Desktop and Chrome use managed cloud and do not
-accept provider keys. Managed cloud conversations are encrypted in transit and
-at rest. AGI does not sell your data, and does not use customer conversation
-content to train AGI-owned models.
+accept provider keys. Managed cloud conversations are encrypted in transit, and
+at rest by the database and object-storage vendors that hold them, as a property
+of those vendors' platforms and not a layer AGI adds. AGI does not sell your
+data, and does not use customer conversation content to train AGI-owned models.
+The Free plan is served by free capacity from model providers, AGI picks the
+provider for the default model, and some of those providers' terms may allow
+training on what you send; to keep your chats out of training, turn on
+**Only use models that do not train on your chats** in Settings, Privacy.
 
 ## Diagnostics
 

@@ -5,7 +5,7 @@ path: /docs
 category: getting-started
 tags: glossary, terminology, definitions, what does mean, jargon, terms, vocabulary, acronym
 platforms: web, desktop, cli, mobile, vscode, chrome, macos, windows, linux, ios, android
-updated: 2026-09-27
+updated: 2026-10-07
 scope: public
 ---
 
@@ -25,8 +25,9 @@ free, and inference can run offline once the runtime and model are installed.
 
 **BYOK**, "bring your own key", means you supply a provider API key and AGI
 sends your requests directly to that provider with it. By default the CLI stores
-keys in your operating system's credential store. Your provider bills the usage,
-and AGI adds no markup. BYOK is free.
+keys in your operating system's credential store, and in owner-only files on
+Linux or when the keyring is turned off. Your provider bills the usage, and AGI
+adds no markup. BYOK is free.
 
 **Managed cloud** runs on AGI-operated provider access. It is metered, and it
 refuses BYOK credentials by design so the two trust boundaries stay separate.

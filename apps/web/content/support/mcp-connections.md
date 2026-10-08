@@ -4,7 +4,7 @@ title: Connect a custom MCP server
 path: /connectors/mcp-directory
 category: connectors
 tags: mcp, model context protocol, custom mcp, mcp server, remote mcp, mcp url, auth token, tool discovery, mcp directory, mcp-server, scopes
-updated: 2026-09-17
+updated: 2026-10-08
 scope: public
 ---
 
@@ -16,8 +16,12 @@ call them on your behalf, under the same approval rules as any other connector.
 
 ## Adding one
 
-A custom MCP connection needs three things: a name to show it under, the
-server's URL, and an auth token if the server requires one. AGI then queries the
+Connectors are coming soon, and none can be connected until they open, a
+custom MCP server included. The steps below apply once they open.
+
+A custom MCP connection needs a name to show it under and the server's URL,
+plus either an auth token or an OAuth client ID and secret if the server
+requires one. AGI then queries the
 server for its tools, showing "Discovering live MCP capabilities…" while it
 does.
 
