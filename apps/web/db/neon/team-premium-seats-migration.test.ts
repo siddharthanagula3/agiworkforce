@@ -2,10 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-describe('Team Premium seats migration (0355)', () => {
-  const load = () => readFile(join(process.cwd(), 'db/neon/0355_team_premium_seats.sql'), 'utf8');
+describe('Team Premium seats migration (0356)', () => {
+  const load = () => readFile(join(process.cwd(), 'db/neon/0356_team_premium_seats.sql'), 'utf8');
   const loadDown = () =>
-    readFile(join(process.cwd(), 'db/neon/down/0355_team_premium_seats.down.sql'), 'utf8');
+    readFile(join(process.cwd(), 'db/neon/down/0356_team_premium_seats.down.sql'), 'utf8');
 
   it('records how many licensed seats are Premium, starting every organization at none', async () => {
     const sql = await load();
@@ -30,7 +30,7 @@ describe('Team Premium seats migration (0355)', () => {
   it('refuses a Premium membership beyond the paid Premium seats, inside the database', async () => {
     const sql = await load();
     expect(sql).toMatch(
-      /create trigger guard_premium_seat_assignment\s+before insert or update of seat_type, organization_id on public\.organization_members/i,
+      /create trigger guard_premium_seat_assignment\s+before insert or update on public\.organization_members/i,
     );
     expect(sql).toMatch(/if assigned_premium \+ 1 > paid_premium then/i);
     expect(sql).toMatch(/errcode = 'check_violation'/i);
@@ -49,7 +49,9 @@ describe('Team Premium seats migration (0355)', () => {
 
   it('does not count the row being written against itself', async () => {
     const sql = await load();
-    expect(sql).toMatch(/and m\.seat_type = 'premium'\s+and m\.user_id <> new\.user_id/i);
+    expect(sql).toMatch(
+      /and m\.seat_type = 'premium'\s+and m\.status = 'active'\s+and m\.user_id <> new\.user_id/i,
+    );
   });
 
   it('runs the assignment guard with a pinned search path and no public execute', async () => {
@@ -83,6 +85,38 @@ describe('Team Premium seats migration (0355)', () => {
     );
   });
 
+  it('counts only active members, so a removed member never holds a paid Premium seat', async () => {
+    const sql = await load();
+    expect(sql).toMatch(/if new\.seat_type <> 'premium' or new\.status <> 'active' then/i);
+    expect(sql).toMatch(/where seat_type = 'premium' and status = 'active';/i);
+  });
+
+  it('brings a reactivated Premium member back on Standard when no paid seat is free', async () => {
+    const sql = await load();
+    expect(sql).toMatch(
+      /if becomes_active and new\.seat_type is not distinct from old\.seat_type then\s+new\.seat_type := 'standard';/i,
+    );
+  });
+
+  it('refuses the application role a paid-through date, which would grant Premium on its own', async () => {
+    const sql = await load();
+    const guard = sql.slice(
+      sql.search(/create or replace function public\.guard_premium_paid_through/i),
+    );
+    expect(guard.split('$$;')[0]).not.toMatch(/security definer/i);
+    expect(guard).toMatch(
+      /if current_user = 'app_rls'\s+and new\.premium_paid_through is not null[\s\S]{0,400}insufficient_privilege/i,
+    );
+    expect(sql).toMatch(
+      /create trigger guard_premium_paid_through\s+before insert or update of premium_paid_through on public\.organization_members/i,
+    );
+  });
+
+  it('moves the seat assignment time only when the seat type moves', async () => {
+    const sql = await load();
+    expect(sql).toMatch(/new\.seat_type_changed_at := old\.seat_type_changed_at;\s+return new;/i);
+  });
+
   it('leaves the total seat ceiling from 0085 alone', async () => {
     const sql = await load();
     expect(sql).not.toMatch(/organizations_seats_within_license/i);
@@ -104,13 +138,14 @@ describe('Team Premium seats migration (0355)', () => {
       /alter table public\.organizations drop column if exists licensed_premium_seats;/i,
     );
     expect(down).toMatch(/drop function if exists public\.guard_premium_seat_assignment\(\)/i);
+    expect(down).toMatch(/drop function if exists public\.guard_premium_paid_through\(\)/i);
     const restored = down.slice(
       down.search(/create or replace function public\.guard_organization_seat_columns/i),
     );
     expect(restored).toMatch(/new\.licensed_seats is distinct from old\.licensed_seats/i);
     expect(restored.split('$$;')[0]).not.toMatch(/licensed_premium_seats/i);
     expect(down).toMatch(
-      /delete from public\.schema_migrations\s+where filename = '0355_team_premium_seats\.sql'/i,
+      /delete from public\.schema_migrations\s+where filename = '0356_team_premium_seats\.sql'/i,
     );
   });
 });
