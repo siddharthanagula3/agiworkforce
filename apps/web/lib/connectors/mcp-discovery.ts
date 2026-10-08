@@ -523,9 +523,19 @@ async function revocationClient(
   }
 }
 
+/**
+ * The SDK parses both metadata shapes loosely, so RFC 7009 and RFC 8414 fields
+ * survive on the OpenID variant too; only its declared type omits them.
+ */
+type RevocationServerMetadata = AuthorizationServerMetadata & {
+  revocation_endpoint?: string;
+  revocation_endpoint_auth_methods_supported?: string[];
+  service_documentation?: string;
+};
+
 async function postRevocation(
   endpoint: string,
-  metadata: AuthorizationServerMetadata,
+  metadata: RevocationServerMetadata,
   client: McpSuppliedOAuthClient,
   credential: DiscoveredRevocationToken,
   fetchFn: FetchLike,
@@ -588,7 +598,7 @@ export async function revokeDiscoveredGrant(input: {
       signal: init?.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal,
     });
   try {
-    let metadata: AuthorizationServerMetadata | undefined;
+    let metadata: RevocationServerMetadata | undefined;
     try {
       metadata = await discoverAuthorizationServerMetadata(input.issuer, { fetchFn });
     } catch {
