@@ -163,8 +163,6 @@ mod tests {
     use crate::core::llm::models_config::ModelEntry;
     use crate::core::llm::Provider;
 
-    const DEEPSEEK_FLASH_INPUT_PER_1M: f64 = 0.44;
-    const DEEPSEEK_FLASH_OUTPUT_PER_1M: f64 = 1.32;
     const MILLION: f64 = 1_000_000.0;
 
     fn catalog_model(
@@ -179,6 +177,44 @@ mod tests {
                     && predicate(entry)
             })
             .expect("catalog must include a model matching the pricing test")
+    }
+
+    /// The provider's models that carry one flat rate, cheapest first. The
+    /// subjects are chosen by their place in that order rather than by a typed
+    /// price, so a catalog repricing or a model retirement cannot strand them.
+    fn flat_rate_models(provider: Provider) -> Vec<&'static ModelEntry> {
+        let mut models: Vec<&'static ModelEntry> =
+            crate::core::llm::models_config::get_all_model_entries()
+                .values()
+                .filter(|entry| {
+                    entry.provider == provider.as_string()
+                        && entry.deprecated != Some(true)
+                        && entry.input_cost > 0.0
+                        && entry.output_cost > 0.0
+                        && entry.input_token_pricing_tiers.is_empty()
+                        && entry.long_context.is_none()
+                })
+                .collect();
+        models.sort_by(|left, right| {
+            left.input_cost
+                .total_cmp(&right.input_cost)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        models
+    }
+
+    fn cheapest_flat_rate_model(provider: Provider) -> &'static ModelEntry {
+        flat_rate_models(provider)
+            .first()
+            .copied()
+            .expect("catalog must include a flat-rate model for this provider")
+    }
+
+    fn dearest_flat_rate_model(provider: Provider) -> &'static ModelEntry {
+        flat_rate_models(provider)
+            .last()
+            .copied()
+            .expect("catalog must include a flat-rate model for this provider")
     }
 
     /// A prompt size that stays on `model`'s base pricing tier. Long-context
@@ -220,10 +256,7 @@ mod tests {
     #[test]
     fn test_low_cost_deepseek_model_cost() {
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::DeepSeek, |entry| {
-            entry.input_cost == DEEPSEEK_FLASH_INPUT_PER_1M
-                && entry.output_cost == DEEPSEEK_FLASH_OUTPUT_PER_1M
-        });
+        let model = cheapest_flat_rate_model(Provider::DeepSeek);
         let cost = calc.calculate(
             Provider::DeepSeek,
             &model.id,
@@ -231,7 +264,7 @@ mod tests {
             1_000_000,
             super::priced_on(),
         );
-        let expected = DEEPSEEK_FLASH_INPUT_PER_1M + DEEPSEEK_FLASH_OUTPUT_PER_1M;
+        let expected = model.input_cost + model.output_cost;
         assert!(
             (cost - expected).abs() < 1e-9,
             "Expected ${} for the selected DeepSeek model, got ${}",
@@ -269,9 +302,7 @@ mod tests {
     #[test]
     fn test_premium_anthropic_model_cost() {
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::Anthropic, |entry| {
-            entry.input_cost == 5.0 && entry.output_cost == 25.0
-        });
+        let model = dearest_flat_rate_model(Provider::Anthropic);
         let cost = calc.calculate(
             Provider::Anthropic,
             &model.id,
@@ -279,9 +310,11 @@ mod tests {
             1_000_000,
             super::priced_on(),
         );
+        let expected = model.input_cost + model.output_cost;
         assert!(
-            (cost - 30.0).abs() < 1e-9,
-            "Expected $30.00 for the selected premium Anthropic model, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "Expected ${} for the selected premium Anthropic model, got ${}",
+            expected,
             cost
         );
     }
@@ -397,9 +430,7 @@ mod tests {
     #[test]
     fn test_cost_only_input_tokens() {
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::DeepSeek, |entry| {
-            entry.input_cost == DEEPSEEK_FLASH_INPUT_PER_1M
-        });
+        let model = cheapest_flat_rate_model(Provider::DeepSeek);
         let cost = calc.calculate(
             Provider::DeepSeek,
             &model.id,
@@ -407,7 +438,7 @@ mod tests {
             0,
             super::priced_on(),
         );
-        let expected = DEEPSEEK_FLASH_INPUT_PER_1M * 500_000.0 / MILLION;
+        let expected = model.input_cost * 500_000.0 / MILLION;
         assert!(
             (cost - expected).abs() < 1e-9,
             "Expected ${} for 500k input-only tokens, got ${}",
@@ -419,9 +450,7 @@ mod tests {
     #[test]
     fn test_cost_only_output_tokens() {
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::DeepSeek, |entry| {
-            entry.output_cost == DEEPSEEK_FLASH_OUTPUT_PER_1M
-        });
+        let model = cheapest_flat_rate_model(Provider::DeepSeek);
         let cost = calc.calculate(
             Provider::DeepSeek,
             &model.id,
@@ -430,9 +459,9 @@ mod tests {
             super::priced_on(),
         );
         assert!(
-            (cost - DEEPSEEK_FLASH_OUTPUT_PER_1M).abs() < 1e-9,
+            (cost - model.output_cost).abs() < 1e-9,
             "Expected ${} for 1M output-only tokens, got ${}",
-            DEEPSEEK_FLASH_OUTPUT_PER_1M,
+            model.output_cost,
             cost
         );
     }
@@ -440,13 +469,8 @@ mod tests {
     #[test]
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
-        let cheap_model = catalog_model(Provider::DeepSeek, |entry| {
-            entry.input_cost == DEEPSEEK_FLASH_INPUT_PER_1M
-                && entry.output_cost == DEEPSEEK_FLASH_OUTPUT_PER_1M
-        });
-        let expensive_model = catalog_model(Provider::Anthropic, |entry| {
-            entry.input_cost == 5.0 && entry.output_cost == 25.0
-        });
+        let cheap_model = cheapest_flat_rate_model(Provider::DeepSeek);
+        let expensive_model = dearest_flat_rate_model(Provider::Anthropic);
         let cheap = calc.calculate(
             Provider::DeepSeek,
             &cheap_model.id,
