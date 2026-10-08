@@ -2,7 +2,7 @@ import 'server-only';
 
 import {
   cloudCodeSessionPagePath,
-  getPlanMaxSandboxes,
+  planIncludesAgiCode,
   resolveCloudCodeAgentModel,
 } from '@agiworkforce/types';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
@@ -228,7 +228,7 @@ export async function runGitHubCodeTask(request: GitHubCodeTaskRequest): Promise
     return;
   }
   const planTier = await resolveEntitledPlanTier(serviceDb, installation.user_id);
-  if (getPlanMaxSandboxes(planTier) <= 0) {
+  if (!planIncludesAgiCode(planTier)) {
     await reply(TASK_COPY.noPlan);
     return;
   }

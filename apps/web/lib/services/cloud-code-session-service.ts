@@ -10,6 +10,7 @@ import {
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   NOTEBOOK_CELL_LANGUAGES,
   getPlanMaxSandboxes,
+  planIncludesAgiCode,
   cloudCodeShareVisibilityFor,
   isCloudCodeShareVisibility,
   isCloudCodeTurnMode,
@@ -1193,11 +1194,8 @@ export const createCloudCodeSession = tracedCodeAction(
         }
 
         const maxSessions = getPlanMaxSandboxes(planTier);
-        if (maxSessions <= 0) {
-          throw new CloudCodeLimitError(
-            'Your plan does not include managed Code sessions',
-            maxSessions,
-          );
+        if (!planIncludesAgiCode(planTier)) {
+          throw new CloudCodeLimitError('Your plan does not include managed Code sessions', 0);
         }
 
         const scoped = ownerSql(owner, 1);

@@ -365,6 +365,33 @@ describe('CloudCodePage', () => {
     greetingResolved = true;
   });
 
+  it('shows an upgrade screen, not a composer, when the plan does not include AGI Code', async () => {
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: { ...availability, planEntitled: false, planTier: 'free', maxSessions: 1 },
+        sessions: [],
+        runtimes: [],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'AGI Code is on paid plans' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', '/upgrade');
+    expect(
+      screen.queryByRole('textbox', { name: 'Describe a task or ask a question' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /What's up next/ })).not.toBeInTheDocument();
+  });
+
+  it('shows no upgrade screen to a plan that includes AGI Code', async () => {
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('heading', { name: "What's up next, Ada?" });
+    expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
+  });
+
   it('opens on the home column with the greeting and the composer, not a create form', async () => {
     render(<CloudCodePage api={createApi()} />);
 

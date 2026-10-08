@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlanMaxSandboxes } from '@agiworkforce/types';
+import { planIncludesAgiCode } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
@@ -138,7 +138,7 @@ async function handleList(request: NextRequest) {
     throw createError.capabilityUnavailable(CODE_UNAVAILABLE_MESSAGE);
   }
   const planTier = await resolveEntitledPlanTier(db, userId);
-  if (getPlanMaxSandboxes(planTier) <= 0) {
+  if (!planIncludesAgiCode(planTier)) {
     throw createError.capabilityUnavailable(PLAN_UNAVAILABLE_MESSAGE);
   }
 

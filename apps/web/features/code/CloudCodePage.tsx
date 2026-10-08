@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   PanelLeft,
@@ -21,9 +22,11 @@ import type {
   CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import {
+  agiCodeMinimumPlan,
   CLOUD_CODE_DEFAULT_TURN_MODE,
   CLOUD_CODE_DEFAULT_TURN_STEPS,
   cloudCodeStopReasonIsRetryable,
+  getBillingPlanPricing,
   normalizeBillingPlanTier,
   NOTEBOOK_TEMPLATE_ID,
   resolveCloudCodeAgentModel,
@@ -96,6 +99,8 @@ const NOTICE_GLYPH_SIZE = 16;
 const DEFAULT_SESSION_TITLE_WORDS = 6;
 const GREETING_MARK_SIZE = 28;
 const GREETING_NAME_SLOT = '{name}';
+const UPGRADE_PLAN_SLOT = '{plan}';
+const UPGRADE_PATH = '/upgrade';
 const DOCUMENT_TITLE_SEPARATOR = ' · ';
 const MISSING_SESSION_STATUSES = new Set([403, 404]);
 const RENAME_COMMIT_KEY = 'Enter';
@@ -978,6 +983,18 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           : null
     : null;
 
+  const planUpgradeRequired =
+    availability !== null &&
+    availability.deploymentEnabled &&
+    availability.storageReady &&
+    !availability.planEntitled &&
+    !local.supported &&
+    selectedSession === null;
+  const minimumPlan = agiCodeMinimumPlan();
+  const upgradeFromPlan = minimumPlan
+    ? CODE_COPY.upgradeFromPlan.replace(UPGRADE_PLAN_SLOT, getBillingPlanPricing(minimumPlan).label)
+    : null;
+
   const agentContextWindow = getModelMetadata(agentModel)?.contextWindow ?? null;
   const closed = selectedSession?.state === 'closed';
   const archived = selectedSession?.archivedAt != null;
@@ -985,7 +1002,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
 
   const notices = (
     <>
-      {unavailableNotice && (!isLocalDraft || selectedSession !== null) && (
+      {unavailableNotice && !planUpgradeRequired && (!isLocalDraft || selectedSession !== null) && (
         <div className={styles['notice']} role="status">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{unavailableNotice}</span>
@@ -1259,6 +1276,21 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                         <div ref={transcriptEndRef} />
                       </div>
                     </div>
+                  ) : planUpgradeRequired ? (
+                    <div className={styles['greetingArea']} data-testid="code-upgrade">
+                      <div className={`${styles['center']} ${styles['upgradePanel']}`}>
+                        <h1 className={styles['greeting']}>
+                          <AgiMark size={GREETING_MARK_SIZE} />
+                          {CODE_COPY.upgradeHeading}
+                        </h1>
+                        <p className={styles['upgradeBody']}>
+                          {[CODE_COPY.upgradeBody, upgradeFromPlan].filter(Boolean).join(' ')}
+                        </p>
+                        <Link href={UPGRADE_PATH} className={styles['upgradeAction']}>
+                          {CODE_COPY.upgradeAction}
+                        </Link>
+                      </div>
+                    </div>
                   ) : (
                     <div className={styles['greetingArea']}>
                       <div className={styles['center']}>
@@ -1280,7 +1312,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                     <div className={styles['center']}>{notices}</div>
                   </div>
 
-                  {archived ? (
+                  {planUpgradeRequired ? null : archived ? (
                     <div className={styles['composerArea']} data-testid="code-composer-area">
                       <div className={styles['center']}>
                         <div className={styles['closedBanner']} role="status">
