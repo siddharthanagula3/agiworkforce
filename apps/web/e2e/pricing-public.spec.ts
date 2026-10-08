@@ -39,8 +39,8 @@ test.describe('/pricing Team billing toggle', () => {
 
       await expect(
         page
-          .locator('#pricing-team-title')
-          .locator('xpath=ancestor::article')
+          .locator('article')
+          .filter({ has: page.locator('#pricing-team-title') })
           .getByText(/^save \d+% annually$/i),
       ).toBeVisible();
 
