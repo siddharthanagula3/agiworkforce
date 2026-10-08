@@ -514,7 +514,7 @@ function recordedAnswerStream(
     recorded = true;
     if (!content.trim()) return;
     await record({ content, usage, complete }).catch((error: unknown) => {
-      logger.error({ error }, '[free-quota] the fallback answer could not be saved on the server');
+      logger.error({ error }, '[free-quota] the Free Auto answer could not be saved on the server');
     });
   };
 
@@ -585,18 +585,19 @@ export function refuseUnsupportedFreeQuotaPrompt(): Response {
   return refuse('unsupported_prompt', baseCopyFor(loadFreePools().inventory));
 }
 
-export interface FreeQuotaFallbackTurn {
+export interface FreeAutoTurn {
   requestId: string;
   requestedModel: string;
-  reason: string;
+  fallbackReason?: string;
   assistantParentId?: string;
+  providerRequestSignal?: () => AbortSignal;
 }
 
 export async function serveFreeQuotaTurn(
   request: NextRequest,
   scoped: UserScopedDb,
   body: FreeOfferingRequest,
-  fallbackFor?: FreeQuotaFallbackTurn,
+  freeAuto?: FreeAutoTurn,
 ): Promise<Response> {
   const { inventory, limitedMediaOffer } = loadFreePools();
   const baseCopy = baseCopyFor(inventory);
@@ -1005,7 +1006,9 @@ export async function serveFreeQuotaTurn(
                     return part;
                   }),
           })),
-          signal: request.signal,
+          signal: freeAuto?.providerRequestSignal
+            ? AbortSignal.any([request.signal, freeAuto.providerRequestSignal()])
+            : request.signal,
         },
       );
     } catch {
@@ -1043,21 +1046,21 @@ export async function serveFreeQuotaTurn(
       },
     );
     return new Response(
-      fallbackFor && conversation.is_temporary !== true
+      freeAuto && conversation.is_temporary !== true
         ? recordedAnswerStream(answer, ({ content, usage, complete }) =>
             persistAssistantTurn({
               processed: {
-                requestId: fallbackFor.requestId,
+                requestId: freeAuto.requestId,
                 conversationId: body.conversation_id,
                 assistantMessageId: body.assistant_message_id,
-                ...(fallbackFor.assistantParentId
-                  ? { assistantParentId: fallbackFor.assistantParentId }
+                ...(freeAuto.assistantParentId
+                  ? { assistantParentId: freeAuto.assistantParentId }
                   : {}),
                 organizationId: scoped.organizationId,
                 conversationIsTemporary: false,
-                requestedModel: fallbackFor.requestedModel,
-                usedFallback: true,
-                fallbackReason: fallbackFor.reason,
+                requestedModel: freeAuto.requestedModel,
+                usedFallback: freeAuto.fallbackReason !== undefined,
+                fallbackReason: freeAuto.fallbackReason,
                 routeLane: 'free',
               },
               userId: scoped.userId,
@@ -1068,7 +1071,7 @@ export async function serveFreeQuotaTurn(
                 inputTokens: usage?.promptTokens ?? 0,
                 outputTokens: usage?.completionTokens ?? 0,
                 truncated: !complete,
-                fallbackReason: fallbackFor.reason,
+                ...(freeAuto.fallbackReason ? { fallbackReason: freeAuto.fallbackReason } : {}),
               },
             }),
           )

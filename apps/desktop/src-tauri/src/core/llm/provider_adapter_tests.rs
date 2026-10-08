@@ -29,12 +29,29 @@ mod tests {
     fn adaptive_anthropic_model() -> &'static str {
         crate::core::llm::models_config::get_all_model_entries()
             .values()
-            .find(|entry| {
+            .filter(|entry| {
                 entry.provider == "anthropic"
                     && crate::core::llm::models_config::model_uses_adaptive_thinking(&entry.id)
             })
             .map(|entry| entry.id.as_str())
+            .min()
             .expect("catalog must include an adaptive Anthropic model")
+    }
+
+    fn anthropic_model_capped_when_thinking_is_disabled() -> &'static str {
+        crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .filter(|entry| {
+                entry.provider == "anthropic"
+                    && crate::core::llm::models_config::model_supports_effort(&entry.id, "max")
+                    && crate::core::llm::models_config::max_effort_when_thinking_disabled(&entry.id)
+                        == Some("high")
+            })
+            .map(|entry| entry.id.as_str())
+            .min()
+            .expect(
+                "catalog must include an Anthropic model capped at high effort without thinking",
+            )
     }
 
     fn xai_chat_model() -> &'static str {
@@ -2021,7 +2038,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: adaptive_anthropic_model().to_string(),
+            model: anthropic_model_capped_when_thinking_is_disabled().to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,

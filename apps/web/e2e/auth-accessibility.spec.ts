@@ -19,19 +19,25 @@ async function openAuth(page: Page, route: string): Promise<void> {
   await expect(page.getByTestId('auth-layout')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
   if (route === '/signup') {
-    await expect(page.getByTestId('auth-signup-consent').getByRole('checkbox')).not.toBeChecked();
+    await expect(page.getByTestId('auth-age-field').getByRole('textbox')).toHaveValue('');
   }
 }
 
-// A link inside a running sentence (the consent label, an error message) is
-// sized by its line of text; every other control stands alone and is measured.
+// A link inside a running sentence (a label, the sign-up agreement, an error
+// message) is sized by its line of text; every other control stands alone and
+// is measured.
 async function shortStandaloneTargets(page: Page): Promise<string[]> {
   return page.getByTestId('auth-layout').evaluate((layout, minimum) => {
     const short: string[] = [];
     const controls = layout.querySelectorAll<HTMLElement>('button, a[href], summary, input');
     for (const control of controls) {
       if (control.closest('[aria-hidden="true"]')) continue;
-      if (control.tagName === 'A' && control.closest('label, [role="alert"]')) continue;
+      if (
+        control.tagName === 'A' &&
+        control.closest('label, [role="alert"], [data-testid="auth-signup-agreement"]')
+      ) {
+        continue;
+      }
       const checkbox = control instanceof HTMLInputElement && control.type === 'checkbox';
       const target = checkbox ? (control.closest('label') ?? control) : control;
       const box = target.getBoundingClientRect();
@@ -75,18 +81,18 @@ test.describe('auth accessibility', () => {
     test(`${route} ties every field error to the field it is about`, async ({ page }) => {
       await openAuth(page, route);
 
-      // On /signup the first thing that can fail is the consent box, and an
-      // attempt without it must never reach the provider, so that is the field
-      // this screen proves. The email field's wiring is the same component as
-      // on /login, which proves it here against a real response.
+      // On /signup the first thing that can fail is the age field, and an
+      // attempt without an eligible age must never reach the provider, so that
+      // is the field this screen proves. The email field's wiring is the same
+      // component as on /login, which proves it here against a real response.
       if (route === '/signup') {
-        await page.getByLabel('Email address').fill(`unticked-${Date.now()}@example.invalid`);
+        await page.getByLabel('Email address').fill(`no-age-${Date.now()}@example.invalid`);
         await page.getByRole('button', { name: 'Continue', exact: true }).click();
-        const box = page.getByTestId('auth-signup-consent').getByRole('checkbox');
-        await expect(page.getByTestId('auth-signup-consent').getByRole('alert')).toBeVisible();
-        await expect(box).toHaveAttribute('aria-invalid', 'true');
-        const describedBy = await box.getAttribute('aria-describedby');
-        expect(describedBy, 'the box points at its own message').toBeTruthy();
+        const age = page.getByTestId('auth-age-field').getByRole('textbox');
+        await expect(page.getByTestId('auth-age-field').getByRole('alert')).toBeVisible();
+        await expect(age).toHaveAttribute('aria-invalid', 'true');
+        const describedBy = await age.getAttribute('aria-describedby');
+        expect(describedBy, 'the field points at its own message').toBeTruthy();
         for (const id of describedBy!.split(' ')) {
           await expect(page.locator(`[id="${id}"]`)).toHaveCount(1);
         }

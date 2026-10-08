@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 const client = vi.hoisted(() => ({
   isReady: true,
@@ -67,8 +69,8 @@ function renderFlow(mode: 'login' | 'signup' = 'login') {
   return store;
 }
 
-function requiredBox(): HTMLElement {
-  return within(screen.getByTestId('auth-signup-consent')).getByRole('checkbox');
+function ageField(): HTMLInputElement {
+  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL) as HTMLInputElement;
 }
 
 function marketingEmailBox(): HTMLElement {
@@ -140,7 +142,7 @@ describe('what the form tells the scene', () => {
     expect(store.getSnapshot().mood).toBe('neutral');
   });
 
-  it('shows sympathy for a refused sign-up attempt and recovers once the box is ticked', async () => {
+  it('shows sympathy for a refused sign-up attempt and recovers once the age is eligible', async () => {
     const store = renderFlow('signup');
     expect(store.getSnapshot().mood).toBe('neutral');
 
@@ -149,11 +151,34 @@ describe('what the form tells the scene', () => {
     expect(client.startProvider).not.toHaveBeenCalled();
     expect(store.getSnapshot().mood).toBe('error');
 
-    await userEvent.click(requiredBox());
+    await userEvent.type(ageField(), '1');
+    expect(store.getSnapshot().mood).toBe('error');
+    await userEvent.type(ageField(), '5');
     expect(store.getSnapshot().mood).toBe('neutral');
   });
 
-  it('hears the optional box no differently from the required one, and never as an answer to a refusal', async () => {
+  it('is handed the age field to follow, as it is the address, and never what the field holds', async () => {
+    const store = renderFlow('signup');
+    const handed = [
+      vi.spyOn(store, 'setFocusTarget'),
+      vi.spyOn(store, 'noteCaret'),
+      vi.spyOn(store, 'watchBox'),
+      vi.spyOn(store, 'setPrivacy'),
+    ];
+
+    await userEvent.type(ageField(), '57');
+
+    const [setFocusTarget, noteCaret, watchBox, setPrivacy] = handed;
+    expect(noteCaret).toHaveBeenCalledWith(ageField());
+    expect(watchBox).not.toHaveBeenCalled();
+    expect(setPrivacy).not.toHaveBeenCalled();
+    for (const call of [...(setFocusTarget?.mock.calls ?? []), ...(noteCaret?.mock.calls ?? [])]) {
+      expect(call).toHaveLength(1);
+      expect(call[0] === null || call[0] instanceof HTMLInputElement).toBe(true);
+    }
+  });
+
+  it('hears nothing from the optional box, and never takes it as an answer to a refusal', async () => {
     const store = renderFlow('signup');
     const heard = vi.fn();
     store.subscribe(heard);
@@ -167,14 +192,10 @@ describe('what the form tells the scene', () => {
     ];
     const resting = store.getSnapshot();
 
-    await userEvent.click(requiredBox());
-    await userEvent.click(requiredBox());
-    const afterRequired = bridge.map((spy) => spy.mock.calls.length);
     await userEvent.click(marketingEmailBox());
     await userEvent.click(marketingEmailBox());
 
-    expect(bridge.map((spy) => spy.mock.calls.length)).toEqual(afterRequired);
-    expect(afterRequired.every((calls) => calls === 0)).toBe(true);
+    expect(bridge.map((spy) => spy.mock.calls.length).every((calls) => calls === 0)).toBe(true);
     expect(heard).not.toHaveBeenCalled();
     expect(store.getSnapshot()).toEqual(resting);
 
@@ -202,7 +223,7 @@ describe('what the form tells the scene', () => {
       step: { kind: 'new_password', email: EMAIL, purpose: 'sign_up' },
     });
     const signUp = renderFlow('signup');
-    await userEvent.click(requiredBox());
+    await userEvent.type(ageField(), String(ACCOUNT_MINIMUM_AGE));
     await submitEmail();
     await screen.findByRole('heading', { name: 'Create a password' });
     await waitFor(() => expect(screen.getByLabelText('Password')).toHaveFocus());

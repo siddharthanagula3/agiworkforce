@@ -34,8 +34,8 @@ export const AUTH_FIELD_STACK_CLASS = 'mt-5';
 export const AUTH_FIELD_AID_CLASS = 'mt-3 flex justify-end';
 export const AUTH_CHECK_ROW_CLASS = `flex min-h-11 cursor-pointer items-start gap-3 ${SECONDARY_TEXT}`;
 export const AUTH_CHECKBOX_CLASS = 'auth-checkbox mt-0.5 shrink-0 cursor-pointer';
-export const AUTH_CONSENT_CLASS = 'mt-4 flex flex-col';
-export const AUTH_CONSENT_MESSAGE_CLASS = `${AUTH_ERROR_CLASS} ms-8`;
+export const AUTH_AGREEMENT_CLASS = `mt-4 ${SECONDARY_TEXT}`;
+export const AUTH_AGE_CONFIRMATION_CLASS = 'mb-4';
 const OPTIONAL_CHECK_ROW = `flex min-h-11 items-start gap-3 pt-2 pb-3 ${SECONDARY_TEXT}`;
 export const AUTH_OPTIONAL_CHECK_ROW_CLASS = `${OPTIONAL_CHECK_ROW} cursor-pointer`;
 export const AUTH_HELD_CHECK_ROW_CLASS = `${OPTIONAL_CHECK_ROW} cursor-not-allowed`;
@@ -70,6 +70,7 @@ export const AUTH_FOOTER_BAR_CLASS = 'h-3.5 w-px bg-rule';
 export const AUTH_FOOTER_LINK_CLASS =
   'auth-inline rounded-compact text-text-secondary underline-offset-4 hover:underline';
 export const AUTH_FOOTER_NAV_LINK_CLASS = `${AUTH_FOOTER_LINK_CLASS} ${TOUCH_TARGET} px-2`;
+export const AUTH_FIELD_AID_LINK_CLASS = `${AUTH_FOOTER_LINK_CLASS} ${TOUCH_TARGET} -my-2.5 text-base leading-normal underline`;
 export const AUTH_DISCLOSURE_CLASS =
   'mt-5 flex flex-col gap-1 rounded-xl bg-surface-elevated p-4 text-base leading-normal text-text-secondary';
 export const AUTH_DISCLOSURE_TITLE_CLASS = 'font-semibold text-text-primary';

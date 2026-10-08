@@ -48,6 +48,13 @@ function isPreviewOffering(offeringKey: string): boolean {
   return PREVIEW_MODEL_MARKER.test(getProviderOffering(offeringKey)?.providerModelId ?? '');
 }
 
+export const FREE_AUTO_ROUTE_ORDERS = ['router_first', 'quota_first'] as const;
+
+const FreeAutoRouteSchema = z.strictObject({
+  order: z.enum(FREE_AUTO_ROUTE_ORDERS),
+  quotaFirstByteTimeoutMs: z.number().int().positive(),
+});
+
 const FreeQuotaObservationSchema = z.object({
   offeringKey: z
     .string()
@@ -82,6 +89,7 @@ export const FreeQuotaInventorySchema = z
         approvedOfferingKeys: z.array(z.string().min(1)).min(1),
       })
       .nullable(),
+    freeAutoRoute: FreeAutoRouteSchema.optional(),
     freeAutoFallback: z
       .object({
         offeringKeys: z.array(z.string().min(1)).min(1),
@@ -154,6 +162,14 @@ export const FreeQuotaInventorySchema = z
 export type FreeQuotaInventory = z.infer<typeof FreeQuotaInventorySchema>;
 export type FreeQuotaObservation = z.infer<typeof FreeQuotaObservationSchema>;
 export type FreeQuotaTermsReview = NonNullable<FreeQuotaInventory['termsReview']>;
+export type FreeAutoRoute = z.infer<typeof FreeAutoRouteSchema>;
+
+export function freeAutoQuotaFirstRoute(
+  inventory: FreeQuotaInventory | undefined,
+): FreeAutoRoute | null {
+  const route = inventory?.freeAutoRoute;
+  return route?.order === 'quota_first' ? route : null;
+}
 
 export function termsReviewStanding(
   review: FreeQuotaTermsReview | null,

@@ -11,7 +11,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
-import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -134,7 +134,9 @@ export default function AgeGateScreen() {
           </Text>
 
           <Text testID="age-gate-refusal" style={[styles.body, { color: colors.textSecondary }]}>
-            {ACCOUNT_AGE_REQUIREMENT_NOTICE}
+            {threshold === ACCOUNT_MINIMUM_AGE
+              ? ACCOUNT_AGE_REQUIREMENT_NOTICE
+              : `AGI accounts are for people ${threshold} and older in your region.`}
           </Text>
 
           <Text style={[styles.body, { color: colors.textSecondary }]}>

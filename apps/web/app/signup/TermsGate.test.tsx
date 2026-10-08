@@ -1,8 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
+import {
+  ACCOUNT_AGE_FIELD_LABEL,
+  ACCOUNT_AGE_INELIGIBLE_MESSAGE,
+  ACCOUNT_AGE_REQUIRED_MESSAGE,
+  ACCOUNT_AGE_REQUIREMENT_NOTICE,
+  ACCOUNT_MINIMUM_AGE,
+  PARENTAL_PERMISSION_BELOW_AGE,
+} from '@agiworkforce/types';
+import { AuthSceneBridgeProvider, createSceneStore } from '@agiworkforce/ui/auth-scene';
 
 import { useMarketingEmailGrant } from '@/features/auth/marketingEmailChoice';
 import { FREE_PLAN_TRAINING_SIGNUP_STATEMENT } from '@/lib/compliance/free-plan-training-disclosure';
@@ -25,6 +33,30 @@ function marketingEmailBox(): HTMLElement {
   return screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label });
 }
 
+const YOUNGEST_ADMITTED = String(ACCOUNT_MINIMUM_AGE);
+const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
+
+function ageField(): HTMLInputElement {
+  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL) as HTMLInputElement;
+}
+
+async function enterAge(age: string = YOUNGEST_ADMITTED): Promise<void> {
+  await userEvent.clear(ageField());
+  if (age) await userEvent.type(ageField(), age);
+}
+
+function ageAlert(): HTMLElement | null {
+  return within(screen.getByTestId('auth-age-field')).queryByRole('alert');
+}
+
+function renderAgeReview() {
+  return render(
+    <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue" confirmAge>
+      <p role="status">Recording agreement</p>
+    </TermsGate>,
+  );
+}
+
 function renderReview(props: { offerMarketingEmail?: boolean; optedOutBySignal?: boolean } = {}) {
   return render(
     <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue" confirmAge {...props}>
@@ -36,27 +68,32 @@ function renderReview(props: { offerMarketingEmail?: boolean; optedOutBySignal?:
 describe('terms confirmation', () => {
   beforeEach(() => window.localStorage.clear());
 
-  it('asks for the terms and the age on the first screen and holds Continue until both are ticked', async () => {
+  it('asks for the terms and the age on the first screen and goes on only with the terms ticked and an eligible age', async () => {
     const user = userEvent.setup();
-    render(
-      <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue" confirmAge>
-        <p role="status">Recording agreement</p>
-      </TermsGate>,
-    );
+    renderAgeReview();
 
-    const terms = screen.getByRole('checkbox', { name: /I agree to the Terms of Service/ });
-    const age = screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL });
+    const terms = termsBox();
+    const age = ageField();
     const button = screen.getByRole('button', { name: 'Continue' });
     expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toEqual([terms]);
+    expect(age).toHaveValue('');
+    expect(age).toHaveAccessibleDescription(ACCOUNT_AGE_REQUIREMENT_NOTICE);
+    expect(age.compareDocumentPosition(terms) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Age requirements' })).toHaveAttribute(
+      'href',
+      '/terms#s-02',
+    );
     expect(button).toBeDisabled();
 
-    await user.click(terms);
+    await enterAge();
     expect(button).toBeDisabled();
-    await user.click(age);
+    await user.click(terms);
     expect(button).toBeEnabled();
     await user.click(terms);
     expect(button).toBeDisabled();
     await user.click(terms);
+    expect(screen.queryByText('Recording agreement')).not.toBeInTheDocument();
     await user.click(button);
 
     expect(screen.getByText('Recording agreement')).toBeInTheDocument();
@@ -65,7 +102,108 @@ describe('terms confirmation', () => {
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
   });
 
-  it('asks only for the terms when the account already confirmed its age', () => {
+  it.each([
+    ['an empty field', '', ACCOUNT_AGE_REQUIRED_MESSAGE],
+    ['a word', 'ten', ACCOUNT_AGE_REQUIRED_MESSAGE],
+    ['zero', '0', ACCOUNT_AGE_REQUIRED_MESSAGE],
+    [`a ${TOO_YOUNG} year old`, TOO_YOUNG, ACCOUNT_AGE_INELIGIBLE_MESSAGE],
+  ])(
+    'refuses Continue for %s with the terms ticked, says why on the field, and goes on once corrected',
+    async (_case, entry, message) => {
+      const user = userEvent.setup();
+      renderAgeReview();
+      await user.click(termsBox());
+      await enterAge(entry);
+      expect(ageAlert()).toBeNull();
+
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(screen.queryByText('Recording agreement')).not.toBeInTheDocument();
+      expect(ageAlert()).toHaveTextContent(message);
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+      expect(ageField()).toHaveAttribute('aria-invalid', 'true');
+      expect(ageField()).toHaveFocus();
+      expect(termsBox()).toBeEnabled();
+
+      await enterAge();
+      expect(ageAlert()).toBeNull();
+      expect(ageField()).not.toHaveAttribute('aria-invalid');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(screen.getByText('Recording agreement')).toBeInTheDocument();
+    },
+  );
+
+  it.each([YOUNGEST_ADMITTED, String(PARENTAL_PERMISSION_BELOW_AGE - 1), '18'])(
+    'goes on for a %s year old',
+    async (age) => {
+      const user = userEvent.setup();
+      renderAgeReview();
+      await enterAge(age);
+      await user.click(termsBox());
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByText('Recording agreement')).toBeInTheDocument();
+    },
+  );
+
+  it('shows no refusal while an age is being typed, only for an attempt', async () => {
+    renderAgeReview();
+
+    await userEvent.type(ageField(), '1');
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(ageField()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('keeps the age in the field and out of everything the step writes or hands on', async () => {
+    window.sessionStorage.clear();
+    const cookiesBefore = document.cookie;
+    const addressBefore = window.location.href;
+    const user = userEvent.setup();
+    renderReview({ offerMarketingEmail: true });
+    await enterAge('57');
+    await user.click(termsBox());
+    await user.click(marketingEmailBox());
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByTestId('grant-probe')).toHaveTextContent(POLICY_LAST_UPDATED.privacy);
+    expect(ageField()).not.toHaveAttribute('name');
+    expect({ ...window.localStorage }).toEqual({
+      [TERMS_GATE_STORAGE_KEY]: POLICY_LAST_UPDATED.terms,
+    });
+    expect(window.sessionStorage.length).toBe(0);
+    expect(document.cookie).toBe(cookiesBefore);
+    expect(window.location.href).toBe(addressBefore);
+  });
+
+  it('works the same on a page with no scene, and is followed by the scene on a page with one', async () => {
+    const bare = renderAgeReview();
+    await enterAge(TOO_YOUNG);
+    await userEvent.click(termsBox());
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(ageAlert()).toHaveTextContent(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
+    bare.unmount();
+
+    const store = createSceneStore();
+    const noteCaret = vi.spyOn(store, 'noteCaret');
+    render(
+      <AuthSceneBridgeProvider value={store}>
+        <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue" confirmAge>
+          <p role="status">Recording agreement</p>
+        </TermsGate>
+      </AuthSceneBridgeProvider>,
+    );
+    await enterAge();
+    await userEvent.click(termsBox());
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(noteCaret).toHaveBeenCalledWith(ageField());
+    expect(screen.getByText('Recording agreement')).toBeInTheDocument();
+  });
+
+  it('asks only for the terms when the page does not ask the age', () => {
     render(
       <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue">
         <p>Recording agreement</p>
@@ -73,9 +211,9 @@ describe('terms confirmation', () => {
     );
 
     expect(screen.getAllByRole('checkbox')).toHaveLength(1);
-    expect(
-      screen.queryByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(ACCOUNT_AGE_FIELD_LABEL)).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Age requirements' })).not.toBeInTheDocument();
   });
 
   it('requires an explicit Continue after checking, and allows reconsidering before submission', async () => {
@@ -139,24 +277,24 @@ describe('marketing email on the terms review screen', () => {
     expect(
       screen.queryByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
     ).toBeNull();
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    expect(screen.getAllByRole('checkbox')).toEqual([termsBox()]);
+    expect(ageField()).toBeInTheDocument();
   });
 
   it('offers one optional unticked box under the terms, which Continue never waits for', async () => {
     const user = userEvent.setup();
     renderReview({ offerMarketingEmail: true });
     const optional = marketingEmailBox();
-    const age = screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL });
 
     expect(optional).not.toBeChecked();
     expect(optional).not.toBeRequired();
-    expect(screen.getAllByRole('checkbox')).toEqual([age, termsBox(), optional]);
+    expect(screen.getAllByRole('checkbox')).toEqual([termsBox(), optional]);
 
     await user.click(optional);
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     await user.click(optional);
     await user.click(termsBox());
-    await user.click(age);
+    await enterAge();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -169,7 +307,7 @@ describe('marketing email on the terms review screen', () => {
     renderReview({ offerMarketingEmail: true });
 
     await user.click(termsBox());
-    await user.click(screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }));
+    await enterAge();
     await user.click(marketingEmailBox());
     expect(screen.queryByTestId('grant-probe')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -228,7 +366,7 @@ describe('marketing email on the terms review screen', () => {
       await user.keyboard(' ');
       await user.click(optional);
       await user.click(termsBox());
-      await user.click(screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }));
+      await enterAge();
       await user.click(screen.getByRole('button', { name: 'Continue' }));
 
       expect(optional).not.toBeChecked();

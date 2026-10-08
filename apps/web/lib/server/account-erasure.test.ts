@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   deleteStoredMediaObjects: vi.fn(),
   deleteObject: vi.fn(),
+  deletePrivateObject: vi.fn(),
+  privateObjectStorageConfigured: vi.fn(() => true),
   objectStorageConfigured: vi.fn(() => true),
   deleteE2BSessionsForUser: vi.fn(),
   resolveObjectBackupTarget: vi.fn(
@@ -56,14 +58,14 @@ vi.mock('@/lib/server/object-storage', () => ({
     value.startsWith('https://cdn/') ? value.slice(12) : null,
   objectKeyFromStorageUri: (value: string) => value,
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
-  deletePrivateObject: vi.fn(),
+  deletePrivateObject: (...args: unknown[]) => mocks.deletePrivateObject(...args),
   getBoundedObject: vi.fn(),
   getBoundedPrivateObject: vi.fn(),
   getObject: vi.fn(),
   getObjectStream: vi.fn(),
   getPrivateObject: vi.fn(),
   getPrivateObjectStream: vi.fn(),
-  isPrivateObjectStorageConfigured: vi.fn(() => true),
+  isPrivateObjectStorageConfigured: () => mocks.privateObjectStorageConfigured(),
   putPrivateObject: vi.fn(),
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
@@ -169,6 +171,7 @@ interface ErasureFixture {
   mediaRows?: Array<{ id: string; storage_pathname: string | null }>;
   knowledgeRows?: Array<{ storage_uri: string | null }>;
   avatarUrl?: string | null;
+  feedbackScreenshotKeys?: Array<string | null>;
   failStatementMatching?: string;
   activeVideoJobs?: boolean;
   activeImageJobs?: boolean;
@@ -215,6 +218,9 @@ function primeDb(fixture: ErasureFixture = {}): void {
     if (sql.includes('media_assets')) return fixture.mediaRows ?? [];
     if (sql.includes('project_knowledge_files')) return fixture.knowledgeRows ?? [];
     if (sql.includes('avatar_url')) return [{ avatar_url: fixture.avatarUrl ?? null }];
+    if (sql.includes("metadata->>'screenshot_key'")) {
+      return (fixture.feedbackScreenshotKeys ?? []).map((screenshot_key) => ({ screenshot_key }));
+    }
     return [];
   });
   mocks.execute.mockImplementation(async (sql: string) => {
@@ -366,6 +372,8 @@ describe('eraseUserAccountData', () => {
     vi.clearAllMocks();
     mocks.objectStorageConfigured.mockReturnValue(true);
     mocks.deleteObject.mockResolvedValue(undefined);
+    mocks.deletePrivateObject.mockResolvedValue(undefined);
+    mocks.privateObjectStorageConfigured.mockReturnValue(true);
     mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 0, failedPathnames: [] });
     mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 0, failed: 0, reachable: true });
   });
@@ -503,6 +511,50 @@ describe('eraseUserAccountData', () => {
       ),
     ).toBe(true);
     expect(report.complete).toBe(true);
+  });
+
+  it('deletes the screenshots a person attached to feedback from private storage', async () => {
+    primeDb({
+      feedbackScreenshotKeys: ['feedback/user-1/1_a.png', null, 'feedback/user-1/2_b.webp'],
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deletePrivateObject.mock.calls.map((call) => call[0])).toEqual([
+      'feedback/user-1/1_a.png',
+      'feedback/user-1/2_b.webp',
+    ]);
+    expect(mocks.deleteObject).not.toHaveBeenCalledWith('feedback/user-1/1_a.png');
+    expect(report.feedbackObjectsDeleted).toBe(2);
+    expect(report.feedbackObjectsFailed).toBe(0);
+    expect(report.tables['feedback']?.deleted).toBe(true);
+    expect(report.complete).toBe(true);
+  });
+
+  it('keeps the feedback rows, and the account, while a screenshot is still stored', async () => {
+    primeDb({ feedbackScreenshotKeys: ['feedback/user-1/1_a.png'] });
+    mocks.deletePrivateObject.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.feedbackObjectsFailed).toBe(1);
+    expect(report.tables['feedback']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feedback where')),
+    ).toBe(false);
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+  });
+
+  it('retains the feedback rows when private storage is not configured to delete from', async () => {
+    primeDb({ feedbackScreenshotKeys: ['feedback/user-1/1_a.png'] });
+    mocks.privateObjectStorageConfigured.mockReturnValueOnce(false);
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deletePrivateObject).not.toHaveBeenCalled();
+    expect(report.feedbackObjectsFailed).toBe(1);
+    expect(report.complete).toBe(false);
   });
 
   it('erases every listed table, anonymizes shared rows, and removes the profile last', async () => {

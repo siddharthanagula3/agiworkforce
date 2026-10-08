@@ -19,6 +19,7 @@ import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
   freeQuotaFallbackReplay,
   serveFreeQuotaFallback,
+  serveFreeQuotaFirst,
 } from '@/lib/services/free-lane/free-quota-fallback';
 import {
   observeFreeLaneAttemptFailure,
@@ -137,7 +138,7 @@ import type {
   CloudAgentRun,
   CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
-import { getVerifiedBearerUserScopedDb } from '@/lib/server/rls-db';
+import { getVerifiedBearerUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { runWithPhaseTimer, timePhase } from '@/lib/observability/phase-timer';
 import { annotateActiveSpan, withSpan } from '@/lib/observability/span';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
@@ -375,6 +376,7 @@ function recordResilienceObservation(observation: {
 async function dispatchChatCompletions(
   request: NextRequest,
   authResult: AuthGateSuccess,
+  freeQuotaFirst?: (scopedDb: Promise<UserScopedDb>) => Promise<Response | null>,
 ): Promise<NextResponse | Response> {
   const { userId, token, subscription } = authResult;
 
@@ -430,6 +432,11 @@ async function dispatchChatCompletions(
   if (policyGateResponse) return policyGateResponse;
   if (spendGateResponse) return spendGateResponse;
   if (!workspaceControls.ok) return workspaceControls.response;
+
+  if (freeQuotaFirst) {
+    const answered = await freeQuotaFirst(scopedDbPromise);
+    if (answered) return answered;
+  }
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await timePhase(CHAT_TURN_PHASE.processRequest, () =>
@@ -1450,14 +1457,27 @@ async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse 
   });
   const response = await timePhase(CHAT_TURN_PHASE.turnSlot, () =>
     withManagedTurnSlot({ userId, planTier: authResult.subscription.plan_tier }, async () => {
-      const dispatched = await dispatchChatCompletions(request, authResult);
-      if (!replay) return dispatched;
+      if (!replay) return dispatchChatCompletions(request, authResult);
+      const quotaLane = { answered: false, tried: null as string | null };
+      const dispatched = await dispatchChatCompletions(request, authResult, async (scopedDb) => {
+        const first = await serveFreeQuotaFirst({
+          request,
+          replay: replay.clone(),
+          userId,
+          scopedDb: () => scopedDb,
+        });
+        quotaLane.answered = first.response !== null;
+        quotaLane.tried = first.tried;
+        return first.response;
+      });
+      if (quotaLane.answered) return dispatched;
       const fallback = await serveFreeQuotaFallback({
         request,
         replay,
         refusal: dispatched,
         userId,
         scopedDb: () => getVerifiedBearerUserScopedDb(request, { userId, token }),
+        tried: quotaLane.tried,
       });
       return fallback ?? dispatched;
     }),

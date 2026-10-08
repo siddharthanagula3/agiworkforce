@@ -1,60 +1,37 @@
 'use client';
 
 import Link from 'next/link';
-import { useId } from 'react';
-import {
-  ACCOUNT_AGE_CONFIRMATION_LABEL,
-  ACCOUNT_AGE_REQUIREMENT_NOTICE,
-} from '@agiworkforce/types';
 
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 
+import { AuthAgeField } from './AuthAgeField';
 import { useAuthCopy } from './authCopy';
-import { AUTH_CHECKBOX_CLASS, AUTH_CHECK_ROW_CLASS, AUTH_FOOTER_LINK_CLASS } from './authStyles';
+import {
+  AUTH_AGE_CONFIRMATION_CLASS,
+  AUTH_FIELD_AID_CLASS,
+  AUTH_FIELD_AID_LINK_CLASS,
+} from './authStyles';
+import type { SignupAgeGate } from './useSignupAgeGate';
 
 const TERMS_ELIGIBILITY_HREF = `${CANONICAL_POLICY_ROUTES.terms}#s-02`;
 
 export function AuthAgeConfirmation({
-  confirmed,
+  gate,
   disabled,
-  onChange,
 }: {
-  confirmed: boolean;
+  gate: SignupAgeGate;
   disabled: boolean;
-  onChange: (confirmed: boolean) => void;
 }) {
   const copy = useAuthCopy();
-  const checkboxId = useId();
-  const noticeId = useId();
 
   return (
-    <div
-      className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1"
-      data-testid="auth-age-confirmation"
-    >
-      <label htmlFor={checkboxId} className={AUTH_CHECK_ROW_CLASS}>
-        <input
-          id={checkboxId}
-          type="checkbox"
-          checked={confirmed}
-          disabled={disabled}
-          aria-describedby={confirmed ? undefined : noticeId}
-          onChange={(event) => onChange(event.target.checked)}
-          className={AUTH_CHECKBOX_CLASS}
-        />
-        <span>{copy.text('flow.age.confirm', ACCOUNT_AGE_CONFIRMATION_LABEL)}</span>
-      </label>
-      <Link
-        href={TERMS_ELIGIBILITY_HREF}
-        className={`${AUTH_FOOTER_LINK_CLASS} -my-2.5 inline-flex min-h-11 items-center text-sm leading-normal underline`}
-      >
-        {copy.text('flow.age.terms', 'Age requirements')}
-      </Link>
-      {confirmed ? null : (
-        <p id={noticeId} className="sr-only">
-          {copy.text('flow.age.notice', ACCOUNT_AGE_REQUIREMENT_NOTICE)}
-        </p>
-      )}
+    <div className={AUTH_AGE_CONFIRMATION_CLASS}>
+      <AuthAgeField gate={gate} disabled={disabled} />
+      <div className={AUTH_FIELD_AID_CLASS}>
+        <Link href={TERMS_ELIGIBILITY_HREF} className={AUTH_FIELD_AID_LINK_CLASS}>
+          {copy.text('flow.age.terms', 'Age requirements')}
+        </Link>
+      </div>
     </div>
   );
 }
