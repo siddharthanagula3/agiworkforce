@@ -141,7 +141,6 @@ body:has([data-design='agi'][data-public-reference]) {
   --public-section-space: var(--space-8);
   --public-pagehead-space: var(--space-7);
   --public-anchor-offset: calc(var(--agi-header-height) + var(--space-4));
-  --public-consent-max-block-size: 40dvh;
   --public-accent-light: #754500;
   --public-accent-dark: #f0a84a;
   --public-surface-page: hsl(var(--neutral-0));
