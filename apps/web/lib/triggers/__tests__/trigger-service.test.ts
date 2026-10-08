@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -21,7 +22,7 @@ import {
   EVENT_TRIGGER_SIGNING_SECRET_ENV,
 } from '../trigger-signatures';
 import { triggerWebhookPath } from '../trigger-endpoints';
-import type { EventTrigger } from '../trigger-types';
+import { triggerSourceAvailable, type EventTrigger } from '../trigger-types';
 
 const TASK_ID = '22222222-2222-4222-8222-222222222222';
 
@@ -238,6 +239,38 @@ describe('createTrigger', () => {
     expect(triggerWebhookPath(created.trigger)).toBe(
       `/api/webhooks/connectors/${created.trigger.id}`,
     );
+  });
+});
+
+describe('connector-backed trigger sources', () => {
+  it.each([
+    ['gmail', ['message.received'], 'me@example.com'],
+    ['google_calendar', ['events.changed'], undefined],
+  ] as const)(
+    'refuses a %s trigger before reading the database while connectors are coming soon',
+    async (source, eventTypes, sourceAccount) => {
+      expect(connectorsReleased()).toBe(false);
+      const query = vi.fn();
+
+      await expect(
+        createTrigger(
+          database(query),
+          { userId: 'user-1', organizationId: null },
+          { taskId: TASK_ID, name: 'Inbox', source, eventTypes: [...eventTypes], sourceAccount },
+        ),
+      ).rejects.toMatchObject({ message: CONNECTORS_COMING_SOON_MESSAGE });
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
+
+  it('opens Gmail and Calendar with the connector release and never gates the other sources', () => {
+    for (const source of ['gmail', 'google_calendar'] as const) {
+      expect(triggerSourceAvailable(source, 'coming_soon')).toBe(false);
+      expect(triggerSourceAvailable(source, 'released')).toBe(true);
+    }
+    for (const source of ['github', 'slack', 'connector'] as const) {
+      expect(triggerSourceAvailable(source, 'coming_soon')).toBe(true);
+    }
   });
 });
 

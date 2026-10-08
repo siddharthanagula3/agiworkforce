@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { baseInitOptions } from '@agiworkforce/i18n';
+import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 
 import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
@@ -615,7 +616,10 @@ describe('ComposerPlusMenu, free image and video offer', () => {
 
     const image = screen.getByText('Create image').closest('button')!;
     expect(image).toHaveTextContent(/upgrade/i);
-    expect(image).toHaveAttribute('title', 'Image generation is available on Pro and above.');
+    expect(image).toHaveAttribute(
+      'title',
+      `Image generation is available on ${billingPlanCapabilityPlanLabels('image_generation')}.`,
+    );
     expect(screen.queryByText('Limited')).not.toBeInTheDocument();
     expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
   });

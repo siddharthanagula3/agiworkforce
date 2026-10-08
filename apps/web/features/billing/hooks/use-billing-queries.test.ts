@@ -63,10 +63,9 @@ describe('buildBillingInfoFromUsage', () => {
     const max15x = buildBillingInfoFromUsage({ ...usage, plan_tier: 'max_15x' });
 
     expect(free.features).toContain('1 project');
-    expect(free.features).toContain('1 custom MCP server');
     expect(max15x.features).toContain('Unlimited projects');
-    expect(max15x.features).toContain('Unlimited custom MCP servers');
     expect(max15x.features).toContain('Video generation');
+    expect([...free.features, ...max15x.features].join('\n')).not.toMatch(/custom MCP server/);
   });
 });
 

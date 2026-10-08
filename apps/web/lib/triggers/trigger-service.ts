@@ -7,11 +7,13 @@ import {
   normalizeFieldConditions,
   type FieldCondition,
 } from '@/lib/automation/field-conditions';
+import { connectorsComingSoonError } from '@/lib/connectors/connector-capability';
 import { secureTokenHex } from '@/lib/secure-random';
 
 import {
   isTriggerSource,
   isValidTriggerEventType,
+  triggerSourceAvailable,
   WILDCARD_EVENT_TYPE,
   type EventTrigger,
   type EventTriggerDelivery,
@@ -253,6 +255,7 @@ export async function createTrigger(
   input: TriggerInput,
 ): Promise<CreatedTrigger> {
   const definition = validateTriggerInput(input);
+  if (!triggerSourceAvailable(definition.source)) throw connectorsComingSoonError();
   const [existing] = await db.query<{ count: string }>(
     `select count(*)::text as count from event_triggers where user_id = $1`,
     [scope.userId],

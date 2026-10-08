@@ -29,6 +29,8 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => {
   };
 });
 
+import { connectorsReleased } from '@agiworkforce/types';
+import { CLI_AVAILABILITY_NOTE, SURFACE_STATUS } from '@/lib/surface-status';
 import { UpgradePlanDialog } from './UpgradePlanDialog';
 
 describe('UpgradePlanDialog', () => {
@@ -45,13 +47,27 @@ describe('UpgradePlanDialog', () => {
     expect(screen.getByText('Max 20x')).toBeTruthy();
     expect(screen.getByText('Team')).toBeTruthy();
     expect(screen.getByText('1 project')).toBeTruthy();
-    expect(screen.getByText('1 custom MCP server')).toBeTruthy();
     expect(screen.getByText('5 projects')).toBeTruthy();
-    expect(screen.getByText('5 custom MCP servers')).toBeTruthy();
     expect(screen.getAllByText('25 projects').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('25 custom MCP servers').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('Up to 5 Projects and 1 custom remote MCP')).toBeNull();
     expect(screen.queryByText('Unlimited Projects')).toBeNull();
+  });
+
+  it('promises only what the web app ships today', () => {
+    expect(connectorsReleased()).toBe(false);
+    render(
+      <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="free" onUpgrade={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'See all plans' }));
+
+    const text = document.body.textContent ?? '';
+    expect(text).not.toMatch(/custom MCP server|connector|Skills and connectors/i);
+    expect(text).not.toMatch(/on web, desktop, mobile and Chrome|in the CLI and VS Code/);
+    expect(text).not.toMatch(/developer surfaces/i);
+    expect(screen.getAllByText('Managed Cloud chat on the web').length).toBeGreaterThan(0);
+    expect(SURFACE_STATUS.cli).not.toBe('Available now');
+    expect(text).not.toMatch(/stay free in the CLI\.|remain free in the CLI\./);
+    expect(screen.getAllByText(new RegExp(CLI_AVAILABILITY_NOTE)).length).toBe(2);
   });
 
   it('offers no annual billing and never sends Team through personal checkout', () => {

@@ -1354,7 +1354,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         <p className="mt-1 text-sm text-muted-foreground">
           {canAuthor
             ? 'Portable instruction sets for focused workflows. Select one in chat with / or @, write your own, or download a bundled SKILL.md.'
-            : "Bundled, portable instruction sets for focused workflows. Select one in chat with / or @, or download its SKILL.md. The web app doesn't author skills. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."}
+            : 'Bundled, portable instruction sets for focused workflows. Select one in chat with / or @, or download its SKILL.md.'}
         </p>
       </div>
 
@@ -1410,7 +1410,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           {skills.length === 0
             ? canAuthor
               ? 'No skills yet. Create one, or download a bundled SKILL.md from Browse.'
-              : "No skills loaded in this environment. Skills ship bundled with AGI Workforce. The web app can't create one. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI."
+              : 'No skills loaded in this environment. Skills ship bundled with AGI Workforce.'
             : 'No skills match your search.'}
         </p>
       ) : (

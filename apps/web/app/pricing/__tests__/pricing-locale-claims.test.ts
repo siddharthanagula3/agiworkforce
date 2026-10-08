@@ -89,6 +89,24 @@ describe('pricing locale bundles, plan feature claims', () => {
     }
   });
 
+  it('carries the connector-free plan lines in every locale', () => {
+    const bundles = pricingBundles();
+    expect(bundles.map(([locale]) => locale).sort()).toEqual(
+      SUPPORTED_LANGUAGES.map((language) => language.code).sort(),
+    );
+    for (const [locale, bundle] of bundles) {
+      expect(bundle['chatsAtOnce'], `${locale}/pricing.json chatsAtOnce`).toContain('{{chats}}');
+      expect(bundle['chatsAtOnce'], `${locale}/pricing.json chatsAtOnce`).not.toMatch(/\p{N}/u);
+      expect(
+        bundle['unlimitedProjectsAndStorage'],
+        `${locale}/pricing.json unlimitedProjectsAndStorage`,
+      ).not.toMatch(/MCP|\p{N}/u);
+      expect(bundle['compareSubheading'], `${locale}/pricing.json compareSubheading`).not.toMatch(
+        /Desktop|デスクトップ|桌面|데스크톱|डेस्कटॉप|سطح المكتب/u,
+      );
+    }
+  });
+
   it('states Pro concurrency and connector ceilings the billing catalog grants', () => {
     const { maxConcurrentTurns, maxConnectorTools } = BILLING_PLAN_PRODUCT_LIMITS.pro;
     expect(typeof maxConcurrentTurns).toBe('number');

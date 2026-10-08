@@ -5,6 +5,11 @@ import {
   MANAGED_CLOUD_TRIGGER_DELIVERY_OUTCOMES,
   MANAGED_CLOUD_TRIGGER_SOURCES,
 } from '@agiworkforce/cloud-contracts';
+import {
+  CONNECTOR_RELEASE_STATE,
+  connectorsReleased,
+  type ConnectorReleaseState,
+} from '@agiworkforce/types';
 import type { FieldCondition } from '@/lib/automation/field-conditions';
 
 export const TRIGGER_SOURCES = MANAGED_CLOUD_TRIGGER_SOURCES;
@@ -13,6 +18,18 @@ export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
 
 export function isTriggerSource(value: unknown): value is TriggerSource {
   return (TRIGGER_SOURCES as readonly unknown[]).includes(value);
+}
+
+const CONNECTOR_BACKED_TRIGGER_SOURCES: ReadonlySet<TriggerSource> = new Set([
+  'gmail',
+  'google_calendar',
+]);
+
+export function triggerSourceAvailable(
+  source: TriggerSource,
+  connectorState: ConnectorReleaseState = CONNECTOR_RELEASE_STATE,
+): boolean {
+  return !CONNECTOR_BACKED_TRIGGER_SOURCES.has(source) || connectorsReleased(connectorState);
 }
 
 export const GITHUB_TRIGGER_EVENT_TYPES = MANAGED_CLOUD_GITHUB_TRIGGER_EVENT_TYPES;

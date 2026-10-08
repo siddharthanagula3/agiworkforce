@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
+import { AVAILABLE_NOW_LABEL, isReleased, SURFACE_STATUS } from '@/lib/surface-status';
 import { NotificationsSection } from './NotificationsSection';
 import { SecuritySection } from './SecuritySection';
 
@@ -55,7 +56,11 @@ describe('Web Settings capability boundaries', () => {
     const optionLabels = within(scheduleSelect)
       .getAllByRole('option')
       .map((option) => option.textContent);
-    expect(optionLabels).toEqual(['Off', 'Email', 'Mobile push', 'Email, Mobile push']);
+    expect(optionLabels).toEqual(
+      isReleased('mobile')
+        ? ['Off', 'Email', 'Mobile push', 'Email, Mobile push']
+        : ['Off', 'Email'],
+    );
     expect(screen.queryByText(/project, usage, billing/i)).not.toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
   });
@@ -68,7 +73,9 @@ describe('Web Settings capability boundaries', () => {
   });
 
   it('does not deny the email and push schedule channels, which are implemented', () => {
-    render(<NotificationsSection />);
+    render(
+      <NotificationsSection surfaceStatus={{ ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL }} />,
+    );
 
     expect(screen.queryByText('Browser replies only')).not.toBeInTheDocument();
     expect(screen.queryByText(/Email, task, schedule, project/)).not.toBeInTheDocument();

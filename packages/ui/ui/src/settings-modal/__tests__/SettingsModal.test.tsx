@@ -827,9 +827,10 @@ describe('Skills pane (table)', () => {
     renderModal({ activeSection: 'skills' });
     expect(
       screen.getByText(
-        "Bundled, portable instruction sets for focused workflows. Select one in chat with / or @, or download its SKILL.md. The web app doesn't author skills. Use Record a skill in the Desktop app, or add a SKILL.md file to .agiworkforce/skills in the CLI.",
+        'Bundled, portable instruction sets for focused workflows. Select one in chat with / or @, or download its SKILL.md.',
       ),
     ).toBeTruthy();
+    expect(screen.queryByText(/Desktop app|\.agiworkforce\/skills/)).toBeNull();
     expect(screen.getByRole('columnheader', { name: 'Skill' })).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: 'Author' })).toBeTruthy();
     expect(screen.getByText('humanizer')).toBeTruthy();

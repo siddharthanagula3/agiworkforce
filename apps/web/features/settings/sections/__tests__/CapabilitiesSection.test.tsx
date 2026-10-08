@@ -31,6 +31,8 @@ vi.mock('@/features/settings/components/LockdownModePanel', () => ({
   LockdownModePanel: () => null,
 }));
 
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
+import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import { CapabilitiesSection } from '../CapabilitiesSection';
 
 describe('CapabilitiesSection', () => {
@@ -52,6 +54,14 @@ describe('CapabilitiesSection', () => {
     expect(screen.queryByText(/has moved to/i)).toBeNull();
     expect(screen.queryByText(/have moved to/i)).toBeNull();
     expect(screen.queryByRole('link', { name: 'Memory' })).toBeNull();
+  });
+
+  it('states provider-key availability from the surface release status', () => {
+    render(<CapabilitiesSection />);
+
+    const note = screen.getByText(/Running models on your own provider keys/);
+    expect(note).toHaveTextContent(BYOK_SURFACES.availability);
+    if (CLI_AVAILABILITY_NOTE) expect(note.textContent).not.toMatch(/available in the CLI/);
   });
 
   it('still renders the code execution toggle it kept', () => {

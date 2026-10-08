@@ -50,13 +50,12 @@ import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@shared/lib/utils';
 import {
-  BILLING_PLAN_CAPABILITY_TIERS,
   CONNECTORS_COMING_SOON_LABEL,
   CONNECTORS_COMING_SOON_MESSAGE,
   connectorsReleased,
-  getBillingPlanPricing,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
+import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
 import { ConnectorsComingSoonMenuItem } from '@/features/connectors/components/ConnectorsComingSoonMenuItem';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
@@ -158,13 +157,8 @@ const BADGE_NOT_USED_HERE = 'Not used here';
 const BADGE_NOT_SUPPORTED = 'Not supported';
 const PLAN_UNVERIFIED_TITLE = 'Your plan could not be verified. Click to retry.';
 const PLAN_CHECKING_TITLE = 'Checking your plan.';
-const IMAGE_ENTITLEMENT_HINT = 'Image generation is available on Pro and above.';
-const VIDEO_ENTITLEMENT_HINT = `Video generation is available on ${new Intl.ListFormat('en', {
-  style: 'long',
-  type: 'conjunction',
-}).format(
-  BILLING_PLAN_CAPABILITY_TIERS.video_generation.map((plan) => getBillingPlanPricing(plan).label),
-)}.`;
+const IMAGE_ENTITLEMENT_HINT = planCapabilityEntitlementHint('image_generation');
+const VIDEO_ENTITLEMENT_HINT = planCapabilityEntitlementHint('video_generation');
 const FOLDER_UNSUPPORTED_TITLE = 'Folder access is not supported in this browser';
 const CLEAR_FOLDER_LABEL = 'Clear working folder';
 
