@@ -1074,13 +1074,13 @@ mod tests {
     fn manually_controlled_anthropic_model() -> &'static str {
         crate::core::llm::models_config::get_all_model_entries()
             .values()
-            .find(|entry| {
+            .filter(|entry| {
                 entry.provider == "anthropic"
                     && entry.capabilities.thinking
-                    && entry.quality_tier == "balanced"
                     && !crate::core::llm::models_config::model_uses_adaptive_thinking(&entry.id)
             })
             .map(|entry| entry.id.as_str())
+            .min()
             .expect("catalog must include a manually controlled Anthropic reasoning model")
     }
 
