@@ -212,6 +212,8 @@ describe('accountErasureProgress', () => {
     exportObjectsFailed: 0,
     avatarObjectsDeleted: 0,
     avatarObjectsFailed: 0,
+    feedbackObjectsDeleted: 0,
+    feedbackObjectsFailed: 0,
     cacheKeysDeleted: 0,
     cacheKeysFailed: 0,
     tables: {} as Record<string, Record<string, unknown>>,

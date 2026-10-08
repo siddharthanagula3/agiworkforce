@@ -45,6 +45,7 @@ function incompleteStores(report: AccountErasureReport): string {
     ['knowledge objects', report.knowledgeObjectsFailed],
     ['export archive objects', report.exportObjectsFailed],
     ['avatar objects', report.avatarObjectsFailed],
+    ['feedback screenshots', report.feedbackObjectsFailed],
     ['sandbox cache keys', report.cacheKeysFailed],
   ] as const) {
     if ((count ?? 0) > 0) failures.push(`${store} (${count} failed)`);
