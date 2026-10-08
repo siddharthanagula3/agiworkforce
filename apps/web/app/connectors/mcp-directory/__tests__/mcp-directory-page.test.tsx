@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
-import { directoryRecordPath } from '../directory-public';
+import {
+  COMMUNITY_VIEW_NOTICE,
+  DEFAULT_VIEW_LINK_LABEL,
+  SHORT_LIST_COMMUNITY_LINK_LABEL,
+  SHORT_LIST_NOTICE,
+  directoryRecordPath,
+} from '../directory-public';
 
 const getSnapshotViewMock = vi.hoisted(() => vi.fn());
 
@@ -39,7 +45,7 @@ function record(overrides: Partial<DirectoryRecord> = {}): DirectoryRecord {
     repositoryUrl: null,
     version: null,
     sourceRegistry: 'internal',
-    badge: 'official',
+    badge: 'first-party',
     iconUrl: `https://${id}.example/icon.png`,
     monogram: 'LI',
     documentationUrl: null,
@@ -207,12 +213,12 @@ describe('McpDirectoryPage', () => {
   it('links every card name to its details and names the publisher', async () => {
     getSnapshotViewMock.mockResolvedValue(
       snapshot([
-        record({ id: 'linear', name: 'Linear' }),
+        record({ id: 'linear', name: 'Linear', badge: 'registry' }),
         record({ id: 'org/github', name: 'GitHub', publisher: 'GitHub, Inc.', badge: 'community' }),
       ]),
     );
 
-    await renderPage();
+    await renderPage({ view: 'community' });
 
     const cards = screen.getAllByRole('listitem');
     expect(cards).toHaveLength(2);
@@ -253,5 +259,74 @@ describe('McpDirectoryPage', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
       'Find a connector for your work.',
     );
+  });
+
+  describe('listing policy', () => {
+    const community = (overrides: Partial<DirectoryRecord>) =>
+      record({ badge: 'registry', sourceRegistry: 'mcp-registry', ...overrides });
+
+    it('hides unchecked community entries by default and says why the list is short', async () => {
+      getSnapshotViewMock.mockResolvedValue(
+        snapshot([record(), community({ id: 'unchecked', name: 'Unchecked Server' })]),
+      );
+
+      await renderPage();
+
+      expect(screen.queryByRole('heading', { level: 3, name: 'Unchecked Server' })).toBeNull();
+      expect(screen.getByText(SHORT_LIST_NOTICE, { exact: false })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: SHORT_LIST_COMMUNITY_LINK_LABEL })).toHaveAttribute(
+        'href',
+        `${BASE_PATH}?view=community`,
+      );
+    });
+
+    it('shows eligible community entries in the community view and keeps the view in links', async () => {
+      getSnapshotViewMock.mockResolvedValue(
+        snapshot([record(), community({ id: 'unchecked', name: 'Unchecked Server' })]),
+      );
+
+      await renderPage({ view: 'community' });
+
+      expect(
+        screen.getByRole('heading', { level: 3, name: 'Unchecked Server' }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(COMMUNITY_VIEW_NOTICE, { exact: false })).toBeInTheDocument();
+      expect(screen.queryByText(SHORT_LIST_NOTICE, { exact: false })).toBeNull();
+      expect(screen.getByRole('link', { name: DEFAULT_VIEW_LINK_LABEL })).toHaveAttribute(
+        'href',
+        BASE_PATH,
+      );
+      const pills = within(screen.getByRole('navigation', { name: 'Categories' })).getAllByRole(
+        'link',
+      );
+      expect(pills.every((pill) => pill.getAttribute('href')?.includes('view=community'))).toBe(
+        true,
+      );
+    });
+
+    it('never shows an API-key server or an unchecked money-moving one, even in the community view', async () => {
+      getSnapshotViewMock.mockResolvedValue(
+        snapshot([
+          community({
+            id: 'keyed',
+            name: 'Keyed Server',
+            authMode: 'api-key',
+            connectable: 'api-key-form',
+          }),
+          community({ id: 'broker', name: 'Broker Server', description: 'Place trades.' }),
+        ]),
+      );
+
+      await renderPage({ view: 'community' });
+
+      expect(screen.queryByRole('heading', { level: 3, name: 'Keyed Server' })).toBeNull();
+      expect(screen.queryByRole('heading', { level: 3, name: 'Broker Server' })).toBeNull();
+    });
+
+    it('drops the short-list notice once the default list is long enough', async () => {
+      getSnapshotViewMock.mockResolvedValue(snapshot(manyRecords(PAGE_SIZE)));
+      await renderPage();
+      expect(screen.queryByText(SHORT_LIST_NOTICE, { exact: false })).toBeNull();
+    });
   });
 });

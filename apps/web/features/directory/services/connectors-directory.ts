@@ -24,6 +24,7 @@ import {
   OTHER_CATEGORY,
   type DirectoryCategory,
 } from '@/lib/connectors/directory/categorize';
+import { DEFAULT_LIST_SHORT_BELOW } from '@/lib/connectors/directory/listing';
 import firstPartyTargets from '@/lib/connectors/directory/sources/first-party.json';
 import type {
   DirectoryAuthMode,
@@ -84,6 +85,9 @@ const BADGE_TO_KIND: Record<DirectoryBadge, DirectoryBadgeKind> = {
   registry: 'community',
   community: 'community',
 };
+
+export const CONNECTOR_SHORT_LIST_NOTICE =
+  'This list is short because only connectors we have checked by hand are listed by default. Choose Type, then Community, to see unchecked listings.';
 
 const CURATED_BADGE: DirectoryBadgeKind = 'first-party';
 const SELF_ADDED_BADGE: DirectoryBadgeKind = 'custom';
@@ -551,6 +555,12 @@ export function toConnectorSection({
         : catalogueTotal;
   const showCount = connectionState === CONNECTOR_STATE_ALL && stats !== undefined;
   const connectedEmpty = connectionState === CONNECTOR_STATE_CONNECTED;
+  const shortList =
+    connectionState === CONNECTOR_STATE_ALL &&
+    request.badge === null &&
+    request.search === '' &&
+    request.category === null &&
+    catalogueTotal < DEFAULT_LIST_SHORT_BELOW;
   return {
     ...initialConnectorSection(),
     entries,
@@ -566,6 +576,7 @@ export function toConnectorSection({
       ? { emptyCopy: CONNECTOR_NONE_CONNECTED_COPY, emptyHint: CONNECTOR_NONE_CONNECTED_HINT }
       : {}),
     ...(tabHeading ? { catalogHeading: tabHeading } : {}),
+    ...(shortList ? { notice: CONNECTOR_SHORT_LIST_NOTICE } : {}),
   };
 }
 
