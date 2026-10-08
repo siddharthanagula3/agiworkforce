@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor, within, type RenderResult } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
+import { ACCOUNT_AGE_FIELD_LABEL } from '@agiworkforce/types';
 
 const signUpState = vi.hoisted(() => ({
   status: 'missing_requirements' as string | null,
@@ -89,7 +89,7 @@ const REDIRECTS = {
   ssoCallbackUrl: '/auth/sso-callback?redirectTo=%2Fchat',
 };
 const PROVIDERS = [{ id: 'google' as const, label: 'Google' }];
-const REQUIRED_BOX = new RegExp(`^${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use`);
+const TYPED_AGE = '57';
 const TERMS_ONLY = { surface: 'web-signup', version: POLICY_LAST_UPDATED.terms };
 const TERMS_AND_GRANT = { ...TERMS_ONLY, marketingEmailNoticeVersion: POLICY_LAST_UPDATED.privacy };
 
@@ -99,7 +99,7 @@ function openSignup(): RenderResult {
 
 async function admitByEmail(tab: RenderResult, { marketingEmail }: { marketingEmail: boolean }) {
   const screen = within(tab.container);
-  await userEvent.click(screen.getByRole('checkbox', { name: REQUIRED_BOX }));
+  await userEvent.type(screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL), TYPED_AGE);
   if (marketingEmail) {
     await userEvent.click(
       screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),
@@ -116,7 +116,7 @@ async function admitByEmail(tab: RenderResult, { marketingEmail }: { marketingEm
 
 async function admitByProvider(tab: RenderResult, { marketingEmail }: { marketingEmail: boolean }) {
   const screen = within(tab.container);
-  await userEvent.click(screen.getByRole('checkbox', { name: REQUIRED_BOX }));
+  await userEvent.type(screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL), TYPED_AGE);
   if (marketingEmail) {
     await userEvent.click(
       screen.getByRole('checkbox', { name: MARKETING_EMAIL_CONSENT_PURPOSE.label }),

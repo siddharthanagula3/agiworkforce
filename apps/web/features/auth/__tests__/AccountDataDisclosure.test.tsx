@@ -65,13 +65,15 @@ describe('account policy disclosure', () => {
     expect(screen.getByText(FREE_PLAN_TRAINING_SIGNUP_STATEMENT)).not.toBeVisible();
   });
 
-  it('places the notice with the consent box, before the account-switch link', () => {
+  it('places the notice with the agreement, before the account-switch link', () => {
     renderSignupScreen();
 
-    const consent = screen.getByTestId('auth-signup-consent');
+    const agreement = screen.getByTestId('auth-signup-agreement');
     const notice = screen.getByTestId('auth-data-use-notice');
     const switchLink = screen.getByRole('link', { name: 'Log in' });
-    expect(consent.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      agreement.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
       notice.compareDocumentPosition(switchLink) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

@@ -32,7 +32,7 @@
     "secondary": "Utilities"
   },
   "age_rating": {
-    "rating": "18+",
+    "rating": "13+",
     "questionnaire": {
       "cartoon_or_fantasy_violence": "None",
       "realistic_violence": "None",
@@ -46,7 +46,7 @@
       "user_generated_content": "None",
       "contests": "None"
     },
-    "note": "App Store Connect calculated 9+ from the content questionnaire on 2026-09-26. AGI Cloud accounts are for people 18 and older: getAgeThreshold in apps/mobile/src/features/auth/services/ageGate.ts never asks for less than ACCOUNT_HOLDER_MINIMUM_AGE (18, packages/contracts/types/src/account-eligibility.ts) in any region. Apple requires an app whose terms set a minimum age above the calculated rating to use Override to Higher Age Rating, so the rating is set to 18+ there; the content descriptions still follow the questionnaire answers. Regional ratings may differ."
+    "note": "App Store Connect calculated 9+ from the content questionnaire on 2026-09-26. AGI Cloud accounts are for people 13 and older: getAgeThreshold in apps/mobile/src/features/auth/services/ageGate.ts never asks for less than ACCOUNT_MINIMUM_AGE (13, packages/contracts/types/src/account-eligibility.ts) in any region, and asks for 16 in EU member-state zones and North Macedonia and 18 in India and Brazil. Apple requires an app whose terms set a minimum age above the calculated rating to use Override to Higher Age Rating, so the rating is set to 13+ there; the content descriptions still follow the questionnaire answers. Regional ratings may differ."
   },
   "privacy_nutrition_labels": {
     "data_not_collected": false,

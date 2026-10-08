@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
+import { ACCOUNT_AGE_FIELD_LABEL, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 
 const client = vi.hoisted(() => ({
   isReady: true,
@@ -152,8 +152,6 @@ function renderFlow(mode: AuthMode = 'login') {
   );
 }
 
-const CONSENT_BOX = new RegExp(`^${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use`);
-
 async function submitEmail() {
   await userEvent.type(screen.getByLabelText('Email address'), EMAIL);
   await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -165,7 +163,10 @@ async function openStep(variant: StepVariant) {
   if (step.kind === 'email') return container;
 
   if (mode === 'signup') {
-    await userEvent.click(screen.getByRole('checkbox', { name: CONSENT_BOX }));
+    await userEvent.type(
+      screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL),
+      String(ACCOUNT_MINIMUM_AGE),
+    );
   }
   client.startWithEmail.mockResolvedValue({ status: 'next', step } as AuthResult);
   await submitEmail();

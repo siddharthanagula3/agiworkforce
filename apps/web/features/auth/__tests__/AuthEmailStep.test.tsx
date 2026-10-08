@@ -4,9 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 
 import {
-  ACCOUNT_AGE_CONFIRMATION_LABEL,
+  ACCOUNT_AGE_FIELD_LABEL,
+  ACCOUNT_AGE_INELIGIBLE_MESSAGE,
+  ACCOUNT_AGE_REQUIRED_MESSAGE,
   ACCOUNT_AGE_REQUIREMENT_NOTICE,
-  ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
+  ACCOUNT_MINIMUM_AGE,
+  PARENTAL_PERMISSION_BELOW_AGE,
 } from '@agiworkforce/types';
 
 import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
@@ -20,7 +23,11 @@ const PROVIDERS: readonly AuthProvider[] = [
   { id: 'github', label: 'GitHub' },
 ];
 
-const CONSENT_SENTENCE = `${ACCOUNT_AGE_CONFIRMATION_LABEL}, agree to the Terms of Use, and acknowledge the Privacy Policy.`;
+const AGREEMENT_SENTENCE =
+  'By creating an account, you agree to the Terms of Use and acknowledge the Privacy Policy.';
+const YOUNGEST_ADMITTED = String(ACCOUNT_MINIMUM_AGE);
+const TOO_YOUNG = String(ACCOUNT_MINIMUM_AGE - 1);
+const ADMITTED_AGES = [YOUNGEST_ADMITTED, String(PARENTAL_PERMISSION_BELOW_AGE - 1), '18'];
 
 function renderStep(overrides: Partial<Parameters<typeof AuthEmailStep>[0]> = {}) {
   const props = {
@@ -41,8 +48,24 @@ function renderStep(overrides: Partial<Parameters<typeof AuthEmailStep>[0]> = {}
   return props;
 }
 
-function consentBox(): HTMLInputElement {
-  return screen.getByRole('checkbox', { name: CONSENT_SENTENCE }) as HTMLInputElement;
+function ageField(): HTMLInputElement {
+  return screen.getByLabelText(ACCOUNT_AGE_FIELD_LABEL) as HTMLInputElement;
+}
+
+async function enterAge(age: string = YOUNGEST_ADMITTED): Promise<void> {
+  await userEvent.clear(ageField());
+  if (age) await userEvent.type(ageField(), age);
+}
+
+function ageAlert(): HTMLElement | null {
+  return within(screen.getByTestId('auth-age-field')).queryByRole('alert');
+}
+
+function withPasskeys(): void {
+  Object.defineProperty(window, 'PublicKeyCredential', {
+    configurable: true,
+    value: function PublicKeyCredential() {},
+  });
 }
 
 function marketingEmailBox(): HTMLInputElement {
@@ -55,14 +78,16 @@ function signalGlobalPrivacyControl(): void {
   Object.defineProperty(navigator, 'globalPrivacyControl', { configurable: true, value: true });
 }
 
-function expectRefused(): void {
-  const box = consentBox();
-  expect(screen.getByRole('alert')).toHaveTextContent(ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE);
-  expect(box).toHaveAttribute('aria-invalid', 'true');
-  expect(box).toHaveAccessibleDescription(
-    `${ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE} ${ACCOUNT_AGE_REQUIREMENT_NOTICE}`,
+function expectRefused(message: string = ACCOUNT_AGE_REQUIRED_MESSAGE): void {
+  const field = ageField();
+  expect(ageAlert()).toHaveTextContent(message);
+  expect(field).toHaveAttribute('aria-invalid', 'true');
+  expect(field).toHaveAccessibleDescription(
+    message === ACCOUNT_AGE_INELIGIBLE_MESSAGE
+      ? message
+      : `${message} ${ACCOUNT_AGE_REQUIREMENT_NOTICE}`,
   );
-  expect(box).toHaveFocus();
+  expect(field).toHaveFocus();
 }
 
 describe('AuthEmailStep', () => {
@@ -79,6 +104,8 @@ describe('AuthEmailStep', () => {
     expect(screen.getByRole('button', { name: 'Continue with GitHub' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/signup');
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(ACCOUNT_AGE_FIELD_LABEL)).toBeNull();
+    expect(screen.queryByTestId('auth-signup-agreement')).toBeNull();
     expect(screen.getByTestId('auth-legal-footer')).toBeInTheDocument();
     expect(screen.queryByTestId('auth-data-use-notice')).toBeNull();
   });
@@ -92,40 +119,82 @@ describe('AuthEmailStep', () => {
     expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
   });
 
-  it('carries the agreement in the one consent box on sign up, with no passive sentence', () => {
+  it('states the agreement beside the action on sign up, with no box to tick for it', () => {
     renderStep({ mode: 'signup' });
 
     expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
     expect(
       screen.getByText('Get started with AGI Workforce and put AI to work for you.'),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('checkbox')).toEqual([consentBox(), marketingEmailBox()]);
-    expect(within(screen.getByTestId('auth-signup-consent')).getAllByRole('checkbox')).toEqual([
-      consentBox(),
-    ]);
-    expect(consentBox()).not.toBeChecked();
-    expect(screen.queryByText(/By signing up/)).toBeNull();
-    expect(screen.getByRole('link', { name: 'Terms of Use' })).toHaveAttribute('href', '/terms');
-    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+    const agreement = screen.getByTestId('auth-signup-agreement');
+    expect(agreement).toHaveTextContent(AGREEMENT_SENTENCE);
+    expect(agreement.tagName).toBe('P');
+    expect(within(agreement).queryByRole('checkbox')).toBeNull();
+    expect(screen.getAllByRole('checkbox')).toEqual([marketingEmailBox()]);
+    expect(screen.getAllByText(/By creating an account/)).toHaveLength(1);
+    expect(within(agreement).getByRole('link', { name: 'Terms of Use' })).toHaveAttribute(
+      'href',
+      '/terms',
+    );
+    expect(within(agreement).getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
       'href',
       '/privacy',
     );
+    const submit = screen.getByRole('button', { name: 'Continue' });
+    expect(
+      submit.compareDocumentPosition(agreement) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
-  it('keeps the detailed age rule as the description of the box until it is ticked', async () => {
+  it('asks for the age as a number, in the form between the address and the action', () => {
     renderStep({ mode: 'signup' });
-    const box = consentBox();
+    const field = ageField();
+    const form = field.closest('form') as HTMLFormElement;
 
-    expect(box).toHaveAccessibleDescription(ACCOUNT_AGE_REQUIREMENT_NOTICE);
+    expect([...form.querySelectorAll('input, button')]).toEqual([
+      screen.getByLabelText('Email address'),
+      field,
+      screen.getByRole('button', { name: 'Continue' }),
+    ]);
+    expect(field).toHaveValue('');
+    expect(field).toHaveAttribute('type', 'text');
+    expect(field).toHaveAttribute('inputmode', 'numeric');
+    expect(field).toHaveAttribute('pattern', '[0-9]*');
+    expect(field).toHaveAttribute('maxlength', '3');
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    expect(field).toHaveAttribute('aria-required', 'true');
+    expect(field).not.toHaveAttribute('required');
+  });
+
+  it('keeps the age out of anything the form itself could submit', async () => {
+    renderStep({ mode: 'signup' });
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await enterAge('57');
+    const form = ageField().closest('form') as HTMLFormElement;
+
+    expect(ageField()).not.toHaveAttribute('name');
+    expect([...new FormData(form).entries()]).toEqual([['email', 'person@example.com']]);
+  });
+
+  it('keeps the detailed age rule as the description of the field until the entry is eligible', async () => {
+    renderStep({ mode: 'signup' });
+    const field = ageField();
+
+    expect(field).toHaveAccessibleDescription(ACCOUNT_AGE_REQUIREMENT_NOTICE);
     expect(screen.queryByRole('alert')).toBeNull();
 
-    await userEvent.click(box);
+    await enterAge('1');
+    expect(field).toHaveAccessibleDescription(ACCOUNT_AGE_REQUIREMENT_NOTICE);
+    expect(screen.queryByRole('alert')).toBeNull();
 
-    expect(box).toBeChecked();
-    expect(box).not.toHaveAccessibleDescription();
+    await enterAge(YOUNGEST_ADMITTED);
+
+    expect(field).toHaveValue(YOUNGEST_ADMITTED);
+    expect(field).not.toHaveAccessibleDescription();
+    expect(field).not.toHaveAttribute('aria-invalid');
   });
 
-  it('refuses the email form until the box is ticked, then lets it through', async () => {
+  it('refuses the email form until an age is entered, then lets it through', async () => {
     const props = renderStep({ mode: 'signup' });
 
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
@@ -133,12 +202,14 @@ describe('AuthEmailStep', () => {
 
     expect(props.onSubmit).not.toHaveBeenCalled();
     expectRefused();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
 
-    await userEvent.click(consentBox());
+    await enterAge();
 
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(consentBox()).not.toHaveAttribute('aria-invalid');
+    expect(ageField()).not.toHaveAttribute('aria-invalid');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(props.onSubmit).toHaveBeenCalledTimes(1);
     expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
   });
 
@@ -152,8 +223,17 @@ describe('AuthEmailStep', () => {
     expectRefused();
   });
 
+  it('submits from Enter in the age field once the age is eligible', async () => {
+    const props = renderStep({ mode: 'signup' });
+
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await userEvent.type(ageField(), `${YOUNGEST_ADMITTED}{Enter}`);
+
+    expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
+  });
+
   for (const provider of PROVIDERS) {
-    it(`refuses ${provider.label} until the box is ticked, then starts it`, async () => {
+    it(`refuses ${provider.label} until an age is entered, then starts it`, async () => {
       const props = renderStep({ mode: 'signup' });
       const button = screen.getByRole('button', { name: `Continue with ${provider.label}` });
 
@@ -163,31 +243,117 @@ describe('AuthEmailStep', () => {
       expect(props.onStartProvider).not.toHaveBeenCalled();
       expectRefused();
 
-      await userEvent.click(consentBox());
+      await enterAge();
       await userEvent.click(button);
 
+      expect(props.onStartProvider).toHaveBeenCalledTimes(1);
       expect(props.onStartProvider).toHaveBeenCalledWith(provider.id);
     });
   }
 
   it('refuses a passkey start on sign up the same way', async () => {
-    Object.defineProperty(window, 'PublicKeyCredential', {
-      configurable: true,
-      value: function PublicKeyCredential() {},
-    });
+    withPasskeys();
     const onStartPasskey = vi.fn();
     renderStep({ mode: 'signup', passkeySignIn: true, onStartPasskey });
+    const passkey = await screen.findByRole('button', {
+      name: 'Sign in with a passkey or security key',
+    });
 
+    await userEvent.click(passkey);
+
+    expect(onStartPasskey).not.toHaveBeenCalled();
+    expectRefused();
+
+    await enterAge();
+    await userEvent.click(passkey);
+
+    expect(onStartPasskey).toHaveBeenCalledTimes(1);
+    Reflect.deleteProperty(window, 'PublicKeyCredential');
+  });
+
+  it(`refuses a ${TOO_YOUNG} year old at every way in, and starts none of them`, async () => {
+    withPasskeys();
+    const onStartPasskey = vi.fn();
+    const onSignupAdmitted = vi.fn();
+    const props = renderStep({
+      mode: 'signup',
+      passkeySignIn: true,
+      onStartPasskey,
+      onSignupAdmitted,
+    });
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await enterAge(TOO_YOUNG);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    const waysIn = [
+      screen.getByRole('button', { name: 'Continue' }),
+      ...PROVIDERS.map(({ label }) =>
+        screen.getByRole('button', { name: `Continue with ${label}` }),
+      ),
+      await screen.findByRole('button', { name: 'Sign in with a passkey or security key' }),
+    ];
+    for (const wayIn of waysIn) {
+      await userEvent.click(wayIn);
+
+      expectRefused(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+    }
+    await userEvent.type(ageField(), '{Enter}');
+
+    expectRefused(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
+    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.onStartProvider).not.toHaveBeenCalled();
+    expect(onStartPasskey).not.toHaveBeenCalled();
+    expect(onSignupAdmitted).not.toHaveBeenCalled();
+    Reflect.deleteProperty(window, 'PublicKeyCredential');
+  });
+
+  it.each(ADMITTED_AGES)('admits a %s year old at every way in', async (age) => {
+    withPasskeys();
+    const onStartPasskey = vi.fn();
+    const onStartProvider = vi.fn();
+    const props = renderStep({
+      mode: 'signup',
+      passkeySignIn: true,
+      onStartPasskey,
+      onStartProvider,
+    });
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await enterAge(age);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    for (const { label } of PROVIDERS) {
+      await userEvent.click(screen.getByRole('button', { name: `Continue with ${label}` }));
+    }
     await userEvent.click(
       await screen.findByRole('button', { name: 'Sign in with a passkey or security key' }),
     );
 
-    expect(onStartPasskey).not.toHaveBeenCalled();
-    expectRefused();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
+    expect(onStartProvider.mock.calls).toEqual(PROVIDERS.map(({ id }) => [id]));
+    expect(onStartPasskey).toHaveBeenCalledTimes(1);
     Reflect.deleteProperty(window, 'PublicKeyCredential');
   });
 
-  it('keeps the refusal until the box is ticked, not until the next attempt', async () => {
+  it.each([
+    ['zero', '0'],
+    ['an age nobody has', '999'],
+    ['a word', 'ten'],
+  ])('refuses %s as it refuses an empty field', async (_case, entry) => {
+    const props = renderStep({ mode: 'signup' });
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await enterAge(entry);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+    expectRefused();
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(props.onStartProvider).not.toHaveBeenCalled();
+    expect(props.onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps the refusal until the age is eligible, not until the next attempt or keystroke', async () => {
     const props = renderStep({ mode: 'signup' });
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
@@ -196,17 +362,20 @@ describe('AuthEmailStep', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(props.onStartProvider).not.toHaveBeenCalled();
 
-    await userEvent.click(consentBox());
-    await userEvent.click(consentBox());
+    await userEvent.type(ageField(), '1');
+    expect(ageAlert()).toHaveTextContent(ACCOUNT_AGE_REQUIRED_MESSAGE);
+    await userEvent.type(ageField(), '6');
+    expect(screen.queryByRole('alert')).toBeNull();
 
-    expect(consentBox()).not.toBeChecked();
+    await enterAge(TOO_YOUNG);
+
     expect(screen.queryByRole('alert')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Continue with GitHub' }));
     expect(props.onStartProvider).not.toHaveBeenCalled();
-    expectRefused();
+    expectRefused(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
   });
 
-  it('refuses a retry once the box is unticked again, then lets a ticked retry through', async () => {
+  it('refuses a retry once the age is no longer eligible, then lets a corrected retry through', async () => {
     const onRetry = vi.fn();
     renderStep({
       mode: 'signup',
@@ -215,27 +384,101 @@ describe('AuthEmailStep', () => {
       onRetry,
     });
     const retry = screen.getByRole('button', { name: 'Try again' });
-    const consent = within(screen.getByTestId('auth-signup-consent'));
 
     expect(retry).toBeEnabled();
     await userEvent.click(retry);
 
     expect(onRetry).not.toHaveBeenCalled();
-    expect(consent.getByRole('alert')).toHaveTextContent(ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE);
-    expect(consentBox()).toHaveAttribute('aria-invalid', 'true');
-    expect(consentBox()).toHaveAccessibleDescription(
-      `${ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE} ${ACCOUNT_AGE_REQUIREMENT_NOTICE}`,
-    );
-    expect(consentBox()).toHaveFocus();
+    expectRefused();
 
-    await userEvent.click(consentBox());
-    expect(consent.queryByRole('alert')).toBeNull();
+    await enterAge();
+    expect(ageAlert()).toBeNull();
+    await userEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    await enterAge(TOO_YOUNG);
     await userEvent.click(retry);
 
     expect(onRetry).toHaveBeenCalledTimes(1);
+    expectRefused(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
   });
 
-  it('retries a failed sign-in without asking for a box that screen does not have', async () => {
+  it('hands the age to nothing that leaves the screen, and writes it nowhere', async () => {
+    withPasskeys();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    const cookiesBefore = document.cookie;
+    const addressBefore = window.location.href;
+    const leaving = {
+      onSubmit: vi.fn(),
+      onStartProvider: vi.fn(),
+      onStartPasskey: vi.fn(),
+      onRetry: vi.fn(),
+      onSignupAdmitted: vi.fn(),
+    };
+    renderStep({
+      mode: 'signup',
+      passkeySignIn: true,
+      error: 'We could not reach the server. Check your connection and try again.',
+      retryOffered: true,
+      ...leaving,
+    });
+    await enterAge('57');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    for (const { label } of PROVIDERS) {
+      await userEvent.click(screen.getByRole('button', { name: `Continue with ${label}` }));
+    }
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Sign in with a passkey or security key' }),
+    );
+
+    expect(leaving.onRetry.mock.calls).toEqual([[]]);
+    expect(leaving.onSubmit.mock.calls).toEqual([['person@example.com']]);
+    expect(leaving.onStartProvider.mock.calls).toEqual(PROVIDERS.map(({ id }) => [id]));
+    expect(leaving.onStartPasskey.mock.calls).toEqual([[]]);
+    expect(leaving.onSignupAdmitted.mock.calls).toEqual(
+      Array.from({ length: 2 + PROVIDERS.length + 1 }, () => [{ marketingEmail: false }]),
+    );
+    const carried = JSON.stringify(Object.values(leaving).map((callback) => callback.mock.calls));
+    expect(carried).not.toContain('57');
+    expect(carried).not.toMatch(/age/i);
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+    expect(document.cookie).toBe(cookiesBefore);
+    expect(window.location.href).toBe(addressBefore);
+    Reflect.deleteProperty(window, 'PublicKeyCredential');
+  });
+
+  it('forgets the age when the screen turns to sign-in and back without remounting', async () => {
+    const props = {
+      providers: PROVIDERS,
+      ready: true,
+      phase: 'idle' as const,
+      error: null,
+      fieldError: null,
+      switchOffered: false,
+      providerPending: null,
+      onSubmit: vi.fn(),
+      onStartProvider: vi.fn(),
+    };
+    const { rerender } = render(<AuthEmailStep {...props} mode="signup" switchUrl="/login" />);
+    await enterAge(TOO_YOUNG);
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    expectRefused(ACCOUNT_AGE_INELIGIBLE_MESSAGE);
+
+    rerender(<AuthEmailStep {...props} mode="login" switchUrl="/signup" />);
+    expect(screen.queryByLabelText(ACCOUNT_AGE_FIELD_LABEL)).toBeNull();
+    rerender(<AuthEmailStep {...props} mode="signup" switchUrl="/login" />);
+
+    expect(ageField()).toHaveValue('');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(props.onStartProvider).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed sign-in without asking for an age that screen does not ask for', async () => {
     const onRetry = vi.fn();
     renderStep({ retryOffered: true, onRetry });
 
@@ -279,11 +522,28 @@ describe('AuthEmailStep', () => {
     ).toBeTruthy();
   });
 
-  it('asks nothing about age when signing in', () => {
-    renderStep();
+  it('asks nothing about age when signing in, and starts every way in without one', async () => {
+    withPasskeys();
+    const onStartPasskey = vi.fn();
+    const props = renderStep({ passkeySignIn: true, onStartPasskey });
 
-    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+    expect(screen.queryByLabelText(ACCOUNT_AGE_FIELD_LABEL)).toBeNull();
+    expect(screen.queryByTestId('auth-age-field')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: /age/i })).toBeNull();
     expect(screen.queryByText(ACCOUNT_AGE_REQUIREMENT_NOTICE, { exact: false })).toBeNull();
+    expect(screen.queryByText(/By creating an account/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Sign in with a passkey or security key' }),
+    );
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
+
+    expect(props.onStartProvider).toHaveBeenCalledWith('google');
+    expect(onStartPasskey).toHaveBeenCalledTimes(1);
+    expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
+    expect(screen.queryByRole('alert')).toBeNull();
+    Reflect.deleteProperty(window, 'PublicKeyCredential');
   });
 
   it('shows a sign up failure inline rather than as a banner', () => {
@@ -314,7 +574,7 @@ describe('AuthEmailStep', () => {
     renderStep({ mode: 'signup', ready: false });
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
-    expect(consentBox()).toBeEnabled();
+    expect(ageField()).toBeEnabled();
   });
 
   describe('sign-in with the password on the same screen', () => {
@@ -658,7 +918,7 @@ describe('the optional marketing email box on sign up', () => {
     Reflect.deleteProperty(navigator, 'globalPrivacyControl');
   });
 
-  it('sits directly under the required box as a real label, unticked and never required', () => {
+  it('sits directly under the agreement as a real label, unticked and never required', () => {
     renderStep({ mode: 'signup' });
     const box = marketingEmailBox();
 
@@ -670,16 +930,16 @@ describe('the optional marketing email box on sign up', () => {
     expect(box.closest('label')).toHaveTextContent(MARKETING_EMAIL_CONSENT_PURPOSE.label);
     expect(box.closest('label')).toHaveAttribute('for', box.id);
 
-    const required = screen.getByTestId('auth-signup-consent');
+    const agreement = screen.getByTestId('auth-signup-agreement');
     const optional = screen.getByTestId('auth-marketing-email-consent');
-    expect(required.nextElementSibling).toBe(optional);
+    expect(agreement.nextElementSibling).toBe(optional);
     expect(optional.nextElementSibling).toBe(screen.getByTestId('auth-data-use-notice'));
   });
 
-  it('follows the required box and its two policy links in keyboard order', async () => {
+  it('follows the action and the two policy links of its agreement in keyboard order', async () => {
     renderStep({ mode: 'signup' });
 
-    consentBox().focus();
+    screen.getByRole('button', { name: 'Continue' }).focus();
     await userEvent.tab();
     expect(screen.getByRole('link', { name: 'Terms of Use' })).toHaveFocus();
     await userEvent.tab();
@@ -689,7 +949,7 @@ describe('the optional marketing email box on sign up', () => {
     expect(marketingEmailBox()).toHaveFocus();
     await userEvent.keyboard(' ');
     expect(marketingEmailBox()).toBeChecked();
-    expect(consentBox()).not.toBeChecked();
+    expect(ageField()).toHaveValue('');
   });
 
   it('is not on the sign-in screen', () => {
@@ -731,7 +991,7 @@ describe('the optional marketing email box on sign up', () => {
     const onStartProvider = vi.fn();
     renderStep({ mode: 'signup', onSignupAdmitted, onStartProvider });
 
-    await userEvent.click(consentBox());
+    await enterAge();
     if (ticked) await userEvent.click(marketingEmailBox());
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -743,7 +1003,7 @@ describe('the optional marketing email box on sign up', () => {
     );
   });
 
-  it('never stands in for the required box, and leaves its refusal as it was', async () => {
+  it('never stands in for the age, and leaves its refusal as it was', async () => {
     const onSignupAdmitted = vi.fn();
     const props = renderStep({ mode: 'signup', onSignupAdmitted });
 
@@ -760,10 +1020,8 @@ describe('the optional marketing email box on sign up', () => {
 
     await userEvent.click(marketingEmailBox());
 
-    expect(within(screen.getByTestId('auth-signup-consent')).getByRole('alert')).toHaveTextContent(
-      ACCOUNT_SIGNUP_CONSENT_REQUIRED_MESSAGE,
-    );
-    expect(consentBox()).toHaveAttribute('aria-invalid', 'true');
+    expect(ageAlert()).toHaveTextContent(ACCOUNT_AGE_REQUIRED_MESSAGE);
+    expect(ageField()).toHaveAttribute('aria-invalid', 'true');
     expect(screen.queryByTestId('auth-marketing-email-consent')).not.toContainElement(
       screen.getByRole('alert'),
     );
@@ -780,7 +1038,7 @@ describe('the optional marketing email box on sign up', () => {
       onSignupAdmitted,
     });
 
-    await userEvent.click(consentBox());
+    await enterAge();
     await userEvent.click(marketingEmailBox());
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await userEvent.click(marketingEmailBox());
@@ -793,10 +1051,10 @@ describe('the optional marketing email box on sign up', () => {
     ]);
   });
 
-  it('is held while a request is in flight, as the required box is', () => {
+  it('is held while a request is in flight, as the age field is', () => {
     renderStep({ mode: 'signup', phase: 'checking_account' });
 
-    expect(consentBox()).toBeDisabled();
+    expect(ageField()).toBeDisabled();
     expect(marketingEmailBox()).toBeDisabled();
   });
 
@@ -818,7 +1076,7 @@ describe('the optional marketing email box on sign up', () => {
 
       await userEvent.click(box);
       await userEvent.click(screen.getByText(MARKETING_EMAIL_CONSENT_PURPOSE.label));
-      await userEvent.click(consentBox());
+      await enterAge();
       await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
       expect(box).not.toBeChecked();
@@ -830,7 +1088,7 @@ describe('the optional marketing email box on sign up', () => {
   it('lets the keyboard reach a box held under Global Privacy Control, so its reason is read out, and Space leaves it empty', async () => {
     renderStep({ mode: 'signup', optedOutBySignal: true });
 
-    consentBox().focus();
+    screen.getByRole('button', { name: 'Continue' }).focus();
     await userEvent.tab();
     await userEvent.tab();
     await userEvent.tab();
@@ -867,7 +1125,7 @@ describe('the optional marketing email box on sign up', () => {
     rerender(<AuthEmailStep {...props} mode="signup" switchUrl="/login" />);
 
     expect(marketingEmailBox()).not.toBeChecked();
-    await userEvent.click(consentBox());
+    await enterAge();
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
     expect(onSignupAdmitted).toHaveBeenCalledWith({ marketingEmail: false });
   });

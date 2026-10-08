@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { evaluateAccountAge } from '@agiworkforce/types';
 import { Spinner } from '@agiworkforce/ui';
 
 import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
@@ -9,6 +10,7 @@ import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
 import type { SignupAttemptChoices } from '@/app/signup/signupAttemptMarkers';
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
+import { AuthAgeField } from './AuthAgeField';
 import { useAuthCopy } from './authCopy';
 import { AuthDataUseNotice } from './AuthDataUseNotice';
 import { AuthDivider } from './AuthDivider';
@@ -18,7 +20,7 @@ import { AuthPasswordField } from './AuthPasswordField';
 import { AuthPhaseStatus } from './AuthPhaseStatus';
 import { AuthMarketingEmailConsent } from './AuthMarketingEmailConsent';
 import { AuthProviderButtons } from './AuthProviderButtons';
-import { AuthSignupConsent } from './AuthSignupConsent';
+import { AuthSignupAgreement } from './AuthSignupAgreement';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
 import { AuthSwitchLine, SWITCH_INSTEAD_COPY } from './AuthSwitchLine';
@@ -39,7 +41,7 @@ import {
   AUTH_STEP_LINKS_CLASS,
 } from './authStyles';
 import { useMarketingEmailChoice } from './marketingEmailChoice';
-import { useSignupConsentGate } from './useSignupConsentGate';
+import { useSignupAgeGate } from './useSignupAgeGate';
 import type { AuthMode, AuthPhase, AuthProvider, AuthProviderId } from './authContract';
 
 const HEADING_DEFAULTS: Readonly<Record<AuthMode, { key: string; label: string }>> = {
@@ -113,11 +115,12 @@ export function AuthEmailStep({
   const [passkeysSupported, setPasskeysSupported] = useState(false);
   const [lastUsed, setLastUsed] = useState<AuthLastUsed | null>(null);
   const isSignup = mode === 'signup';
-  const consent = useSignupConsentGate(isSignup);
+  const ageGate = useSignupAgeGate(isSignup);
   const marketingEmail = useMarketingEmailChoice(optedOutBySignal);
   if (passwordMode !== mode) {
     setPasswordMode(mode);
     setPassword('');
+    ageGate.forget();
     marketingEmail.choose(false);
   }
   useEffect(() => {
@@ -151,7 +154,7 @@ export function AuthEmailStep({
     );
 
   const attempt = (action: () => void) => {
-    const admitted = consent.admit(() => {
+    const admitted = ageGate.admit(() => {
       setAttempted({ email, password });
       if (isSignup) onSignupAdmitted?.({ marketingEmail: marketingEmail.wanted });
       action();
@@ -176,9 +179,11 @@ export function AuthEmailStep({
     return email.trim();
   };
 
-  const onConsentChange = (next: boolean) => {
-    if (next && consent.refused) scene.setMood(error || fieldError ? 'error' : 'neutral');
-    consent.confirm(next);
+  const onAgeChange = (next: string) => {
+    if (ageGate.refusedAs !== null && evaluateAccountAge(next) === 'eligible') {
+      scene.setMood(error || fieldError ? 'error' : 'neutral');
+    }
+    ageGate.enter(next);
   };
 
   const otherWaysIn = (
@@ -289,6 +294,12 @@ export function AuthEmailStep({
           </div>
         ) : null}
 
+        {isSignup ? (
+          <div className={AUTH_FIELD_STACK_CLASS}>
+            <AuthAgeField gate={{ ...ageGate, enter: onAgeChange }} disabled={busy} />
+          </div>
+        ) : null}
+
         {error ? (
           <p role="alert" className={AUTH_ERROR_CLASS}>
             {error}
@@ -308,7 +319,7 @@ export function AuthEmailStep({
 
       {isSignup ? (
         <>
-          <AuthSignupConsent gate={{ ...consent, confirm: onConsentChange }} disabled={busy} />
+          <AuthSignupAgreement />
           <AuthMarketingEmailConsent
             choice={marketingEmail}
             disabled={busy}

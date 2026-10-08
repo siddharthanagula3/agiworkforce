@@ -32,6 +32,7 @@ afterAll(() => {
   Object.defineProperty(global, 'Intl', { configurable: true, value: originalIntl });
 });
 
+import { ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
   detectRegionRule,
   getAgeThreshold,
@@ -123,14 +124,22 @@ describe('getAgeThreshold', () => {
     expect(getAgeThreshold()).toBe(18);
   });
 
-  it('returns the 18 account minimum in the EU, above its 16 consent age', () => {
+  it('keeps the 16 regional age in the EU, above the account minimum', () => {
     setTimezone('Europe/Berlin');
-    expect(getAgeThreshold()).toBe(18);
+    expect(getAgeThreshold()).toBe(16);
+    expect(getAgeThreshold()).toBeGreaterThan(ACCOUNT_MINIMUM_AGE);
   });
 
-  it('returns the 18 account minimum where the regional consent age is 13', () => {
+  it('returns the account minimum where no regional age is higher', () => {
     setTimezone('America/New_York');
-    expect(getAgeThreshold()).toBe(18);
+    expect(getAgeThreshold()).toBe(ACCOUNT_MINIMUM_AGE);
+  });
+
+  it('never asks for less than the account minimum in any zone', () => {
+    for (const zone of ['Europe/London', 'Antarctica/Troll', 'Etc/UTC', 'Asia/Tokyo']) {
+      setTimezone(zone);
+      expect(getAgeThreshold()).toBeGreaterThanOrEqual(ACCOUNT_MINIMUM_AGE);
+    }
   });
 });
 
@@ -144,7 +153,7 @@ describe('confirmAgeGate', () => {
     const record = confirmAgeGate(20);
     expect(record.confirmed).toBe(true);
     expect(record.isMinor).toBe(false);
-    expect(record.threshold).toBe(18);
+    expect(record.threshold).toBe(ACCOUNT_MINIMUM_AGE);
     expect(record.regionCode).toBe('DEFAULT');
     expect(isAgeGateConfirmed()).toBe(true);
     expect(isMinorMode()).toBe(false);
@@ -158,10 +167,17 @@ describe('confirmAgeGate', () => {
     expect(isAgeGateConfirmed()).toBe(false);
   });
 
-  it('refuses a 17 year old where the regional consent age is 13', () => {
-    const record = confirmAgeGate(17);
+  it.each([13, 16, 17])('admits a %i year old where no regional age is higher (US)', (age) => {
+    const record = confirmAgeGate(age);
+    expect(record.isMinor).toBe(false);
+    expect(record.threshold).toBe(ACCOUNT_MINIMUM_AGE);
+    expect(isAgeGateConfirmed()).toBe(true);
+    expect(isMinorMode()).toBe(false);
+  });
+
+  it('refuses the year under the account minimum (US)', () => {
+    const record = confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
     expect(record.isMinor).toBe(true);
-    expect(record.threshold).toBe(18);
     expect(isAgeGateConfirmed()).toBe(false);
   });
 
@@ -172,25 +188,29 @@ describe('confirmAgeGate', () => {
     expect(record.regionCode).toBe('IN');
   });
 
-  it('marks minor for India threshold (18), age 17', () => {
+  it.each([13, 16, 17])('marks minor for India threshold (18), age %i', (age) => {
     setTimezone('Asia/Kolkata');
-    const record = confirmAgeGate(17);
+    const record = confirmAgeGate(age);
     expect(record.isMinor).toBe(true);
+    expect(record.threshold).toBe(18);
+    expect(isAgeGateConfirmed()).toBe(false);
   });
 
-  it('marks minor for EU threshold (16), age 15', () => {
+  it.each([13, 15])('marks minor for EU threshold (16), age %i', (age) => {
     setTimezone('Europe/Berlin');
-    const record = confirmAgeGate(15);
+    const record = confirmAgeGate(age);
     expect(record.isMinor).toBe(true);
     expect(record.regionCode).toBe('DE');
-    expect(record.threshold).toBe(18);
+    expect(record.threshold).toBe(16);
+    expect(isAgeGateConfirmed()).toBe(false);
   });
 
-  it('refuses a 16 year old in the EU, since an account needs 18', () => {
+  it.each([16, 17])('admits a %i year old in the EU, at or over its regional age', (age) => {
     setTimezone('Europe/Berlin');
-    const record = confirmAgeGate(16);
-    expect(record.isMinor).toBe(true);
-    expect(isAgeGateConfirmed()).toBe(false);
+    const record = confirmAgeGate(age);
+    expect(record.isMinor).toBe(false);
+    expect(record.threshold).toBe(16);
+    expect(isAgeGateConfirmed()).toBe(true);
   });
 
   it('stores a valid ISO timestamp in confirmedAt', () => {
@@ -213,7 +233,7 @@ describe('isAgeGateConfirmed', () => {
   });
 
   it('returns false for a device refused an account', () => {
-    confirmAgeGate(15);
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
     expect(isAgeGateConfirmed()).toBe(false);
   });
 });
