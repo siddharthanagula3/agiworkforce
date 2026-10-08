@@ -33,6 +33,7 @@
 --
 -- Depends: 0015_organizations (organizations, organization_members)
 --          0085_organization_seats_lifecycle (licensed_seats, the seat guard)
+--          0234_workspaces_membership_status_and_installations (seat_type)
 -- =============================================================================
 
 begin;
@@ -42,6 +43,20 @@ alter table public.organizations
 
 alter table public.organization_members
   add column if not exists seat_type text not null default 'standard';
+
+-- destructive: 0234's full/limited/guest check is dropped and every row's 'full'
+-- becomes 'standard'. No code reads those values; the down file restores them.
+-- 0234 created seat_type for a full/limited/guest access level that no code
+-- reads; every row holds 'full'. Premium seats take the column over, so the
+-- old check goes, an existing row becomes 'standard' and so does the default.
+alter table public.organization_members
+  drop constraint if exists organization_members_seat_type_check;
+update public.organization_members
+   set seat_type = 'standard'
+ where seat_type <> all (array['standard', 'premium']);
+set constraints all immediate;
+alter table public.organization_members
+  alter column seat_type set default 'standard';
 
 alter table public.organization_members
   add column if not exists seat_type_changed_at timestamptz;

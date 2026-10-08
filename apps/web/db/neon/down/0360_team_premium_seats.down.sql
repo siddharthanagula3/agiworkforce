@@ -41,7 +41,13 @@ alter table public.organizations
 
 alter table public.organization_members drop column if exists premium_paid_through;
 alter table public.organization_members drop column if exists seat_type_changed_at;
-alter table public.organization_members drop column if exists seat_type;
+update public.organization_members set seat_type = 'full';
+set constraints all immediate;
+alter table public.organization_members
+  alter column seat_type set default 'full';
+alter table public.organization_members
+  add constraint organization_members_seat_type_check
+  check (seat_type = any (array['full', 'limited', 'guest']));
 alter table public.organizations drop column if exists licensed_premium_seats;
 
 delete from public.schema_migrations
