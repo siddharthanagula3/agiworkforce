@@ -66,10 +66,8 @@ describe('GET', () => {
 
     expect(response.status).toBe(200);
     expect(body.sessions).toHaveLength(1);
-    expect(String(mocks.query.mock.calls[0]?.[0])).toMatch(
-      /where user_id = \$1 and conversation_id/,
-    );
-    expect((mocks.query.mock.calls[0]?.[1] as unknown[])[1]).toBe(CONVERSATION);
+    expect(String(mocks.query.mock.calls[0]?.[0])).toMatch(/c\.deleted_at is null/);
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual(['user-1', CONVERSATION, null]);
   });
 
   it('answers an empty list for a conversation that is not one', async () => {
@@ -106,6 +104,32 @@ describe('POST', () => {
     expect(String(mocks.query.mock.calls[0]?.[0])).toMatch(
       /insert into public\.study_sessions[\s\S]*on conflict \(conversation_id\) do update/,
     );
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual([
+      'user-1',
+      CONVERSATION,
+      'Eigenvalues',
+      'learn',
+      'beginner',
+      null,
+    ]);
+  });
+
+  it('answers 404 for a conversation the caller cannot see, without saying whether it exists', async () => {
+    mocks.query.mockResolvedValue([]);
+
+    const response = await POST(
+      send('POST', {
+        conversationId: CONVERSATION,
+        topic: 'Eigenvalues',
+        mode: 'learn',
+        level: 'beginner',
+      }) as never,
+    );
+
+    expect(response.status).toBe(404);
+    const body = await response.json();
+    expect(body.error.code).toBe('NOT_FOUND');
+    expect(JSON.stringify(body)).not.toContain(CONVERSATION);
   });
 
   it('refuses a mode or level the feature does not offer', async () => {

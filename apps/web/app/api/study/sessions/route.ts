@@ -57,7 +57,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     if (!UUID.test(conversationId)) {
       throw createError.validation('Invalid conversationId');
     }
-    const session = await readStudySessionForConversation(db, userId, conversationId);
+    const session = await readStudySessionForConversation(
+      db,
+      { userId, organizationId },
+      conversationId,
+    );
     const payload: StudySessionsResponse = { sessions: session ? [session] : [] };
     return NextResponse.json(payload);
   }
@@ -74,16 +78,22 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation-list');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const body = await readValidatedJsonBody(request, StartSchema, 'Invalid study session');
 
-  const session = await startStudySession(db, {
-    userId,
-    conversationId: body.conversationId,
-    topic: body.topic,
-    mode: body.mode,
-    level: body.level,
-  });
+  const session = await startStudySession(
+    db,
+    { userId, organizationId },
+    {
+      conversationId: body.conversationId,
+      topic: body.topic,
+      mode: body.mode,
+      level: body.level,
+    },
+  );
+  if (!session) {
+    throw createError.notFound('Conversation not found');
+  }
   return NextResponse.json({ session }, { status: 201 });
 }
 
