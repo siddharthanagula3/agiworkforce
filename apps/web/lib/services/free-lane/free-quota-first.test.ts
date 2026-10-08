@@ -907,4 +907,25 @@ describe('the free router refusing a turn the free quota lane already tried', ()
     expect(served?.headers.get('X-AGI-Fallback-Reason')).toBe('free_limit_reached');
     expect(ranking).toContain(served?.headers.get('X-AGI-Resolved-Model'));
   });
+
+  it('lets the free router refusal stand for a Health space chat instead of answering from the lane', async () => {
+    mocks.store = createMemoryKeyValueStore();
+    const first = await tryFirst();
+    await attest();
+    mocks.stream.mockResolvedValue(answered());
+    mocks.conversationKeptToItsRoute.mockResolvedValue(true);
+
+    const served = await serveFreeQuotaFallback({
+      request: first.request,
+      replay: first.replay,
+      refusal: refusal(),
+      userId: 'fixture-user',
+      scopedDb,
+      tried: first.tried,
+    });
+
+    expect(served).toBeNull();
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.persistAnswer).not.toHaveBeenCalled();
+  });
 });
