@@ -1167,9 +1167,8 @@ export function ComposerFooter({
       ? { allowed: reasoning.supportedEfforts ?? [], gated: [] as Effort[] }
       : splitEffortsByEntitlement(reasoning, knownTier);
   // A model can support provider-managed thinking without accepting a user
-  // effort value (Haiku 4.5 is the important case). Only an explicit catalog
-  // effort ladder earns UI; never turn a token-budget capability into a dead
-  // or misleading effort switch.
+  // effort value. Only an explicit catalog effort ladder earns UI; never turn
+  // a token-budget capability into a dead or misleading effort switch.
   const hasEffortControl = supportsAdaptive && effortChips.length > 0;
   const showThinkingSwitch = showsThinkingSwitch(reasoning);
   const fastTier = getModelMetadataById(selectedModel.id)?.fastTier;
