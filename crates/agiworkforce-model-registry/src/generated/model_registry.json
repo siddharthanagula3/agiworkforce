@@ -469,39 +469,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "deepseek-v4-flash": {
-      "identity": {
-        "key": "deepseek-v4-flash",
-        "displayName": "DeepSeek V4 Flash",
-        "provider": "deepseek",
-        "developer": "deepseek",
-        "providerModelId": "deepseek-v4-flash",
-        "openRouterSlug": "deepseek/deepseek-v4-flash-0731",
-        "kind": "code",
-        "familyPartner": "deepseek-v4-pro",
-        "openWeight": true,
-        "license": "MIT",
-        "aliases": ["deepseek/deepseek-v4-flash-0731"],
-        "family": "deepseek-flash",
-        "version": "4"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 31, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-31",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_premium",
-        "replacedBy": null
-      },
-      "speed": "very-fast",
-      "residencyRegions": ["cn"],
-      "evidenceRefs": []
-    },
     "deepseek-v4-pro": {
       "identity": {
         "key": "deepseek-v4-pro",
@@ -511,7 +478,7 @@
         "providerModelId": "deepseek-v4-pro",
         "openRouterSlug": "deepseek/deepseek-v4-pro-0813",
         "kind": "reasoning",
-        "familyPartner": "deepseek-v4-flash",
+        "familyPartner": "deepseek-flash",
         "openWeight": true,
         "license": "MIT",
         "aliases": ["deepseek/deepseek-v4-pro-0813"],
@@ -548,8 +515,8 @@
         "openWeight": true,
         "license": "MIT",
         "aliases": ["deepseek/deepseek-v4.1-flash"],
-        "family": null,
-        "version": null
+        "family": "deepseek-flash",
+        "version": "4.1"
       },
       "lifecycle": {
         "status": "active",
@@ -559,9 +526,9 @@
         "deprecated": false,
         "releasedOn": "2026-09-10",
         "deprecatedOn": null,
-        "stage": "probed",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "packages/ai/model-registry/catalog/probes.json#deepseek-flash",
+        "stageSource": "catalog/model-families.json#deepseek/deepseek-flash",
         "replacedBy": null
       },
       "speed": "very-fast",
@@ -12832,7 +12799,7 @@
       "gemini-3.1-flash-tts-preview",
       "gemini-3.8-flash-tts"
     ],
-    "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-flash"],
+    "deepseek": ["deepseek-v4-pro", "deepseek-flash"],
     "qwen": ["qwen-3.5-flash", "qwen-3.8-flash", "qwen-3.7-plus"],
     "perplexity": ["sonar", "sonar-reasoning-pro", "sonar-pro", "sonar-deep-research"],
     "runway": ["runway-gen-4"],
@@ -13884,249 +13851,6 @@
         "inputPerMillion": 0.25,
         "outputPerMillion": 30,
         "imagePerImage": 0.0336
-      }
-    },
-    "deepseek/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "deepseek",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "deepseek/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.3,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.006
-      }
-    },
-    "open_router/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "open_router",
-      "providerModelId": "deepseek/deepseek-v4-flash",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.0886,
-        "outputPerMillion": 0.1772,
-        "cacheReadPerMillion": 0.0177,
-        "cacheWritePerMillion": 0.0886
-      }
-    },
-    "vercel_gateway/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "vercel_gateway",
-      "providerModelId": "deepseek/deepseek-v4-flash",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.13,
-        "outputPerMillion": 0.26,
-        "cacheReadPerMillion": 0.028,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "cheaperinference/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "cheaperinference",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.21,
-        "outputPerMillion": 0.84,
-        "cacheReadPerMillion": 0.0042,
-        "cacheWritePerMillion": 0.21
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 0.3,
-          "outputPerMillion": 1.2,
-          "cacheReadPerMillion": 0.006,
-          "cacheWritePerMillion": 0.3
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "deepseek_anthropic/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "deepseek_anthropic",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "deepseek-anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32,
-        "cacheReadPerMillion": 0.014,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "qwen/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "qwen",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 0.4
-      }
-    },
-    "deepinfra/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "deepinfra",
-      "providerModelId": "deepseek-ai/DeepSeek-V4-Flash",
-      "harnessId": "deepinfra/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.09,
-        "outputPerMillion": 0.18,
-        "cacheReadPerMillion": 0.018,
-        "cacheWritePerMillion": 0.09
-      },
-      "responseFormats": ["json_object", "json_schema"]
-    },
-    "together/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "together",
-      "providerModelId": "deepseek-ai/DeepSeek-V4-Flash-0731",
-      "harnessId": "together/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.28,
-        "cacheReadPerMillion": 0.03,
-        "cacheWritePerMillion": 0.14
-      },
-      "responseFormats": ["json_schema"]
-    },
-    "novita/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "novita",
-      "providerModelId": "deepseek/deepseek-v4-flash",
-      "harnessId": "novita/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.28,
-        "cacheReadPerMillion": 0.028,
-        "cacheWritePerMillion": 0.14
-      },
-      "responseFormats": ["json_schema"]
-    },
-    "experientiallabs/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "experientiallabs",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.19,
-        "outputPerMillion": 0.51,
-        "cacheReadPerMillion": 0.028,
-        "cacheWritePerMillion": 0.19
-      }
-    },
-    "workers_ai/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "workers_ai",
-      "providerModelId": "@cf/deepseek-ai/deepseek-v4-flash-0731",
-      "harnessId": "workers-ai/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32
       }
     },
     "deepseek/deepseek-v4-pro": {
@@ -24775,30 +24499,6 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "deepseek-v4-flash": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "deepseek-v4-pro": {
       "textInput": true,
       "imageInput": false,
@@ -34793,13 +34493,6 @@
       "outputPerMillion": 30,
       "imagePerImage": 0.0336
     },
-    "deepseek-v4-flash": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.3,
-      "outputPerMillion": 1.2,
-      "cacheReadPerMillion": 0.006
-    },
     "deepseek-v4-pro": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -37852,7 +37545,6 @@
       "maxOutputTokens": 4096,
       "knowledgeCutoff": "2025-01"
     },
-    "deepseek-v4-flash": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
     "deepseek-v4-pro": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
     "deepseek-flash": { "contextTokens": 1048576, "maxOutputTokens": 393216 },
     "qwen-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
@@ -38503,43 +38195,6 @@
     "gemini-nano-banana-2.1": {},
     "gemini-3-pro-image": {},
     "gemini-3.1-flash-lite-image": {},
-    "deepseek-v4-flash": {
-      "swebench": {
-        "value": 75,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "humaneval": {
-        "value": 95,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "mmlu": {
-        "value": 87,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "gpqa": {
-        "value": 75,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "aime": {
-        "value": 85,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      }
-    },
     "deepseek-v4-pro": {
       "swebench": {
         "value": 81,
@@ -39556,6 +39211,13 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the xai/grok slot moves from grok-4.6 to grok-4.7 against the eval gate. The gate was run on 2026-10-07 and refused grok-4.7: it scored 0.818 on the jailbreak corpus against a floor of 1.000, and its p95 latency rose past the 50% tolerance on coding, files and computer use; it scored 1.000 on the other fourteen corpora, where grok-4.6 scored 0.600 on refusal, 0.778 on chat and 0.833 on coding. The slot records the refusal as its promotion reason. Both models list at $2/$6 per million with a 500,000 token context. grok-4.6 leaves through the retire tool into retired-models.json naming grok-4.7, with its route and probe records; its run file and the slot's baseline, which measured it, stay as recorded. No Auto slot names the Grok family, so the model is reached only when picked by name. No provider call was made for this change."
+    },
+    {
+      "id": "verification/2026-10-07/80",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the DeepSeek flash family slot moves from deepseek-v4-flash to the row keyed by DeepSeek's current unversioned id, which serves DeepSeek V4.1 Flash, against the eval gate. The gate was run on 2026-10-07 on the three zero-tolerance corpora and refused that model: golden 0.917, refusal 0.000 and jailbreak 0.364 against floors of 0.900, 1.000 and 1.000, the same three scores its predecessor recorded; the other twelve corpora were not measured for it. The slot records the refusal as its promotion reason. An id with no version gives the slot pattern nothing to parse, so the slot now declares that this id resolves to generation 4.1 (unversionedModelIds), which the family matcher reads; the pattern itself is unchanged. Both models list at $0.30/$1.20 per million. deepseek-v4-flash leaves through the retire tool into retired-models.json naming its successor, with its route, probe and synced records, and deepseek-v4-pro now names the new row as its variant partner. The new row has only the direct DeepSeek route; the marketplace routes of the old row were not copied because nothing read for this change says those gateways serve the new id. The reasoning_premium Auto slot names this family, so the eval safety floor baseline entry for that slot now states what is true of the new model. No task's preferred slots and no plan's allowed slots include reasoning_premium, so Auto does not dispatch to it. deepseek-v4-pro is unchanged. No provider call was made for this change."
     }
   ],
   "retiredModels": {
@@ -39748,6 +39410,39 @@
       "released": "January 2026",
       "retiredOn": "2026-07-22",
       "metadataSource": "packages/contracts/types/src/models.json@5a165d78b",
+      "metadataPreserved": true
+    },
+    "deepseek-v4-flash": {
+      "id": "deepseek-v4-flash",
+      "displayName": "DeepSeek V4 Flash",
+      "provider": "deepseek",
+      "developer": "deepseek",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "deepseek-flash",
+      "metadataSource": "catalog/models.curation.json#deepseek-v4-flash",
       "metadataPreserved": true
     },
     "deepseek-v4-flash-vision-exp": {
@@ -40767,13 +40462,13 @@
       "canonicalFamily": "deepseek-flash",
       "tier": "fast",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "deepseek-v4-flash",
-      "activeGeneration": "4",
+      "activeModelKey": "deepseek-flash",
+      "activeGeneration": "4.1",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "deepseek-v4-flash",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day on the three zero-tolerance corpora and refused this model: refusal 0.000 and jailbreak 0.364 against floors of 1.000"
     },
     "deepseek/deepseek-pro": {
       "provider": "deepseek",
@@ -41298,7 +40993,7 @@
           "description": "Shared flagship coding route. Model and provider are selected by the canonical registry."
         },
         "reasoning_premium": {
-          "modelKey": "deepseek-v4-flash",
+          "modelKey": "deepseek-flash",
           "label": "Reasoning Premium",
           "description": "Shared reasoning premium route. Model and provider are selected by the canonical registry."
         },
@@ -41476,7 +41171,7 @@
         "gpt-6.1-sol",
         "claude-sonnet-5-5",
         "gemini-3.1-pro-preview",
-        "deepseek-v4-flash",
+        "deepseek-flash",
         "deepseek-v4-pro",
         "qwen-3.7-plus",
         "glm-5.3",

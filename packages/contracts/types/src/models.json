@@ -475,6 +475,12 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the xai/grok slot moves from grok-4.6 to grok-4.7 against the eval gate. The gate was run on 2026-10-07 and refused grok-4.7: it scored 0.818 on the jailbreak corpus against a floor of 1.000, and its p95 latency rose past the 50% tolerance on coding, files and computer use; it scored 1.000 on the other fourteen corpora, where grok-4.6 scored 0.600 on refusal, 0.778 on chat and 0.833 on coding. The slot records the refusal as its promotion reason. Both models list at $2/$6 per million with a 500,000 token context. grok-4.6 leaves through the retire tool into retired-models.json naming grok-4.7, with its route and probe records; its run file and the slot's baseline, which measured it, stay as recorded. No Auto slot names the Grok family, so the model is reached only when picked by name. No provider call was made for this change."
+    },
+    {
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the DeepSeek flash family slot moves from deepseek-v4-flash to the row keyed by DeepSeek's current unversioned id, which serves DeepSeek V4.1 Flash, against the eval gate. The gate was run on 2026-10-07 on the three zero-tolerance corpora and refused that model: golden 0.917, refusal 0.000 and jailbreak 0.364 against floors of 0.900, 1.000 and 1.000, the same three scores its predecessor recorded; the other twelve corpora were not measured for it. The slot records the refusal as its promotion reason. An id with no version gives the slot pattern nothing to parse, so the slot now declares that this id resolves to generation 4.1 (unversionedModelIds), which the family matcher reads; the pattern itself is unchanged. Both models list at $0.30/$1.20 per million. deepseek-v4-flash leaves through the retire tool into retired-models.json naming its successor, with its route, probe and synced records, and deepseek-v4-pro now names the new row as its variant partner. The new row has only the direct DeepSeek route; the marketplace routes of the old row were not copied because nothing read for this change says those gateways serve the new id. The reasoning_premium Auto slot names this family, so the eval safety floor baseline entry for that slot now states what is true of the new model. No task's preferred slots and no plan's allowed slots include reasoning_premium, so Auto does not dispatch to it. deepseek-v4-pro is unchanged. No provider call was made for this change."
     }
   ],
   "providers": {
@@ -588,14 +594,14 @@
       "defaultPricing": { "inputPerMillion": 0.44, "outputPerMillion": 1.32 },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
-      "defaultModel": "deepseek-v4-flash",
+      "defaultModel": "deepseek-flash",
       "taskRouting": {
-        "fast_completion": "deepseek-v4-flash",
-        "code_generation": "deepseek-v4-flash",
+        "fast_completion": "deepseek-flash",
+        "code_generation": "deepseek-flash",
         "complex_reasoning": "deepseek-v4-pro",
-        "chat": "deepseek-v4-flash",
+        "chat": "deepseek-flash",
         "vision": "deepseek-flash",
-        "long_context": "deepseek-v4-flash"
+        "long_context": "deepseek-flash"
       },
       "canonicalization": {}
     },
@@ -1738,67 +1744,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "deepseek-v4-flash": {
-      "id": "deepseek-v4-flash",
-      "apiModelId": "deepseek-v4-flash",
-      "openRouterSlug": "deepseek/deepseek-v4-flash-0731",
-      "name": "DeepSeek V4 Flash",
-      "provider": "deepseek",
-      "developer": "deepseek",
-      "modelType": "code",
-      "inputModalities": ["text"],
-      "variantPartner": "deepseek-v4-pro",
-      "contextWindow": 1000000,
-      "inputCost": 0.3,
-      "outputCost": 1.2,
-      "cached_input": 0.006,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "benchmarks": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
-      "speed": "very-fast",
-      "quality": "excellent",
-      "qualityTier": "fast",
-      "bestFor": ["Cost-Effective", "Coding", "Long Context", "Multimodal", "High Volume"],
-      "released": "July 31, 2026",
-      "deprecation_date": null,
-      "pricingNote": "DeepSeek retired V4-Flash on 2026-09-10. Its API still accepts this id, but only as a temporary route to DeepSeek-V4.1-Flash billed at V4.1-Flash rates: peak $0.30/1M input on a cache miss, $1.20/1M output, $0.006/1M cache hit, with off-peak exactly half. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, excluding Chinese public holidays. The catalog carries the peak rate because it is the only figure never undercut, and the schema has no field for a time-of-day split. CORRECTED 2026-10-07: this row read $0.44/$1.32 with cache read $0.014, the V4-Flash rate DeepSeek stopped charging on 2026-09-10 04:00 UTC. Measured the same day: a request for this id is answered by the V4.1-Flash id. DeepSeek gives no end date for the temporary route. The other hosts in this model's route list serve the published V4-Flash weights and keep their own price sheets. Verified against https://api-docs.deepseek.com/quick_start/pricing and https://api-docs.deepseek.com/news/news260910, retrieved 2026-10-07.",
-      "openWeight": true,
-      "license": "MIT",
-      "maxOutputTokens": 384000,
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_toggle",
-        "supportedEfforts": ["low", "high", "max"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": { "minTier": "pro" },
-      "providerCompatibility": { "forcedToolChoice": false },
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_premium"
-      }
-    },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
       "apiModelId": "deepseek-v4-pro",
@@ -1808,7 +1753,7 @@
       "developer": "deepseek",
       "modelType": "reasoning",
       "inputModalities": ["text"],
-      "variantPartner": "deepseek-v4-flash",
+      "variantPartner": "deepseek-flash",
       "contextWindow": 1000000,
       "inputCost": 1.32,
       "outputCost": 3.96,
@@ -1921,9 +1866,9 @@
       "tierPolicy": { "minTier": "pro" },
       "providerCompatibility": { "forcedToolChoice": false },
       "lifecycle": {
-        "stage": "probed",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "source": "packages/ai/model-registry/catalog/probes.json#deepseek-flash"
+        "source": "catalog/model-families.json#deepseek/deepseek-flash"
       }
     },
     "qwen-3.5-flash": {
@@ -21857,7 +21802,7 @@
       "gpt-6.1-sol",
       "claude-sonnet-5-5",
       "gemini-3.1-pro-preview",
-      "deepseek-v4-flash",
+      "deepseek-flash",
       "deepseek-v4-pro",
       "qwen-3.7-plus",
       "glm-5.3",

@@ -53,7 +53,8 @@
     "gpt-5.6-terra",
     "gpt-5.6-luna",
     "gpt-image-2",
-    "grok-4.6"
+    "grok-4.6",
+    "deepseek-v4-flash"
   ],
   "retiredModels": [
     {
@@ -939,6 +940,38 @@
       "retiredOn": "2026-10-08",
       "replacedBy": "grok-4.7",
       "metadataSource": "catalog/models.curation.json#grok-4.6"
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "displayName": "DeepSeek V4 Flash",
+      "provider": "deepseek",
+      "developer": "deepseek",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "deepseek-flash",
+      "metadataSource": "catalog/models.curation.json#deepseek-v4-flash"
     }
   ],
   "grandfatheredWithoutMetadata": [

@@ -167,7 +167,11 @@ It is a measurement, not an endorsement: this model answered all ten disallowed
 requests in the refusal corpus and seven of eleven jailbreak wrappers, while
 passing every capability corpus outright. The measurement is committed as it was
 recorded, the audit prints both unmet suites on every CI run, and the gate holds
-the refusal and jailbreak floors at 1.0 regardless.
+the refusal and jailbreak floors at 1.0 regardless. Its successor was measured
+on the three zero-tolerance corpora on 2026-10-07 and scored the same 0.917,
+0.000 and 0.364; the gate refused it, and the owner moved the slot to it that
+day regardless. The baseline therefore describes the model the slot held
+before, which has left the catalog.
 
 The Grok baseline was recorded with `--allow-costly` on 2026-10-07, 107 cases
 for about $0.54. Its two PDF rows in the files corpus are skipped, because that
