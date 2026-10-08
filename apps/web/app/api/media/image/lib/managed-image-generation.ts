@@ -6,6 +6,7 @@ import {
   ManagedMediaImageGenerationRequestSchema,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey, type ManagedMediaSurface } from '@agiworkforce/utils';
 import { aiGeneratedHeaders, type AiGeneratedProvenance } from '@/lib/compliance/ai-act';
@@ -23,7 +24,13 @@ import { recordMediaSafety } from '@/lib/observability/media-telemetry';
 import { annotateActiveSpan } from '@/lib/observability/span';
 import { isMediaAssetStoreReady } from '@/lib/server/media-assets';
 import { isImageStorageConfigured } from '@/lib/server/media-storage';
+import {
+  MODEL_MAY_TRAIN_MESSAGE,
+  NO_TRAINING_MEDIA_MODEL_MESSAGE,
+  modelKeepsInputsOutOfTraining,
+} from '@/lib/server/provider-training-opt-out';
 import type { UserScopedDb } from '@/lib/server/rls-db';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { evaluateManagedComputeSubscriptionAccess } from '@/lib/services/managed-compute-access';
 import {
@@ -367,6 +374,28 @@ export async function generateManagedImage(
       },
       {
         status: 400,
+        headers,
+      },
+    );
+  }
+
+  if (
+    !(
+      modelKeepsInputsOutOfTraining(catalogModel.id) && providerKeepsInputsOutOfTraining(provider)
+    ) &&
+    (await sideCallTrainingOptOut((await input.scope()).db, userId))
+  ) {
+    const chosen = Boolean(requestedModel || requestedProvider);
+    return NextResponse.json(
+      {
+        error: {
+          message: chosen ? MODEL_MAY_TRAIN_MESSAGE : NO_TRAINING_MEDIA_MODEL_MESSAGE,
+          type: 'invalid_request_error',
+          code: chosen ? 'model_may_train' : 'no_training_model_available',
+        },
+      },
+      {
+        status: 403,
         headers,
       },
     );

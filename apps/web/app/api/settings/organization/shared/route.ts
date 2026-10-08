@@ -35,6 +35,7 @@ interface OrgMemberRosterEntry {
   joinedAt: string;
   displayName: string | null;
   email: string | null;
+  canEditProjects: boolean;
 }
 
 export interface OrganizationSharedOverview {
@@ -67,8 +68,12 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         joined_at: string;
         display_name: string | null;
         email: string | null;
+        can_edit_projects: boolean | null;
       }>(
-        `select om.user_id, om.role, om.joined_at, p.display_name, p.email
+        `select om.user_id, om.role, om.joined_at, p.display_name, p.email,
+                'content.share' = any (
+                  public.organization_member_permissions(om.organization_id, om.user_id)
+                ) as can_edit_projects
            from public.organization_members om
            left join public.profiles p on p.id = om.user_id
           where om.organization_id = $1
@@ -93,6 +98,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       joinedAt: row.joined_at,
       displayName: row.display_name,
       email: row.email,
+      canEditProjects: row.can_edit_projects === true,
     })),
     sharedProjects: canManageSharing
       ? sharedProjects

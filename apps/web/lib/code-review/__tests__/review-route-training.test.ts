@@ -36,7 +36,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importO
   drainToLlmResponse: mocks.drain,
 }));
 
-import { reviewPullRequestDiff } from '@/lib/code-review/pipeline';
+import { reviewPullRequestDiff, reviewSummaryBody } from '@/lib/code-review/pipeline';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 
 const DIFF = [
@@ -83,12 +83,28 @@ describe('automated code review honours the provider-training opt-out', () => {
     expect(mocks.buildAdapter).toHaveBeenCalledWith(catalogProvider(TRAINING_MODEL!));
   });
 
-  it('refuses a configured model that may train for an account that opted out', async () => {
+  it('reviews with Auto instead of a configured model that may train, and says so in the review', async () => {
     const outcome = await review(true, TRAINING_MODEL!);
 
-    expect(outcome).toMatchObject({ status: 'unavailable', reason: 'no-route' });
-    expect(mocks.buildAdapter).not.toHaveBeenCalled();
-    expect(mocks.drain).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ status: 'no-findings', configuredModelSetAside: true });
+    expect(mocks.buildAdapter).toHaveBeenCalled();
+    for (const [provider] of mocks.buildAdapter.mock.calls) {
+      expect(providerKeepsInputsOutOfTraining(provider as string)).toBe(true);
+    }
+    for (const [, model] of mocks.drain.mock.calls) {
+      expect(model).not.toBe(TRAINING_MODEL);
+      expect(modelKeepsInputsOutOfTraining(model as string)).toBe(true);
+    }
+    expect(reviewSummaryBody(outcome)).toContain(
+      'The review model set for this installation was not used',
+    );
+  });
+
+  it('keeps a configured model that may train out of the note when the account has not opted out', async () => {
+    const outcome = await review(false, TRAINING_MODEL!);
+
+    expect(outcome.configuredModelSetAside).toBeUndefined();
+    expect(reviewSummaryBody(outcome)).not.toContain('was not used');
   });
 
   it.each(['free', 'pro', 'max'])(

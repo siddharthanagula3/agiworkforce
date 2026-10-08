@@ -41,6 +41,7 @@ function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
           joined_at: '2026-01-01T00:00:00.000Z',
           display_name: 'Owner Name',
           email: 'owner@example.com',
+          can_edit_projects: true,
         },
         {
           user_id: 'user-member',
@@ -48,6 +49,15 @@ function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
           joined_at: '2026-01-02T00:00:00.000Z',
           display_name: null,
           email: 'member@example.com',
+          can_edit_projects: true,
+        },
+        {
+          user_id: 'user-viewer',
+          role: 'viewer',
+          joined_at: '2026-01-03T00:00:00.000Z',
+          display_name: null,
+          email: 'viewer@example.com',
+          can_edit_projects: false,
         },
       ];
     }
@@ -134,7 +144,7 @@ describe('GET /api/settings/organization/shared', () => {
     };
 
     expect(body.organizationId).toBe(ORG);
-    expect(body.members.map((m) => m.userId)).toEqual(['user-owner', 'user-member']);
+    expect(body.members.map((m) => m.userId)).toEqual(['user-owner', 'user-member', 'user-viewer']);
     expect(body.sharedProjects[0]!.projectId).toBe(PROJECT);
     expect(body.sharedProjects[0]!.memberGrants).toEqual([
       { userId: 'user-member', access: 'none' },
@@ -149,7 +159,30 @@ describe('GET /api/settings/organization/shared', () => {
     expect(body.members.map((m) => m.displayName ?? m.email)).toEqual([
       'Owner Name',
       'member@example.com',
+      'viewer@example.com',
     ]);
+  });
+
+  it('says which members can be given edit access, from the role permissions the server enforces', async () => {
+    respondFor('admin');
+
+    const body = (await (await get()).json()) as {
+      members: { userId: string; canEditProjects: boolean }[];
+    };
+
+    expect(body.members.map(({ userId, canEditProjects }) => [userId, canEditProjects])).toEqual([
+      ['user-owner', true],
+      ['user-member', true],
+      ['user-viewer', false],
+    ]);
+    const rosterSql = String(
+      mockNeonQuery.mock.calls.find(([sql]) =>
+        /from public\.organization_members om/i.test(String(sql)),
+      )?.[0],
+    );
+    expect(rosterSql).toMatch(
+      /'content\.share' = any \(\s*public\.organization_member_permissions\(/,
+    );
   });
 
   it('never lets a connector credential reach the wire', async () => {

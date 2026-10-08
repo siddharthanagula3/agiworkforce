@@ -58,6 +58,7 @@ describe('0090 shared project knowledge is read-only for org members', () => {
    */
   const REVIEWED_LATER_POLICY_CHANGES = ['0217_shared_project_editor_write.sql'];
   const REVIEWED_READ_NARROWINGS = ['0315_private_shared_projects.sql'];
+  const REVIEWED_EDITOR_NARROWINGS = ['0358_shared_project_editor_needs_share_permission.sql'];
 
   it('is the last unreviewed migration to touch this table POLICIES, so its grants win', () => {
     const laterPolicyChanges = readdirSync(neonDir)
@@ -70,7 +71,10 @@ describe('0090 shared project knowledge is read-only for org members', () => {
         );
       })
       .filter(
-        (f) => !REVIEWED_LATER_POLICY_CHANGES.includes(f) && !REVIEWED_READ_NARROWINGS.includes(f),
+        (f) =>
+          !REVIEWED_LATER_POLICY_CHANGES.includes(f) &&
+          !REVIEWED_READ_NARROWINGS.includes(f) &&
+          !REVIEWED_EDITOR_NARROWINGS.includes(f),
       );
 
     expect(laterPolicyChanges).toEqual([]);
@@ -104,6 +108,23 @@ describe('0090 shared project knowledge is read-only for org members', () => {
         expect(policy).toMatch(/for\s+select/i);
         expect(policy).toContain('organization_project_access');
         expect(policy).toMatch(/coalesce\(a\.access, s\.default_access\) <> 'none'/);
+      }
+    }
+  });
+
+  it('keeps every reviewed editor narrowing gated on the write grant and a role that still shares', () => {
+    for (const file of REVIEWED_EDITOR_NARROWINGS) {
+      const later = readMigration(file);
+      const knowledgePolicies = later
+        .split('create policy')
+        .filter((chunk) => /on public\.project_knowledge_files/i.test(chunk));
+
+      expect(knowledgePolicies.length).toBeGreaterThan(0);
+      for (const policy of knowledgePolicies) {
+        expect(policy).toContain('organization_project_access');
+        expect(policy).toMatch(/a\.access = 'write'/);
+        expect(policy).toMatch(/app_has_org_permission\(s\.organization_id, 'content\.share'\)/);
+        expect(policy).not.toMatch(/for\s+all/i);
       }
     }
   });

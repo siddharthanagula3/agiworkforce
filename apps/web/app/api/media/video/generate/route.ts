@@ -50,6 +50,12 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  MODEL_MAY_TRAIN_MESSAGE,
+  NO_TRAINING_MEDIA_MODEL_MESSAGE,
+  modelKeepsInputsOutOfTraining,
+} from '@/lib/server/provider-training-opt-out';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import { isVideoStorageConfigured } from '@/lib/server/media-storage';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { isVideoProviderReleaseEnabled } from '@/lib/server/video-provider-release-policy';
@@ -325,14 +331,16 @@ function getGoogleApiKey(): string | undefined {
   return undefined;
 }
 
+function videoProviderConfigured(provider: VideoProvider): boolean {
+  return provider === 'google'
+    ? Boolean(getGoogleApiKey())
+    : provider === 'openrouter'
+      ? Boolean(process.env['OPENROUTER_API_KEY']?.trim())
+      : Boolean(process.env['RUNWAY_API_KEY']?.trim());
+}
+
 function requireVideoProviderConfigured(provider: VideoProvider): void {
-  const configured =
-    provider === 'google'
-      ? Boolean(getGoogleApiKey())
-      : provider === 'openrouter'
-        ? Boolean(process.env['OPENROUTER_API_KEY']?.trim())
-        : Boolean(process.env['RUNWAY_API_KEY']?.trim());
-  if (!configured) {
+  if (!videoProviderConfigured(provider)) {
     const label =
       provider === 'google' ? 'Google Veo' : provider === 'openrouter' ? 'OpenRouter' : 'Runway';
     throw createError.serviceUnavailable(`${label} is not configured. Please contact support.`);
@@ -400,6 +408,33 @@ function resolveVideoModel(
     throw createError.serviceUnavailable(`No live ${provider} video model is configured`);
   }
   return { provider, model };
+}
+
+function noTrainingVideoModel(): { provider: VideoProvider; model: ModelMetadata } | null {
+  for (const model of getModels({
+    modelTypes: ['video'],
+    requireCapabilities: { videoGen: true },
+  })) {
+    const provider = wireVideoProvider(model);
+    if (
+      provider &&
+      isExecutableVideoModel(model) &&
+      isModelLive(model) &&
+      modelKeepsInputsOutOfTraining(model.id) &&
+      videoProviderConfigured(provider) &&
+      isVideoProviderReleaseEnabled(provider)
+    ) {
+      return { provider, model };
+    }
+  }
+  return null;
+}
+
+function trainingRefusal(request: NextRequest, code: string, message: string): NextResponse {
+  return NextResponse.json(
+    { error: { message, type: 'invalid_request_error', code } },
+    { status: 403, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+  );
 }
 
 function estimateVideoDuration(provider: VideoProvider, durationSecs: number): number {
@@ -979,7 +1014,24 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const { provider, model } = resolveVideoModel(requestedProvider, requestedModelId);
+  let { provider, model } = resolveVideoModel(requestedProvider, requestedModelId);
+  if (
+    !modelKeepsInputsOutOfTraining(model.id) &&
+    (await sideCallTrainingOptOut(scopedDb, userId))
+  ) {
+    if (requestedModelId || requestedProvider) {
+      return trainingRefusal(request, 'model_may_train', MODEL_MAY_TRAIN_MESSAGE);
+    }
+    const keepsOut = noTrainingVideoModel();
+    if (!keepsOut) {
+      return trainingRefusal(
+        request,
+        'no_training_model_available',
+        NO_TRAINING_MEDIA_MODEL_MESSAGE,
+      );
+    }
+    ({ provider, model } = keepsOut);
+  }
   annotateActiveSpan({ 'media.provider': provider, 'media.model': model });
 
   // Checked on the RESOLVED model: a provider default must not be a way past a
