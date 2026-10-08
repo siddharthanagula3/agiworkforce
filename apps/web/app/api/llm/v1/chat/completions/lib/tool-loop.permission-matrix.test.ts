@@ -207,6 +207,7 @@ describe('tool approval permission matrix', () => {
           levelForConnectorTool: () => undefined,
           isDenied: (qualifiedName: string) => qualifiedName === 'search_maps',
           isConnectorToolDenied: () => false,
+          isConnectorDenied: () => false,
           size: 1,
         },
       }),

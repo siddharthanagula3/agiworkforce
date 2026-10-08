@@ -56,7 +56,7 @@ import {
 } from '@/lib/user-connector-tools';
 import { extractUserQuery, runResearchLoop } from './lib/research-loop';
 import { searchResearchFileSources } from '@/lib/services/research-file-source-service';
-import { buildResearchRunOptions } from './lib/research-run-options';
+import { buildResearchRunOptions, scopeResearchConnectors } from './lib/research-run-options';
 import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
@@ -565,9 +565,13 @@ async function dispatchChatCompletions(
       const { run, db: runDb } = startedRun;
       const researchToolApprovalPolicy =
         processed.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
-      const researchConnectorPermissions = await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
-        loadConnectorToolPermissions(requestDb, userId, processed.organizationId ?? null),
+      const researchConnectors = scopeResearchConnectors(
+        processed,
+        await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
+          loadConnectorToolPermissions(requestDb, userId, processed.organizationId ?? null),
+        ),
       );
+      const researchConnectorPermissions = researchConnectors.permissions;
       processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
         approvalRequired: !hostedToolRunsUnasked(
           researchToolApprovalPolicy,
@@ -593,7 +597,7 @@ async function dispatchChatCompletions(
       // within the workspace's site rules; the loop applies it at ingestion. The
       // file search runs before the loop so a failing index degrades to a
       // web-only run rather than failing the turn.
-      const requestedResearchConnectorIds = processed.researchSources?.connectors ?? [];
+      const requestedResearchConnectorIds = researchConnectors.connectorIds;
       const researchConnectorIds =
         requestedResearchConnectorIds.length > 0 &&
         (await connectorsAllowedForTurn(request, userId, processed))
@@ -841,6 +845,7 @@ async function dispatchChatCompletions(
               planTier: processed.subscriptionTier,
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
+              isConnectorDenied: turnConnectorPermissions.isConnectorDenied,
               ...(processed.healthSpaceProjectId ? { healthSpace: true } : {}),
               googleUserDataRouted: processed.googleUserData === true,
             }),

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   connectorToolPermissionsFromEntries,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
+  scopeConnectorPermissionsToTurn,
   withDisabledConnectorIds,
 } from '../connector-tool-permissions';
 
@@ -50,5 +52,35 @@ describe('withDisabledConnectorIds', () => {
     );
 
     expect(permissions.isDenied('not-a-qualified-name')).toBe(false);
+  });
+
+  it('denies the switched-off connector as a whole, so it is never contacted', () => {
+    const saved = connectorToolPermissionsFromEntries([
+      { connectorId: 'notion', toolName: 'search', level: 'allow' },
+    ]);
+    const permissions = scopeConnectorPermissionsToTurn(saved, {
+      temporary: true,
+      disabledConnectorIds: ['notion'],
+    });
+
+    expect(permissions.isConnectorDenied('notion')).toBe(true);
+    expect(permissions.isConnectorDenied('github')).toBe(false);
+  });
+
+  it('denies no connector as a whole on saved per-tool verdicts alone', () => {
+    const saved = connectorToolPermissionsFromEntries([
+      { connectorId: 'notion', toolName: 'search', level: 'deny' },
+    ]);
+
+    expect(saved.isConnectorDenied('notion')).toBe(false);
+  });
+
+  it('denies every connector as a whole under lockdown', () => {
+    expect(
+      withDisabledConnectorIds(
+        LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
+        new Set(['notion']),
+      ).isConnectorDenied('github'),
+    ).toBe(true);
   });
 });

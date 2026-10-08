@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
 
+type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
+
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => {
@@ -98,7 +100,8 @@ vi.mock('@/lib/secure-random', () => ({
   secureTokenHex: vi.fn(),
   secureFilenameSegment: () => 'abcdefghijklm',
 }));
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<OAuthAccessModule>()),
   disconnectConnectorOAuthGrant: vi.fn(),
   resolveConnectorAccessToken: mocks.resolveConnectorAccessToken,
 }));
@@ -248,6 +251,18 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
     expect(response.status).toBe(409);
     expect((await response.json()).error.code).toBe(code);
     expect(mocks.resolveConnectorAccessToken).toHaveBeenCalledWith('user-1', 'google-drive');
+    expect(mocks.downloadGoogleDriveFile).not.toHaveBeenCalled();
+  });
+
+  it('asks the caller to try again, not to reconnect, when Drive could not be reached', async () => {
+    mocks.resolveConnectorAccessToken.mockResolvedValue({ status: 'unreachable' });
+
+    const response = await post({ fileIds: [DRIVE_A] });
+
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.error.message).toBe("Couldn't reach Google Drive. Try again.");
+    expect(body.error.code).not.toBe('google_drive_reconnect_required');
     expect(mocks.downloadGoogleDriveFile).not.toHaveBeenCalled();
   });
 

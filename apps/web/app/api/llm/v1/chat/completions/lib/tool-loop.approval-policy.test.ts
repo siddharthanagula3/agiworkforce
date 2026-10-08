@@ -185,6 +185,7 @@ describe('account-wide default tool approval policy', () => {
           levelForConnectorTool: () => undefined,
           isDenied: () => false,
           isConnectorToolDenied: () => false,
+          isConnectorDenied: () => false,
           size: 1,
         },
       }),

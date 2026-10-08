@@ -741,6 +741,23 @@ export interface RevocableConnectorToken {
   accountKey: string;
   token: string;
   tokenTypeHint: 'access_token' | 'refresh_token';
+  /** The access token issued alongside `token` when `token` is the refresh token. */
+  companionAccessToken: string | null;
+  issuer: string | null;
+  mcpUrl: string | null;
+}
+
+type RevocableGrantRow = Pick<
+  GrantRow,
+  'access_token_enc' | 'refresh_token_enc' | 'account_key' | 'issuer' | 'mcp_url'
+>;
+
+function openRevocable(sealed: string, purpose: 'oauth-access-token' | 'oauth-refresh-token') {
+  try {
+    return decryptConnectorToken(sealed, purpose);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -756,12 +773,12 @@ export async function listRevocableConnectorTokens(
   accountKey?: string | null,
 ): Promise<RevocableConnectorToken[]> {
   const db = getNeonDb();
-  let rows: Array<Pick<GrantRow, 'access_token_enc' | 'refresh_token_enc' | 'account_key'>>;
+  let rows: RevocableGrantRow[];
   try {
     rows = await withAccountColumns((accountAware) => {
       const scoped = accountAware && accountKey !== undefined && accountKey !== null;
-      return db.query<Pick<GrantRow, 'access_token_enc' | 'refresh_token_enc' | 'account_key'>>(
-        `select access_token_enc, refresh_token_enc,
+      return db.query<RevocableGrantRow>(
+        `select access_token_enc, refresh_token_enc, issuer, mcp_url,
                 ${accountAware ? 'account_key' : `'${DEFAULT_CONNECTOR_ACCOUNT_KEY}' as account_key`}
            from public.connector_oauth_grants
           where user_id = $1 and connector_id = $2 and revoked_at is null${
@@ -782,10 +799,8 @@ export async function listRevocableConnectorTokens(
     const sealed = row.refresh_token_enc ?? row.access_token_enc;
     if (!sealed) continue;
     const purpose = row.refresh_token_enc ? 'oauth-refresh-token' : 'oauth-access-token';
-    let token: string;
-    try {
-      token = decryptConnectorToken(sealed, purpose);
-    } catch {
+    const token = openRevocable(sealed, purpose);
+    if (token === null) {
       logger.warn(
         { connectorId },
         '[connector-oauth] a stored credential could not be decrypted for revocation',
@@ -796,6 +811,12 @@ export async function listRevocableConnectorTokens(
       accountKey: normalizeConnectorAccountKey(row.account_key),
       token,
       tokenTypeHint: row.refresh_token_enc ? 'refresh_token' : 'access_token',
+      companionAccessToken:
+        row.refresh_token_enc && row.access_token_enc
+          ? openRevocable(row.access_token_enc, 'oauth-access-token')
+          : null,
+      issuer: row.issuer ?? null,
+      mcpUrl: row.mcp_url ?? null,
     });
   }
   return tokens;

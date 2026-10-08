@@ -25,13 +25,18 @@ import {
 } from '@/lib/user-connector-tools';
 import { findDirectoryTargetByRemoteUrl } from '@/lib/connectors/mcp-directory-targets';
 import { createCustomConnector } from '@/lib/connectors/custom-connector-creation';
-import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
+import {
+  disconnectConnectorOAuthGrant,
+  vendorRevocationAuditStatus,
+  vendorRevocationNotice,
+} from '@/lib/connectors/oauth-access';
 import { resolveClientRedirectUri } from '@/lib/connectors/mcp-client-metadata';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import {
   clearConnectorToolPermissions,
   customConnectorId,
   deleteCustomConnectorRows,
+  findCustomConnectorRow,
   toCustomConnectorView,
 } from '@/lib/connectors/mcp-custom-connections';
 
@@ -179,11 +184,14 @@ async function handleDelete(request: NextRequest) {
     throw createError.validation('id query param is required');
   }
 
+  const existing = await findCustomConnectorRow(db, userId, id);
+  const disconnect = existing
+    ? await disconnectConnectorOAuthGrant(userId, customConnectorId(existing.short_id))
+    : null;
   const deleted = await deleteCustomConnectorRows(db, userId, id);
 
   for (const row of deleted) {
     await evictCustomConnectorCaches(userId, row.id);
-    await disconnectConnectorOAuthGrant(userId, customConnectorId(row.short_id));
     await clearConnectorToolPermissions(db, userId, customConnectorId(row.short_id));
     await recordAuditEvent({
       userId,
@@ -194,11 +202,19 @@ async function handleDelete(request: NextRequest) {
         resourceId: row.id,
         connectorId: customConnectorId(row.short_id),
         source: AUDIT_SOURCE,
+        ...(disconnect ? { status: vendorRevocationAuditStatus(disconnect.vendorRevocation) } : {}),
       },
     });
   }
 
-  return NextResponse.json({ success: true } satisfies DeleteCustomConnectorResponse);
+  const vendorNotice =
+    existing && disconnect
+      ? vendorRevocationNotice(existing.name, disconnect.vendorRevocation)
+      : null;
+  return NextResponse.json({
+    success: true,
+    ...(vendorNotice ? { vendorNotice } : {}),
+  } satisfies DeleteCustomConnectorResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

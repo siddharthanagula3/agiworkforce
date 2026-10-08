@@ -275,12 +275,48 @@ describe('credentials a disconnect has to hand back', () => {
     const tokens = await listRevocableConnectorTokens('user-1', 'gmail');
 
     expect(tokens).toEqual([
-      { accountKey: 'work', token: 'work-refresh', tokenTypeHint: 'refresh_token' },
-      { accountKey: 'personal', token: 'personal-access', tokenTypeHint: 'access_token' },
+      {
+        accountKey: 'work',
+        token: 'work-refresh',
+        tokenTypeHint: 'refresh_token',
+        companionAccessToken: 'work-access',
+        issuer: null,
+        mcpUrl: null,
+      },
+      {
+        accountKey: 'personal',
+        token: 'personal-access',
+        tokenTypeHint: 'access_token',
+        companionAccessToken: null,
+        issuer: null,
+        mcpUrl: null,
+      },
     ]);
     const sql = String(mockQuery.mock.calls[0]?.[0]);
     expect(sql).toMatch(/revoked_at is null/);
     expect(sql).not.toMatch(/limit/i);
+  });
+
+  it('carries the issuer a discovered grant has to be revoked at', async () => {
+    mockQuery.mockResolvedValue([
+      {
+        account_key: 'default',
+        access_token_enc: encryptConnectorToken('vendor-access', 'oauth-access-token'),
+        refresh_token_enc: encryptConnectorToken('vendor-refresh', 'oauth-refresh-token'),
+        issuer: 'https://auth.vendor.test',
+        mcp_url: 'https://mcp.vendor.test/mcp',
+      },
+    ]);
+
+    const [token] = await listRevocableConnectorTokens('user-1', 'custom:abc');
+
+    expect(token).toMatchObject({
+      token: 'vendor-refresh',
+      companionAccessToken: 'vendor-access',
+      issuer: 'https://auth.vendor.test',
+      mcpUrl: 'https://mcp.vendor.test/mcp',
+    });
+    expect(String(mockQuery.mock.calls[0]?.[0])).toMatch(/issuer, mcp_url/);
   });
 
   it('narrows to one account when a key is named', async () => {

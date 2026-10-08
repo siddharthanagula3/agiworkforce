@@ -11,6 +11,7 @@ import {
   ConnectConflictResponseSchema,
   ConnectorConnectionSchema,
   ConnectorDirectoryEntrySchema,
+  DisconnectResponseSchema,
   ListConnectorsResponseSchema,
   MANAGED_CLOUD_CONNECTORS_PATH,
   connectorDirectoryEntryPath,
@@ -129,6 +130,18 @@ function fetchConnectorsShared(): Promise<ConnectorsResponse> {
 
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   return connectorErrorMessage(await res.json().catch(() => null), fallback);
+}
+
+/**
+ * A disconnect that the vendor did not confirm leaves access live there, which
+ * the person can only end on the vendor's side, so the notice stays until it
+ * is dismissed rather than timing out unread.
+ */
+export async function announceVendorNotice(res: Response, connectorId: string): Promise<void> {
+  const parsed = DisconnectResponseSchema.safeParse(await res.json().catch(() => null));
+  const notice = parsed.success ? parsed.data.vendorNotice : undefined;
+  if (!notice) return;
+  toast.warning(notice, { id: `connector-vendor-notice-${connectorId}`, duration: Infinity });
 }
 
 const BROKER_OUTCOME_PARAMS = [
@@ -528,6 +541,7 @@ export function useConnectors(): ConnectorStatus {
           setConnectedIds((prev) => new Set([...prev, id]));
           toast.error(await readErrorMessage(res, 'Could not disconnect. Try again later.'));
         } else {
+          await announceVendorNotice(res, id);
           setGrantedScopes((prev) => {
             if (!(id in prev)) return prev;
             const next = { ...prev };

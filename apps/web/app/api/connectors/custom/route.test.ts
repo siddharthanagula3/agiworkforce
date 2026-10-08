@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
   summaries: vi.fn(async (..._args: unknown[]) => [] as unknown[]),
   directoryByUrl: vi.fn(async (..._args: unknown[]) => null as unknown),
+  disconnect: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -58,6 +60,7 @@ vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
 vi.mock('@/lib/connectors/mcp-discovery', () => ({
   mcpServerPublishesProtectedResource: vi.fn(async () => false),
   refreshDiscoveredGrant: vi.fn(),
+  revokeDiscoveredGrant: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
   ConnectorGrantDecryptionError: class extends Error {},
@@ -70,8 +73,9 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   upsertConnectorOAuthGrant: vi.fn(),
   withLockedConnectorOAuthGrant: vi.fn(),
 }));
-vi.mock('@/lib/connectors/oauth-access', () => ({
-  disconnectConnectorOAuthGrant: vi.fn(async () => true),
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<OAuthAccessModule>()),
+  disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnect(...args),
   resolveConnectorAccessToken: vi.fn(async () => ({ status: 'not-connected' })),
 }));
 vi.mock('@/lib/connectors/mcp-client-metadata', () => ({
@@ -89,7 +93,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@agiworkforce/mcp', () => ({ connectMcpServer: mocks.connect }));
 
-import { GET, POST } from './route';
+import { DELETE, GET, POST } from './route';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 
 function request() {
@@ -222,5 +226,67 @@ describe('GET /api/connectors/custom directory linkage', () => {
 
     expect(body.connectors).toEqual([{ ...ROW, signedIn: false }]);
     expect(body.connectors[0]).not.toHaveProperty('directoryId');
+  });
+});
+
+describe('DELETE /api/connectors/custom vendor revocation', () => {
+  const STORED = { id: 'row-1', short_id: 'abc123', name: 'Sentry' };
+  let order: string[];
+
+  function deleteRequest() {
+    return new NextRequest('http://localhost/api/connectors/custom?id=row-1', {
+      method: 'DELETE',
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    order = [];
+    mocks.query.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (text.startsWith('select id, short_id, name from user_custom_connectors')) {
+        return [STORED];
+      }
+      if (text.startsWith('delete from user_custom_connectors')) {
+        order.push('row deleted');
+        return [{ id: STORED.id, short_id: STORED.short_id }];
+      }
+      return [];
+    });
+  });
+
+  it('hands the grant back to the vendor while the row still holds its client', async () => {
+    mocks.disconnect.mockImplementation(async () => {
+      order.push('vendor revoked');
+      return { disconnected: true, vendorRevocation: { status: 'revoked' } };
+    });
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(mocks.disconnect).toHaveBeenCalledWith('user-1', 'custom-abc123');
+    expect(order).toEqual(['vendor revoked', 'row deleted']);
+  });
+
+  it('tells the user access may remain at the vendor when it was not revoked', async () => {
+    mocks.disconnect.mockResolvedValue({
+      disconnected: true,
+      vendorRevocation: {
+        status: 'not-revoked',
+        reason: 'no-revocation-endpoint',
+        manageUrl: 'https://sentry.example/settings/apps',
+      },
+    });
+
+    const response = await DELETE(deleteRequest());
+
+    expect(await response.json()).toEqual({
+      success: true,
+      vendorNotice:
+        'Disconnected here, but access was not revoked at Sentry, so access may remain until ' +
+        'you remove it at https://sentry.example/settings/apps.',
+    });
+    expect(order).toEqual(['row deleted']);
   });
 });

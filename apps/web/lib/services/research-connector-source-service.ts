@@ -90,11 +90,13 @@ export async function readResearchConnectorSources(input: {
     0,
     MAX_QUERIES_PER_CONNECTOR,
   );
+  const picked = new Set(input.connectorIds);
   const catalog = await loadUserConnectorToolCatalog(input.userId, {
     customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
     planTier: input.planTier,
     organizationId: input.organizationId,
     isToolDenied: input.isToolDenied,
+    isConnectorDenied: (connectorId) => !picked.has(connectorId),
     googleUserDataRouted: input.googleUserDataRouted,
   });
   const labels = new Map<string, string>();

@@ -4,6 +4,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
 const toastInfo = vi.fn();
+const toastWarning = vi.fn();
 const routerPush = vi.hoisted(() => vi.fn());
 const clerkUserState = vi.hoisted(() => ({ isLoaded: true, isSignedIn: true }));
 
@@ -16,6 +17,7 @@ vi.mock('sonner', () => ({
     error: (...args: unknown[]) => toastError(...args),
     success: (...args: unknown[]) => toastSuccess(...args),
     info: (...args: unknown[]) => toastInfo(...args),
+    warning: (...args: unknown[]) => toastWarning(...args),
   },
 }));
 
@@ -343,6 +345,39 @@ describe('useConnectors, OAuth grants', () => {
     expect(result.current.connectedIds.has('linear')).toBe(false);
     expect(result.current.grantedScopes['linear']).toBeUndefined();
     expect(result.current.needsReauthorizationIds.has('linear')).toBe(false);
+    expect(toastWarning).not.toHaveBeenCalled();
+  });
+
+  it('keeps a notice on screen when the vendor did not confirm the revocation', async () => {
+    const notice =
+      'Disconnected here, but access was not revoked at Linear, so access may remain until you ' +
+      'remove it in your Linear account settings.';
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse(200, {
+            connectors: [{ connectorId: 'linear', source: 'oauth', scopes: ['read'] }],
+            available: ['linear'],
+          }),
+        )
+        .mockResolvedValueOnce(jsonResponse(200, { success: true, vendorNotice: notice })),
+    );
+
+    const { result } = renderHook(() => useConnectors());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.disconnect('linear');
+    });
+
+    expect(result.current.connectedIds.has('linear')).toBe(false);
+    expect(toastWarning).toHaveBeenCalledWith(notice, {
+      id: 'connector-vendor-notice-linear',
+      duration: Infinity,
+    });
+    expect(toastError).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
+type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
 vi.mock('server-only', () => ({}));
 
@@ -75,7 +76,8 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
 }));
 
 const mockResolveAccessToken = vi.fn();
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<OAuthAccessModule>()),
   resolveConnectorAccessToken: (...a: unknown[]) => mockResolveAccessToken(...a),
 }));
 
@@ -246,6 +248,64 @@ describe('OAuth connector catalog gating', () => {
     expect(defs).toEqual([]);
   });
 
+  it('never refreshes or lists a connector the turn switched off', async () => {
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'tok',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue(catalogWith('linear', 'create_issue'));
+
+    const defs = await loadUserConnectorToolDefs('user-1', {
+      isConnectorDenied: (connectorId) => connectorId === 'linear',
+    });
+
+    expect(defs).toEqual([]);
+    expect(mockResolveAccessToken).not.toHaveBeenCalled();
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
+  it('never refreshes or lists a connector the workspace policy blocks', async () => {
+    const organizationId = '11111111-1111-4111-8111-111111111111';
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('from public.organization_members')) {
+        return Promise.resolve([{ organization_id: organizationId }]);
+      }
+      if (sql.includes('from public.organization_connector_policies')) {
+        return Promise.resolve([
+          {
+            organization_id: organizationId,
+            allowed_connectors: [],
+            blocked_connectors: ['linear'],
+            allow_custom_connectors: true,
+            allowed_plugins: [],
+            blocked_plugins: [],
+            allowed_mcp_hosts: [],
+            updated_by_user_id: null,
+            updated_at: '2026-10-08T00:00:00.000Z',
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const defs = await loadUserConnectorToolDefs('user-1', { organizationId });
+
+    expect(defs).toEqual([]);
+    expect(mockResolveAccessToken).not.toHaveBeenCalled();
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
+  it('offers no reconnect tool when the token refresh only failed transiently', async () => {
+    mockResolveAccessToken.mockResolvedValue({ status: 'unreachable' });
+
+    const defs = await loadUserConnectorToolDefs('user-1');
+
+    expect(defs).toEqual([]);
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
   it('keeps the operator mapping when an id is both operator-mapped and OAuth-configured', async () => {
     process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
       connectors: [{ connectorId: 'linear', url: 'https://operator.example.com/mcp' }],
@@ -383,6 +443,39 @@ describe('OAuth connector execution, lazy authentication', () => {
     expect(parseConnectorAuthorizationRequired(result.content)).toMatchObject({
       reason: 'authorization_expired',
     });
+    expect(callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the connector could not be reached, with no connect card, when the refresh fails transiently', async () => {
+    mockResolveAccessToken.mockResolvedValue({ status: 'unreachable' });
+
+    const result = await makeUserConnectorExecutor('user-1')('linear', 'create_issue', {});
+
+    expect(parseConnectorAuthorizationRequired(result.content)).toBeNull();
+    expect(result).toEqual({
+      handled: true,
+      content: "Couldn't reach Linear just now. It is still connected, so try again in a moment.",
+      isError: true,
+    });
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('says the connector could not be reached when the refresh after a 401 fails transiently', async () => {
+    mockResolveAccessToken
+      .mockResolvedValueOnce({
+        status: 'ready',
+        accessToken: 'stale',
+        tokenType: 'Bearer',
+        grantedScopes: ['read'],
+      })
+      .mockResolvedValueOnce({ status: 'unreachable' });
+    const callTool = vi.fn().mockRejectedValue(unauthorized());
+    mockConnectMcpServer.mockResolvedValue({ callTool, close: async () => undefined });
+
+    const result = await makeUserConnectorExecutor('user-1')('linear', 'create_issue', {});
+
+    expect(parseConnectorAuthorizationRequired(result.content)).toBeNull();
+    expect(result.content).toMatch(/^Couldn't reach Linear just now/);
     expect(callTool).toHaveBeenCalledTimes(1);
   });
 

@@ -16,6 +16,7 @@ import {
   withLockedConnectorOAuthGrant,
   type ConnectorOAuthGrant,
   type LockedConnectorOAuthGrant,
+  type RevocableConnectorToken,
 } from '@/lib/connectors/oauth-store';
 import {
   getConnectorOAuthProvider,
@@ -24,7 +25,7 @@ import {
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import { removeBankAccountsItem } from '@/lib/connectors/bank-accounts';
 import { BANK_ACCOUNTS_CONNECTOR_ID } from '@/lib/connectors/plaid-config';
-import { refreshDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
+import { refreshDiscoveredGrant, revokeDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
 import { getCustomConnectorOAuthClient } from '@/lib/connectors/mcp-custom-connections';
 import { canonicalResourceUri } from '@/lib/connectors/registry-authorization';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -64,7 +65,12 @@ export type ConnectorAccessOutcome =
   /** Configured, but this user has never authorized it (or has disconnected). */
   | { status: 'not-connected' }
   /** Authorized once, but the stored credential can no longer be used. */
-  | { status: 'reauthorization-required'; reason: 'expired' | 'refresh-failed' | 'undecryptable' };
+  | { status: 'reauthorization-required'; reason: 'expired' | 'refresh-failed' | 'undecryptable' }
+  /**
+   * The grant is intact, but refreshing it timed out, hit a network failure or
+   * a server error. Reconnecting would not help; trying again later may.
+   */
+  | { status: 'unreachable' };
 
 export type ReadyConnectorAccess = Extract<ConnectorAccessOutcome, { status: 'ready' }>;
 
@@ -154,6 +160,15 @@ const REFRESH_FAILED: ConnectorAccessOutcome = {
 
 const EXPIRED: ConnectorAccessOutcome = { status: 'reauthorization-required', reason: 'expired' };
 
+const UNREACHABLE: ConnectorAccessOutcome = { status: 'unreachable' };
+
+const TRANSIENT_CLIENT_STATUSES = new Set([408, 429]);
+
+function isTransientRefreshFailure(error: unknown): boolean {
+  if (!(error instanceof ConnectorOAuthTokenError)) return true;
+  return error.status >= 500 || TRANSIENT_CLIENT_STATUSES.has(error.status);
+}
+
 async function refreshUnderLock(
   userId: string,
   connectorId: string,
@@ -171,7 +186,7 @@ async function refreshUnderLock(
         { connectorId },
         '[connector-oauth] a concurrent refresh held the grant too long',
       );
-      return REFRESH_FAILED;
+      return UNREACHABLE;
     }
     if (error instanceof ConnectorGrantDecryptionError) {
       return { status: 'reauthorization-required', reason: 'undecryptable' };
@@ -214,7 +229,7 @@ async function refreshLockedGrant(
     }
     if (outcome.status === 'failed') {
       logger.warn({ connectorId }, '[connector-oauth] discovered-connector token refresh failed');
-      return { outcome: REFRESH_FAILED, dropped: false };
+      return { outcome: UNREACHABLE, dropped: false };
     }
 
     await locked.saveTokens({
@@ -248,7 +263,11 @@ async function refreshLockedGrant(
       },
       '[connector-oauth] token refresh failed',
     );
-    return { outcome: REFRESH_FAILED, dropped: isDead ? await locked.revoke() : false };
+    if (isDead) return { outcome: REFRESH_FAILED, dropped: await locked.revoke() };
+    return {
+      outcome: isTransientRefreshFailure(error) ? UNREACHABLE : REFRESH_FAILED,
+      dropped: false,
+    };
   }
 
   await locked.saveTokens({
@@ -259,6 +278,119 @@ async function refreshLockedGrant(
     accessTokenExpiresAt: refreshed.accessTokenExpiresAt,
   });
   return { outcome: ready(refreshed, current.accountKey), dropped: false };
+}
+
+export type ConnectorVendorRevocation =
+  | { status: 'revoked' }
+  | { status: 'nothing-to-revoke' }
+  | {
+      status: 'not-revoked';
+      reason: 'no-revocation-endpoint' | 'failed';
+      /** Where the provider says its users manage access, when it publishes one. */
+      manageUrl: string | null;
+    };
+
+export interface ConnectorDisconnectOutcome {
+  disconnected: boolean;
+  vendorRevocation: ConnectorVendorRevocation;
+}
+
+type CredentialRevocation = Exclude<ConnectorVendorRevocation, { status: 'nothing-to-revoke' }>;
+
+const NO_REVOCATION_ENDPOINT: CredentialRevocation = {
+  status: 'not-revoked',
+  reason: 'no-revocation-endpoint',
+  manageUrl: null,
+};
+
+const REVOCATION_FAILED: CredentialRevocation = {
+  status: 'not-revoked',
+  reason: 'failed',
+  manageUrl: null,
+};
+
+async function revokeCredentialAtVendor(
+  userId: string,
+  connectorId: string,
+  provider: ConnectorOAuthProvider | null,
+  credential: RevocableConnectorToken,
+): Promise<CredentialRevocation> {
+  if (credential.mcpUrl) {
+    const outcome = await revokeDiscoveredGrant({
+      issuer: credential.issuer,
+      client: await getCustomConnectorOAuthClient(userId, connectorId).catch(() => null),
+      tokens: [
+        { token: credential.token, tokenTypeHint: credential.tokenTypeHint },
+        ...(credential.companionAccessToken
+          ? [{ token: credential.companionAccessToken, tokenTypeHint: 'access_token' as const }]
+          : []),
+      ],
+    });
+    if (outcome.status === 'revoked') return outcome;
+    return {
+      status: 'not-revoked',
+      reason: outcome.status === 'unsupported' ? 'no-revocation-endpoint' : 'failed',
+      manageUrl: outcome.manageUrl,
+    };
+  }
+  if (!provider?.revocationUrl) return NO_REVOCATION_ENDPOINT;
+  return (await revokeTokenAtProvider(provider, credential.token, credential.tokenTypeHint))
+    ? { status: 'revoked' }
+    : REVOCATION_FAILED;
+}
+
+function summarizeRevocations(
+  outcomes: readonly CredentialRevocation[],
+): ConnectorVendorRevocation {
+  const kept = outcomes.filter(
+    (outcome): outcome is Extract<CredentialRevocation, { status: 'not-revoked' }> =>
+      outcome.status === 'not-revoked',
+  );
+  if (outcomes.length === 0) return { status: 'nothing-to-revoke' };
+  if (kept.length === 0) return { status: 'revoked' };
+  return {
+    status: 'not-revoked',
+    reason: kept.some((outcome) => outcome.reason === 'failed')
+      ? 'failed'
+      : 'no-revocation-endpoint',
+    manageUrl: kept.find((outcome) => outcome.manageUrl)?.manageUrl ?? null,
+  };
+}
+
+/**
+ * Hands every credential back to the provider that issued it, through RFC 7009
+ * revocation where the provider offers it. Never throws: a provider that
+ * refuses, times out or offers no endpoint is reported, and the caller still
+ * destroys its own copy.
+ */
+async function revokeCredentialsAtVendor(
+  userId: string,
+  connectorId: string,
+  ...accountKey: [] | [string | null | undefined]
+): Promise<{ revocation: ConnectorVendorRevocation; outcomes: CredentialRevocation[] }> {
+  let revocable: RevocableConnectorToken[];
+  try {
+    revocable = await listRevocableConnectorTokens(userId, connectorId, ...accountKey);
+  } catch (error) {
+    logger.warn(
+      { connectorId, error: error instanceof Error ? error.name : 'unknown' },
+      '[connector-oauth] provider-side revocation could not be attempted; revoking locally',
+    );
+    return { revocation: REVOCATION_FAILED, outcomes: [] };
+  }
+  const provider = getConnectorOAuthProvider(connectorId);
+  const outcomes: CredentialRevocation[] = [];
+  for (const credential of revocable) {
+    outcomes.push(await revokeCredentialAtVendor(userId, connectorId, provider, credential));
+  }
+  const revocation = summarizeRevocations(outcomes);
+  if (revocation.status === 'not-revoked') {
+    logger.warn(
+      { connectorId, reason: revocation.reason },
+      '[connector-oauth] the provider did not confirm revocation; access may remain there',
+    );
+  }
+  return { revocation, outcomes };
 }
 
 /**
@@ -289,21 +421,11 @@ export async function revokeAllConnectorTokensAtProviders(
   let attempted = 0;
   let revoked = 0;
   for (const connectorId of connectorIds) {
-    const provider = getConnectorOAuthProvider(connectorId);
-    if (!provider?.revocationUrl) continue;
-    try {
-      const revocable = await listRevocableConnectorTokens(userId, connectorId);
-      for (const credential of revocable) {
-        attempted += 1;
-        if (await revokeTokenAtProvider(provider, credential.token, credential.tokenTypeHint)) {
-          revoked += 1;
-        }
-      }
-    } catch (error) {
-      logger.warn(
-        { connectorId, error: error instanceof Error ? error.name : 'unknown' },
-        '[connector-oauth] erasure could not revoke a grant upstream; erasing locally',
-      );
+    const { outcomes } = await revokeCredentialsAtVendor(userId, connectorId);
+    for (const outcome of outcomes) {
+      if (outcome.status === 'not-revoked' && outcome.reason === 'no-revocation-endpoint') continue;
+      attempted += 1;
+      if (outcome.status === 'revoked') revoked += 1;
     }
   }
   return { attempted, revoked };
@@ -319,21 +441,38 @@ export async function disconnectConnectorOAuthGrant(
   userId: string,
   connectorId: string,
   accountKey?: string | null,
-): Promise<boolean> {
+): Promise<ConnectorDisconnectOutcome> {
   if (connectorId === BANK_ACCOUNTS_CONNECTOR_ID) await removeBankAccountsItem(userId);
-  const provider: ConnectorOAuthProvider | null = getConnectorOAuthProvider(connectorId);
-  if (provider?.revocationUrl) {
-    try {
-      const revocable = await listRevocableConnectorTokens(userId, connectorId, accountKey);
-      for (const credential of revocable) {
-        await revokeTokenAtProvider(provider, credential.token, credential.tokenTypeHint);
-      }
-    } catch (error) {
-      logger.warn(
-        { connectorId, error: error instanceof Error ? error.name : 'unknown' },
-        '[connector-oauth] provider-side revocation could not be attempted; revoking locally',
-      );
-    }
-  }
-  return revokeConnectorOAuthGrant(userId, connectorId, accountKey);
+  const { revocation } = await revokeCredentialsAtVendor(userId, connectorId, accountKey);
+  return {
+    disconnected: await revokeConnectorOAuthGrant(userId, connectorId, accountKey),
+    vendorRevocation: revocation,
+  };
+}
+
+export function connectorUnreachableMessage(label: string): string {
+  return `Couldn't reach ${label} just now. It is still connected, so try again in a moment.`;
+}
+
+export function vendorRevocationNotice(
+  label: string,
+  revocation: ConnectorVendorRevocation,
+): string | null {
+  if (revocation.status !== 'not-revoked') return null;
+  const cause =
+    revocation.reason === 'failed'
+      ? `${label} did not confirm that it revoked access`
+      : `access was not revoked at ${label}`;
+  const where = revocation.manageUrl
+    ? `at ${revocation.manageUrl}`
+    : `in your ${label} account settings`;
+  return `Disconnected here, but ${cause}, so access may remain until you remove it ${where}.`;
+}
+
+export function vendorRevocationAuditStatus(revocation: ConnectorVendorRevocation): string {
+  if (revocation.status === 'revoked') return 'vendor_revoked';
+  if (revocation.status === 'nothing-to-revoke') return 'vendor_nothing_to_revoke';
+  return revocation.reason === 'failed'
+    ? 'vendor_revocation_failed'
+    : 'vendor_offers_no_revocation';
 }

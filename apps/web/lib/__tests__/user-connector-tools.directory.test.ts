@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
 type ScanModule1 = typeof import('@/lib/connectors/mcp-directory-targets');
+type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
 
 vi.mock('server-only', () => ({}));
 
@@ -56,7 +57,8 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
 }));
 
 const mockResolveAccessToken = vi.fn();
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<OAuthAccessModule>()),
   resolveConnectorAccessToken: (...a: unknown[]) => mockResolveAccessToken(...a),
 }));
 

@@ -151,6 +151,8 @@ export type ConnectorProbeFailureResponse = z.infer<typeof ConnectorProbeFailure
 
 export const DisconnectResponseSchema = z.object({
   success: z.boolean(),
+  /** Present when the vendor did not confirm revocation, so access may remain there. */
+  vendorNotice: z.string().min(1).optional(),
 });
 export type DisconnectResponse = z.infer<typeof DisconnectResponseSchema>;
 

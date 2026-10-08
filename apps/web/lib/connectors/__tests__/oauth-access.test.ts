@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
+type McpDiscoveryModule = typeof import('@/lib/connectors/mcp-discovery');
+type McpCustomConnectionsModule = typeof import('@/lib/connectors/mcp-custom-connections');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
@@ -40,6 +42,8 @@ const mocks = vi.hoisted(() => {
     listRevocable: vi.fn(),
     refresh: vi.fn(),
     refreshDiscovered: vi.fn(),
+    revokeDiscovered: vi.fn(),
+    customClient: vi.fn(),
     record: vi.fn(),
     revokeAtProvider: vi.fn(),
     getProvider: vi.fn(),
@@ -99,14 +103,22 @@ vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/connectors/mcp-discovery', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<McpDiscoveryModule>()),
   refreshDiscoveredGrant: mocks.refreshDiscovered,
+  revokeDiscoveredGrant: mocks.revokeDiscovered,
+}));
+
+vi.mock('@/lib/connectors/mcp-custom-connections', async (importOriginal) => ({
+  ...(await importOriginal<McpCustomConnectionsModule>()),
+  getCustomConnectorOAuthClient: mocks.customClient,
 }));
 
 import {
+  connectorUnreachableMessage,
   disconnectConnectorOAuthGrant,
   resolveConnectorAccessToken,
   revokeAllConnectorTokensAtProviders,
+  vendorRevocationNotice,
 } from '../oauth-access';
 
 const PROVIDER = {
@@ -140,7 +152,20 @@ beforeEach(() => {
   mocks.listRevocable.mockResolvedValue([]);
   mocks.updateTokens.mockResolvedValue(undefined);
   mocks.record.mockResolvedValue({ recorded: true });
+  mocks.customClient.mockResolvedValue(null);
 });
+
+function revocable(overrides: Record<string, unknown> = {}) {
+  return {
+    accountKey: 'default',
+    token: 'live-refresh',
+    tokenTypeHint: 'refresh_token',
+    companionAccessToken: null,
+    issuer: null,
+    mcpUrl: null,
+    ...overrides,
+  };
+}
 
 describe('resolveConnectorAccessToken', () => {
   it('reports not-configured when there is neither an OAuth app nor an MCP endpoint', async () => {
@@ -259,9 +284,62 @@ describe('resolveConnectorAccessToken', () => {
 
     await expect(
       resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
-    ).resolves.toEqual({ status: 'reauthorization-required', reason: 'refresh-failed' });
+    ).resolves.toEqual({ status: 'unreachable' });
     expect(mocks.revokeGrant).not.toHaveBeenCalled();
     expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a timeout', new MockTokenError('Token endpoint auth.example.com did not answer', 504, null)],
+    ['rate limiting', new MockTokenError('slow down', 429, null)],
+    ['a network failure', new TypeError('fetch failed')],
+  ])('reports the connector unreachable, not expired, after %s', async (_label, error) => {
+    mocks.getGrant.mockResolvedValue(grant());
+    mocks.refresh.mockRejectedValue(error);
+
+    await expect(
+      resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
+    ).resolves.toEqual({ status: 'unreachable' });
+    expect(mocks.revokeGrant).not.toHaveBeenCalled();
+  });
+
+  it('still asks for reconnection when the provider definitively refuses the client', async () => {
+    mocks.getGrant.mockResolvedValue(grant());
+    mocks.refresh.mockRejectedValue(new MockTokenError('bad client', 401, 'invalid_client'));
+
+    await expect(
+      resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
+    ).resolves.toEqual({ status: 'reauthorization-required', reason: 'refresh-failed' });
+  });
+
+  it('reports the connector unreachable when another refresh holds the grant too long', async () => {
+    mocks.getGrant
+      .mockResolvedValueOnce(grant({ accessTokenExpiresAt: new Date(0) }))
+      .mockRejectedValueOnce(new mocks.ConnectorGrantLockTimeoutError());
+
+    await expect(resolveConnectorAccessToken('u1', 'linear')).resolves.toEqual({
+      status: 'unreachable',
+    });
+  });
+
+  it('reports a discovered connector unreachable when its refresh failed transiently', async () => {
+    mocks.getProvider.mockReturnValue(null);
+    mocks.getGrant.mockResolvedValue(
+      grant({ mcpUrl: 'https://mcp.example.test/mcp', issuer: 'https://auth.example.test' }),
+    );
+    mocks.refreshDiscovered.mockResolvedValue({ status: 'failed', message: 'network' });
+
+    await expect(
+      resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
+    ).resolves.toEqual({ status: 'unreachable' });
+    expect(mocks.revokeGrant).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it('words a transient failure as a retry, never as an expiry', () => {
+    expect(connectorUnreachableMessage('Linear')).toBe(
+      "Couldn't reach Linear just now. It is still connected, so try again in a moment.",
+    );
   });
 
   it('asks for reconnection when the stored ciphertext cannot be decrypted', async () => {
@@ -329,8 +407,16 @@ describe('resolveConnectorAccessToken', () => {
 describe('disconnectConnectorOAuthGrant', () => {
   it('revokes locally even when the provider exposes no revocation endpoint', async () => {
     mocks.getProvider.mockReturnValue({ ...PROVIDER, revocationUrl: undefined });
+    mocks.listRevocable.mockResolvedValue([revocable()]);
 
-    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toBe(true);
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: {
+        status: 'not-revoked',
+        reason: 'no-revocation-endpoint',
+        manageUrl: null,
+      },
+    });
     expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
     expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
   });
@@ -340,12 +426,13 @@ describe('disconnectConnectorOAuthGrant', () => {
       ...PROVIDER,
       revocationUrl: 'https://auth.example.com/revoke',
     });
-    mocks.listRevocable.mockResolvedValue([
-      { accountKey: 'default', token: 'live-refresh', tokenTypeHint: 'refresh_token' },
-    ]);
+    mocks.listRevocable.mockResolvedValue([revocable()]);
     mocks.revokeAtProvider.mockResolvedValue(true);
 
-    await disconnectConnectorOAuthGrant('u1', 'linear');
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'revoked' },
+    });
 
     expect(mocks.revokeAtProvider).toHaveBeenCalledWith(
       expect.anything(),
@@ -361,8 +448,12 @@ describe('disconnectConnectorOAuthGrant', () => {
       revocationUrl: 'https://auth.example.com/revoke',
     });
     mocks.listRevocable.mockResolvedValue([
-      { accountKey: 'work', token: 'work-refresh', tokenTypeHint: 'refresh_token' },
-      { accountKey: 'personal', token: 'personal-access', tokenTypeHint: 'access_token' },
+      revocable({ accountKey: 'work', token: 'work-refresh' }),
+      revocable({
+        accountKey: 'personal',
+        token: 'personal-access',
+        tokenTypeHint: 'access_token',
+      }),
     ]);
     mocks.revokeAtProvider.mockResolvedValue(true);
 
@@ -381,7 +472,7 @@ describe('disconnectConnectorOAuthGrant', () => {
       revocationUrl: 'https://auth.example.com/revoke',
     });
     mocks.listRevocable.mockResolvedValue([
-      { accountKey: 'work', token: 'work-refresh', tokenTypeHint: 'refresh_token' },
+      revocable({ accountKey: 'work', token: 'work-refresh' }),
     ]);
     mocks.revokeAtProvider.mockResolvedValue(true);
 
@@ -399,8 +490,117 @@ describe('disconnectConnectorOAuthGrant', () => {
     });
     mocks.listRevocable.mockRejectedValue(new Error('database down'));
 
-    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toBe(true);
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
+    });
     expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+  });
+
+  it('reports a provider that refused the revocation', async () => {
+    mocks.getProvider.mockReturnValue({
+      ...PROVIDER,
+      revocationUrl: 'https://auth.example.com/revoke',
+    });
+    mocks.listRevocable.mockResolvedValue([revocable()]);
+    mocks.revokeAtProvider.mockResolvedValue(false);
+
+    const outcome = await disconnectConnectorOAuthGrant('u1', 'linear');
+
+    expect(outcome.vendorRevocation).toEqual({
+      status: 'not-revoked',
+      reason: 'failed',
+      manageUrl: null,
+    });
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+  });
+
+  it('has nothing to report when no credential was held', async () => {
+    mocks.listRevocable.mockResolvedValue([]);
+
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'nothing-to-revoke' },
+    });
+  });
+
+  describe('a directory or custom MCP grant', () => {
+    const discovered = revocable({
+      token: 'vendor-refresh',
+      companionAccessToken: 'vendor-access',
+      issuer: 'https://auth.vendor.test',
+      mcpUrl: 'https://mcp.vendor.test/mcp',
+    });
+
+    beforeEach(() => {
+      mocks.getProvider.mockReturnValue(null);
+      mocks.listRevocable.mockResolvedValue([discovered]);
+    });
+
+    it('revokes the refresh and access tokens at the issuer before deleting its own copy', async () => {
+      const order: string[] = [];
+      mocks.revokeDiscovered.mockImplementation(async () => {
+        order.push('vendor');
+        return { status: 'revoked' };
+      });
+      mocks.revokeGrant.mockImplementation(async () => {
+        order.push('local');
+        return true;
+      });
+      mocks.customClient.mockResolvedValue({ clientId: 'own-client', clientSecret: 'own-secret' });
+
+      await expect(disconnectConnectorOAuthGrant('u1', 'custom:abc')).resolves.toEqual({
+        disconnected: true,
+        vendorRevocation: { status: 'revoked' },
+      });
+      expect(mocks.revokeDiscovered).toHaveBeenCalledWith({
+        issuer: 'https://auth.vendor.test',
+        client: { clientId: 'own-client', clientSecret: 'own-secret' },
+        tokens: [
+          { token: 'vendor-refresh', tokenTypeHint: 'refresh_token' },
+          { token: 'vendor-access', tokenTypeHint: 'access_token' },
+        ],
+      });
+      expect(mocks.customClient).toHaveBeenCalledWith('u1', 'custom:abc');
+      expect(order).toEqual(['vendor', 'local']);
+      expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
+    });
+
+    it('deletes its copy and names where to remove access when the issuer offers no revocation', async () => {
+      mocks.revokeDiscovered.mockResolvedValue({
+        status: 'unsupported',
+        manageUrl: 'https://vendor.test/settings/apps',
+      });
+
+      const outcome = await disconnectConnectorOAuthGrant('u1', 'dir-record');
+
+      expect(outcome).toEqual({
+        disconnected: true,
+        vendorRevocation: {
+          status: 'not-revoked',
+          reason: 'no-revocation-endpoint',
+          manageUrl: 'https://vendor.test/settings/apps',
+        },
+      });
+      expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'dir-record', undefined);
+      expect(vendorRevocationNotice('Vendor', outcome.vendorRevocation)).toBe(
+        'Disconnected here, but access was not revoked at Vendor, so access may remain until ' +
+          'you remove it at https://vendor.test/settings/apps.',
+      );
+    });
+
+    it('deletes its copy and says access may remain when the revocation fails', async () => {
+      mocks.revokeDiscovered.mockResolvedValue({ status: 'failed', manageUrl: null });
+
+      const outcome = await disconnectConnectorOAuthGrant('u1', 'dir-record');
+
+      expect(outcome.disconnected).toBe(true);
+      expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'dir-record', undefined);
+      expect(vendorRevocationNotice('Vendor', outcome.vendorRevocation)).toBe(
+        'Disconnected here, but Vendor did not confirm that it revoked access, so access may ' +
+          'remain until you remove it in your Vendor account settings.',
+      );
+    });
   });
 });
 
@@ -418,8 +618,8 @@ describe('revokeAllConnectorTokensAtProviders', () => {
     mocks.dbQuery.mockResolvedValue([{ connector_id: 'gmail' }, { connector_id: 'no-revoke' }]);
     mocks.getProvider.mockImplementation((id: string) => (id === 'gmail' ? google : {}));
     mocks.listRevocable.mockResolvedValue([
-      { accountKey: 'default', token: 'r1', tokenTypeHint: 'refresh_token' },
-      { accountKey: 'work', token: 'r2', tokenTypeHint: 'refresh_token' },
+      revocable({ token: 'r1' }),
+      revocable({ accountKey: 'work', token: 'r2' }),
     ]);
     mocks.revokeAtProvider.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
@@ -428,8 +628,26 @@ describe('revokeAllConnectorTokensAtProviders', () => {
       revoked: 1,
     });
     expect(mocks.listRevocable).toHaveBeenCalledWith('u1', 'gmail');
-    expect(mocks.listRevocable).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeAtProvider).toHaveBeenCalledTimes(2);
     expect(mocks.revokeAtProvider).toHaveBeenCalledWith(google, 'r2', 'refresh_token');
+  });
+
+  it('revokes directory and custom MCP grants at their issuer on erasure', async () => {
+    mocks.dbQuery.mockResolvedValue([{ connector_id: 'custom:abc' }]);
+    mocks.getProvider.mockReturnValue(null);
+    mocks.customClient.mockResolvedValue(null);
+    mocks.listRevocable.mockResolvedValue([
+      revocable({ issuer: 'https://auth.vendor.test', mcpUrl: 'https://mcp.vendor.test/mcp' }),
+    ]);
+    mocks.revokeDiscovered.mockResolvedValue({ status: 'revoked' });
+
+    await expect(revokeAllConnectorTokensAtProviders('u1')).resolves.toEqual({
+      attempted: 1,
+      revoked: 1,
+    });
+    expect(mocks.revokeDiscovered).toHaveBeenCalledWith(
+      expect.objectContaining({ issuer: 'https://auth.vendor.test' }),
+    );
   });
 
   it('never throws when the grants cannot be read or a token cannot be listed', async () => {
