@@ -24,6 +24,7 @@ import { planDisplayLabel } from '../features/account-auth/planLabel';
 import {
   classifyManagedQuotaErrorCode,
   effectivePlanTier,
+  isTeamPlanTier,
   normalizeUsagePercentage,
   type AccountAuthState,
   type ManagedQuotaBlockPresentation,
@@ -814,7 +815,9 @@ function unixSecondsToIso(value: number | null): string | undefined {
 }
 
 export function accountTypeForTier(tier: string): AccountIdentity['accountType'] {
-  return tier === 'team' || tier === 'enterprise' ? 'Organization account' : 'Personal account';
+  return isTeamPlanTier(tier) || tier === 'enterprise'
+    ? 'Organization account'
+    : 'Personal account';
 }
 
 export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | undefined {

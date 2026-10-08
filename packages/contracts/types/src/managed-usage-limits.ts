@@ -72,6 +72,13 @@ export const MANAGED_USAGE_LIMITS: Readonly<Record<BillingPlanTier, ManagedUsage
       dailyCredits: 0,
       unlimited: false,
     },
+    team_premium: {
+      monthlyCredits: 10_000,
+      weeklyCredits: 2_500,
+      fiveHourCredits: 250,
+      dailyCredits: 0,
+      unlimited: false,
+    },
     enterprise: { ...NO_MANAGED_USAGE, unlimited: true },
   });
 
@@ -81,6 +88,7 @@ export const MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION: Readonly<
   Record<number, ManagedUsageLimitTable>
 > = Object.freeze({
   1: MANAGED_USAGE_LIMITS,
+  2: MANAGED_USAGE_LIMITS,
   [BILLING_PLAN_CATALOG_VERSION]: MANAGED_USAGE_LIMITS,
 });
 
@@ -143,6 +151,7 @@ export const MANAGED_USAGE_BASELINES: Readonly<Partial<Record<BillingPlanTier, B
     max: 'pro',
     max_15x: 'pro',
     team: 'pro',
+    team_premium: 'team',
   });
 
 export interface ManagedUsageComparison {

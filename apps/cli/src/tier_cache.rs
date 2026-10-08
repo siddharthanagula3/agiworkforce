@@ -64,7 +64,7 @@ pub fn default_api_base() -> &'static str {
 /// User's current subscription tier as returned by the AGI Workforce API.
 ///
 /// Mirrors the managed tiers in `packages/contracts/types/src/billing-catalog.ts`:
-///   `free` | `basic` | `pro` | `max` | `max_15x` | `team` | `enterprise`
+///   `free` | `basic` | `pro` | `max` | `max_15x` | `team` | `team_premium` | `enterprise`
 /// Plus `Byok` which is a CLI-side classification for Local/BYOK sessions (no server tier).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -78,6 +78,8 @@ pub enum UserTier {
     #[serde(rename = "max_15x")]
     Max15x,
     Team,
+    #[serde(rename = "team_premium")]
+    TeamPremium,
     Enterprise,
     /// BYOK / Local mode, tier enforcement is the user's responsibility.
     Byok,
@@ -101,6 +103,7 @@ impl UserTier {
             | UserTier::Max
             | UserTier::Max15x
             | UserTier::Team
+            | UserTier::TeamPremium
             | UserTier::Enterprise => Some(crate::model_catalog::economy_default_model()),
             UserTier::Byok => None,
         }
@@ -115,6 +118,7 @@ impl UserTier {
             UserTier::Max => "Max 5x",
             UserTier::Max15x => "Max 20x",
             UserTier::Team => "Team",
+            UserTier::TeamPremium => "Team Premium",
             UserTier::Enterprise => "Enterprise",
             UserTier::Byok => "BYOK",
         }
@@ -129,7 +133,7 @@ impl UserTier {
         match self {
             UserTier::Free | UserTier::Basic | UserTier::Byok => "free",
             UserTier::Pro | UserTier::Team => "pro",
-            UserTier::Max | UserTier::Max15x => "max",
+            UserTier::Max | UserTier::Max15x | UserTier::TeamPremium => "max",
             UserTier::Enterprise => "enterprise",
         }
     }
@@ -532,7 +536,7 @@ fn tier_rank(t: &UserTier) -> u8 {
         UserTier::Free => 1,
         UserTier::Basic => 2,
         UserTier::Pro | UserTier::Team => 3,
-        UserTier::Max => 4,
+        UserTier::Max | UserTier::TeamPremium => 4,
         UserTier::Max15x => 5,
         UserTier::Enterprise => 6,
     }
@@ -766,6 +770,7 @@ fn parse_tier_str(s: &str) -> Option<UserTier> {
         "max" => Some(UserTier::Max),
         "max_15x" | "max-15x" | "max15x" => Some(UserTier::Max15x),
         "team" => Some(UserTier::Team),
+        "team_premium" => Some(UserTier::TeamPremium),
         "enterprise" => Some(UserTier::Enterprise),
         "byok" | "local" => Some(UserTier::Byok),
         _ => None,
@@ -785,6 +790,7 @@ fn tier_to_str(t: &UserTier) -> String {
         UserTier::Max => "max",
         UserTier::Max15x => "max_15x",
         UserTier::Team => "team",
+        UserTier::TeamPremium => "team_premium",
         UserTier::Enterprise => "enterprise",
         UserTier::Byok => "byok",
     }

@@ -11,6 +11,7 @@ export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
   max: BILLING_PLAN_PRICING.max.label,
   max_15x: BILLING_PLAN_PRICING.max_15x.label,
   team: BILLING_PLAN_PRICING.team.label,
+  team_premium: BILLING_PLAN_PRICING.team_premium.label,
   enterprise: BILLING_PLAN_PRICING.enterprise.label,
 });
 
@@ -23,6 +24,7 @@ export const PLAN_DESCRIPTION: Readonly<Record<UIPlanTier, string>> = Object.fre
   max: 'Max 5x, flagship models and higher usage',
   max_15x: 'Max 20x, flagship models and the highest individual usage',
   team: 'Pro capabilities with shared team administration',
+  team_premium: 'Max 5x usage and models with shared team administration',
   enterprise: 'Managed controls and negotiated enterprise capabilities',
 });
 
@@ -46,7 +48,7 @@ export function isFreePlan(tier: UIPlanTier): boolean {
 }
 
 export function canSwitchProviderInThread(tier: UIPlanTier): boolean {
-  return tier === 'max' || tier === 'max_15x' || tier === 'enterprise';
+  return tier === 'max' || tier === 'max_15x' || tier === 'team_premium' || tier === 'enterprise';
 }
 
 const TIER_ORDER: Readonly<Record<UIPlanTier, number>> = Object.freeze({
@@ -57,6 +59,7 @@ const TIER_ORDER: Readonly<Record<UIPlanTier, number>> = Object.freeze({
   pro: 2,
   team: 2,
   max: 3,
+  team_premium: 3,
   max_15x: 4,
   enterprise: 5,
 });

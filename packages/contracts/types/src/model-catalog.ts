@@ -1705,6 +1705,7 @@ function normalizeProductTier(tier: string | null | undefined): ProductTier {
     case 'max_15x':
     case 'max-15x':
     case 'max15x':
+    case 'team_premium':
       return 'max';
     case 'enterprise':
       return 'enterprise';
@@ -1974,6 +1975,7 @@ export function normalizeSubscriptionAccessTier(tier: string): SubscriptionAcces
     case 'max+':
     case 'max_plus':
     case 'max-plus':
+    case 'team_premium':
       return 'max';
     case 'enterprise':
       return 'enterprise';

@@ -344,7 +344,7 @@ describe('billing catalog', () => {
   describe('single-tier identity predicates', () => {
     const PREDICATE_BY_TIER: Readonly<
       Record<
-        Exclude<BillingPlanTier, 'team' | 'enterprise'>,
+        Exclude<BillingPlanTier, 'team' | 'team_premium' | 'enterprise'>,
         (value: string | null | undefined) => boolean
       >
     > = {

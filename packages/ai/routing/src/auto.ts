@@ -649,6 +649,7 @@ function normalizeTier(
     case 'max+':
     case 'max_plus':
     case 'max-plus':
+    case 'team_premium':
       return 'max';
     case 'enterprise':
       return 'enterprise';

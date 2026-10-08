@@ -4,6 +4,7 @@ import {
   getBillingPlanPricing,
   isContractPricedPlan,
   isFreeOfChargePlanTier,
+  isTeamSeatUpgradeTier,
   normalizeBillingPlanTier,
   type BillingInterval,
   type BillingPlanTier,
@@ -15,9 +16,14 @@ import {
  * later reprice is visibly a different catalog rather than a silent rewrite of
  * what a customer agreed to.
  */
-export const BILLING_PLAN_CATALOG_VERSION = 2;
+export const BILLING_PLAN_CATALOG_VERSION = 3;
 
-export type PlanSellability = 'self_serve' | 'contract_only' | 'free_of_charge' | 'withdrawn';
+/**
+ * `seat_upgrade` is a tier sold only as a seat type on its parent plan's
+ * subscription: it has a price, and nobody can check out for it as a plan.
+ */
+export type PlanSellability =
+  'self_serve' | 'seat_upgrade' | 'contract_only' | 'free_of_charge' | 'withdrawn';
 
 export interface PlanCatalogEntry {
   tier: BillingPlanTier;
@@ -60,6 +66,7 @@ export function grandfatheredYearlyBillingNotice(tier: string | null | undefined
 function sellabilityOf(tier: BillingPlanTier): PlanSellability {
   if (WITHDRAWN_BILLING_PLANS[tier]) return 'withdrawn';
   if (isContractPricedPlan(tier)) return 'contract_only';
+  if (isTeamSeatUpgradeTier(tier)) return 'seat_upgrade';
   if ((SELF_SERVE_PAID_PLAN_TIERS as readonly string[]).includes(tier)) return 'self_serve';
   return 'free_of_charge';
 }
@@ -92,7 +99,9 @@ export function isPlanOnSale(tier: string | null | undefined): boolean {
 export function resolvePurchasablePlan(tier: string | null | undefined): BillingPlanTier | null {
   const entry = planCatalogEntry(tier);
   if (entry.sellability !== 'withdrawn') {
-    return entry.sellability === 'contract_only' ? null : entry.tier;
+    return entry.sellability === 'contract_only' || entry.sellability === 'seat_upgrade'
+      ? null
+      : entry.tier;
   }
   return entry.successorTier === null ? null : resolvePurchasablePlan(entry.successorTier);
 }
