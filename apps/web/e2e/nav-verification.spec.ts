@@ -120,6 +120,19 @@ test.describe('primary navigation works at runtime', () => {
     await expect(railEntry(page, 'Projects')).toHaveAttribute('aria-current', 'page');
   });
 
+  test('the retired Images destination lands on the Library Images tab', async ({ page }) => {
+    await openApp(page);
+
+    await page.goto('/chat/images', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL('**/chat/library?tab=images', { timeout: LOAD_TIMEOUT_MS });
+    await page.waitForTimeout(SETTLE_MS);
+    await expect(page.getByRole('tab', { name: 'Images' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(railEntry(page, 'Library')).toHaveAttribute('aria-current', 'page');
+  });
+
   test('study mode offers its start form and refuses to start without a subject', async ({
     page,
   }) => {

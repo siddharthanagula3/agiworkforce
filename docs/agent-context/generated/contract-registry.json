@@ -34,6 +34,7 @@
     "command-capabilities",
     "concept-registry",
     "connector-connect-required",
+    "connector-release",
     "connector-vocabulary",
     "content-safety",
     "context",
