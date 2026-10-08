@@ -2,10 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-describe('Team Premium seats migration (0356)', () => {
-  const load = () => readFile(join(process.cwd(), 'db/neon/0356_team_premium_seats.sql'), 'utf8');
+describe('Team Premium seats migration (0357)', () => {
+  const load = () => readFile(join(process.cwd(), 'db/neon/0357_team_premium_seats.sql'), 'utf8');
   const loadDown = () =>
-    readFile(join(process.cwd(), 'db/neon/down/0356_team_premium_seats.down.sql'), 'utf8');
+    readFile(join(process.cwd(), 'db/neon/down/0357_team_premium_seats.down.sql'), 'utf8');
 
   it('records how many licensed seats are Premium, starting every organization at none', async () => {
     const sql = await load();
@@ -145,7 +145,7 @@ describe('Team Premium seats migration (0356)', () => {
     expect(restored).toMatch(/new\.licensed_seats is distinct from old\.licensed_seats/i);
     expect(restored.split('$$;')[0]).not.toMatch(/licensed_premium_seats/i);
     expect(down).toMatch(
-      /delete from public\.schema_migrations\s+where filename = '0356_team_premium_seats\.sql'/i,
+      /delete from public\.schema_migrations\s+where filename = '0357_team_premium_seats\.sql'/i,
     );
   });
 });

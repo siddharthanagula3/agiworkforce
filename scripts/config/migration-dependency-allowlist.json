@@ -3,28 +3,28 @@
   "entries": [
     {
       "file": "apps/web/app/api/settings/organization/route.ts",
-      "migration": 356,
-      "reason": "Creating a workspace writes the paid Premium seat count of 0356. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0356 is pending, so this code cannot reach production until the owner applies 0356 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
+      "migration": 357,
+      "reason": "Creating a workspace writes the paid Premium seat count of 0357. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0357 is pending, so this code cannot reach production until the owner applies 0357 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
     },
     {
       "file": "apps/web/app/api/settings/team/route.ts",
-      "migration": 356,
-      "reason": "The member list returns each member's seat type from 0356. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0356 is pending, so this code cannot reach production until the owner applies 0356 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
+      "migration": 357,
+      "reason": "The member list returns each member's seat type from 0357. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0357 is pending, so this code cannot reach production until the owner applies 0357 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
     },
     {
       "file": "apps/web/app/api/stripe-webhook/lib/seats.ts",
-      "migration": 356,
-      "reason": "The webhook stores the paid Premium seat count of 0356 and demotes unpaid Premium assignments. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0356 is pending, so this code cannot reach production until the owner applies 0356 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
+      "migration": 357,
+      "reason": "The webhook stores the paid Premium seat count of 0357 and demotes unpaid Premium assignments. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0357 is pending, so this code cannot reach production until the owner applies 0357 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
     },
     {
       "file": "apps/web/lib/services/team-seat-entitlement.ts",
-      "migration": 356,
-      "reason": "Seat entitlement reads the 0356 seat type and paid-through date. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0356 is pending, so this code cannot reach production until the owner applies 0356 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
+      "migration": 357,
+      "reason": "Seat entitlement reads the 0357 seat type and paid-through date. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0357 is pending, so this code cannot reach production until the owner applies 0357 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
     },
     {
       "file": "apps/web/lib/services/team-seat-type-service.ts",
-      "migration": 356,
-      "reason": "Assigning a seat type writes the 0356 membership seat columns. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0356 is pending, so this code cannot reach production until the owner applies 0356 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
+      "migration": 357,
+      "reason": "Assigning a seat type writes the 0357 membership seat columns. Releases do not apply migrations: the production deploy runs `pnpm db:migrate -- verify`, which fails while 0357 is pending, so this code cannot reach production until the owner applies 0357 with `pnpm db:migrate -- apply --target production --confirm-production`. Staging applies pending migrations on deploy."
     }
   ]
 }

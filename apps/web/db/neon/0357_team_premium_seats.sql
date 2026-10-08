@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0356: Premium seats on a Team subscription
+-- Migration 0357: Premium seats on a Team subscription
 --
 -- Why    : A Team subscription now bills two seat types on one subscription, a
 --          Standard seat and a Premium seat. The schema knew one number,
