@@ -41,12 +41,13 @@ one team can hold both. A Premium seat carries the usage limits and model access
 of Max 5x, which is five times the usage of a Standard seat, and keeps every
 Team feature.
 
-An owner or admin sets each member's seat type in Settings, Team. Moving a
-member to Premium charges the difference for the rest of the current period
-straight away and keeps the renewal date; a Premium seat the team already pays
-for and has not assigned is used first, at no extra charge. Moving a member back
-to Standard bills the Standard price from the next renewal: the current period
-is not refunded, and the member keeps Premium usage until it ends.
+Seat types are set in Settings, Team. An owner or admin can assign a Premium
+seat the team already pays for and has not assigned, at no extra charge. Only
+the workspace owner can make a change that alters the bill. Moving a member to
+Premium when no paid Premium seat is free charges the difference for the rest of
+the current period straight away and keeps the renewal date. Moving a member
+back to Standard bills the Standard price from the next renewal: the current
+period is not refunded, and the member keeps Premium usage until it ends.
 
 Premium seats are priced in US dollars only. The pricing page carries the price
 of each seat type.
