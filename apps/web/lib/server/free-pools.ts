@@ -96,6 +96,7 @@ export const FreeQuotaInventorySchema = z
         spendOnCapacityShortage: z.boolean(),
       })
       .optional(),
+    chosenOnlyByName: z.array(z.string().min(1)).optional(),
   })
   .superRefine((inventory, context) => {
     const seen = new Set<string>();
@@ -156,6 +157,18 @@ export const FreeQuotaInventorySchema = z
         });
       }
       ranked.add(key);
+    }
+    const byNameOnly = new Set<string>();
+    for (const key of inventory.chosenOnlyByName ?? []) {
+      if (!seen.has(key) || byNameOnly.has(key) || ranked.has(key)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['chosenOnlyByName'],
+          message:
+            'An offering chosen only by name must be a distinct observed offering that the Free Auto fallback does not rank',
+        });
+      }
+      byNameOnly.add(key);
     }
   });
 

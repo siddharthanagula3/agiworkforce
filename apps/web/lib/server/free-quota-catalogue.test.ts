@@ -29,6 +29,7 @@ import {
   loadFreeQuotaPolicy,
   resolveFreeQuotaAlternative,
   resolveFreeQuotaDecisions,
+  resolveReadyFreeQuotaOffering,
   type FreeQuotaContext,
 } from './free-quota-catalogue';
 import { FreeQuotaInventorySchema, eligibleFreeEligibility, loadFreePools } from './free-pools';
@@ -855,6 +856,61 @@ describe('which free chat allocation a Free Auto turn spends first', () => {
     expect(freeQuotaChatUseOrder(await readyChat(store), ranking)[0]!.entry.offeringKey).toBe(
       second!.entry.offeringKey,
     );
+  });
+
+  it('never chooses an allocation the inventory leaves to be picked by name', async () => {
+    const store = await attested(createMemoryKeyValueStore());
+    const [first, second] = freeQuotaChatUseOrder(await readyChat(store), ranking).map(
+      ({ entry }) => entry.offeringKey,
+    );
+    const choose = (chosenOnlyByName: string[]) =>
+      resolveReadyFreeQuotaOffering(context({ store }), {
+        inventory: { ...reviewedInventory, chosenOnlyByName },
+        category: 'chat',
+        needsImageInput: false,
+        ranking,
+        spendExpiringFirst: true,
+      });
+
+    expect(await choose([])).toBe(first);
+    expect(await choose([first!])).toBe(second);
+  });
+
+  it('never suggests a by-name allocation as the alternative to a refused one', async () => {
+    const store = await attested(createMemoryKeyValueStore());
+    const ready = (await readyChat(store)).map(({ entry }) => entry.offeringKey);
+    const [refused, next, afterNext] = ready;
+    const suggest = (chosenOnlyByName: string[]) =>
+      resolveFreeQuotaAlternative(context({ store }), {
+        inventory: { ...reviewedInventory, chosenOnlyByName },
+        refusedKey: refused!,
+        needsImageInput: false,
+      });
+
+    expect(await suggest([])).toBe(next);
+    expect(await suggest([next!])).toBe(afterNext);
+  });
+
+  it('ships a by-name list of ready chat allocations that the automatic order would otherwise reach', async () => {
+    const byName = inventory.chosenOnlyByName ?? [];
+    const ready = (await readyChat()).map(({ entry }) => entry.offeringKey);
+
+    expect(byName.length).toBeGreaterThan(0);
+    for (const key of byName) expect(ready, key).toContain(key);
+  });
+
+  it.each([
+    ['one the fallback ranks', () => [ranking[0]!]],
+    ['one the inventory never observed', () => ['qwen-quota-unobserved']],
+    [
+      'the same one twice',
+      () => [inventory.chosenOnlyByName![0]!, inventory.chosenOnlyByName![0]!],
+    ],
+  ])('refuses a by-name list holding %s', (_label, keys) => {
+    const parsed = FreeQuotaInventorySchema.safeParse({ ...inventory, chosenOnlyByName: keys() });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((issue) => issue.path.join('.'))).toContain('chosenOnlyByName');
   });
 });
 

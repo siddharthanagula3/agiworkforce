@@ -294,9 +294,11 @@ export async function resolveReadyFreeQuotaOffering(
       : isFreeMediaCategory(input.category)
         ? [...decisions.offerings].sort(expiringCapacityFirst)
         : decisions.offerings;
+  const byNameOnly = new Set(input.inventory.chosenOnlyByName ?? []);
   const ready = candidates.find(
     ({ entry, offering, decision }) =>
       entry.offeringKey !== input.excludeKey &&
+      !byNameOnly.has(entry.offeringKey) &&
       decision.status === 'ready' &&
       offering.category === input.category &&
       (!input.needsImageInput || offering.quotaChatImageInput === true),
