@@ -38,6 +38,7 @@ import {
   useTransferOrganizationOwnership,
   useUpdateTeamMemberRole,
   useUpdateTeamMemberSeatType,
+  SeatTypePaymentRequiredError,
   type OrganizationOwnerRoleAfterTransfer,
   type TeamInvitation,
   type TeamInvitationCredentialResult,
@@ -295,9 +296,26 @@ export function TeamSection() {
         premiumPaidThrough: member.premiumPaidThrough,
       }),
       onConfirm: () =>
-        updateSeatType.mutateAsync({ memberId: member.id, organizationId, seatType }),
+        updateSeatType
+          .mutateAsync({ memberId: member.id, organizationId, seatType })
+          .catch(() => undefined),
     });
   }
+
+  function seatChangeBlockedReason(member: TeamMember): string | null {
+    if (!seatBilling) return null;
+    if (member.seatType === 'standard' && !seatBilling.premiumSeatsSold) {
+      return 'Premium seats are not sold in the currency or billing period this workspace uses.';
+    }
+    if (isOwner) return null;
+    if (member.seatType === 'standard' && unassignedPremiumSeats > 0) return null;
+    return member.seatType === 'premium'
+      ? 'Only the workspace owner can move a Premium seat back to Standard, because it changes what the workspace pays.'
+      : 'Every paid Premium seat is in use. Only the workspace owner can buy another.';
+  }
+
+  const seatPaymentPending =
+    updateSeatType.error instanceof SeatTypePaymentRequiredError ? updateSeatType.error : null;
 
   const workspacePicker =
     workspaces.length > 0 ? (
@@ -733,10 +751,33 @@ export function TeamSection() {
           }}
         >
           Active members and pending invitations each reserve one seat.
-          {seatBilling
+          {seatBilling?.premiumSeatsSold
             ? ` A Standard seat is ${seatPriceLabel('standard', seatBilling.interval)} and a Premium seat is ${seatPriceLabel('premium', seatBilling.interval)}. Set each member's seat type in the member list.`
             : ''}
         </p>
+        {seatPaymentPending ? (
+          <p
+            role="alert"
+            data-testid="team-seat-payment-pending"
+            style={{
+              borderTop: '1px solid var(--settings-border)',
+              color: 'var(--text-1)',
+              fontSize: 13,
+              lineHeight: 1.5,
+              margin: 0,
+              padding: 'var(--space-3) var(--space-5)',
+            }}
+          >
+            {seatPaymentPending.message}{' '}
+            {seatPaymentPending.paymentUrl ? (
+              <a href={seatPaymentPending.paymentUrl} target="_blank" rel="noopener noreferrer">
+                Pay the invoice
+              </a>
+            ) : (
+              <SettingsSectionLink section="billing">Open billing to pay it</SettingsSectionLink>
+            )}
+          </p>
+        ) : null}
       </SectionCard>
 
       {canAdminister ? (
@@ -1092,15 +1133,8 @@ export function TeamSection() {
                   <select
                     aria-label={`Seat type for ${member.name}`}
                     value={member.seatType}
-                    disabled={
-                      updateSeatType.isPending ||
-                      (!seatBilling.premiumSeatsSold && member.seatType === 'standard')
-                    }
-                    title={
-                      seatBilling.premiumSeatsSold
-                        ? undefined
-                        : 'Premium seats are not sold in the currency this workspace is billed in.'
-                    }
+                    disabled={updateSeatType.isPending || seatChangeBlockedReason(member) !== null}
+                    title={seatChangeBlockedReason(member) ?? undefined}
                     onChange={(event) =>
                       requestSeatChange(member, event.target.value as TeamSeatType)
                     }

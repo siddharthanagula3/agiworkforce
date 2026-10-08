@@ -500,8 +500,6 @@ export default function PricingPage() {
   const teamPremium = BILLING_PLAN_PRICING.team_premium;
   const teamSeatEntry = localizedPlans?.team[teamInterval];
   const premiumSeatEntry = localizedPlans?.team_premium?.[teamInterval];
-  // A subscription bills every line in one currency, so Premium seats are
-  // offered only where their price is published in the Team seat's currency.
   const premiumSeatsOffered =
     !hasActivePaidPlan &&
     (premiumSeatEntry?.currency ?? 'usd').toLowerCase() ===

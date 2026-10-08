@@ -1,6 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const SeatPaymentError = vi.hoisted(
+  () =>
+    class SeatTypePaymentRequiredError extends Error {
+      readonly paymentUrl: string | null;
+      constructor(message: string, paymentUrl: string | null) {
+        super(message);
+        this.paymentUrl = paymentUrl;
+      }
+    },
+);
+
 const state = vi.hoisted(() => ({
   seatDataAvailable: true,
   organization: null as null | {
@@ -50,7 +61,8 @@ const state = vi.hoisted(() => ({
     premiumSeatsAssigned: number;
     billing: { interval: 'monthly' | 'yearly'; currency: string; premiumSeatsSold: boolean };
   },
-  updateSeatType: vi.fn(),
+  updateSeatType: vi.fn(async () => ({})),
+  seatError: null as Error | null,
   create: vi.fn(),
   switchWorkspace: vi.fn(),
   updateOrganization: vi.fn(),
@@ -102,11 +114,12 @@ vi.mock('../hooks/use-settings-queries', () => ({
     isError: false,
     refetch: vi.fn(),
   }),
+  SeatTypePaymentRequiredError: SeatPaymentError,
   useUpdateTeamMemberSeatType: () => ({
     mutate: state.updateSeatType,
     mutateAsync: state.updateSeatType,
     isPending: false,
-    error: null,
+    error: state.seatError,
   }),
   useTeamInvitations: () => ({
     data: {
@@ -202,6 +215,7 @@ describe('TeamSection', () => {
     };
     state.members = [];
     state.seatTypes = null;
+    state.seatError = null;
     state.invitations = [];
     state.inviteError = null;
     vi.clearAllMocks();
@@ -968,6 +982,49 @@ describe('TeamSection', () => {
         expect(state.updateSeatType).toHaveBeenCalledWith(
           expect.objectContaining({ memberId: 'org-1:member-1', seatType: 'standard' }),
         ),
+      );
+    });
+
+    it('lets an admin assign only a Premium seat that is already paid for', () => {
+      teamWorkspace('admin');
+      state.members = [
+        seatMember('owner-1', 'Ada Owner', 'owner', 'premium', false),
+        seatMember('member-1', 'Grace Member', 'member', 'standard', false),
+        seatMember('admin-1', 'Alan Admin', 'admin', 'standard', true),
+      ];
+      sellPremiumSeats({ licensedPremiumSeats: 1, premiumSeatsAssigned: 1 });
+      const { unmount } = render(<TeamSection />);
+
+      expect(screen.getByRole('combobox', { name: 'Seat type for Grace Member' })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Alan Admin' })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Ada Owner' })).toBeDisabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Grace Member' })).toHaveAttribute(
+        'title',
+        expect.stringContaining('Only the workspace owner'),
+      );
+      unmount();
+
+      sellPremiumSeats({ licensedPremiumSeats: 2, premiumSeatsAssigned: 1 });
+      render(<TeamSection />);
+
+      expect(screen.getByRole('combobox', { name: 'Seat type for Grace Member' })).toBeEnabled();
+      expect(screen.getByRole('combobox', { name: 'Seat type for Ada Owner' })).toBeDisabled();
+    });
+
+    it('shows the invoice link and asks for the seat to be assigned again when the charge needs payment', () => {
+      teamWorkspace('owner');
+      sellPremiumSeats();
+      state.seatError = new SeatPaymentError(
+        'The charge for the Premium seat has not completed. Pay the invoice, then assign the Premium seat again.',
+        'https://invoice.stripe.test/in_1',
+      );
+      render(<TeamSection />);
+
+      const alert = screen.getByTestId('team-seat-payment-pending');
+      expect(alert).toHaveTextContent('assign the Premium seat again');
+      expect(screen.getByRole('link', { name: 'Pay the invoice' })).toHaveAttribute(
+        'href',
+        'https://invoice.stripe.test/in_1',
       );
     });
 
