@@ -1,6 +1,7 @@
 import type { SettingsConnector } from '@agiworkforce/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { NEW_ENTRY_WINDOW_DAYS } from '../constants';
 import { SETTINGS_CONNECTORS } from '@features/settings/components/WebSettingsModal';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
@@ -92,6 +93,51 @@ function section(
     ...patch,
   });
 }
+
+describe('connector New label', () => {
+  const NOW = Date.parse('2026-10-08T00:00:00.000Z');
+  const DAY = 86_400_000;
+  const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
+
+  it('marks a record published inside the window', () => {
+    const entry = toConnectorEntry(
+      record({ publishedAt: ago(NEW_ENTRY_WINDOW_DAYS - 1) }),
+      new Set(),
+      false,
+      NOW,
+    );
+    expect(entry.isNew).toBe(true);
+  });
+
+  it('marks a record first seen inside the window even when it was published long ago', () => {
+    const entry = toConnectorEntry(
+      record({ publishedAt: ago(400), firstSeenAt: ago(2) }),
+      new Set(),
+      false,
+      NOW,
+    );
+    expect(entry.isNew).toBe(true);
+  });
+
+  it('leaves a record older than the window unmarked', () => {
+    const entry = toConnectorEntry(
+      record({
+        publishedAt: ago(NEW_ENTRY_WINDOW_DAYS + 1),
+        firstSeenAt: ago(NEW_ENTRY_WINDOW_DAYS + 1),
+      }),
+      new Set(),
+      false,
+      NOW,
+    );
+    expect(entry.isNew).toBeUndefined();
+  });
+
+  it('leaves a record with no dates, an unparseable date or a future date unmarked', () => {
+    for (const patch of [{}, { publishedAt: 'soon' }, { firstSeenAt: ago(-3) }]) {
+      expect(toConnectorEntry(record(patch), new Set(), false, NOW).isNew).toBeUndefined();
+    }
+  });
+});
 
 describe('toConnectorEntry', () => {
   it('proxies the icon through the app rather than the third party url', () => {
@@ -346,7 +392,7 @@ describe('toConnectorSection', () => {
     ]);
   });
 
-  it('carries paging state and the directory count from the stats alone', () => {
+  it('counts what the current view can show rather than the whole synced list', () => {
     const built = section([record()], new Set(), [curated()], {
       total: 2_368,
       nextCursor: '100',
@@ -354,7 +400,7 @@ describe('toConnectorSection', () => {
     });
     expect(built.total).toBe(2_369);
     expect(built.hasMore).toBe(true);
-    expect(built.countLabel).toBe('17,204 connectors');
+    expect(built.countLabel).toBe('2,369 connectors');
   });
 
   it('leads Top connectors with the first page featured records and the curated seeds', () => {
@@ -394,14 +440,16 @@ describe('toConnectorSection', () => {
 
   it('says the count is only what has been indexed while the crawl is running', () => {
     const built = section([record()], new Set(), [curated()], {
-      stats: { totalRecords: 412, bootstrapComplete: false },
+      total: 411,
+      stats: { totalRecords: 9_999, bootstrapComplete: false },
     });
     expect(built.countLabel).toBe('412 connectors indexed so far');
   });
 
   it('states a plain count once the crawl has finished', () => {
     const built = section([record()], new Set(), [curated()], {
-      stats: { totalRecords: 17_204, bootstrapComplete: true },
+      total: 17_203,
+      stats: { totalRecords: 99_999, bootstrapComplete: true },
     });
     expect(built.countLabel).toBe('17,204 connectors');
   });
@@ -428,12 +476,12 @@ function curated(patch: Partial<SettingsConnector> = {}) {
 }
 
 describe('curated first party connectors', () => {
-  it('renders a curated connector as a Popular verified entry', () => {
+  it('renders a curated connector as a Popular first-party entry', () => {
     const entry = toCuratedConnectorEntry(curated(), new Set());
     expect(entry).toMatchObject({
       id: 'gmail',
       popular: true,
-      badges: ['verified'],
+      badges: ['first-party'],
       sourceId: 'first-party',
       installed: false,
       facets: { category: ['Communication'] },
@@ -550,7 +598,7 @@ describe('curated first party connectors', () => {
   it('builds a detail for a curated connector with no registry record', () => {
     expect(toCuratedConnectorDetail(curated(), new Set(['gmail']))).toMatchObject({
       kind: 'connector',
-      badge: 'verified',
+      badge: 'first-party',
       categories: ['Communication'],
       connected: true,
       connectable: true,

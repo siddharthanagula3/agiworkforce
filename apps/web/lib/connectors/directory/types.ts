@@ -54,6 +54,8 @@ export interface DirectoryRecord {
   readonly websiteUrl: string | null;
   readonly supportUrl: string | null;
   readonly privacyPolicyUrl: string | null;
+  readonly publishedAt?: string;
+  readonly firstSeenAt?: string;
 }
 
 export interface DirectorySnapshot {

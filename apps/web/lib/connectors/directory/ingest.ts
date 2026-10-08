@@ -307,6 +307,15 @@ function cursorAfterSweep(plan: ProbePlan, result: ProbeResult, previous: string
   return sweptBacklog ? plan.candidates[result.lastIndex]!.id : previous;
 }
 
+function stampFirstSeen(
+  record: DirectoryRecord,
+  previous: DirectoryRecord | undefined,
+  seenAt: string | null,
+): DirectoryRecord {
+  const firstSeenAt = previous ? previous.firstSeenAt : (seenAt ?? undefined);
+  return firstSeenAt === undefined ? record : { ...record, firstSeenAt };
+}
+
 function mergeRegistryBatch(
   existingRegistry: readonly DirectoryRecord[],
   batch: readonly DirectoryRecord[],
@@ -387,8 +396,13 @@ async function runIngest(
   const existing = await existingRecordsForIngest(options.rebuild === true);
   const existingRegistry = existing.filter((record) => record.sourceRegistry === REGISTRY_SOURCE);
   const removedIds = new Set(crawl.removedIds);
+  const existingRegistryById = new Map(existingRegistry.map((record) => [record.id, record]));
+  const firstSeenAt = mode === 'incremental' ? runStartedAt : null;
+  const upserts = crawl.upserts.map((record) =>
+    stampFirstSeen(record, existingRegistryById.get(record.id), firstSeenAt),
+  );
   const plan = planAuthProbes(
-    crawl.upserts,
+    upserts,
     existingRegistry,
     removedIds,
     syncState.authProbeCursor,
@@ -404,7 +418,7 @@ async function runIngest(
   );
   const probesEndedAtMs = now();
 
-  const registryBatch = new Map(crawl.upserts.map((record) => [record.id, record]));
+  const registryBatch = new Map(upserts.map((record) => [record.id, record]));
   for (const record of probes.resolved) registryBatch.set(record.id, record);
 
   const exhausted = crawl.stop === 'exhausted';
