@@ -19,7 +19,7 @@ const trainingMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  ...(await importOriginal<SideCallTrainingPolicyModule>()),
   sideCallTrainingOptOut: vi.fn(async () => trainingMocks.optedOut),
 }));
 
@@ -282,6 +282,8 @@ import {
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { MANAGED_COMPUTE_PRIVATE_BETA_ENV } from '@/lib/managed-compute-gate';
+
+type SideCallTrainingPolicyModule = typeof import('@/lib/server/side-call-training-policy');
 
 const BASE_URL = 'http://localhost/api/media/video/generate';
 

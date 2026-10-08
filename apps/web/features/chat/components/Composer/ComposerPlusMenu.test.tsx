@@ -9,9 +9,11 @@ import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
 
+type TypesModule = typeof import('@agiworkforce/types');
+
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 

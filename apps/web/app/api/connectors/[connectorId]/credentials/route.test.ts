@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -88,6 +88,8 @@ vi.mock('@/lib/connectors/directory/tool-names-cache', () => ({
 }));
 
 import { GET, POST } from './route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const RECORD_ID = 'ai.fodda/mcp-server';
 const ENCODED_ID = encodeURIComponent(RECORD_ID);

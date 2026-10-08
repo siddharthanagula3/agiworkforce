@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 const connectorRelease = vi.hoisted(() => ({ released: false }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -11,6 +11,8 @@ const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 import { AddSourcesModal } from '../AddSourcesModal';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function renderModal() {
   const onAddFromGoogleDrive = vi.fn(async () => 'added' as const);

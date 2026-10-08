@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -45,6 +45,8 @@ import {
   evaluateConnectorPolicyForUser,
   evaluatePluginPolicyForUser,
 } from '../connector-policy-gate';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const ORG = 'org-1';
 const USER = 'user-1';

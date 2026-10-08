@@ -11,6 +11,7 @@ import {
   checkTestHygiene,
   configRetries,
   focusedTests,
+  scannerUnparseable,
   maskNonCode,
   suiteRetries,
   testFiles,
@@ -150,4 +151,15 @@ test('the repository itself passes and the walk finds its whole test corpus', ()
   assert.deepEqual(failures, []);
   assert.equal(files, testFiles(REPO_ROOT).length);
   assert.ok(files > 1000, `expected the full test corpus, found ${files}`);
+});
+
+test('an inline typeof import() type argument on an empty call is flagged, an alias or an argument is not', () => {
+  const typeArgument = ['<typeof', "import('x')>"].join(' ');
+  assert.equal(scannerUnparseable(`await o${typeArgument}()`).length, 1);
+  assert.equal(scannerUnparseable(`await o${typeArgument.replace(' ', '\n    ')}\n  ()`).length, 1);
+  assert.equal(
+    scannerUnparseable("type XModule = typeof import('x');\nawait o<XModule>();").length,
+    0,
+  );
+  assert.equal(scannerUnparseable(`await vi.importActual${typeArgument}('x');`).length, 0);
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -67,6 +67,8 @@ import {
 } from '../user-connector-tools';
 import { EgressPolicyError } from '@/lib/egress-policy';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -137,6 +137,8 @@ import {
   withUserConnectorMcpHandle,
 } from '../user-connector-tools';
 import { parseConnectorAuthorizationRequired } from '@/lib/connectors/connect-required';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function catalogFor(serverName: string, toolName: string) {
   const tool = {

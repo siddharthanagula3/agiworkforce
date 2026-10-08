@@ -4,7 +4,7 @@ import { createError } from '@/lib/errors';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -140,6 +140,8 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
 }));
 
 import { POST } from '../route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const DRIVE_A = 'driveFileAAAA01';
 const DRIVE_B = 'driveFileBBBB02';

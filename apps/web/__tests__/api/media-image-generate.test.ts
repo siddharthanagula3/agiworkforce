@@ -36,12 +36,12 @@ const trainingMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  ...(await importOriginal<SideCallTrainingPolicyModule>()),
   sideCallTrainingOptOut: vi.fn(async () => trainingMocks.optedOut),
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/model-registry')>();
+  const actual = await importOriginal<ModelRegistryModule>();
   return {
     ...actual,
     providerKeepsInputsOutOfTraining: (provider: string) =>
@@ -341,6 +341,9 @@ import { imageProviderCostMicrousd } from '@/app/api/media/image/lib/image-gener
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { PLATFORM_POLICY_REFUSAL } from '@/lib/moderation';
+
+type SideCallTrainingPolicyModule = typeof import('@/lib/server/side-call-training-policy');
+type ModelRegistryModule = typeof import('@agiworkforce/model-registry');
 
 const BASE_URL = 'http://localhost/api/media/image/generate';
 

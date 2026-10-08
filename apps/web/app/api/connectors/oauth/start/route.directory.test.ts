@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -50,6 +50,8 @@ vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
 
 import { GET } from './route';
 import { __resetConnectorOAuthRegistryCacheForTests } from '@/lib/connectors/oauth-registry';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const RECORD_ID = 'ch.cowork24/booking';
 const ENCODED_ID = encodeURIComponent(RECORD_ID);

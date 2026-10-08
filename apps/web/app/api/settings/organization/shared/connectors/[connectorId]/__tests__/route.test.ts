@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -121,6 +121,8 @@ vi.mock('@/lib/security-audit', () => ({
 
 import { createError } from '@/lib/errors';
 import { DELETE, PUT } from '../route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const CONNECTOR = '44444444-4444-4444-8444-444444444444';

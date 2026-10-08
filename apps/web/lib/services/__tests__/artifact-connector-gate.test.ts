@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 const connectorRelease = vi.hoisted(() => ({ released: false }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -11,11 +11,14 @@ const mocks = vi.hoisted(() => ({ buildWorkspaceFeatureGateResponse: vi.fn(async
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  ...(await importOriginal<ManagedComputeGateModule>()),
   buildWorkspaceFeatureGateResponse: mocks.buildWorkspaceFeatureGateResponse,
 }));
 
 import { artifactConnectorsGateResponse } from '../artifact-connector-gate';
+
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+type TypesModule = typeof import('@agiworkforce/types');
 
 const HEADERS = { 'Cache-Control': 'private, no-store' };
 

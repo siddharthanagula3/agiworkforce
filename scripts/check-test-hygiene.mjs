@@ -3,7 +3,9 @@
  * Two ways a suite reports green without measuring anything: one focused test
  * that silently skips its file, and a retry that runs a flaky test until it
  * passes. Skips are counted by check-llm-failure-guardrails; empty and
- * vacuous tests by check-test-integrity.
+ * vacuous tests by check-test-integrity. A third: a type argument written as
+ * `<typeof import('x')>()` on an empty call, which Semgrep cannot parse, so CI's security scan
+ * reports the file as unscanned and the gate fails on an incomplete scan.
  */
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -38,6 +40,13 @@ const FOCUSED = [
 const SUITE_RETRY = [
   { regex: /\.\s*configure\s*\(\s*\{[^}]*\bretries\s*:\s*([1-9]\d*)/g, label: 'suite retries' },
   { regex: /\bthis\s*\.\s*retries\s*\(\s*([1-9]\d*)/g, label: 'suite retries' },
+];
+
+const SCANNER_UNPARSEABLE = [
+  {
+    regex: /<\s*typeof\s+import\s*\([^)]*\)\s*>\s*\(\s*\)/g,
+    label: 'an inline `typeof import()` type argument on an empty call',
+  },
 ];
 
 const CONFIG_RETRY = /(^|[^.\w])retries\s*:\s*([^,\n}]+)/g;
@@ -104,6 +113,21 @@ export function focusedTests(source) {
   return scan(source, FOCUSED);
 }
 
+export function scannerUnparseable(source) {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (match, prefix) => prefix + ' '.repeat(match.length - 1));
+  const found = [];
+  for (const rule of SCANNER_UNPARSEABLE) {
+    rule.regex.lastIndex = 0;
+    let match;
+    while ((match = rule.regex.exec(code)) !== null) {
+      found.push({ line: lineOf(code, match.index), label: rule.label });
+    }
+  }
+  return found;
+}
+
 export function suiteRetries(source) {
   return scan(source, SUITE_RETRY);
 }
@@ -163,10 +187,14 @@ export function checkTestHygiene(root = REPO_ROOT) {
 
   const focused = [];
   const retried = [];
+  const unparseable = [];
   for (const relative of files) {
     const source = fs.readFileSync(path.join(root, relative), 'utf8');
     for (const finding of focusedTests(source)) {
       focused.push({ ...finding, id: `${relative}:${finding.line}` });
+    }
+    for (const finding of scannerUnparseable(source)) {
+      unparseable.push({ ...finding, id: `${relative}:${finding.line}` });
     }
     for (const finding of suiteRetries(source)) {
       retried.push({ ...finding, id: `${relative}:${finding.line}`, file: relative });
@@ -176,6 +204,12 @@ export function checkTestHygiene(root = REPO_ROOT) {
   for (const finding of focused) {
     failures.push(
       `${finding.id} is ${finding.label}; every other test in that file stops running and the suite still reports green`,
+    );
+  }
+
+  for (const finding of unparseable) {
+    failures.push(
+      `${finding.id} has ${finding.label}, which Semgrep cannot parse; name it first (type XModule = typeof import('x')) and pass XModule`,
     );
   }
 

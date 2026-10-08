@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -262,6 +262,8 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 }));
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 interface ToolDef {
   serverId: string;

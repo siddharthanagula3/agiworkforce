@@ -56,7 +56,7 @@ const admitManagedTurnSlot = () => ({
   slot: { release: async () => {} },
 });
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 vi.mock('@/lib/rate-limit', () => ({
@@ -342,6 +342,8 @@ import {
 } from '@/lib/workflows/durable-stream-liveness';
 import { logger } from '@/lib/logger';
 import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from '@/app/api/llm/v1/chat/completions/lib/turn-phases';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function makeRequest(model: string, conversationId?: string, stream = false): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {

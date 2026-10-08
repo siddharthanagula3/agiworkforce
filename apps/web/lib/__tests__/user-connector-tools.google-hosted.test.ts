@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -36,6 +36,8 @@ vi.mock('@agiworkforce/mcp', async (importOriginal) => ({
 }));
 
 import { loadUserConnectorToolCatalog } from '../user-connector-tools';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function serveCustomConnectors(urls: Record<string, string>) {
   mocks.query.mockImplementation(async (sql: string) =>

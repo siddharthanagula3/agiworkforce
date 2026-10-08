@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -20,6 +20,8 @@ import { resolveSubscriptionAccess } from '@/lib/services/subscription-access-po
 import { RELEASED_SURFACES } from '@/lib/surface-status';
 import { SUPPORTED_BROWSERS, UNSUPPORTED_BROWSER_NOTICE } from '@/lib/browser-support';
 import { SELECTABLE_LANGUAGES } from '@agiworkforce/i18n/languages';
+
+type LoggerModule = typeof import('@/lib/logger');
 
 const APP_DIR = path.resolve(__dirname, '..');
 const WEB_ROOT = path.resolve(APP_DIR, '..');

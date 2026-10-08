@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -19,6 +19,8 @@ vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
 
 import { GMAIL_PUBSUB_TOPIC_ENV, registerGmailWatch } from '../gmail-watch';
 import type { EventTrigger } from '../trigger-types';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const TRIGGER = {
   id: '11111111-1111-4111-8111-111111111111',

@@ -57,7 +57,7 @@ const mocks = vi.hoisted(() => ({
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 vi.mock('server-only', () => ({}));
@@ -218,6 +218,8 @@ function postRequest(connectorId: string): NextRequest {
 }
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 describe('/api/connectors tenant scope', () => {
   it('reads the connector list through the rls scoped handle', async () => {

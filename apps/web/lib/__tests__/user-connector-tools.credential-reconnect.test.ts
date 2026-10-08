@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -74,6 +74,8 @@ vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => {
 
 import { makeUserConnectorExecutor } from '../user-connector-tools';
 import { parseConnectorAuthorizationRequired } from '@/lib/connectors/connect-required';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const SHORT_ID = 'abc123def0';
 const SERVER_ID = `custom-${SHORT_ID}`;

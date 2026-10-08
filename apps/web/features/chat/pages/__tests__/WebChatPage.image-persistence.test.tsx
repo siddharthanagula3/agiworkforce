@@ -98,9 +98,7 @@ vi.mock('@/lib/hooks/useConversations', () => ({
 }));
 
 vi.mock('@/features/study/hooks/use-conversation-study-session', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/study/hooks/use-conversation-study-session')
-  >()),
+  ...(await importOriginal<StudySessionHookModule>()),
   useConversationStudySession: () => ({
     session: null,
     endedHere: false,
@@ -362,6 +360,9 @@ import { trackMessageSave } from '../../lib/pending-message-saves';
 import { CHAT_MESSAGE_PERSISTENCE_TIMEOUT_MS } from '@shared/config/network';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { MediaGenerationApiError } from '@/lib/hooks/useMediaGeneration';
+
+type StudySessionHookModule =
+  typeof import('@/features/study/hooks/use-conversation-study-session');
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {

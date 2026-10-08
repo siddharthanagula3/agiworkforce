@@ -11,30 +11,30 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 vi.mock('@/lib/observability/denials', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/denials')>()),
+  ...(await importOriginal<DenialsModule>()),
   recordCapabilityDenial: vi.fn(),
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: () => ({ query: mocks.privilegedQuery }),
 }));
 vi.mock('@/lib/services/subscription-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/subscription-service')>()),
+  ...(await importOriginal<SubscriptionServiceModule>()),
   SubscriptionService: { getSubscription: mocks.getSubscription },
 }));
 vi.mock('@/lib/services/credit-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/credit-service')>()),
+  ...(await importOriginal<CreditServiceModule>()),
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
   CreditService: { getOrCreateAccount: mocks.getOrCreateAccount },
 }));
 vi.mock('@/lib/services/enterprise-collection-state', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/enterprise-collection-state')>()),
+  ...(await importOriginal<EnterpriseCollectionStateModule>()),
   readOrganizationCollectionState: mocks.readOrganizationCollectionState,
 }));
 
@@ -61,6 +61,13 @@ import {
   seatHolderPlanTier,
   type SeatAssignmentColumns,
 } from '../team-seat-entitlement';
+
+type LoggerModule = typeof import('@/lib/logger');
+type DenialsModule = typeof import('@/lib/observability/denials');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type CreditServiceModule = typeof import('@/lib/services/credit-service');
+type EnterpriseCollectionStateModule = typeof import('@/lib/services/enterprise-collection-state');
+type SubscriptionServiceModule = typeof import('@/lib/services/subscription-service');
 
 const PERIOD_START = '2026-09-01T00:00:00.000Z';
 const PERIOD_END = new Date(Date.now() + 20 * 86_400_000).toISOString();

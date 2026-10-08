@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => false,
 }));
 
@@ -34,6 +34,8 @@ vi.mock('@/lib/mcp-url-validation', async (importOriginal) => ({
 import type { NextRequest } from 'next/server';
 
 import { registerPluginConnectors } from '../plugin-connectors';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const REQUEST = {} as NextRequest;
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -52,6 +52,8 @@ import {
   loadUserConnectorToolDefs,
   __resetConnectorMcpMapCacheForTests,
 } from '../user-connector-tools';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const MCP_CLIENT_DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
 

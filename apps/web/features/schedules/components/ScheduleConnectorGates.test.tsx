@@ -7,7 +7,7 @@ import {
 } from '@agiworkforce/types';
 
 vi.mock('@/features/connectors/hooks/use-connectors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/connectors/hooks/use-connectors')>()),
+  ...(await importOriginal<UseConnectorsModule>()),
   useConnectors: () => ({
     connectedIds: new Set<string>(),
     customNames: {},
@@ -20,6 +20,8 @@ vi.mock('@/features/connectors/hooks/use-connectors', async (importOriginal) => 
 
 import { ScheduleAccessFields } from './ScheduleAccessFields';
 import ScheduleTriggersPanel from './ScheduleTriggersPanel';
+
+type UseConnectorsModule = typeof import('@/features/connectors/hooks/use-connectors');
 
 const SOURCES = { project: false, memory: false, web: true, recentChats: false };
 

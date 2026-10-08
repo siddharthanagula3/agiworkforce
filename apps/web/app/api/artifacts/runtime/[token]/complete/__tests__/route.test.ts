@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -227,6 +227,8 @@ import { createError } from '@/lib/errors';
 import { ArtifactRuntimeRouteUnavailableError } from '@/lib/services/artifact-runtime-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { POST } from '../route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const TOKEN = 'Abcdefghijklmnopqrstuv_1';
 const ARTIFACT = { token: TOKEN, ownerId: 'owner-9', publishedArtifactId: 'published-1' };

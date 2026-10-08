@@ -9,15 +9,18 @@ const loggerMocks = vi.hoisted(() => ({
   debug: vi.fn(),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: loggerMocks,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+type LoggerModule = typeof import('@/lib/logger');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
 
 const STANDARD_PRICE = 'price_team_standard_monthly';
 const PREMIUM_PRICE = 'price_team_premium_monthly';

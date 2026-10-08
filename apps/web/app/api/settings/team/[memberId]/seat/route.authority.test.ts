@@ -24,35 +24,35 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<RequestContextCacheModule>()),
   invalidateActiveOrganizationCache: vi.fn(async () => undefined),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/settings/team/team-admin-access')>()),
+  ...(await importOriginal<TeamAdminAccessModule>()),
   requireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
 }));
 vi.mock('@/app/api/stripe-webhook/lib/seats', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/stripe-webhook/lib/seats')>()),
+  ...(await importOriginal<SeatsModule>()),
   persistPurchasedSeatsOnOrganization: vi.fn(async () => 'persisted'),
 }));
 vi.mock('@/lib/server/localized-pricing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/localized-pricing-service')>()),
+  ...(await importOriginal<LocalizedPricingServiceModule>()),
   getPriceSelectionForCurrency: vi.fn(async (plan: string) => ({
     priceId: plan === 'team_premium' ? PREMIUM_PRICE : STANDARD_PRICE,
     currency: 'usd',
@@ -60,7 +60,7 @@ vi.mock('@/lib/server/localized-pricing-service', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<EntitlementResolutionModule>()),
   resolveEntitlementBundle: vi.fn(async () => ({
     subscription: {
       id: 'sub-row-owner',
@@ -74,7 +74,7 @@ vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/services/subscription-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/subscription-service')>()),
+  ...(await importOriginal<SubscriptionServiceModule>()),
   SubscriptionService: { carryCreditsForUpgradePeriod: vi.fn(async () => 'account-1') },
 }));
 
@@ -96,7 +96,7 @@ function privilegedQuery(sql: string) {
 }
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: vi.fn(() => ({
     query: vi.fn(async (sql: string) => privilegedQuery(sql)),
     execute: vi.fn(async () => 1),
@@ -123,7 +123,7 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => {
     execute: vi.fn(async () => 1),
   };
   return {
-    ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+    ...(await importOriginal<RlsDbModule>()),
     getUserScopedDb: vi.fn(async () => ({
       db: { ...tx, transaction: async (callback: (inner: typeof tx) => unknown) => callback(tx) },
       userId: 'caller-1',
@@ -132,13 +132,27 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => {
 });
 
 vi.mock('@/lib/server/stripe-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/stripe-client')>()),
+  ...(await importOriginal<StripeClientModule>()),
   getStripeClient: vi.fn(() => ({
     subscriptions: { retrieve: state.stripeRetrieve, update: state.stripeUpdate },
   })),
 }));
 
 import { PATCH } from './route';
+
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
+type SeatsModule = typeof import('@/app/api/stripe-webhook/lib/seats');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type LocalizedPricingServiceModule = typeof import('@/lib/server/localized-pricing-service');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RequestContextCacheModule = typeof import('@/lib/server/request-context-cache');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type StripeClientModule = typeof import('@/lib/server/stripe-client');
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+type SubscriptionServiceModule = typeof import('@/lib/services/subscription-service');
 
 function subscription(premium: number) {
   const recurring = { interval: 'month', interval_count: 1 };

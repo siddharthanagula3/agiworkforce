@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -57,6 +57,8 @@ import {
   __resetConnectorMcpMapCacheForTests,
   makeUserConnectorExecutor,
 } from '../user-connector-tools';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const SECRET = `sk_live_${'c'.repeat(30)}`;
 

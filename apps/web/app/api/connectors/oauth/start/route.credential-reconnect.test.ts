@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -55,6 +55,8 @@ vi.mock('@/lib/user-connector-tools', () => ({
 }));
 
 import { GET, OAUTH_START_STATUS_CREDENTIAL } from './route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const SERVER_ID = 'custom-abc123def0';
 const DIRECTORY_ID = 'io.sentry/mcp';
