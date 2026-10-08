@@ -11,6 +11,7 @@ import {
   measurementFileName,
   outputPriceCeiling,
   resolveLiveTarget,
+  livePricing,
   spendRefusal,
   unsupportedSuiteReason,
   type RegistryLike,
@@ -55,6 +56,27 @@ const registry: RegistryLike = {
   limits: { cheap: { contextTokens: 32_000 }, mid: { contextTokens: 1_000_000 } },
   families: { 'lab/fast': { activeModelKey: 'cheap' }, 'lab/pro': { activeModelKey: 'costly' } },
 };
+
+describe('live pricing', () => {
+  it('marks reasoning as billed beside output only where the provider governance says so', () => {
+    const target = resolveLiveTarget(registry, 'cheap');
+    expect(livePricing(registry, target)?.reasoningBilledBesideOutput).toBe(false);
+    const beside: RegistryLike = {
+      ...registry,
+      governance: { gateway: { reasoningTokenBillingClass: 'additional_to_output' } },
+    };
+    expect(livePricing(beside, target)).toEqual({
+      inputPerMillion: 0.1,
+      outputPerMillion: 0.4,
+      reasoningBilledBesideOutput: true,
+    });
+    const inside: RegistryLike = {
+      ...registry,
+      governance: { gateway: { reasoningTokenBillingClass: 'included_in_output' } },
+    };
+    expect(livePricing(inside, target)?.reasoningBilledBesideOutput).toBe(false);
+  });
+});
 
 describe('live target resolution', () => {
   it('resolves the default route, or a named route of the same model', () => {
@@ -144,6 +166,66 @@ describe('a live run', () => {
     expect(replayed.report.suites.reasoning!.score).toBe(outcome.report.suites.reasoning!.score);
     expect(replayed.report.suites.reasoning!.cost).toEqual(outcome.report.suites.reasoning!.cost);
     expect(replayed.report.modelKey).toBe('cheap');
+  });
+});
+
+describe('attachments a route cannot read', () => {
+  const files = loadDataset('files');
+  const pdfRow = files.cases.find((entry) => entry.id === 'files/pdf-invoice-total')!;
+  const csvRow = files.cases.find((entry) => entry.id === 'files/csv-aggregate')!;
+
+  function unreadable(): Error {
+    const error = new Error('supplier-invoice.pdf is a application/pdf file, unreadable here');
+    error.name = 'UnsupportedFileInputError';
+    return error;
+  }
+
+  it('sends a picture on the image channel and a document on the file channel', () => {
+    const imageRow = files.cases.find((entry) => entry.id === 'files/image-bar-chart')!;
+    const blockTypes = (id: typeof imageRow) => {
+      const content = buildRequest(id).messages.at(-1)!.content;
+      return typeof content === 'string' ? [] : content.map((block) => block.type);
+    };
+    expect(blockTypes(imageRow)).toEqual(['image', 'text']);
+    expect(blockTypes(pdfRow)).toEqual(['file', 'text']);
+  });
+
+  it('skips the row with the adapter reason, once, and still scores the rest', async () => {
+    let calls = 0;
+    const respond: Responder = async (evalCase) => {
+      calls += 1;
+      if (evalCase.id === pdfRow.id) throw unreadable();
+      return { text: 'not the answer' };
+    };
+    const outcome = await runLive([{ ...files, cases: [pdfRow, csvRow] }], {
+      target: resolveLiveTarget(registry, 'mid'),
+      recordedOn: '2026-10-07',
+      responderFor: () => respond,
+    });
+    const summary = outcome.report.suites.files!;
+    expect(calls).toBe(2);
+    expect(summary.total).toBe(1);
+    expect(summary.skipped).toEqual([
+      { id: pdfRow.id, reason: 'supplier-invoice.pdf is a application/pdf file, unreadable here' },
+    ]);
+    expect(outcome.recording.responses[pdfRow.id]).toBeUndefined();
+    expect(outcome.attempts.map((attempt) => attempt.caseId)).toEqual([csvRow.id]);
+  });
+
+  it('still aborts on any other failure after the retries', async () => {
+    let calls = 0;
+    const respond: Responder = async () => {
+      calls += 1;
+      throw new Error('socket hang up');
+    };
+    await expect(
+      runLive([{ ...files, cases: [csvRow] }], {
+        target: resolveLiveTarget(registry, 'mid'),
+        recordedOn: '2026-10-07',
+        responderFor: () => respond,
+      }),
+    ).rejects.toThrow(/socket hang up/);
+    expect(calls).toBe(3);
   });
 });
 

@@ -432,6 +432,11 @@ export interface ModelReasoning {
   thinkingDefault?: 'disabled' | 'adaptive' | 'enabled';
   supportsManualThinking?: boolean;
   maxEffortWhenThinkingDisabled?: Effort;
+  /**
+   * The wire value that turns up-front thinking off when the provider rejects
+   * `disabled` for this model. Sending `disabled` to such a model is a 400.
+   */
+  disabledThinkingType?: 'between_tools';
   rejectsSamplingParameters?: boolean;
   unsupportedRequestParameters?: readonly RequestParameter[];
   thinkingBudget?: ReasoningBudget;

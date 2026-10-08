@@ -84,36 +84,6 @@
       "speed": "very-fast",
       "released": "July 2026"
     },
-    "deepseek-v4-flash": {
-      "contextWindow": 1000000,
-      "inputCost": 0.44,
-      "outputCost": 1.32,
-      "cached_input": 0.014,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "benchmarks": {
-        "swebench": 75,
-        "humaneval": 95,
-        "mmlu": 87,
-        "gpqa": 75,
-        "aime": 85
-      },
-      "speed": "very-fast",
-      "released": "July 31, 2026"
-    },
     "deepseek-v4-pro": {
       "contextWindow": 1000000,
       "inputCost": 1.32,
@@ -242,29 +212,6 @@
         "mmlu": 88
       },
       "speed": "slow"
-    },
-    "gpt-image-2": {
-      "contextWindow": 4000,
-      "inputCost": 8,
-      "outputCost": 30,
-      "cached_input": 2,
-      "capabilities": {
-        "streaming": false,
-        "tools": false,
-        "vision": true,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": true,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "medium",
-      "released": "April 2026"
     },
     "gemini-3.8-flash": {
       "contextWindow": 1048576,

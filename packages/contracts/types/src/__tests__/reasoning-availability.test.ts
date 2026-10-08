@@ -75,8 +75,9 @@ describe('per-model reasoning capability', () => {
   it('exposes the OpenAI chat-route effort set without minimal', () => {
     const r = getModelReasoning(openAiChatModelId);
     expect(r.control).toBe('effort_levels');
-    expect(r.supportedEfforts).toEqual(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(r.supportedEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     expect(r.supportedEfforts).not.toContain('minimal');
+    expect(r.canDisableThinking).toBe(false);
   });
 
   it('exposes the Anthropic max-effort model through adaptive reasoning', () => {
@@ -87,7 +88,7 @@ describe('per-model reasoning capability', () => {
     expect(r.request?.effortPath).toBe('output_config.effort');
     expect(r.thinkingDefault).toBe('adaptive');
     expect(r.supportsManualThinking).toBe(false);
-    expect(r.maxEffortWhenThinkingDisabled).toBe('high');
+    expect(r.canDisableThinking).toBe(false);
     expect(r.rejectsSamplingParameters).toBe(true);
   });
 
@@ -151,15 +152,11 @@ describe('availability axis + display/selectable split', () => {
     }
   });
 
-  it('encodes Responses-only reasoning surfaces without making them chat parameters', () => {
+  it('encodes the Responses effort path apart from the chat parameter', () => {
     const r = getModelReasoning(openAiReasoningModelId);
-    expect(r.supportedEfforts).toEqual(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
-    expect(typeof r.ultraMode).toBe('object');
-    if (typeof r.ultraMode === 'object') {
-      expect(r.ultraMode.endpoint).toBe('responses');
-      expect(r.ultraMode.param).toBe('multi_agent.enabled');
-    }
-    expect(r.proMode?.endpoint).toBe('responses');
-    expect(r.persistentReasoning?.endpoint).toBe('responses');
+    expect(r.supportedEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(r.request?.api).toBe('chat');
+    expect(r.request?.effortPath).toBe('reasoning_effort');
+    expect(r.request?.responsesEffortPath).toBe('reasoning.effort');
   });
 });

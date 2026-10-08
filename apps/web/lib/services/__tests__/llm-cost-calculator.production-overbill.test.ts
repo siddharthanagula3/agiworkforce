@@ -26,11 +26,16 @@ describe('LLMCostCalculator list price · production overbill regression', () =>
   // derived from, rather than by name: the arithmetic is what is under test, and
   // a literal id here would be a second copy of the catalogue. If no model
   // carries that rate any more, this fails loudly instead of drifting.
-  const INPUT_PER_MILLION = 0.2;
-  const OUTPUT_PER_MILLION = 1.2;
+  // The production turn was priced at $0.20 / $1.20 per million; that model has
+  // since been retired, so the same 842 + 15 token turn is priced at the rate of
+  // the model that replaced it in the catalogue.
+  const INPUT_PER_MILLION = 0.1;
+  const OUTPUT_PER_MILLION = 0.5;
   const model = listCanonicalModels().find(
     (candidate) =>
-      candidate.inputCost === INPUT_PER_MILLION && candidate.outputCost === OUTPUT_PER_MILLION,
+      candidate.provider === 'openai' &&
+      candidate.inputCost === INPUT_PER_MILLION &&
+      candidate.outputCost === OUTPUT_PER_MILLION,
   )?.id;
   const usage = {
     promptTokens: 842,
@@ -38,8 +43,8 @@ describe('LLMCostCalculator list price · production overbill regression', () =>
     totalTokens: 857,
   };
 
-  // 842 / 1e6 * $0.20 + 15 / 1e6 * $1.20 = $0.0001864
-  const EXPECTED_MICROUSD = 187; // Math.ceil(0.0001864 * 1e6)
+  // 842 / 1e6 * $0.10 + 15 / 1e6 * $0.50 = $0.0000917
+  const EXPECTED_MICROUSD = 92; // Math.ceil(0.0000917 * 1e6)
 
   it('guards the fixture: a model still carries the rate this pins', () => {
     expect(model).toBeDefined();

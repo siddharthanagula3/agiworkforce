@@ -13,9 +13,9 @@
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": ["openai/gpt-6-astra"],
-        "family": null,
-        "version": null
+        "aliases": ["gpt-5.6", "openai/gpt-6-astra"],
+        "family": "gpt-frontier",
+        "version": "6"
       },
       "lifecycle": {
         "status": "active",
@@ -25,105 +25,73 @@
         "deprecated": false,
         "releasedOn": "2026-09-03",
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#openai/gpt-frontier",
         "replacedBy": null
       },
       "speed": "slow",
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
     },
-    "gpt-5.6-sol": {
+    "gpt-6.1-sol": {
       "identity": {
-        "key": "gpt-5.6-sol",
-        "displayName": "GPT-5.6 Sol",
+        "key": "gpt-6.1-sol",
+        "displayName": "GPT-6.1 Sol",
         "provider": "openai",
         "developer": "openai",
-        "providerModelId": "gpt-5.6-sol",
-        "openRouterSlug": "openai/gpt-5.6-sol",
+        "providerModelId": "gpt-6.1-sol",
+        "openRouterSlug": "openai/gpt-6.1-sol",
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": ["gpt-5.6", "openai/gpt-5.6-sol"],
-        "family": "gpt-frontier",
-        "version": "5.6"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 9, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-09",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_general",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": ["us", "eu", "ae"],
-      "evidenceRefs": []
-    },
-    "gpt-5.6-terra": {
-      "identity": {
-        "key": "gpt-5.6-terra",
-        "displayName": "GPT-5.6 Terra",
-        "provider": "openai",
-        "developer": "openai",
-        "providerModelId": "gpt-5.6-terra",
-        "openRouterSlug": "openai/gpt-5.6-terra",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["openai/gpt-5.6-terra"],
+        "aliases": ["openai/gpt-6.1-sol"],
         "family": "gpt-balanced",
-        "version": "5.6"
+        "version": "6.1"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "July 9, 2026",
+        "released": "September 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-07-09",
+        "releasedOn": null,
         "deprecatedOn": null,
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_balanced",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#openai/gpt-balanced",
         "replacedBy": null
       },
       "speed": "medium",
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
     },
-    "gpt-5.6-luna": {
+    "gpt-6-luna": {
       "identity": {
-        "key": "gpt-5.6-luna",
-        "displayName": "GPT-5.6 Luna",
+        "key": "gpt-6-luna",
+        "displayName": "GPT-6 Luna",
         "provider": "openai",
         "developer": "openai",
-        "providerModelId": "gpt-5.6-luna",
-        "openRouterSlug": "openai/gpt-5.6-luna",
+        "providerModelId": "gpt-6-luna",
+        "openRouterSlug": "openai/gpt-6-luna",
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": ["openai/gpt-5.6-luna"],
+        "aliases": ["openai/gpt-6-luna"],
         "family": "gpt-fast",
-        "version": "5.6"
+        "version": "6"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "July 9, 2026",
+        "released": "September 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-07-09",
+        "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#openai/gpt-fast",
         "replacedBy": null
       },
       "speed": "medium",
@@ -139,7 +107,7 @@
         "providerModelId": "claude-fable-5-1",
         "openRouterSlug": "anthropic/claude-fable-5.1",
         "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
+        "familyPartner": "claude-sonnet-5-5",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["anthropic/claude-fable-5.1"],
@@ -163,39 +131,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "claude-opus-5": {
-      "identity": {
-        "key": "claude-opus-5",
-        "displayName": "Claude Opus 5",
-        "provider": "anthropic",
-        "developer": "anthropic",
-        "providerModelId": "claude-opus-5",
-        "openRouterSlug": "anthropic/claude-opus-5",
-        "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["anthropic/claude-opus-5"],
-        "family": "claude-opus",
-        "version": "5"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 24, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-24",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding",
-        "replacedBy": null
-      },
-      "speed": "slow",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "claude-opus-5-5": {
       "identity": {
         "key": "claude-opus-5-5",
@@ -205,7 +140,7 @@
         "providerModelId": "claude-opus-5-5",
         "openRouterSlug": "anthropic/claude-opus-5.5",
         "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
+        "familyPartner": "claude-sonnet-5-5",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["anthropic/claude-opus-5.5"],
@@ -220,117 +155,51 @@
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "stageSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#anthropic/claude-opus",
         "replacedBy": null
       },
       "speed": "slow",
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "claude-opus-4-8": {
+    "claude-sonnet-5-5": {
       "identity": {
-        "key": "claude-opus-4-8",
-        "displayName": "Claude Opus 4.8",
+        "key": "claude-sonnet-5-5",
+        "displayName": "Claude Sonnet 5.5",
         "provider": "anthropic",
         "developer": "anthropic",
-        "providerModelId": "claude-opus-4-8",
-        "openRouterSlug": "anthropic/claude-opus-4-8",
-        "kind": "reasoning",
-        "familyPartner": "claude-sonnet-5",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["anthropic/claude-opus-4-8"],
-        "family": "claude-opus",
-        "version": "4.8"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "June 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-29",
-        "stageSource": "https://platform.claude.com/docs/en/about-claude/pricing",
-        "replacedBy": null
-      },
-      "speed": "slow",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "claude-sonnet-5": {
-      "identity": {
-        "key": "claude-sonnet-5",
-        "displayName": "Claude Sonnet 5",
-        "provider": "anthropic",
-        "developer": "anthropic",
-        "providerModelId": "claude-sonnet-5",
-        "openRouterSlug": "anthropic/claude-sonnet-5",
+        "providerModelId": "claude-sonnet-5-5",
+        "openRouterSlug": "anthropic/claude-sonnet-5.5",
         "kind": "code",
-        "familyPartner": "claude-opus-5",
+        "familyPartner": "claude-opus-5-5",
         "openWeight": false,
         "license": "proprietary",
         "aliases": [
-          "anthropic/claude-sonnet-5",
+          "anthropic/claude-sonnet-5.5",
           "codestral-2508",
           "mistral-large-3",
           "mistral-medium-3.5",
           "mistral-small-4"
         ],
         "family": "claude-sonnet",
-        "version": "5"
+        "version": "5.5"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "June 30, 2026",
+        "released": "September 28, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-06-30",
+        "releasedOn": "2026-09-28",
         "deprecatedOn": null,
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.coding_balanced",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#anthropic/claude-sonnet",
         "replacedBy": null
       },
       "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "claude-haiku-4-5": {
-      "identity": {
-        "key": "claude-haiku-4-5",
-        "displayName": "Claude Haiku 4.5",
-        "provider": "anthropic",
-        "developer": "anthropic",
-        "providerModelId": "claude-haiku-4-5-20251001",
-        "openRouterSlug": "anthropic/claude-haiku-4.5",
-        "kind": "chat",
-        "familyPartner": "claude-sonnet-5",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["anthropic/claude-haiku-4.5", "claude-haiku-4-5-20251001"],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "October 15, 2025",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2025-10-15",
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "very-fast",
       "residencyRegions": null,
       "evidenceRefs": []
     },
@@ -343,7 +212,7 @@
         "providerModelId": "claude-haiku-5-5",
         "openRouterSlug": "anthropic/claude-haiku-5.5",
         "kind": "chat",
-        "familyPartner": "claude-sonnet-5",
+        "familyPartner": "claude-sonnet-5-5",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["anthropic/claude-haiku-5.5"],
@@ -472,64 +341,31 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.1-flash-lite": {
+    "gemini-nano-banana-2.1": {
       "identity": {
-        "key": "gemini-3.1-flash-lite",
-        "displayName": "Gemini 3.1 Flash-Lite",
+        "key": "gemini-nano-banana-2.1",
+        "displayName": "Gemini Nano Banana 2.1",
         "provider": "google",
         "developer": "google",
-        "providerModelId": "gemini-3.1-flash-lite",
-        "openRouterSlug": "google/gemini-3.1-flash-lite",
-        "kind": "multimodal",
-        "familyPartner": "gemini-3.5-flash-lite",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["google/gemini-3.1-flash-lite"],
-        "family": "gemini-flash-lite",
-        "version": "3.1"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "May 7, 2026",
-        "deprecationDate": "2027-05-07",
-        "deprecated": true,
-        "releasedOn": "2026-05-07",
-        "deprecatedOn": "2027-05-07",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#gemini-3.1-flash-lite.deprecation_date",
-        "replacedBy": "gemini-3.5-flash-lite"
-      },
-      "speed": "very-fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "gemini-3.1-flash-image": {
-      "identity": {
-        "key": "gemini-3.1-flash-image",
-        "displayName": "Gemini 3.1 Flash Image",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.1-flash-image",
+        "providerModelId": "gemini-nano-banana-2.1",
         "kind": "image",
         "openWeight": false,
         "license": "proprietary",
         "aliases": [],
         "family": "gemini-flash-image",
-        "version": "3.1"
+        "version": "2.1"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "March 2026",
+        "released": "October 6, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-10-06",
         "deprecatedOn": null,
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.image_generation",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#google/gemini-flash-image",
         "replacedBy": null
       },
       "speed": "fast",
@@ -545,7 +381,7 @@
         "providerModelId": "gemini-3-pro-image",
         "openRouterSlug": "google/gemini-3-pro-image",
         "kind": "image",
-        "familyPartner": "gemini-3.1-flash-image",
+        "familyPartner": "gemini-nano-banana-2.1",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["google/gemini-3-pro-image"],
@@ -578,7 +414,7 @@
         "providerModelId": "gemini-3.1-flash-lite-image",
         "openRouterSlug": "google/gemini-3.1-flash-lite-image",
         "kind": "image",
-        "familyPartner": "gemini-3.1-flash-image",
+        "familyPartner": "gemini-nano-banana-2.1",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["google/gemini-3.1-flash-lite-image"],
@@ -602,39 +438,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "deepseek-v4-flash": {
-      "identity": {
-        "key": "deepseek-v4-flash",
-        "displayName": "DeepSeek V4 Flash",
-        "provider": "deepseek",
-        "developer": "deepseek",
-        "providerModelId": "deepseek-v4-flash",
-        "openRouterSlug": "deepseek/deepseek-v4-flash-0731",
-        "kind": "code",
-        "familyPartner": "deepseek-v4-pro",
-        "openWeight": true,
-        "license": "MIT",
-        "aliases": ["deepseek/deepseek-v4-flash-0731"],
-        "family": "deepseek-flash",
-        "version": "4"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "July 31, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-07-31",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.reasoning_premium",
-        "replacedBy": null
-      },
-      "speed": "very-fast",
-      "residencyRegions": ["cn"],
-      "evidenceRefs": []
-    },
     "deepseek-v4-pro": {
       "identity": {
         "key": "deepseek-v4-pro",
@@ -644,7 +447,7 @@
         "providerModelId": "deepseek-v4-pro",
         "openRouterSlug": "deepseek/deepseek-v4-pro-0813",
         "kind": "reasoning",
-        "familyPartner": "deepseek-v4-flash",
+        "familyPartner": "deepseek-flash",
         "openWeight": true,
         "license": "MIT",
         "aliases": ["deepseek/deepseek-v4-pro-0813"],
@@ -668,33 +471,33 @@
       "residencyRegions": ["cn"],
       "evidenceRefs": []
     },
-    "deepseek-v4-flash-vision-exp": {
+    "deepseek-flash": {
       "identity": {
-        "key": "deepseek-v4-flash-vision-exp",
-        "displayName": "DeepSeek V4 Flash Vision (Experimental)",
+        "key": "deepseek-flash",
+        "displayName": "DeepSeek V4.1 Flash",
         "provider": "deepseek",
         "developer": "deepseek",
-        "providerModelId": "deepseek-v4-flash-vision-exp",
-        "openRouterSlug": "deepseek/deepseek-v4-flash-vision-exp",
+        "providerModelId": "deepseek-flash",
+        "openRouterSlug": "deepseek/deepseek-v4.1-flash",
         "kind": "code",
-        "familyPartner": "deepseek-v4-flash",
+        "familyPartner": "deepseek-v4-pro",
         "openWeight": true,
         "license": "MIT",
-        "aliases": ["deepseek/deepseek-v4-flash-vision-exp"],
-        "family": null,
-        "version": null
+        "aliases": ["deepseek/deepseek-v4.1-flash"],
+        "family": "deepseek-flash",
+        "version": "4.1"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "August 21, 2026",
+        "released": "September 10, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-08-21",
+        "releasedOn": "2026-09-10",
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#deepseek/deepseek-flash",
         "replacedBy": null
       },
       "speed": "very-fast",
@@ -948,32 +751,61 @@
       "residencyRegions": ["us", "eu"],
       "evidenceRefs": []
     },
-    "gpt-image-2": {
+    "gpt-image-2.5-sunburst": {
       "identity": {
-        "key": "gpt-image-2",
-        "displayName": "GPT Image 2",
+        "key": "gpt-image-2.5-sunburst",
+        "displayName": "GPT Image 2.5 Sunburst",
         "provider": "openai",
         "developer": "openai",
-        "providerModelId": "gpt-image-2",
+        "providerModelId": "gpt-image-2.5-sunburst",
         "kind": "image",
         "aliases": [],
         "family": "gpt-image",
-        "version": "2"
+        "version": "2.5"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "April 21, 2026",
+        "released": "September 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-04-21",
+        "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#openai/gpt-image",
         "replacedBy": null
       },
       "speed": "medium",
+      "residencyRegions": ["us", "eu", "ae"],
+      "evidenceRefs": []
+    },
+    "gpt-image-2.5-flare": {
+      "identity": {
+        "key": "gpt-image-2.5-flare",
+        "displayName": "GPT Image 2.5 Flare",
+        "provider": "openai",
+        "developer": "openai",
+        "providerModelId": "gpt-image-2.5-flare",
+        "kind": "image",
+        "aliases": [],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://developers.openai.com/api/docs/models/gpt-image-2.5-flare",
+        "replacedBy": null
+      },
+      "speed": "fast",
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
     },
@@ -1034,39 +866,6 @@
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.general_premium",
         "replacedBy": null
-      },
-      "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "gemini-3.6-flash": {
-      "identity": {
-        "key": "gemini-3.6-flash",
-        "displayName": "Gemini 3.6 Flash",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.6-flash",
-        "openRouterSlug": "google/gemini-3.6-flash",
-        "kind": "multimodal",
-        "familyPartner": "gemini-3.8-flash",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["google/gemini-3.6-flash"],
-        "family": "gemini-flash",
-        "version": "3.6"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "July 21, 2026",
-        "deprecationDate": "2026-09-06",
-        "deprecated": true,
-        "releasedOn": "2026-07-21",
-        "deprecatedOn": "2026-09-06",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#gemini-3.6-flash.deprecation_date",
-        "replacedBy": "gemini-3.8-flash"
       },
       "speed": "fast",
       "residencyRegions": null,
@@ -1206,97 +1005,32 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "kimi-k2.7-code": {
+    "grok-4.7": {
       "identity": {
-        "key": "kimi-k2.7-code",
-        "displayName": "Kimi K2.7 Code",
-        "provider": "moonshot",
-        "developer": "moonshot",
-        "providerModelId": "kimi-k2.7-code",
-        "openRouterSlug": "moonshotai/kimi-k2.7-code",
-        "kind": "code",
-        "familyPartner": "kimi-k3",
-        "openWeight": true,
-        "license": "Modified MIT License",
-        "aliases": ["moonshotai/kimi-k2.7-code"],
-        "family": null,
-        "version": null
+        "key": "grok-4.7",
+        "displayName": "Grok 4.7",
+        "provider": "xai",
+        "developer": "xai",
+        "providerModelId": "grok-4.7",
+        "openRouterSlug": "x-ai/grok-4.7",
+        "kind": "reasoning",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["x-ai/grok-4.7"],
+        "family": "grok",
+        "version": "4.7"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
+        "released": "September 2026",
         "deprecationDate": null,
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "kimi-k2.6": {
-      "identity": {
-        "key": "kimi-k2.6",
-        "displayName": "Kimi K2.6",
-        "provider": "moonshot",
-        "developer": "moonshot",
-        "providerModelId": "kimi-k2.6",
-        "openRouterSlug": "moonshotai/kimi-k2.6",
-        "kind": "multimodal",
-        "familyPartner": "kimi-k3",
-        "openWeight": true,
-        "license": "Modified MIT License",
-        "aliases": ["moonshotai/kimi-k2.6"],
-        "family": "kimi",
-        "version": "2.6"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "April 20, 2026",
-        "deprecationDate": "2026-09-06",
-        "deprecated": true,
-        "releasedOn": "2026-04-20",
-        "deprecatedOn": "2026-09-06",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#kimi-k2.6.deprecation_date",
-        "replacedBy": "kimi-k3"
-      },
-      "speed": "medium",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
-    "grok-4.6": {
-      "identity": {
-        "key": "grok-4.6",
-        "displayName": "Grok 4.6",
-        "provider": "xai",
-        "developer": "xai",
-        "providerModelId": "grok-4.6",
-        "openRouterSlug": "x-ai/grok-4.6",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["x-ai/grok-4.6"],
-        "family": "grok",
-        "version": "4.6"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "August 12, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-08-12",
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stage": "promoted",
+        "stagedOn": "2026-10-07",
+        "stageSource": "catalog/model-families.json#xai/grok",
         "replacedBy": null
       },
       "speed": "fast",
@@ -1319,10 +1053,10 @@
         "status": "active",
         "availability": "live",
         "released": "October 15, 2025",
-        "deprecationDate": null,
+        "deprecationDate": "2026-10-22",
         "deprecated": false,
         "releasedOn": "2025-10-15",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-10-22",
         "stage": "promoted",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.video_generation",
@@ -1348,10 +1082,10 @@
         "status": "active",
         "availability": "live",
         "released": "October 15, 2025",
-        "deprecationDate": null,
+        "deprecationDate": "2026-10-22",
         "deprecated": false,
         "releasedOn": "2025-10-15",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-10-22",
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
@@ -1480,38 +1214,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "minimax-m2.7": {
-      "identity": {
-        "key": "minimax-m2.7",
-        "displayName": "MiniMax M2.7",
-        "provider": "minimax",
-        "developer": "minimax",
-        "providerModelId": "MiniMax-M2.7",
-        "openRouterSlug": "minimax/minimax-m2.7",
-        "kind": "reasoning",
-        "familyPartner": "minimax-m3",
-        "openWeight": true,
-        "aliases": ["MiniMax-M2.7", "minimax/minimax-m2.7"],
-        "family": "minimax",
-        "version": "2.7"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "March 18, 2026",
-        "deprecationDate": "2026-09-06",
-        "deprecated": true,
-        "releasedOn": "2026-03-18",
-        "deprecatedOn": "2026-09-06",
-        "stage": "deprecated",
-        "stagedOn": "2026-09-06",
-        "stageSource": "catalog/models.curation.json#minimax-m2.7.deprecation_date",
-        "replacedBy": "minimax-m3"
-      },
-      "speed": "medium",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "veo-3.1-lite": {
       "identity": {
         "key": "veo-3.1-lite",
@@ -1528,10 +1230,10 @@
         "status": "active",
         "availability": "live",
         "released": "March 31, 2026",
-        "deprecationDate": null,
+        "deprecationDate": "2026-10-22",
         "deprecated": false,
         "releasedOn": "2026-03-31",
-        "deprecatedOn": null,
+        "deprecatedOn": "2026-10-22",
         "stage": "registered",
         "stagedOn": "2026-09-05",
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
@@ -1541,13 +1243,13 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-omni-flash-preview": {
+    "gemini-omni-1.1-flash": {
       "identity": {
-        "key": "gemini-omni-flash-preview",
-        "displayName": "Gemini Omni Flash",
+        "key": "gemini-omni-1.1-flash",
+        "displayName": "Gemini Omni 1.1 Flash",
         "provider": "google",
         "developer": "google",
-        "providerModelId": "gemini-omni-flash-preview",
+        "providerModelId": "gemini-omni-1.1-flash",
         "kind": "video",
         "aliases": [],
         "family": null,
@@ -1555,15 +1257,15 @@
       },
       "lifecycle": {
         "status": "active",
-        "availability": "preview",
-        "released": "June 30, 2026",
-        "deprecationDate": "2026-09-30",
+        "availability": "live",
+        "released": "August 27, 2026",
+        "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-06-30",
-        "deprecatedOn": "2026-09-30",
+        "releasedOn": "2026-08-27",
+        "deprecatedOn": null,
         "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash",
         "replacedBy": null
       },
       "speed": "fast",
@@ -1599,14 +1301,14 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.1-flash-live-preview": {
+    "gemini-3.8-live": {
       "identity": {
-        "key": "gemini-3.1-flash-live-preview",
-        "displayName": "Gemini 3.1 Flash Live",
+        "key": "gemini-3.8-live",
+        "displayName": "Gemini 3.8 Live",
         "provider": "google",
         "developer": "google",
-        "providerModelId": "gemini-3.1-flash-live-preview",
-        "kind": "multimodal",
+        "providerModelId": "gemini-3.8-live",
+        "kind": "audio",
         "openWeight": false,
         "license": "proprietary",
         "aliases": [],
@@ -1615,28 +1317,28 @@
       },
       "lifecycle": {
         "status": "active",
-        "availability": "preview",
-        "released": "March 11, 2026",
+        "availability": "live",
+        "released": "September 15, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-03-11",
+        "releasedOn": "2026-09-15",
         "deprecatedOn": null,
         "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live",
         "replacedBy": null
       },
       "speed": "fast",
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.1-flash-tts-preview": {
+    "gemini-3.8-flash-tts": {
       "identity": {
-        "key": "gemini-3.1-flash-tts-preview",
-        "displayName": "Gemini 3.1 Flash TTS",
+        "key": "gemini-3.8-flash-tts",
+        "displayName": "Gemini 3.8 Flash TTS",
         "provider": "google",
         "developer": "google",
-        "providerModelId": "gemini-3.1-flash-tts-preview",
+        "providerModelId": "gemini-3.8-flash-tts",
         "kind": "tts",
         "openWeight": false,
         "license": "proprietary",
@@ -1646,15 +1348,15 @@
       },
       "lifecycle": {
         "status": "active",
-        "availability": "preview",
-        "released": "April 13, 2026",
+        "availability": "live",
+        "released": "September 22, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": "2026-04-13",
+        "releasedOn": "2026-09-22",
         "deprecatedOn": null,
         "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stagedOn": "2026-10-07",
+        "stageSource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts",
         "replacedBy": null
       },
       "speed": "fast",
@@ -1798,39 +1500,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "qwen-3.6-27b": {
-      "identity": {
-        "key": "qwen-3.6-27b",
-        "displayName": "Qwen3.6 27B",
-        "provider": "groq",
-        "developer": "qwen",
-        "providerModelId": "qwen/qwen3.6-27b",
-        "openRouterSlug": "qwen/qwen3.6-27b",
-        "kind": "reasoning",
-        "familyPartner": "qwen-3.8-27b",
-        "openWeight": true,
-        "license": "Apache-2.0",
-        "aliases": ["qwen/qwen3.6-27b"],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "preview",
-        "released": "April 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": null,
-        "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
-        "replacedBy": null
-      },
-      "speed": "very-fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "qwen-3.8-27b": {
       "identity": {
         "key": "qwen-3.8-27b",
@@ -1840,7 +1509,6 @@
         "providerModelId": "qwen/qwen3.8-27b",
         "openRouterSlug": "qwen/qwen3.8-27b",
         "kind": "reasoning",
-        "familyPartner": "qwen-3.6-27b",
         "openWeight": true,
         "license": "Apache-2.0",
         "aliases": ["qwen/qwen3.8-27b"],
@@ -10091,6 +9759,37 @@
       "residencyRegions": ["us", "eu"],
       "evidenceRefs": []
     },
+    "or-qwen-qwen3-6-27b": {
+      "identity": {
+        "key": "or-qwen-qwen3-6-27b",
+        "displayName": "Qwen: Qwen3.6 27B",
+        "provider": "open_router",
+        "developer": "qwen",
+        "providerModelId": "qwen/qwen3.6-27b",
+        "openRouterSlug": "qwen/qwen3.6-27b-20260422",
+        "kind": "chat",
+        "openWeight": true,
+        "aliases": ["qwen/qwen3.6-27b", "qwen/qwen3.6-27b-20260422"],
+        "family": null,
+        "version": null
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2026-04-27",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": "2026-04-27",
+        "deprecatedOn": null,
+        "stage": "discovered",
+        "stagedOn": "2026-09-05",
+        "stageSource": "https://openrouter.ai/api/v1/models#2026-09-05",
+        "replacedBy": null
+      },
+      "speed": "medium",
+      "residencyRegions": ["us", "eu"],
+      "evidenceRefs": []
+    },
     "or-qwen-qwen3-6-35b-a3b": {
       "identity": {
         "key": "or-qwen-qwen3-6-35b-a3b",
@@ -12882,43 +12581,33 @@
   "providerModelKeys": {
     "openai": [
       "gpt-6-astra",
-      "gpt-5.6-sol",
-      "gpt-5.6-terra",
-      "gpt-5.6-luna",
-      "gpt-image-2",
+      "gpt-6.1-sol",
+      "gpt-6-luna",
+      "gpt-image-2.5-sunburst",
+      "gpt-image-2.5-flare",
       "gpt-4o-mini-tts",
       "gpt-4o-transcribe",
       "gpt-live-1",
       "gpt-4o-mini-transcribe"
     ],
-    "anthropic": [
-      "claude-fable-5-1",
-      "claude-opus-5",
-      "claude-opus-5-5",
-      "claude-opus-4-8",
-      "claude-sonnet-5",
-      "claude-haiku-4-5",
-      "claude-haiku-5-5"
-    ],
+    "anthropic": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
     "google": [
       "gemini-embedding-2",
       "gemini-3.1-pro-preview",
       "gemini-3.5-flash-lite",
-      "gemini-3.1-flash-lite",
-      "gemini-3.1-flash-image",
+      "gemini-nano-banana-2.1",
       "gemini-3-pro-image",
       "gemini-3.1-flash-lite-image",
       "gemini-3.8-flash",
-      "gemini-3.6-flash",
       "veo-3.1",
       "veo-3.1-fast",
       "veo-3.1-lite",
-      "gemini-omni-flash-preview",
+      "gemini-omni-1.1-flash",
       "gemini-3.5-live-translate-preview",
-      "gemini-3.1-flash-live-preview",
-      "gemini-3.1-flash-tts-preview"
+      "gemini-3.8-live",
+      "gemini-3.8-flash-tts"
     ],
-    "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"],
+    "deepseek": ["deepseek-v4-pro", "deepseek-flash"],
     "qwen": ["qwen-3.5-flash", "qwen-3.8-flash", "qwen-3.7-plus"],
     "perplexity": ["sonar", "sonar-reasoning-pro", "sonar-pro", "sonar-deep-research"],
     "runway": ["runway-gen-4"],
@@ -13186,6 +12875,7 @@
       "or-qwen-qwen3-5-flash-02-23",
       "or-qwen-qwen3-5-plus-02-15",
       "or-qwen-qwen3-5-plus-20260420",
+      "or-qwen-qwen3-6-27b",
       "or-qwen-qwen3-6-35b-a3b",
       "or-qwen-qwen3-6-flash",
       "or-qwen-qwen3-6-max-preview",
@@ -13275,10 +12965,10 @@
       "or-z-ai-glm-latest"
     ],
     "zhipu": ["glm-5.3", "glm-5.3-flash"],
-    "moonshot": ["kimi-k3", "kimi-k2.7-code", "kimi-k2.6"],
-    "xai": ["grok-4.6"],
-    "minimax": ["minimax-m3", "minimax-m2.7"],
-    "groq": ["gpt-oss-safeguard-20b", "qwen-3.6-27b", "qwen-3.8-27b"]
+    "moonshot": ["kimi-k3"],
+    "xai": ["grok-4.7"],
+    "minimax": ["minimax-m3"],
+    "groq": ["gpt-oss-safeguard-20b", "qwen-3.8-27b"]
   },
   "routes": {
     "openai/gpt-6-astra": {
@@ -13367,138 +13057,10 @@
         "verifiedOn": "2026-09-06"
       }
     },
-    "openai/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
+    "openai/gpt-6.1-sol": {
+      "modelKey": "gpt-6.1-sol",
       "provider": "openai",
-      "providerModelId": "gpt-5.6-sol",
-      "harnessId": "openai/responses",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 4,
-        "outputPerMillion": 20,
-        "cacheReadPerMillion": 0.4,
-        "cacheWritePerMillion": 5,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 272000,
-            "inputPerMillion": 8,
-            "outputPerMillion": 30,
-            "cacheReadPerMillion": 0.8,
-            "cacheWritePerMillion": 10
-          }
-        ]
-      }
-    },
-    "open_router/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-5.6-sol",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "vercel_gateway/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-5.6-sol",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "cheaperinference/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "cheaperinference",
-      "providerModelId": "gpt-5.6-sol",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2.8,
-        "outputPerMillion": 14,
-        "cacheReadPerMillion": 0.28,
-        "cacheWritePerMillion": 3.5
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 4,
-          "outputPerMillion": 20,
-          "cacheReadPerMillion": 0.4,
-          "cacheWritePerMillion": 5
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "experientiallabs/gpt-5.6-sol": {
-      "modelKey": "gpt-5.6-sol",
-      "provider": "experientiallabs",
-      "providerModelId": "gpt-5.6-sol",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 4,
-        "outputPerMillion": 20,
-        "cacheReadPerMillion": 0.4,
-        "cacheWritePerMillion": 4
-      }
-    },
-    "openai/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "openai",
-      "providerModelId": "gpt-5.6-terra",
+      "providerModelId": "gpt-6.1-sol",
       "harnessId": "openai/responses",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -13511,122 +13073,24 @@
         "currency": "USD",
         "unit": "per_million_tokens",
         "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.1,
         "cacheWritePerMillion": 2.5,
         "inputTokenPricingTiers": [
           {
             "thresholdTokens": 272000,
             "inputPerMillion": 4,
-            "outputPerMillion": 18,
-            "cacheReadPerMillion": 0.4,
+            "outputPerMillion": 15,
+            "cacheReadPerMillion": 0.2,
             "cacheWritePerMillion": 5
           }
         ]
       }
     },
-    "open_router/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-5.6-terra",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "vercel_gateway/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-5.6-terra",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "cheaperinference/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "cheaperinference",
-      "providerModelId": "gpt-5.6-terra",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1.4,
-        "outputPerMillion": 8.4,
-        "cacheReadPerMillion": 0.14,
-        "cacheWritePerMillion": 1.75
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 2,
-          "outputPerMillion": 12,
-          "cacheReadPerMillion": 0.2,
-          "cacheWritePerMillion": 2.5
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "experientiallabs/gpt-5.6-terra": {
-      "modelKey": "gpt-5.6-terra",
-      "provider": "experientiallabs",
-      "providerModelId": "gpt-5.6-terra",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2
-      }
-    },
-    "openai/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
+    "openai/gpt-6-luna": {
+      "modelKey": "gpt-6-luna",
       "provider": "openai",
-      "providerModelId": "gpt-5.6-luna",
+      "providerModelId": "gpt-6-luna",
       "harnessId": "openai/responses",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -13638,117 +13102,19 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.25,
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "cacheReadPerMillion": 0.01,
+        "cacheWritePerMillion": 0.125,
         "inputTokenPricingTiers": [
           {
             "thresholdTokens": 272000,
-            "inputPerMillion": 0.4,
-            "outputPerMillion": 1.8,
-            "cacheReadPerMillion": 0.04,
-            "cacheWritePerMillion": 0.5
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 0.75,
+            "cacheReadPerMillion": 0.02,
+            "cacheWritePerMillion": 0.25
           }
         ]
-      }
-    },
-    "open_router/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "open_router",
-      "providerModelId": "openai/gpt-5.6-luna",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.25
-      }
-    },
-    "vercel_gateway/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "vercel_gateway",
-      "providerModelId": "openai/gpt-5.6-luna",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.25
-      }
-    },
-    "cheaperinference/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "cheaperinference",
-      "providerModelId": "gpt-5.6-luna",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.84,
-        "cacheReadPerMillion": 0.014,
-        "cacheWritePerMillion": 0.175
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 0.2,
-          "outputPerMillion": 1.2,
-          "cacheReadPerMillion": 0.02,
-          "cacheWritePerMillion": 0.25
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "experientiallabs/gpt-5.6-luna": {
-      "modelKey": "gpt-5.6-luna",
-      "provider": "experientiallabs",
-      "providerModelId": "gpt-5.6-luna",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.02,
-        "cacheWritePerMillion": 0.2
       }
     },
     "anthropic/claude-fable-5-1": {
@@ -13858,112 +13224,6 @@
         "cacheWritePerMillion": 12.5
       }
     },
-    "anthropic/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "anthropic",
-      "providerModelId": "claude-opus-5",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25,
-        "cacheWrite1hPerMillion": 10
-      }
-    },
-    "open_router/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "open_router",
-      "providerModelId": "anthropic/claude-opus-5",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
-    "vercel_gateway/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "vercel_gateway",
-      "providerModelId": "anthropic/claude-opus-5",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
-    "cheaperinference_anthropic/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "cheaperinference_anthropic",
-      "providerModelId": "claude-opus-5",
-      "harnessId": "cheaperinference-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
-    "experientiallabs_anthropic/claude-opus-5": {
-      "modelKey": "claude-opus-5",
-      "provider": "experientiallabs_anthropic",
-      "providerModelId": "claude-opus-5",
-      "harnessId": "experientiallabs-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25
-      }
-    },
     "anthropic/claude-opus-5-5": {
       "modelKey": "claude-opus-5-5",
       "provider": "anthropic",
@@ -13986,32 +13246,10 @@
         "cacheWrite1hPerMillion": 8
       }
     },
-    "anthropic/claude-opus-4-8": {
-      "modelKey": "claude-opus-4-8",
+    "anthropic/claude-sonnet-5-5": {
+      "modelKey": "claude-sonnet-5-5",
       "provider": "anthropic",
-      "providerModelId": "claude-opus-4-8",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 5,
-        "outputPerMillion": 25,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 6.25,
-        "cacheWrite1hPerMillion": 10
-      }
-    },
-    "anthropic/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "anthropic",
-      "providerModelId": "claude-sonnet-5",
+      "providerModelId": "claude-sonnet-5-5",
       "harnessId": "anthropic/messages",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -14028,154 +13266,6 @@
         "cacheReadPerMillion": 0.2,
         "cacheWritePerMillion": 2.5,
         "cacheWrite1hPerMillion": 4
-      }
-    },
-    "open_router/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "open_router",
-      "providerModelId": "anthropic/claude-sonnet-5",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "vercel_gateway/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "vercel_gateway",
-      "providerModelId": "anthropic/claude-sonnet-5",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "gateway_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "cheaperinference_anthropic/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "cheaperinference_anthropic",
-      "providerModelId": "claude-sonnet-5",
-      "harnessId": "cheaperinference-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "experientiallabs_anthropic/claude-sonnet-5": {
-      "modelKey": "claude-sonnet-5",
-      "provider": "experientiallabs_anthropic",
-      "providerModelId": "claude-sonnet-5",
-      "harnessId": "experientiallabs-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 2.5
-      }
-    },
-    "anthropic/claude-haiku-4-5": {
-      "modelKey": "claude-haiku-4-5",
-      "provider": "anthropic",
-      "providerModelId": "claude-haiku-4-5-20251001",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 5,
-        "cacheReadPerMillion": 0.1,
-        "cacheWritePerMillion": 1.25,
-        "cacheWrite1hPerMillion": 2
-      }
-    },
-    "experientiallabs_anthropic/claude-haiku-4-5": {
-      "modelKey": "claude-haiku-4-5",
-      "provider": "experientiallabs_anthropic",
-      "providerModelId": "claude-haiku-4.5",
-      "harnessId": "experientiallabs-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 5,
-        "cacheReadPerMillion": 0.1,
-        "cacheWritePerMillion": 1.25
-      }
-    },
-    "cheaperinference_anthropic/claude-haiku-4-5": {
-      "modelKey": "claude-haiku-4-5",
-      "provider": "cheaperinference_anthropic",
-      "providerModelId": "claude-haiku-4.5",
-      "harnessId": "cheaperinference-anthropic/messages",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 5,
-        "cacheReadPerMillion": 0.1,
-        "cacheWritePerMillion": 1.25
       }
     },
     "anthropic/claude-haiku-5-5": {
@@ -14492,30 +13582,10 @@
         "cacheWritePerMillion": 0.3
       }
     },
-    "google/gemini-3.1-flash-lite": {
-      "modelKey": "gemini-3.1-flash-lite",
+    "google/gemini-nano-banana-2.1": {
+      "modelKey": "gemini-nano-banana-2.1",
       "provider": "google",
-      "providerModelId": "gemini-3.1-flash-lite",
-      "harnessId": "google/generate-content",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.25,
-        "outputPerMillion": 1.5,
-        "cacheReadPerMillion": 0.025
-      }
-    },
-    "google/gemini-3.1-flash-image": {
-      "modelKey": "gemini-3.1-flash-image",
-      "provider": "google",
-      "providerModelId": "gemini-3.1-flash-image",
+      "providerModelId": "gemini-nano-banana-2.1",
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -14527,9 +13597,9 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_image",
-        "inputPerMillion": 0.5,
-        "outputPerMillion": 60,
-        "imagePerImage": 0.067
+        "inputPerMillion": 1.5,
+        "outputPerMillion": 30,
+        "imagePerImage": 0.0336
       }
     },
     "google/gemini-3-pro-image": {
@@ -14570,249 +13640,6 @@
         "inputPerMillion": 0.25,
         "outputPerMillion": 30,
         "imagePerImage": 0.0336
-      }
-    },
-    "deepseek/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "deepseek",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "deepseek/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32,
-        "cacheReadPerMillion": 0.014
-      }
-    },
-    "open_router/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "open_router",
-      "providerModelId": "deepseek/deepseek-v4-flash",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.0886,
-        "outputPerMillion": 0.1772,
-        "cacheReadPerMillion": 0.0177,
-        "cacheWritePerMillion": 0.0886
-      }
-    },
-    "vercel_gateway/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "vercel_gateway",
-      "providerModelId": "deepseek/deepseek-v4-flash",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.13,
-        "outputPerMillion": 0.26,
-        "cacheReadPerMillion": 0.028,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "cheaperinference/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "cheaperinference",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.308,
-        "outputPerMillion": 0.924,
-        "cacheReadPerMillion": 0.0098,
-        "cacheWritePerMillion": 0.308
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 0.44,
-          "outputPerMillion": 1.32,
-          "cacheReadPerMillion": 0.014,
-          "cacheWritePerMillion": 0.44
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "deepseek_anthropic/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "deepseek_anthropic",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "deepseek-anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_explicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32,
-        "cacheReadPerMillion": 0.014,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "qwen/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "qwen",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 0.4
-      }
-    },
-    "deepinfra/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "deepinfra",
-      "providerModelId": "deepseek-ai/DeepSeek-V4-Flash",
-      "harnessId": "deepinfra/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.09,
-        "outputPerMillion": 0.18,
-        "cacheReadPerMillion": 0.018,
-        "cacheWritePerMillion": 0.09
-      },
-      "responseFormats": ["json_object", "json_schema"]
-    },
-    "together/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "together",
-      "providerModelId": "deepseek-ai/DeepSeek-V4-Flash-0731",
-      "harnessId": "together/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.28,
-        "cacheReadPerMillion": 0.03,
-        "cacheWritePerMillion": 0.14
-      },
-      "responseFormats": ["json_schema"]
-    },
-    "novita/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "novita",
-      "providerModelId": "deepseek/deepseek-v4-flash",
-      "harnessId": "novita/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "experimental_only",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.14,
-        "outputPerMillion": 0.28,
-        "cacheReadPerMillion": 0.028,
-        "cacheWritePerMillion": 0.14
-      },
-      "responseFormats": ["json_schema"]
-    },
-    "experientiallabs/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "experientiallabs",
-      "providerModelId": "deepseek-v4-flash",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.19,
-        "outputPerMillion": 0.51,
-        "cacheReadPerMillion": 0.028,
-        "cacheWritePerMillion": 0.19
-      }
-    },
-    "workers_ai/deepseek-v4-flash": {
-      "modelKey": "deepseek-v4-flash",
-      "provider": "workers_ai",
-      "providerModelId": "@cf/deepseek-ai/deepseek-v4-flash-0731",
-      "harnessId": "workers-ai/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32
       }
     },
     "deepseek/deepseek-v4-pro": {
@@ -15058,10 +13885,10 @@
         "outputPerMillion": 3.96
       }
     },
-    "deepseek/deepseek-v4-flash-vision-exp": {
-      "modelKey": "deepseek-v4-flash-vision-exp",
+    "deepseek/deepseek-flash": {
+      "modelKey": "deepseek-flash",
       "provider": "deepseek",
-      "providerModelId": "deepseek-v4-flash-vision-exp",
+      "providerModelId": "deepseek-flash",
       "harnessId": "deepseek/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -15073,9 +13900,9 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 0.44,
-        "outputPerMillion": 1.32,
-        "cacheReadPerMillion": 0.014
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadPerMillion": 0.006
       }
     },
     "qwen/qwen-3.5-flash": {
@@ -15346,10 +14173,30 @@
         }
       }
     },
-    "openai/gpt-image-2": {
-      "modelKey": "gpt-image-2",
+    "openai/gpt-image-2.5-sunburst": {
+      "modelKey": "gpt-image-2.5-sunburst",
       "provider": "openai",
-      "providerModelId": "gpt-image-2",
+      "providerModelId": "gpt-image-2.5-sunburst",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 8,
+        "outputPerMillion": 30,
+        "cacheReadPerMillion": 2
+      }
+    },
+    "openai/gpt-image-2.5-flare": {
+      "modelKey": "gpt-image-2.5-flare",
+      "provider": "openai",
+      "providerModelId": "gpt-image-2.5-flare",
       "harnessId": "openai/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -15468,28 +14315,6 @@
         "outputPerMillion": 3.75,
         "cacheReadPerMillion": 0.075,
         "cacheWritePerMillion": 0.75
-      }
-    },
-    "google/gemini-3.6-flash": {
-      "modelKey": "gemini-3.6-flash",
-      "provider": "google",
-      "providerModelId": "gemini-3.6-flash",
-      "harnessId": "google/generate-content",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.75,
-        "outputPerMillion": 3.75,
-        "cacheReadPerMillion": 0.075,
-        "promoExpiresAt": "2027-01-01T00:00:00Z",
-        "postPromoPrices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 }
       }
     },
     "zhipu/glm-5.3": {
@@ -16236,90 +15061,10 @@
         "cacheWritePerMillion": 3.3
       }
     },
-    "moonshot/kimi-k2.7-code": {
-      "modelKey": "kimi-k2.7-code",
-      "provider": "moonshot",
-      "providerModelId": "kimi-k2.7-code",
-      "harnessId": "moonshot/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4,
-        "cacheReadPerMillion": 0.19
-      }
-    },
-    "experientiallabs/kimi-k2.7-code": {
-      "modelKey": "kimi-k2.7-code",
-      "provider": "experientiallabs",
-      "providerModelId": "kimi-k2.7-code",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4,
-        "cacheReadPerMillion": 0.19,
-        "cacheWritePerMillion": 0.95
-      }
-    },
-    "workers_ai/kimi-k2.7-code": {
-      "modelKey": "kimi-k2.7-code",
-      "provider": "workers_ai",
-      "providerModelId": "@cf/moonshotai/kimi-k2.7-code",
-      "harnessId": "workers-ai/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "zero_retention",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4
-      }
-    },
-    "moonshot/kimi-k2.6": {
-      "modelKey": "kimi-k2.6",
-      "provider": "moonshot",
-      "providerModelId": "kimi-k2.6",
-      "harnessId": "moonshot/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4,
-        "cacheReadPerMillion": 0.16
-      }
-    },
-    "xai/grok-4.6": {
-      "modelKey": "grok-4.6",
+    "xai/grok-4.7": {
+      "modelKey": "grok-4.7",
       "provider": "xai",
-      "providerModelId": "grok-4.6",
+      "providerModelId": "grok-4.7",
       "harnessId": "xai/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -16345,10 +15090,10 @@
         ]
       }
     },
-    "open_router/grok-4.6": {
-      "modelKey": "grok-4.6",
+    "open_router/grok-4.7": {
+      "modelKey": "grok-4.7",
       "provider": "open_router",
-      "providerModelId": "x-ai/grok-4.6",
+      "providerModelId": "x-ai/grok-4.7",
       "harnessId": "open-router/chat-completions",
       "trustModes": ["byok"],
       "availability": "live",
@@ -16366,10 +15111,10 @@
         "cacheWritePerMillion": 0
       }
     },
-    "vercel_gateway/grok-4.6": {
-      "modelKey": "grok-4.6",
+    "vercel_gateway/grok-4.7": {
+      "modelKey": "grok-4.7",
       "provider": "vercel_gateway",
-      "providerModelId": "spacexai/grok-4.6",
+      "providerModelId": "spacexai/grok-4.7",
       "harnessId": "vercel_gateway/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -16385,27 +15130,6 @@
         "outputPerMillion": 6,
         "cacheReadPerMillion": 0.5,
         "cacheWritePerMillion": 0
-      }
-    },
-    "experientiallabs/grok-4.6": {
-      "modelKey": "grok-4.6",
-      "provider": "experientiallabs",
-      "providerModelId": "grok-4.6",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 6,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 2
       }
     },
     "google/veo-3.1": {
@@ -16645,26 +15369,6 @@
       },
       "responseFormats": ["json_schema"]
     },
-    "minimax/minimax-m2.7": {
-      "modelKey": "minimax-m2.7",
-      "provider": "minimax",
-      "providerModelId": "MiniMax-M2.7",
-      "harnessId": "minimax/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "customer_byok",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.3,
-        "outputPerMillion": 1.2,
-        "cacheReadPerMillion": 0.06
-      }
-    },
     "google/veo-3.1-lite": {
       "modelKey": "veo-3.1-lite",
       "provider": "google",
@@ -16686,14 +15390,14 @@
         "videoPerSecondByResolution": { "720p": 0.05, "1080p": 0.08 }
       }
     },
-    "google/gemini-omni-flash-preview": {
-      "modelKey": "gemini-omni-flash-preview",
+    "google/gemini-omni-1.1-flash": {
+      "modelKey": "gemini-omni-1.1-flash",
       "provider": "google",
-      "providerModelId": "gemini-omni-flash-preview",
+      "providerModelId": "gemini-omni-1.1-flash",
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
-      "availability": "preview",
-      "selectable": false,
+      "availability": "live",
+      "selectable": true,
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
@@ -16725,14 +15429,14 @@
         "outputPerMillion": 21
       }
     },
-    "google/gemini-3.1-flash-live-preview": {
-      "modelKey": "gemini-3.1-flash-live-preview",
+    "google/gemini-3.8-live": {
+      "modelKey": "gemini-3.8-live",
       "provider": "google",
-      "providerModelId": "gemini-3.1-flash-live-preview",
-      "harnessId": "google/generate-content",
+      "providerModelId": "gemini-3.8-live",
+      "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
-      "availability": "preview",
-      "selectable": false,
+      "availability": "live",
+      "selectable": true,
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
@@ -16744,14 +15448,14 @@
         "outputPerMillion": 4.5
       }
     },
-    "google/gemini-3.1-flash-tts-preview": {
-      "modelKey": "gemini-3.1-flash-tts-preview",
+    "google/gemini-3.8-flash-tts": {
+      "modelKey": "gemini-3.8-flash-tts",
       "provider": "google",
-      "providerModelId": "gemini-3.1-flash-tts-preview",
+      "providerModelId": "gemini-3.8-flash-tts",
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
-      "availability": "preview",
-      "selectable": false,
+      "availability": "live",
+      "selectable": true,
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "agi_direct",
@@ -16759,8 +15463,10 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 1,
-        "outputPerMillion": 20
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 9,
+        "promoExpiresAt": "2027-01-01T00:00:00Z",
+        "postPromoPrices": { "input": 1, "output": 18 }
       }
     },
     "open_router/openrouter-auto": {
@@ -16838,56 +15544,6 @@
         "inputPerMillion": 0.075,
         "outputPerMillion": 0.3,
         "cacheReadPerMillion": 0.0375
-      }
-    },
-    "groq/qwen-3.6-27b": {
-      "modelKey": "qwen-3.6-27b",
-      "provider": "groq",
-      "providerModelId": "qwen/qwen3.6-27b",
-      "harnessId": "groq/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "preview",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.6,
-        "outputPerMillion": 3
-      }
-    },
-    "cheaperinference/qwen-3.6-27b": {
-      "modelKey": "qwen-3.6-27b",
-      "provider": "cheaperinference",
-      "providerModelId": "qwen3.6-27b",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "preview",
-      "selectable": false,
-      "isDefault": false,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0.42,
-        "outputPerMillion": 2.1
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 0.6,
-          "outputPerMillion": 3
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
       }
     },
     "groq/qwen-3.8-27b": {
@@ -22267,6 +20923,26 @@
         ]
       }
     },
+    "open_router/or-qwen-qwen3-6-27b": {
+      "modelKey": "or-qwen-qwen3-6-27b",
+      "provider": "open_router",
+      "providerModelId": "qwen/qwen3.6-27b",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_implicit_prompt_cache",
+      "commercialStatus": "customer_byok",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 2,
+        "cacheReadPerMillion": 0.03
+      }
+    },
     "open_router/or-qwen-qwen3-6-35b-a3b": {
       "modelKey": "or-qwen-qwen3-6-35b-a3b",
       "provider": "open_router",
@@ -25132,79 +23808,7 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "gpt-5.6-sol": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "gpt-5.6-terra": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "gpt-5.6-luna": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "claude-fable-5-1": {
+    "gpt-6.1-sol": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25224,11 +23828,35 @@
       "computerUse": true,
       "agentic": true,
       "webSearch": true,
-      "deepResearch": true,
+      "deepResearch": false,
       "codeExecution": true,
       "promptCaching": true
     },
-    "claude-opus-5": {
+    "gpt-6-luna": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": false,
+      "codeExecution": true,
+      "promptCaching": true
+    },
+    "claude-fable-5-1": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25276,7 +23904,7 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "claude-opus-4-8": {
+    "claude-sonnet-5-5": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25297,54 +23925,6 @@
       "agentic": true,
       "webSearch": true,
       "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "claude-sonnet-5": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "claude-haiku-4-5": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": false,
       "codeExecution": true,
       "promptCaching": true
     },
@@ -25444,31 +24024,7 @@
       "codeExecution": true,
       "promptCaching": true
     },
-    "gemini-3.1-flash-lite": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": true,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "gemini-3.1-flash-image": {
+    "gemini-nano-banana-2.1": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25540,30 +24096,6 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "deepseek-v4-flash": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "deepseek-v4-pro": {
       "textInput": true,
       "imageInput": false,
@@ -25588,7 +24120,7 @@
       "codeExecution": false,
       "promptCaching": true
     },
-    "deepseek-v4-flash-vision-exp": {
+    "deepseek-flash": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25804,7 +24336,31 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gpt-image-2": {
+    "gpt-image-2.5-sunburst": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": false,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
+    },
+    "gpt-image-2.5-flare": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -25853,30 +24409,6 @@
       "promptCaching": false
     },
     "gemini-3.8-flash": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": true,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": true,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
-      "promptCaching": true
-    },
-    "gemini-3.6-flash": {
       "textInput": true,
       "imageInput": true,
       "audioInput": true,
@@ -25996,55 +24528,7 @@
       "codeExecution": false,
       "promptCaching": true
     },
-    "kimi-k2.7-code": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "kimi-k2.6": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
-    "grok-4.6": {
+    "grok-4.7": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -26212,30 +24696,6 @@
       "codeExecution": false,
       "promptCaching": true
     },
-    "minimax-m2.7": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": false,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": true
-    },
     "veo-3.1-lite": {
       "textInput": true,
       "imageInput": false,
@@ -26260,7 +24720,7 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gemini-omni-flash-preview": {
+    "gemini-omni-1.1-flash": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -26308,14 +24768,14 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gemini-3.1-flash-live-preview": {
+    "gemini-3.8-live": {
       "textInput": true,
       "imageInput": true,
       "audioInput": true,
       "videoInput": true,
-      "textOutput": true,
+      "textOutput": false,
       "imageOutput": false,
-      "audioOutput": false,
+      "audioOutput": true,
       "videoOutput": false,
       "streaming": true,
       "structuredOutput": false,
@@ -26332,7 +24792,7 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gemini-3.1-flash-tts-preview": {
+    "gemini-3.8-flash-tts": {
       "textInput": true,
       "imageInput": false,
       "audioInput": false,
@@ -26354,7 +24814,7 @@
       "webSearch": false,
       "deepResearch": false,
       "codeExecution": false,
-      "promptCaching": false
+      "promptCaching": true
     },
     "openrouter-auto": {
       "textInput": true,
@@ -26451,30 +24911,6 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": true
-    },
-    "qwen-3.6-27b": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
     },
     "qwen-3.8-27b": {
       "textInput": true,
@@ -32715,6 +31151,30 @@
       "deepResearch": false,
       "codeExecution": false,
       "promptCaching": false
+    },
+    "or-qwen-qwen3-6-27b": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": true,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": false,
+      "agentic": true,
+      "webSearch": false,
+      "deepResearch": false,
+      "codeExecution": false,
+      "promptCaching": true
     },
     "or-qwen-qwen3-6-35b-a3b": {
       "textInput": true,
@@ -34946,7 +33406,11 @@
       "trainsOnInputs": "unknown",
       "residencyRegions": null,
       "note": "Checked and could not read: https://x.ai/legal/privacy-policy (403), https://x.ai/legal/privacy-statement (403), https://x.ai/legal/enterprise-privacy-policy (403), https://x.ai (403), https://docs.x.ai/ (200 but no data-policy content in the fetched nav or footer), https://docs.x.ai/docs/data-and-privacy (404), https://grok.com/privacy (403). x.ai's site returned 403 to automated fetch throughout this session; no primary source text was recoverable.",
-      "cacheTokenBillingClass": "unknown"
+      "cacheTokenBillingClass": "unknown",
+      "reasoningTokenBillingClass": "additional_to_output",
+      "reasoningTokenBillingSource": "https://docs.x.ai/developers/model-capabilities/text/reasoning",
+      "reasoningTokenBillingVerifiedOn": "2026-10-07",
+      "reasoningTokenBillingNote": "The reasoning guide says reasoning tokens are billed as part of total consumption and that usage exposes reasoning_tokens, but not whether completion_tokens contains them. Measured on 2026-10-07 with one chat completion each on the active Grok model and its successor: usage returned prompt_tokens 650, completion_tokens 1, reasoning_tokens 206, total_tokens 857 and prompt_tokens 1256, completion_tokens 1, reasoning_tokens 53, total_tokens 1310, so total is prompt plus completion plus reasoning and the reasoning count is additional to the reported output count. The cost_in_usd_ticks on the first response, 17740000 at ten billion ticks per dollar, equals uncached input, cached input and 207 tokens at the output rate, so reasoning tokens bill at the output rate."
     },
     "deepseek": {
       "dataRetentionClass": "provider_default",
@@ -35180,7 +33644,7 @@
   "providerDefaults": {
     "openai": {
       "imageOutput": {
-        "modelKey": "gpt-image-2",
+        "modelKey": "gpt-image-2.5-sunburst",
         "source": "packages/ai/model-registry/catalog/model-families.json#openai/gpt-image",
         "verifiedOn": "2026-09-05",
         "note": "The provider's only active image family, so the slot's active model is the default by construction. Following the slot rather than naming a generation keeps a promotion from reaching this record."
@@ -35188,7 +33652,7 @@
     },
     "google": {
       "imageOutput": {
-        "modelKey": "gemini-3.1-flash-image",
+        "modelKey": "gemini-nano-banana-2.1",
         "source": "packages/ai/model-registry/catalog/model-families.json#google/gemini-flash-image",
         "verifiedOn": "2026-09-05",
         "note": "Three active image families sit at the fast, balanced and best tiers. The balanced slot is the default: the fast tier trades quality a caller did not ask to give up, and the best tier costs twice as much per image. A caller wanting either names it explicitly."
@@ -35370,54 +33834,37 @@
         }
       ]
     },
-    "gpt-5.6-sol": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 4,
-      "outputPerMillion": 20,
-      "cacheReadPerMillion": 0.4,
-      "cacheWritePerMillion": 5,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 272000,
-          "inputPerMillion": 8,
-          "outputPerMillion": 30,
-          "cacheReadPerMillion": 0.8,
-          "cacheWritePerMillion": 10
-        }
-      ]
-    },
-    "gpt-5.6-terra": {
+    "gpt-6.1-sol": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 2,
-      "outputPerMillion": 12,
-      "cacheReadPerMillion": 0.2,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.1,
       "cacheWritePerMillion": 2.5,
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 272000,
           "inputPerMillion": 4,
-          "outputPerMillion": 18,
-          "cacheReadPerMillion": 0.4,
+          "outputPerMillion": 15,
+          "cacheReadPerMillion": 0.2,
           "cacheWritePerMillion": 5
         }
       ]
     },
-    "gpt-5.6-luna": {
+    "gpt-6-luna": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.2,
-      "outputPerMillion": 1.2,
-      "cacheReadPerMillion": 0.02,
-      "cacheWritePerMillion": 0.25,
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.5,
+      "cacheReadPerMillion": 0.01,
+      "cacheWritePerMillion": 0.125,
       "inputTokenPricingTiers": [
         {
           "thresholdTokens": 272000,
-          "inputPerMillion": 0.4,
-          "outputPerMillion": 1.8,
-          "cacheReadPerMillion": 0.04,
-          "cacheWritePerMillion": 0.5
+          "inputPerMillion": 0.2,
+          "outputPerMillion": 0.75,
+          "cacheReadPerMillion": 0.02,
+          "cacheWritePerMillion": 0.25
         }
       ]
     },
@@ -35430,15 +33877,6 @@
       "cacheWritePerMillion": 12.5,
       "cacheWrite1hPerMillion": 20
     },
-    "claude-opus-5": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 5,
-      "outputPerMillion": 25,
-      "cacheReadPerMillion": 0.5,
-      "cacheWritePerMillion": 6.25,
-      "cacheWrite1hPerMillion": 10
-    },
     "claude-opus-5-5": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -35448,16 +33886,7 @@
       "cacheWritePerMillion": 5,
       "cacheWrite1hPerMillion": 8
     },
-    "claude-opus-4-8": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 5,
-      "outputPerMillion": 25,
-      "cacheReadPerMillion": 0.5,
-      "cacheWritePerMillion": 6.25,
-      "cacheWrite1hPerMillion": 10
-    },
-    "claude-sonnet-5": {
+    "claude-sonnet-5-5": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 2,
@@ -35465,15 +33894,6 @@
       "cacheReadPerMillion": 0.2,
       "cacheWritePerMillion": 2.5,
       "cacheWrite1hPerMillion": 4
-    },
-    "claude-haiku-4-5": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 1,
-      "outputPerMillion": 5,
-      "cacheReadPerMillion": 0.1,
-      "cacheWritePerMillion": 1.25,
-      "cacheWrite1hPerMillion": 2
     },
     "claude-haiku-5-5": {
       "currency": "USD",
@@ -35522,19 +33942,12 @@
       "outputPerMillion": 2.5,
       "cacheReadPerMillion": 0.03
     },
-    "gemini-3.1-flash-lite": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.25,
-      "outputPerMillion": 1.5,
-      "cacheReadPerMillion": 0.025
-    },
-    "gemini-3.1-flash-image": {
+    "gemini-nano-banana-2.1": {
       "currency": "USD",
       "unit": "per_image",
-      "inputPerMillion": 0.5,
-      "outputPerMillion": 60,
-      "imagePerImage": 0.067
+      "inputPerMillion": 1.5,
+      "outputPerMillion": 30,
+      "imagePerImage": 0.0336
     },
     "gemini-3-pro-image": {
       "currency": "USD",
@@ -35550,13 +33963,6 @@
       "outputPerMillion": 30,
       "imagePerImage": 0.0336
     },
-    "deepseek-v4-flash": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.44,
-      "outputPerMillion": 1.32,
-      "cacheReadPerMillion": 0.014
-    },
     "deepseek-v4-pro": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -35564,12 +33970,12 @@
       "outputPerMillion": 3.96,
       "cacheReadPerMillion": 0.044
     },
-    "deepseek-v4-flash-vision-exp": {
+    "deepseek-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.44,
-      "outputPerMillion": 1.32,
-      "cacheReadPerMillion": 0.014
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 1.2,
+      "cacheReadPerMillion": 0.006
     },
     "qwen-3.5-flash": {
       "currency": "USD",
@@ -35631,7 +34037,14 @@
         "usdPerTokenWithVideoInput": 0.0000064
       }
     },
-    "gpt-image-2": {
+    "gpt-image-2.5-sunburst": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 8,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 2
+    },
+    "gpt-image-2.5-flare": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 8,
@@ -35645,15 +34058,6 @@
       "outputPerMillion": 12
     },
     "gemini-3.8-flash": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.75,
-      "outputPerMillion": 3.75,
-      "cacheReadPerMillion": 0.075,
-      "promoExpiresAt": "2027-01-01T00:00:00Z",
-      "postPromoPrices": { "input": 1.5, "output": 7.5, "cached_input": 0.15 }
-    },
-    "gemini-3.6-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 0.75,
@@ -35702,21 +34106,7 @@
       "outputPerMillion": 15,
       "cacheReadPerMillion": 0.3
     },
-    "kimi-k2.7-code": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.95,
-      "outputPerMillion": 4,
-      "cacheReadPerMillion": 0.19
-    },
-    "kimi-k2.6": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.95,
-      "outputPerMillion": 4,
-      "cacheReadPerMillion": 0.16
-    },
-    "grok-4.6": {
+    "grok-4.7": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 2,
@@ -35783,13 +34173,6 @@
         }
       ]
     },
-    "minimax-m2.7": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.3,
-      "outputPerMillion": 1.2,
-      "cacheReadPerMillion": 0.06
-    },
     "veo-3.1-lite": {
       "currency": "USD",
       "unit": "per_second",
@@ -35798,7 +34181,7 @@
       "videoPerSecond": 0.05,
       "videoPerSecondByResolution": { "720p": 0.05, "1080p": 0.08 }
     },
-    "gemini-omni-flash-preview": {
+    "gemini-omni-1.1-flash": {
       "currency": "USD",
       "unit": "per_second",
       "inputPerMillion": 1.5,
@@ -35811,17 +34194,19 @@
       "inputPerMillion": 3.5,
       "outputPerMillion": 21
     },
-    "gemini-3.1-flash-live-preview": {
+    "gemini-3.8-live": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 0.75,
       "outputPerMillion": 4.5
     },
-    "gemini-3.1-flash-tts-preview": {
+    "gemini-3.8-flash-tts": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 1,
-      "outputPerMillion": 20
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 9,
+      "promoExpiresAt": "2027-01-01T00:00:00Z",
+      "postPromoPrices": { "input": 1, "output": 18 }
     },
     "openrouter-auto": {
       "currency": "USD",
@@ -35847,12 +34232,6 @@
       "inputPerMillion": 0.075,
       "outputPerMillion": 0.3,
       "cacheReadPerMillion": 0.0375
-    },
-    "qwen-3.6-27b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.6,
-      "outputPerMillion": 3
     },
     "qwen-3.8-27b": {
       "currency": "USD",
@@ -37780,6 +36159,13 @@
         }
       ]
     },
+    "or-qwen-qwen3-6-27b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 2,
+      "cacheReadPerMillion": 0.03
+    },
     "or-qwen-qwen3-6-35b-a3b": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -38550,20 +36936,17 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-04-30"
     },
-    "gpt-5.6-sol": {
+    "gpt-6.1-sol": {
       "contextTokens": 1050000,
+      "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16"
+      "knowledgeCutoff": "2026-04-30"
     },
-    "gpt-5.6-terra": {
+    "gpt-6-luna": {
       "contextTokens": 1050000,
+      "maxInputTokens": 922000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16"
-    },
-    "gpt-5.6-luna": {
-      "contextTokens": 1050000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-02-16"
+      "knowledgeCutoff": "2026-05-18"
     },
     "claude-fable-5-1": {
       "contextTokens": 1000000,
@@ -38571,35 +36954,17 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06"
     },
-    "claude-opus-5": {
-      "contextTokens": 1000000,
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-05"
-    },
     "claude-opus-5-5": {
       "contextTokens": 1000000,
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-06"
     },
-    "claude-opus-4-8": {
+    "claude-sonnet-5-5": {
       "contextTokens": 1000000,
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01"
-    },
-    "claude-sonnet-5": {
-      "contextTokens": 1000000,
-      "maxInputTokens": 1000000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01"
-    },
-    "claude-haiku-4-5": {
-      "contextTokens": 200000,
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 64000,
-      "knowledgeCutoff": "2025-02"
+      "knowledgeCutoff": "2026-06"
     },
     "claude-haiku-5-5": {
       "contextTokens": 1000000,
@@ -38610,21 +36975,15 @@
     "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
     "gemini-3.1-pro-preview": { "contextTokens": 1048576 },
     "gemini-3.5-flash-lite": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-lite": {
-      "contextTokens": 1048576,
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2025-01"
-    },
-    "gemini-3.1-flash-image": { "contextTokens": 131072 },
+    "gemini-nano-banana-2.1": { "contextTokens": 131072 },
     "gemini-3-pro-image": { "contextTokens": 65536, "maxOutputTokens": 32768 },
     "gemini-3.1-flash-lite-image": {
       "contextTokens": 65536,
       "maxOutputTokens": 4096,
       "knowledgeCutoff": "2025-01"
     },
-    "deepseek-v4-flash": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
     "deepseek-v4-pro": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
-    "deepseek-v4-flash-vision-exp": { "contextTokens": 1000000, "maxOutputTokens": 384000 },
+    "deepseek-flash": { "contextTokens": 1048576, "maxOutputTokens": 393216 },
     "qwen-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "qwen-3.8-flash": {
       "contextTokens": 1000000,
@@ -38674,21 +37033,15 @@
         "supportsSeed": true
       }
     },
-    "gpt-image-2": { "contextTokens": 4000 },
+    "gpt-image-2.5-sunburst": {},
+    "gpt-image-2.5-flare": {},
     "gpt-4o-mini-tts": { "contextTokens": 2000 },
     "gemini-3.8-flash": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
-    "gemini-3.6-flash": {
-      "contextTokens": 1048576,
-      "maxOutputTokens": 65536,
-      "knowledgeCutoff": "2026-03"
-    },
     "glm-5.3": { "contextTokens": 1000000, "maxOutputTokens": 128000 },
     "glm-5.3-flash": { "contextTokens": 1000000, "maxOutputTokens": 128000 },
     "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "kimi-k3": { "contextTokens": 1048576, "maxOutputTokens": 1048576 },
-    "kimi-k2.7-code": { "contextTokens": 262144, "maxOutputTokens": 32768 },
-    "kimi-k2.6": { "contextTokens": 262144, "maxOutputTokens": 32768 },
-    "grok-4.6": { "contextTokens": 500000, "knowledgeCutoff": "2026-02-01" },
+    "grok-4.7": { "contextTokens": 500000, "knowledgeCutoff": "2026-05" },
     "veo-3.1": {
       "contextTokens": 1024,
       "videoGeneration": {
@@ -38773,7 +37126,6 @@
     "gpt-live-1": { "contextTokens": 128000, "knowledgeCutoff": "2025-07-31" },
     "gpt-4o-mini-transcribe": { "contextTokens": 16000 },
     "minimax-m3": { "contextTokens": 1000000, "maxOutputTokens": 524288 },
-    "minimax-m2.7": { "contextTokens": 204800, "maxOutputTokens": 204800 },
     "veo-3.1-lite": {
       "contextTokens": 1024,
       "videoGeneration": {
@@ -38800,10 +37152,10 @@
         "supportsSeed": true
       }
     },
-    "gemini-omni-flash-preview": { "contextTokens": 1048576 },
+    "gemini-omni-1.1-flash": { "contextTokens": 1048576 },
     "gemini-3.5-live-translate-preview": { "contextTokens": 131072, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-live-preview": { "contextTokens": 131072, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-tts-preview": { "contextTokens": 8192, "maxOutputTokens": 16384 },
+    "gemini-3.8-live": { "contextTokens": 131072, "maxOutputTokens": 65536 },
+    "gemini-3.8-flash-tts": { "contextTokens": 8192, "maxOutputTokens": 16384 },
     "openrouter-auto": { "contextTokens": 2000000 },
     "openrouter-auto-beta": { "contextTokens": 2000000 },
     "openrouter-free": {
@@ -38812,7 +37164,6 @@
       "responseBudgetFloorTokens": 8192
     },
     "gpt-oss-safeguard-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
-    "qwen-3.6-27b": { "contextTokens": 131072, "maxOutputTokens": 16384 },
     "qwen-3.8-27b": { "contextTokens": 131042, "maxOutputTokens": 16384 },
     "or-aion-labs-aion-2-0": { "contextTokens": 131072, "maxOutputTokens": 32768 },
     "or-aion-labs-aion-3-0": { "contextTokens": 131072, "maxOutputTokens": 32768 },
@@ -39130,6 +37481,7 @@
     "or-qwen-qwen3-5-flash-02-23": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-5-plus-02-15": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-5-plus-20260420": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
+    "or-qwen-qwen3-6-27b": { "contextTokens": 262144, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-6-35b-a3b": { "contextTokens": 262144, "maxOutputTokens": 235929 },
     "or-qwen-qwen3-6-flash": { "contextTokens": 1000000, "maxOutputTokens": 65536 },
     "or-qwen-qwen3-6-max-preview": { "contextTokens": 262144, "maxOutputTokens": 65536 },
@@ -39226,15 +37578,11 @@
   },
   "benchmarks": {
     "gpt-6-astra": {},
-    "gpt-5.6-sol": {},
-    "gpt-5.6-terra": {},
-    "gpt-5.6-luna": {},
+    "gpt-6.1-sol": {},
+    "gpt-6-luna": {},
     "claude-fable-5-1": {},
-    "claude-opus-5": {},
     "claude-opus-5-5": {},
-    "claude-opus-4-8": {},
-    "claude-sonnet-5": {},
-    "claude-haiku-4-5": {},
+    "claude-sonnet-5-5": {},
     "claude-haiku-5-5": {},
     "gemini-embedding-2": {},
     "gemini-3.1-pro-preview": {
@@ -39275,47 +37623,9 @@
       }
     },
     "gemini-3.5-flash-lite": {},
-    "gemini-3.1-flash-lite": {},
-    "gemini-3.1-flash-image": {},
+    "gemini-nano-banana-2.1": {},
     "gemini-3-pro-image": {},
     "gemini-3.1-flash-lite-image": {},
-    "deepseek-v4-flash": {
-      "swebench": {
-        "value": 75,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "humaneval": {
-        "value": 95,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "mmlu": {
-        "value": 87,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "gpqa": {
-        "value": 75,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "aime": {
-        "value": 85,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      }
-    },
     "deepseek-v4-pro": {
       "swebench": {
         "value": 81,
@@ -39353,7 +37663,7 @@
         "confidence": "aggregated"
       }
     },
-    "deepseek-v4-flash-vision-exp": {},
+    "deepseek-flash": {},
     "qwen-3.5-flash": {},
     "qwen-3.8-flash": {},
     "sonar": {
@@ -39401,34 +37711,30 @@
     },
     "runway-gen-4": {},
     "seedance-2.5": {},
-    "gpt-image-2": {},
+    "gpt-image-2.5-sunburst": {},
+    "gpt-image-2.5-flare": {},
     "gpt-4o-mini-tts": {},
     "gemini-3.8-flash": {},
-    "gemini-3.6-flash": {},
     "glm-5.3": {},
     "glm-5.3-flash": {},
     "qwen-3.7-plus": {},
     "kimi-k3": {},
-    "kimi-k2.7-code": {},
-    "kimi-k2.6": {},
-    "grok-4.6": {},
+    "grok-4.7": {},
     "veo-3.1": {},
     "veo-3.1-fast": {},
     "gpt-4o-transcribe": {},
     "gpt-live-1": {},
     "gpt-4o-mini-transcribe": {},
     "minimax-m3": {},
-    "minimax-m2.7": {},
     "veo-3.1-lite": {},
-    "gemini-omni-flash-preview": {},
+    "gemini-omni-1.1-flash": {},
     "gemini-3.5-live-translate-preview": {},
-    "gemini-3.1-flash-live-preview": {},
-    "gemini-3.1-flash-tts-preview": {},
+    "gemini-3.8-live": {},
+    "gemini-3.8-flash-tts": {},
     "openrouter-auto": {},
     "openrouter-auto-beta": {},
     "openrouter-free": {},
     "gpt-oss-safeguard-20b": {},
-    "qwen-3.6-27b": {},
     "qwen-3.8-27b": {},
     "or-aion-labs-aion-2-0": {},
     "or-aion-labs-aion-3-0": {},
@@ -39689,6 +37995,7 @@
     "or-qwen-qwen3-5-flash-02-23": {},
     "or-qwen-qwen3-5-plus-02-15": {},
     "or-qwen-qwen3-5-plus-20260420": {},
+    "or-qwen-qwen3-6-27b": {},
     "or-qwen-qwen3-6-35b-a3b": {},
     "or-qwen-qwen3-6-flash": {},
     "or-qwen-qwen3-6-max-preview": {},
@@ -40232,6 +38539,132 @@
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Claude Opus 5.5 carried four values that Anthropic's pages contradict. The effort page states that medium is its default effort and that adaptive thinking is always on, with thinking.type disabled returning 400 at every effort level, where the row recorded default effort high, thinking that could be disabled and a maximum disabled effort of high; the models overview gives a Jun 2026 knowledge cutoff where the row recorded 2026-05; and the public OpenRouter list names it anthropic/claude-opus-5.5 where the row recorded anthropic/claude-opus-5-5. Corrected from platform.claude.com/docs/en/build-with-claude/effort, the models overview and openrouter.ai/api/v1/models, retrieved 2026-10-07. Prices, context and output limits already matched."
+    },
+    {
+      "id": "verification/2026-10-07/66",
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "Claude Sonnet 5.5 (claude-sonnet-5-5), released 2026-09-28, joins the catalog at lifecycle stage registered. Read from platform.claude.com on 2026-10-07: the model overview (id, 1M context, 128K output, Jun 2026 cutoff, $2/$10), the what's-new page (thinking.type disabled returns 400 and between_tools replaces it at high effort or below, forced tool_choice returns 400, computer use through computer_toolset_20260801, thinking blocks bound to model, prefix and account, notes between tool calls returned as thinking blocks), and the effort and prompt caching pages (all five levels, default high, 512-token minimum). The row declares reasoning.disabledThinkingType between_tools, which the Anthropic adapter sends in place of disabled, and providerCompatibility.forcedToolChoice false. The cache read price is recorded at $0.20 because Anthropic's pages give both $0.20 and $0.10. The OpenRouter slug anthropic/claude-sonnet-5.5 was read from the public openrouter.ai/api/v1/models list the same day."
+    },
+    {
+      "id": "verification/2026-10-07/67",
+      "date": "2026-10-07",
+      "verifiedBy": "official-anthropic-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Claude Opus 5.5 and Claude Fable 5.1 now declare providerCompatibility.forcedToolChoice false. The Claude Opus 5.5 what's-new page states that tool_choice any or a named tool returns 400 on Claude Opus 5.5 and that the same applies on Claude Fable 5.1; neither row recorded it, so a forced tool choice sent to either was a provider error. Verified against platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5, retrieved 2026-10-07."
+    },
+    {
+      "id": "verification/2026-10-07/68",
+      "date": "2026-10-07",
+      "verifiedBy": "official-xai-documentation",
+      "status": "ADDITION",
+      "notes": "Grok 4.7 (grok-4.7), released September 2026, joins the catalog at lifecycle stage registered. Read from docs.x.ai on 2026-10-07: the model page (500,000 token context, text and image input, text output, $2.00/$0.50/$6.00 below 200,000 prompt tokens and $4.00/$1.00/$12.00 for every token once the prompt reaches 200,000, effort low, medium, high and xhigh with high the default, function calling and structured outputs, no batch API), the models overview (knowledge cutoff May 2026), the reasoning guide (reasoning cannot be disabled; presencePenalty, frequencyPenalty and stop return an error) and the release notes (no text output limit; the Responses API always returns reasoning.encrypted_content). The tools overview uses grok-4.7 in its web search, X search and code interpreter examples. OpenRouter lists x-ai/grok-4.7 and the Vercel AI Gateway lists spacexai/grok-4.7, both at the same price; those two gateway routes are recorded. The Experiential Labs page for grok-4.7 shows a default waterfall of one disabled rung, so no route through that gateway is recorded. No inference call was made for this entry."
+    },
+    {
+      "id": "verification/2026-10-07/69",
+      "date": "2026-10-07",
+      "verifiedBy": "official-deepseek-documentation-and-live-api",
+      "status": "ADDITION",
+      "notes": "DeepSeek V4.1 Flash (deepseek-flash), released 2026-09-10, joins the catalog at lifecycle stage registered. Read on 2026-10-07 from api-docs.deepseek.com: the pricing page (peak $0.30 cache miss, $1.20 output, $0.006 cache hit, off-peak half, vision supported, thinking and non-thinking), the 2026-09-10 news post (native multimodal support; V4-Flash and V4-Flash-Vision-Exp are retired and their ids temporarily route to V4.1-Flash; deepseek-v4-pro requests route to V4.1-Flash at V4.1-Flash rates from 2026-09-14 04:00 UTC until V4.1-Pro launches) and the thinking mode guide (thinking.type enabled or disabled, enabled by default, reasoning_effort low, high or max with high the default). Measured the same day on the DeepSeek API: GET /models lists deepseek-flash as DeepSeek-V4.1-Flash with a 1,048,576 token context, 393,216 output tokens and text and image input; a request for deepseek-v4-flash is answered by deepseek-flash; and tool_choice required in thinking mode returns \"Thinking mode does not support this tool_choice\", so the row declares providerCompatibility.forcedToolChoice false. The weights are published at huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash under the MIT license. OpenRouter lists deepseek/deepseek-v4.1-flash. The deepseek/deepseek-flash slot does not move with this entry."
+    },
+    {
+      "id": "verification/2026-10-07/70",
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "GPT-6.1 Sol (gpt-6.1-sol) and GPT-6 Luna (gpt-6-luna) join the catalog at lifecycle stage registered. Read from developers.openai.com on 2026-10-07: each model page (1,050,000 token context, 922,000 input, 128,000 output; Sol $2/$0.10/$2.50/$10 with an Apr 30 2026 cutoff and effort low to max, medium the default; Luna $0.10/$0.01/$0.125/$0.50 with a May 18 2026 cutoff and effort none to max, medium the default; text and image input, text output; over 272K input tokens billed at 2x input and cache and 1.5x output; Chat Completions, Responses and Batch; web search, file search, image generation, code interpreter, hosted shell, apply patch, skills, computer use, MCP and tool search on Responses), the latest-model guide (GPT-6 Astra and GPT-6.1 Sol do not accept none; tool calling on those two requires Responses; Luna supports function calling in Chat Completions only at reasoning_effort none; temperature, top_p and top_logprobs must be removed when effort is not none) and the prompt caching guide (GPT-5.6 and later: 1,024 token minimum, 30 minute lifetime, writes at 1.25x, explicit breakpoints). Both rows declare reasoning.rejectsSamplingParameters, which the OpenAI adapter now reads. The models list shows no Terra in generation 6 and describes GPT-6.1 Sol as near-Astra performance at a lower cost. OpenAI gives no release date for either; the OpenRouter slugs are dated 2026-09-29 and 2026-09-22. Whether a forced tool_choice is accepted is not stated on any page read."
+    },
+    {
+      "id": "verification/2026-10-07/71",
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "GPT-6 Astra now records medium as its default effort and declares reasoning.rejectsSamplingParameters. The latest-model guide states that GPT-6 Astra and GPT-6.1 Sol support low, medium (default), high, xhigh and max, do not support none, and that temperature, top_p and top_logprobs must be removed when reasoning effort is not none; the row recorded no default and did not say sampling parameters are rejected, so a request carrying a temperature was a provider error. Prices, limits, cutoff and endpoints on developers.openai.com/api/docs/models/gpt-6-astra still match the row. Verified 2026-10-07."
+    },
+    {
+      "id": "verification/2026-10-07/72",
+      "date": "2026-10-07",
+      "verifiedBy": "official-deepseek-documentation-and-live-api",
+      "status": "CORRECTION",
+      "notes": "DeepSeek V4 Flash (deepseek-v4-flash) now carries the price DeepSeek actually bills for it. The 2026-09-10 news post and the pricing page state that V4-Flash and V4-Flash-Vision-Exp are retired and that both ids temporarily route to V4.1-Flash at V4.1-Flash rates, and a request for deepseek-v4-flash on 2026-10-07 was answered by deepseek-flash. The row is corrected from $0.44/$1.32/$0.014 to the peak V4.1-Flash rate of $0.30/$1.20/$0.006. The DeepSeek vision default moves from deepseek-v4-flash-vision-exp to deepseek-flash, which is the model that already answers the retired id and which the list-models endpoint reports as accepting image input; deepseek-v4-flash-vision-exp then leaves the catalog through retired-models.json. The deepseek/deepseek-flash slot stays on deepseek-v4-flash: the promotion gate refused deepseek-flash on 2026-10-07 with the refusal corpus at 0.000 and the jailbreak corpus at 0.364 against floors of 1.000."
+    },
+    {
+      "id": "verification/2026-10-07/73",
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-and-one-live-image-call",
+      "status": "ADDITION",
+      "notes": "Four Google models join the catalog at lifecycle stage registered: Gemini Omni 1.1 Flash (gemini-omni-1.1-flash, stable 2026-08-27, video), Gemini 3.8 Live (gemini-3.8-live, 2026-09-15, live audio), Gemini 3.8 Flash TTS (gemini-3.8-flash-tts, 2026-09-22, speech) and Gemini Nano Banana 2.1 (gemini-nano-banana-2.1, 2026-10-06, image). Prices were read from ai.google.dev/gemini-api/docs/pricing, release dates and replacements from the deprecations page, and limits and capabilities from each model page, all on 2026-10-07. One live call was made, a single 1K image from gemini-nano-banana-2.1 to read the output format the catalog requires, which was image/jpeg; no call was made to the other three. None of the four matches the family pattern of the slot it would replace, because Google renamed each line, and the eval harness measures text answers only, so no slot moves with this entry."
+    },
+    {
+      "id": "verification/2026-10-07/74",
+      "date": "2026-10-07",
+      "verifiedBy": "official-google-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Shutdown dates from the Gemini API deprecations page, retrieved 2026-10-07, are now recorded as deprecation_date: 2026-10-22 for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview (which read 2026-09-30), and 2026-11-17 for gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. The three Veo rows hold the google/veo, google/veo-fast and google/veo-lite slots, so video generation through those slots stops on 2026-10-22 unless the slots are moved before then. gemini-3.1-flash-image was deprecated on 2026-10-06 with no shutdown date announced, so its row carries no date."
+    },
+    {
+      "id": "verification/2026-10-07/75",
+      "date": "2026-10-07",
+      "verifiedBy": "official-groq-documentation-no-live-call",
+      "status": "CORRECTION",
+      "notes": "Groq shut down qwen/qwen3.6-27b on 2026-09-14 and names qwen/qwen3.8-27b as its replacement; its deprecations page says requests to a deprecated model id return errors after the date. The catalog row qwen-3.6-27b was still offered as a preview model with no date. It now carries the shutdown date and is marked unavailable with that reason, which stops it being routed or probed. The family tool cannot deprecate it, because the compiler holds a model that is not live at or below the shadow stage, and it stays in the catalog because model-routes.json still declares two routes for it; removing it is a separate step. Verified against console.groq.com/docs/deprecations, retrieved 2026-10-07."
+    },
+    {
+      "id": "verification/2026-10-07/76",
+      "date": "2026-10-07",
+      "verifiedBy": "official-openai-documentation-no-live-call",
+      "status": "ADDITION",
+      "notes": "GPT Image 2.5 Sunburst (gpt-image-2.5-sunburst) and GPT Image 2.5 Flare (gpt-image-2.5-flare) join the catalog at lifecycle stage registered, read from their model pages on developers.openai.com on 2026-10-07: identical token prices (text input $5 and $1.25 cached, image input $8 and $2 cached, image output $30), image generation, image edit and batch endpoints, quality low to max, snapshots dated 2026-09-08. No inference call was made. The openai/gpt-image slot stays on gpt-image-2: neither id matches the slot pattern, which expects a bare version after gpt-image, and the eval harness has no measurement for image output. OpenAI lists no deprecation for gpt-image-2. gpt-transcribe is not added: OpenAI prices it at $0.0045 per minute of audio and the catalog has no per-audio-minute price field for a transcription model, so a row would bill at zero or at a guessed token rate."
+    },
+    {
+      "id": "verification/2026-10-07/77",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model outside the QwenCloud free quota, the anthropic/claude-opus slot moves from claude-opus-5 to claude-opus-5-5 and the anthropic/claude-sonnet slot from claude-sonnet-5 to claude-sonnet-5-5. The eval gate was not run for either move: no Anthropic slot has a committed baseline and no run was recorded for either model, so nothing here says the new models were measured against the old ones. The catalog-side gates the family tool computes (provider, family identity, lifecycle, capability coverage, price and limit regression) were evaluated and are recorded on each slot. Claude Opus 5.5 lists at $4/$20 per million against $5/$25 for Claude Opus 5, cannot have thinking switched off and defaults to medium effort; Claude Sonnet 5.5 keeps $2/$10. claude-opus-5, claude-opus-4-8, claude-sonnet-5 and claude-haiku-4-5 leave the roster through the retire tool into retired-models.json, each naming its successor, and their route and probe records go with them. claude-haiku-5-5 takes no family slot: no routing slot names a Haiku model and the picker lists it from its own row. The successors carry only their direct Anthropic route. The marketplace routes the retired rows had (OpenRouter, Vercel AI Gateway, Cheaper Inference, Experiential Labs) were not copied, because no source read for this change states that those gateways serve the new ids or at what price; until they are added, a Claude model has no same-model fallback route and one Claude model cannot stand in for another in a fallback plan. No provider call was made."
+    },
+    {
+      "id": "verification/2026-10-07/78",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the three OpenAI chat slots follow the tier names OpenAI uses from generation 6: the frontier slot now matches the astra name and holds gpt-6-astra, the balanced slot matches sol and holds gpt-6.1-sol, and the fast slot holds gpt-6-luna. The eval gate was not run for any of them: no OpenAI slot has a committed baseline and no run was recorded for these models. The catalog-side gates are recorded on each slot, and one of them fails: gpt-6-astra lists at $10/$50 per million against $4/$20 for gpt-5.6-sol, a 150% rise on both sides against the 25% ceiling, so the frontier slot, the OpenAI default and the flagship_general Auto slot now cost two and a half times what they did. gpt-6.1-sol lists at $2/$10 against $2/$12 for gpt-5.6-terra and gpt-6-luna at $0.10/$0.50 against $0.20/$1.20. gpt-6.1-sol moves from the Max list to the Pro list with the balanced slot it now holds, and its minTier follows; the direct entries for gpt-6-astra, gpt-6.1-sol and gpt-6-luna in tierAllowedModels are dropped because the slots now name them. The openai/gpt-image slot matches the sunburst name and holds gpt-image-2.5-sunburst, the model OpenAI describes as its most capable for generation and editing; gpt-image-2.5-flare stays as a registered row outside the slot. Both 2.5 image rows now declare image input and prompt caching, which their pricing rows (image input and cached input prices) and the edits endpoint already stated; OpenAI publishes no context limit for them, so the slot's 4,000 token minimum is unmet by data and recorded as such on the slot. gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and gpt-image-2 leave through the retire tool into retired-models.json, each naming the model that took its slot, with their route, probe and synced records. The successors carry fewer routes: gpt-6-astra keeps its Experiential Labs and Cheaper Inference routes, gpt-6.1-sol and gpt-6-luna have only the direct OpenAI route, and the OpenRouter and Vercel AI Gateway routes of the 5.6 rows were not copied because nothing read for this change says those gateways serve the new ids. The GPT-6 rows record no ultra, pro or persistent reasoning surface and gpt-6-astra and gpt-6.1-sol do not accept effort none; nothing in product code reads the three surface records. No provider call was made."
+    },
+    {
+      "id": "verification/2026-10-07/79",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the xai/grok slot moves from grok-4.6 to grok-4.7 against the eval gate. The gate was run on 2026-10-07 and refused grok-4.7: it scored 0.818 on the jailbreak corpus against a floor of 1.000, and its p95 latency rose past the 50% tolerance on coding, files and computer use; it scored 1.000 on the other fourteen corpora, where grok-4.6 scored 0.600 on refusal, 0.778 on chat and 0.833 on coding. The slot records the refusal as its promotion reason. Both models list at $2/$6 per million with a 500,000 token context. grok-4.6 leaves through the retire tool into retired-models.json naming grok-4.7, with its route and probe records; its run file and the slot's baseline, which measured it, stay as recorded. No Auto slot names the Grok family, so the model is reached only when picked by name. No provider call was made for this change."
+    },
+    {
+      "id": "verification/2026-10-07/80",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the DeepSeek flash family slot moves from deepseek-v4-flash to the row keyed by DeepSeek's current unversioned id, which serves DeepSeek V4.1 Flash, against the eval gate. The gate was run on 2026-10-07 on the three zero-tolerance corpora and refused that model: golden 0.917, refusal 0.000 and jailbreak 0.364 against floors of 0.900, 1.000 and 1.000, the same three scores its predecessor recorded; the other twelve corpora were not measured for it. The slot records the refusal as its promotion reason. An id with no version gives the slot pattern nothing to parse, so the slot now declares that this id resolves to generation 4.1 (unversionedModelIds), which the family matcher reads; the pattern itself is unchanged. Both models list at $0.30/$1.20 per million. deepseek-v4-flash leaves through the retire tool into retired-models.json naming its successor, with its route, probe and synced records, and deepseek-v4-pro now names the new row as its variant partner. The new row has only the direct DeepSeek route; the marketplace routes of the old row were not copied because nothing read for this change says those gateways serve the new id. The reasoning_premium Auto slot names this family, so the eval safety floor baseline entry for that slot now states what is true of the new model. No task's preferred slots and no plan's allowed slots include reasoning_premium, so Auto does not dispatch to it. deepseek-v4-pro is unchanged. No provider call was made for this change."
+    },
+    {
+      "id": "verification/2026-10-07/81",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the google/gemini-flash-image slot moves from gemini-3.1-flash-image, which Google deprecated on 2026-10-06, to gemini-nano-banana-2.1; the slot pattern now matches the nano-banana name. The eval gate was not run: the harness has no measurement for image output and the slot has no baseline. Two catalog-side gates fail and are recorded on the slot as failing. Input rises from $0.50 to $1.50 per million, 200% against the 25% ceiling, while image output falls from $60 to $30 per million and the 1K image from $0.067 to $0.0336, so a generated image costs about half. The slot's minimum context of 1,000,000 tokens is unmet by both models, which each publish 131,072; the minimum predates the 2026-09-01 correction of the old row and was not changed here. This slot serves the image_generation Auto slot on Pro and above. gemini-3.1-flash-image leaves through the retire tool, and gemini-3-pro-image and gemini-3.1-flash-lite-image now name the new row as their variant partner. Three preview rows with shutdown dates leave for the stable models Google names as their replacements: gemini-omni-flash-preview for gemini-omni-1.1-flash, gemini-3.1-flash-live-preview for gemini-3.8-live and gemini-3.1-flash-tts-preview for gemini-3.8-flash-tts. The retire tool cannot carry out a row that is not live, because the compiler holds such a row at or below the shadow stage and the tool removes only from deprecated; their retired records were written in the tool's shape directly and the rows deleted. gemini-3.5-live-translate-preview stays: it has no shutdown date and no newer row covers live speech translation. gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-embedding-2 and the three Veo rows are unchanged. The retire tool reads a released field the authored rows do not carry and stamps the UTC day, so the sixteen records written for this refresh take their release date from each row's releasedOverride and are dated 2026-10-07, the local day the work was done. No provider call was made."
+    },
+    {
+      "id": "verification/2026-10-07/82",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, three more rows leave the roster. minimax-m2.7, deprecated on 2026-09-06 in favour of minimax-m3, and kimi-k2.7-code, superseded by kimi-k3, leave through the retire tool. qwen-3.6-27b, the Groq-hosted model Groq shut down on 2026-09-14, was marked unavailable and so cannot reach the deprecated stage; its retired record was written directly in the tool's shape, naming qwen-3.8-27b, and its two routes were removed with it. qwen-3.8-27b no longer names it as a variant partner. Removing the Groq row uncovers one row of the synced OpenRouter catalog, which the curated row had hidden because both carried the same wire id: OpenRouter's own listing of that model now appears at stage discovered, like the 346 other mirrored OpenRouter rows. Those rows mirror OpenRouter's catalog, old generations included; none is at a stage that managed traffic or a managed picker admits. No row under provider qwen, no providerOfferings entry and neither qwen family slot was touched. The moonshot/kimi, zhipu/glm and minimax/minimax slots already held their newest models and are unchanged. No provider call was made."
+    },
+    {
+      "id": "verification/2026-10-07/83",
+      "date": "2026-10-07",
+      "verifiedBy": "catalog-type-contract-no-live-call",
+      "status": "CORRECTION",
+      "notes": "gpt-image-2.5-sunburst and gpt-image-2.5-flare were added without a speed, which the compatibility catalog type requires of every model, so every package that typechecks against models.json failed from the commit that added them. Both now carry one. OpenAI publishes no speed for either model: the Sunburst row takes medium, the value the catalog uses where a provider states none and the value gpt-image-2 carried, and the Flare row takes fast, because OpenAI's own description of that model is fast everyday image generation. Neither value is a measurement. No provider call was made."
     }
   ],
   "retiredModels": {
@@ -40262,11 +38695,143 @@
       "metadataSource": "packages/contracts/types/src/models.json@22fa072c3",
       "metadataPreserved": true
     },
+    "claude-haiku-4-5": {
+      "id": "claude-haiku-4-5",
+      "displayName": "Claude Haiku 4.5",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "chat",
+      "contextWindow": 200000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "October 15, 2025",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "claude-haiku-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-haiku-4-5",
+      "metadataPreserved": true
+    },
     "claude-opus-4-6": { "id": "claude-opus-4-6", "metadataPreserved": false },
     "claude-opus-4-6-mini": { "id": "claude-opus-4-6-mini", "metadataPreserved": false },
     "claude-opus-4-7": { "id": "claude-opus-4-7", "metadataPreserved": false },
+    "claude-opus-4-8": {
+      "id": "claude-opus-4-8",
+      "displayName": "Claude Opus 4.8",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "June 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "claude-opus-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-opus-4-8",
+      "metadataPreserved": true
+    },
     "claude-opus-4.6": { "id": "claude-opus-4.6", "metadataPreserved": false },
     "claude-opus-4.7": { "id": "claude-opus-4.7", "metadataPreserved": false },
+    "claude-opus-5": {
+      "id": "claude-opus-5",
+      "displayName": "Claude Opus 5",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "July 24, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "claude-opus-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-opus-5",
+      "metadataPreserved": true
+    },
+    "claude-sonnet-5": {
+      "id": "claude-sonnet-5",
+      "displayName": "Claude Sonnet 5",
+      "provider": "anthropic",
+      "developer": "anthropic",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "June 30, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "claude-sonnet-5-5",
+      "metadataSource": "catalog/models.curation.json#claude-sonnet-5",
+      "metadataPreserved": true
+    },
     "codestral-2508": {
       "id": "codestral-2508",
       "displayName": "Codestral 25.08",
@@ -40294,8 +38859,206 @@
       "metadataSource": "packages/contracts/types/src/models.json@5a165d78b",
       "metadataPreserved": true
     },
+    "deepseek-v4-flash": {
+      "id": "deepseek-v4-flash",
+      "displayName": "DeepSeek V4 Flash",
+      "provider": "deepseek",
+      "developer": "deepseek",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "July 31, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "deepseek-flash",
+      "metadataSource": "catalog/models.curation.json#deepseek-v4-flash",
+      "metadataPreserved": true
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "id": "deepseek-v4-flash-vision-exp",
+      "displayName": "DeepSeek V4 Flash Vision (Experimental)",
+      "provider": "deepseek",
+      "developer": "deepseek",
+      "modelType": "code",
+      "contextWindow": 1000000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "August 21, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "deepseek-flash",
+      "metadataSource": "catalog/models.curation.json#deepseek-v4-flash-vision-exp",
+      "metadataPreserved": true
+    },
     "gemini-3-flash-preview": { "id": "gemini-3-flash-preview", "metadataPreserved": false },
     "gemini-3-pro-preview": { "id": "gemini-3-pro-preview", "metadataPreserved": false },
+    "gemini-3.1-flash-image": {
+      "id": "gemini-3.1-flash-image",
+      "displayName": "Gemini 3.1 Flash Image",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "image",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": true,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "March 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-nano-banana-2.1",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-image",
+      "metadataPreserved": true
+    },
+    "gemini-3.1-flash-lite": {
+      "id": "gemini-3.1-flash-lite",
+      "displayName": "Gemini 3.1 Flash-Lite",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "multimodal",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": true,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "May 7, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.5-flash-lite",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-lite",
+      "metadataPreserved": true
+    },
+    "gemini-3.1-flash-live-preview": {
+      "id": "gemini-3.1-flash-live-preview",
+      "displayName": "Gemini 3.1 Flash Live",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "multimodal",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": true,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "March 11, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-live",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-live-preview",
+      "metadataPreserved": true
+    },
+    "gemini-3.1-flash-tts-preview": {
+      "id": "gemini-3.1-flash-tts-preview",
+      "displayName": "Gemini 3.1 Flash TTS",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "tts",
+      "contextWindow": 8192,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": false,
+        "audioOutput": true,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "April 13, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-flash-tts",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-tts-preview",
+      "metadataPreserved": true
+    },
     "gemini-3.5-flash": {
       "id": "gemini-3.5-flash",
       "displayName": "Gemini 3.5 Flash",
@@ -40323,6 +39086,39 @@
       "metadataSource": "packages/contracts/types/src/models.json@5a165d78b",
       "metadataPreserved": true
     },
+    "gemini-3.6-flash": {
+      "id": "gemini-3.6-flash",
+      "displayName": "Gemini 3.6 Flash",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "multimodal",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": true,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": true,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "July 21, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-3.8-flash",
+      "metadataSource": "catalog/models.curation.json#gemini-3.6-flash",
+      "metadataPreserved": true
+    },
     "gemini-3.7-flash": {
       "id": "gemini-3.7-flash",
       "displayName": "Gemini 3.7 Flash",
@@ -40348,6 +39144,39 @@
       "released": "August 2026",
       "retiredOn": "2026-09-02",
       "metadataSource": "packages/contracts/types/src/models.json@a82e29921",
+      "metadataPreserved": true
+    },
+    "gemini-omni-flash-preview": {
+      "id": "gemini-omni-flash-preview",
+      "displayName": "Gemini Omni Flash",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "video",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": true,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "June 30, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gemini-omni-1.1-flash",
+      "metadataSource": "catalog/models.curation.json#gemini-omni-flash-preview",
       "metadataPreserved": true
     },
     "glm-4.7": { "id": "glm-4.7", "metadataPreserved": false },
@@ -40381,6 +39210,138 @@
     "google/gemma-4-26b-a4b-it:free": {
       "id": "google/gemma-4-26b-a4b-it:free",
       "metadataPreserved": false
+    },
+    "gpt-5.6-luna": {
+      "id": "gpt-5.6-luna",
+      "displayName": "GPT-5.6 Luna",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gpt-6-luna",
+      "metadataSource": "catalog/models.curation.json#gpt-5.6-luna",
+      "metadataPreserved": true
+    },
+    "gpt-5.6-sol": {
+      "id": "gpt-5.6-sol",
+      "displayName": "GPT-5.6 Sol",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gpt-6-astra",
+      "metadataSource": "catalog/models.curation.json#gpt-5.6-sol",
+      "metadataPreserved": true
+    },
+    "gpt-5.6-terra": {
+      "id": "gpt-5.6-terra",
+      "displayName": "GPT-5.6 Terra",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "July 9, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gpt-6.1-sol",
+      "metadataSource": "catalog/models.curation.json#gpt-5.6-terra",
+      "metadataPreserved": true
+    },
+    "gpt-image-2": {
+      "id": "gpt-image-2",
+      "displayName": "GPT Image 2",
+      "provider": "openai",
+      "developer": "openai",
+      "modelType": "image",
+      "contextWindow": 4000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": false,
+        "imageOutput": true,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": false,
+        "structuredOutput": false,
+        "functionCalling": false,
+        "reasoning": false,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "April 21, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "gpt-image-2.5-sunburst",
+      "metadataSource": "catalog/models.curation.json#gpt-image-2",
+      "metadataPreserved": true
     },
     "gpt-oss-120b": {
       "id": "gpt-oss-120b",
@@ -40469,6 +39430,39 @@
       "metadataSource": "packages/contracts/types/src/models.json@22fa072c3",
       "metadataPreserved": true
     },
+    "grok-4.6": {
+      "id": "grok-4.6",
+      "displayName": "Grok 4.6",
+      "provider": "xai",
+      "developer": "xai",
+      "modelType": "reasoning",
+      "contextWindow": 500000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "August 12, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "grok-4.7",
+      "metadataSource": "catalog/models.curation.json#grok-4.6",
+      "metadataPreserved": true
+    },
     "groq-llama-3.1-8b": {
       "id": "groq-llama-3.1-8b",
       "displayName": "Llama 3.1 8B Instant (Groq)",
@@ -40521,6 +39515,105 @@
       "released": "2024",
       "retiredOn": "2026-07-22",
       "metadataSource": "packages/contracts/types/src/models.json@5a165d78b",
+      "metadataPreserved": true
+    },
+    "kimi-k2.6": {
+      "id": "kimi-k2.6",
+      "displayName": "Kimi K2.6",
+      "provider": "moonshot",
+      "developer": "moonshot",
+      "modelType": "multimodal",
+      "contextWindow": 262144,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "April 20, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "kimi-k3",
+      "metadataSource": "catalog/models.curation.json#kimi-k2.6",
+      "metadataPreserved": true
+    },
+    "kimi-k2.7-code": {
+      "id": "kimi-k2.7-code",
+      "displayName": "Kimi K2.7 Code",
+      "provider": "moonshot",
+      "developer": "moonshot",
+      "modelType": "code",
+      "contextWindow": 262144,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": true,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-07",
+      "replacedBy": "kimi-k3",
+      "metadataSource": "catalog/models.curation.json#kimi-k2.7-code",
+      "metadataPreserved": true
+    },
+    "minimax-m2.7": {
+      "id": "minimax-m2.7",
+      "displayName": "MiniMax M2.7",
+      "provider": "minimax",
+      "developer": "minimax",
+      "modelType": "reasoning",
+      "contextWindow": 204800,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": false,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": false,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": true
+      },
+      "released": "March 18, 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "minimax-m3",
+      "metadataSource": "catalog/models.curation.json#minimax-m2.7",
       "metadataPreserved": true
     },
     "mistral-large-3": {
@@ -40647,6 +39740,39 @@
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
       "metadataPreserved": false
     },
+    "qwen-3.6-27b": {
+      "id": "qwen-3.6-27b",
+      "displayName": "Qwen3.6 27B",
+      "provider": "groq",
+      "developer": "qwen",
+      "modelType": "reasoning",
+      "contextWindow": 131072,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "April 2026",
+      "retiredOn": "2026-10-07",
+      "replacedBy": "qwen-3.8-27b",
+      "metadataSource": "catalog/models.curation.json#qwen-3.6-27b",
+      "metadataPreserved": true
+    },
     "qwen-coder-flash": {
       "id": "qwen-coder-flash",
       "displayName": "Qwen Coder Flash",
@@ -40767,52 +39893,52 @@
       "canonicalFamily": "gpt-frontier",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-5.6-sol",
-      "activeGeneration": "5.6",
+      "activeModelKey": "gpt-6-astra",
+      "activeGeneration": "6",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-5.6-sol",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/gpt-balanced": {
       "provider": "openai",
       "canonicalFamily": "gpt-balanced",
       "tier": "balanced",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-5.6-terra",
-      "activeGeneration": "5.6",
+      "activeModelKey": "gpt-6.1-sol",
+      "activeGeneration": "6.1",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-5.6-terra",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/gpt-fast": {
       "provider": "openai",
       "canonicalFamily": "gpt-fast",
       "tier": "fast",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-5.6-luna",
-      "activeGeneration": "5.6",
+      "activeModelKey": "gpt-6-luna",
+      "activeGeneration": "6",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-5.6-luna",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/gpt-image": {
       "provider": "openai",
       "canonicalFamily": "gpt-image",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gpt-image-2",
-      "activeGeneration": "2",
+      "activeModelKey": "gpt-image-2.5-sunburst",
+      "activeGeneration": "2.5",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gpt-image-2",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "openai/transcribe-balanced": {
       "provider": "openai",
@@ -40884,26 +40010,26 @@
       "canonicalFamily": "claude-opus",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "claude-opus-5",
-      "activeGeneration": "5",
+      "activeModelKey": "claude-opus-5-5",
+      "activeGeneration": "5-5",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "claude-opus-5",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "anthropic/claude-sonnet": {
       "provider": "anthropic",
       "canonicalFamily": "claude-sonnet",
       "tier": "balanced",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "claude-sonnet-5",
-      "activeGeneration": "5",
+      "activeModelKey": "claude-sonnet-5-5",
+      "activeGeneration": "5-5",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "claude-sonnet-5",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "google/gemini-flash": {
       "provider": "google",
@@ -40949,13 +40075,13 @@
       "canonicalFamily": "gemini-flash-image",
       "tier": "balanced",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "gemini-3.1-flash-image",
-      "activeGeneration": "3.1",
+      "activeModelKey": "gemini-nano-banana-2.1",
+      "activeGeneration": "2.1",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "gemini-3.1-flash-image",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07; the eval gate was not run"
     },
     "google/gemini-embedding": {
       "provider": "google",
@@ -41014,13 +40140,13 @@
       "canonicalFamily": "deepseek-flash",
       "tier": "fast",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "deepseek-v4-flash",
-      "activeGeneration": "4",
+      "activeModelKey": "deepseek-flash",
+      "activeGeneration": "4.1",
       "activeLifecycle": "stable",
-      "previousModelKey": null,
+      "previousModelKey": "deepseek-v4-flash",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day on the three zero-tolerance corpora and refused this model: refusal 0.000 and jailbreak 0.364 against floors of 1.000"
     },
     "deepseek/deepseek-pro": {
       "provider": "deepseek",
@@ -41079,13 +40205,13 @@
       "canonicalFamily": "grok",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "grok-4.6",
-      "activeGeneration": "4.6",
+      "activeModelKey": "grok-4.7",
+      "activeGeneration": "4.7",
       "activeLifecycle": "stable",
-      "previousModelKey": "grok-4.5",
+      "previousModelKey": "grok-4.6",
       "fallbackChain": [],
-      "promotedAt": "2026-09-05",
-      "promotionReason": "automatic family upgrade from grok-4.5 to grok-4.6"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day and refused this model: jailbreak 0.818 against a floor of 1.000, and p95 latency past tolerance on coding, files and computer use"
     },
     "zhipu/glm": {
       "provider": "zhipu",
@@ -41505,7 +40631,7 @@
           "description": "Shared workhorse general route. Model and provider are selected by the canonical registry."
         },
         "general_balanced": {
-          "modelKey": "gpt-5.6-terra",
+          "modelKey": "gpt-6.1-sol",
           "label": "General Balanced",
           "description": "Shared general balanced route. Model and provider are selected by the canonical registry."
         },
@@ -41515,7 +40641,7 @@
           "description": "Shared general premium route. Model and provider are selected by the canonical registry."
         },
         "flagship_general": {
-          "modelKey": "gpt-5.6-sol",
+          "modelKey": "gpt-6-astra",
           "label": "Flagship General",
           "description": "Shared flagship general route. Model and provider are selected by the canonical registry."
         },
@@ -41525,7 +40651,7 @@
           "description": "Shared coding fast route. Model and provider are selected by the canonical registry."
         },
         "coding_premium": {
-          "modelKey": "gpt-5.6-sol",
+          "modelKey": "gpt-6-astra",
           "label": "Coding Premium",
           "description": "Shared coding premium route. Model and provider are selected by the canonical registry."
         },
@@ -41535,17 +40661,17 @@
           "description": "Shared escalation coding route. Model and provider are selected by the canonical registry."
         },
         "coding_balanced": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Coding Balanced",
           "description": "Shared coding balanced route. Model and provider are selected by the canonical registry."
         },
         "flagship_coding": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Flagship Coding",
           "description": "Shared flagship coding route. Model and provider are selected by the canonical registry."
         },
         "reasoning_premium": {
-          "modelKey": "deepseek-v4-flash",
+          "modelKey": "deepseek-flash",
           "label": "Reasoning Premium",
           "description": "Shared reasoning premium route. Model and provider are selected by the canonical registry."
         },
@@ -41560,22 +40686,22 @@
           "description": "Shared reasoning balanced route. Model and provider are selected by the canonical registry."
         },
         "creative_writing": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Creative Writing",
           "description": "Shared creative writing route. Model and provider are selected by the canonical registry."
         },
         "creative_writing_premium": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Creative Writing Premium",
           "description": "Shared creative writing premium route. Model and provider are selected by the canonical registry."
         },
         "creative_balanced": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Creative Balanced",
           "description": "Shared creative balanced route. Model and provider are selected by the canonical registry."
         },
         "creative_premium": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Creative Premium",
           "description": "Shared creative premium route. Model and provider are selected by the canonical registry."
         },
@@ -41610,27 +40736,27 @@
           "description": "Shared search premium route. Model and provider are selected by the canonical registry."
         },
         "browser_dom": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Browser Dom",
           "description": "Shared browser dom route. Model and provider are selected by the canonical registry."
         },
         "computer_use": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Computer Use",
           "description": "Shared computer use route. Model and provider are selected by the canonical registry."
         },
         "computer_use_balanced": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Computer Use Balanced",
           "description": "Shared computer use balanced route. Model and provider are selected by the canonical registry."
         },
         "computer_use_premium": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Computer Use Premium",
           "description": "Shared computer use premium route. Model and provider are selected by the canonical registry."
         },
         "image_generation": {
-          "modelKey": "gemini-3.1-flash-image",
+          "modelKey": "gemini-nano-banana-2.1",
           "label": "Image Generation",
           "description": "Shared image generation route. Model and provider are selected by the canonical registry."
         },
@@ -41655,7 +40781,7 @@
           "description": "Shared voice live route. Model and provider are selected by the canonical registry."
         },
         "voice_live_backend": {
-          "modelKey": "gpt-5.6-terra",
+          "modelKey": "gpt-6.1-sol",
           "label": "Voice Live Backend",
           "description": "Shared voice live backend route. Model and provider are selected by the canonical registry."
         },
@@ -41670,12 +40796,12 @@
           "description": "Shared voice speech route. Model and provider are selected by the canonical registry."
         },
         "general_balanced_pro": {
-          "modelKey": "gpt-5.6-terra",
+          "modelKey": "gpt-6.1-sol",
           "label": "General Balanced Pro",
           "description": "Shared general balanced pro route. Model and provider are selected by the canonical registry."
         },
         "coding_premium_pro": {
-          "modelKey": "claude-sonnet-5",
+          "modelKey": "claude-sonnet-5-5",
           "label": "Coding Premium Pro",
           "description": "Shared coding premium pro route. Model and provider are selected by the canonical registry."
         },
@@ -41695,12 +40821,12 @@
           "description": "Shared long context pro route. Model and provider are selected by the canonical registry."
         },
         "flagship_coding_pro_plus": {
-          "modelKey": "claude-opus-5",
+          "modelKey": "claude-opus-5-5",
           "label": "Flagship Coding Pro Plus",
           "description": "Shared flagship coding pro plus route. Model and provider are selected by the canonical registry."
         },
         "flagship_general_pro_plus": {
-          "modelKey": "gpt-5.6-sol",
+          "modelKey": "gpt-6-astra",
           "label": "Flagship General Pro Plus",
           "description": "Shared flagship general pro plus route. Model and provider are selected by the canonical registry."
         },
@@ -41713,29 +40839,23 @@
     },
     "legacyTiers": {
       "economy": [
-        "gpt-5.6-luna",
+        "gpt-6-luna",
         "gemini-3.5-flash-lite",
         "gemini-3.8-flash",
         "qwen-3.8-flash",
         "openrouter-free"
       ],
       "pro_additions": [
-        "gpt-5.6-terra",
-        "claude-sonnet-5",
+        "gpt-6.1-sol",
+        "claude-sonnet-5-5",
         "gemini-3.1-pro-preview",
-        "deepseek-v4-flash",
+        "deepseek-flash",
         "deepseek-v4-pro",
         "qwen-3.7-plus",
         "glm-5.3",
         "kimi-k3"
       ],
-      "flagship_additions": [
-        "gpt-5.6-sol",
-        "gpt-6-astra",
-        "claude-fable-5-1",
-        "claude-opus-5",
-        "grok-4.6"
-      ]
+      "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.7"]
     },
     "release": { "policyVersion": 19 }
   }

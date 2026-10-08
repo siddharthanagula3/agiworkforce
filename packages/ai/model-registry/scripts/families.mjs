@@ -106,11 +106,20 @@ export function inferLifecycle(model, modelKey, policy) {
   return previewMarkerFor(apiId, policy) ? policy.previewLifecycle : policy.stableLifecycle;
 }
 
+/**
+ * A provider can serve its current model under an id that carries no version,
+ * so the pattern has nothing to parse. The slot then states which generation
+ * that id resolves to, and the id is compared like any other member.
+ */
+function unversionedGeneration(family, apiId) {
+  return family.unversionedModelIds?.[apiId] ?? null;
+}
+
 export function matchFamilyMember(family, model, modelKey, policy) {
   if (model.provider !== family.provider) return null;
   const apiId = modelApiId(model, modelKey);
   const match = new RegExp(family.apiModelIdPattern).exec(stripLifecycleSuffix(apiId, policy));
-  const generation = match?.groups?.[GENERATION_GROUP];
+  const generation = match?.groups?.[GENERATION_GROUP] ?? unversionedGeneration(family, apiId);
   if (!generation) return null;
   return {
     modelKey,

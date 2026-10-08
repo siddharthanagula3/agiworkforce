@@ -64,11 +64,11 @@ const currentAnthropic = {
     maxOutput: 128_000,
   },
   [anthropicPremiumModelKey]: {
-    input: 5,
-    cacheRead: 0.5,
-    cacheWrite5m: 6.25,
-    cacheWrite1h: 10,
-    output: 25,
+    input: 4,
+    cacheRead: 0.2,
+    cacheWrite5m: 5,
+    cacheWrite1h: 8,
+    output: 20,
     context: 1_000_000,
     maxOutput: 128_000,
   },
@@ -193,15 +193,19 @@ test('publishes the current Anthropic roster with canonical API IDs, limits, and
   assert.equal(standardReasoning.request.togglePath, 'thinking.type');
 
   const premium = compatibility.models[anthropicPremiumModelKey];
-  assert.equal(premium.knowledgeCutoff, '2026-05');
-  assert.equal(premium.released, 'July 24, 2026');
+  assert.equal(premium.knowledgeCutoff, '2026-06');
+  assert.equal(premium.released, 'September 2026');
   assert.equal(premium.tierPolicy.minTier, 'max');
   assert.equal(premium.promptCacheMinimumTokens, 512);
-  assert.deepEqual(premium.providerCompatibility, { nativeWebFetch: false });
+  assert.deepEqual(premium.providerCompatibility, {
+    nativeWebFetch: false,
+    forcedToolChoice: false,
+  });
   assert.deepEqual(premium.reasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(premium.reasoning.defaultEffort, 'medium');
   assert.equal(premium.reasoning.thinkingDefault, 'adaptive');
   assert.equal(premium.reasoning.supportsManualThinking, false);
-  assert.equal(premium.reasoning.maxEffortWhenThinkingDisabled, 'high');
+  assert.equal(premium.reasoning.canDisableThinking, false);
   assert.equal(premium.reasoning.rejectsSamplingParameters, true);
 
   assert.equal(compatibility.models[anthropicStandardModelKey].promo_expires_at, undefined);

@@ -270,11 +270,10 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
     const ordering = orderPreferredSlotsForTaskFamily(
       taskInput('code_execution', 'coding', 'premium', fakeCents),
     )!;
-    expect(ordering.escalationLadder).toEqual([
-      CODING_BALANCED_MODEL_ID,
-      CODING_ESCALATION_MODEL_ID,
-      CODING_PREMIUM_MODEL_ID,
-    ]);
+    const balancedBand = [CODING_BALANCED_MODEL_ID, CODING_ESCALATION_MODEL_ID].sort(
+      (left, right) => fakeCents(left) - fakeCents(right),
+    );
+    expect(ordering.escalationLadder).toEqual([...balancedBand, CODING_PREMIUM_MODEL_ID]);
   });
 
   it('never descends the curator band ladder for any family/task/profile (Decision #10)', () => {

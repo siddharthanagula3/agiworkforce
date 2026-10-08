@@ -4,7 +4,7 @@ import {
   type RouteHealthSnapshot,
   type RoutingRuntimeState,
 } from '@agiworkforce/routing';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getRoutingSlotModel, listManagedRoutesForModel } from '@agiworkforce/types';
 import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 
 const mockGetRouteHealthSnapshot = vi.fn(async (routeIds: readonly string[], _nowMs: number) => {
@@ -95,10 +95,15 @@ describe('resolveWebCloudModelRoute · Auto model continuity across turns', () =
       }),
     );
 
-    // One unhealthy route is not a failed model: the conversation stays on its
-    // model through another host serving it.
-    expect(turnTwo.reason).toBe('continuity');
-    expect(turnTwo.modelKey).toBe(turnOne.modelKey);
+    // One unhealthy route is not a failed model: while another host serves the
+    // model the conversation stays on it, and only a model with no host left
+    // moves up the ladder.
+    const otherHosts = listManagedRoutesForModel(turnOne.modelKey).filter(
+      (route) => route.routeId !== turnOne.routeId,
+    );
+    const staysOnModel = otherHosts.length > 0;
+    expect(turnTwo.reason === 'continuity').toBe(staysOnModel);
+    expect(turnTwo.modelKey === turnOne.modelKey).toBe(staysOnModel);
     expect(turnTwo.routeId).not.toBe(turnOne.routeId);
 
     const everyRoute = getRoutePricingForModel(turnOne.modelKey).map((route) => route.routeId);
@@ -108,7 +113,7 @@ describe('resolveWebCloudModelRoute · Auto model continuity across turns', () =
     // route standing and report continuity, which reads as the ladder refusing
     // to move rather than as the fixture being wrong.
     expect(everyRoute).toContain(turnOne.routeId);
-    expect(everyRoute).toContain(turnTwo.routeId);
+    for (const host of otherHosts) expect(everyRoute).toContain(host.routeId);
     const turnThree = selected(
       resolveWebCloudModelRoute(AUTO_ALIAS, PAID_TIER, CODING_TASK, ZERO_COST_USAGE, undefined, {
         runtimeState: unhealthyRuntimeState(everyRoute),

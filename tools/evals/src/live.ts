@@ -45,6 +45,9 @@ export interface RegistryLike {
   readonly capabilities: Readonly<Record<string, Readonly<Record<string, boolean | null>>>>;
   readonly limits: Readonly<Record<string, { readonly contextTokens?: number | null }>>;
   readonly families: Readonly<Record<string, RegistryFamily>>;
+  readonly governance?: Readonly<
+    Record<string, { readonly reasoningTokenBillingClass?: string } | undefined>
+  >;
 }
 
 export interface LiveTarget {
@@ -56,6 +59,14 @@ export interface LiveTarget {
 }
 
 const LIVE = 'live';
+const REASONING_BESIDE_OUTPUT = 'additional_to_output';
+
+export function livePricing(registry: RegistryLike, target: LiveTarget): RoutePricing | null {
+  const pricing = target.route.pricing;
+  if (pricing === undefined) return null;
+  const billingClass = registry.governance?.[target.route.provider]?.reasoningTokenBillingClass;
+  return { ...pricing, reasoningBilledBesideOutput: billingClass === REASONING_BESIDE_OUTPUT };
+}
 
 export function resolveLiveTarget(
   registry: RegistryLike,

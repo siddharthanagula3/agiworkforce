@@ -5,8 +5,6 @@ import type { ProtocolRoute } from '@agiworkforce/types';
 import { modelRegistry } from '@agiworkforce/model-registry';
 type ScanModule0 = typeof import('@agiworkforce/types');
 
-const MANAGED_ONLY_EXPERIMENTAL_PROVIDER = 'cheaperinference_anthropic';
-
 vi.mock('server-only', () => ({}));
 
 const OPENAI_CHAT_FIXTURE_BASE_URL = 'https://openrouter.ai/api/v1';
@@ -198,19 +196,25 @@ describe('resolveProviderFromModel', () => {
   });
 
   it('falls back to default resolution when a managed-only route is asked to serve byok traffic', () => {
-    const model = requireProviderDefaultModel('anthropic');
+    const [routeId, route] = Object.entries(modelRegistry.routes).find(
+      ([, candidate]) =>
+        !candidate.isDefault &&
+        (candidate.trustModes as readonly string[]).includes('managed_cloud') &&
+        !(candidate.trustModes as readonly string[]).includes('byok'),
+    )!;
+    const defaultProvider = Object.values(modelRegistry.routes).find(
+      (candidate) => candidate.modelKey === route.modelKey && candidate.isDefault,
+    )!.provider;
+    expect(defaultProvider).not.toBe(route.provider);
 
     expect(
-      resolveProviderFromModel(model, `${MANAGED_ONLY_EXPERIMENTAL_PROVIDER}/${model}`, {
+      resolveProviderFromModel(route.modelKey, routeId, {
         trustMode: 'byok',
         hasUserProviderKey: true,
       }),
-    ).toBe('anthropic');
+    ).toBe(defaultProvider);
     expect(loggerWarn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        routeId: `${MANAGED_ONLY_EXPERIMENTAL_PROVIDER}/${model}`,
-        reason: 'trust_mode_not_permitted',
-      }),
+      expect.objectContaining({ routeId, reason: 'trust_mode_not_permitted' }),
       expect.any(String),
     );
   });
