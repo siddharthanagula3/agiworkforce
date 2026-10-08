@@ -1,4 +1,4 @@
--- Reverses 0355_team_premium_seats.sql.
+-- Reverses 0356_team_premium_seats.sql.
 --
 -- Cost: every Premium seat assignment and every paid-through date is destroyed,
 -- and the stored Premium seat count with them. Stripe keeps billing the Premium
@@ -8,6 +8,8 @@
 
 begin;
 
+drop trigger if exists guard_premium_paid_through on public.organization_members;
+drop function if exists public.guard_premium_paid_through();
 drop trigger if exists guard_premium_seat_assignment on public.organization_members;
 drop function if exists public.guard_premium_seat_assignment();
 
@@ -43,6 +45,6 @@ alter table public.organization_members drop column if exists seat_type;
 alter table public.organizations drop column if exists licensed_premium_seats;
 
 delete from public.schema_migrations
- where filename = '0355_team_premium_seats.sql';
+ where filename = '0356_team_premium_seats.sql';
 
 commit;
