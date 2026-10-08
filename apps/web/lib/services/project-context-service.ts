@@ -8,6 +8,7 @@ import {
   type InstructionLayer,
 } from '@agiworkforce/context';
 import type { ContextCandidate, ContextSourceLoader } from '@agiworkforce/context-engine';
+import { PROJECT_INSTRUCTIONS_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { MAX_PROJECT_KNOWLEDGE_FILES } from '@agiworkforce/types';
 
 import { fenceContextSource } from '@/app/api/llm/v1/chat/completions/lib/context/context-manifest';
@@ -72,7 +73,6 @@ export interface LoadedProjectContext extends ProjectContext {
   sources: ContextSource[];
 }
 
-const MAX_INSTRUCTIONS_CHARS = 8_000;
 const MAX_DESCRIPTION_CHARS = 1_000;
 export const MAX_KNOWLEDGE_FILES = MAX_PROJECT_KNOWLEDGE_FILES;
 const MAX_FILE_SUMMARY_CHARS = 300;
@@ -92,7 +92,7 @@ const MAX_TOTAL_SIBLING_CHARS = 16_000;
  */
 export const MAX_PROJECT_CONTEXT_CHARS =
   MAX_DESCRIPTION_CHARS +
-  MAX_INSTRUCTIONS_CHARS +
+  PROJECT_INSTRUCTIONS_MAX_LENGTH +
   MAX_TOTAL_FILE_CONTENT_CHARS +
   MAX_TOTAL_SIBLING_CHARS +
   MAX_KNOWLEDGE_FILES * (MAX_FILE_NAME_CHARS + MAX_FILE_SUMMARY_CHARS) +
@@ -198,6 +198,7 @@ export async function loadProjectContext(
     userId: string;
     currentConversationId?: string;
     currentUserQuery?: string;
+    semanticRetrieval?: boolean;
   },
 ): Promise<LoadedProjectContext | null> {
   const [project] = await db.query<{
@@ -356,6 +357,7 @@ export async function loadProjectContext(
     userId: params.userId,
     organizationId: project.organization_id ?? null,
     query,
+    semantic: params.semanticRetrieval ?? true,
     files: files
       .filter((file) => (file.extracted_text?.trim().length ?? 0) > MAX_FILE_CONTENT_CHARS)
       .map((file) => ({ fileId: file.id, extractedText: file.extracted_text ?? '' })),
@@ -516,7 +518,7 @@ export function projectContextDropOrder(
 }
 
 const PROJECT_SOURCE_BUDGET_CHARS: Readonly<Record<string, number>> = {
-  project_instruction: MAX_INSTRUCTIONS_CHARS,
+  project_instruction: PROJECT_INSTRUCTIONS_MAX_LENGTH,
   project_knowledge_file: MAX_TOTAL_FILE_CONTENT_CHARS,
   project_sibling_chat: MAX_TOTAL_SIBLING_CHARS,
 };
@@ -545,7 +547,7 @@ export function projectContextLoaders(context: LoadedProjectContext): ContextSou
 
   return [...new Set(context.sources.map((source) => source.sourceClass))].map((sourceClass) => ({
     sourceClass,
-    budgetChars: PROJECT_SOURCE_BUDGET_CHARS[sourceClass] ?? MAX_INSTRUCTIONS_CHARS,
+    budgetChars: PROJECT_SOURCE_BUDGET_CHARS[sourceClass] ?? PROJECT_INSTRUCTIONS_MAX_LENGTH,
     load: (): ContextCandidate[] =>
       context.sources
         .filter((source) => source.sourceClass === sourceClass)
@@ -610,7 +612,7 @@ export function renderProjectContextBlocks(context: ProjectContext): {
     instructionSections.push(
       `Project instructions (set by the user; follow them for every reply in this project):\n${truncate(
         context.instructions.trim(),
-        MAX_INSTRUCTIONS_CHARS,
+        PROJECT_INSTRUCTIONS_MAX_LENGTH,
       )}`,
     );
   }

@@ -23,7 +23,10 @@ import { ProjectMemoryPanel } from './ProjectMemoryPanel';
 import { ProjectDefaultModelField } from './ProjectDefaultModelField';
 import type { Project } from '@features/projects/stores/project-store';
 import { toUserMessage } from '@/lib/user-error-message';
-import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import {
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_INSTRUCTIONS_MAX_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 
 export interface ProjectSettingsDialogProps {
   open: boolean;
@@ -273,17 +276,23 @@ export function ProjectSettingsDialog({
               >
                 Instructions
               </Label>
-              <p className="text-xs text-muted-foreground">
+              <p id="ps-instructions-hint" className="text-xs text-muted-foreground">
                 Set context and customize how AGI responds in this project.
               </p>
               <Textarea
                 id="ps-instructions"
+                aria-describedby="ps-instructions-hint ps-instructions-count"
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
                 placeholder={`e.g. "Respond in Spanish. Reference the latest documentation. Keep answers short and focused."`}
+                maxLength={PROJECT_INSTRUCTIONS_MAX_LENGTH}
                 rows={5}
                 className="resize-y rounded-xl bg-muted/40"
               />
+              <p id="ps-instructions-count" className="text-end text-sm text-muted-foreground">
+                {instructions.length.toLocaleString()} /{' '}
+                {PROJECT_INSTRUCTIONS_MAX_LENGTH.toLocaleString()}
+              </p>
             </div>
 
             <ProjectDefaultModelField value={defaultModelId} onChange={setDefaultModelId} />

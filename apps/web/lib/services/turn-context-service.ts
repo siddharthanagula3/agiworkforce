@@ -207,10 +207,17 @@ interface PersonalContextParts {
   readonly memory: string | null;
   readonly pastChats: string | null;
   readonly memoryCitations: readonly ManagedMemoryCitation[];
+  readonly projectBlocks: readonly ProjectContextBlock[];
+}
+
+interface TurnProjectContext {
+  readonly context: LoadedProjectContext;
+  readonly blocks: readonly ProjectContextBlock[];
 }
 
 export interface FreeOfferingPersonalContext {
   readonly blocks: readonly InstructionBlock[];
+  readonly projectBlocks: readonly ProjectContextBlock[];
   readonly memoryCitations: readonly ManagedMemoryCitation[];
 }
 
@@ -225,6 +232,7 @@ async function resolvePersonalContextParts(
     temporaryChat: boolean;
     memoryEnabled: boolean | undefined;
     query: string;
+    project?: TurnProjectContext | null;
     recordManifest?: boolean;
   },
 ): Promise<PersonalContextParts> {
@@ -262,8 +270,8 @@ async function resolvePersonalContextParts(
       memoryEnabled: input.memoryEnabled,
       policy,
       query: input.query,
-      projectContext: null,
-      projectBlocks: [],
+      projectContext: input.project?.context ?? null,
+      projectBlocks: input.project?.blocks ?? [],
       ...(input.recordManifest === undefined ? {} : { recordManifest: input.recordManifest }),
     });
   } catch (error) {
@@ -277,6 +285,7 @@ async function resolvePersonalContextParts(
     memory: context?.memoryPrompt || null,
     pastChats: context?.pastChatPrompt || null,
     memoryCitations: context?.memoryPrompt ? context.memoryCitations : [],
+    projectBlocks: context?.projectBlocks ?? input.project?.blocks ?? [],
   };
 }
 
@@ -292,10 +301,18 @@ export async function resolveFreeOfferingPersonalContext(
     memoryEnabled: boolean | undefined;
     personalization: boolean | undefined;
     query: string;
+    project: TurnProjectContext | null;
   },
 ): Promise<FreeOfferingPersonalContext> {
-  if (input.personalization === false) return { blocks: [], memoryCitations: [] };
-  const parts = await resolvePersonalContextParts(db, input);
+  const personalized = input.personalization !== false;
+  if (!personalized && !input.project) {
+    return { blocks: [], projectBlocks: [], memoryCitations: [] };
+  }
+  const parts = await resolvePersonalContextParts(db, {
+    ...input,
+    memoryEnabled: personalized ? input.memoryEnabled : false,
+  });
+  if (!personalized) return { blocks: [], projectBlocks: parts.projectBlocks, memoryCitations: [] };
   const blocks: InstructionBlock[] = [];
   if (parts.instructions !== null) blocks.push({ layer: 'personalized', text: parts.instructions });
   if (parts.memory !== null) {
@@ -304,7 +321,7 @@ export async function resolveFreeOfferingPersonalContext(
   if (parts.pastChats !== null) {
     blocks.push({ layer: instructionLayerForContextClass('past_chat'), text: parts.pastChats });
   }
-  return { blocks, memoryCitations: parts.memoryCitations };
+  return { blocks, projectBlocks: parts.projectBlocks, memoryCitations: parts.memoryCitations };
 }
 
 export async function resolveLocalTurnPersonalContext(
