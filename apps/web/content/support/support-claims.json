@@ -2402,22 +2402,57 @@
       ]
     },
     {
+      "id": "billing-team-admin-assigns-paid-premium-seat",
+      "doc": "billing-and-plans",
+      "section": "Team seat types",
+      "kind": "prose",
+      "sentence": "An owner or admin can assign a Premium seat the team already pays for and has not assigned, at no extra charge.",
+      "implementation": ["apps/web/lib/services/team-seat-type-service.ts#changeMemberSeatType"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/team-seat-type-service.test.ts",
+          "name": "lets %s assign a Premium seat that is already paid for and unassigned, charging nothing"
+        }
+      ]
+    },
+    {
+      "id": "billing-team-owner-only-bill-changes",
+      "doc": "billing-and-plans",
+      "section": "Team seat types",
+      "kind": "prose",
+      "sentence": "Only the workspace owner can make a change that alters the bill.",
+      "implementation": ["apps/web/lib/services/team-seat-type-service.ts#changeMemberSeatType"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/team-seat-type-service.test.ts",
+          "name": "refuses a Premium seat that would be charged when asked by %s, and charges nothing"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/team-seat-type-service.test.ts",
+          "name": "refuses an admin moving a Premium member back to Standard, which changes the next invoice"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/team/[memberId]/seat/route.authority.test.ts",
+          "name": "refuses an admin a charged Premium seat and charges nothing"
+        }
+      ]
+    },
+    {
       "id": "billing-team-premium-upgrade-charges-now",
       "doc": "billing-and-plans",
       "section": "Team seat types",
       "kind": "prose",
-      "sentence": "Moving a member to Premium charges the difference for the rest of the current period straight away and keeps the renewal date; a Premium seat the team already pays for and has not assigned is used first, at no extra charge.",
+      "sentence": "Moving a member to Premium when no paid Premium seat is free charges the difference for the rest of the current period straight away and keeps the renewal date.",
       "implementation": ["apps/web/lib/services/team-seat-type-service.ts#changeMemberSeatType"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/services/__tests__/team-seat-type-service.test.ts",
           "name": "converts one Standard seat, charges the rest of the period now and keeps the renewal date"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/lib/services/__tests__/team-seat-type-service.test.ts",
-          "name": "uses a Premium seat the team already pays for without charging again"
         }
       ]
     },
@@ -2440,7 +2475,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/services/__tests__/team-seat-type-service.test.ts",
-          "name": "keeps Premium entitlement until the period the team already paid for ends"
+          "name": "records the paid period on the privileged connection after the member has left Premium"
         },
         {
           "kind": "test",
