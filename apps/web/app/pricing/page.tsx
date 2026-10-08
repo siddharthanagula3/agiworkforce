@@ -19,7 +19,11 @@ import {
   pricingManagedChatSurfaceNote,
   pricingSurfaceStatus,
 } from '@/features/marketing/components/pricing/developer-surface-presentation';
-import { SURFACE_NAMES } from '@/lib/surface-status';
+import { isReleased, SURFACE_NAMES } from '@/lib/surface-status';
+import {
+  connectorFeatureNote,
+  planCapabilityLabel,
+} from '@/features/billing/lib/plan-capability-release';
 import type { TFunction } from 'i18next';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -34,12 +38,12 @@ import {
   type FreeQuotaMediaOffer,
 } from '@agiworkforce/cloud-contracts';
 import {
-  BILLING_PLAN_CAPABILITY_LABELS,
   BILLING_PLAN_PRICING,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
   compareManagedUsage,
+  connectorsReleased,
   currencyMinorUnitDigits,
   formatPrivacyModeLabel,
   getAllowedModelsForTier,
@@ -807,6 +811,15 @@ export default function PricingPage() {
     percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
   })}`;
 
+  const connectorsOpen = connectorsReleased();
+  const concurrencyFeature = (plan: BillingPlanTier, connectorKey: string) => {
+    if (connectorsOpen) return t(connectorKey);
+    const chats = getBillingPlanProductLimits(plan)?.maxConcurrentTurns;
+    return typeof chats === 'number' ? t('chatsAtOnce', { chats }) : null;
+  };
+  const unlimitedFeature = (connectorKey: string) =>
+    connectorsOpen ? t(connectorKey) : t('unlimitedProjectsAndStorage');
+
   const freeMediaFeature = freeMediaFeatureKey(freeMediaOffer);
   const freeFeatures = presentCopy([
     freeMediaFeature ? t(freeMediaFeature) : null,
@@ -819,12 +832,12 @@ export default function PricingPage() {
     t('basicFeature2'),
     t('basicFeature3'),
     t('basicFeature4'),
-    t('basicFeature5'),
+    concurrencyFeature('basic', 'basicFeature5'),
     t('basicFeature6'),
   ]);
   const proFeatures = presentCopy([
     ...usageComparisonCopy('pro'),
-    t('proFeature2'),
+    concurrencyFeature('pro', 'proFeature2'),
     t('proFeature3'),
     t('proFeature4'),
     t('proFeature5'),
@@ -840,7 +853,7 @@ export default function PricingPage() {
     t('seatTypesNote'),
     ...usageComparisonCopy('team'),
     t('teamFeature2'),
-    t('teamFeature3'),
+    isReleased('cli') ? t('teamFeature3') : null,
     t('teamFeature4'),
     t('teamFeature5'),
   ]);
@@ -849,15 +862,15 @@ export default function PricingPage() {
       ? presentCopy([
           ...usageComparisonCopy('max'),
           `All ${FLAGSHIP_MODEL_COUNT} flagship models unlocked for manual selection`,
-          t('maxFeature4'),
-          t('maxFeature5'),
+          unlimitedFeature('maxFeature4'),
+          concurrencyFeature('max', 'maxFeature5'),
           t('maxFeature6'),
         ])
       : presentCopy([
           ...usageComparisonCopy('max_15x'),
           t('max15xFeature3'),
-          t('max15xFeature4'),
-          t('max15xFeature5'),
+          unlimitedFeature('max15xFeature4'),
+          concurrencyFeature('max_15x', 'max15xFeature5'),
           t('max15xFeature6'),
         ]);
 
@@ -904,7 +917,7 @@ export default function PricingPage() {
   const capabilityRow = (capability: BillingPlanCapability, note?: string) =>
     comparisonRow(
       capability,
-      BILLING_PLAN_CAPABILITY_LABELS[capability],
+      planCapabilityLabel(capability),
       (plan) => capabilityCell(plan, capability),
       note,
     );
@@ -912,7 +925,7 @@ export default function PricingPage() {
     capability: 'image_generation' | 'video_generation',
     category: FreeQuotaMediaCategory,
   ) =>
-    comparisonRow(capability, BILLING_PLAN_CAPABILITY_LABELS[capability], (plan) =>
+    comparisonRow(capability, planCapabilityLabel(capability), (plan) =>
       mediaCapabilityCell(plan, category, freeMediaOffer[category], t('compareLimitedPreview')),
     );
   const usageCell = (plan: ComparedPlan): PlanComparisonCell => {
@@ -953,7 +966,7 @@ export default function PricingPage() {
       label: t('features'),
       rows: [
         capabilityRow('managed_chat', pricingManagedChatSurfaceNote(t)),
-        comparisonRow('projects', BILLING_PLAN_CAPABILITY_LABELS.projects, (plan) =>
+        comparisonRow('projects', planCapabilityLabel('projects'), (plan) =>
           limitCell(getBillingPlanProductLimits(plan)?.projects, t),
         ),
         comparisonRow('knowledgeStorage', t('compareRowKnowledgeStorage'), (plan) =>
@@ -961,10 +974,13 @@ export default function PricingPage() {
             formatBytes(bytes, 0),
           ),
         ),
-        comparisonRow('customMcp', t('compareRowCustomMcp'), (plan) =>
-          limitCell(getBillingPlanProductLimits(plan)?.customMcpServers, t),
+        comparisonRow(
+          'customMcp',
+          t('compareRowCustomMcp'),
+          (plan) => limitCell(getBillingPlanProductLimits(plan)?.customMcpServers, t),
+          connectorFeatureNote(),
         ),
-        capabilityRow('skills_connectors'),
+        capabilityRow('skills_connectors', connectorFeatureNote()),
         capabilityRow('agi_work'),
         capabilityRow('deep_research'),
         mediaRow('image_generation', 'image'),

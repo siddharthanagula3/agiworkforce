@@ -6,6 +6,7 @@ import {
   type SurfaceId,
   type SurfaceStatusMap,
 } from '@/lib/surface-status';
+import { MANAGED_CHAT_SURFACES } from '@/features/billing/lib/plan-capability-release';
 
 export function pricingSurfaceStatus(
   surface: SurfaceId,
@@ -26,13 +27,6 @@ export function pricingDeveloperSurfaceNote(
     vscodeStatus: pricingSurfaceStatus('vscode', t, statuses),
   });
 }
-
-const MANAGED_CHAT_SURFACES = [
-  'web',
-  'desktop',
-  'mobile',
-  'chrome',
-] as const satisfies readonly SurfaceId[];
 
 export function pricingManagedChatSurfaceNote(
   t: TFunction<'pricing'>,

@@ -12,6 +12,7 @@ import {
   LocalAccessSection,
 } from '@/features/desktop-host';
 import { PaneTitle } from '@shared/components/PaneTitle';
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
@@ -97,8 +98,7 @@ export function CapabilitiesSection() {
       <LockdownModePanel />
 
       <p className="text-xs text-muted-foreground">
-        Running models on your own provider keys is available in the CLI; VS Code support is coming
-        soon. Hosted Web and Desktop are Managed Cloud only and never store a provider key of yours.
+        {`Running models on your own provider keys belongs to the ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} Hosted Web and Desktop are Managed Cloud only and never store a provider key of yours.`}
       </p>
     </div>
   );

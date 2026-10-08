@@ -1,8 +1,8 @@
 import { translateUiPlural } from '@agiworkforce/ui';
 import {
-  BILLING_PLAN_CAPABILITY_LABELS,
   MANAGED_USAGE_BASELINES,
   canUseBillingPlanCapability,
+  connectorsReleased,
   formatCredits,
   getBillingPlanPricing,
   getBillingPlanProductLimits,
@@ -19,6 +19,12 @@ import {
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { formatUsdAmount } from './billing-format';
+import {
+  CURRENT_RELEASE_STATE,
+  planCapabilityLabel,
+  planCapabilityReleased,
+  type ProductReleaseState,
+} from './plan-capability-release';
 
 export type SelectablePaidPlan = SelfServePaidPlanTier;
 export type DisplayPaidPlan = SelectablePaidPlan | 'team';
@@ -96,12 +102,23 @@ const COMPARED_LIMITS: ReadonlyArray<{
   >;
   label: string;
   format: (value: number) => string;
+  needsConnectors?: true;
 }> = [
   { key: 'projects', label: 'Projects', format: formatCount },
   { key: 'knowledgeStorageBytes', label: 'File storage', format: formatStorage },
-  { key: 'customMcpServers', label: 'Custom MCP servers', format: formatCount },
+  {
+    key: 'customMcpServers',
+    label: 'Custom MCP servers',
+    format: formatCount,
+    needsConnectors: true,
+  },
   { key: 'maxConcurrentTurns', label: 'Chats at once', format: formatCount },
-  { key: 'maxConnectorTools', label: 'Connector tools', format: formatCount },
+  {
+    key: 'maxConnectorTools',
+    label: 'Connector tools',
+    format: formatCount,
+    needsConnectors: true,
+  },
   { key: 'maxScheduledTasks', label: 'Scheduled tasks', format: formatCount },
 ];
 
@@ -136,7 +153,11 @@ export interface PlanChangeSummary {
   lostCapabilities: string[];
 }
 
-export function summarizePlanChange(from: BillingPlanTier, to: BillingPlanTier): PlanChangeSummary {
+export function summarizePlanChange(
+  from: BillingPlanTier,
+  to: BillingPlanTier,
+  release: ProductReleaseState = CURRENT_RELEASE_STATE,
+): PlanChangeSummary {
   const fromWindows = planCreditWindows(from);
   const toWindows = planCreditWindows(to);
   const credits: PlanValueChange[] =
@@ -164,7 +185,8 @@ export function summarizePlanChange(from: BillingPlanTier, to: BillingPlanTier):
   const toLimits = getBillingPlanProductLimits(to);
   const limits: PlanValueChange[] =
     fromLimits && toLimits
-      ? COMPARED_LIMITS.flatMap(({ key, label, format }) => {
+      ? COMPARED_LIMITS.flatMap(({ key, label, format, needsConnectors }) => {
+          if (needsConnectors && !connectorsReleased(release.connectors)) return [];
           const before = limitValue(fromLimits[key], format);
           const after = limitValue(toLimits[key], format);
           return before === after ? [] : [{ label, from: before, to: after }];
@@ -175,8 +197,10 @@ export function summarizePlanChange(from: BillingPlanTier, to: BillingPlanTier):
     credits,
     limits,
     lostCapabilities: COMPARED_CAPABILITIES.flatMap((capability) =>
-      canUseBillingPlanCapability(from, capability) && !canUseBillingPlanCapability(to, capability)
-        ? [BILLING_PLAN_CAPABILITY_LABELS[capability]]
+      planCapabilityReleased(capability, release) &&
+      canUseBillingPlanCapability(from, capability) &&
+      !canUseBillingPlanCapability(to, capability)
+        ? [planCapabilityLabel(capability, release)]
         : [],
     ),
   };
@@ -189,29 +213,36 @@ export interface BillingPlanDisplay {
   features: string[];
 }
 
-export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay {
+export function getBillingPlanDisplay(
+  plan: BillingPlanTier,
+  release: ProductReleaseState = CURRENT_RELEASE_STATE,
+): BillingPlanDisplay {
   const pricing = getBillingPlanPricing(plan);
   const monthlyPriceUsd = getPlanPriceUsd(plan, 'monthly');
   const limits = getBillingPlanProductLimits(plan);
   const features: string[] = [];
+  const offered = (capability: BillingPlanCapability) =>
+    planCapabilityReleased(capability, release) && canUseBillingPlanCapability(plan, capability);
 
-  if (canUseBillingPlanCapability(plan, 'managed_chat')) {
-    features.push(BILLING_PLAN_CAPABILITY_LABELS.managed_chat);
+  if (offered('managed_chat')) {
+    features.push(planCapabilityLabel('managed_chat', release));
   }
   if (limits) {
     features.push(limitLabel(limits.projects, 'project', 'projects', 'counts.planProjects'));
-    features.push(
-      limitLabel(
-        limits.customMcpServers,
-        'custom MCP server',
-        'custom MCP servers',
-        'counts.planCustomMcpServers',
-      ),
-    );
+    if (connectorsReleased(release.connectors)) {
+      features.push(
+        limitLabel(
+          limits.customMcpServers,
+          'custom MCP server',
+          'custom MCP servers',
+          'counts.planCustomMcpServers',
+        ),
+      );
+    }
   }
   for (const capability of FEATURED_CAPABILITIES) {
-    if (canUseBillingPlanCapability(plan, capability)) {
-      features.push(BILLING_PLAN_CAPABILITY_LABELS[capability]);
+    if (offered(capability)) {
+      features.push(planCapabilityLabel(capability, release));
     }
   }
 

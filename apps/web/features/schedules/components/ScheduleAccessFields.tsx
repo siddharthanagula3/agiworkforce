@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { Button, Checkbox, Label, Spinner } from '@agiworkforce/ui';
 import type { ManagedCloudScheduleSources } from '@agiworkforce/cloud-contracts';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 
@@ -121,65 +122,98 @@ export function ScheduleAccessFields({
 
       <fieldset className="space-y-3">
         <legend className="text-xs font-medium text-muted-foreground">Connectors</legend>
-        <p className="text-xs text-muted-foreground">
-          A run can use tools only from the connectors checked here. A tool that needs your approval
-          still pauses the run until you approve or deny it.
-        </p>
-        {loading ? (
-          <div className="flex items-center gap-2">
-            <Spinner size="sm" />
-            <span className="text-sm text-muted-foreground">Reading your connectors…</span>
-          </div>
-        ) : error ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-            <Button type="button" variant="outline" size="sm" onClick={retry}>
-              Try again
-            </Button>
-          </div>
-        ) : connected.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No connectors are connected.{' '}
-            <Link
-              href="/connectors"
-              className="font-medium text-foreground underline underline-offset-2"
-            >
-              Connect one
-            </Link>{' '}
-            to let runs use it.
-          </p>
+        {connectorsReleased() ? (
+          <ConnectorChoices
+            connected={connected}
+            connectors={connectors}
+            loading={loading}
+            error={error}
+            retry={retry}
+            toggleConnector={toggleConnector}
+          />
         ) : (
-          <ul className="space-y-2">
-            {connected.map((entry) => {
-              const id = `schedule-connector-${entry.id}`;
-              return (
-                <li key={entry.id} className="flex items-center gap-3">
-                  <Checkbox
-                    id={id}
-                    checked={connectors === null || connectors.includes(entry.serverId)}
-                    onCheckedChange={(checked) => toggleConnector(entry.serverId, checked === true)}
-                  />
-                  <Label htmlFor={id} className="cursor-pointer">
-                    {entry.name}
-                  </Label>
-                </li>
-              );
-            })}
-          </ul>
+          <p className="text-sm text-muted-foreground">{CONNECTORS_COMING_SOON_MESSAGE}</p>
         )}
-        {connectors === null && connected.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Every connector is included, including ones you connect later. Uncheck one to choose
-            exactly which the schedule uses.
-          </p>
-        ) : connectors !== null && connected.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            A connector you connect later is not added until you check it here.
-          </p>
-        ) : null}
       </fieldset>
     </section>
+  );
+}
+
+function ConnectorChoices({
+  connected,
+  connectors,
+  loading,
+  error,
+  retry,
+  toggleConnector,
+}: {
+  connected: ConnectedConnector[];
+  connectors: string[] | null;
+  loading: boolean;
+  error: string | null;
+  retry: () => void;
+  toggleConnector: (serverId: string, included: boolean) => void;
+}) {
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        A run can use tools only from the connectors checked here. A tool that needs your approval
+        still pauses the run until you approve or deny it.
+      </p>
+      {loading ? (
+        <div className="flex items-center gap-2">
+          <Spinner size="sm" />
+          <span className="text-sm text-muted-foreground">Reading your connectors…</span>
+        </div>
+      ) : error ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={retry}>
+            Try again
+          </Button>
+        </div>
+      ) : connected.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No connectors are connected.{' '}
+          <Link
+            href="/connectors"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            Connect one
+          </Link>{' '}
+          to let runs use it.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {connected.map((entry) => {
+            const id = `schedule-connector-${entry.id}`;
+            return (
+              <li key={entry.id} className="flex items-center gap-3">
+                <Checkbox
+                  id={id}
+                  checked={connectors === null || connectors.includes(entry.serverId)}
+                  onCheckedChange={(checked) => toggleConnector(entry.serverId, checked === true)}
+                />
+                <Label htmlFor={id} className="cursor-pointer">
+                  {entry.name}
+                </Label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {connectors === null && connected.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Every connector is included, including ones you connect later. Uncheck one to choose
+          exactly which the schedule uses.
+        </p>
+      ) : connectors !== null && connected.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          A connector you connect later is not added until you check it here.
+        </p>
+      ) : null}
+    </>
   );
 }

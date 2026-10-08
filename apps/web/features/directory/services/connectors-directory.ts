@@ -26,6 +26,13 @@ import {
 } from '@/lib/connectors/directory/categorize';
 import { DEFAULT_LIST_SHORT_BELOW } from '@/lib/connectors/directory/listing';
 import firstPartyTargets from '@/lib/connectors/directory/sources/first-party.json';
+import {
+  COMING_SOON_LABEL,
+  isReleased,
+  SURFACE_NAMES,
+  SURFACE_STATUS,
+  type SurfaceStatusMap,
+} from '@/lib/surface-status';
 import type {
   DirectoryAuthMode,
   DirectoryBadge,
@@ -142,6 +149,28 @@ const CONNECTABLE_MODE: DirectoryConnectableMode = 'connect';
 const NEEDS_SETUP_MODE: DirectoryConnectableMode = 'needs-setup';
 const DESKTOP_AND_CLI_MODE: DirectoryConnectableMode = 'desktop-and-cli';
 const UNAVAILABLE_MODE: DirectoryConnectableMode = 'unavailable';
+const COMING_SOON_MODE: DirectoryConnectableMode = 'coming-soon';
+
+const LOCAL_CONNECTOR_COMING_SOON_NOTICE = `This connector runs on your own computer, so it connects from ${SURFACE_NAMES.desktop} or the ${SURFACE_NAMES.cli} rather than from the browser. Both are ${COMING_SOON_LABEL.toLowerCase()}.`;
+
+export function presentedConnectableMode(
+  mode: DirectoryConnectableMode,
+  statuses: SurfaceStatusMap = SURFACE_STATUS,
+): DirectoryConnectableMode {
+  if (mode !== DESKTOP_AND_CLI_MODE) return mode;
+  return isReleased('desktop', statuses) || isReleased('cli', statuses) ? mode : COMING_SOON_MODE;
+}
+
+function localConnectorAvailability(
+  mode: DirectoryConnectableMode,
+  statuses: SurfaceStatusMap,
+): { desktopHref?: string; setupNotice?: string } {
+  if (mode !== DESKTOP_AND_CLI_MODE) return {};
+  if (presentedConnectableMode(mode, statuses) === COMING_SOON_MODE) {
+    return { setupNotice: LOCAL_CONNECTOR_COMING_SOON_NOTICE };
+  }
+  return isReleased('desktop', statuses) ? { desktopHref: DESKTOP_DOWNLOAD_PATH } : {};
+}
 
 export const CONNECTOR_SORT_OPTIONS: readonly DirectorySortKey[] = [
   DIRECTORY_SORT_POPULAR,
@@ -246,8 +275,10 @@ export function toConnectorEntry(
   connectedIds: ReadonlySet<string>,
   popular = false,
   nowMs: number = Date.now(),
+  statuses: SurfaceStatusMap = SURFACE_STATUS,
 ): DirectoryEntry {
   const connected = connectedIds.has(record.id);
+  const mode = presentedConnectableMode(record.connectable, statuses);
   return {
     id: record.id,
     name: record.name,
@@ -262,8 +293,8 @@ export function toConnectorEntry(
     ...(isNewConnectorRecord(record, nowMs) ? { isNew: true } : {}),
     installed: connected,
     installable: !CONNECTABLE_BLOCKED.has(record.connectable),
-    connectableMode: record.connectable,
-    ...withStateLabel(connectorStateLabel(record.connectable, connected)),
+    connectableMode: mode,
+    ...withStateLabel(connectorStateLabel(mode, connected)),
     facets: {
       [CONNECTOR_CATEGORY_GROUP_ID]: record.categories,
     },
@@ -309,9 +340,10 @@ export function toCuratedConnectorEntry(
   connector: SettingsConnector,
   connectedIds: ReadonlySet<string>,
   setup?: ConnectorSetupRequirement,
+  statuses: SurfaceStatusMap = SURFACE_STATUS,
 ): DirectoryEntry {
   const connected = connectedIds.has(connector.id);
-  const mode = curatedMode(connector, setup);
+  const mode = presentedConnectableMode(curatedMode(connector, setup), statuses);
   return {
     id: connector.id,
     name: connector.name,
@@ -699,11 +731,14 @@ export function toCuratedConnectorDetail(
   connectedIds: ReadonlySet<string>,
   setup?: ConnectorSetupRequirement,
   extras: ConnectorDetailExtras = {},
+  statuses: SurfaceStatusMap = SURFACE_STATUS,
 ): DirectoryConnectorDetail {
   const target = FIRST_PARTY_TARGETS_BY_ID.get(connector.id);
   const vendor = connector.publisher ?? connector.name;
   const websiteUrl = target ? originOf(target.documentationUrl) : null;
-  const mode = curatedMode(connector, setup);
+  const sourceMode = curatedMode(connector, setup);
+  const mode = presentedConnectableMode(sourceMode, statuses);
+  const local = localConnectorAvailability(sourceMode, statuses);
   return {
     kind: 'connector',
     id: connector.id,
@@ -727,10 +762,10 @@ export function toCuratedConnectorDetail(
     ...connectorDetailExtras(connector.id, connectedIds, extras),
     connectable: connector.canConnect === true,
     connectableMode: mode,
-    ...(mode === DESKTOP_AND_CLI_MODE ? { desktopHref: DESKTOP_DOWNLOAD_PATH } : {}),
+    ...(local.desktopHref ? { desktopHref: local.desktopHref } : {}),
     ...(mode === CONNECTABLE_MODE
       ? {}
-      : { setupNotice: setup?.message ?? curatedSetupNotice(connector) }),
+      : { setupNotice: local.setupNotice ?? setup?.message ?? curatedSetupNotice(connector) }),
   };
 }
 
@@ -742,6 +777,7 @@ export function toConnectorDetail(
   record: DirectoryRecord,
   connectedIds: ReadonlySet<string>,
   extras: ConnectorDetailExtras = {},
+  statuses: SurfaceStatusMap = SURFACE_STATUS,
 ): DirectoryConnectorDetail {
   return {
     kind: 'connector',
@@ -770,8 +806,8 @@ export function toConnectorDetail(
     connected: connectedIds.has(record.id),
     ...connectorDetailExtras(record.id, connectedIds, extras),
     connectable: !CONNECTABLE_BLOCKED.has(record.connectable),
-    connectableMode: record.connectable,
-    ...(record.connectable === 'desktop-and-cli' ? { desktopHref: DESKTOP_DOWNLOAD_PATH } : {}),
+    connectableMode: presentedConnectableMode(record.connectable, statuses),
+    ...localConnectorAvailability(record.connectable, statuses),
     ...((record.connectable === NEEDS_SETUP_MODE || record.connectable === UNAVAILABLE_MODE) &&
     !record.listingNote
       ? { setupNotice: CONNECTOR_SETUP_NOTICE_REGISTRY }

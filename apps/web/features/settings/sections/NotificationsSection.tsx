@@ -7,6 +7,12 @@ import {
 } from '@/app/settings/_lib/preferences-client';
 import { Switch } from '@agiworkforce/ui';
 import { useWebPushToggle } from '@/features/notifications';
+import {
+  isReleased,
+  SURFACE_STATUS,
+  type SurfaceId,
+  type SurfaceStatusMap,
+} from '@/lib/surface-status';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 
@@ -19,6 +25,7 @@ interface ChannelSpec {
   id: NotifKey;
   channel: string;
   defaultValue: boolean;
+  surface?: SurfaceId;
 }
 
 interface EventSpec {
@@ -39,7 +46,12 @@ const EVENTS: ReadonlyArray<EventSpec> = [
       'A scheduled task completes or fails. Scheduled runs happen on the server while you are away, so this is the one result you cannot see in the app.',
     channels: [
       { id: 'emailScheduleDone', channel: 'Email', defaultValue: true },
-      { id: 'mobilePushScheduleDone', channel: 'Mobile push', defaultValue: true },
+      {
+        id: 'mobilePushScheduleDone',
+        channel: 'Mobile push',
+        defaultValue: true,
+        surface: 'mobile',
+      },
     ],
   },
   {
@@ -88,6 +100,15 @@ function channelOptions(event: EventSpec): ChannelOption[] {
   ];
 }
 
+function offeredEvents(statuses: SurfaceStatusMap): EventSpec[] {
+  return EVENTS.map((event) => ({
+    ...event,
+    channels: event.channels.filter(
+      (channel) => !channel.surface || isReleased(channel.surface, statuses),
+    ),
+  }));
+}
+
 function defaultNotificationState(): Record<NotifKey, boolean> {
   return EVENTS.flatMap((event) => event.channels).reduce(
     (acc, channel) => ({ ...acc, [channel.id]: channel.defaultValue }),
@@ -105,7 +126,11 @@ const SELECT_STYLE = {
   padding: '0 var(--space-2)',
 } as const;
 
-export function NotificationsSection() {
+export function NotificationsSection({
+  surfaceStatus = SURFACE_STATUS,
+}: {
+  surfaceStatus?: SurfaceStatusMap;
+} = {}) {
   const [state, setState] = useState<Record<NotifKey, boolean>>(() => defaultNotificationState());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -218,7 +243,7 @@ export function NotificationsSection() {
       </div>
 
       <div>
-        {EVENTS.map((event) => {
+        {offeredEvents(surfaceStatus).map((event) => {
           const options = channelOptions(event);
           const selectedIds = event.channels
             .filter((channel) => state[channel.id])

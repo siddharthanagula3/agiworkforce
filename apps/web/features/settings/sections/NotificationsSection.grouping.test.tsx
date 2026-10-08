@@ -2,7 +2,10 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StrictMode } from 'react';
 
+import { AVAILABLE_NOW_LABEL, SURFACE_STATUS, type SurfaceStatusMap } from '@/lib/surface-status';
 import { NotificationsSection } from './NotificationsSection';
+
+const MOBILE_RELEASED: SurfaceStatusMap = { ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL };
 
 const mocks = vi.hoisted(() => ({
   fetchPreferenceNamespace: vi.fn(),
@@ -89,7 +92,7 @@ describe('NotificationsSection grouping', () => {
   });
 
   it('lists each event once as a row with a channel select', async () => {
-    render(<NotificationsSection />);
+    render(<NotificationsSection surfaceStatus={MOBILE_RELEASED} />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     expect(screen.getAllByText('Scheduled task finished')).toHaveLength(1);
@@ -116,7 +119,7 @@ describe('NotificationsSection grouping', () => {
   });
 
   it('saves both channel keys when both are selected in one change', async () => {
-    render(<NotificationsSection />);
+    render(<NotificationsSection surfaceStatus={MOBILE_RELEASED} />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Scheduled task finished' }), {
@@ -139,7 +142,7 @@ describe('NotificationsSection grouping', () => {
       emailScheduleDone: true,
       mobilePushScheduleDone: true,
     });
-    render(<NotificationsSection />);
+    render(<NotificationsSection surfaceStatus={MOBILE_RELEASED} />);
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: 'Scheduled task finished' })).toHaveValue(
         'emailScheduleDone+mobilePushScheduleDone',
@@ -155,6 +158,36 @@ describe('NotificationsSection grouping', () => {
         browserReplyReady: true,
         emailScheduleDone: false,
         mobilePushScheduleDone: false,
+        emailSecurityAlerts: true,
+      }),
+    );
+  });
+
+  it('offers no mobile push while Mobile is unreleased and keeps the stored choice', async () => {
+    expect(SURFACE_STATUS.mobile).not.toBe(AVAILABLE_NOW_LABEL);
+    mocks.fetchPreferenceNamespace.mockResolvedValue({
+      browserReplyReady: true,
+      emailScheduleDone: true,
+      mobilePushScheduleDone: true,
+    });
+    render(<NotificationsSection />);
+    const scheduleSelect = screen.getByRole('combobox', { name: 'Scheduled task finished' });
+    await waitFor(() => expect(scheduleSelect).toHaveValue('emailScheduleDone'));
+
+    expect(
+      within(scheduleSelect)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Off', 'Email']);
+    expect(screen.queryByText(/Mobile push/)).toBeNull();
+
+    fireEvent.change(scheduleSelect, { target: { value: 'off' } });
+
+    await waitFor(() =>
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
+        browserReplyReady: true,
+        emailScheduleDone: false,
+        mobilePushScheduleDone: true,
         emailSecurityAlerts: true,
       }),
     );

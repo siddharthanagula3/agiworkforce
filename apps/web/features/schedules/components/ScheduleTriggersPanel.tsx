@@ -10,12 +10,14 @@ import {
   managedCloudTriggersForTaskPath,
   managedCloudTriggerWatchPath,
 } from '@agiworkforce/cloud-contracts';
+import { CONNECTORS_COMING_SOON_LABEL } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
   GITHUB_TRIGGER_EVENT_TYPES,
   GMAIL_TRIGGER_EVENT_TYPES,
   GOOGLE_CALENDAR_TRIGGER_EVENT_TYPES,
+  triggerSourceAvailable,
   type EventTrigger,
   type TriggerSource,
 } from '@/lib/triggers/trigger-types';
@@ -373,11 +375,14 @@ export default function ScheduleTriggersPanel({
                 setConditions([]);
               }}
             >
-              {SOURCES.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
+              {SOURCES.map((entry) => {
+                const available = triggerSourceAvailable(entry.value);
+                return (
+                  <option key={entry.value} value={entry.value} disabled={!available}>
+                    {available ? entry.label : `${entry.label} (${CONNECTORS_COMING_SOON_LABEL})`}
+                  </option>
+                );
+              })}
             </select>
             <p className={FIELD_CLASS}>{selected.note}</p>
           </div>

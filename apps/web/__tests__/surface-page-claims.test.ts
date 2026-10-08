@@ -246,7 +246,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
     expect(pricing).toMatch(/\{\{surface\}\}: \{\{status\}\}/u);
     expect(pricing).not.toMatch(/released CLI|CLI today/u);
     expect(pricing).toMatch(/Local session files on disk/u);
-    expect(pricing).toMatch(/Desktop runs managed cloud/u);
+    expect(pricing).not.toMatch(/Desktop runs managed cloud/u);
     expect(pricing).not.toMatch(/SQLite|llama\.cpp|vLLM|Desktop, CLI & VS Code/u);
     const page = rendered('app/pricing/page.tsx');
     expect(page).toMatch(

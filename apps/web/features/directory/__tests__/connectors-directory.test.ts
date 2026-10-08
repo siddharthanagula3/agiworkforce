@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NEW_ENTRY_WINDOW_DAYS } from '../constants';
 import { SETTINGS_CONNECTORS } from '@features/settings/components/WebSettingsModal';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
+import { AVAILABLE_NOW_LABEL, SURFACE_STATUS, type SurfaceStatusMap } from '@/lib/surface-status';
 
 import {
   connectorConnectionState,
@@ -18,6 +19,7 @@ import {
   fetchConnectorRecord,
   initialConnectorSection,
   matchesCuratedConnector,
+  presentedConnectableMode,
   registrySignIn,
   relatedConnectorRequest,
   toConnectorDetail,
@@ -31,6 +33,9 @@ import {
   CONNECTOR_SHORT_LIST_NOTICE,
   type ConnectorDirectoryRequest,
 } from '../services/connectors-directory';
+
+const DESKTOP_RELEASED: SurfaceStatusMap = { ...SURFACE_STATUS, desktop: AVAILABLE_NOW_LABEL };
+const CLI_RELEASED: SurfaceStatusMap = { ...SURFACE_STATUS, cli: AVAILABLE_NOW_LABEL };
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -193,7 +198,13 @@ describe('toConnectorEntry', () => {
     expect(toConnectorEntry(record(), new Set()).statusLabel).toBeUndefined();
     expect(toConnectorEntry(record(), new Set(['customerscore'])).statusLabel).toBeUndefined();
     expect(
-      toConnectorEntry(record({ connectable: 'desktop-and-cli' }), new Set()).statusLabel,
+      toConnectorEntry(
+        record({ connectable: 'desktop-and-cli' }),
+        new Set(),
+        false,
+        Date.now(),
+        DESKTOP_RELEASED,
+      ).statusLabel,
     ).toBe('Desktop and CLI');
     expect(toConnectorEntry(record({ connectable: 'needs-setup' }), new Set()).statusLabel).toBe(
       'Needs setup',
@@ -727,11 +738,47 @@ describe('toConnectorDetail', () => {
     expect(toConnectorDetail(record({ remotes: [] }), new Set()).connectorUrl).toBeNull();
   });
 
-  it('points a desktop only connector at the download page', () => {
-    const detail = toConnectorDetail(record({ connectable: 'desktop-and-cli' }), new Set());
+  it('points a desktop only connector at the download page once Desktop is released', () => {
+    const detail = toConnectorDetail(
+      record({ connectable: 'desktop-and-cli' }),
+      new Set(),
+      {},
+      DESKTOP_RELEASED,
+    );
     expect(detail.connectable).toBe(false);
     expect(detail.connectableMode).toBe('desktop-and-cli');
     expect(detail.desktopHref).toBe('/download');
+  });
+
+  it('never offers an unreleased Desktop or CLI for a desktop only connector', () => {
+    expect(SURFACE_STATUS.desktop).not.toBe(AVAILABLE_NOW_LABEL);
+    expect(SURFACE_STATUS.cli).not.toBe(AVAILABLE_NOW_LABEL);
+    const detail = toConnectorDetail(record({ connectable: 'desktop-and-cli' }), new Set());
+    expect(detail.connectable).toBe(false);
+    expect(detail.connectableMode).toBe('coming-soon');
+    expect(detail.desktopHref).toBeUndefined();
+    expect(detail.setupNotice).toMatch(/Both are coming soon\.$/);
+    const entry = toConnectorEntry(record({ connectable: 'desktop-and-cli' }), new Set());
+    expect(entry.connectableMode).toBe('coming-soon');
+    expect(entry.statusLabel).toBeUndefined();
+    expect(presentedConnectableMode('desktop-and-cli', CLI_RELEASED)).toBe('desktop-and-cli');
+    expect(
+      toConnectorDetail(record({ connectable: 'desktop-and-cli' }), new Set(), {}, CLI_RELEASED)
+        .desktopHref,
+    ).toBeUndefined();
+  });
+
+  it('holds a device-local first-party connector at coming soon until Desktop or the CLI ships', () => {
+    const local = curated({ canConnect: false });
+    const setup = { kind: 'device-local', missingEnv: [], message: 'Runs on your device.' };
+    expect(toCuratedConnectorEntry(local, new Set(), setup).connectableMode).toBe('coming-soon');
+    const detail = toCuratedConnectorDetail(local, new Set(), setup);
+    expect(detail.connectableMode).toBe('coming-soon');
+    expect(detail.desktopHref).toBeUndefined();
+    expect(detail.setupNotice).toMatch(/Both are coming soon\.$/);
+    const released = toCuratedConnectorDetail(local, new Set(), setup, {}, DESKTOP_RELEASED);
+    expect(released.connectableMode).toBe('desktop-and-cli');
+    expect(released.desktopHref).toBe('/download');
   });
 
   it('says what a registry connector that needs setup is missing', () => {

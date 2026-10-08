@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { Check } from 'lucide-react';
 import {
+  BILLING_PLAN_CAPABILITY_LABELS,
   getPublishedPlanPricePerMonthUsd,
   isBillingPlanTier,
   isPlanSelectableOnSurface,
@@ -17,6 +18,7 @@ import {
   Button,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import {
   formatCatalogPrice,
   getBillingPlanDisplay,
@@ -70,11 +72,14 @@ interface PlanCard {
 const PLAN_TAGLINES: Record<PlanCardId, string> = {
   free: 'Core managed chat with a private, adaptive usage limit.',
   basic: 'The starting paid plan for light work across customer apps.',
-  pro: 'Higher capacity plus managed developer surfaces.',
+  pro: `Higher capacity plus ${BILLING_PLAN_CAPABILITY_LABELS.agi_work} and ${BILLING_PLAN_CAPABILITY_LABELS.deep_research}.`,
   max: 'High capacity for intensive multi-step work.',
   max_15x: 'The highest-capacity individual plan, including video generation.',
   team: 'Pro-level capacity for every seat, plus shared organization administration.',
 };
+
+const LOCAL_AND_BYOK_NOTE =
+  `Local and BYOK are always free in the CLI. ${CLI_AVAILABILITY_NOTE}`.trim();
 
 const PLAN_CARD_IDS: readonly PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x', 'team'];
 
@@ -309,7 +314,7 @@ export function UpgradePlanDialog({
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Managed cloud is open by default; sign in and start now. Upgrade for higher hosted
-                capacity. Local and BYOK stay free in the CLI.
+                capacity. {LOCAL_AND_BYOK_NOTE}
               </p>
             </div>
           </div>
@@ -354,8 +359,8 @@ export function UpgradePlanDialog({
         {/* Footer note */}
         <div className="border-t border-border/60 px-6 py-4">
           <p className="text-center text-caption text-muted-foreground">
-            Managed cloud is open by default. Paid tiers add higher hosted capacity. Local and BYOK
-            always remain free in the CLI.
+            Managed cloud is open by default. Paid tiers add higher hosted capacity.{' '}
+            {LOCAL_AND_BYOK_NOTE}
           </p>
         </div>
       </DialogContent>

@@ -12,9 +12,14 @@ import {
   getMinimumRequiredTier,
   getModelMetadataById,
   getPlanContextWindowTokens,
+  type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 import { SURFACE_NAMES, SURFACE_STATUS } from '@/lib/surface-status';
+import {
+  connectorFeatureNote,
+  planCapabilityLabel,
+} from '@/features/billing/lib/plan-capability-release';
 
 const testState = vi.hoisted(() => ({
   auth: { user: null as null | { id: string; email: string }, initialized: true },
@@ -200,7 +205,12 @@ async function showMax20x() {
 
 const INCLUDED = 'Included';
 const NOT_INCLUDED = 'Not included';
-const CAPABILITY = BILLING_PLAN_CAPABILITY_LABELS;
+const CAPABILITY = Object.fromEntries(
+  (Object.keys(BILLING_PLAN_CAPABILITY_LABELS) as BillingPlanCapability[]).map((capability) => [
+    capability,
+    planCapabilityLabel(capability),
+  ]),
+) as Record<BillingPlanCapability, string>;
 const PLAN_ID_BY_LABEL = new Map<string, BillingPlanTier>(
   Object.values(BILLING_PLAN_PRICING).map((plan) => [plan.label, plan.id]),
 );
@@ -780,6 +790,37 @@ describe('PricingPage', () => {
     check();
     await showTeamAndEnterprise();
     check();
+  });
+
+  it('labels the chat and connector rows with what has shipped', () => {
+    render(<PricingPage />);
+
+    expect(comparisonRow('Managed Cloud chat on the web').label).toBe(
+      planCapabilityLabel('managed_chat'),
+    );
+    expect(comparisonRows().map((row) => row.label)).not.toContain(
+      BILLING_PLAN_CAPABILITY_LABELS.managed_chat,
+    );
+    const connectorNote = connectorFeatureNote() ?? '';
+    expect(connectorNote).not.toBe('');
+    expect(comparisonRow(CAPABILITY.skills_connectors).note).toBe(connectorNote);
+    expect(comparisonRow('compareRowCustomMcp').note).toBe(connectorNote);
+  });
+
+  it('keeps unreleased connectors, MCP servers and CLI access out of the plan cards', async () => {
+    expect(connectorFeatureNote()).toBeDefined();
+    render(<PricingPage />);
+
+    const lockedKeys =
+      /\b(basicFeature5|proFeature2|maxFeature4|maxFeature5|max15xFeature4|max15xFeature5|teamFeature3)\b/;
+    expect(document.body.textContent).not.toMatch(lockedKeys);
+    expect(screen.getAllByText('chatsAtOnce').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByText('unlimitedProjectsAndStorage')).toBeInTheDocument();
+    await showMax20x();
+    expect(document.body.textContent).not.toMatch(lockedKeys);
+    expect(screen.getByText('unlimitedProjectsAndStorage')).toBeInTheDocument();
+    await showTeamAndEnterprise();
+    expect(document.body.textContent).not.toMatch(lockedKeys);
   });
 
   it('lists Deep Research as a comparison row derived from the plan catalog', async () => {

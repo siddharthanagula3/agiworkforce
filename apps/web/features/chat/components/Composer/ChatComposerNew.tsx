@@ -95,6 +95,7 @@ import { readFolderForMention, useMentionFolders } from '@features/chat/hooks/us
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import { usePromotionalMediaModels } from '@features/chat/hooks/use-promotional-media-models';
 import { freeMediaAccess, freeMediaOfferNote } from '@/features/models/lib/free-media-offer';
+import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
 import { useSearchAllowance } from '@features/chat/hooks/use-search-allowance';
 import {
   useChatStore,
@@ -2888,7 +2889,7 @@ const ChatComposerNewComponent = ({
               status: 'unavailable',
               notice: freeMediaOfferChecking
                 ? 'Checking image model availability…'
-                : 'Image generation is available on Pro and above.',
+                : planCapabilityEntitlementHint('image_generation'),
             };
           }
           return { status: 'applied', content: argument, toggles: { imageMode: true } };
