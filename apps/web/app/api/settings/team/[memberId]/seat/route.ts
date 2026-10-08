@@ -17,7 +17,9 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import {
   SeatTypePaymentPendingError,
+  SeatTypeWaitlistError,
   changeMemberSeatType,
+  seatTypeWaitlistResponse,
   type SeatTypeChange,
 } from '@/lib/services/team-seat-type-service';
 import { requireTeamAdminAccess } from '../../team-admin-access';
@@ -69,13 +71,14 @@ async function handleUpdateSeatType(
       },
     );
   } catch (error) {
+    if (error instanceof SeatTypeWaitlistError) return seatTypeWaitlistResponse();
     if (!(error instanceof SeatTypePaymentPendingError)) throw error;
     return NextResponse.json(
       {
         success: false,
         paymentActionRequired: true,
         message:
-          'The charge for the Premium seat needs to be completed before the seat changes. The member is still on a Standard seat.',
+          'The charge for the Premium seat has to be completed before the seat changes. The member is still on a Standard seat. Pay the invoice, then assign the Premium seat again; the paid seat is used and nothing is charged twice.',
         ...(error.paymentUrl ? { paymentUrl: error.paymentUrl } : {}),
       },
       { status: 402 },

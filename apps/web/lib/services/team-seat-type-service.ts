@@ -17,6 +17,12 @@ import { persistPurchasedSeatsOnOrganization } from '@/app/api/stripe-webhook/li
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
+  hasBillingWaitlistAccess,
+  holdsLivePaidSubscription,
+  waitlistAccessRequiredResponse,
+} from '@/lib/server/billing-waitlist-access';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
+import {
   DEFAULT_CHECKOUT_CURRENCY,
   getConfiguredPriceId,
   getPricePointForPriceId,
@@ -41,6 +47,20 @@ export interface SeatTypeChange extends TeamSeatTypeChange {
   previousSeatType: TeamSeatType;
 }
 
+export { waitlistAccessRequiredResponse as seatTypeWaitlistResponse };
+
+export class SeatTypeWaitlistError extends Error {
+  constructor() {
+    super('Paid seat changes are not open to this workspace yet');
+    this.name = 'SeatTypeWaitlistError';
+  }
+}
+
+export const SEAT_BILLING_PERMISSION = 'billing.contracts.manage';
+
+const SEAT_BILLING_DENIED_MESSAGE =
+  'Only the workspace owner can change what the workspace pays. An admin can assign a Premium seat that is already paid for and not in use. Nothing was changed.';
+
 export const PREMIUM_SEAT_CEILING_CONSTRAINT = 'organization_members_premium_within_license';
 
 const NO_PAID_PREMIUM_SEAT_MESSAGE =
@@ -56,7 +76,7 @@ interface OrganizationBillingRow {
 interface MemberSeatRow {
   user_id: string;
   seat_type: string | null;
-  premium_paid_through_active: boolean | null;
+  premium_paid_through: string | Date | null;
 }
 
 async function ownSubscriptionOf(
@@ -128,6 +148,53 @@ async function raisePremiumAllowance(
   }
 }
 
+function paidThroughStillCovers(
+  paidThrough: string | Date | null,
+  periodEnd: string | null,
+): boolean {
+  if (!paidThrough || !periodEnd) return false;
+  const until = new Date(paidThrough).getTime();
+  return until > Date.now() && until <= new Date(periodEnd).getTime();
+}
+
+async function requireSeatBillingAuthority(organizationId: string, actorId: string) {
+  await requireMemberPermission(
+    organizationId,
+    actorId,
+    SEAT_BILLING_PERMISSION,
+    SEAT_BILLING_DENIED_MESSAGE,
+  );
+}
+
+async function requirePaidChangesOpen(
+  privileged: DatabaseAdapter,
+  payer: DatabaseAdapter,
+  ownerUserId: string,
+): Promise<void> {
+  if (holdsLivePaidSubscription(await ownSubscriptionOf(privileged, ownerUserId))) return;
+  if (await hasBillingWaitlistAccess(payer, ownerUserId)) return;
+  throw new SeatTypeWaitlistError();
+}
+
+async function recordPaidThrough(
+  privileged: DatabaseAdapter,
+  input: { organizationId: string; userId: string; paidThrough: string },
+): Promise<void> {
+  try {
+    await privileged.execute(
+      `update public.organization_members
+          set premium_paid_through = $3::timestamptz
+        where organization_id = $1 and user_id = $2 and seat_type = 'standard'`,
+      [input.organizationId, input.userId, input.paidThrough],
+    );
+  } catch (error) {
+    logger.error(
+      { error, organizationId: input.organizationId, userId: input.userId },
+      'The paid Premium period of a seat moved to Standard was not recorded; the member is on Standard limits now',
+    );
+  }
+}
+
 export interface ChangeMemberSeatTypeInput {
   organizationId: string;
   administrator: MemberAdministrator;
@@ -155,6 +222,7 @@ export async function changeMemberSeatType(
       .asUserSafe();
   }
 
+  const actorId = input.administrator.userId;
   let ownerUserId: string | null = null;
   let stripeIds: { subscriptionId: string; customerId: string | null } | null = null;
 
@@ -164,9 +232,7 @@ export async function changeMemberSeatType(
       await resolveAuthority(tx, input.organizationId, input.administrator);
 
       const [member] = await tx.query<MemberSeatRow>(
-        `select user_id, seat_type,
-                (premium_paid_through is not null and premium_paid_through > now())
-                  as premium_paid_through_active
+        `select user_id, seat_type, premium_paid_through
            from public.organization_members
           where organization_id = $1 and user_id = $2 and status = 'active'
           limit 1`,
@@ -199,14 +265,19 @@ export async function changeMemberSeatType(
         const [assigned] = await tx.query<{ assigned: string }>(
           `select count(*)::text as assigned
              from public.organization_members
-            where organization_id = $1 and seat_type = 'premium'`,
+            where organization_id = $1 and seat_type = 'premium' and status = 'active'`,
           [input.organizationId],
         );
         const assignedPremium = Number.parseInt(assigned?.assigned ?? '0', 10);
         const paidSeatFree = seats.premium > assignedPremium;
-        const restored = member.premium_paid_through_active === true;
+        const restored = paidThroughStillCovers(member.premium_paid_through, billing.paidThrough);
         if (!paidSeatFree && seats.standard < 1) {
           throw createError.conflict(NO_PAID_PREMIUM_SEAT_MESSAGE);
+        }
+        if (!paidSeatFree) {
+          await requireSeatBillingAuthority(input.organizationId, actorId);
+          if (!restored)
+            await requirePaidChangesOpen(privileged, tx, organization.owner_user_id as string);
         }
         const nextSeats = paidSeatFree
           ? seats
@@ -259,6 +330,7 @@ export async function changeMemberSeatType(
       }
       const paidSeat = seats.premium >= 1;
       const paidThrough = paidSeat ? billing.paidThrough : null;
+      if (paidSeat) await requireSeatBillingAuthority(input.organizationId, actorId);
       const nextSeats = paidSeat
         ? await billing.moveSeat({
             seats: { standard: seats.standard + 1, premium: seats.premium - 1 },
@@ -269,9 +341,9 @@ export async function changeMemberSeatType(
 
       await tx.execute(
         `update public.organization_members
-            set seat_type = 'standard', premium_paid_through = $3::timestamptz
+            set seat_type = 'standard'
           where organization_id = $1 and user_id = $2`,
-        [input.organizationId, input.targetUserId, paidThrough],
+        [input.organizationId, input.targetUserId],
       );
 
       return {
@@ -283,6 +355,14 @@ export async function changeMemberSeatType(
       };
     }),
   );
+
+  if (change.premiumPaidThrough) {
+    await recordPaidThrough(privileged, {
+      organizationId: input.organizationId,
+      userId: input.targetUserId,
+      paidThrough: change.premiumPaidThrough,
+    });
+  }
 
   if (change.billing === 'reduced_at_renewal' && ownerUserId && stripeIds) {
     const ids: { subscriptionId: string; customerId: string | null } = stripeIds;
@@ -308,11 +388,6 @@ export async function changeMemberSeatType(
   return change;
 }
 
-/**
- * The cadence and currency a workspace's seats are billed in, read from the
- * price recorded on the owner's subscription. Null when the workspace is not on
- * a Team subscription this deployment has a price for.
- */
 async function readSeatBilling(
   privileged: DatabaseAdapter,
   ownerUserId: string | null,
@@ -348,6 +423,7 @@ export async function readSeatTypeSummary(
                 from public.organization_members member
                where member.organization_id = organization.id
                  and member.seat_type = 'premium'
+                 and member.status = 'active'
             ) as premium_seats_assigned
        from public.organizations organization
       where organization.id = $1
@@ -361,9 +437,10 @@ export async function readSeatTypeSummary(
     return null;
   }
   const billing = await readSeatBilling(privileged, row.owner_user_id);
-  if (!billing) return null;
+  const licensedPremiumSeats = Number(row.licensed_premium_seats ?? 0);
+  if (!billing || (!billing.premiumSeatsSold && licensedPremiumSeats === 0)) return null;
   return {
-    licensedPremiumSeats: Number(row.licensed_premium_seats ?? 0),
+    licensedPremiumSeats,
     premiumSeatsAssigned: Number(row.premium_seats_assigned ?? 0),
     billing,
   };

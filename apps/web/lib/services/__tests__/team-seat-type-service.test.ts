@@ -47,7 +47,7 @@ vi.mock('@/app/api/settings/team/membership-role-ceiling', async (importOriginal
 const STANDARD_PRICE = 'price_team_standard';
 const PREMIUM_PRICE = 'price_team_premium';
 const ORGANIZATION = '11111111-1111-4111-8111-111111111111';
-const PERIOD_END_SECONDS = 1_792_592_000;
+const PERIOD_END_SECONDS = Math.floor(Date.now() / 1000) + 12 * 86_400;
 const PERIOD_END_ISO = new Date(PERIOD_END_SECONDS * 1000).toISOString();
 
 type Service = typeof import('../team-seat-type-service');
@@ -119,20 +119,25 @@ function fakeStripe(current: ReturnType<typeof teamSubscription>) {
   return { stripe, retrieve, update };
 }
 
+type Role = 'owner' | 'admin' | 'member' | null;
+
 interface World {
-  requesterRole: 'owner' | 'admin' | 'member' | null;
-  target: { seat_type: string; premium_paid_through_active: boolean } | null;
+  requesterRole: Role;
+  target: { seat_type: string; premium_paid_through: string | null } | null;
   assignedPremium: number;
   organization?: Record<string, unknown> | null;
   memberWriteError?: unknown;
+  waitlistRedeemed?: boolean;
 }
 
 function fakeDatabases(world: World) {
   const writes: Array<{ sql: string; params: unknown[] }> = [];
+  const privilegedWrites: Array<{ sql: string; params: unknown[] }> = [];
   const tx = {
     query: vi.fn(async (sql: string) => {
       if (sql.includes('pg_advisory_xact_lock')) return [];
-      if (sql.includes('premium_paid_through_active')) {
+      if (sql.includes('beta_redemptions')) return [{ granted: world.waitlistRedeemed === true }];
+      if (sql.includes('select user_id, seat_type, premium_paid_through')) {
         return world.target ? [{ user_id: 'target-1', ...world.target }] : [];
       }
       if (sql.includes('as assigned')) return [{ assigned: String(world.assignedPremium) }];
@@ -158,8 +163,8 @@ function fakeDatabases(world: World) {
     }),
   } as unknown as DatabaseAdapter;
   const privileged = {
-    query: vi.fn(async () =>
-      world.organization === null
+    query: vi.fn(async () => {
+      return world.organization === null
         ? []
         : [
             {
@@ -169,39 +174,69 @@ function fakeDatabases(world: World) {
               stripe_customer_id: 'cus_team',
               ...world.organization,
             },
-          ],
-    ),
+          ];
+    }),
+    execute: vi.fn(async (sql: string, params: unknown[] = []) => {
+      mocks.events.push('paid_through.write');
+      privilegedWrites.push({ sql, params });
+      return 1;
+    }),
   } as unknown as DatabaseAdapter;
-  return { db, privileged, tx, writes };
+  return { db, privileged, tx, writes, privilegedWrites };
 }
 
-function grantPermissions(role: World['requesterRole']) {
+const OWNER_PERMISSIONS = ['members.manage', 'billing.read', 'billing.contracts.manage'];
+const ADMIN_PERMISSIONS = ['members.manage', 'billing.read'];
+
+function grantPermissions(role: Role, permissions?: string[]) {
   mocks.permissionQuery.mockResolvedValue([
     {
       role,
-      permissions: role === 'owner' || role === 'admin' ? ['members.manage', 'billing.read'] : [],
+      permissions:
+        permissions ??
+        (role === 'owner' ? OWNER_PERMISSIONS : role === 'admin' ? ADMIN_PERMISSIONS : []),
     },
   ]);
 }
 
-const ADMIN = { kind: 'member', userId: 'admin-1' } as const;
+const ACTOR = { kind: 'member', userId: 'admin-1' } as const;
 
-function request(seatType: 'standard' | 'premium', extra: Record<string, unknown> = {}) {
+function request(
+  seatType: 'standard' | 'premium',
+  extra: Record<string, unknown> = {},
+): Parameters<Service['changeMemberSeatType']>[2] {
   return {
     organizationId: ORGANIZATION,
-    administrator: ADMIN,
+    administrator: ACTOR,
     targetUserId: 'target-1',
     seatType,
     ...extra,
   };
 }
 
+function ownerSubscriptionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sub-row-owner',
+    plan_tier: 'team',
+    status: 'active',
+    stripe_subscription_id: 'sub_team',
+    current_period_start: new Date('2026-10-01T00:00:00.000Z'),
+    current_period_end: new Date(PERIOD_END_SECONDS * 1000),
+    plan_catalog_version: null,
+    ...overrides,
+  };
+}
+
+const STANDARD_TARGET = { seat_type: 'standard', premium_paid_through: null };
+const PREMIUM_TARGET = { seat_type: 'premium', premium_paid_through: null };
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.events.length = 0;
   vi.stubEnv('STRIPE_PRICE_TEAM_MONTHLY_USD', STANDARD_PRICE);
   vi.stubEnv('STRIPE_PRICE_TEAM_PREMIUM_MONTHLY_USD', PREMIUM_PRICE);
-  grantPermissions('admin');
+  vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '');
+  grantPermissions('owner');
   mocks.persistSeats.mockImplementation(async () => {
     mocks.events.push('seats.persist');
     return 'persisted';
@@ -212,27 +247,20 @@ beforeEach(() => {
         ? { priceId: PREMIUM_PRICE, currency: 'usd', amountMinor: 12_500 }
         : { priceId: STANDARD_PRICE, currency, amountMinor: 2_500 },
   );
-  mocks.resolveOwnerBundle.mockResolvedValue({
-    subscription: {
-      id: 'sub-row-owner',
-      current_period_start: new Date('2026-10-01T00:00:00.000Z'),
-      current_period_end: new Date('2026-11-01T00:00:00.000Z'),
-      plan_catalog_version: null,
-    },
-  });
+  mocks.resolveOwnerBundle.mockResolvedValue({ subscription: ownerSubscriptionRow() });
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('who may change a seat type', () => {
-  it('refuses a member without member management, before billing is touched', async () => {
+describe('who may change what the workspace pays', () => {
+  it('refuses a member without member management, before billing is read', async () => {
     grantPermissions('member');
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
       requesterRole: 'member',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, retrieve, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
@@ -248,10 +276,11 @@ describe('who may change a seat type', () => {
   });
 
   it('refuses a caller who is not a member of the workspace', async () => {
+    grantPermissions(null);
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
       requesterRole: null,
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
@@ -266,7 +295,7 @@ describe('who may change a seat type', () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
       requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, retrieve } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
@@ -275,17 +304,207 @@ describe('who may change a seat type', () => {
       changeMemberSeatType(
         world.db,
         { privileged: world.privileged, stripe },
-        {
-          ...request('premium'),
+        request('premium', {
           administrator: {
             kind: 'service_principal',
             actorId: 'key-1',
             scopes: new Set(['members.manage'] as const),
           },
-        },
+        }),
       ),
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(retrieve).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an admin moving themselves', 'admin', ADMIN_PERMISSIONS, 'admin-1'],
+    ['an admin moving the owner', 'admin', ADMIN_PERMISSIONS, 'owner-1'],
+    ['a custom role holding member management', 'member', ['members.manage'], 'target-1'],
+  ] as const)(
+    'refuses a Premium seat that would be charged when asked by %s, and charges nothing',
+    async (_label, role, permissions, targetUserId) => {
+      grantPermissions(role, [...permissions]);
+      const { changeMemberSeatType } = await loadService();
+      const world = fakeDatabases({
+        requesterRole: role,
+        target: STANDARD_TARGET,
+        assignedPremium: 0,
+      });
+      const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
+
+      await expect(
+        changeMemberSeatType(
+          world.db,
+          { privileged: world.privileged, stripe },
+          request('premium', { targetUserId }),
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        message: expect.stringContaining('Only the workspace owner'),
+      });
+
+      expect(update).not.toHaveBeenCalled();
+      expect(world.writes).toEqual([]);
+      expect(mocks.persistSeats).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['an admin', 'admin', ADMIN_PERMISSIONS],
+    ['a custom role holding member management', 'member', ['members.manage']],
+  ] as const)(
+    'lets %s assign a Premium seat that is already paid for and unassigned, charging nothing',
+    async (_label, role, permissions) => {
+      grantPermissions(role, [...permissions]);
+      const { changeMemberSeatType } = await loadService();
+      const world = fakeDatabases({
+        requesterRole: role,
+        target: STANDARD_TARGET,
+        assignedPremium: 1,
+      });
+      const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
+
+      const change = await changeMemberSeatType(
+        world.db,
+        { privileged: world.privileged, stripe },
+        request('premium'),
+      );
+
+      expect(change.billing).toBe('uses_paid_seat');
+      expect(update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses an admin moving a Premium member back to Standard, which changes the next invoice', async () => {
+    grantPermissions('admin');
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'admin',
+      target: PREMIUM_TARGET,
+      assignedPremium: 2,
+    });
+    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
+
+    await expect(
+      changeMemberSeatType(world.db, { privileged: world.privileged, stripe }, request('standard')),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(update).not.toHaveBeenCalled();
+    expect(world.writes).toEqual([]);
+  });
+
+  it('lets the owner move an admin to a charged Premium seat', async () => {
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
+      assignedPremium: 0,
+    });
+    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
+
+    const change = await changeMemberSeatType(
+      world.db,
+      { privileged: world.privileged, stripe },
+      request('premium', { targetUserId: 'admin-2' }),
+    );
+
+    expect(change.billing).toBe('charged_now');
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the paid-plan waitlist gate', () => {
+  it('refuses a charged Premium seat when the payer is neither on a live paid plan nor let in from the waitlist', async () => {
+    mocks.resolveOwnerBundle.mockResolvedValue({
+      subscription: ownerSubscriptionRow({ status: 'canceled' }),
+    });
+    const { changeMemberSeatType, SeatTypeWaitlistError } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
+      assignedPremium: 0,
+      waitlistRedeemed: false,
+    });
+    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
+
+    await expect(
+      changeMemberSeatType(world.db, { privileged: world.privileged, stripe }, request('premium')),
+    ).rejects.toBeInstanceOf(SeatTypeWaitlistError);
+
+    expect(update).not.toHaveBeenCalled();
+    expect(world.writes).toEqual([]);
+    expect(
+      vi
+        .mocked(world.tx.query)
+        .mock.calls.some(([sql]) => String(sql).includes('beta_redemptions')),
+    ).toBe(true);
+  });
+
+  it('lets the charge through for a payer who redeemed waitlist access', async () => {
+    mocks.resolveOwnerBundle.mockResolvedValue({
+      subscription: ownerSubscriptionRow({ status: 'canceled' }),
+    });
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
+      assignedPremium: 0,
+      waitlistRedeemed: true,
+    });
+    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
+
+    await changeMemberSeatType(
+      world.db,
+      { privileged: world.privileged, stripe },
+      request('premium'),
+    );
+
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens for everyone once the owner opens paid plans', async () => {
+    vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
+    mocks.resolveOwnerBundle.mockResolvedValue({
+      subscription: ownerSubscriptionRow({ status: 'canceled' }),
+    });
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
+      assignedPremium: 0,
+      waitlistRedeemed: false,
+    });
+    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
+
+    await changeMemberSeatType(
+      world.db,
+      { privileged: world.privileged, stripe },
+      request('premium'),
+    );
+
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks nothing of the gate when nothing is charged', async () => {
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
+      assignedPremium: 1,
+      waitlistRedeemed: false,
+    });
+    const { stripe } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
+
+    await changeMemberSeatType(
+      world.db,
+      { privileged: world.privileged, stripe },
+      request('premium'),
+    );
+
+    expect(
+      vi
+        .mocked(world.tx.query)
+        .mock.calls.some(([sql]) => String(sql).includes('beta_redemptions')),
+    ).toBe(false);
   });
 });
 
@@ -293,8 +512,8 @@ describe('moving a member to a Premium seat', () => {
   it('converts one Standard seat, charges the rest of the period now and keeps the renewal date', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: null }));
@@ -305,7 +524,6 @@ describe('moving a member to a Premium seat', () => {
       request('premium', { idempotencyKey: 'attempt-1' }),
     );
 
-    expect(update).toHaveBeenCalledTimes(1);
     expect(update.mock.calls[0]).toEqual([
       'sub_team',
       {
@@ -332,11 +550,10 @@ describe('moving a member to a Premium seat', () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
       requesterRole: 'owner',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      target: STANDARD_TARGET,
       assignedPremium: 1,
     });
     const { stripe } = fakeStripe(teamSubscription({ standard: 4, premium: 1 }));
-    grantPermissions('owner');
 
     await changeMemberSeatType(
       world.db,
@@ -357,11 +574,34 @@ describe('moving a member to a Premium seat', () => {
     expect(world.writes[0]?.params).toEqual([ORGANIZATION, 'target-1']);
   });
 
-  it('raises the member usage ledger to the Premium allowance for the current period', async () => {
+  it('counts only active members against the paid Premium seats', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
       requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      target: STANDARD_TARGET,
+      assignedPremium: 1,
+    });
+    grantPermissions('admin');
+    const { stripe } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
+
+    await changeMemberSeatType(
+      world.db,
+      { privileged: world.privileged, stripe },
+      request('premium'),
+    );
+
+    const counted = vi
+      .mocked(world.tx.query)
+      .mock.calls.map(([sql]) => String(sql))
+      .find((sql) => sql.includes('as assigned'));
+    expect(counted).toContain("status = 'active'");
+  });
+
+  it('raises the member usage ledger to the Premium allowance for the current period', async () => {
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
@@ -381,37 +621,17 @@ describe('moving a member to a Premium seat', () => {
       'team',
       'team_premium',
       new Date('2026-10-01T00:00:00.000Z'),
-      new Date('2026-11-01T00:00:00.000Z'),
+      new Date(PERIOD_END_SECONDS * 1000),
       world.privileged,
       { previous: null, next: null },
     );
   });
 
-  it('uses a Premium seat the team already pays for without charging again', async () => {
-    const { changeMemberSeatType } = await loadService();
-    const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
-      assignedPremium: 1,
-    });
-    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
-
-    const change = await changeMemberSeatType(
-      world.db,
-      { privileged: world.privileged, stripe },
-      request('premium'),
-    );
-
-    expect(update).not.toHaveBeenCalled();
-    expect(change).toMatchObject({ billing: 'uses_paid_seat', seats: { standard: 3, premium: 2 } });
-    expect(world.writes).toHaveLength(1);
-  });
-
   it('assigns nothing while the charge for the Premium seat is incomplete', async () => {
     const { changeMemberSeatType, SeatTypePaymentPendingError } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
@@ -439,8 +659,8 @@ describe('moving a member to a Premium seat', () => {
   it('cannot assign more Premium seats than are paid for when there is no Standard seat to convert', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 2,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 0, premium: 2 }));
@@ -454,10 +674,11 @@ describe('moving a member to a Premium seat', () => {
   });
 
   it('answers the database Premium ceiling with a conflict and leaves the member on Standard', async () => {
+    grantPermissions('admin');
     const { changeMemberSeatType, PREMIUM_SEAT_CEILING_CONSTRAINT } = await loadService();
     const world = fakeDatabases({
       requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      target: STANDARD_TARGET,
       assignedPremium: 1,
       memberWriteError: Object.assign(new Error('no paid Premium seat left to assign'), {
         code: '23514',
@@ -476,8 +697,8 @@ describe('moving a member to a Premium seat', () => {
   it('refuses when Stripe does not hold the seats that were requested', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
@@ -492,8 +713,8 @@ describe('moving a member to a Premium seat', () => {
   it('does not sell a dollar Premium seat onto a subscription billed in rupees', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, update } = fakeStripe(
@@ -514,8 +735,8 @@ describe('moving a member to a Premium seat', () => {
   ])('changes nothing while the subscription %s', async (_label, state) => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 0,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }, state));
@@ -530,8 +751,8 @@ describe('moving a member to a Premium seat', () => {
   it('has no seat types to change on a workspace without a Team subscription', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: STANDARD_TARGET,
       assignedPremium: 0,
       organization: { billing_plan_tier: 'enterprise' },
     });
@@ -548,8 +769,8 @@ describe('moving a member back to a Standard seat', () => {
   it('bills the Standard price from the next renewal, with no proration and no charge', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'premium', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: PREMIUM_TARGET,
       assignedPremium: 2,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
@@ -576,11 +797,11 @@ describe('moving a member back to a Standard seat', () => {
     });
   });
 
-  it('keeps Premium entitlement until the period the team already paid for ends', async () => {
+  it('records the paid period on the privileged connection after the member has left Premium', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'premium', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: PREMIUM_TARGET,
       assignedPremium: 1,
     });
     const { stripe } = fakeStripe(teamSubscription({ standard: 3, premium: 1 }));
@@ -592,38 +813,24 @@ describe('moving a member back to a Standard seat', () => {
     );
 
     expect(world.writes[0]?.sql).toContain("seat_type = 'standard'");
-    expect(world.writes[0]?.sql).toContain('premium_paid_through = $3');
-    expect(world.writes[0]?.params).toEqual([ORGANIZATION, 'target-1', PERIOD_END_ISO]);
-  });
-
-  it('lowers the stored Premium count only after the member has left the Premium seat', async () => {
-    const { changeMemberSeatType } = await loadService();
-    const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'premium', premium_paid_through_active: false },
-      assignedPremium: 2,
-    });
-    const { stripe } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
-
-    await changeMemberSeatType(
-      world.db,
-      { privileged: world.privileged, stripe },
-      request('standard'),
-    );
-
-    expect(mocks.events).toEqual(['stripe.update', 'member.write', 'commit', 'seats.persist']);
-    expect(mocks.persistSeats).toHaveBeenCalledWith(
-      world.privileged,
-      expect.objectContaining({ seats: 5, premiumSeats: 1 }),
-    );
+    expect(world.writes[0]?.sql).not.toContain('premium_paid_through');
+    expect(world.privilegedWrites[0]?.sql).toContain('premium_paid_through = $3');
+    expect(world.privilegedWrites[0]?.params).toEqual([ORGANIZATION, 'target-1', PERIOD_END_ISO]);
+    expect(mocks.events).toEqual([
+      'stripe.update',
+      'member.write',
+      'commit',
+      'paid_through.write',
+      'seats.persist',
+    ]);
     expect(mocks.carryCredits).not.toHaveBeenCalled();
   });
 
   it('grants no paid-through period for a Premium seat Stripe was never billing', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'premium', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: PREMIUM_TARGET,
       assignedPremium: 1,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
@@ -636,16 +843,19 @@ describe('moving a member back to a Standard seat', () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(change).toMatchObject({ billing: 'none', premiumPaidThrough: null });
-    expect(world.writes[0]?.params).toEqual([ORGANIZATION, 'target-1', null]);
+    expect(world.privilegedWrites).toEqual([]);
   });
 });
 
 describe('repeating and reversing a seat change', () => {
-  it('restores a seat inside its paid period without a second charge', async () => {
+  it('restores a seat inside its paid period without a second charge or the waitlist', async () => {
+    mocks.resolveOwnerBundle.mockResolvedValue({
+      subscription: ownerSubscriptionRow({ status: 'canceled' }),
+    });
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'standard', premium_paid_through_active: true },
+      requesterRole: 'owner',
+      target: { seat_type: 'standard', premium_paid_through: PERIOD_END_ISO },
       assignedPremium: 1,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 4, premium: 1 }));
@@ -667,11 +877,32 @@ describe('repeating and reversing a seat change', () => {
     expect(mocks.carryCredits).not.toHaveBeenCalled();
   });
 
+  it('charges again when the recorded paid period runs past the current billing period', async () => {
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: {
+        seat_type: 'standard',
+        premium_paid_through: new Date((PERIOD_END_SECONDS + 365 * 86_400) * 1000).toISOString(),
+      },
+      assignedPremium: 1,
+    });
+    const { stripe } = fakeStripe(teamSubscription({ standard: 4, premium: 1 }));
+
+    const change = await changeMemberSeatType(
+      world.db,
+      { privileged: world.privileged, stripe },
+      request('premium'),
+    );
+
+    expect(change.billing).toBe('charged_now');
+  });
+
   it('changes nothing and charges nothing when the member already holds that seat type', async () => {
     const { changeMemberSeatType } = await loadService();
     const world = fakeDatabases({
-      requesterRole: 'admin',
-      target: { seat_type: 'premium', premium_paid_through_active: false },
+      requesterRole: 'owner',
+      target: PREMIUM_TARGET,
       assignedPremium: 1,
     });
     const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 1 }));
@@ -690,12 +921,60 @@ describe('repeating and reversing a seat change', () => {
 
   it('reports a member who is not in the workspace', async () => {
     const { changeMemberSeatType } = await loadService();
-    const world = fakeDatabases({ requesterRole: 'admin', target: null, assignedPremium: 0 });
+    const world = fakeDatabases({ requesterRole: 'owner', target: null, assignedPremium: 0 });
     const { stripe, retrieve } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
 
     await expect(
       changeMemberSeatType(world.db, { privileged: world.privileged, stripe }, request('premium')),
     ).rejects.toMatchObject({ statusCode: 404 });
     expect(retrieve).not.toHaveBeenCalled();
+  });
+});
+
+describe('the seat type summary', () => {
+  it('shows no seat types to a team billed in a currency that has no Premium price', async () => {
+    vi.stubEnv('STRIPE_PRICE_TEAM_MONTHLY_INR', 'price_team_inr');
+    mocks.resolveOwnerBundle.mockResolvedValue({
+      subscription: ownerSubscriptionRow({ stripe_price_id: 'price_team_inr' }),
+    });
+    const { readSeatTypeSummary } = await loadService();
+    const privileged = {
+      query: vi.fn(async () => [
+        {
+          owner_user_id: 'owner-1',
+          billing_plan_tier: 'team',
+          licensed_premium_seats: 0,
+          premium_seats_assigned: 0,
+        },
+      ]),
+    } as unknown as DatabaseAdapter;
+
+    await expect(readSeatTypeSummary(privileged, ORGANIZATION)).resolves.toBeNull();
+  });
+
+  it('counts only active members as holding a Premium seat', async () => {
+    mocks.resolveOwnerBundle.mockResolvedValue({
+      subscription: ownerSubscriptionRow({ stripe_price_id: STANDARD_PRICE }),
+    });
+    const { readSeatTypeSummary } = await loadService();
+    const privileged = {
+      query: vi.fn(async () => [
+        {
+          owner_user_id: 'owner-1',
+          billing_plan_tier: 'team',
+          licensed_premium_seats: 2,
+          premium_seats_assigned: 1,
+        },
+      ]),
+    } as unknown as DatabaseAdapter;
+
+    await expect(readSeatTypeSummary(privileged, ORGANIZATION)).resolves.toEqual({
+      licensedPremiumSeats: 2,
+      premiumSeatsAssigned: 1,
+      billing: { interval: 'monthly', currency: 'usd', premiumSeatsSold: true },
+    });
+    expect(String(vi.mocked(privileged.query).mock.calls[0]?.[0])).toContain(
+      "member.status = 'active'",
+    );
   });
 });

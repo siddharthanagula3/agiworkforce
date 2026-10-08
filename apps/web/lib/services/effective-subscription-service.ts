@@ -78,7 +78,7 @@ export async function provisionSeatMemberCreditAccounts(
   for (const row of rows) {
     const orgTier = normalizeBillingPlanTier(row.billing_plan_tier);
     if (!isSeatBearingBillingPlan(orgTier)) continue;
-    const seatTier = seatHolderPlanTier(orgTier, row);
+    const seatTier = seatHolderPlanTier(orgTier, row, input.periodEnd);
     const budgetCents = getPlanUsageBudgetCents(
       { tier: seatTier, catalogVersion: input.catalogVersion },
       'monthly',

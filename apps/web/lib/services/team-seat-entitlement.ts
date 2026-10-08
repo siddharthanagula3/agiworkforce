@@ -13,29 +13,21 @@ import {
 
 export interface SeatAssignmentColumns {
   seat_type: string | null;
-  premium_paid_through_active: boolean | null;
+  premium_paid_through: string | Date | null;
   licensed_premium_seats: number | string | null;
   premium_seat_rank: number | string | null;
 }
 
-/**
- * Select-list fragment for one membership row. `membership` and `organization`
- * are the aliases every caller joins under. The rank orders Premium holders by
- * when they were assigned, so a paid count that drops below the assigned count
- * takes Premium from the latest assignment first.
- */
 export const SEAT_ASSIGNMENT_COLUMNS_SQL = `
     membership.seat_type as seat_type,
-    (
-      membership.premium_paid_through is not null
-      and membership.premium_paid_through > now()
-    ) as premium_paid_through_active,
+    membership.premium_paid_through as premium_paid_through,
     organization.licensed_premium_seats as licensed_premium_seats,
     (
       select count(*)
         from public.organization_members premium_peer
        where premium_peer.organization_id = membership.organization_id
          and premium_peer.seat_type = 'premium'
+         and premium_peer.status = 'active'
          and (
            coalesce(premium_peer.seat_type_changed_at, premium_peer.joined_at),
            premium_peer.user_id
@@ -54,8 +46,19 @@ function toCount(value: number | string | null | undefined, fallback: number): n
   return fallback;
 }
 
-export function entitledSeatType(row: SeatAssignmentColumns): TeamSeatType {
-  if (row.premium_paid_through_active === true) return 'premium';
+export type PaidPeriodEnd = string | Date | null | undefined;
+
+function paidThroughCovers(paidThrough: string | Date | null, periodEnd: PaidPeriodEnd): boolean {
+  if (!paidThrough || !periodEnd) return false;
+  const until = new Date(paidThrough).getTime();
+  return until > Date.now() && until <= new Date(periodEnd).getTime();
+}
+
+export function entitledSeatType(
+  row: SeatAssignmentColumns,
+  ownerPeriodEnd: PaidPeriodEnd,
+): TeamSeatType {
+  if (paidThroughCovers(row.premium_paid_through, ownerPeriodEnd)) return 'premium';
   if (normalizeTeamSeatType(row.seat_type) !== 'premium') return DEFAULT_TEAM_SEAT_TYPE;
   const rank = toCount(row.premium_seat_rank, Number.MAX_SAFE_INTEGER);
   return rank <= toCount(row.licensed_premium_seats, 0) ? 'premium' : DEFAULT_TEAM_SEAT_TYPE;
@@ -64,10 +67,11 @@ export function entitledSeatType(row: SeatAssignmentColumns): TeamSeatType {
 export function seatHolderPlanTier(
   planTier: string | null | undefined,
   row: SeatAssignmentColumns | null | undefined,
+  ownerPeriodEnd: PaidPeriodEnd,
 ): BillingPlanTier {
   const tier = normalizeBillingPlanTier(planTier);
   if (teamSeatTypeOfPlan(tier) !== DEFAULT_TEAM_SEAT_TYPE || !row) return tier;
-  return teamSeatPlanTier(entitledSeatType(row));
+  return teamSeatPlanTier(entitledSeatType(row, ownerPeriodEnd));
 }
 
 const OWNER_SEAT_SQL = `
@@ -92,6 +96,7 @@ export async function resolveOwnerSeatPlanTier(
   ownerUserId: string,
   planTier: string | null | undefined,
   stripeSubscriptionId: string | null,
+  ownerPeriodEnd: PaidPeriodEnd,
 ): Promise<BillingPlanTier> {
   const tier = normalizeBillingPlanTier(planTier);
   if (teamSeatTypeOfPlan(tier) !== DEFAULT_TEAM_SEAT_TYPE) return tier;
@@ -99,5 +104,5 @@ export async function resolveOwnerSeatPlanTier(
     ownerUserId,
     stripeSubscriptionId,
   ]);
-  return seatHolderPlanTier(tier, row);
+  return seatHolderPlanTier(tier, row, ownerPeriodEnd);
 }

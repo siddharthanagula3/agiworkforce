@@ -205,7 +205,6 @@ import {
   getSlotForModel,
   isFlagshipRoutingSlot,
   normalizeModelId,
-  BILLING_PLAN_CAPABILITY_TIERS,
   billingPlanCapabilityPlanLabels,
   canUseBillingPlanCapability,
   isFreeBillingPlanTier,
@@ -218,6 +217,8 @@ import {
   autoAliasForRoutingProfile,
   ROUTING_PROFILE_CHOICES,
   getTierPolicy,
+  billingPlanCapabilityWireTiers,
+  wirePlanOf,
 } from '@agiworkforce/types';
 import type {
   ChatResponseFormat,
@@ -1180,8 +1181,8 @@ export function getResearchPlanRefusal(
           message: `Deep Research is available on ${billingPlanCapabilityPlanLabels('deep_research')} plans. Upgrade your plan to use it.`,
           type: 'invalid_request_error',
           code: 'plan_upgrade_required',
-          current_plan: plan,
-          required_plans: [...BILLING_PLAN_CAPABILITY_TIERS.deep_research],
+          current_plan: wirePlanOf(plan).tier,
+          required_plans: billingPlanCapabilityWireTiers('deep_research'),
         },
       },
       { status: 403 },

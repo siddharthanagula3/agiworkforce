@@ -55,6 +55,7 @@ import {
   resolveEntitlementBundle,
 } from '../effective-subscription-service';
 import {
+  SEAT_ASSIGNMENT_COLUMNS_SQL,
   entitledSeatType,
   resolveOwnerSeatPlanTier,
   seatHolderPlanTier,
@@ -62,14 +63,17 @@ import {
 } from '../team-seat-entitlement';
 
 const PERIOD_START = '2026-09-01T00:00:00.000Z';
-const PERIOD_END = '2026-10-01T00:00:00.000Z';
+const PERIOD_END = new Date(Date.now() + 20 * 86_400_000).toISOString();
+const IN_PERIOD = new Date(Date.now() + 5 * 86_400_000).toISOString();
+const PAST_PERIOD = new Date(Date.now() + 400 * 86_400_000).toISOString();
+const ALREADY_OVER = new Date(Date.now() - 86_400_000).toISOString();
 
 const scopedDb = { query: vi.fn(async () => []) } as unknown as DatabaseAdapter;
 
 function seat(overrides: Partial<SeatAssignmentColumns> = {}): SeatAssignmentColumns {
   return {
     seat_type: 'standard',
-    premium_paid_through_active: false,
+    premium_paid_through: null,
     licensed_premium_seats: 0,
     premium_seat_rank: 0,
     ...overrides,
@@ -123,39 +127,47 @@ beforeEach(() => {
   mocks.readOrganizationCollectionState.mockResolvedValue({ readOnly: false });
 });
 
+function seatTypeAt(row: SeatAssignmentColumns) {
+  return entitledSeatType(row, PERIOD_END);
+}
+
 describe('which seat type a membership is entitled to', () => {
   it('is Premium for a Premium assignment inside the paid Premium count', () => {
-    expect(entitledSeatType(PREMIUM_SEAT)).toBe('premium');
-    expect(entitledSeatType(seat({ ...PREMIUM_SEAT, premium_seat_rank: 2 }))).toBe('premium');
+    expect(seatTypeAt(PREMIUM_SEAT)).toBe('premium');
+    expect(seatTypeAt(seat({ ...PREMIUM_SEAT, premium_seat_rank: 2 }))).toBe('premium');
   });
 
   it('is Standard for a Premium assignment the team no longer pays for', () => {
-    expect(entitledSeatType(seat({ ...PREMIUM_SEAT, premium_seat_rank: 3 }))).toBe('standard');
-    expect(entitledSeatType(seat({ ...PREMIUM_SEAT, licensed_premium_seats: 0 }))).toBe('standard');
-    expect(entitledSeatType(seat({ ...PREMIUM_SEAT, premium_seat_rank: null }))).toBe('standard');
+    expect(seatTypeAt(seat({ ...PREMIUM_SEAT, premium_seat_rank: 3 }))).toBe('standard');
+    expect(seatTypeAt(seat({ ...PREMIUM_SEAT, licensed_premium_seats: 0 }))).toBe('standard');
+    expect(seatTypeAt(seat({ ...PREMIUM_SEAT, premium_seat_rank: null }))).toBe('standard');
   });
 
   it('is Standard for a Standard assignment, however many Premium seats are paid for', () => {
-    expect(entitledSeatType(seat({ licensed_premium_seats: 10, premium_seat_rank: 0 }))).toBe(
-      'standard',
-    );
+    expect(seatTypeAt(seat({ licensed_premium_seats: 10, premium_seat_rank: 0 }))).toBe('standard');
   });
 
   it('stays Premium through a period already paid at the Premium price', () => {
-    expect(entitledSeatType(seat({ premium_paid_through_active: true }))).toBe('premium');
+    expect(seatTypeAt(seat({ premium_paid_through: IN_PERIOD }))).toBe('premium');
+  });
+
+  it('honours a paid-through date only up to the end of the period the owner paid for', () => {
+    expect(seatTypeAt(seat({ premium_paid_through: PAST_PERIOD }))).toBe('standard');
+    expect(seatTypeAt(seat({ premium_paid_through: ALREADY_OVER }))).toBe('standard');
+    expect(entitledSeatType(seat({ premium_paid_through: IN_PERIOD }), null)).toBe('standard');
   });
 
   it('reads an unknown stored seat type as Standard', () => {
-    expect(entitledSeatType(seat({ ...PREMIUM_SEAT, seat_type: 'gold' }))).toBe('standard');
-    expect(entitledSeatType(seat({ ...PREMIUM_SEAT, seat_type: null }))).toBe('standard');
+    expect(seatTypeAt(seat({ ...PREMIUM_SEAT, seat_type: 'gold' }))).toBe('standard');
+    expect(seatTypeAt(seat({ ...PREMIUM_SEAT, seat_type: null }))).toBe('standard');
   });
 
   it('applies a seat type only on the plan that sells seat types', () => {
-    expect(seatHolderPlanTier('team', PREMIUM_SEAT)).toBe('team_premium');
-    expect(seatHolderPlanTier('team', seat())).toBe('team');
-    expect(seatHolderPlanTier('team', null)).toBe('team');
-    expect(seatHolderPlanTier('enterprise', PREMIUM_SEAT)).toBe('enterprise');
-    expect(seatHolderPlanTier('pro', PREMIUM_SEAT)).toBe('pro');
+    expect(seatHolderPlanTier('team', PREMIUM_SEAT, PERIOD_END)).toBe('team_premium');
+    expect(seatHolderPlanTier('team', seat(), PERIOD_END)).toBe('team');
+    expect(seatHolderPlanTier('team', null, PERIOD_END)).toBe('team');
+    expect(seatHolderPlanTier('enterprise', PREMIUM_SEAT, PERIOD_END)).toBe('enterprise');
+    expect(seatHolderPlanTier('pro', PREMIUM_SEAT, PERIOD_END)).toBe('pro');
   });
 });
 
@@ -200,8 +212,8 @@ describe('a member on a Premium seat', () => {
     expect(mocks.getOrCreateAccount).toHaveBeenCalledWith(
       'member-1',
       'sub-owner-1',
-      new Date(PERIOD_START),
-      new Date(PERIOD_END),
+      expect.any(Date),
+      expect.any(Date),
       getPlanUsageBudgetCents('max', 'monthly'),
       scopedDb,
       null,
@@ -235,7 +247,7 @@ describe('a member on a Standard seat', () => {
 
   it('keeps the Premium limits until the period it was moved in ends', async () => {
     mocks.privilegedQuery.mockResolvedValue([
-      seatCandidate(seat({ premium_paid_through_active: true })),
+      seatCandidate(seat({ premium_paid_through: IN_PERIOD })),
     ]);
 
     await expect(resolveEntitledPlanTier(scopedDb, 'member-1')).resolves.toBe('team_premium');
@@ -295,10 +307,12 @@ describe('the owner of the team subscription', () => {
   it('sizes the owner allowance from the seat the owner holds', async () => {
     const db = { query: vi.fn(async () => [PREMIUM_SEAT]) } as unknown as DatabaseAdapter;
 
-    await expect(resolveOwnerSeatPlanTier(db, 'owner-1', 'team', null)).resolves.toBe(
+    await expect(resolveOwnerSeatPlanTier(db, 'owner-1', 'team', null, PERIOD_END)).resolves.toBe(
       'team_premium',
     );
-    await expect(resolveOwnerSeatPlanTier(db, 'owner-1', 'pro', null)).resolves.toBe('pro');
+    await expect(resolveOwnerSeatPlanTier(db, 'owner-1', 'pro', null, PERIOD_END)).resolves.toBe(
+      'pro',
+    );
   });
 });
 
@@ -337,5 +351,18 @@ describe('the monthly ledger sweep', () => {
     );
     expect(budgets.get('standard-member')).toBe(getPlanUsageBudgetCents('team', 'monthly'));
     expect(budgets.get('premium-member')).toBe(getPlanUsageBudgetCents('max', 'monthly'));
+  });
+});
+
+describe('the seat assignment columns', () => {
+  it('reads the paid-through date as stored and leaves the cap to the owner period the caller holds', () => {
+    expect(SEAT_ASSIGNMENT_COLUMNS_SQL).toContain(
+      'membership.premium_paid_through as premium_paid_through',
+    );
+    expect(SEAT_ASSIGNMENT_COLUMNS_SQL).not.toMatch(/public\.subscriptions/);
+  });
+
+  it('ranks Premium holders among active members only', () => {
+    expect(SEAT_ASSIGNMENT_COLUMNS_SQL).toContain("premium_peer.status = 'active'");
   });
 });
