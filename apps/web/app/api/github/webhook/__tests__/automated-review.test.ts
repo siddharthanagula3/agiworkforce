@@ -81,6 +81,8 @@ describe('findings are anchored to the diff before anything is posted', () => {
       diff: DIFF,
       prNumber: 7,
       planTier: 'pro',
+      ownerUserId: 'user-1',
+      noTrainingOnly: false,
       postedCommentBodies,
       callModel: async (call) => {
         calls.push(call);
@@ -121,6 +123,8 @@ describe('findings are anchored to the diff before anything is posted', () => {
       diff: DIFF,
       prNumber: 7,
       planTier: 'pro',
+      ownerUserId: 'user-1',
+      noTrainingOnly: false,
       postedCommentBodies: [],
       callModel: async () => ({ text: 'Looks good to me, LGTM!', outputTokens: 5 }),
     });
@@ -143,6 +147,8 @@ describe('a re-review does not repeat itself', () => {
       diff: DIFF,
       prNumber: 7,
       planTier: 'pro',
+      ownerUserId: 'user-1',
+      noTrainingOnly: false,
       postedCommentBodies: [alreadyPosted],
       callModel: answering([REAL_FINDING]),
     });
@@ -158,6 +164,8 @@ describe('a re-review does not repeat itself', () => {
       diff: DIFF,
       prNumber: 7,
       planTier: 'pro',
+      ownerUserId: 'user-1',
+      noTrainingOnly: false,
       postedCommentBodies: [],
       callModel: answering([REAL_FINDING, { ...REAL_FINDING, explanation: 'said again' }]),
     });
@@ -170,6 +178,8 @@ describe('a re-review does not repeat itself', () => {
       diff: DIFF,
       prNumber: 7,
       planTier: 'pro',
+      ownerUserId: 'user-1',
+      noTrainingOnly: false,
       postedCommentBodies: [],
       callModel: answering([REAL_FINDING]),
     });
@@ -185,6 +195,8 @@ describe('the review body', () => {
       diff: DIFF,
       prNumber: 7,
       planTier: 'pro',
+      ownerUserId: 'user-1',
+      noTrainingOnly: false,
       postedCommentBodies: [],
       callModel: answering([REAL_FINDING]),
     });

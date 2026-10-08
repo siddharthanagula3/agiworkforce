@@ -12,6 +12,9 @@ import {
 export const PRIVACY_PREFERENCES_NAMESPACE = 'privacy';
 export const PROVIDER_TRAINING_OPT_OUT_KEY = 'keepOutOfProviderTraining';
 
+export const MODEL_MAY_TRAIN_MESSAGE =
+  "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.";
+
 export async function readProviderTrainingOptOut(
   db: Pick<DatabaseAdapter, 'query'>,
   userId: string,

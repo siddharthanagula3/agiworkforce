@@ -41,7 +41,9 @@ export async function sideCallRoutingRequest<T extends AutoRoutingRequest>(
   const providerIds = noTrainingProviderIds(
     request.availableProviderIds ?? listAvailableManagedProviderIds(),
   );
-  return providerIds.size > 0 ? { ...request, availableProviderIds: providerIds } : null;
+  return providerIds.size > 0
+    ? { ...request, availableProviderIds: providerIds, noTrainingOnly: true }
+    : null;
 }
 
 export async function sideCallProviderAllowed(

@@ -2,6 +2,8 @@ import 'server-only';
 
 import { NextRequest, NextResponse, after } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import {
   verifyGitHubWebhookSignature,
   getInstallationAccessToken,
@@ -523,12 +525,19 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       },
     );
 
+    const noTrainingOnly = await sideCallTrainingOptOut(
+      createClaimedUserScopedDb(db, { userId: installation.user_id, organizationId: null }),
+      installation.user_id,
+    );
+
     const outcome = await reviewPullRequestDiff({
       diff: rawDiff,
       prNumber,
       planTier,
       postedCommentBodies,
       preferredModel: installation.review_model,
+      ownerUserId: installation.user_id,
+      noTrainingOnly,
     });
 
     if (outcome.status === 'unavailable' || outcome.status === 'no-diff') {

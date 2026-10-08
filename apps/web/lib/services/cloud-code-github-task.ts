@@ -36,6 +36,7 @@ import {
   readCloudCodeSessionChanges,
   type CloudCodeOwner,
 } from './cloud-code-session-service';
+import { CloudCodeModelMayTrainError } from './cloud-code-agent-service';
 import { CloudCodeTurnStillRunningError, runCloudCodeTurn } from './cloud-code-turn-transport';
 import { resolveEntitledPlanTier } from './entitlement-resolution';
 import { assertWorkspaceCodeAccess } from './organization-policy-code-gate';
@@ -78,7 +79,8 @@ function userFacingFailure(error: unknown): string | null {
     error instanceof CloudCodeValidationError ||
     error instanceof CloudCodeLimitError ||
     error instanceof CloudCodeConflictError ||
-    error instanceof CloudCodeUnavailableError;
+    error instanceof CloudCodeUnavailableError ||
+    error instanceof CloudCodeModelMayTrainError;
   return known && error.message ? error.message : null;
 }
 

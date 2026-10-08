@@ -25,6 +25,7 @@ vi.mock('@/lib/e2b/session-store', () => ({
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: vi.fn(() => ({ stream: vi.fn() })),
   resolveProviderFromModel: vi.fn(() => 'anthropic'),
+  listAvailableManagedProviderIds: vi.fn(() => new Set<string>()),
 }));
 vi.mock('@/lib/services/cloud-code-agent-runner', () => ({
   createCloudCodeToolRunner: vi.fn(() => ({})),

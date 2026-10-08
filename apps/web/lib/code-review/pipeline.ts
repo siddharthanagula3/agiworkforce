@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { resolveAutoRoute } from '@agiworkforce/routing';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
+import { resolveAutoRoute, type AutoRoutingRequest } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
@@ -13,6 +14,8 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { logger } from '@/lib/logger';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
+import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
 import { chunkDiff, parseUnifiedDiff, type ReviewDiffFile } from './diff';
 import {
   anchorFindings,
@@ -57,6 +60,9 @@ export interface CodeReviewInput {
   postedCommentBodies: readonly string[];
   /** The installation's configured review model, when it has one. */
   preferredModel?: string | null;
+  /** Who installed the review, and whether their content stays off providers that may train. */
+  ownerUserId: string;
+  noTrainingOnly: boolean;
   /** Injected so a test drives the pipeline without a provider. */
   callModel?: (call: CodeReviewModelCall) => Promise<{ text: string; outputTokens: number }>;
   signal?: AbortSignal;
@@ -67,35 +73,52 @@ export interface CodeReviewInput {
  * the Auto coding route otherwise. Either way the provider is resolved from the
  * catalogue, so no provider is named in this file.
  */
-function resolveReviewRoute(
-  planTier: string,
-  preferredModel: string | null | undefined,
-): { dispatchProvider: string; modelKey: string; providerModelId: string } | null {
+async function resolveReviewRoute(
+  input: Pick<CodeReviewInput, 'planTier' | 'preferredModel' | 'ownerUserId' | 'noTrainingOnly'>,
+): Promise<{ dispatchProvider: string; modelKey: string; providerModelId: string } | null> {
+  const { planTier, preferredModel, noTrainingOnly } = input;
   const normalized = preferredModel ? normalizeModelId(preferredModel) : null;
   if (normalized) {
     try {
-      return {
-        dispatchProvider: resolveProviderFromModel(normalized),
-        modelKey: normalized,
-        providerModelId: normalized,
-      };
+      const dispatchProvider = resolveProviderFromModel(normalized);
+      if (
+        noTrainingOnly &&
+        !(
+          modelKeepsInputsOutOfTraining(normalized) &&
+          providerKeepsInputsOutOfTraining(dispatchProvider)
+        )
+      ) {
+        logger.warn(
+          { preferredModel },
+          '[code-review] configured review model may train on inputs and the account opted out',
+        );
+        return null;
+      }
+      return { dispatchProvider, modelKey: normalized, providerModelId: normalized };
     } catch (error) {
       logger.warn({ error, preferredModel }, '[code-review] configured review model is unroutable');
     }
   }
-  const route = resolveAutoRoute({
+  const baseRouting: AutoRoutingRequest = {
     selection: 'auto',
     taskType: 'coding',
     subscriptionTier: planTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
-  });
+  };
+  const routing = noTrainingOnly
+    ? await sideCallRoutingRequest(null, input.ownerUserId, baseRouting, { forceNoTraining: true })
+    : baseRouting;
+  if (!routing) return null;
+  const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
     logger.warn({ code: route.code }, '[code-review] no managed route available');
     return null;
   }
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  if (noTrainingOnly && !providerKeepsInputsOutOfTraining(dispatchProvider)) return null;
   return {
-    dispatchProvider: dispatchProviderForSelectedRoute(route),
+    dispatchProvider,
     modelKey: route.modelKey,
     providerModelId: route.providerModelId,
   };
@@ -105,7 +128,7 @@ async function callReviewModel(
   input: CodeReviewInput,
   call: CodeReviewModelCall,
 ): Promise<{ text: string; outputTokens: number } | null> {
-  const route = resolveReviewRoute(input.planTier, input.preferredModel);
+  const route = await resolveReviewRoute(input);
   if (!route) return null;
 
   const request = openAIWireRequestToChatRequest({
