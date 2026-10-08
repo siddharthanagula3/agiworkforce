@@ -17,7 +17,10 @@ interface BillingState {
   unauthenticated?: boolean;
   dailyUsage_cents: number;
   dailyLimit_cents: number;
+  refreshUser: () => Promise<void>;
 }
+
+const refreshUser = vi.fn(async () => undefined);
 
 const billingState: BillingState = {
   subscription: null,
@@ -26,6 +29,7 @@ const billingState: BillingState = {
   error: null,
   dailyUsage_cents: 0,
   dailyLimit_cents: 0,
+  refreshUser,
 };
 
 const CATALOGUE_ENTRIES = vi.hoisted(() => [
@@ -193,10 +197,18 @@ import { ComposerFooter } from '../ComposerFooter';
 
 /**
  * The short list only ever offers models the plan admits, so an upgrade claim
- * against a paying subscriber is now structurally impossible there. This reads
- * whichever surface currently carries the claim: a short list row while the
- * plan is unresolved, or the catalogue row once the disclosure is open.
+ * against a paying subscriber is structurally impossible there. This reads
+ * whichever surface carries the claim once the plan is known: a short list
+ * row, or the catalogue row once the disclosure is open.
  */
+function shortListUpgradeClaims(): string[] {
+  const picker = within(screen.getByTestId('popover-content'));
+  return picker
+    .queryAllByRole('button')
+    .map((row) => `${row.getAttribute('aria-label') ?? ''} ${row.textContent ?? ''}`)
+    .filter((text) => /upgrade/i.test(text));
+}
+
 function premiumRowLabel(): string {
   const shortListRow = screen.queryByRole('button', { name: /Premium Model/i });
   if (shortListRow) return shortListRow.getAttribute('aria-label') ?? '';
@@ -213,6 +225,7 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
     billingState.isLoading = false;
     billingState.error = null;
     billingState.unauthenticated = undefined;
+    refreshUser.mockClear();
   });
 
   it('does not claim an upgrade is required while /api/me is still loading', () => {
@@ -221,7 +234,7 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toBe('Premium Model');
+    expect(shortListUpgradeClaims()).toEqual([]);
   });
 
   it('does not claim an upgrade is required when the account request failed', () => {
@@ -229,7 +242,46 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toBe('Premium Model');
+    expect(shortListUpgradeClaims()).toEqual([]);
+  });
+
+  it('offers no paid routing rows while the plan is still loading', () => {
+    billingState.initialized = false;
+    billingState.isLoading = true;
+
+    render(<ComposerFooter />);
+
+    const picker = within(screen.getByTestId('popover-content'));
+    expect(picker.getByText("Loading your plan's models…")).toBeVisible();
+    expect(picker.queryByRole('button', { name: /Premium Model/ })).toBeNull();
+    for (const name of ['Auto', 'Auto: Instant', 'Auto: Best', 'Auto: Economy']) {
+      expect(picker.queryByRole('button', { name })).toBeNull();
+    }
+  });
+
+  it('offers a retry instead of paid routing rows when the account request failed', () => {
+    billingState.error = 'Network request failed';
+
+    render(<ComposerFooter />);
+
+    const picker = within(screen.getByTestId('popover-content'));
+    fireEvent.click(picker.getByRole('button', { name: /Could not load your plan's models/ }));
+    expect(refreshUser).toHaveBeenCalledTimes(1);
+    expect(picker.queryByRole('button', { name: /Premium Model/ })).toBeNull();
+    for (const name of ['Auto', 'Auto: Instant', 'Auto: Best', 'Auto: Economy']) {
+      expect(picker.queryByRole('button', { name })).toBeNull();
+    }
+  });
+
+  it('offers a paid plan its models with no claim and no loading line once the plan is known', () => {
+    billingState.subscription = { tier: 'pro' };
+
+    render(<ComposerFooter />);
+
+    const picker = within(screen.getByTestId('popover-content'));
+    expect(picker.getByRole('button', { name: 'Premium Model' })).toBeVisible();
+    expect(picker.queryByText("Loading your plan's models…")).toBeNull();
+    expect(shortListUpgradeClaims()).toEqual([]);
   });
 
   it('expands the Free section and marks paid models Upgrade to use for a signed-out visitor', () => {
