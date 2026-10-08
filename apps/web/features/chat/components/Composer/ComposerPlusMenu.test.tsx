@@ -5,7 +5,6 @@ import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { baseInitOptions } from '@agiworkforce/i18n';
 
-import { freeMediaLimitedLine } from '@/features/models/lib/free-media-offer';
 import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
 
@@ -566,7 +565,7 @@ describe('ComposerPlusMenu, working folder row', () => {
 
 describe('ComposerPlusMenu, free image and video offer', () => {
   const LAST_DAY = '2026-10-20';
-  const NOTE = freeMediaLimitedLine(LAST_DAY);
+  const NOTE = "Today's free limit is used. Resets in 3 hours.";
   const mediaRows = {
     hostCanGenerateVideo: true,
     videoModelsAvailable: true,

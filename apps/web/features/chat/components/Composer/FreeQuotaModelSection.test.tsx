@@ -778,7 +778,7 @@ describe('Free section in the composer', () => {
     }
   });
 
-  it('marks free image models Limited with the plain line while the limited offer covers the account', () => {
+  it('marks free image models Limited, with no line under the list, while the limited offer covers the account', () => {
     const offered = {
       ...catalogue([
         model(familyA[0]!),
@@ -795,10 +795,7 @@ describe('Free section in the composer', () => {
       ],
     };
     renderSection(sources(source('ready', offered)));
-    const line = `Free while our free capacity lasts, until ${calendarDay('2026-11-25')} (UTC) at the latest.`;
-
     expect(screen.queryByText('Limited')).not.toBeInTheDocument();
-    expect(screen.queryByText(line)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Free model category' }), {
       target: { value: 'image' },
@@ -806,11 +803,10 @@ describe('Free section in the composer', () => {
 
     const row = screen.getByRole('button', { name: name(imageKey) });
     expect(row).toHaveTextContent('Limited');
-    expect(row).toHaveAccessibleDescription(new RegExp(literal(line)));
-    expect(screen.getByText(line)).toBeVisible();
+    expect(screen.queryByText(/Free while our free capacity lasts/)).not.toBeInTheDocument();
   });
 
-  it('keeps the Limited mark and the image end date off a selected free chat model shown above the image list', () => {
+  it('keeps the Limited mark and the daily-limit line off a selected free chat model shown above the image list', () => {
     const chatKey = familyA[0]!;
     const offered = {
       ...catalogue([model(chatKey), { ...model(imageKey), expiresOn: '2026-10-21' }]),
@@ -818,7 +814,7 @@ describe('Free section in the composer', () => {
         {
           category: 'image' as const,
           dailyCap: 5,
-          remainingToday: 4,
+          remainingToday: 0,
           resetsAt: '2026-10-05T00:00:00.000Z',
         },
       ],
@@ -829,7 +825,7 @@ describe('Free section in the composer', () => {
       target: { value: 'image' },
     });
 
-    const note = screen.getByText(/^Free while our free capacity lasts/);
+    const note = screen.getByText(/^Today's free limit is used/);
     const chatRow = screen.getByRole('button', { name: name(chatKey) });
     expect(chatRow).toHaveAttribute('aria-pressed', 'true');
     expect(chatRow).not.toHaveTextContent('Limited');

@@ -9,8 +9,6 @@ import {
   FREE_MEDIA_PLAN_CAPABILITY,
   catalogueFreeMediaOffer,
   freeMediaAccess,
-  freeMediaLastDayLabel,
-  freeMediaLimitedLine,
   freeMediaOfferNote,
   freeMediaPlanStanding,
   freeQuotaCalendarDay,
@@ -125,7 +123,6 @@ describe('the label on image and video generation', () => {
       models: [model({ key: 'image-early' }), model({ key: 'image-undated', expiresOn: null })],
     });
     expect(label(false, undated, 'image')).toEqual({ label: 'limited', lastDay: null });
-    expect(freeMediaLimitedLine(null)).toBe('Free while our free capacity lasts.');
   });
 });
 
@@ -157,15 +154,7 @@ describe('where a plan stands on free image and video', () => {
 });
 
 describe('the line beside the Limited label', () => {
-  it('says free while capacity lasts, with the last day and the zone that day is counted in', () => {
-    expect(freeMediaLimitedLine('2026-11-25', 'en-GB')).toBe(
-      'Free while our free capacity lasts, until 25 Nov 2026 (UTC) at the latest.',
-    );
-    expect(freeMediaLastDayLabel('2026-11-25', 'en-GB')).toBe('25 Nov 2026 (UTC)');
-    expect(freeMediaLastDayLabel('2026-11-25')).toBe(`${freeQuotaCalendarDay('2026-11-25')} (UTC)`);
-  });
-
-  it("says when today's share is used and when it resets, instead of promising more", () => {
+  it("says when today's share is used and when it resets, and nothing while some remains", () => {
     const limited = limitedFreeMedia(
       catalogue({
         limitedOffer: [{ category: 'image', dailyCap: 5, remainingToday: 0, resetsAt: RESETS_AT }],
@@ -177,9 +166,7 @@ describe('the line beside the Limited label', () => {
     expect(freeMediaOfferNote(limited, threeHoursBefore)).toBe(
       "Today's free limit is used. Resets in 3 hours.",
     );
-    expect(freeMediaOfferNote({ ...limited, remainingToday: 2 }, threeHoursBefore)).toBe(
-      freeMediaLimitedLine('2026-11-25'),
-    );
+    expect(freeMediaOfferNote({ ...limited, remainingToday: 2 }, threeHoursBefore)).toBeNull();
   });
 });
 

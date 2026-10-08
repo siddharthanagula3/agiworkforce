@@ -343,6 +343,7 @@ export function FreeQuotaModelSection({
       : null;
   const limitedOffer =
     freeMediaAccess({ planIncludes: false, offer: limitedMedia }).label === 'limited';
+  const limitedNote = limitedOffer && limitedMedia ? freeMediaOfferNote(limitedMedia) : null;
   const promotionalIssuer = experiential.catalogue?.issuer ?? null;
   const loading = quota.status === 'loading' || experiential.status === 'loading';
   const settled = !loading && quota.status !== 'error' && experiential.status !== 'error';
@@ -411,7 +412,13 @@ export function FreeQuotaModelSection({
         key={entry.model.key}
         entry={entry}
         promotional={entry.issuer === promotionalIssuer}
-        noteId={entry.issuer === promotionalIssuer ? noteId : limited ? limitedNoteId : null}
+        noteId={
+          entry.issuer === promotionalIssuer
+            ? noteId
+            : limited && limitedNote
+              ? limitedNoteId
+              : null
+        }
         limited={limited}
         selected={entry.model.key === selectedId}
         onSelect={onSelect}
@@ -483,9 +490,9 @@ export function FreeQuotaModelSection({
               </select>
             </div>
           )}
-          {limitedOffer && limitedMedia && (
+          {limitedNote && (
             <p id={limitedNoteId} className={LIMITED_NOTE_CLASS}>
-              {freeMediaOfferNote(limitedMedia)}
+              {limitedNote}
             </p>
           )}
           {renderPending('list')}
