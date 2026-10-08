@@ -140,14 +140,27 @@ async function applyPremiumSeatCount(
   );
   const demoted = await db.query<{ user_id: string }>(
     `update public.organization_members as member
-        set seat_type = 'standard'
+        set seat_type = 'standard',
+            premium_paid_through = greatest(
+              member.premium_paid_through,
+              (
+                select owner_period.current_period_end
+                  from public.organizations organization
+                  join public.subscriptions owner_period
+                    on owner_period.user_id = organization.owner_user_id
+                 where organization.id = member.organization_id
+                 limit 1
+              )
+            )
       where member.organization_id = $1
         and member.seat_type = 'premium'
+        and member.status = 'active'
         and (
           select count(*)
             from public.organization_members peer
            where peer.organization_id = member.organization_id
              and peer.seat_type = 'premium'
+             and peer.status = 'active'
              and (coalesce(peer.seat_type_changed_at, peer.joined_at), peer.user_id)
                  <= (coalesce(member.seat_type_changed_at, member.joined_at), member.user_id)
         ) > $2
@@ -157,7 +170,7 @@ async function applyPremiumSeatCount(
   if (demoted.length > 0) {
     logger.warn(
       { organizationId, premiumSeats, demotedMembers: demoted.length },
-      'Paid Premium seats fell below the assigned Premium seats; the latest assignments returned to Standard',
+      'Paid Premium seats fell below the assigned Premium seats; the latest assignments returned to Standard and keep Premium to the end of the paid period',
     );
   }
 }

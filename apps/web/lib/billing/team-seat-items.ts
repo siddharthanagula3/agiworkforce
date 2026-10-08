@@ -28,10 +28,6 @@ export function seatTypeOfLineItem(item: SeatLineItem): TeamSeatType | null {
   return point ? teamSeatTypeOfPlan(point.plan) : null;
 }
 
-/**
- * Null when no line bills a registered Team seat Price, which is how an
- * Enterprise or individual subscription reads: those keep their own seat rule.
- */
 export function resolveSeatQuantities(
   items: readonly SeatLineItem[] | null | undefined,
 ): TeamSeatQuantities | null {
@@ -46,11 +42,6 @@ export function resolveSeatQuantities(
   return matched ? quantities : null;
 }
 
-/**
- * Stripe returns subscription items in no promised order, so a team that mixes
- * seat types is represented by its Standard seat line wherever one price is
- * recorded for the subscription.
- */
 export function primarySeatLineItem<T extends SeatLineItem>(
   items: readonly T[] | null | undefined,
 ): T | null {

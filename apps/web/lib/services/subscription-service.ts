@@ -69,10 +69,11 @@ async function resolveAllowance(
   userId: string,
   planTier: string,
   subscriptionId: string,
+  periodEnd: Date,
   options: CreditAllocationOptions,
 ): Promise<VersionedPlanTier> {
   return {
-    tier: await resolveOwnerSeatPlanTier(options.db, userId, planTier, null),
+    tier: await resolveOwnerSeatPlanTier(options.db, userId, planTier, null, periodEnd),
     catalogVersion:
       options.catalogVersion !== undefined
         ? options.catalogVersion
@@ -131,7 +132,7 @@ export class SubscriptionService {
     periodEnd: Date,
     options: CreditAllocationOptions,
   ): Promise<string> {
-    const allowance = await resolveAllowance(userId, planTier, subscriptionId, options);
+    const allowance = await resolveAllowance(userId, planTier, subscriptionId, periodEnd, options);
     const creditsCents = getPlanUsageBudgetCents(allowance, 'monthly');
 
     if (creditsCents === 0) {
@@ -185,7 +186,7 @@ export class SubscriptionService {
     periodEnd: Date,
     options: CreditAllocationOptions,
   ): Promise<string> {
-    const allowance = await resolveAllowance(userId, planTier, subscriptionId, options);
+    const allowance = await resolveAllowance(userId, planTier, subscriptionId, periodEnd, options);
     const creditsCents = getPlanUsageBudgetCents(allowance, 'monthly');
 
     if (creditsCents === 0) {

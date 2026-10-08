@@ -226,12 +226,42 @@ describe('GET /api/me, shared cloud contract', () => {
         current_period_end: Date.parse(SEAT_PERIOD_END) / 1000,
         cancel_at_period_end: false,
         effective_tier: orgTier,
+        ...(orgTier === 'team' ? { seat_type: 'standard' } : {}),
         subscription_source: 'manual',
       });
       expect(parsed.capability_handshake?.sources.tier).toBe(tierPolicy);
       expect(parsed.feature_flags.advanced_model_access).toBe(true);
     },
   );
+
+  it('reports a Premium seat member as Team with a Premium seat, never as a tier older clients cannot read', async () => {
+    mockGetSubscription.mockResolvedValue(null);
+    mockNeonQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from public.organization_members membership')
+        ? [
+            seatCandidate({
+              seat_type: 'premium',
+              licensed_premium_seats: 1,
+              premium_seat_rank: 1,
+              premium_paid_through: null,
+            }),
+          ]
+        : [{ routing_preferences: { us_only: false } }],
+    );
+
+    const res = await GET(makeGetRequest());
+    const body = await res.json();
+    const parsed = MeResponseSchema.parse(body);
+
+    expect(parsed.plan).toMatchObject({
+      tier: 'team',
+      display_name: 'Team',
+      effective_tier: 'team',
+      seat_type: 'premium',
+    });
+    expect(JSON.stringify(body)).not.toContain('team_premium');
+    expect(parsed.capability_handshake?.sources.tier).toBe('tier:max');
+  });
 
   it('keeps a seat member on Free when the organization has used every licensed seat', async () => {
     mockGetSubscription.mockResolvedValue(null);

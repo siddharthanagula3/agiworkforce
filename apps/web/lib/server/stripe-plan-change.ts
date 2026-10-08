@@ -185,11 +185,6 @@ export interface SeatChangeBasis {
   premiumRecurringCents: number;
 }
 
-/**
- * A Team subscription may carry a Premium seat line beside its Standard one. A
- * seat count is the sum of both, and a seat added here is a Standard seat, so
- * the Premium line is left exactly as Stripe holds it.
- */
 export function seatChangeBasis(subscription: Stripe.Subscription): SeatChangeBasis | null {
   const item = primarySeatLineItem(subscription.items.data);
   if (!item) return null;
@@ -680,12 +675,8 @@ function hostedInvoiceUrl(subscription: Stripe.Subscription): string | null {
   return invoice && typeof invoice === 'object' ? (invoice.hosted_invoice_url ?? null) : null;
 }
 
-/**
- * Moves seats between the two lines of one Team subscription by writing both
- * quantities as absolute values, so repeating the call lands the same state. A
- * charged move follows the seat increase policy: invoiced now, renewal date
- * unchanged. An uncharged move changes only what the next renewal bills.
- */
+// Both quantities are written as absolute values: an increment here would charge twice on a
+// retried request.
 async function moveTeamSeat(
   stripe: TeamSeatStripe,
   subscription: Stripe.Subscription,

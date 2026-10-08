@@ -14,6 +14,8 @@ import {
   creditsFromCents,
   isFreeBillingPlanTier,
   type ManagedUsageBalanceResponse,
+  seatTypeField,
+  wirePlanOf,
 } from '@agiworkforce/types';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-credits';
@@ -103,7 +105,8 @@ async function handleGetBalance(request: NextRequest) {
   const responseBody: ManagedUsageBalanceResponse = {
     object: 'credit_balance',
     subscription: {
-      plan_tier: subscription.plan_tier,
+      plan_tier: wirePlanOf(subscription.plan_tier).tier,
+      ...seatTypeField(wirePlanOf(subscription.plan_tier).seatType),
       status: subscription.status,
       current_period_end:
         subscription.current_period_end instanceof Date

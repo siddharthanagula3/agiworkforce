@@ -142,7 +142,7 @@ async function resolveSeatSubscription(
     return {
       id: row.subscription_id,
       user_id: userId,
-      plan_tier: seatHolderPlanTier(orgTier, row),
+      plan_tier: seatHolderPlanTier(orgTier, row, row.current_period_end),
       status: resolveEffectiveSubscriptionBillingStatus({
         plan_tier: orgTier,
         status: row.status,
@@ -343,6 +343,7 @@ async function withOwnerSeat(userId: string, own: SubscriptionInfo): Promise<Sub
       userId,
       own.plan_tier,
       own.stripe_subscription_id,
+      own.current_period_end,
     );
     return planTier === own.plan_tier ? own : { ...own, plan_tier: planTier };
   } catch (error) {
