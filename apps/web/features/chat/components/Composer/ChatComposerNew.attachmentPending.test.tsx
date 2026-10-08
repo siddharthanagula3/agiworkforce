@@ -8,6 +8,12 @@ type ScanModule2 = typeof import('@features/chat/hooks/use-skills-list');
 type ScanModule3 = typeof import('@features/chat/hooks/use-media-model-availability');
 type ScanModule4 = typeof import('@agiworkforce/unified-chat');
 type ScanModule5 = typeof import('@features/connectors/hooks/use-connectors');
+type AttachmentMetadataModule = typeof import('@features/chat/lib/attachment-metadata');
+type PreparedAttachment = Awaited<ReturnType<AttachmentMetadataModule['prepareChatAttachment']>>;
+
+const preparation = vi.hoisted(() => ({
+  prepareChatAttachment: vi.fn<(file: File) => Promise<unknown>>(),
+}));
 
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
@@ -36,7 +42,12 @@ vi.mock('@features/chat/hooks/use-media-model-availability', async (importOrigin
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
-  useCapability: (capability: string) => capability === 'canTakeScreenshot',
+  useCapability: () => false,
+}));
+
+vi.mock('@features/chat/lib/attachment-metadata', async (importOriginal) => ({
+  ...(await importOriginal<AttachmentMetadataModule>()),
+  prepareChatAttachment: preparation.prepareChatAttachment,
 }));
 
 vi.mock('@features/connectors/hooks/use-connectors', async (importOriginal) => ({
@@ -57,25 +68,22 @@ function reason() {
   return screen.queryByTestId('composer-send-disabled-reason');
 }
 
-/** Holds the screen capture open so a send can be attempted underneath it. */
-function pendingCapture() {
-  let fail: (error: Error) => void = () => undefined;
-  const getDisplayMedia = vi.fn(
+/** Holds a picked file in preparation so a send can be attempted underneath it. */
+function pendingAttachment() {
+  let finish: (prepared: PreparedAttachment) => void = () => undefined;
+  preparation.prepareChatAttachment.mockImplementation(
     () =>
-      new Promise<MediaStream>((_resolve, reject) => {
-        fail = reject;
+      new Promise<PreparedAttachment>((resolve) => {
+        finish = resolve;
       }),
   );
-  Object.defineProperty(navigator, 'mediaDevices', {
-    configurable: true,
-    value: { getDisplayMedia },
-  });
-  return { cancel: () => fail(new Error('cancelled')) };
+  return { settle: (file: File) => finish({ status: 'ready', file }) };
 }
 
-async function startScreenshot() {
-  await userEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-  await userEvent.click(await screen.findByText('Take a screenshot'));
+function pickFile(container: HTMLElement, file: File) {
+  const picker = container.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!picker) throw new Error('The composer has no file picker');
+  fireEvent.change(picker, { target: { files: [file] } });
 }
 
 beforeEach(() => {
@@ -88,24 +96,29 @@ afterEach(() => {
 });
 
 describe('a send raced against an attachment that is still being prepared', () => {
-  it('holds the message until the capture ends instead of sending without it', async () => {
-    const capture = pendingCapture();
+  it('holds the message until the file is ready instead of sending without it', async () => {
+    const attachment = pendingAttachment();
+    const file = new File(['picture'], 'photo.png', { type: 'image/png' });
     const onSend = vi.fn();
-    render(<ChatComposerNew onSend={onSend} />);
+    const { container } = render(<ChatComposerNew onSend={onSend} />);
 
-    await startScreenshot();
+    pickFile(container, file);
+    await waitFor(() => {
+      expect(preparation.prepareChatAttachment).toHaveBeenCalledTimes(1);
+    });
     await userEvent.type(input(), 'look at this');
     fireEvent.keyDown(input(), { key: 'Enter' });
 
     expect(onSend).not.toHaveBeenCalled();
     expect((input() as HTMLTextAreaElement).value).toContain('look at this');
 
-    capture.cancel();
+    attachment.settle(file);
 
     await waitFor(() => {
       expect(onSend).toHaveBeenCalledTimes(1);
     });
     expect(onSend.mock.calls[0]?.[0]).toContain('look at this');
+    expect(onSend.mock.calls[0]?.[1]).toEqual([file]);
   });
 });
 
