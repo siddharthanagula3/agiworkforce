@@ -6155,7 +6155,7 @@ const ChatComposerNewComponent = ({
 
       {projectPicker &&
         !imageMode &&
-        (workMode === 'agiwork' || (!canUseAgiWork && !emptyState)) && (
+        (workMode === 'agiwork' || (!canUseAgiWork && pickerHasSelection)) && (
           <div className="relative" ref={projectPickerRef}>
             <div
               data-testid={workScopeBarVisible ? 'composer-work-bar' : 'composer-project-tab'}
