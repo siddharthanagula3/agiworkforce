@@ -150,28 +150,38 @@ fn a_trust_mode_an_additional_harness_cannot_serve_never_sees_that_route() {
 
 #[test]
 fn same_model_routes_come_before_any_model_substitution() {
-    let decision = resolve_auto_route(&AutoRoutingRequest {
-        selection: Some("auto-balanced"),
-        task_type: RoutingTaskType::Coding,
-        subscription_tier: Some("max"),
-        trust_mode: TrustMode::Byok,
-        ..AutoRoutingRequest::default()
-    })
-    .expect("generated registry should load");
+    let mut profiles_with_own_model_fallbacks = 0;
+    for selection in ["auto-economy", "auto-balanced", "auto-premium"] {
+        let decision = resolve_auto_route(&AutoRoutingRequest {
+            selection: Some(selection),
+            task_type: RoutingTaskType::Coding,
+            subscription_tier: Some("max"),
+            trust_mode: TrustMode::Byok,
+            ..AutoRoutingRequest::default()
+        })
+        .expect("generated registry should load");
 
-    let AutoRouteDecision::Selected(selected) = decision else {
-        panic!("expected selected route");
-    };
-    let own_model_fallbacks = selected
-        .fallbacks
-        .iter()
-        .take_while(|fallback| fallback.model_key == selected.model_key)
-        .count();
-    assert!(own_model_fallbacks > 0);
-    assert!(
-        selected.fallbacks[own_model_fallbacks..]
+        let AutoRouteDecision::Selected(selected) = decision else {
+            panic!("expected selected route for {selection}");
+        };
+        let own_model_fallbacks = selected
+            .fallbacks
             .iter()
-            .all(|fallback| fallback.model_key != selected.model_key)
+            .take_while(|fallback| fallback.model_key == selected.model_key)
+            .count();
+        if own_model_fallbacks > 0 {
+            profiles_with_own_model_fallbacks += 1;
+        }
+        assert!(
+            selected.fallbacks[own_model_fallbacks..]
+                .iter()
+                .all(|fallback| fallback.model_key != selected.model_key),
+            "{selection} substitutes a model before exhausting the selected model's routes"
+        );
+    }
+    assert!(
+        profiles_with_own_model_fallbacks > 0,
+        "no coding profile selects a model with a second route, so the ordering went untested"
     );
 }
 
