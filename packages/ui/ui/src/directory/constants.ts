@@ -1,6 +1,7 @@
 import type {
   DirectoryBadgeKind,
   DirectoryConnectableMode,
+  DirectoryConnectorStatus,
   DirectoryManageColumn,
   DirectoryPluginScanVerdict,
   DirectorySectionKey,
@@ -66,12 +67,18 @@ export const DIRECTORY_BADGE_LABELS: Record<DirectoryBadgeKind, string> = {
   community: 'Community',
   custom: 'Custom',
   update: 'Update available',
+  unreviewed: 'Not reviewed',
 };
 
 export const VERIFIED_GLYPH_BADGE: DirectoryBadgeKind = 'verified';
 export const CUSTOM_BADGE: DirectoryBadgeKind = 'custom';
 export const COMMUNITY_BADGE: DirectoryBadgeKind = 'community';
 export const UPDATE_BADGE: DirectoryBadgeKind = 'update';
+export const UNREVIEWED_BADGE: DirectoryBadgeKind = 'unreviewed';
+export const DIRECTORY_TRUST_COPY =
+  'Only add skills and plugins from sources you trust. Read the files first; a skill can include instructions or scripts that act on your data.';
+export const PLUGIN_UNREVIEWED_NOTE =
+  'You added this plugin yourself, so AGI Workforce has not reviewed it. Read its files before you rely on it.';
 export const CONNECTED_GLYPH_LABEL = 'Connected';
 export const DIRECTORY_CUSTOM_HEADING = 'Your custom connectors';
 
@@ -140,6 +147,14 @@ export const PLUGIN_CONNECTORS_TAB_COPY =
   'Tools and data sources this plugin connects to. Connect each one so AGI can use it.';
 export const PLUGIN_SKILLS_TAB_EMPTY = 'This plugin ships no skills the web app can load.';
 export const PLUGIN_CONNECTORS_TAB_EMPTY = 'This plugin needs no connectors.';
+export const PLUGIN_CONNECTORS_HEADING = 'Connectors';
+export const PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE =
+  "Installing a plugin never connects a service by itself. Each connector stays off until you connect it, and the plugin's skills load whether or not it is connected.";
+export const PLUGIN_CONNECTOR_STATUS_LABELS: Record<DirectoryConnectorStatus, string> = {
+  connected: 'Connected',
+  'not-connected': 'Not connected',
+  'not-added': 'Not added',
+};
 export const PLUGIN_SKILL_SLASH_PREFIX = '/';
 export const PLUGIN_MORE_INFO_LABEL = 'More info';
 export const PLUGIN_HOMEPAGE_LABEL = 'Homepage';
@@ -303,6 +318,7 @@ export const DIRECTORY_MANAGE_SKILL_COUNT_LABELS = { one: 'skill', other: 'skill
 export const DIRECTORY_MANAGE_SINGULAR_COUNT = 1;
 export const DIRECTORY_MANAGE_UNKNOWN_VALUE = '';
 export const DIRECTORY_MANAGE_ROW_ACTION_PREFIX = 'Manage';
+export const DIRECTORY_MANAGE_ROW_TOGGLE_PREFIX = 'Use';
 
 export const INSTALL_CONFIRM_TITLE_PREFIX = 'Install';
 export const INSTALL_CONFIRM_CANCEL_LABEL = 'Cancel';
@@ -311,9 +327,11 @@ export const SKILL_ENABLED_LABEL = 'Enable skill';
 export const SKILL_ENABLED_HINT = 'Turn this off to keep it in the catalogue without offering it.';
 export const SKILL_TRY_IN_CHAT_LABEL = 'Try in chat';
 
-export const DELETE_SKILL_CONFIRM_TITLE = 'Delete skill?';
+export function deleteSkillConfirmTitle(name: string): string {
+  return `Delete /${name}?`;
+}
 export const DELETE_SKILL_CONFIRM_DESCRIPTION =
-  'This removes it from your account. Chats that already used it are not affected.';
+  'The skill and its files are deleted from your account and cannot be recovered. It stops appearing in chat and the / menu. Chats that already used it keep their replies.';
 export const DELETE_SKILL_CONFIRM_LABEL = 'Delete';
 
 export const CONNECTOR_ADD_API_KEY_LABEL = 'Add API key';
@@ -363,8 +381,8 @@ export const UPLOAD_PLUGIN_FAILED_COPY = 'The plugin could not be uploaded.';
 
 export const UPLOAD_SKILL_LABEL = 'Upload skill';
 export const UPLOAD_SKILL_INTRO =
-  'Choose a SKILL.md, or a zip of the skill folder with its references and scripts. SKILL.md needs a name and a description in its frontmatter.';
-export const UPLOAD_SKILL_ACCEPT = '.md,.zip,text/markdown,application/zip';
+  'Zip the skill folder (named the same as the skill, with SKILL.md inside) and upload the .zip or .skill file.';
+export const UPLOAD_SKILL_ACCEPT = '.zip,.skill,.md,application/zip,text/markdown';
 export const UPLOAD_SKILL_FAILED_COPY = 'The skill could not be uploaded.';
 
 export const UPLOAD_CHOOSE_FILE_LABEL = 'Choose file';

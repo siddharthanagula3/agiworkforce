@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export type DirectorySectionKey = 'skills' | 'connectors' | 'plugins';
 
 export type DirectoryBadgeKind =
-  'first-party' | 'official' | 'verified' | 'community' | 'custom' | 'update';
+  'first-party' | 'official' | 'verified' | 'community' | 'custom' | 'update' | 'unreviewed';
 
 export type DirectorySortKey = 'popular' | 'updated' | 'name';
 
@@ -98,6 +98,9 @@ export interface DirectoryManageRow {
   author?: string;
   skillCount?: number;
   updatedAt?: string;
+  groupId?: string;
+  /** Present only when the row carries its own on/off switch. */
+  enabled?: boolean;
 }
 
 export interface DirectoryManageAction {
@@ -108,6 +111,7 @@ export interface DirectoryManageAction {
 
 export interface DirectoryManageSection {
   rows: readonly DirectoryManageRow[];
+  groups?: readonly DirectoryGroup[];
   loading?: boolean;
   error?: string | null;
   actions?: readonly DirectoryManageAction[];
@@ -233,10 +237,16 @@ export interface DirectoryPluginSkillSetting {
   description?: string;
 }
 
+export type DirectoryConnectorStatus = 'connected' | 'not-connected' | 'not-added';
+
 export interface DirectoryPluginConnectorSetting {
   id: string;
   name: string;
   connected: boolean;
+  /** Absent when the account's state for this connector cannot be read. */
+  status?: DirectoryConnectorStatus;
+  /** A server the plugin ships itself, added as a connector only by installing it. */
+  bundled?: boolean;
 }
 
 export interface DirectoryPluginSettings {
@@ -325,6 +335,11 @@ export interface DirectoryPluginDetail {
   availabilityNote?: string;
   /** Why the MCP servers this plugin bundles will not be added as connectors. */
   connectorsNote?: string;
+  connectors?: readonly DirectoryPluginConnectorSetting[];
+  /** Connectors are not open yet: every row reads as locked, with no action. */
+  connectorsLocked?: DirectoryLockNotice;
+  /** Added by the account itself rather than listed in a reviewed directory. */
+  unreviewed?: boolean;
   href?: string;
 }
 

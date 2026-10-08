@@ -39,6 +39,14 @@ const DETAILS: Record<string, DirectoryDetail> = {
     description: 'Only skills',
     examplePrompts: [],
   },
+  needs: {
+    kind: 'plugin',
+    id: 'needs',
+    name: 'Needs',
+    description: 'Needs a directory connector',
+    examplePrompts: [],
+    connectors: [{ id: 'gmail', name: 'Gmail', connected: false, status: 'not-added' }],
+  },
 };
 
 function adapter(): DirectoryAdapter {
@@ -116,6 +124,35 @@ describe('lockConnectorDirectory', () => {
     });
     await expect(locked.loadDetail?.('plugins', 'plain')).resolves.not.toHaveProperty(
       'connectorsNote',
+    );
+  });
+
+  it('keeps one detail loader across re-wraps so an open detail does not reload forever', () => {
+    const source = adapter();
+    const first = lockConnectorDirectory(source).loadDetail;
+    const second = lockConnectorDirectory({ ...source, plugins: { entries: [] } }).loadDetail;
+    expect(second).toBe(first);
+    expect(lockConnectorDirectory({ ...source, loadDetail: vi.fn() }).loadDetail).not.toBe(first);
+  });
+
+  it('locks every connector a plugin lists, and leaves a plugin with none untouched', async () => {
+    const locked = lockConnectorDirectory(adapter());
+    const lock = {
+      label: 'Coming soon',
+      message: 'Connecting Gmail, Google Drive, Calendar and other apps is coming soon.',
+    };
+
+    await expect(locked.loadDetail?.('plugins', 'needs')).resolves.toMatchObject({
+      connectorsLocked: lock,
+    });
+    await expect(locked.loadDetail?.('plugins', 'needs')).resolves.not.toHaveProperty(
+      'connectorsNote',
+    );
+    await expect(locked.loadDetail?.('plugins', 'bundles')).resolves.toMatchObject({
+      connectorsLocked: lock,
+    });
+    await expect(locked.loadDetail?.('plugins', 'plain')).resolves.not.toHaveProperty(
+      'connectorsLocked',
     );
   });
 });

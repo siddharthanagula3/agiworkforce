@@ -1,6 +1,6 @@
 'use client';
 
-import { Upload } from 'lucide-react';
+import { ShieldAlert, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import { cn } from '../cn';
@@ -27,7 +27,7 @@ import {
   UPLOAD_SUBMIT_LABEL,
 } from './constants';
 import { isDirectoryScanCaution, type DirectoryScanCaution } from './scan-caution';
-import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
+import { DETAIL_NOTICE, DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
 import type { DirectoryUploadResult } from './types';
 
 export function UploadFileDialog({
@@ -36,6 +36,7 @@ export function UploadFileDialog({
   description,
   accept,
   failureCopy,
+  trustNotice,
   onClose,
   onSubmit,
 }: {
@@ -44,6 +45,7 @@ export function UploadFileDialog({
   description: string;
   accept: string;
   failureCopy: string;
+  trustNotice?: string;
   onClose: () => void;
   onSubmit: (file: File, acknowledgedScans?: readonly string[]) => Promise<DirectoryUploadResult>;
 }) {
@@ -106,6 +108,12 @@ export function UploadFileDialog({
           </ul>
         ) : (
           <div className="flex flex-col gap-3">
+            {trustNotice ? (
+              <p className={DETAIL_NOTICE} data-testid="upload-trust-notice">
+                <ShieldAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+                {trustNotice}
+              </p>
+            ) : null}
             <input
               ref={input}
               type="file"

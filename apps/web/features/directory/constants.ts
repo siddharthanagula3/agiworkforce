@@ -5,6 +5,7 @@ import {
   PLUGIN_MARKETPLACES_API_PATH,
   PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH,
 } from '@/features/plugins/routes';
+import { payloadCeilingBytes } from '@/lib/payload-ceiling';
 
 export const DIRECTORY_SOURCE_AGI = 'agi';
 export const DIRECTORY_SOURCE_YOURS = 'yours';
@@ -24,6 +25,21 @@ export const SKILL_ORIGIN_PERSONAL = 'Created by you';
 export const SKILL_ORIGIN_BUNDLED = 'Included with AGI Workforce';
 export const SKILL_ORIGIN_MANAGED = 'Managed for this workspace';
 export const SKILL_ORIGIN_UNKNOWN_PLUGIN = 'Part of a plugin';
+
+export const SKILL_GROUP_CREATED = 'created';
+export const SKILL_GROUP_WORKSPACE = 'workspace';
+export const SKILL_GROUP_PLUGINS = 'plugins';
+export const SKILL_GROUP_AGI = 'agi';
+export const SKILL_MANAGE_GROUPS = [
+  { id: SKILL_GROUP_CREATED, heading: 'Created by you' },
+  { id: SKILL_GROUP_WORKSPACE, heading: 'From your workspace' },
+  { id: SKILL_GROUP_PLUGINS, heading: 'From plugins' },
+  { id: SKILL_GROUP_AGI, heading: 'From AGI Workforce' },
+] as const;
+
+export function skillWorkspacePluginOrigin(pluginName: string): string {
+  return `Provided by your workspace through the ${pluginName} plugin`;
+}
 
 export function skillPluginPublisher(pluginName: string): string {
   return `From ${pluginName}`;
@@ -291,6 +307,12 @@ export const UPLOAD_FILE_FIELD = 'file';
 export const PLUGIN_UPLOAD_FAILED_COPY = 'That plugin could not be uploaded.';
 export const PLUGIN_CREATE_FAILED_COPY = 'That plugin could not be created.';
 export const SKILL_UPLOAD_FAILED_COPY = 'That skill could not be uploaded.';
+export const SKILL_UPLOAD_PAYLOAD_LIMIT_BYTES = payloadCeilingBytes(SKILLS_PATH);
+const BYTES_PER_MEGABYTE = 1024 * 1024;
+export function skillUploadTooLargeCopy(): string {
+  return `This file is larger than ${Math.floor(SKILL_UPLOAD_PAYLOAD_LIMIT_BYTES / BYTES_PER_MEGABYTE)} MB.`;
+}
+export const SKILL_CREATOR_SKILL_NAME = 'skill-creator';
 export const UPLOAD_PLUGIN_DONE_TITLE = 'Plugin installed';
 export const UPLOAD_SKILL_DONE_TITLE = 'Skill added';
 export const CREATE_PLUGIN_DONE_TITLE = 'Plugin created';

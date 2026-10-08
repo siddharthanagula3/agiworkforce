@@ -213,7 +213,7 @@ describe('the Add menu offers what the account can actually do', () => {
     await waitFor(() => expect(loadSection).toHaveBeenCalledWith('plugins'));
   });
 
-  it('puts Upload skill first on the skills menu and never on the plugins one', () => {
+  it('puts Upload skill after the ways to create one, and never on the plugins menu', () => {
     const adapter: DirectoryAdapter = {
       sections: ['skills'],
       skills: {
@@ -231,6 +231,119 @@ describe('the Add menu offers what the account can actually do', () => {
     const items = within(openAddMenu())
       .getAllByRole('menuitem')
       .map((item) => item.textContent);
-    expect(items).toEqual(['Upload skill', 'Create a skill']);
+    expect(items).toEqual(['Create a skill', 'Upload skill']);
+  });
+});
+
+describe('the skills list grouped like the leaders', () => {
+  const groups = [
+    { id: 'created', heading: 'Created by you' },
+    { id: 'workspace', heading: 'From your workspace' },
+    { id: 'plugins', heading: 'From plugins' },
+    { id: 'agi', heading: 'From AGI Workforce' },
+  ];
+  const rows = [
+    { id: 'mine', name: 'mine', slashName: true, author: 'You', groupId: 'created' },
+    { id: 'team', name: 'team', slashName: true, author: 'Team pack', groupId: 'workspace' },
+    { id: 'packed', name: 'packed', slashName: true, author: 'Pack', groupId: 'plugins' },
+    { id: 'docx', name: 'docx', slashName: true, author: 'AGI', groupId: 'agi', enabled: true },
+    { id: 'pdf', name: 'pdf', slashName: true, author: 'AGI', groupId: 'agi', enabled: false },
+  ];
+
+  function openAddMenu() {
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+    return screen.getByRole('menu');
+  }
+
+  function renderSkills(patch: Partial<DirectoryAdapter> = {}) {
+    const adapter: DirectoryAdapter = {
+      sections: ['skills'],
+      skills: { installable: true, entries: [], manage: { rows, groups } },
+      loadDetail: vi.fn(() => Promise.resolve(null)),
+      ...patch,
+    };
+    render(<DirectoryPanel section="skills" adapter={adapter} />);
+    return adapter;
+  }
+
+  it('heads each group and skips the ones with nothing in them', () => {
+    renderSkills();
+    expect(screen.getAllByRole('table')).toHaveLength(4);
+    expect(screen.getByRole('table', { name: 'Created by you' })).toBeTruthy();
+    expect(
+      within(screen.getByRole('table', { name: 'From AGI Workforce' })).getAllByRole('row'),
+    ).toHaveLength(3);
+  });
+
+  it('turns a built-in skill on or off from its row without opening it', async () => {
+    const setSkillEnabled = vi.fn(() => Promise.resolve());
+    const adapter = renderSkills({ setSkillEnabled });
+    fireEvent.click(screen.getByRole('switch', { name: 'Use /pdf' }));
+    await waitFor(() => expect(setSkillEnabled).toHaveBeenCalledWith('pdf', true));
+    expect(adapter.loadDetail).not.toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: 'Use /docx' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    expect(screen.queryByRole('switch', { name: 'Use /mine' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Use /packed' })).toBeNull();
+  });
+
+  it('says why a switch did not take instead of failing silently', async () => {
+    renderSkills({ setSkillEnabled: () => Promise.reject(new Error('That skill is locked.')) });
+    fireEvent.click(screen.getByRole('switch', { name: 'Use /docx' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('That skill is locked.');
+  });
+
+  it('offers upload with the leader help text, the .skill type and the trust warning', () => {
+    renderSkills({
+      uploadSkillFile: vi.fn(),
+      skills: {
+        installable: true,
+        entries: [],
+        manage: { rows, groups, actions: [] },
+      },
+    });
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: 'Upload skill' }));
+    expect(
+      screen.getByText(
+        'Zip the skill folder (named the same as the skill, with SKILL.md inside) and upload the .zip or .skill file.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByTestId('upload-trust-notice').textContent).toBe(
+      'Only add skills and plugins from sources you trust. Read the files first; a skill can include instructions or scripts that act on your data.',
+    );
+    expect(screen.getByLabelText('Choose file').getAttribute('accept')).toContain('.skill');
+  });
+});
+
+describe('deleting a skill the account wrote', () => {
+  it('names the skill and what is lost before anything is deleted', async () => {
+    const deleteEntry = vi.fn(() => Promise.resolve());
+    const adapter: DirectoryAdapter = {
+      sections: ['skills'],
+      skills: { installable: true, entries: [] },
+      openEntry: { section: 'skills', entryId: 'mine' },
+      loadDetail: () =>
+        Promise.resolve({
+          kind: 'skill',
+          id: 'mine',
+          name: 'mine',
+          description: 'Mine',
+          files: [{ path: 'SKILL.md', content: 'Do it.' }],
+          editable: true,
+          installed: true,
+        }),
+      openSettings: vi.fn(),
+      deleteEntry,
+    };
+    render(<DirectoryPanel section="skills" adapter={adapter} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete skill' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText('Delete /mine?')).toBeTruthy();
+    expect(dialog.textContent).toContain('cannot be recovered');
+    expect(deleteEntry).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(deleteEntry).toHaveBeenCalledWith('skills', 'mine'));
   });
 });

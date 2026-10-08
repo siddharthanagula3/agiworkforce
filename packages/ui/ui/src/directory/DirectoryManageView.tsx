@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
 import { Spinner } from '../primitives/Spinner';
+import { Switch } from '../primitives/Switch';
 import { Menu, MenuItem } from '../sidebar/Menu';
 import {
   DIRECTORY_ADD_MENU_LABEL,
@@ -20,6 +21,7 @@ import {
   DIRECTORY_MANAGE_NAME_HEADINGS,
   DIRECTORY_MANAGE_NO_MATCH_COPY,
   DIRECTORY_MANAGE_ROW_ACTION_PREFIX,
+  DIRECTORY_MANAGE_ROW_TOGGLE_PREFIX,
   DIRECTORY_MANAGE_SINGULAR_COUNT,
   DIRECTORY_MANAGE_SKILL_COUNT_LABELS,
   DIRECTORY_MANAGE_SLASH_PREFIX,
@@ -30,6 +32,7 @@ import {
 } from './constants';
 import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING, DIRECTORY_MENU_TRIGGER } from './styles';
 import type {
+  DirectoryGroup,
   DirectoryManageColumn,
   DirectoryManageRow,
   DirectoryManageSection,
@@ -89,17 +92,46 @@ function metaLine(
     .join(` ${DIRECTORY_MANAGE_META_SEPARATOR} `);
 }
 
+interface RowGroup {
+  id: string;
+  heading: string | null;
+  rows: readonly DirectoryManageRow[];
+}
+
+function groupRows(
+  rows: readonly DirectoryManageRow[],
+  groups: readonly DirectoryGroup[] | undefined,
+): RowGroup[] {
+  if (!groups || groups.length === 0) return [{ id: '', heading: null, rows }];
+  const known = new Set(groups.map((group) => group.id));
+  const ungrouped = rows.filter((row) => row.groupId === undefined || !known.has(row.groupId));
+  return [
+    ...(ungrouped.length > 0 ? [{ id: '', heading: null, rows: ungrouped }] : []),
+    ...groups.map((group) => ({
+      id: group.id,
+      heading: group.heading,
+      rows: rows.filter((row) => row.groupId === group.id),
+    })),
+  ].filter((group) => group.rows.length > 0);
+}
+
 export function DirectoryManageView({
   section,
   view,
   onBrowse,
   onOpen,
+  onSetEnabled,
+  busyId,
+  status,
   headerActions,
 }: {
   section: DirectorySectionKey;
   view: DirectoryManageSection;
   onBrowse: () => void;
   onOpen: (id: string) => void;
+  onSetEnabled?: (id: string, enabled: boolean) => void;
+  busyId?: string | null;
+  status?: ReactNode;
   headerActions?: ReactNode;
 }) {
   const [query, setQuery] = useState('');
@@ -113,6 +145,98 @@ export function DirectoryManageView({
     [view.rows, needle],
   );
   const actions = view.actions ?? [];
+  const grouped = useMemo(() => groupRows(rows, view.groups), [rows, view.groups]);
+  const switchable = onSetEnabled !== undefined && rows.some((row) => row.enabled !== undefined);
+
+  function renderTable(group: RowGroup, labelled: boolean) {
+    const headingId = `directory-manage-${section}-${group.id}`;
+    return (
+      <div key={group.id} className="flex flex-col gap-2">
+        {group.heading ? (
+          <h3
+            id={headingId}
+            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            {group.heading}
+          </h3>
+        ) : null}
+        <div className="overflow-x-auto">
+          <table
+            className="w-full border-collapse"
+            {...(labelled && group.heading ? { 'aria-labelledby': headingId } : {})}
+          >
+            <thead>
+              <tr>
+                <th scope="col" className={HEAD_CELL_CLASS}>
+                  {DIRECTORY_MANAGE_NAME_HEADINGS[section]}
+                </th>
+                {trailing.map((column) => (
+                  <th key={column} scope="col" className={TRAILING_HEAD_CELL_CLASS}>
+                    {DIRECTORY_MANAGE_COLUMN_HEADINGS[column]}
+                  </th>
+                ))}
+                {switchable ? (
+                  <th scope="col" className={HEAD_CELL_CLASS}>
+                    <span className="sr-only">{DIRECTORY_MANAGE_ROW_TOGGLE_PREFIX}</span>
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border border-t border-border">
+              {group.rows.map((row) => (
+                <tr
+                  key={row.id}
+                  className="cursor-pointer transition-colors motion-reduce:transition-none hover:bg-muted"
+                  onClick={() => onOpen(row.id)}
+                >
+                  <td className="px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpen(row.id);
+                      }}
+                      aria-label={`${DIRECTORY_MANAGE_ROW_ACTION_PREFIX} ${row.name}`}
+                      className={cn(
+                        'max-w-full truncate rounded-sm text-start text-sm font-medium text-foreground',
+                        row.slashName ? 'font-mono' : '',
+                        DIRECTORY_FOCUS_RING,
+                      )}
+                    >
+                      {row.slashName ? `${DIRECTORY_MANAGE_SLASH_PREFIX}${row.name}` : row.name}
+                    </button>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground sm:hidden">
+                      {metaLine(row, trailing)}
+                    </p>
+                  </td>
+                  {trailing.map((column) => (
+                    <td key={column} className={CELL_CLASS}>
+                      <span className="block max-w-[16rem] truncate">{cellValue(row, column)}</span>
+                    </td>
+                  ))}
+                  {switchable ? (
+                    <td className="w-px px-3 py-2.5">
+                      {row.enabled !== undefined ? (
+                        <Switch
+                          checked={row.enabled}
+                          disabled={busyId === row.id}
+                          onClick={(event) => event.stopPropagation()}
+                          onCheckedChange={(checked) => onSetEnabled?.(row.id, checked)}
+                          aria-label={`${DIRECTORY_MANAGE_ROW_TOGGLE_PREFIX} ${
+                            row.slashName ? `${DIRECTORY_MANAGE_SLASH_PREFIX}${row.name}` : row.name
+                          }`}
+                        />
+                      ) : null}
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -170,6 +294,8 @@ export function DirectoryManageView({
         />
       </div>
 
+      {status}
+
       {view.error ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-danger">
           <p role="alert">{view.error}</p>
@@ -213,56 +339,8 @@ export function DirectoryManageView({
           {DIRECTORY_MANAGE_NO_MATCH_COPY}
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th scope="col" className={HEAD_CELL_CLASS}>
-                  {DIRECTORY_MANAGE_NAME_HEADINGS[section]}
-                </th>
-                {trailing.map((column) => (
-                  <th key={column} scope="col" className={TRAILING_HEAD_CELL_CLASS}>
-                    {DIRECTORY_MANAGE_COLUMN_HEADINGS[column]}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border border-t border-border">
-              {rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="cursor-pointer transition-colors motion-reduce:transition-none hover:bg-muted"
-                  onClick={() => onOpen(row.id)}
-                >
-                  <td className="px-3 py-2.5">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onOpen(row.id);
-                      }}
-                      aria-label={`${DIRECTORY_MANAGE_ROW_ACTION_PREFIX} ${row.name}`}
-                      className={cn(
-                        'max-w-full truncate rounded-sm text-start text-sm font-medium text-foreground',
-                        row.slashName ? 'font-mono' : '',
-                        DIRECTORY_FOCUS_RING,
-                      )}
-                    >
-                      {row.slashName ? `${DIRECTORY_MANAGE_SLASH_PREFIX}${row.name}` : row.name}
-                    </button>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground sm:hidden">
-                      {metaLine(row, trailing)}
-                    </p>
-                  </td>
-                  {trailing.map((column) => (
-                    <td key={column} className={CELL_CLASS}>
-                      <span className="block max-w-[16rem] truncate">{cellValue(row, column)}</span>
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-col gap-6">
+          {grouped.map((group) => renderTable(group, grouped.length > 1))}
         </div>
       )}
     </div>

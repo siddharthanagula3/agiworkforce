@@ -24,6 +24,8 @@ import {
   toPluginRequest,
   toPluginSection,
   toUserMarketplaceDetail,
+  toUserMarketplaceEntry,
+  pluginConnectorRows,
   pluginSourceChips,
   uninstallPlugin,
   withInstallBlock,
@@ -870,6 +872,75 @@ describe('a source the account supplied is read honestly by every consumer', () 
         skillCount: 1,
         updatedAt: expect.any(String),
       },
+    ]);
+  });
+});
+
+describe('a plugin the account added itself is marked as not reviewed', () => {
+  function entry(): PluginMarketplaceEntry {
+    return {
+      id: 'entry-own',
+      sourceId: 'source-own',
+      pluginKey: 'fixture-own',
+      name: 'fixture-own',
+      description: 'A plugin from the account',
+      version: '1.0.0',
+      declaredSkills: [],
+      requiredConnectors: [],
+      agents: [],
+      examplePrompts: [],
+      permissions: ['Reads files'],
+      contentHash: 'd'.repeat(64),
+      createdAt: '2026-09-07T00:00:00.000Z',
+      updatedAt: '2026-09-07T00:00:00.000Z',
+    };
+  }
+
+  it('badges and warns before installing one from a repository or an upload', () => {
+    for (const kind of ['repository', 'upload'] as const) {
+      const source = { ...userSource(), id: 'source-own', kind };
+      const card = toUserMarketplaceEntry(entry(), source, installs());
+      expect(card.badges).toEqual(['unreviewed']);
+      expect(card.installNotice).toMatch(/^Only add skills and plugins from sources you trust\./);
+      expect(card.installNotice).toContain('Reads files');
+      expect(toUserMarketplaceDetail(entry(), source, installs()).unreviewed).toBe(true);
+    }
+  });
+
+  it('leaves a plugin the account wrote in the app unmarked', () => {
+    const source = { ...userSource(), id: 'source-own', kind: 'authored' as const };
+    const card = toUserMarketplaceEntry(entry(), source, installs());
+    expect(card.badges).toBeUndefined();
+    expect(card.installNotice).not.toContain('sources you trust');
+    expect(toUserMarketplaceDetail(entry(), source, installs()).unreviewed).toBeUndefined();
+  });
+});
+
+describe('pluginConnectorRows', () => {
+  const account = {
+    connected: new Set(['gmail', 'drive']),
+    added: new Set(['drive', 'calendar']),
+    nameOf: (id: string) => ({ gmail: 'Gmail', drive: 'Google Drive' })[id],
+  };
+
+  it('reads each directory connector as connected, added but not signed in, or not added', () => {
+    expect(
+      pluginConnectorRows(['gmail', 'drive', 'calendar', 'slack'], [], false, account),
+    ).toEqual([
+      { id: 'gmail', name: 'Gmail', connected: true, status: 'connected' },
+      { id: 'drive', name: 'Google Drive', connected: false, status: 'not-connected' },
+      { id: 'calendar', name: 'calendar', connected: false, status: 'not-connected' },
+      { id: 'slack', name: 'slack', connected: false, status: 'not-added' },
+    ]);
+  });
+
+  it('calls a bundled server Not added before install and claims nothing it cannot see after', () => {
+    const servers = [{ name: 'docs', transport: 'http' }];
+    expect(pluginConnectorRows([], servers, false, account)).toEqual([
+      { id: 'bundled:docs', name: 'docs', connected: false, bundled: true, status: 'not-added' },
+    ]);
+    expect(pluginConnectorRows([], servers, true, account)).toEqual([
+      { id: 'bundled:docs', name: 'docs', connected: false, bundled: true },
     ]);
   });
 });
