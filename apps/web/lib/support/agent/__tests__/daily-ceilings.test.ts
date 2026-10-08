@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type ScanModule0 = typeof import('@/lib/server/key-value');
+
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+  ...(await importOriginal<ScanModule0>()),
   getKeyValueRateLimiter: () => null,
 }));
 

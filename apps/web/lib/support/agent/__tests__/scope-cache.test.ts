@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type RoutingModule = typeof import('@agiworkforce/routing');
 
+type ScanModule0 = typeof import('@/lib/services/provider-adapter-service');
+type ScanModule1 = typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response');
+type ScanModule2 = typeof import('@/lib/services/cogs-ledger-service');
+type ScanModule3 = typeof import('@/lib/server/key-value');
+
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
   const actual = await importOriginal<RoutingModule>();
   const { modelMocks } = await import('./fixtures/model-mocks');
@@ -9,7 +14,7 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return {
-    ...(await importOriginal<typeof import('@/lib/services/provider-adapter-service')>()),
+    ...(await importOriginal<ScanModule0>()),
     buildServerProviderAdapter: modelMocks.buildServerProviderAdapter,
     toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
   };
@@ -17,21 +22,19 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importOriginal) => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return {
-    ...(await importOriginal<
-      typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response')
-    >()),
+    ...(await importOriginal<ScanModule1>()),
     drainToLlmResponse: modelMocks.drainToLlmResponse,
   };
 });
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   recordSettledProviderCost: vi.fn(async () => {}),
   recordCacheHitCostEvent: vi.fn(async () => {}),
 }));
 
 const store = new Map<string, unknown>();
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+  ...(await importOriginal<ScanModule3>()),
   getKeyValueStore: () => ({
     get: async (key: string) => store.get(key) ?? null,
     set: async (key: string, value: unknown) => {

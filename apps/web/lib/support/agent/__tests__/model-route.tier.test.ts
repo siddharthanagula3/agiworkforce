@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type RoutingModule = typeof import('@agiworkforce/routing');
 
+type ScanModule0 = typeof import('@/lib/server/side-call-training-policy');
+type ScanModule1 = typeof import('@/lib/services/provider-adapter-service');
+type ScanModule2 = typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response');
+
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  ...(await importOriginal<ScanModule0>()),
   sideCallRoutingRequest: async (_db: unknown, _userId: string, request: unknown) => request,
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
@@ -13,7 +17,7 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return {
-    ...(await importOriginal<typeof import('@/lib/services/provider-adapter-service')>()),
+    ...(await importOriginal<ScanModule1>()),
     buildServerProviderAdapter: modelMocks.buildServerProviderAdapter,
     toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
   };
@@ -21,9 +25,7 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importOriginal) => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return {
-    ...(await importOriginal<
-      typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response')
-    >()),
+    ...(await importOriginal<ScanModule2>()),
     drainToLlmResponse: modelMocks.drainToLlmResponse,
   };
 });
