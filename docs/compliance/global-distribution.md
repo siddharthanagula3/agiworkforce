@@ -2,7 +2,7 @@
 
 Status: Draft applicability and evidence map; not approved for publication
 Owner: Legal/compliance
-Last reviewed: 2026-10-07, America/Chicago
+Last reviewed: 2026-10-08, America/Chicago
 
 This is the canonical working map for the public-site mission. It records current
 repository evidence and regional questions from the [dated research
@@ -31,13 +31,58 @@ outside the confirmed research scope needs a fresh primary-source review.
 
 ## Distribution authority is unresolved
 
-**DIST-01, all surfaces and plans.** No executable offered-country allowlist or
-sanctions matrix was found in the scoped reads of web proxy/config/lib, compliance
-contracts and current compliance documents. The Terms' export-control section is
-policy text, not proof of screening. Provider residence, billing currency, catalog
-membership and admission by a web function are not offer authority. The owner
-must establish one approved surface/plan/route/country matrix and identify its
-canonical executable owner. This document does not manufacture one.
+**DIST-01, all surfaces and plans.** The owner's rule, applied 2026-10-08 for the
+public launch: offer the service where both ChatGPT and Claude offer theirs (the
+stricter list wins where they differ) and nowhere under a comprehensive United
+States embargo. The executable list is
+[service-regions.ts](../../packages/contracts/compliance/src/service-regions.ts);
+the [proxy](../../apps/web/proxy.ts) enforces it through
+[region-access.ts](../../apps/web/lib/region-access.ts), and
+[/supported-countries](../../apps/web/app/supported-countries/page.tsx) prints it
+from the same module. Do not copy the codes anywhere else. The list covers the web
+proxy and the transcription route only; store territories, desktop and CLI
+downloads, Local/BYOK use and payment eligibility are still not governed by it.
+
+How the 2026-10-08 derivation ran, so the next one can repeat it:
+
+| Source  | URL                                                                     | Read on 2026-10-08                                                                                                                                                                                                                                                                                                                                                                        |
+| ------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude  | https://www.anthropic.com/supported-countries                           | Fetched live (HTTP 200). 185 countries; territories and dependencies of a listed country are supported; Ukraine except Crimea, Donetsk, Kherson, Luhansk and Zaporizhzhia; an entity incorporated, headquartered or majority controlled in an unsupported region is unsupported wherever its people are.                                                                                  |
+| ChatGPT | https://help.openai.com/en/articles/7947663-chatgpt-supported-countries | The live page returned HTTP 403 to every fetch. Read instead from the Internet Archive capture of 2026-09-28 06:13 UTC of that URL ("Updated: 2 months ago") and from OpenAI's live API list at https://developers.openai.com/api/docs/supported-countries (HTTP 200). The two name the same 207 places, each territory named separately; Ukraine "with certain exceptions", unspecified. |
+| OFAC    | https://ofac.treasury.gov/sanctions-programs-and-country-information    | Fetched live. Cuba, Iran and North Korea programs active. The Ukraine-/Russia-related program still lists E.O. 13685 (Crimea region) and E.O. 14065 (so-called DNR and LNR regions). There is no Syria Sanctions program on the list: E.O. 14312 ended it from 2025-07-01 and the remaining Syria-related program is PAARSS, which is list-based.                                         |
+
+Territory rule, decided by the lead on 2026-10-08: a territory or dependency of a
+country both companies serve is served, even where ChatGPT's list does not name
+it. Claude's list says this outright; ChatGPT's names territories one by one and
+leaves out, among others, Puerto Rico, Guam, the US Virgin Islands, American
+Samoa, the Northern Mariana Islands, Jersey, Guernsey, the Isle of Man, Gibraltar,
+Curaçao, Sint Maarten and the Cook Islands. Reading that omission as a refusal
+would have closed 29 territories of the United States, the United Kingdom, the
+Netherlands, Norway, Australia and New Zealand, so they are open. A place stays
+refused when it is sanctioned, when its sovereign is itself unserved (Hong Kong
+and Macao), or when its status is disputed with no served sovereign (Western
+Sahara, Antarctica, and the excluded regions of Ukraine).
+
+Each ISO 3166-1 code (from the tz database's `iso3166.tab`) was matched against
+both lists by name, with that territory rule applied. Result: 16 countries or
+territories. Cuba, Iran and North Korea are embargoed; Antarctica, Belarus,
+China, Hong Kong, Kosovo, Macao, Russia, Syria, Venezuela and Western Sahara are
+on neither list; Afghanistan, Myanmar and Yemen are on ChatGPT's list but not
+Claude's. Six Ukrainian regions are refused by the ISO 3166-2 code in Vercel's
+`x-vercel-ip-country-region` header: 43 Crimea and 40 Sevastopol (OFAC and
+Claude), 14 Donetsk and 09 Luhansk (Claude by whole region; OFAC covers the
+so-called DNR and LNR parts), 65 Kherson and 23 Zaporizhzhia (Claude only).
+
+Limits of the enforcement. Location is Vercel's IP geolocation, so a VPN or a
+misplaced address passes or fails wrongly; a Ukrainian address is refused only
+when the region header is present and names one of the six codes; a request with
+no country header is served. The Clerk sign-up runs behind the proxy only on the
+`/__clerk` path; a Clerk frontend host outside it is not covered, and no
+server-side country check exists in sign-up, so the proxy is the enforcement point.
+Signed webhooks, `/api/cron/*`, `/api/health`, `/api/version`, the canonical
+policy pages and `/region-unavailable` stay reachable from every place. The
+Stripe, OpenRouter, Apple and Google callbacks are outside the proxy matcher; the
+transcription route, also outside it, applies the same check itself.
 
 **DIST-02, EEA.** The owner decided on 2026-10-07 that sign-up is open in the
 EEA at the 2026-10-08 launch. Production refused EEA traffic from 2026-10-02:
@@ -45,13 +90,13 @@ EEA at the 2026-10-08 launch. Production refused EEA traffic from 2026-10-02:
 reports removing it on 2026-10-07 on the owner's instruction, to take effect at
 the next deploy; that is the lead's report, not a value this repository can
 read. The code path remains and is off by default: [country set and
-flag](../../apps/web/lib/eu-access.ts) lines 1-32 and 55-69, and [proxy
-rewrite](../../apps/web/proxy.ts) lines 264-289. Only recognised true values
-enable the flag. Missing/unknown country headers and non-set countries pass this
-function; declared webhook/cron routes and `/region-unavailable` are exempt,
-and proxy matchers omit other specific paths. The detected-country rewrite uses
-HTTP 451 and serves `/region-unavailable`, which is now noindex and no longer
-says the EEA is not served. No EU or UK representative is appointed;
+flag](../../apps/web/lib/eu-access.ts), applied by
+[region-access.ts](../../apps/web/lib/region-access.ts) after the DIST-01 list.
+Only recognised true values enable the flag. Missing/unknown country headers and
+non-set countries pass this function; the exemptions listed under DIST-01 apply,
+and proxy matchers omit other specific paths. A refused page request gets HTTP
+451 and `/region-unavailable`, which is noindex and does not say the EEA is not
+served; an API request gets a 451 JSON body. No EU or UK representative is appointed;
 [/legal/eu-representative](../../apps/web/app/legal/eu-representative/page.tsx)
 and [/supported-countries](../../apps/web/app/supported-countries/page.tsx)
 say so. Header accuracy, alternate entry and a live response were not
@@ -73,7 +118,7 @@ concurrent lead changes can move them, so recheck before publication.
 
 | ID  | Current public/code evidence                                                                                                                                                                                                                                                                                               | What it establishes and what remains unknown                                                                                                                                                                                                                                                                                                                                                                                              |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E01 | [EEA access](../../apps/web/lib/eu-access.ts):1,55,65; [proxy](../../apps/web/proxy.ts):256,284,316; `/region-unavailable`                                                                                                                                                                                                 | Conditional detected-country web refusal, off by default and reported removed from production on 2026-10-07 (DIST-02). Every matcher/entry and offer authority remain unknown.                                                                                                                                                                                                                                                            |
+| E01 | [Service regions](../../packages/contracts/compliance/src/service-regions.ts); [region access](../../apps/web/lib/region-access.ts); [EEA switch](../../apps/web/lib/eu-access.ts); [proxy](../../apps/web/proxy.ts) `regionBlock`; `/region-unavailable`                                                                  | Always-on detected-country and Ukrainian-region refusal (DIST-01): a page request is rewritten to `/region-unavailable` with HTTP 451, an API request gets a 451 JSON `REGION_UNAVAILABLE` body. The EEA switch rides the same path and stays off (DIST-02). Live header behaviour on production was not observed.                                                                                                                        |
 | E02 | [Terms](../../apps/web/app/terms/page.tsx):326; [Privacy](../../apps/web/app/privacy/page.tsx):1635; [Mobile legal](../../apps/web/app/mobile/legal/page.tsx); [age constants](../../packages/contracts/types/src/account-eligibility.ts):1,3                                                                              | Since the owner's decision of 2026-10-07, accounts are open from 13 and anyone under 18 needs a parent or guardian's permission (`ACCOUNT_MINIMUM_AGE`, `PARENTAL_PERMISSION_BELOW_AGE`). Web sign-up asks for an age, refuses under 13, and stores and verifies nothing; the permission is not verified. The mobile page keeps its own regional age table by the owner's choice. Verified parent or school machinery is not established. |
 | E03 | [Consent purposes](../../apps/web/lib/consent-purposes.ts):38; [unticked choice](../../apps/web/features/auth/marketingEmailChoice.ts):14; [authenticated acceptance](../../apps/web/app/api/terms/accept/route.ts):94; [ledger](../../apps/web/lib/server/consent-records.ts):98                                          | Separate optional account marketing-email choice (purpose `marketing_email`, label "Email me product news, tips and offers.") and server record. This is not proof of a future sender's audience selection or unsubscribe behavior.                                                                                                                                                                                                       |
 | E04 | [Settings](../../apps/web/features/settings/sections/PrivacySection.tsx):615; [consent centre](../../apps/web/app/privacy/requests/ConsentCentre.tsx):88,135,199; [consent API](../../apps/web/app/api/consent/route.ts):58,93                                                                                             | Account consent withdrawal paths exist. Forms, deadlines, signed-out rights, operational fulfilment and sender-side unsubscribes were not exercised.                                                                                                                                                                                                                                                                                      |
@@ -110,7 +155,7 @@ missing fact or work owner; no row has a green compliance status.
 | R-KR, South Korea                                          | [APAC-01](../research/global-distribution-research-2026-10-05.md#apac-01)-`10`, [APAC-N094](../research/global-distribution-research-2026-10-05.md#apac-n094)-`N098`: under-14 privacy consent verification, majority 19, AI notice, separate marketing and transfers. Anthropic identity-disclosure inference was corrected.                                                                                                                                                                                                                                 | E02-E08. An 18 declaration does not establish Korean majority. No local offer, lawful transfer basis, guardian verification or API audience assurance proved. Owner/counsel decide capacity and scope; lead verifies implementation. No age change here.                                                                                                                                                     |
 | R-JP, Japan                                                | [APAC-11](../research/global-distribution-research-2026-10-05.md#apac-11)-`13`,[APAC-N084](../research/global-distribution-research-2026-10-05.md#apac-n084),[APAC-N116](../research/global-distribution-research-2026-10-05.md#apac-n116): consent-capacity guidance, contract majority and recorded 2026 amendment future timing/qualifiers; separate email records.                                                                                                                                                                                        | E02-E08. No targeting, purpose/transfer or email evidence for Japan. Do not turn guidance or future redirection of existing consent duties into a present signup-consent requirement. Cabinet commencement and current instrument review needed before relying on scheduled date.                                                                                                                            |
 | R-SG-TW, Singapore and Taiwan                              | [APAC-14](../research/global-distribution-research-2026-10-05.md#apac-14)-`16`: understandable teen consent guidance and age assurance; Taiwan proof and capacity/guardian rules. Singapore statute/spam text was not read by the verifier.                                                                                                                                                                                                                                                                                                                   | E02-E08. Singapore provider access/storage does not establish an AGI consumer offer there. Assess distinct controller/transport roles, country offering, consent proof and local contract rules. Missing Singapore statutory primary reads remain open.                                                                                                                                                      |
-| R-CN-HK, China and Hong Kong                               | [APAC-17](../research/global-distribution-research-2026-10-05.md#apac-17)-`18`: 2021 PIPL text and competitor supported-country observations. Later amendment and Hong Kong claims were not rechecked.                                                                                                                                                                                                                                                                                                                                                        | E01,E05-E08. Competitor lists and a mainland/international provider endpoint are not AGI distribution authority. Offering and complete local obligations unknown; fresh primary review and upstream route-country authority required.                                                                                                                                                                        |
+| R-CN-HK, China and Hong Kong                               | [APAC-17](../research/global-distribution-research-2026-10-05.md#apac-17)-`18`: 2021 PIPL text and competitor supported-country observations. Later amendment and Hong Kong claims were not rechecked.                                                                                                                                                                                                                                                                                                                                                        | E01,E05-E08. Mainland China, Hong Kong and Macao are refused from 2026-10-08 under the DIST-01 rule, because neither ChatGPT nor Claude lists them. A provider endpoint there is still not distribution authority; local obligations stay unassessed.                                                                                                                                                        |
 | R-AU, Australia                                            | [APAC-19](../research/global-distribution-research-2026-10-05.md#apac-19)-`31`,`34`, corrections and omissions: current recorded online-safety DIS scope/tiers, age assurance versus prevention controls, conditional APP small-business rule, spam and draft child code. General assistant exclusion from social-media rules is qualified; December 2026 code registration was scheduled, not final-code proof.                                                                                                                                              | E02-E08,E11. Owner/counsel classify actual generated-content risk, controls, APP status and child access. Self-declaration is not enough where the recorded safety code requires assurance; no documented AGI risk assessment/controls proven here. NSW minor contract and newer final instruments remain unknown.                                                                                           |
 | R-NZ, New Zealand                                          | [APAC-32](../research/global-distribution-research-2026-10-05.md#apac-32)-`33`,[APAC-N102](../research/global-distribution-research-2026-10-05.md#apac-n102): overseas-business privacy scope, minors' contract enforceability; companion-like social-media bill remains a bill.                                                                                                                                                                                                                                                                              | E02,E05-E08. NZ business/offering and actual audience unverified. Review contract/privacy applicability; do not convert the pending bill into a duty.                                                                                                                                                                                                                                                        |
 | R-UAE-SA, UAE and Saudi Arabia                             | [APAC-35](../research/global-distribution-research-2026-10-05.md#apac-35)-`37`,[APAC-N114](../research/global-distribution-research-2026-10-05.md#apac-n114): UAE child-digital-safety scope/transition, social-platform statement with unverified Gazette date, Saudi capacity/guardian and per-purpose consent. UAE classifications and some PDPL text remain unread.                                                                                                                                                                                       | E02-E08. No targeting, classification, representative or local assurance facts proved. Owner/counsel settle scope/effective instruments; lead provides purpose and guardian-record evidence if applicable. A social-platform rule is not automatically an assistant rule.                                                                                                                                    |

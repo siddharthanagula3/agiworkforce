@@ -371,3 +371,30 @@ describe('transcription cost model', () => {
     expect(estimateTranscriptionCostCents({ inputCost: 0, outputCost: 0 }, 1_000, 1_000)).toBe(0);
   });
 });
+
+describe('POST /api/llm/v1/audio/transcriptions, outside the proxy', () => {
+  it('refuses a country where AGI is not offered before any reservation or provider spend', async () => {
+    const response = await POST(transcriptionRequest({ 'x-vercel-ip-country': 'IR' }));
+
+    expect(response.status).toBe(451);
+    expect(response.headers.get('x-agi-region-block')).toBe('IR');
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'REGION_UNAVAILABLE',
+    );
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses an excluded region of Ukraine and serves the rest of it', async () => {
+    const refused = await POST(
+      transcriptionRequest({ 'x-vercel-ip-country': 'UA', 'x-vercel-ip-country-region': '43' }),
+    );
+    expect(refused.status).toBe(451);
+
+    providerReturns({ text: 'hello' });
+    const served = await POST(
+      transcriptionRequest({ 'x-vercel-ip-country': 'UA', 'x-vercel-ip-country-region': '30' }),
+    );
+    expect(served.status).toBe(200);
+  });
+});

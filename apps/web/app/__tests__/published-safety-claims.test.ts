@@ -180,12 +180,15 @@ describe('/supported-countries', () => {
     expect(SELECTABLE_LANGUAGES.map((language) => language.code)).toEqual(['en', 'es']);
   });
 
-  it('does not claim a sanctions screen the proxy does not have', () => {
-    const proxy = read('proxy.ts');
-    expect(proxy).not.toMatch(/sanction|embargo|OFAC/iu);
-    expect(PAGE).toContain(
-      'This site has no page that turns a visitor away by country for sanctions reasons',
+  it('prints the list the proxy refuses, from the one module that holds it', () => {
+    expect(PAGE).toContain("from '@agiworkforce/compliance/service-regions'");
+    expect(PAGE).toContain('UNSERVED_COUNTRIES');
+    expect(PAGE).toContain('UNSERVED_SUBDIVISIONS');
+    expect(read('lib/region-access.ts')).toContain(
+      "import { decideServiceRegion } from '@agiworkforce/compliance/service-regions';",
     );
+    expect(read('proxy.ts')).toContain('decideRegionAccess(request.headers, process.env)');
+    expect(PAGE).not.toContain('This site has no page that turns a visitor away by country');
   });
 });
 
@@ -201,7 +204,10 @@ describe('/region-unavailable', () => {
 
   it('is still what the proxy serves with a 451 when the block is on', () => {
     const proxy = read('proxy.ts');
-    expect(proxy).toContain("const UNAVAILABLE_PATH = '/region-unavailable';");
+    expect(read('lib/region-access.ts')).toContain(
+      "export const REGION_UNAVAILABLE_PATH = '/region-unavailable';",
+    );
+    expect(proxy).toContain('target.pathname = REGION_UNAVAILABLE_PATH;');
     expect(proxy).toContain('status: 451,');
   });
 });

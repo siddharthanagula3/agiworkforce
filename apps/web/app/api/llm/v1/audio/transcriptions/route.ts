@@ -52,6 +52,7 @@ import {
   evaluateManagedComputeSubscriptionAccess,
 } from '@/lib/services/managed-compute-access';
 import { sideCallProviderAllowed } from '@/lib/server/side-call-training-policy';
+import { REGION_UNAVAILABLE_BODY, decideRegionAccess } from '@/lib/region-access';
 
 function isLikelyAudio(head: Uint8Array): boolean {
   if (head.length < 4) return false;
@@ -256,6 +257,18 @@ export type TranscriptionAdmission = (request: NextRequest, userId: string) => P
 async function handleTranscriptions(request: NextRequest, admit?: TranscriptionAdmission) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
+
+  const region = decideRegionAccess(request.headers, process.env);
+  if (region.blocked) {
+    return NextResponse.json(REGION_UNAVAILABLE_BODY, {
+      status: 451,
+      headers: {
+        'x-agi-region-block': region.place,
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      },
+    });
+  }
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {

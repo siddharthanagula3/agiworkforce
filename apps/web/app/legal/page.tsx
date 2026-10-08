@@ -109,7 +109,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/supported-countries',
     label: 'Supported countries and regions',
-    body: 'Where the service is offered, where United States sanctions law excludes it, what is the same in every country, and the interface languages.',
+    body: 'Where the service is offered, the countries and regions where it is not, what is the same in every country, and the interface languages.',
   },
   {
     href: '/legal/government-requests',
