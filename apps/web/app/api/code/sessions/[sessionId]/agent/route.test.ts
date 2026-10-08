@@ -56,6 +56,7 @@ import {
   CloudCodeNotFoundError,
 } from '@/lib/services/cloud-code-session-service';
 import { CloudCodeTurnStillRunningError } from '@/lib/services/cloud-code-turn-transport';
+import { CloudCodeModelMayTrainError } from '@/lib/services/cloud-code-agent-service';
 import { POST } from './route';
 
 const PRO_MODEL = getAllowedModelsForTier('pro_additions')[0]!;
@@ -215,6 +216,18 @@ describe('POST /api/code/sessions/[sessionId]/agent', () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
       error: { message: expect.stringMatching(/unarchive/i) },
+    });
+  });
+
+  it('refuses a model that may train for an account that opted out, in the chat refusal words', async () => {
+    mockRunTurn.mockRejectedValue(new CloudCodeModelMayTrainError());
+    const response = await POST(turnRequest(), context);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'model_may_train',
+        message: expect.stringContaining('Only use models that do not train on your chats'),
+      },
     });
   });
 

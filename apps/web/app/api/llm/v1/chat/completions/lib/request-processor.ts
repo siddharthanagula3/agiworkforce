@@ -330,6 +330,7 @@ import {
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
 import {
   modelKeepsInputsOutOfTraining,
+  MODEL_MAY_TRAIN_MESSAGE,
   noTrainingChatModelFor,
   readProviderTrainingOptOut,
 } from '@/lib/server/provider-training-opt-out';
@@ -1289,6 +1290,7 @@ export type ProcessedRequest = {
    */
   modelPolicy?: ModelAccessPolicy | null;
   zeroDataRetentionOnly?: boolean;
+  noTrainingOnly?: boolean;
   /** Eligibility and subject facts for any semantic decision this turn schedules. */
   decisionScope?: SemanticDecisionScope;
   secretRedactionCount?: number;
@@ -2158,6 +2160,7 @@ export function buildWebCloudAutoRoutingRequest(
    */
   residencyRegion?: string | null,
   requiredRouteId?: string | null,
+  noTrainingOnly?: boolean,
 ): AutoRoutingRequest {
   const gatewayFlagHarnessIds = admittedHarnessIds();
   return {
@@ -2198,6 +2201,7 @@ export function buildWebCloudAutoRoutingRequest(
     ...(zeroDataRetentionProviders && zeroDataRetentionProviders.size > 0
       ? { zeroDataRetentionProviders }
       : {}),
+    ...(noTrainingOnly ? { noTrainingOnly } : {}),
     ...(organizationPolicy ? { organizationPolicy } : {}),
     ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
     ...(residencyRegion ? { residencyRegion } : {}),
@@ -2340,6 +2344,7 @@ export function resolveWebCloudModelRoute(
   userRoutingPreferences?: UserRoutingPreferences | null,
   rollout?: WebCloudRolloutInputs,
   residencyRegion?: string | null,
+  noTrainingOnly?: boolean,
 ) {
   return resolveAutoRoute(
     buildWebCloudAutoRoutingRequest(
@@ -2356,6 +2361,8 @@ export function resolveWebCloudModelRoute(
       userRoutingPreferences,
       rollout,
       residencyRegion,
+      undefined,
+      noTrainingOnly,
     ),
   );
 }
@@ -2381,6 +2388,7 @@ export interface CompactionAdmission {
   zeroDataRetentionOnly?: boolean;
   zeroDataRetentionProviders?: ReadonlySet<string>;
   organizationPolicy?: ModelAccessPolicy | null;
+  noTrainingOnly?: boolean;
 }
 
 export function buildCompactionRoutingRequest(admission: CompactionAdmission) {
@@ -2395,6 +2403,11 @@ export function buildCompactionRoutingRequest(admission: CompactionAdmission) {
     admission.zeroDataRetentionOnly,
     admission.zeroDataRetentionProviders,
     admission.organizationPolicy,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    admission.noTrainingOnly,
   );
 }
 
@@ -2705,7 +2718,26 @@ async function modelMayTrainMessage(
   const google = await googleUserData;
   if (google === 'conversation') return GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE;
   if (google === 'connectors') return GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE;
-  return "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.";
+  return MODEL_MAY_TRAIN_MESSAGE;
+}
+
+async function modelMayTrainRefusal(
+  healthSpace: Promise<string | null>,
+  googleUserData: Promise<GoogleUserDataTurnReason>,
+): Promise<ProcessFailure> {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message: await modelMayTrainMessage(healthSpace, googleUserData),
+          type: 'invalid_request_error',
+          code: 'model_may_train',
+        },
+      },
+      { status: 403 },
+    ),
+  };
 }
 
 // The free plan has no Auto. A client that still sends it is served the plan's
@@ -3945,6 +3977,7 @@ export async function processRequest(
         rolloutInputs,
         residencyRegion,
         ownership.selectedRouteId,
+        trainingOptOut,
       ),
       routeResolutionNowMs,
     );
@@ -3977,6 +4010,7 @@ export async function processRequest(
         userRoutingPreferences,
         rolloutInputs,
         residencyRegion,
+        trainingOptOut,
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -4078,6 +4112,14 @@ export async function processRequest(
         '[model-policy] explicitly requested model refused by workspace policy',
       );
       return { ok: false, response: modelPolicyDenialResponse(explicitRefusal) };
+    }
+    if (
+      trainingOptOut &&
+      resolveAutoRoute({ ...baseRoutingRequest, noTrainingOnly: false }).status === 'selected'
+    ) {
+      return isAutoModeModelId(requestedModel)
+        ? noTrainingModelUnavailable(await googleUserDataPromise)
+        : modelMayTrainRefusal(healthSpacePromise, googleUserDataPromise);
     }
     logger.warn(
       {
@@ -4474,19 +4516,7 @@ export async function processRequest(
     !isAutoModeModelId(requestedModel) &&
     !modelKeepsInputsOutOfTraining(chatRequest.model)
   ) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: await modelMayTrainMessage(healthSpacePromise, googleUserDataPromise),
-            type: 'invalid_request_error',
-            code: 'model_may_train',
-          },
-        },
-        { status: 403 },
-      ),
-    };
+    return modelMayTrainRefusal(healthSpacePromise, googleUserDataPromise);
   }
 
   const preSkillMessageCount = chatRequest.messages.length;
@@ -5173,7 +5203,9 @@ export async function processRequest(
             provider,
             estimatedPromptTokens,
             maxTokens,
-            fallbackAllowedByPolicy,
+            (candidate) =>
+              fallbackAllowedByPolicy(candidate) &&
+              (!trainingOptOut || modelKeepsInputsOutOfTraining(candidate)),
           );
 
       if (!fallbackModel && workspaceModelPolicy) {
@@ -5201,6 +5233,9 @@ export async function processRequest(
         const fallbackProvider = resolveProviderFromModel(fallbackModel.model, fallbackRouteId, {
           trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
         });
+        if (trainingOptOut && !providerKeepsInputsOutOfTraining(fallbackProvider)) {
+          return monthlyLimitRefusal();
+        }
         const fallbackCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
           fallbackProvider,
           fallbackModel.model,
@@ -5650,6 +5685,7 @@ export async function processRequest(
           zeroDataRetentionOnly,
           zeroDataRetentionProviders,
           organizationPolicy: workspaceModelPolicy,
+          noTrainingOnly: trainingOptOut,
         }),
     }),
   );
@@ -5709,7 +5745,12 @@ export async function processRequest(
   // cannot leave the lane. The trial path stays rotation-free as before.
   const failoverRoutes = (
     freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks)
-  ).filter((route) => !trainingOptOut || modelKeepsInputsOutOfTraining(route.modelKey));
+  ).filter(
+    (route) =>
+      !trainingOptOut ||
+      (modelKeepsInputsOutOfTraining(route.modelKey) &&
+        providerKeepsInputsOutOfTraining(route.provider)),
+  );
 
   if (
     routeDecision.shadow &&
@@ -5782,6 +5823,7 @@ export async function processRequest(
     // Carried, not re-read: the OpenRouter route-retry inside managed failover
     // is outside the plan above and must answer to this same snapshot.
     modelPolicy: workspaceModelPolicy,
+    ...(trainingOptOut ? { noTrainingOnly: true } : {}),
     subscriptionTier: subscription.plan_tier,
     routePlanId: buildInterimRoutePlanId(routeDecision),
     resolvedTaskType,

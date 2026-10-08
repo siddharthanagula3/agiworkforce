@@ -234,6 +234,18 @@ describe('Google user data only reaches providers that keep inputs out of traini
     for (const fallback of result.fallbackModels ?? []) {
       expect(modelKeepsInputsOutOfTraining(fallback)).toBe(true);
     }
+    for (const route of result.fallbackRoutes ?? []) {
+      expect(providerKeepsInputsOutOfTraining(route.provider)).toBe(true);
+    }
+    expect(result.noTrainingOnly).toBe(true);
+  });
+
+  it('leaves managed failover ungoverned by the opt-out when no Google data can reach the turn', async () => {
+    const result = await run('google-none-auto', 'auto');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.noTrainingOnly).toBeUndefined();
   });
 
   it('serves a model that may train when the only Google connector is off for this chat', async () => {

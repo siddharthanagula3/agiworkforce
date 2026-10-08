@@ -28,7 +28,10 @@ import 'server-only';
  * The OpenRouter route-retry below is NOT drawn from the candidate plan, so the
  * policy filtering the request processor applies to `fallbackModels` does not
  * govern it. It is checked against the policy snapshot directly (`modelPolicy`
- * option), and a refusal falls through to the candidate rotation.
+ * option), and a refusal falls through to the candidate rotation. The same holds
+ * for the account's provider-training opt-out (`noTrainingOnly`): every hop,
+ * planned, free-lane or route-retry, is re-checked against it here, so a hop
+ * whose model or transport may train is skipped rather than served.
  *
  * Deliberately NARROWER than the gateway in one dimension: once a provider has
  * minted tool-call ids for this turn, the turn stays on that provider. See
@@ -71,6 +74,8 @@ import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { logger } from '@/lib/logger';
 import { nextFreeLaneRoute } from '@/lib/services/free-lane/plan';
 import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/model-policy-evaluator';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import { isGatewayBackedHarness, type FailoverRoute } from './failover-plan';
 import type { ProcessedRequest } from './request-processor';
@@ -439,6 +444,9 @@ export function createFailoverPlan(
   let latestRouteId: string | null = freeLane ? freeLane.dispatchedRouteId : null;
   let latestHarnessId = processed.servingHarnessId;
   let billingRotationUsed = false;
+  const hopMayTrain = (model: string, provider: string): boolean =>
+    processed.noTrainingOnly === true &&
+    !(modelKeepsInputsOutOfTraining(model) && providerKeepsInputsOutOfTraining(provider));
 
   const nextAdmissibleCandidate = (): FailoverAttempt | null => {
     while (remaining.length > 0) {
@@ -516,6 +524,13 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, model: candidate, tier },
           'Managed failover candidate skipped: admission re-check failed',
+        );
+        continue;
+      }
+      if (hopMayTrain(candidate, provider)) {
+        logger.warn(
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: it may train on inputs and the account opted out',
         );
         continue;
       }
@@ -599,6 +614,13 @@ export function createFailoverPlan(
         );
         continue;
       }
+      if (hopMayTrain(route.modelKey, route.provider)) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
+          'Free-lane failover candidate skipped: it may train on inputs and the account opted out',
+        );
+        continue;
+      }
 
       // The plan travels with the attempt so settlement and health writes name
       // the route that actually served, not the one this request opened with.
@@ -668,6 +690,7 @@ export function createFailoverPlan(
     const apiModelId = toProviderApiModelId(processed.llmRequest.model);
     if (!canFailoverToOpenRouter(processed.provider, apiModelId)) return null;
     if (!options.isProviderDispatchable('openrouter')) return null;
+    if (hopMayTrain(processed.llmRequest.model, 'openrouter')) return null;
     const hasVendorNativeTools = (processed.llmRequest.tools ?? []).some(
       (tool) => !(tool && typeof tool === 'object' && 'function' in tool),
     );

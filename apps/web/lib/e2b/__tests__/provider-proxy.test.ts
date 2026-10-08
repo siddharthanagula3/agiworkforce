@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+import { modelRegistry, providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import {
   providerProxyAuthHeader,
   providerProxyBaseUrl,
@@ -65,5 +66,18 @@ describe('provider proxy constants', () => {
   it('is null when the deployment origin is malformed', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'not a url');
     expect(resolveAppOrigin()).toBeNull();
+  });
+});
+
+describe('provider proxy and the provider-training opt-out', () => {
+  it('covers only providers that keep inputs out of training, so a harness turn never needs the setting', () => {
+    const covered = Object.keys(modelRegistry.governance).filter(
+      (providerId) => providerProxyAuthHeader(providerId) !== undefined,
+    );
+
+    expect(covered.length).toBeGreaterThan(0);
+    for (const providerId of covered) {
+      expect(providerKeepsInputsOutOfTraining(providerId), providerId).toBe(true);
+    }
   });
 });

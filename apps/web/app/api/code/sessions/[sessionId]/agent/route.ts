@@ -32,6 +32,7 @@ import {
   CloudCodeTurnStillRunningError,
   runCloudCodeTurn,
 } from '@/lib/services/cloud-code-turn-transport';
+import { CloudCodeModelMayTrainError } from '@/lib/services/cloud-code-agent-service';
 import {
   ManagedUsageRequestError,
   parseManagedUsageIdempotencyKey,
@@ -197,6 +198,14 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) return managedUsageErrorResponse(error);
+    if (error instanceof CloudCodeModelMayTrainError) {
+      return NextResponse.json(
+        {
+          error: { message: error.message, type: 'invalid_request_error', code: 'model_may_train' },
+        },
+        { status: 403 },
+      );
+    }
     rethrowCloudCodeError(error);
   }
 }

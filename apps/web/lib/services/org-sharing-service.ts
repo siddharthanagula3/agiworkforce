@@ -250,16 +250,26 @@ export async function resolveSharedProjectScope(
     if (!membership) return null;
     const projectIds = await listReadableSharedProjectIds(db, membership.organizationId, userId);
     if (projectIds.length === 0) return null;
-    const writableProjectIds = await listWritableSharedProjectIds(
-      db,
-      membership.organizationId,
-      userId,
-    );
+    const grantedWrite = await listWritableSharedProjectIds(db, membership.organizationId, userId);
+    const writableProjectIds =
+      grantedWrite.length > 0 && (await mayHoldWrite(membership.organizationId, userId))
+        ? grantedWrite
+        : [];
     return { organizationId: membership.organizationId, projectIds, writableProjectIds };
   } catch (error) {
     if (isMissingRelation(error)) return null;
     throw error;
   }
+}
+
+/**
+ * The same rule the grant table's insert policy applies: an edit grant only
+ * counts for someone whose role lets them share. A member later moved to
+ * Viewer keeps their old grant row, and without this read-time check it would
+ * keep working.
+ */
+async function mayHoldWrite(organizationId: string, userId: string): Promise<boolean> {
+  return (await resolveOrganizationPermissions(organizationId, userId)).has('content.share');
 }
 
 export type ProjectWriteAccess = 'owner' | 'editor';
@@ -402,6 +412,13 @@ export async function setProjectMemberAccess(
   db: DatabaseAdapter,
   input: SetMemberAccessInput,
 ): Promise<SharedProjectMemberGrant> {
+  if (input.access === 'write' && !(await mayHoldWrite(input.organizationId, input.targetUserId))) {
+    throw createError
+      .forbidden(
+        "This person's workspace role, such as Viewer, can open the project but not edit it. Change their role to Member to give them edit access.",
+      )
+      .asUserSafe();
+  }
   const [row] = await db.query<{ user_id: string; access: MemberProjectAccess }>(
     `insert into public.organization_project_access
        (organization_id, project_id, user_id, access, granted_by_user_id)

@@ -66,6 +66,7 @@ beforeEach(() => {
     sharedProjectLimit: 25,
     sharedConnectorLimit: 25,
   });
+  mockNeonQuery.mockResolvedValue([{ permissions: ['content.read', 'content.share'] }]);
 });
 
 describe('role gates fail closed', () => {
@@ -235,6 +236,72 @@ describe('resolveSharedProjectScope', () => {
     expect((await resolveSharedProjectScope(db, 'member-1'))?.writableProjectIds).toEqual([
       PROJECT,
     ]);
+  });
+});
+
+describe('a Viewer is read-only on shared projects', () => {
+  const viewerPermissions = [{ permissions: ['content.read'] }];
+
+  it('drops an edit grant a member kept after being moved to Viewer', async () => {
+    mockNeonQuery.mockResolvedValue(viewerPermissions);
+    const { db } = makeDb((sql) => {
+      if (/from user_projects/i.test(sql)) return [];
+      if (/organization_members/i.test(sql)) return [{ organization_id: ORG, role: 'viewer' }];
+      return [{ project_id: PROJECT }];
+    });
+
+    expect(
+      await resolveProjectWriteAccess(db, {
+        projectId: PROJECT,
+        userId: 'viewer-1',
+        organizationId: ORG,
+      }),
+    ).toBeNull();
+    expect((await resolveSharedProjectScope(db, 'viewer-1'))?.writableProjectIds).toEqual([]);
+    const [sql, params] = mockNeonQuery.mock.calls.at(-1) as [string, unknown[]];
+    expect(sql).toContain('organization_member_permissions');
+    expect(params).toEqual([ORG, 'viewer-1']);
+  });
+
+  it('still lets a Viewer open what is shared with them', async () => {
+    mockNeonQuery.mockResolvedValue(viewerPermissions);
+    const { db } = makeDb((sql) => {
+      if (/organization_members/i.test(sql)) return [{ organization_id: ORG, role: 'viewer' }];
+      return [{ project_id: PROJECT }];
+    });
+
+    expect((await resolveSharedProjectScope(db, 'viewer-1'))?.projectIds).toEqual([PROJECT]);
+  });
+
+  it('refuses to give a Viewer edit access, and says how to change it', async () => {
+    mockNeonQuery.mockResolvedValue(viewerPermissions);
+    const { db, issued } = makeDb(() => [{ user_id: 'viewer-1', access: 'write' }]);
+
+    await expect(
+      setProjectMemberAccess(db, {
+        organizationId: ORG,
+        projectId: PROJECT,
+        targetUserId: 'viewer-1',
+        access: 'write',
+        grantedByUserId: 'admin-1',
+      }),
+    ).rejects.toMatchObject({ statusCode: 403, message: expect.stringMatching(/Viewer/) });
+    expect(issued).toHaveLength(0);
+  });
+
+  it('still lets a Viewer be given read access', async () => {
+    mockNeonQuery.mockResolvedValue(viewerPermissions);
+    const { db } = makeDb(() => [{ user_id: 'viewer-1', access: 'read' }]);
+
+    await expect(
+      setProjectMemberAccess(db, {
+        organizationId: ORG,
+        projectId: PROJECT,
+        targetUserId: 'viewer-1',
+        access: 'read',
+        grantedByUserId: 'admin-1',
+      }),
+    ).resolves.toEqual({ userId: 'viewer-1', access: 'read' });
   });
 });
 

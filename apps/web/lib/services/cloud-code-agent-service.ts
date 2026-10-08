@@ -22,6 +22,12 @@ import {
 } from '@/lib/e2b/session-store';
 import { logger } from '@/lib/logger';
 import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
+import {
+  MODEL_MAY_TRAIN_MESSAGE,
+  modelKeepsInputsOutOfTraining,
+} from '@/lib/server/provider-training-opt-out';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -1043,6 +1049,13 @@ export interface PreparedCloudCodeAgentTurn {
   provider: string;
 }
 
+export class CloudCodeModelMayTrainError extends Error {
+  constructor() {
+    super(MODEL_MAY_TRAIN_MESSAGE);
+    this.name = 'CloudCodeModelMayTrainError';
+  }
+}
+
 /**
  * Everything that must happen before a turn runs, whichever transport runs it:
  * the session is readable and accepts work, and the turn row exists so anything
@@ -1078,6 +1091,12 @@ export async function prepareCloudCodeAgentTurn(
   }
 
   const provider = resolveProviderFromModel(model);
+  if (
+    !(modelKeepsInputsOutOfTraining(model) && providerKeepsInputsOutOfTraining(provider)) &&
+    (await sideCallTrainingOptOut(db, owner.userId))
+  ) {
+    throw new CloudCodeModelMayTrainError();
+  }
 
   const turnRows = await db.query<{ id: string }>(
     `insert into cloud_code_agent_turns
