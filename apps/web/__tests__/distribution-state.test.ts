@@ -359,10 +359,10 @@ function decodeProse(text: string): string {
   return text
     .replace(/&rsquo;|&#8217;|&apos;/g, "'")
     .replace(/&ldquo;|&rdquo;|&quot;/g, '"')
-    .replace(/&amp;/g, '&')
     .replace(/&nbsp;/g, ' ')
     .replace(/\\n/g, '\n\n')
-    .replace(/\\(['"`])/g, '$1');
+    .replace(/\\(['"`])/g, '$1')
+    .replace(/&amp;/g, '&');
 }
 
 const REGISTRY_LABELS: Record<string, string> = {
