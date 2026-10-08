@@ -347,6 +347,7 @@ export type { DownloadCardProps } from './components/DownloadCard';
 export { GeneratedFileCard } from './components/GeneratedFileCard';
 export {
   LibraryView,
+  isLibraryTab,
   artifactTypeForLibraryItem,
   iconKindFor,
   generatedFileFromLibraryItem,

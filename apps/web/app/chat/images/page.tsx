@@ -1,17 +1,12 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { WebAppShell } from '@shared/components/layout/WebAppShell';
-import { ImageStudio } from '@features/images/components/ImageStudio';
-
-export default function ImagesPage() {
-  return (
-    <WebAppShell>
-      <section
-        data-design="agi"
-        className="min-h-full bg-background px-gutter-compact py-8 text-foreground sm:px-gutter-regular sm:py-12 lg:px-gutter-wide"
-      >
-        <ImageStudio />
-      </section>
-    </WebAppShell>
-  );
+/**
+ * /chat/images · retired destination, kept as a redirect.
+ *
+ * Images was a rail entry over the same pictures the Library's Images tab
+ * lists, and new images are made in chat. Kept rather than deleted because the
+ * route was linked from the rail, so live bookmarks and pasted URLs exist.
+ */
+export default function ChatImagesRoute(): never {
+  redirect('/chat/library?tab=images');
 }
