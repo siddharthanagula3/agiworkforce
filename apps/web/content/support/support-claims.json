@@ -2240,7 +2240,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/pricing/page.test.tsx",
-          "name": "shows the enforceable project, MCP, media, and developer-surface plan differences"
+          "name": "shows the enforceable usage, project, storage, MCP, media, and developer-surface plan differences"
         }
       ]
     },
