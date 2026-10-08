@@ -8,6 +8,7 @@ import {
   getBillingPlanPricing,
   isPerSeatBillingPlan,
   planOffersBillingInterval,
+  type TeamSeatQuantities,
 } from '@agiworkforce/types';
 
 export const PlanTierSchema = z.enum(SELF_SERVE_PAID_PLAN_TIERS);
@@ -18,7 +19,7 @@ export function unsoldBillingIntervalMessage(plan: string, interval: BillingInte
   return `${getBillingPlanPricing(plan).label} is not sold with ${interval} billing. Choose ${billingIntervalsForPlan(plan).join(' or ')} billing.`;
 }
 
-export const CheckoutRequestSchema = z
+const SeatedPlanRequestSchema = z
   .object({
     plan: PlanTierSchema,
     billingInterval: BillingIntervalSchema,
@@ -58,11 +59,32 @@ export const PromotionCodeSchema = z
   .max(64)
   .regex(/^[A-Za-z0-9]+$/, 'Promotion codes use letters and numbers only');
 
-export const UpgradePreviewRequestSchema = CheckoutRequestSchema.safeExtend({
+export const CheckoutRequestSchema = SeatedPlanRequestSchema.safeExtend({
+  premiumSeats: z.number().int().min(0).max(MAX_PURCHASABLE_SEATS).optional(),
+}).superRefine((value, context) => {
+  if (value.premiumSeats === undefined) return;
+  if (!isPerSeatBillingPlan(value.plan)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['premiumSeats'],
+      message: `${value.plan} has no seat types; remove the Premium seat count`,
+    });
+    return;
+  }
+  if (value.seats !== undefined && value.premiumSeats > value.seats) {
+    context.addIssue({
+      code: 'custom',
+      path: ['premiumSeats'],
+      message: `Premium seats are part of the seat count; choose at most ${value.seats}`,
+    });
+  }
+});
+
+export const UpgradePreviewRequestSchema = SeatedPlanRequestSchema.safeExtend({
   promotionCode: PromotionCodeSchema.optional(),
 });
 
-export const UpgradeApplyRequestSchema = CheckoutRequestSchema.safeExtend({
+export const UpgradeApplyRequestSchema = SeatedPlanRequestSchema.safeExtend({
   previewToken: z.string().min(1).max(4096),
   promotionCode: PromotionCodeSchema.optional(),
 });
@@ -73,6 +95,18 @@ export function resolveCheckoutQuantity(request: {
 }): number {
   if (!isPerSeatBillingPlan(request.plan)) return 1;
   return request.seats ?? MIN_PURCHASABLE_SEATS;
+}
+
+export function resolveCheckoutSeatQuantities(request: {
+  plan: string;
+  seats?: number | undefined;
+  premiumSeats?: number | undefined;
+}): TeamSeatQuantities {
+  const total = resolveCheckoutQuantity(request);
+  const premium = isPerSeatBillingPlan(request.plan)
+    ? Math.min(request.premiumSeats ?? 0, total)
+    : 0;
+  return { standard: total - premium, premium };
 }
 
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;

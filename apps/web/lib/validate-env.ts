@@ -87,6 +87,8 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_PRICE_TEAM_MONTHLY_USD',
     'STRIPE_PRICE_TEAM_MONTHLY_INR',
     'STRIPE_PRICE_TEAM_YEARLY_USD',
+    'STRIPE_PRICE_TEAM_PREMIUM_MONTHLY_USD',
+    'STRIPE_PRICE_TEAM_PREMIUM_YEARLY_USD',
     'STRIPE_PRICE_ENTERPRISE_MONTHLY',
     'STRIPE_PRICE_ENTERPRISE_YEARLY',
   ];
@@ -1248,6 +1250,20 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     defaultValue: null,
     requiredIn: [],
     description: 'the Stripe price a team seat is charged yearly at in USD',
+  }),
+  published('STRIPE_PRICE_TEAM_PREMIUM_MONTHLY_USD', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price a team premium seat is charged monthly at in USD',
+  }),
+  published('STRIPE_PRICE_TEAM_PREMIUM_YEARLY_USD', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price a team premium seat is charged yearly at in USD',
   }),
   published('STRIPE_PRICE_ENTERPRISE_MONTHLY', {
     type: 'string',

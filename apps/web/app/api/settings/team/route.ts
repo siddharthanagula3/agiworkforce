@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { normalizeTeamSeatType } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -29,6 +30,9 @@ const AddMemberSchema = z.object({
 });
 
 type MemberWithProfile = OrganizationMemberRow & {
+  seat_type?: string | null;
+  premium_paid_through_active?: boolean | null;
+  premium_paid_through?: string | Date | null;
   email: string | null;
   display_name: string | null;
   avatar_url: string | null;
@@ -43,6 +47,11 @@ function formatMember(row: MemberWithProfile, currentUserId: string) {
     name: row.display_name ?? row.email ?? row.user_id,
     avatarUrl: row.avatar_url ?? null,
     role: row.role,
+    seatType: normalizeTeamSeatType(row.seat_type),
+    premiumPaidThrough:
+      row.premium_paid_through_active === true && row.premium_paid_through
+        ? new Date(row.premium_paid_through).toISOString()
+        : null,
     status: 'active' as const,
     provisionedAt: row.provisioned_at ?? null,
     joinedAt: row.joined_at,
@@ -82,6 +91,9 @@ async function handleList(request: NextRequest) {
     `select
        om.organization_id, om.user_id, om.role,
        om.provisioning_source, om.provisioned_at, om.joined_at,
+       om.seat_type, om.premium_paid_through,
+       (om.premium_paid_through is not null and om.premium_paid_through > now())
+         as premium_paid_through_active,
        p.email, p.display_name, p.avatar_url
      from public.organization_members om
      left join public.profiles p on p.id = om.user_id

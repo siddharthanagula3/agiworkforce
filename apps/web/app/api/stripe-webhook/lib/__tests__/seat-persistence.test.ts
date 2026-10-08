@@ -39,6 +39,7 @@ function makeDb(handlers: {
 const INPUT = {
   ownerUserId: 'user_123',
   seats: 25,
+  premiumSeats: 0,
   planTier: 'team',
   stripeSubscriptionId: 'sub_123',
   stripeCustomerId: 'cus_123',
@@ -133,6 +134,7 @@ describe('cancel then re-subscribe', () => {
     return persistPurchasedSeatsOnOrganization(boundToDeadSubscription.db as DatabaseAdapter, {
       ownerUserId: 'owner-1',
       seats: 5,
+      premiumSeats: 0,
       planTier: 'team',
       stripeSubscriptionId: 'sub_new',
       stripeCustomerId: 'cus_1',
@@ -150,6 +152,7 @@ describe('cancel then re-subscribe', () => {
     const outcome = await persistPurchasedSeatsOnOrganization(released.db as DatabaseAdapter, {
       ownerUserId: 'owner-1',
       seats: 5,
+      premiumSeats: 0,
       planTier: 'team',
       stripeSubscriptionId: 'sub_new',
       stripeCustomerId: 'cus_1',
@@ -191,6 +194,7 @@ function makeEnterpriseDb(options: {
 const ENTERPRISE_INPUT = {
   ownerUserId: 'user_ent',
   seats: 100,
+  premiumSeats: 0,
   planTier: 'enterprise',
   stripeSubscriptionId: 'sub_ent',
   stripeCustomerId: 'cus_ent',
@@ -321,7 +325,7 @@ describe('resolvePurchasedSeatsForOwner · enterprise entitlement', () => {
 
     const result = await resolvePurchasedSeatsForOwner(db, () => stripeReturning(75), 'user_ent');
 
-    expect(result).toEqual({ seats: 75, planTier: 'enterprise' });
+    expect(result).toEqual({ seats: 75, premiumSeats: 0, planTier: 'enterprise' });
   });
 
   it('withholds seats once the enterprise organization is read-only', async () => {
@@ -345,7 +349,7 @@ describe('resolvePurchasedSeatsForOwner · enterprise entitlement', () => {
 
     const result = await resolvePurchasedSeatsForOwner(db, () => stripeReturning(75), 'user_ent');
 
-    expect(result).toEqual({ seats: 75, planTier: 'enterprise' });
+    expect(result).toEqual({ seats: 75, premiumSeats: 0, planTier: 'enterprise' });
   });
 
   it('withholds seats for an unpaid enterprise owner once read-only', async () => {
@@ -369,7 +373,7 @@ describe('resolvePurchasedSeatsForOwner · enterprise entitlement', () => {
 
     const result = await resolvePurchasedSeatsForOwner(db, () => stripeReturning(20), 'user_ent');
 
-    expect(result).toEqual({ seats: 20, planTier: 'enterprise' });
+    expect(result).toEqual({ seats: 20, premiumSeats: 0, planTier: 'enterprise' });
   });
 
   it('withholds seats for a canceled enterprise subscription', async () => {

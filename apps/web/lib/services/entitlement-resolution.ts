@@ -22,13 +22,19 @@ import { readOrganizationCollectionState } from '@/lib/services/enterprise-colle
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { resolveSubscriberPlan } from '@/lib/services/plan-catalog-service';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
+import {
+  SEAT_ASSIGNMENT_COLUMNS_SQL,
+  resolveOwnerSeatPlanTier,
+  seatHolderPlanTier,
+  type SeatAssignmentColumns,
+} from '@/lib/services/team-seat-entitlement';
 
 export function isSeatBearingBillingPlan(planTier: string | null | undefined): boolean {
   const tier = normalizeBillingPlanTier(planTier);
   return isPerSeatBillingPlan(tier) || isContractPricedPlan(tier);
 }
 
-interface SeatCandidateRow {
+interface SeatCandidateRow extends SeatAssignmentColumns {
   organization_id: string;
   owner_user_id: string;
   billing_plan_tier: string | null;
@@ -62,7 +68,7 @@ const SEAT_CANDIDATES_SQL = `
         from public.organization_members peer
        where peer.organization_id = organization.id
          and (peer.joined_at, peer.user_id) <= (membership.joined_at, membership.user_id)
-    ) as seat_rank,
+    ) as seat_rank,${SEAT_ASSIGNMENT_COLUMNS_SQL},
     owner_subscription.id as subscription_id,
     owner_subscription.status as status,
     owner_subscription.current_period_start as current_period_start,
@@ -136,7 +142,7 @@ async function resolveSeatSubscription(
     return {
       id: row.subscription_id,
       user_id: userId,
-      plan_tier: orgTier,
+      plan_tier: seatHolderPlanTier(orgTier, row),
       status: resolveEffectiveSubscriptionBillingStatus({
         plan_tier: orgTier,
         status: row.status,
@@ -330,6 +336,21 @@ async function holdsWorkspaceMembership(db: DatabaseAdapter, userId: string): Pr
   return rows.length > 0;
 }
 
+async function withOwnerSeat(userId: string, own: SubscriptionInfo): Promise<SubscriptionInfo> {
+  try {
+    const planTier = await resolveOwnerSeatPlanTier(
+      getNeonDb(),
+      userId,
+      own.plan_tier,
+      own.stripe_subscription_id,
+    );
+    return planTier === own.plan_tier ? own : { ...own, plan_tier: planTier };
+  } catch (error) {
+    logger.error({ error, userId }, 'Owner seat type lookup failed; entitled at the Standard seat');
+    return own;
+  }
+}
+
 export async function resolveEntitlementBundle(
   db: DatabaseAdapter,
   userId: string,
@@ -342,7 +363,8 @@ export async function resolveEntitlementBundle(
       ? bundleFrom(userId, own, 'subscription', ownEntitled)
       : bundleFrom(userId, null, 'none', false);
   if (own && ownEntitled && !isFreeBillingPlanTier(normalizeBillingPlanTier(own.plan_tier))) {
-    return settleOnOwn();
+    if (options.includeSeats === false) return settleOnOwn();
+    return bundleFrom(userId, await withOwnerSeat(userId, own), 'subscription', true);
   }
   if (options.includeSeats === false) return settleOnOwn();
 

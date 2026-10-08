@@ -49,6 +49,7 @@ describe('buildPurchasedSeatRecord', () => {
     expect(buildPurchasedSeatRecord('team', { items: { data: [{ quantity: 30 }] } })).toEqual({
       planTier: 'team',
       seats: 30,
+      premiumSeats: 0,
       perSeat: true,
     });
   });
@@ -57,6 +58,7 @@ describe('buildPurchasedSeatRecord', () => {
     expect(buildPurchasedSeatRecord('pro', { items: { data: [{ quantity: 12 }] } })).toEqual({
       planTier: 'pro',
       seats: 1,
+      premiumSeats: 0,
       perSeat: false,
     });
   });
@@ -67,6 +69,7 @@ describe('buildPurchasedSeatRecord', () => {
     ).toEqual({
       planTier: 'enterprise',
       seats: 300,
+      premiumSeats: 0,
       perSeat: true,
     });
   });
@@ -76,6 +79,7 @@ describe('buildPurchasedSeatRecord', () => {
       {
         planTier: 'not_a_tier',
         seats: 1,
+        premiumSeats: 0,
         perSeat: false,
       },
     );

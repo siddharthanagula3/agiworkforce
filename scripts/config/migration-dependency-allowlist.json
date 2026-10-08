@@ -1,4 +1,30 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/app/api/settings/organization/route.ts",
+      "migration": 355,
+      "reason": "Creating a workspace writes the paid Premium seat count. 0355 is applied before this code is deployed: the release applies pending migrations first, and paid checkout stays behind the waitlist until then."
+    },
+    {
+      "file": "apps/web/app/api/settings/team/route.ts",
+      "migration": 355,
+      "reason": "The member list returns each member's seat type. 0355 is applied before this code is deployed; without it the list query fails closed rather than returning members with a guessed seat."
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/seats.ts",
+      "migration": 355,
+      "reason": "The webhook stores the Premium seat count Stripe bills. 0355 is applied before this code is deployed; a subscription event that arrives first is retried by Stripe until the column exists."
+    },
+    {
+      "file": "apps/web/lib/services/team-seat-entitlement.ts",
+      "migration": 355,
+      "reason": "Seat entitlement reads the member's seat type. 0355 is applied before this code is deployed; without it the seat lookup fails and the resolver falls back to no seat rather than granting one."
+    },
+    {
+      "file": "apps/web/lib/services/team-seat-type-service.ts",
+      "migration": 355,
+      "reason": "Assigning a seat type writes the membership seat columns. 0355 is applied before this code is deployed; without it the assignment fails and nothing is charged twice, because Stripe quantities are set to absolute values."
+    }
+  ]
 }
