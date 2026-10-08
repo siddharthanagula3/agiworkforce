@@ -39,7 +39,7 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 function picker(): ComposerProjectPicker {
   return {
     projects: [{ id: 'proj-1', name: 'Launch' }],
-    activeProjectId: null,
+    activeProjectId: 'proj-1',
     onSelectProject: vi.fn(),
     onCreateProject: vi.fn(),
   };
@@ -52,7 +52,7 @@ describe('composer popovers are portalled (UI-16)', () => {
   it('renders the project picker outside the clipped composer column', () => {
     const { container } = render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Project' }));
+    fireEvent.click(screen.getByRole('button', { name: /Launch$/ }));
 
     expect(container.contains(screen.getByPlaceholderText('Search projects...'))).toBe(false);
   });

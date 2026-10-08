@@ -31,11 +31,10 @@ export function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string;
   // No resolved provider (e.g. a model without a provider) → render no logo
   // rather than crashing on providerKey.toLowerCase().
   if (!providerKey) return null;
-  // Auto modes (managed cloud) carry the AGI brand mark in the brand accent colour.
   if (providerKey === MANAGED_CLOUD_PROVIDER_KEY) {
     return (
-      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-accent-primary-text)]">
-        <AgiMark size={size} mono />
+      <span className="inline-flex shrink-0 items-center justify-center text-foreground">
+        <AgiMark size={size} />
       </span>
     );
   }

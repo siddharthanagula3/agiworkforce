@@ -38,6 +38,7 @@ import {
   PopoverTrigger,
   PopoverContent,
   Slider,
+  Spinner,
   useMenuKeyboard,
 } from '@agiworkforce/ui';
 import { formatLocalModelSize, type LocalModel } from '@agiworkforce/local-runtime-contract';
@@ -150,6 +151,8 @@ const PICKER_ROW_WRAPPED_GUIDANCE_CLASS = 'block text-xs leading-4 text-muted-fo
 const PICKER_BADGE_CLASS =
   'shrink-0 rounded-full px-1.5 py-px text-xs font-semibold uppercase tracking-wide';
 const PICKER_ICON_SIZE = 16;
+const PLAN_LOADING_LABEL = "Loading your plan's models…";
+const PLAN_RETRY_LABEL = "Could not load your plan's models. Try again";
 const PICKER_TRIGGER_ICON_SIZE = 12;
 const PICKER_PANEL_WIDTH_CLASS = 'w-80';
 const PICKER_CATALOGUE_WIDTH_CLASS =
@@ -455,6 +458,27 @@ function RoutingProfileRow({
       </span>
       {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
     </button>
+  );
+}
+
+function UnresolvedPlanRow({ failed, onRetry }: { failed: boolean; onRetry: () => void }) {
+  if (failed) {
+    return (
+      <button
+        type="button"
+        {...{ [PICKER_ROW_ATTR]: '' }}
+        className={`${PICKER_ROW_CLASS} cursor-pointer text-sm text-foreground hover:bg-muted/60 focus-visible:bg-muted/60`}
+        onClick={onRetry}
+      >
+        {PLAN_RETRY_LABEL}
+      </button>
+    );
+  }
+  return (
+    <div role="status" className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+      <Spinner size="sm" />
+      <span>{PLAN_LOADING_LABEL}</span>
+    </div>
   );
 }
 
@@ -916,6 +940,10 @@ export function ComposerFooter({
   const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
   const freePlan = isFreeBillingPlanTier(knownTier);
   freePlanRef.current = freePlan;
+  const planResolved = knownTier !== null;
+  const paidPlan = planResolved && !freePlan;
+  const planRequestFailed = useBillingStore((s) => s.error !== null);
+  const reloadPlan = useBillingStore((s) => s.refreshUser);
 
   useEffect(() => {
     if (!freePlan) return;
@@ -1472,7 +1500,7 @@ export function ComposerFooter({
                             }}
                           />
 
-                          {!freePlan && shortList.auto && (
+                          {paidPlan && shortList.auto && (
                             <AutoRow
                               auto={shortList.auto}
                               isSelected={
@@ -1493,7 +1521,7 @@ export function ComposerFooter({
                             />
                           )}
 
-                          {!freePlan &&
+                          {paidPlan &&
                             shortList.auto &&
                             ROUTING_PROFILE_CHOICE_OPTIONS.filter(
                               (option) => option.choice !== 'auto',
@@ -1521,7 +1549,7 @@ export function ComposerFooter({
                               />
                             ))}
 
-                          {!freePlan &&
+                          {paidPlan &&
                             shortList.current &&
                             (() => {
                               const model = AVAILABLE_MODELS.find(
@@ -1530,7 +1558,7 @@ export function ComposerFooter({
                               return model ? renderModelRow(model) : null;
                             })()}
 
-                          {!freePlan && shortList.recommended.length > 0 && (
+                          {paidPlan && shortList.recommended.length > 0 && (
                             <>
                               <p className={PICKER_SECTION_LABEL_CLASS}>Recommended</p>
                               {shortList.recommended.map((row) => {
@@ -1542,7 +1570,7 @@ export function ComposerFooter({
                             </>
                           )}
 
-                          {!freePlan && shortList.favourites.length > 0 && (
+                          {paidPlan && shortList.favourites.length > 0 && (
                             <>
                               <p className={PICKER_SECTION_LABEL_CLASS}>Favourites</p>
                               {shortList.favourites.map((row) => {
@@ -1552,6 +1580,10 @@ export function ComposerFooter({
                                 return model ? renderModelRow(model) : null;
                               })}
                             </>
+                          )}
+
+                          {!planResolved && (
+                            <UnresolvedPlanRow failed={planRequestFailed} onRetry={reloadPlan} />
                           )}
 
                           {!freePlan && (
