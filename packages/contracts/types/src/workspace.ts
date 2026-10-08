@@ -1,6 +1,7 @@
 // The tenancy model every surface reads: Account is one person, Organization is
 // the billed tenant, Workspace is the container content lives in.
 
+import type { TeamSeatType } from './billing-catalog';
 import type { SourceSurface } from './suite-contracts';
 
 export const WORKSPACE_KINDS = ['personal', 'organization'] as const;
@@ -65,16 +66,12 @@ export function membershipGrantsAccess(status: MembershipStatus): boolean {
   return status === 'active';
 }
 
-export const SEAT_TYPES = ['full', 'limited', 'guest'] as const;
-
-export type SeatType = (typeof SEAT_TYPES)[number];
-
 export interface OrganizationMembership {
   organizationId: string;
   accountId: string;
   roleKey: string;
   status: MembershipStatus;
-  seatType: SeatType;
+  seatType: TeamSeatType;
   // The one account that can transfer ownership and delete the organization.
   // Distinct from the assignable Owner role, of which there may be several.
   isPrimaryOwner: boolean;

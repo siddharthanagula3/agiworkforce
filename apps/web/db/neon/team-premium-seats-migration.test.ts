@@ -27,6 +27,33 @@ describe('Team Premium seats migration (0360)', () => {
     );
   });
 
+  it('takes over the seat_type column 0234 created, converting its rows before the new check', async () => {
+    const sql = await load();
+    const dropOld = sql.search(/drop constraint if exists organization_members_seat_type_check/i);
+    const convert = sql.search(
+      /update public\.organization_members\s+set seat_type = 'standard'\s+where seat_type <> all \(array\['standard', 'premium'\]\)/i,
+    );
+    const flush = sql.search(/set constraints all immediate;/i);
+    const addNew = sql.search(/add constraint organization_members_seat_type_known/i);
+    expect(dropOld).toBeGreaterThan(-1);
+    expect(convert).toBeGreaterThan(dropOld);
+    expect(flush).toBeGreaterThan(convert);
+    expect(addNew).toBeGreaterThan(flush);
+    expect(sql).toMatch(/alter column seat_type set default 'standard'/i);
+  });
+
+  it('restores 0234 seat_type on the way down instead of dropping the column', async () => {
+    const down = await loadDown();
+    expect(down).not.toMatch(/drop column if exists seat_type;/i);
+    expect(down).toMatch(
+      /update public\.organization_members set seat_type = 'full';\s+set constraints all immediate;/i,
+    );
+    expect(down).toMatch(/alter column seat_type set default 'full'/i);
+    expect(down).toMatch(
+      /add constraint organization_members_seat_type_check\s+check \(seat_type = any \(array\['full', 'limited', 'guest'\]\)\)/i,
+    );
+  });
+
   it('refuses a Premium membership beyond the paid Premium seats, inside the database', async () => {
     const sql = await load();
     expect(sql).toMatch(
@@ -126,7 +153,7 @@ describe('Team Premium seats migration (0360)', () => {
   it('reverses every object it adds and restores the earlier seat guard', async () => {
     const down = await loadDown();
     expect(down).toMatch(/^[\s\S]*begin;[\s\S]*commit;\s*$/i);
-    for (const column of ['premium_paid_through', 'seat_type_changed_at', 'seat_type']) {
+    for (const column of ['premium_paid_through', 'seat_type_changed_at']) {
       expect(down).toMatch(
         new RegExp(
           `alter table public\\.organization_members drop column if exists ${column};`,
