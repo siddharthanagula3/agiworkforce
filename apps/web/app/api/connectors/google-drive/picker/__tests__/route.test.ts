@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -52,6 +52,8 @@ vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
 
 import { createError } from '@/lib/errors';
 import { GET } from '../route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function request(): NextRequest {
   return new NextRequest('http://localhost/api/connectors/google-drive/picker');

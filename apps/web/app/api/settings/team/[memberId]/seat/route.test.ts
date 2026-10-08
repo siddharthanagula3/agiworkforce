@@ -22,49 +22,60 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: mocks.csrf,
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<RequestContextCacheModule>()),
   invalidateActiveOrganizationCache: mocks.invalidateCache,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: vi.fn(() => ({ privileged: true })),
 }));
 vi.mock('@/lib/server/stripe-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/stripe-client')>()),
+  ...(await importOriginal<StripeClientModule>()),
   getStripeClient: vi.fn(() => ({ stripe: true })),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => ({ db: { scoped: true }, userId: 'admin-user' })),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/settings/team/team-admin-access')>()),
+  ...(await importOriginal<TeamAdminAccessModule>()),
   requireTeamAdminAccess: mocks.requireTeamAdminAccess,
 }));
 vi.mock('@/lib/services/team-seat-type-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/team-seat-type-service')>()),
+  ...(await importOriginal<TeamSeatTypeServiceModule>()),
   SeatTypePaymentPendingError: mocks.SeatTypePaymentPendingError,
   changeMemberSeatType: mocks.changeMemberSeatType,
 }));
 
 import { AppError, type ErrorCodeValue } from '@/lib/errors';
 import { PATCH } from './route';
+
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RequestContextCacheModule = typeof import('@/lib/server/request-context-cache');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type StripeClientModule = typeof import('@/lib/server/stripe-client');
+type TeamSeatTypeServiceModule = typeof import('@/lib/services/team-seat-type-service');
 
 const ORGANIZATION = '11111111-1111-4111-8111-111111111111';
 const MEMBER_ID = `${ORGANIZATION}:member-1`;

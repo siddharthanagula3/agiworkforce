@@ -77,9 +77,7 @@ vi.mock('@/lib/hooks/useConversations', async () => {
 });
 
 vi.mock('@/features/study/hooks/use-conversation-study-session', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/study/hooks/use-conversation-study-session')
-  >()),
+  ...(await importOriginal<StudySessionHookModule>()),
   useConversationStudySession: () => ({
     session: null,
     endedHere: false,
@@ -231,6 +229,9 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () =
 
 import WebChatPage from '../WebChatPage';
 import { useChatStore } from '@shared/stores/web-chat-store';
+
+type StudySessionHookModule =
+  typeof import('@/features/study/hooks/use-conversation-study-session');
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {

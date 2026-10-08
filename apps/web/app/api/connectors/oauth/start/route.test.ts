@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -49,6 +49,8 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 
 import { GET } from './route';
 import { __resetConnectorOAuthRegistryCacheForTests } from '@/lib/connectors/oauth-registry';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const ENV_KEYS = [
   'CONNECTOR_OAUTH_PROVIDERS_JSON',

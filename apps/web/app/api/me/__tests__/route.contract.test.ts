@@ -4,7 +4,7 @@ import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -60,6 +60,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET } from '../route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const SEAT_PERIOD_END = '2026-10-05T00:00:00.000Z';
 

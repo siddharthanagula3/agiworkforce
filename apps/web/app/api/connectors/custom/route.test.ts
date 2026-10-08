@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -101,6 +101,8 @@ vi.mock('@agiworkforce/mcp', () => ({ connectMcpServer: mocks.connect }));
 
 import { DELETE, GET, POST } from './route';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function request() {
   return new NextRequest('http://localhost/api/connectors/custom', {

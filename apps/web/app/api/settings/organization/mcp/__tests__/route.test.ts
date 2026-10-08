@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -62,6 +62,8 @@ const ORG_ID = '11111111-1111-4111-8111-111111111111';
 
 import { McpProbeError } from '@/lib/connectors/mcp-custom-connections';
 import { GET, PATCH, POST } from '../route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const SERVER_ROW = {
   id: '22222222-2222-4222-8222-222222222222',

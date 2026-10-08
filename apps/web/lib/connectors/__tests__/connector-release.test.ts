@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 const connectorRelease = vi.hoisted(() => ({ released: false }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
@@ -19,28 +19,28 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/feature-flags/capability-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/capability-gate')>()),
+  ...(await importOriginal<CapabilityGateModule>()),
   readKillSwitchGate: mocks.readKillSwitchGate,
 }));
 vi.mock('@/lib/mcp-url-validation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/mcp-url-validation')>()),
+  ...(await importOriginal<McpUrlValidationModule>()),
   validateHttpsMcpUrl: mocks.validateHttpsMcpUrl,
 }));
 vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/connector-policy-gate')>()),
+  ...(await importOriginal<ConnectorPolicyGateModule>()),
   evaluateConnectorPolicyForUser: mocks.evaluateConnectorPolicyForUser,
 }));
 vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
+  ...(await importOriginal<OauthStoreModule>()),
   consumePendingAuthorization: mocks.consumePendingAuthorization,
   upsertConnectorOAuthGrant: mocks.upsertConnectorOAuthGrant,
 }));
 vi.mock('@/lib/connectors/oauth-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-client')>()),
+  ...(await importOriginal<OauthClientModule>()),
   exchangeAuthorizationCode: mocks.exchangeAuthorizationCode,
 }));
 vi.mock('@/lib/connectors/mcp-discovery', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-discovery')>()),
+  ...(await importOriginal<McpDiscoveryModule>()),
   completeMcpAuthorization: mocks.completeMcpAuthorization,
 }));
 
@@ -51,6 +51,14 @@ import {
 } from '../connector-capability';
 import { createCustomConnector } from '../custom-connector-creation';
 import { finishConnectorAuthorization } from '../finish-authorization';
+
+type McpDiscoveryModule = typeof import('@/lib/connectors/mcp-discovery');
+type OauthClientModule = typeof import('@/lib/connectors/oauth-client');
+type OauthStoreModule = typeof import('@/lib/connectors/oauth-store');
+type CapabilityGateModule = typeof import('@/lib/feature-flags/capability-gate');
+type McpUrlValidationModule = typeof import('@/lib/mcp-url-validation');
+type ConnectorPolicyGateModule = typeof import('@/lib/services/connector-policy-gate');
+type TypesModule = typeof import('@agiworkforce/types');
 
 const USER = 'user-1';
 const PLANS = ['free', 'basic', 'pro', 'max', 'enterprise'] as const;

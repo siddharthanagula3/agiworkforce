@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -55,6 +55,8 @@ import {
   makeUserConnectorExecutor,
   __resetConnectorMcpMapCacheForTests,
 } from '../user-connector-tools';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function stubActiveConnector(connectorId: string) {
   mockNeonQuery.mockImplementation((sql: string) => {

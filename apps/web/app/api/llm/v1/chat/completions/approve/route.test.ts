@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -120,6 +120,8 @@ import {
   CloudAgentApprovalCheckpointNotFoundError,
 } from '@/lib/services/cloud-agent-run-service';
 import { POST } from './route';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 const suspendedMessages = [
   { role: 'user', content: 'summarize PR 7' },

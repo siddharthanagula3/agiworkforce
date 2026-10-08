@@ -9,9 +9,11 @@ import {
   type ComposerPluginsMenuProps,
 } from './ComposerPluginsMenu';
 
+type TypesModule = typeof import('@agiworkforce/types');
+
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 

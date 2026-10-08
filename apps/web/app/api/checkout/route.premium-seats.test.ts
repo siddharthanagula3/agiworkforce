@@ -37,23 +37,23 @@ const priceMocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: vi.fn(async () => undefined),
 }));
 vi.mock('@shared/utils/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/env')>()),
+  ...(await importOriginal<EnvModule>()),
   getOptionalEnv: vi.fn(() => 'sk_test_dummy'),
   requireEnv: vi.fn(() => 'sk_test_dummy'),
 }));
@@ -69,11 +69,11 @@ vi.mock('@clerk/nextjs/server', () => ({
   })),
 }));
 vi.mock('@/lib/server/localized-pricing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/localized-pricing-service')>()),
+  ...(await importOriginal<LocalizedPricingServiceModule>()),
   getCheckoutPriceSelection: priceMocks.select,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: dbMocks.query, execute: dbMocks.execute },
     userId: 'user_owner',
@@ -97,6 +97,14 @@ vi.mock('stripe', () => ({
 }));
 
 import { POST } from './route';
+
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type LocalizedPricingServiceModule = typeof import('@/lib/server/localized-pricing-service');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type EnvModule = typeof import('@shared/utils/env');
 
 const STANDARD: PriceSelection = { priceId: 'price_team_usd', currency: 'usd', amountMinor: 2_500 };
 const PREMIUM: PriceSelection = {

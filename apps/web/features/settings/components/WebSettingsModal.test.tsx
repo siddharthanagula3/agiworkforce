@@ -3,9 +3,11 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { WebSettingsModal } from './WebSettingsModal';
 import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
 
+type TypesModule = typeof import('@agiworkforce/types');
+
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 

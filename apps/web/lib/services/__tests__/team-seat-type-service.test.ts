@@ -2,6 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type Stripe from 'stripe';
 
+type MembershipRoleCeilingModule = typeof import('@/app/api/settings/team/membership-role-ceiling');
+type SeatsModule = typeof import('@/app/api/stripe-webhook/lib/seats');
+type LoggerModule = typeof import('@/lib/logger');
+type LocalizedPricingServiceModule = typeof import('@/lib/server/localized-pricing-service');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+type SubscriptionServiceModule = typeof import('@/lib/services/subscription-service');
+
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
@@ -14,33 +22,33 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: () => ({ query: mocks.permissionQuery }),
 }));
 vi.mock('@/app/api/stripe-webhook/lib/seats', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/stripe-webhook/lib/seats')>()),
+  ...(await importOriginal<SeatsModule>()),
   persistPurchasedSeatsOnOrganization: mocks.persistSeats,
 }));
 vi.mock('@/lib/server/localized-pricing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/localized-pricing-service')>()),
+  ...(await importOriginal<LocalizedPricingServiceModule>()),
   getPriceSelectionForCurrency: mocks.priceSelection,
 }));
 vi.mock('@/lib/services/subscription-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/subscription-service')>()),
+  ...(await importOriginal<SubscriptionServiceModule>()),
   SubscriptionService: {
     carryCreditsForUpgradePeriod: mocks.carryCredits,
   },
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<EntitlementResolutionModule>()),
   resolveEntitlementBundle: mocks.resolveOwnerBundle,
 }));
 vi.mock('@/app/api/settings/team/membership-role-ceiling', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/settings/team/membership-role-ceiling')>()),
+  ...(await importOriginal<MembershipRoleCeilingModule>()),
   assertMembershipRoleWithinActor: vi.fn(async () => undefined),
 }));
 

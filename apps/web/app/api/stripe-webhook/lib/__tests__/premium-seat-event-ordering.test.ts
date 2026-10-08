@@ -8,16 +8,16 @@ vi.hoisted(() => {
 });
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
   logSecurityEvent: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/services/subscription-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/subscription-service')>()),
+  ...(await importOriginal<SubscriptionServiceModule>()),
   SubscriptionService: {
     allocateCreditsForPeriod: vi.fn().mockResolvedValue(undefined),
     resetCreditsForNewPeriod: vi.fn().mockResolvedValue(undefined),
@@ -29,6 +29,10 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type Stripe from 'stripe';
 
 import { dispatchStripeEvent } from '../handlers';
+
+type LoggerModule = typeof import('@/lib/logger');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type SubscriptionServiceModule = typeof import('@/lib/services/subscription-service');
 
 interface Call {
   sql: string;

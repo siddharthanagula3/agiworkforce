@@ -10,27 +10,33 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ApiAuthModule>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'member-1' })),
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: vi.fn(() => mocks.privileged),
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ActiveWorkspaceServiceModule>()),
   resolveOrganizationMembershipId: mocks.membership,
 }));
 vi.mock('@/lib/services/team-seat-type-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/team-seat-type-service')>()),
+  ...(await importOriginal<TeamSeatTypeServiceModule>()),
   readSeatTypeSummary: mocks.readSeatTypeSummary,
 }));
 
 import { GET } from './route';
+
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type TeamSeatTypeServiceModule = typeof import('@/lib/services/team-seat-type-service');
 
 const ORGANIZATION = '11111111-1111-4111-8111-111111111111';
 

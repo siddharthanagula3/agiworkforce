@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 
@@ -112,6 +112,8 @@ import { parseConnectorAuthorizationRequired } from '@/lib/connectors/connect-re
 import { ConnectorUnreachableError } from '@/lib/connectors/oauth-access';
 import { withReachableMcpHandle } from '@/lib/connectors/reachable-mcp-handle';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
+
+type TypesModule = typeof import('@agiworkforce/types');
 
 function unauthorized(): Error {
   return Object.assign(new Error('Streamable HTTP error: Error POSTing to endpoint: {}'), {

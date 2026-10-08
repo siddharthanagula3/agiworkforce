@@ -31,9 +31,11 @@ import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
 import type { LimitedPromotionalMedia } from '@features/chat/hooks/use-promotional-media-models';
 
+type TypesModule = typeof import('@agiworkforce/types');
+
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
 }));
 
