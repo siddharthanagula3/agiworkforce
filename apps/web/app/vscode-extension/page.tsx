@@ -136,7 +136,7 @@ export default function VscodeExtensionPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Bring @agi into your editor."
-          body="AGI in VS Code is in developer preview and ships as a VSIX. Request access and pair it with AGI Desktop and the AGI CLI. Installers open at public launch."
+          body="AGI in VS Code is in developer preview and will ship as a VSIX. Ask to be notified, and pair it with AGI Desktop and the AGI CLI when they are released. Installers open when it is released."
           ctas={[
             { label: 'Discuss Enterprise access', waitlist: true },
             { href: '/download', label: 'Get notified' },

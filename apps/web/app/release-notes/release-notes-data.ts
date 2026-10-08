@@ -56,16 +56,30 @@ export const FORTHCOMING: readonly { item: string; detail: string; target: strin
   },
   {
     item: 'VS Code extension',
-    detail: 'Marketplace listing planned for public launch.',
+    detail: 'Marketplace listing planned for its release.',
     target: LAUNCH.shortLabel,
   },
 ];
 
-export function releaseStateLine(note: ReleaseNote): string {
-  const surfaces = note.surfaces.map((surface) => DOC_PLATFORM_LABELS[surface]).join(', ');
-  return `${DOC_MATURITY_LABELS[note.maturity]} · ${surfaces}`;
-}
-
 export function isReleasedSurface(surface: DocPlatform): boolean {
   return RELEASED_DOC_PLATFORMS.includes(surface);
+}
+
+function surfaceLabels(surfaces: readonly DocPlatform[]): string {
+  return surfaces.map((surface) => DOC_PLATFORM_LABELS[surface]).join(', ');
+}
+
+export function releaseStateLine(note: ReleaseNote): string {
+  const released = note.surfaces.filter(isReleasedSurface);
+  const unreleased = note.surfaces.filter((surface) => !isReleasedSurface(surface));
+  return [
+    released.length > 0 ? `${DOC_MATURITY_LABELS[note.maturity]} · ${surfaceLabels(released)}` : '',
+    unreleased.length > 0 ? `Not yet released: ${surfaceLabels(unreleased)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export function isGenerallyAvailable(note: ReleaseNote): boolean {
+  return note.maturity === 'ga' && note.surfaces.some(isReleasedSurface);
 }

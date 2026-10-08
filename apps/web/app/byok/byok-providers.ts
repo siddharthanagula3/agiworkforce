@@ -6,6 +6,7 @@ export const BYOK_PROVIDER_IDS = [
   'google',
   'xai',
   'deepseek',
+  'minimax',
   'qwen',
   'moonshot',
   'perplexity',

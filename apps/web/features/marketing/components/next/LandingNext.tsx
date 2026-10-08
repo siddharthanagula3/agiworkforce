@@ -180,7 +180,7 @@ const TRUST = [
     title: 'Your keys, your bill.',
     body: 'Bring provider keys in the CLI. Traffic goes directly to your provider.',
     points: [
-      'Keys stored encrypted, on your machine',
+      'Keys saved on your own machine',
       'Visible provider label on every route',
       'Explicit, reviewed continuation from Local',
     ],
@@ -214,7 +214,7 @@ const CAPABILITIES = [
   },
   {
     title: 'Tools and connectors',
-    body: 'MCP servers and OAuth apps, behind explicit permissions.',
+    body: 'MCP servers and OAuth apps, behind explicit permissions. Connectors are coming soon.',
     href: '/connectors/mcp-directory',
   },
   { title: 'Memory', body: 'Saved facts you can read, edit and delete.', href: '/features/memory' },

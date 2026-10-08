@@ -12,6 +12,7 @@ export const BYOK_PROVIDERS: ReadonlyArray<ByokProvider> = [
   { id: 'google', label: 'Google', envVar: 'GOOGLE_API_KEY', iconText: 'GG' },
   { id: 'xai', label: 'xAI', envVar: 'XAI_API_KEY', iconText: 'XA' },
   { id: 'deepseek', label: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY', iconText: 'DS' },
+  { id: 'minimax', label: 'MiniMax', envVar: 'MINIMAX_API_KEY', iconText: 'MM' },
   { id: 'perplexity', label: 'Perplexity', envVar: 'PERPLEXITY_API_KEY', iconText: 'PP' },
   { id: 'qwen', label: 'Qwen', envVar: 'QWEN_API_KEY', iconText: 'QW' },
   { id: 'moonshot', label: 'Moonshot', envVar: 'MOONSHOT_API_KEY', iconText: 'MS' },

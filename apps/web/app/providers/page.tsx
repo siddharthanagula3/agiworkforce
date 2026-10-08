@@ -260,9 +260,9 @@ export default function ProvidersPage() {
               cards={[
                 {
                   title: 'Your key, your provider',
-                  body: 'The CLI keeps one keyring entry per provider and calls that provider directly.',
+                  body: 'The CLI keeps one credential per provider, in the operating system keyring or in owner-only files on Linux or when the keyring is turned off, and calls that provider directly.',
                   points: [
-                    'Keys encrypted at rest on your machine',
+                    'Keys saved on your own machine',
                     'Traffic goes straight to the provider',
                     'The route is named on every reply',
                   ],

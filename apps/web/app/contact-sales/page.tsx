@@ -16,7 +16,11 @@ const AUDIENCE_ROUTES_CAPTION = 'Which door you need';
 
 const AUDIENCE_ROUTES = [
   { label: 'Individuals', value: 'Sign in and start, no contract' },
-  { label: 'Teams', value: 'Self-serve checkout on the pricing page' },
+  {
+    label: 'Teams',
+    value:
+      'Per-seat plan on the pricing page; checkout needs an access code while upgrades open in stages',
+  },
   { label: 'Enterprise', value: 'Security review, rollout, and contract terms' },
 ] as const;
 

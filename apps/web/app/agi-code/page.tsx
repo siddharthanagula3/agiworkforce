@@ -9,7 +9,7 @@ import {
   FlagshipHero,
   SurfaceIndex,
 } from '@/features/marketing/components/SurfaceSections';
-import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { LAUNCH, SURFACE_STATUS, surfaceCta } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Code | CLI + VS Code developer stack',
@@ -30,8 +30,8 @@ export default function AgiCodePage() {
           lede="AGI Code spans the agi CLI and the VS Code extension. Resume and fork sessions. Review diffs before they land. Run commands in an OS sandbox. Extend the agent with hooks, skills, and MCP. Local models, your own keys, or AGI managed cloud (public alpha)."
           ctas={[
             { href: '/cli', label: 'See the CLI' },
-            { href: '/vscode-extension', label: 'Get the VS Code Extension' },
-            { href: '/download', label: 'Get notified' },
+            { href: '/vscode-extension', label: 'See the VS Code extension' },
+            surfaceCta('vscode'),
           ]}
           modeRibbon={['Local · offline-capable', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -124,7 +124,7 @@ export default function AgiCodePage() {
         <DevBand
           eyebrow="Local-first"
           title="Works offline. Routes on your rules."
-          body="Point AGI Code at a supported local runtime and work entirely offline after setup. Bring your own provider keys when you want frontier models. The provider label is visible on every request. Nothing moves between modes silently."
+          body="Point the CLI at a supported local runtime and work entirely offline after setup. Bring your own provider keys when you want frontier models. The provider label is visible on every request. Nothing moves between modes silently."
           ctas={[
             { href: '/local', label: 'Run AGI Locally' },
             { href: '/byok', label: 'Set Up BYOK' },

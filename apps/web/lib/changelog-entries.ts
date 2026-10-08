@@ -42,7 +42,7 @@ export const RELEASES: readonly Release[] = [
   },
   {
     date: '2026-07-31',
-    headline: 'Agent tooling and platform maturity · live',
+    headline: 'Agent tooling and platform maturity',
     body: [
       'CLI: configurable keybindings, live NDJSON event streaming, named-agent runs, session search by pull request, managed-gateway model discovery.',
       'Desktop prototype at the time: MCP registry work alongside menu bar residency and renderer IPC isolation. Local MCP did not carry into the public Electron Desktop selected on 15 September.',
@@ -51,14 +51,14 @@ export const RELEASES: readonly Release[] = [
   },
   {
     date: '2026-07-03',
-    headline: 'CLI local model providers · live',
+    headline: 'CLI local model providers',
     body: [
       'The CLI now talks to Ollama and LM Studio as local, self-hosted model providers, alongside its BYOK provider set. Desktop remains an AGI managed-cloud account shell.',
     ],
   },
   {
     date: '2026-06-24',
-    headline: 'Local, BYOK, and cloud trust boundary · live',
+    headline: 'Local, BYOK, and cloud trust boundary',
     body: [
       'Fail-closed egress separation enforced by each implemented route: CLI local mode makes no network call to us, BYOK traffic goes straight to the provider you configured, and managed cloud is metered against your plan.',
       'Canonical security policy published on our security page, naming the trust-boundary model and its known gaps.',
@@ -69,7 +69,7 @@ export const RELEASES: readonly Release[] = [
     headline: 'Marketing site redesign · live',
     body: [
       'Site-wide redesign on the new dark theme. Same surface across every marketing route.',
-      'Single typeface (Geist Sans), 12-spoke brand mark, single amber accent used surgically.',
+      'It shipped with a single typeface (Geist Sans), a 12-spoke brand mark and a single amber accent.',
       'No version numbers, no model IDs, no vanity counts in marketing copy. /changelog is the explicit exception.',
     ],
   },
@@ -77,8 +77,8 @@ export const RELEASES: readonly Release[] = [
     date: '2026-05-04',
     headline: 'OpenClaw porting · complete',
     body: [
-      'Provider adapter interface stable. Anthropic, OpenAI, Ollama, Google adapters live.',
-      'MCP transport and skills loader landed. Hook events parity in the Rust CLI. Live cross-provider demo runs through the API gateway.',
+      'Provider adapter interface stable. Anthropic, OpenAI, Ollama, Google adapters landed.',
+      'MCP transport and skills loader landed. Hook events parity in the Rust CLI. A cross-provider demo ran through the API gateway.',
     ],
   },
   {

@@ -52,7 +52,7 @@ const AROUND_THE_CHAT = [
   {
     meta: 'Tools',
     title: 'Tools and connectors',
-    body: 'Connected MCP servers and OAuth apps appear in the tool timeline under per-tool permissions.',
+    body: 'Connected MCP servers and OAuth apps appear in the tool timeline under per-tool permissions. Connectors are coming soon.',
     href: '/features/tools',
   },
 ] as const;

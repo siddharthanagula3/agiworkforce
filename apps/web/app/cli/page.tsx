@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FeatureGrid } from '@/features/marketing/components/LandingSections';
 import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/SurfaceSections';
+import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { SURFACE_STATUS } from '../../lib/marketing-constants';
 import { CliInstallCommand } from './CliInstallCommand';
 
@@ -13,6 +14,8 @@ export const metadata = buildMetadata({
   description: `agi is a Rust-native developer agent: resumable sessions, code review, sandboxed execution, hooks, skills, and MCP, offline-capable with local models. ${SURFACE_STATUS.cli}.`,
   path: '/cli',
 });
+
+const DEVELOPER_SURFACE_PLANS = billingPlanCapabilityPlanLabels('developer_surfaces');
 
 const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'exec', desc: 'Run a task non-interactively' },
@@ -168,9 +171,9 @@ export default function CliPage() {
               mode: 'AGI Cloud',
               glyph: '●',
               title: 'Managed compute, public alpha.',
-              body: 'Cloud execution is public alpha, open by default, and still fails closed without an explicit route.',
+              body: 'Cloud execution from the CLI is public alpha, part of the higher paid plans, and still fails closed without an explicit route.',
               points: [
-                'Public alpha: sign in and start, no waitlist',
+                `Included with ${DEVELOPER_SURFACE_PLANS}; paid upgrades are opening in stages`,
                 'No agi cloud command: managed runs use the normal model path',
                 'Clear labels before anything routes to cloud',
                 'Usage metered and transparent',

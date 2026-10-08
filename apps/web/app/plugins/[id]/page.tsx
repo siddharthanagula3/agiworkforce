@@ -21,6 +21,7 @@ import {
   isPluginEntryWebInstallable,
   type PluginRegistryEntry,
 } from '@agiworkforce/types';
+import { pluginCliInstallNote } from '@/features/plugins/availability';
 import { ConnectorChecklist } from './ConnectorChecklist';
 
 interface Props {
@@ -141,10 +142,7 @@ export default async function PluginDetailPage({ params }: Props) {
                 ) : entry.status === 'deprecated' ? (
                   <strong>Deprecated. This pack should no longer be installed.</strong>
                 ) : installCommand !== null ? (
-                  <strong>
-                    The web app cannot run this one. Install it from the released CLI with the
-                    command below.
-                  </strong>
+                  <strong>The web app cannot run this one. {pluginCliInstallNote()}</strong>
                 ) : (
                   <strong>
                     Listed in the registry, with no published artifact yet. There is nothing to
