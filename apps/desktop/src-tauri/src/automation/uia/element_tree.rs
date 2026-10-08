@@ -13,6 +13,16 @@ use windows::Win32::UI::Accessibility::{
     UIA_PROPERTY_ID,
 };
 
+// UIA_E_ELEMENTNOTAVAILABLE: the element's window closed between enumeration and the property read.
+const UIA_E_ELEMENTNOTAVAILABLE: windows::core::HRESULT =
+    windows::core::HRESULT(0x8004_0201_u32 as i32);
+
+fn element_no_longer_available(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<windows::core::Error>()
+        .is_some_and(|error| error.code() == UIA_E_ELEMENTNOTAVAILABLE)
+}
+
 impl UIAutomationState {
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
         let desktop = self.root_element()?;
@@ -31,7 +41,11 @@ impl UIAutomationState {
         for index in 0..count {
             let element =
                 unsafe { array.GetElement(index) }.map_err(|err| anyhow!("GetElement: {err:?}"))?;
-            results.push(self.describe_element(&element)?);
+            match self.describe_element(&element) {
+                Ok(info) => results.push(info),
+                Err(error) if element_no_longer_available(&error) => continue,
+                Err(error) => return Err(error),
+            }
         }
 
         Ok(results)
@@ -69,7 +83,11 @@ impl UIAutomationState {
 
             let element = unsafe { collection.GetElement(index) }
                 .map_err(|err| anyhow!("GetElement: {err:?}"))?;
-            results.push(self.describe_element(&element)?);
+            match self.describe_element(&element) {
+                Ok(info) => results.push(info),
+                Err(error) if element_no_longer_available(&error) => continue,
+                Err(error) => return Err(error),
+            }
         }
 
         Ok(results)
@@ -79,8 +97,8 @@ impl UIAutomationState {
         &self,
         element: &IUIAutomationElement,
     ) -> Result<Option<BoundingRectangle>> {
-        let rect =
-            unsafe { element.CurrentBoundingRectangle() }.map_err(|err| anyhow!("{err:?}"))?;
+        let rect = unsafe { element.CurrentBoundingRectangle() }
+            .map_err(|err| anyhow::Error::new(err).context("CurrentBoundingRectangle"))?;
         if rect.left == 0 && rect.right == 0 && rect.top == 0 && rect.bottom == 0 {
             return Ok(None);
         }
@@ -97,15 +115,14 @@ impl UIAutomationState {
     }
 
     fn describe_element(&self, element: &IUIAutomationElement) -> Result<UIElementInfo> {
-        let id = self.register_element(element)?;
-
         let name = read_bstr(|| unsafe { element.CurrentName().ok() }).unwrap_or_default();
         let class_name = read_bstr(|| unsafe { element.CurrentClassName().ok() })
             .unwrap_or_else(|| "Unknown".into());
         let control_type_id = unsafe { element.CurrentControlType() }
-            .map_err(|err| anyhow!("CurrentControlType: {err:?}"))?;
+            .map_err(|err| anyhow::Error::new(err).context("CurrentControlType"))?;
         let control_type = self.control_type_to_string(control_type_id);
         let bounding_rect = self.extract_bounds(element)?;
+        let id = self.register_element(element)?;
 
         Ok(UIElementInfo {
             id,
@@ -246,5 +263,27 @@ impl UIAutomationState {
             UIA_WindowControlTypeId => "Window".to_string(),
             other => format!("Control({})", other.0),
         }
+    }
+}
+
+#[cfg(test)]
+mod element_availability_tests {
+    use super::*;
+
+    #[test]
+    fn only_an_element_not_available_error_counts_as_a_vanished_window() {
+        let vanished = anyhow::Error::new(windows::core::Error::from(UIA_E_ELEMENTNOTAVAILABLE))
+            .context("CurrentControlType");
+        assert!(element_no_longer_available(&vanished));
+
+        let access_denied = anyhow::Error::new(windows::core::Error::from(
+            windows::core::HRESULT(0x8007_0005_u32 as i32),
+        ))
+        .context("CurrentControlType");
+        assert!(!element_no_longer_available(&access_denied));
+
+        assert!(!element_no_longer_available(&anyhow!(
+            "CurrentControlType: HRESULT(0x80040201)"
+        )));
     }
 }
