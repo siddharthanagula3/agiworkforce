@@ -20,6 +20,7 @@ import {
   compareDirectoryRecordsByName,
   isConnectableNow,
 } from '@/lib/connectors/directory/snapshot-view';
+import { isEligibleForListing, isInDefaultListing } from '@/lib/connectors/directory/listing';
 import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
 import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
 
@@ -52,6 +53,8 @@ function matchesBadge(record: DirectoryRecord, badge: DirectoryBadge): boolean {
 }
 
 function matchesFilters(record: DirectoryRecord, query: ConnectorDirectoryQuery): boolean {
+  if (!isEligibleForListing(record)) return false;
+  if (!query.badge && !isInDefaultListing(record)) return false;
   if (query.category && !record.categories.includes(query.category)) return false;
   if (query.badge && !matchesBadge(record, query.badge)) return false;
   if (query.connectable && record.connectable !== query.connectable) return false;

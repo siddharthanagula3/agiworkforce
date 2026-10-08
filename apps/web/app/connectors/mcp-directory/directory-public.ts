@@ -19,6 +19,15 @@ export const BADGE_LABELS = {
   community: 'Community',
 } as const satisfies Record<DirectoryBadge, string>;
 
+export const VIEW_PARAM = 'view';
+export const COMMUNITY_VIEW = 'community';
+export const SHORT_LIST_NOTICE =
+  'This list is short because only connectors we have checked by hand are listed by default.';
+export const SHORT_LIST_COMMUNITY_LINK_LABEL = 'Show Community listings';
+export const COMMUNITY_VIEW_NOTICE =
+  'Community listings have passed automated checks only. Servers that need an API key and unchecked payment or trading connectors are not listed.';
+export const DEFAULT_VIEW_LINK_LABEL = 'Back to checked connectors';
+
 export const BADGE_NOTE =
   'We do not sign or vouch for a community server; the badge on each entry says who published it and nothing more.';
 

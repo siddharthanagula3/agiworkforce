@@ -28,6 +28,7 @@ import {
   toDirectoryRequest,
   toRelatedConnectors,
   connectedConnectorIds,
+  CONNECTOR_SHORT_LIST_NOTICE,
   type ConnectorDirectoryRequest,
 } from '../services/connectors-directory';
 
@@ -432,6 +433,28 @@ describe('toConnectorSection', () => {
       expect(built.catalogHeading).toBe(heading);
       expect(built.entries.some((entry) => entry.popular)).toBe(false);
     }
+  });
+
+  it('says plainly that the default list is short and points to Community', () => {
+    const built = section([record()], new Set(), [curated()], { total: 3 });
+    expect(built.notice).toBe(CONNECTOR_SHORT_LIST_NOTICE);
+    expect(built.notice).toContain('Community');
+  });
+
+  it('leaves the short-list notice off a tab, a search, a category or a long list', () => {
+    const base = { total: 3 };
+    expect(
+      section([record()], new Set(), [], { ...base, request: request({ badge: 'community' }) })
+        .notice,
+    ).toBeUndefined();
+    expect(
+      section([record()], new Set(), [], { ...base, request: request({ search: 'x' }) }).notice,
+    ).toBeUndefined();
+    expect(
+      section([record()], new Set(), [], { ...base, request: request({ category: 'Data' }) })
+        .notice,
+    ).toBeUndefined();
+    expect(section([record()], new Set(), [], { total: 5_000 }).notice).toBeUndefined();
   });
 
   it('omits the count when the api sends no stats', () => {

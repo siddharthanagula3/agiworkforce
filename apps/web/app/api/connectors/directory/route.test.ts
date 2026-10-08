@@ -10,11 +10,15 @@ import {
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
 const mocks = vi.hoisted(() => ({
+  handChecks: new Map<string, unknown>(),
   getSnapshotView: vi.fn(),
   withRateLimit: vi.fn(async (..._args: unknown[]) => null),
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/connectors/directory/hand-checked', () => ({
+  HAND_CHECKS: mocks.handChecks,
+}));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mocks.withRateLimit(...args),
 }));
@@ -81,12 +85,12 @@ function records(): DirectoryRecord[] {
       id: 'io.github.someone/tool',
       name: 'Some Tool',
       publisher: 'someone',
-      description: 'A community connector for shipping invoices.',
-      categories: ['Financial services'],
+      description: 'A community connector for tracking parcels.',
+      categories: ['Code'],
       remotes: [{ url: 'https://tool.example.com/mcp', transport: 'streamable-http' }],
-      authMode: 'api-key',
-      connectable: 'api-key-form',
-      toolNames: ['send_invoice', 'get_invoice'],
+      authMode: 'oauth',
+      connectable: 'connect',
+      toolNames: ['ship_package', 'track_package'],
       repositoryUrl: 'https://github.com/someone/tool',
       version: '1.0.0',
       badge: 'registry',
@@ -139,11 +143,17 @@ function records(): DirectoryRecord[] {
   ];
 }
 
+const HAND_CHECKED_IDS = [
+  'com.linear/mcp',
+  'io.github.acme/bare',
+  'com.example/notes',
+  'com.example/cli-only',
+];
+
 const DEFAULT_ORDER = [
   'notion',
   'slack',
   'com.linear/mcp',
-  'io.github.someone/tool',
   'io.github.acme/bare',
   'com.example/notes',
   'com.example/cli-only',
@@ -187,6 +197,8 @@ async function ids(query = ''): Promise<string[]> {
 describe('GET /api/connectors/directory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.handChecks.clear();
+    for (const id of HAND_CHECKED_IDS) mocks.handChecks.set(id, { id, moneyMoving: false });
     mocks.getSnapshotView.mockResolvedValue(view());
   });
 
@@ -206,7 +218,7 @@ describe('GET /api/connectors/directory', () => {
 
     expect(response.status).toBe(200);
     expect(body.entries.map((entry: { id: string }) => entry.id)).toEqual(DEFAULT_ORDER);
-    expect(body.total).toBe(7);
+    expect(body.total).toBe(6);
     expect(body.nextCursor).toBeNull();
     expect(body.connectableModes).toEqual([
       'connect',
@@ -231,9 +243,15 @@ describe('GET /api/connectors/directory', () => {
   });
 
   it('filters by search across name, publisher, description and tool names', async () => {
-    await expect(ids('?search=invoices')).resolves.toEqual(['io.github.someone/tool']);
-    await expect(ids('?search=someone')).resolves.toEqual(['io.github.someone/tool']);
-    await expect(ids('?search=send_invoice')).resolves.toEqual(['io.github.someone/tool']);
+    await expect(ids('?badge=community&search=parcels')).resolves.toEqual([
+      'io.github.someone/tool',
+    ]);
+    await expect(ids('?badge=community&search=someone')).resolves.toEqual([
+      'io.github.someone/tool',
+    ]);
+    await expect(ids('?badge=community&search=ship_package')).resolves.toEqual([
+      'io.github.someone/tool',
+    ]);
     await expect(ids('?search=Bare')).resolves.toEqual(['io.github.acme/bare']);
   });
 
@@ -257,18 +275,6 @@ describe('GET /api/connectors/directory', () => {
     ]);
   });
 
-  it('returns every record the card labels Community when filtering by community', async () => {
-    const labelledCommunity = (await ids('')).filter((id) =>
-      [
-        'io.github.someone/tool',
-        'io.github.acme/bare',
-        'com.example/notes',
-        'com.example/cli-only',
-      ].includes(id),
-    );
-    await expect(ids('?badge=community')).resolves.toEqual(labelledCommunity);
-  });
-
   it('lists a registry record persisted without a badge under community', async () => {
     mocks.getSnapshotView.mockResolvedValue(
       view([...records(), storedWithoutBadge('io.github.legacy/tool')]),
@@ -287,7 +293,7 @@ describe('GET /api/connectors/directory', () => {
 
   it('filters by one connectable mode', async () => {
     await expect(ids('?connectable=desktop-and-cli')).resolves.toEqual(['com.example/cli-only']);
-    await expect(ids('?connectable=api-key-form')).resolves.toEqual(['io.github.someone/tool']);
+    await expect(ids('?connectable=api-key-form')).resolves.toEqual([]);
   });
 
   it('keeps connectableOnly working as connect or api-key-form, and false means no filter', async () => {
@@ -295,7 +301,6 @@ describe('GET /api/connectors/directory', () => {
       'notion',
       'slack',
       'com.linear/mcp',
-      'io.github.someone/tool',
       'com.example/notes',
     ]);
     await expect(ids('?connectableOnly=false')).resolves.toEqual(DEFAULT_ORDER);
@@ -307,7 +312,7 @@ describe('GET /api/connectors/directory', () => {
   });
 
   it('filters by category', async () => {
-    await expect(ids('?category=Financial+services')).resolves.toEqual(['io.github.someone/tool']);
+    await expect(ids('?category=Financial+services')).resolves.toEqual([]);
     await expect(ids('?category=Productivity')).resolves.toEqual(['notion', 'com.example/notes']);
   });
 
@@ -326,7 +331,6 @@ describe('GET /api/connectors/directory', () => {
       'com.example/notes',
       'notion',
       'slack',
-      'io.github.someone/tool',
     ]);
   });
 
@@ -334,14 +338,14 @@ describe('GET /api/connectors/directory', () => {
     const first = await GET(request('?limit=2'));
     const firstBody = await first.json();
     expect(firstBody.entries.map((entry: { id: string }) => entry.id)).toEqual(['notion', 'slack']);
-    expect(firstBody.total).toBe(7);
+    expect(firstBody.total).toBe(6);
     expect(firstBody.nextCursor).toBe('2');
 
     await expect(ids('?limit=2&cursor=2')).resolves.toEqual([
       'com.linear/mcp',
-      'io.github.someone/tool',
+      'io.github.acme/bare',
     ]);
-    const last = await GET(request('?limit=2&cursor=6'));
+    const last = await GET(request('?limit=2&cursor=5'));
     const lastBody = await last.json();
     expect(lastBody.entries).toHaveLength(1);
     expect(lastBody.nextCursor).toBeNull();
@@ -372,8 +376,8 @@ describe('GET /api/connectors/directory', () => {
       totalRecords: 7,
       remoteRecords: 6,
       byConnectable: {
-        connect: 4,
-        'api-key-form': 1,
+        connect: 5,
+        'api-key-form': 0,
         'desktop-and-cli': 1,
         'needs-setup': 1,
         unavailable: 0,
@@ -395,7 +399,7 @@ describe('GET /api/connectors/directory', () => {
   });
 
   it('carries every record field plus the computed tool count and connector url', async () => {
-    const response = await GET(request());
+    const response = await GET(request('?badge=registry'));
     const body = await response.json();
 
     const tool = body.entries.find(
@@ -412,6 +416,68 @@ describe('GET /api/connectors/directory', () => {
       websiteUrl: 'https://example.com',
       toolCount: 2,
       connectorUrl: 'https://tool.example.com/mcp',
+    });
+  });
+
+  describe('listing policy', () => {
+    const extra = (id: string, overrides: Partial<DirectoryRecord> = {}) =>
+      directoryRecord({
+        id,
+        name: id,
+        badge: 'registry',
+        authMode: 'oauth',
+        connectable: 'connect',
+        categories: ['Code'],
+        toolNames: ['list_things'],
+        ...overrides,
+      });
+    const withExtras = (...added: DirectoryRecord[]) =>
+      mocks.getSnapshotView.mockResolvedValue(view([...records(), ...added]));
+
+    it('lists only first-party and hand-checked entries by default', async () => {
+      withExtras(extra('com.unchecked/server'));
+      const defaults = await ids();
+      expect(defaults).not.toContain('com.unchecked/server');
+      expect(defaults).toEqual(DEFAULT_ORDER);
+      await expect(ids('?badge=community')).resolves.toContain('com.unchecked/server');
+    });
+
+    it('lists nothing but first-party when the hand-check list is empty', async () => {
+      mocks.handChecks.clear();
+      await expect(ids()).resolves.toEqual(['notion', 'slack']);
+    });
+
+    it('never lists a server that needs an API key, even hand-checked', async () => {
+      mocks.handChecks.set('com.keyed/server', { id: 'com.keyed/server', moneyMoving: false });
+      withExtras(
+        extra('com.keyed/server', { authMode: 'api-key', connectable: 'api-key-form' }),
+        extra('com.keyed/other', { authMode: 'api-key', connectable: 'api-key-form' }),
+      );
+      for (const query of ['', '?badge=community', '?connectableOnly=false', '?authMode=api-key']) {
+        const listed = await ids(query);
+        expect(listed).not.toContain('com.keyed/server');
+        expect(listed).not.toContain('com.keyed/other');
+      }
+    });
+
+    it('keeps an unchecked connector that can move money out of every view', async () => {
+      withExtras(
+        extra('com.broker/trading', { description: 'Place trades in your brokerage account.' }),
+        extra('com.example/ledger', { categories: ['Financial services'] }),
+        extra('com.example/odd', { toolNames: ['transfer_funds'] }),
+      );
+      for (const query of ['', '?badge=community', '?badge=registry', '?connectableOnly=false']) {
+        const listed = await ids(query);
+        for (const id of ['com.broker/trading', 'com.example/ledger', 'com.example/odd']) {
+          expect(listed).not.toContain(id);
+        }
+      }
+    });
+
+    it('lists a hand-checked money-moving connector in the default view', async () => {
+      mocks.handChecks.set('com.broker/trading', { id: 'com.broker/trading', moneyMoving: true });
+      withExtras(extra('com.broker/trading', { description: 'Place trades.' }));
+      await expect(ids()).resolves.toContain('com.broker/trading');
     });
   });
 

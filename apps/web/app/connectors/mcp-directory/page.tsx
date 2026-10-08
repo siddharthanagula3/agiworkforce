@@ -13,11 +13,26 @@ import {
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
+import {
+  DEFAULT_LIST_SHORT_BELOW,
+  isEligibleForListing,
+  isInDefaultListing,
+} from '@/lib/connectors/directory/listing';
 import { isConnectableNow } from '@/lib/connectors/directory/snapshot-view';
 import { helpEntryPoint, helpHref } from '@/lib/support/help-entry-points';
 import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import { DirectoryRecordCard } from './DirectoryRecordCard';
-import { BADGE_NOTE, BASE_PATH, SIGN_IN_HREF } from './directory-public';
+import {
+  BADGE_NOTE,
+  BASE_PATH,
+  COMMUNITY_VIEW,
+  COMMUNITY_VIEW_NOTICE,
+  DEFAULT_VIEW_LINK_LABEL,
+  SHORT_LIST_COMMUNITY_LINK_LABEL,
+  SHORT_LIST_NOTICE,
+  SIGN_IN_HREF,
+  VIEW_PARAM,
+} from './directory-public';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import '@/features/marketing/components/pages/company/company.css';
 
@@ -56,8 +71,9 @@ function matches(record: DirectoryRecord, needle: string): boolean {
     .includes(needle);
 }
 
-function href(search: string, category: string): string {
+function href(search: string, category: string, community = false): string {
   const params = new URLSearchParams();
+  if (community) params.set(VIEW_PARAM, COMMUNITY_VIEW);
   if (search) params.set(SEARCH_PARAM, search);
   if (category) params.set(CATEGORY_PARAM, category);
   const query = params.toString();
@@ -75,18 +91,22 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
   const searchText = firstValue(params[SEARCH_PARAM]);
   const search = searchText.toLowerCase();
   const category = firstValue(params[CATEGORY_PARAM]);
+  const community = firstValue(params[VIEW_PARAM]) === COMMUNITY_VIEW;
   const filtered = Boolean(search || category);
 
   const view = await getSnapshotView();
   const selected = view.records.filter(
     (record) =>
       isConnectableNow(record) &&
+      isEligibleForListing(record) &&
+      (community || isInDefaultListing(record)) &&
       matches(record, search) &&
       (!category || record.categories.includes(category)),
   );
   const page = selected.slice(0, PAGE_SIZE);
   const truncated = selected.length > page.length;
   const total = selected.length.toLocaleString();
+  const shortList = !community && !filtered && selected.length < DEFAULT_LIST_SHORT_BELOW;
 
   return (
     <div data-design="agi" className="agi-ds-page agi-co">
@@ -127,6 +147,7 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
               aria-label="Search connectors"
               className="flex w-full flex-wrap items-end gap-3"
             >
+              {community ? <input type="hidden" name={VIEW_PARAM} value={COMMUNITY_VIEW} /> : null}
               <div className="agi-ds-field min-w-0 flex-1 basis-64">
                 <label htmlFor={SEARCH_INPUT_ID} className="text-sm font-medium text-foreground">
                   Search connectors
@@ -163,6 +184,23 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
               </button>
             </form>
 
+            {shortList ? (
+              <Prose>
+                {SHORT_LIST_NOTICE}{' '}
+                <Link href={href('', '', true)} className="agi-ds-link">
+                  {SHORT_LIST_COMMUNITY_LINK_LABEL}
+                </Link>
+              </Prose>
+            ) : null}
+            {community ? (
+              <Prose>
+                {COMMUNITY_VIEW_NOTICE}{' '}
+                <Link href={href(searchText, category)} className="agi-ds-link">
+                  {DEFAULT_VIEW_LINK_LABEL}
+                </Link>
+              </Prose>
+            ) : null}
+
             <Prose>
               Servers that run as a local process have no URL, so those are added from the CLI.{' '}
               {CLI_AVAILABILITY_NOTE}
@@ -170,7 +208,7 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
 
             <nav aria-label="Categories" className="hidden w-full flex-wrap gap-2 sm:flex">
               <Link
-                href={href(searchText, '')}
+                href={href(searchText, '', community)}
                 aria-current={category ? undefined : 'page'}
                 className={PILL_CLASS}
               >
@@ -179,7 +217,7 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
               {DIRECTORY_CATEGORIES.map((name) => (
                 <Link
                   key={name}
-                  href={href(searchText, name)}
+                  href={href(searchText, name, community)}
                   aria-current={category === name ? 'page' : undefined}
                   className={PILL_CLASS}
                 >
@@ -191,7 +229,7 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
             {filtered ? (
               <Prose>
                 {activeFilterSummary(searchText, category)}{' '}
-                <Link href={BASE_PATH} className="agi-ds-link">
+                <Link href={href('', '', community)} className="agi-ds-link">
                   Clear filters
                 </Link>
               </Prose>
