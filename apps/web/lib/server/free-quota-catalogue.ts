@@ -212,20 +212,44 @@ function allowanceLeft(decision: FreeQuotaDecision): number {
   return decision.status === 'ready' ? decision.usable - decision.used : 0;
 }
 
-function expiringCapacityFirst(
+function endingSoonerFirst(
   left: FreeQuotaOfferingDecision,
   right: FreeQuotaOfferingDecision,
 ): number {
   const leftEnds = freeQuotaEndsOn(left.entry, left.offering);
   const rightEnds = freeQuotaEndsOn(right.entry, right.offering);
-  if (leftEnds !== rightEnds) {
-    if (leftEnds === null) return 1;
-    if (rightEnds === null) return -1;
-    return leftEnds < rightEnds ? -1 : 1;
-  }
+  if (leftEnds === rightEnds) return 0;
+  if (leftEnds === null) return 1;
+  if (rightEnds === null) return -1;
+  return leftEnds < rightEnds ? -1 : 1;
+}
+
+function expiringCapacityFirst(
+  left: FreeQuotaOfferingDecision,
+  right: FreeQuotaOfferingDecision,
+): number {
   return (
+    endingSoonerFirst(left, right) ||
     allowanceLeft(right.decision) - allowanceLeft(left.decision) ||
     left.entry.offeringKey.localeCompare(right.entry.offeringKey)
+  );
+}
+
+export function freeQuotaChatUseOrder(
+  offerings: readonly FreeQuotaOfferingDecision[],
+  ranking: readonly string[],
+): FreeQuotaOfferingDecision[] {
+  const rank = new Map(ranking.map((key, index) => [key, index]));
+  const rankOf = (candidate: FreeQuotaOfferingDecision) =>
+    rank.get(candidate.entry.offeringKey) ?? ranking.length;
+  const thinks = (candidate: FreeQuotaOfferingDecision) =>
+    Number(candidate.offering.quotaThinkingRequired === true);
+  return [...offerings].sort(
+    (left, right) =>
+      endingSoonerFirst(left, right) ||
+      rankOf(left) - rankOf(right) ||
+      thinks(left) - thinks(right) ||
+      left.entry.offeringKey.localeCompare(right.entry.offeringKey),
   );
 }
 
@@ -256,17 +280,20 @@ export async function resolveReadyFreeQuotaOffering(
     needsImageInput: boolean;
     excludeKey?: string;
     ranking?: readonly string[];
+    spendExpiringFirst?: boolean;
   },
 ): Promise<string | null> {
   const decisions = await resolveFreeQuotaDecisions(context, { inventory: input.inventory });
   if (!decisions) return null;
-  const candidates = input.ranking
-    ? input.ranking.flatMap((key) =>
-        decisions.offerings.filter(({ entry }) => entry.offeringKey === key),
-      )
-    : isFreeMediaCategory(input.category)
-      ? [...decisions.offerings].sort(expiringCapacityFirst)
-      : decisions.offerings;
+  const candidates = input.spendExpiringFirst
+    ? freeQuotaChatUseOrder(decisions.offerings, input.ranking ?? [])
+    : input.ranking
+      ? input.ranking.flatMap((key) =>
+          decisions.offerings.filter(({ entry }) => entry.offeringKey === key),
+        )
+      : isFreeMediaCategory(input.category)
+        ? [...decisions.offerings].sort(expiringCapacityFirst)
+        : decisions.offerings;
   const ready = candidates.find(
     ({ entry, offering, decision }) =>
       entry.offeringKey !== input.excludeKey &&
@@ -300,18 +327,20 @@ export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuot
     evidenceUrl: inventory.evidenceUrl,
     reportedEligible: inventory.reportedEligible,
     reportedUnavailable: inventory.reportedUnavailable,
-    models: decisions.offerings.map(({ entry, offering, decision }) => ({
-      key: entry.offeringKey,
-      displayName: offering.displayName,
-      providerModelId: offering.providerModelId,
-      category: offering.category,
-      limit: entry.limit,
-      unit: entry.unit,
-      consumedApproximate: entry.consumedApproximate,
-      expiresOn: freeQuotaEndsOn(entry, offering),
-      status: decision.status,
-      ...(getProviderOfferingMediaOutput(offering, policy.videoSeconds) ?? {}),
-    })),
+    models: [...decisions.offerings]
+      .sort(endingSoonerFirst)
+      .map(({ entry, offering, decision }) => ({
+        key: entry.offeringKey,
+        displayName: offering.displayName,
+        providerModelId: offering.providerModelId,
+        category: offering.category,
+        limit: entry.limit,
+        unit: entry.unit,
+        consumedApproximate: entry.consumedApproximate,
+        expiresOn: freeQuotaEndsOn(entry, offering),
+        status: decision.status,
+        ...(getProviderOfferingMediaOutput(offering, policy.videoSeconds) ?? {}),
+      })),
     mediaUseOrder: freeQuotaMediaUseOrder(decisions),
   };
 }
