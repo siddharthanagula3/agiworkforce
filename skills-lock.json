@@ -476,6 +476,14 @@
       "declaredVersion": "2.0.0",
       "computedHash": "sha256-tree-v1:cf381d9a6dbbdd611a60ef68f4851b7416375cf7b7e9559e98364f910c12578b"
     },
+    "pdf-creation": {
+      "path": ".agents/skills/pdf-creation",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:9a65a7cfc6a33583357ee1c9e531acdcb7cf3234a9594985e5eea31ac095fbe2"
+    },
     "pick-ui-library": {
       "path": ".agents/skills/pick-ui-library",
       "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/pick-ui-library)",
@@ -667,6 +675,14 @@
       "audience": "product",
       "declaredVersion": "2.2.0",
       "computedHash": "sha256-tree-v1:7d45aa851b5a5743c02e5b2a5f73f48df623c91973cc4d21591267274e50d3a4"
+    },
+    "spreadsheet-creation": {
+      "path": ".agents/skills/spreadsheet-creation",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:d9da3b5961ac69a93f599c01d965acca37a5daf9a5bd36d81bfee2399de54a8f"
     },
     "systematic-debugging": {
       "path": ".agents/skills/systematic-debugging",

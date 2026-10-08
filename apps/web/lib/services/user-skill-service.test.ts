@@ -10,7 +10,7 @@ import {
   toUserSkillSummary,
   updateUserSkill,
 } from './user-skill-service';
-import { USER_SKILL_AUTHORING_ENV_VAR } from './user-skill-authoring';
+import { USER_SKILL_AUTHORING_ENV_VAR, USER_SKILL_AUTHORING_OFF } from './user-skill-authoring';
 
 interface FakeDb {
   query: ReturnType<typeof vi.fn>;
@@ -149,7 +149,7 @@ describe('user skill service', () => {
 
 describe('user skill service when authoring is disabled', () => {
   beforeEach(() => {
-    delete process.env[USER_SKILL_AUTHORING_ENV_VAR];
+    process.env[USER_SKILL_AUTHORING_ENV_VAR] = USER_SKILL_AUTHORING_OFF;
   });
 
   it('lists nothing without touching the database', async () => {

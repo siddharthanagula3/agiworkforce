@@ -193,33 +193,26 @@ Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:293-293`
 ## S10.24: Skill import.
 
 - Done when: An import dialog takes a skill file or package and adds a usable skill.
-- Wave: 2
-- Already works on: cli
+- Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S10.25: Skill edit.
 
 - Done when: An edit dialog changes a skill's name, description and instructions and saves them.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S10.26: Model incompatibility warning.
 

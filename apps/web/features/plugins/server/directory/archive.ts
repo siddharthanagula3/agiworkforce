@@ -207,6 +207,12 @@ export function commonRootPrefix(paths: readonly string[]): string {
 }
 
 async function readMembers(archive: Uint8Array): Promise<Map<string, ArchiveMember>> {
+  return (await readArchive(archive)).members;
+}
+
+async function readArchive(
+  archive: Uint8Array,
+): Promise<{ members: Map<string, ArchiveMember>; root: string }> {
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(archive);
@@ -254,7 +260,7 @@ async function readMembers(archive: Uint8Array): Promise<Map<string, ArchiveMemb
       read: () => readBounded(file, relative, budget),
     });
   }
-  return members;
+  return { members, root };
 }
 
 async function readText(member: ArchiveMember): Promise<string> {
@@ -636,6 +642,7 @@ function lastSegmentPath(declaredSkill: string): string {
 
 export interface UploadedSingleSkill {
   path: string;
+  archivePath: string;
   content: string;
   files: UploadedSkillFile[];
   omittedFiles: string[];
@@ -644,7 +651,7 @@ export interface UploadedSingleSkill {
 export async function readSingleSkillFromArchive(
   archive: Uint8Array,
 ): Promise<UploadedSingleSkill> {
-  const members = await readMembers(archive);
+  const { members, root } = await readArchive(archive);
   const paths = [...members.keys()]
     .filter((path) => path === CLAUDE_SKILL_FILE_NAME || path.endsWith(SKILL_FILE_SUFFIX))
     .sort();
@@ -655,6 +662,7 @@ export async function readSingleSkillFromArchive(
   const companions = await readCompanionFiles(members, path);
   return {
     path,
+    archivePath: `${root}${path}`,
     content: await readText(members.get(path)!),
     files: companions.files.map((file) => ({
       path: file.path.slice(prefix.length),

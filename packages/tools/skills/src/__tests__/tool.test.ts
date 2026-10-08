@@ -6,6 +6,7 @@ import {
   executeSkillTool,
   executeSkillToolWithFiles,
   formatSkillsForToolPrompt,
+  skillCatalogEntryLength,
   SKILL_FILE_INVENTORY_LIMIT,
 } from '../tool';
 import type { SkillToolFileAccess } from '../tool';
@@ -474,4 +475,14 @@ it('refuses malformed MCP names without ambiguous delimiter matching', () => {
       },
     ).isError,
   ).not.toBe(true);
+});
+
+describe('skillCatalogEntryLength', () => {
+  it('counts exactly the characters one skill adds to the rendered catalog', () => {
+    const one = skill({ name: 'alpha', description: 'First & <one>.' });
+    const two = skill({ name: 'beta', description: 'Second\nline.' });
+    expect(formatSkillsForToolPrompt([one, two]).length).toBe(
+      formatSkillsForToolPrompt([one]).length + skillCatalogEntryLength(two),
+    );
+  });
 });

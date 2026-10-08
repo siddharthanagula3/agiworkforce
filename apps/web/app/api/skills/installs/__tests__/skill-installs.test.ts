@@ -28,7 +28,7 @@ vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
 }));
 
 interface FakeDb {
-  query: () => Promise<Array<{ settings: Record<string, unknown> }>>;
+  query: (sql: string) => Promise<Array<{ settings: Record<string, unknown> }>>;
   execute: (sql: string, params?: unknown[]) => Promise<number>;
   transaction: <T>(fn: (tx: FakeDb) => Promise<T>) => Promise<T>;
 }
@@ -36,7 +36,9 @@ interface FakeDb {
 function fakeDb(initialSettings: Record<string, unknown> = {}): FakeDb {
   let stored: Record<string, unknown> | null =
     Object.keys(initialSettings).length > 0 ? initialSettings : null;
-  const query = vi.fn(async () => (stored ? [{ settings: stored }] : []));
+  const query = vi.fn(async (sql: string) =>
+    stored && !sql.includes('user_skills') ? [{ settings: stored }] : [],
+  );
   const execute = vi.fn(async (_sql: string, params?: unknown[]) => {
     stored = JSON.parse(params?.[1] as string) as Record<string, unknown>;
     return 1;

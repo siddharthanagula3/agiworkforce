@@ -1,6 +1,19 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { buildSkillMarkdown, parseSkillDraftFromMarkdown, validateSkillDraft } from '../validation';
+import { parseFrontmatter } from '../frontmatter';
+import {
+  buildSkillMarkdown,
+  parseSkillDraftFromMarkdown,
+  parseUploadedSkillDraft,
+  SKILL_DRAFT_DESCRIPTION_MAX_LENGTH,
+  unexpectedSkillFrontmatterKeys,
+  validateSkillDraft,
+} from '../validation';
+
+const BUNDLED_SKILLS_ROOT = resolve(__dirname, '../../../../../.agents/skills');
 
 const VALID_DRAFT = {
   name: 'release-notes',
@@ -128,5 +141,87 @@ describe('parseSkillDraftFromMarkdown', () => {
     expect(result).toMatchObject({
       errors: [expect.stringContaining('instructions are required')],
     });
+  });
+});
+
+describe('description limit', () => {
+  it('accepts the 1,024 characters the Agent Skills specification allows', () => {
+    expect(SKILL_DRAFT_DESCRIPTION_MAX_LENGTH).toBe(1024);
+    expect(validateSkillDraft({ ...VALID_DRAFT, description: 'a'.repeat(1024) }).ok).toBe(true);
+  });
+
+  it('refuses one character more', () => {
+    const result = validateSkillDraft({ ...VALID_DRAFT, description: 'a'.repeat(1025) });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain('Description must be 1024 characters or fewer.');
+  });
+});
+
+describe('parseUploadedSkillDraft', () => {
+  const source = (extra: string[]) =>
+    [
+      '---',
+      'name: release-notes',
+      'description: Draft release notes.',
+      ...extra,
+      '---',
+      '',
+      'Step one.',
+    ].join('\n');
+
+  it('accepts the keys Claude accepts on upload', () => {
+    const result = parseUploadedSkillDraft(
+      source([
+        'license: MIT',
+        'compatibility: Requires Python 3',
+        'metadata:',
+        '  author: someone',
+        'allowed-tools: Read',
+      ]),
+    );
+    expect(result).toEqual({
+      ok: true,
+      draft: { name: 'release-notes', description: 'Draft release notes.', body: 'Step one.' },
+    });
+  });
+
+  it('names every unexpected key and the keys that are allowed', () => {
+    const result = parseUploadedSkillDraft(source(['when_to_use: always', 'model: fast']));
+    expect(result).toEqual({
+      ok: false,
+      errors: [
+        'Unexpected key(s) in SKILL.md frontmatter: when_to_use, model. Allowed keys are name, description, license, compatibility, metadata, allowed-tools.',
+      ],
+    });
+  });
+
+  it('reports an unexpected key alongside the field errors', () => {
+    const result = parseUploadedSkillDraft(
+      ['---', 'name: Release Notes', 'description: x', 'paths: src', '---', '', 'Body.'].join('\n'),
+    );
+    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({
+      errors: [
+        expect.stringContaining('Unexpected key(s) in SKILL.md frontmatter: paths.'),
+        expect.stringContaining('lowercase letters'),
+      ],
+    });
+  });
+
+  it('accepts every frontmatter key a bundled skill carries, so a downloaded skill uploads again', () => {
+    const unexpected = readdirSync(BUNDLED_SKILLS_ROOT, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => {
+        let text: string;
+        try {
+          text = readFileSync(join(BUNDLED_SKILLS_ROOT, entry.name, 'SKILL.md'), 'utf-8');
+        } catch {
+          return [];
+        }
+        return unexpectedSkillFrontmatterKeys(parseFrontmatter(text).data).map(
+          (key) => `${entry.name}: ${key}`,
+        );
+      });
+    expect(unexpected).toEqual([]);
   });
 });
