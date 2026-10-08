@@ -2,8 +2,14 @@ jest.mock('@/services/docParser', () => ({
   isParseableDocument: () => true,
 }));
 
+jest.mock('@agiworkforce/types', () => {
+  const actual = jest.requireActual<TypesModule>('@agiworkforce/types');
+  return { ...actual, getModelMetadataById: jest.fn(actual.getModelMetadataById) };
+});
+
 import {
   getHarnessMediaInput,
+  getModelMetadataById,
   getRegistryRoute,
   listChatModels,
   listManagedRoutesForModel,
@@ -12,6 +18,11 @@ import {
   imageLimitRefusal,
   maxImagesPerMessage,
 } from '@/src/features/chat/utils/attachmentValidation';
+
+type TypesModule = typeof import('@agiworkforce/types');
+
+const readMetadata = jest.requireActual<TypesModule>('@agiworkforce/types').getModelMetadataById;
+const metadataById = jest.mocked(getModelMetadataById);
 
 const IMAGE = { mimeType: 'image/png' };
 const DOCUMENT = { mimeType: 'application/pdf' };
@@ -22,21 +33,42 @@ function defaultRouteLimit(modelId: string): number | undefined {
   return harnessId ? getHarnessMediaInput(harnessId).maxImagesPerRequest : undefined;
 }
 
+function modelLimitedByItsRoute() {
+  return listChatModels().find(
+    (candidate) =>
+      candidate.imageInput?.maxImagesPerRequest === undefined &&
+      defaultRouteLimit(candidate.id) !== undefined,
+  );
+}
+
+afterEach(() => {
+  metadataById.mockImplementation(readMetadata);
+});
+
 describe('maxImagesPerMessage', () => {
   it('uses a model override before its route limit', () => {
-    const model = listChatModels().find(
-      (candidate) => candidate.imageInput?.maxImagesPerRequest !== undefined,
-    );
+    const model = modelLimitedByItsRoute();
     expect(model).toBeDefined();
-    expect(maxImagesPerMessage(model!.id)).toBe(model!.imageInput!.maxImagesPerRequest);
+    const override = defaultRouteLimit(model!.id)! + 1;
+    metadataById.mockImplementation((id) => {
+      const metadata = readMetadata(id);
+      return metadata && id === model!.id
+        ? { ...metadata, imageInput: { maxImagesPerRequest: override } }
+        : metadata;
+    });
+
+    expect(maxImagesPerMessage(model!.id)).toBe(override);
+  });
+
+  it('reads every override the catalogue carries', () => {
+    for (const model of listChatModels()) {
+      const override = model.imageInput?.maxImagesPerRequest;
+      if (override !== undefined) expect(maxImagesPerMessage(model.id)).toBe(override);
+    }
   });
 
   it("reads the limit of the model's default managed route", () => {
-    const model = listChatModels().find(
-      (candidate) =>
-        candidate.imageInput?.maxImagesPerRequest === undefined &&
-        defaultRouteLimit(candidate.id) !== undefined,
-    );
+    const model = modelLimitedByItsRoute();
     expect(model).toBeDefined();
     expect(maxImagesPerMessage(model!.id)).toBe(defaultRouteLimit(model!.id));
   });
@@ -47,10 +79,8 @@ describe('maxImagesPerMessage', () => {
 });
 
 describe('imageLimitRefusal', () => {
-  const model = listChatModels().find(
-    (candidate) => candidate.imageInput?.maxImagesPerRequest !== undefined,
-  )!;
-  const limit = model.imageInput!.maxImagesPerRequest!;
+  const model = listChatModels().find((candidate) => maxImagesPerMessage(candidate.id) !== null)!;
+  const limit = maxImagesPerMessage(model.id)!;
 
   it('lets a message at the limit through and counts documents separately', () => {
     const attachments = [...Array.from({ length: limit }, () => IMAGE), DOCUMENT, DOCUMENT];
