@@ -13,15 +13,19 @@ import {
 } from '@agiworkforce/agent-core';
 import { logger } from '@/lib/logger';
 import {
+  DELETED_MEMORY_ASSIGNMENTS,
   MemoryIneligibleError,
   activeMemoryPredicate,
   loadMemoryExclusions,
+  loadProjectMemoryScope,
   matchedMemoryExclusion,
+  memoryScopePredicate,
   memoryWriteAdmission,
   workspaceMemoryPredicate,
   writeConsolidatedMemory,
   type ManagedMemoryContextDb,
   type MemoryIneligibilityReason,
+  type MemoryScope,
 } from '@/lib/services/managed-memory-context-service';
 import { excludedMemoryMessage } from '@/lib/services/memory-write-service';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -76,6 +80,15 @@ export function createMemoryCommandPorts(
   db: ManagedMemoryContextDb,
   scope: MemoryCommandScope,
 ): ExplicitMemoryPorts {
+  let visibleScope: Promise<MemoryScope> | null = null;
+  const visibleMemories = async (values: unknown[]): Promise<string> => {
+    visibleScope ??= loadProjectMemoryScope(db, {
+      userId: scope.userId,
+      projectId: scope.projectId ?? null,
+    });
+    const resolved = await visibleScope;
+    return memoryScopePredicate(resolved, resolved.projectId ? values.push(resolved.projectId) : 0);
+  };
   return {
     /**
      * The same gate an extracted fact passes, plus the never-remember list.
@@ -128,38 +141,51 @@ export function createMemoryCommandPorts(
     find: async (subject) => {
       const trimmed = subject.trim();
       if (trimmed.length < MIN_FORGET_SUBJECT_CHARS) return [];
+      const values: unknown[] = [scope.userId, likePattern(trimmed), scope.organizationId];
+      const visible = await visibleMemories(values);
       return db.query<MemoryCommandMatch>(
         `select id::text as id, content
            from user_memories
           where user_id = $1
             and ${activeMemoryPredicate()}
             and ${workspaceMemoryPredicate(3)}
-            and (project_id is null or project_id = $4::uuid)
+            ${visible}
             and content ilike $2 escape '\\'
           order by pinned desc, updated_at desc
           limit ${MAX_FORGET_MATCHES}`,
-        [scope.userId, likePattern(trimmed), scope.organizationId, scope.projectId ?? null],
+        values,
       );
     },
 
     /**
-     * Soft delete, exactly as the Settings endpoint does: the row leaves every
-     * read immediately because `activeMemoryPredicate` filters it, and
-     * `sweepExpiredMemories` clears the content on expiry. That window is the
-     * only audit retention there is, and it is the same one for both paths.
+     * The text is read before it is cleared so the reply can name what was
+     * forgotten; the stored row keeps no copy of it.
      */
     remove: async (ids) => {
       if (ids.length === 0) return [];
+      const values: unknown[] = [scope.userId, ids, scope.organizationId];
+      const visible = await visibleMemories(values);
       return db.query<MemoryCommandMatch>(
-        `update user_memories
-            set is_deleted = true, updated_at = now()
-          where user_id = $1
-            and id = any($2::uuid[])
-            and is_deleted = false
-            and ${workspaceMemoryPredicate(3)}
-            and (project_id is null or project_id = $4::uuid)
-        returning id::text as id, content`,
-        [scope.userId, ids, scope.organizationId, scope.projectId ?? null],
+        `with target as (
+           select id, content
+             from user_memories
+            where user_id = $1
+              and id = any($2::uuid[])
+              and is_deleted = false
+              and ${workspaceMemoryPredicate(3)}
+              ${visible}
+              for update
+         ), purged as (
+           update user_memories as memory
+              set ${DELETED_MEMORY_ASSIGNMENTS}
+             from target
+            where memory.user_id = $1 and memory.id = target.id
+           returning memory.id
+         )
+         select target.id::text as id, target.content
+           from target
+           join purged on purged.id = target.id`,
+        values,
       );
     },
   };

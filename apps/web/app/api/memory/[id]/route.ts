@@ -15,6 +15,7 @@ import {
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 import {
+  DELETED_MEMORY_ASSIGNMENTS,
   memoryWriteAdmission,
   parseMemoryExpiry,
   unexpiredMemoryPredicate,
@@ -157,7 +158,7 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
   try {
     await db.execute(
       `update user_memories
-       set is_deleted = true, updated_at = now()
+       set ${DELETED_MEMORY_ASSIGNMENTS}
        where id = $1 and user_id = $2 and is_deleted = false
          and ${workspaceMemoryPredicate(3)}`,
       [id, userId, organizationId ?? null],

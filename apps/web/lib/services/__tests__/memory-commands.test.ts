@@ -29,6 +29,8 @@ vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) 
 const { runMemoryCommand } = await import('../memory-commands');
 
 const SCOPE = { userId: 'user-1', organizationId: null };
+const OWN_MEMORY_PROJECT = '0190a000-0000-7000-8000-0000000000e1';
+const PROJECT = '0190a000-0000-7000-8000-0000000000e2';
 
 function db(rows: Record<string, unknown[]> = {}) {
   const query = vi.fn(async (sql: string) => {
@@ -40,6 +42,7 @@ function db(rows: Record<string, unknown[]> = {}) {
         rows['policy'] ?? [{ allow_memory: true, retention_days: null, retention_enforced: false }]
       );
     }
+    if (sql.includes('from user_projects')) return rows['project'] ?? [];
     if (sql.includes('update user_memories')) return rows['remove'] ?? [];
     if (sql.includes('select id::text as id, content')) return rows['find'] ?? [];
     return [];
@@ -122,7 +125,7 @@ describe('runMemoryCommand', () => {
     ).toBe(false);
   });
 
-  it('soft deletes on confirmation and reports exactly what went', async () => {
+  it('deletes on confirmation, keeps no copy of the text, and reports exactly what went', async () => {
     const removed = [{ id: 'm1', content: 'User lives in Berlin' }];
     const connection = db({ find: removed, remove: removed });
 
@@ -137,8 +140,58 @@ describe('runMemoryCommand', () => {
     const [sql, params] = connection.query.mock.calls.find(([text]) =>
       String(text).includes('update user_memories'),
     ) as [string, unknown[]];
-    expect(sql).toContain('is_deleted = true');
+    const assignments = /update user_memories as memory\s+set([\s\S]*?)\bfrom target\b/.exec(
+      sql,
+    )?.[1];
+    expect(assignments).toMatch(/\bis_deleted = true\b/);
+    expect(assignments).toMatch(/\bcontent = ''/);
+    expect(assignments).toMatch(/\bcategory = null\b/);
+    expect(assignments).toMatch(/\bimport_key = null\b/);
+    expect(sql).toMatch(/select target\.id::text as id, target\.content\s+from target/);
     expect(params[1]).toEqual(['m1']);
+  });
+
+  it('forgets only what the chat can see: a project kept to its own memories never touches account ones', async () => {
+    const removed = [{ id: 'm1', content: 'User takes a daily walk' }];
+    const connection = db({
+      project: [{ uses_global_memory: false }],
+      find: removed,
+      remove: removed,
+    });
+
+    await runMemoryCommand(
+      connection,
+      { ...SCOPE, projectId: OWN_MEMORY_PROJECT },
+      { message: 'Forget what I told you about walking', confirmed: true },
+    );
+
+    const memoryCalls = connection.query.mock.calls.filter(([text]) =>
+      String(text).includes('from user_memories'),
+    ) as Array<[string, unknown[]]>;
+    expect(memoryCalls).toHaveLength(2);
+    for (const [sql, params] of memoryCalls) {
+      expect(sql).toContain('project_id = $4::uuid');
+      expect(sql).not.toContain('project_id is null');
+      expect(params[3]).toBe(OWN_MEMORY_PROJECT);
+    }
+  });
+
+  it('forgets account and project memories alike in an ordinary project chat', async () => {
+    const connection = db({
+      project: [{ uses_global_memory: true }],
+      find: [{ id: 'm1', content: 'User lives in Berlin' }],
+    });
+
+    await runMemoryCommand(
+      connection,
+      { ...SCOPE, projectId: PROJECT },
+      { message: 'Forget what I told you about Berlin' },
+    );
+
+    const [sql] = connection.query.mock.calls.find(([text]) =>
+      String(text).includes('from user_memories'),
+    ) as [string, unknown[]];
+    expect(sql).toContain('(project_id is null or project_id = $4::uuid)');
   });
 
   it('says nothing was stored rather than claiming a deletion', async () => {

@@ -1,7 +1,9 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { fenceUntrustedContent } from '@agiworkforce/utils';
 import { resolvePromptText } from '@/lib/prompts/prompt-registry';
+import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
@@ -35,6 +37,8 @@ export interface LiveVoiceContextBundle {
   projectBrief: string | null;
   /** The full project block the text turn assembles, knowledge passages included. */
   projectPrompt: string | null;
+  /** Name, about-you, response style and instructions, as a text chat receives them. */
+  personalizationPrompt: string | null;
   memoryPrompt: string | null;
 }
 
@@ -44,8 +48,11 @@ export const EMPTY_LIVE_VOICE_CONTEXT: LiveVoiceContextBundle = {
   turns: [],
   projectBrief: null,
   projectPrompt: null,
+  personalizationPrompt: null,
   memoryPrompt: null,
 };
+
+type LiveVoiceContextSource = 'transcript' | 'project' | 'personalization' | 'memory';
 
 interface ConversationRow {
   id: string;
@@ -155,16 +162,43 @@ function renderProjectBrief(context: {
  * failing the session: a voice call that cannot start is worse than one that
  * starts without the project brief, and the caller logs what was lost.
  */
+async function loadLiveVoicePersonalization(
+  db: DatabaseAdapter,
+  params: {
+    userId: string;
+    projectId: string | null;
+    onSourceFailure: ((source: LiveVoiceContextSource, error: unknown) => void) | undefined;
+  },
+): Promise<string | null> {
+  try {
+    return await buildCustomInstructionsPreamble(db, params.userId, {
+      projectId: params.projectId,
+    });
+  } catch (error) {
+    params.onSourceFailure?.('personalization', error);
+    return null;
+  }
+}
+
 export async function loadLiveVoiceContext(
-  db: ManagedMemoryContextDb,
+  db: DatabaseAdapter,
   params: {
     userId: string;
     conversationId: string | null;
     organizationId?: string | null;
-    onSourceFailure?: (source: 'transcript' | 'project' | 'memory', error: unknown) => void;
+    onSourceFailure?: (source: LiveVoiceContextSource, error: unknown) => void;
   },
 ): Promise<LiveVoiceContextBundle> {
-  if (!params.conversationId) return EMPTY_LIVE_VOICE_CONTEXT;
+  if (!params.conversationId) {
+    return {
+      ...EMPTY_LIVE_VOICE_CONTEXT,
+      personalizationPrompt: await loadLiveVoicePersonalization(db, {
+        userId: params.userId,
+        projectId: null,
+        onSourceFailure: params.onSourceFailure,
+      }),
+    };
+  }
 
   const [conversation] = await db.query<ConversationRow>(
     `select id, project_id, is_temporary, active_leaf_message_id
@@ -180,6 +214,13 @@ export async function loadLiveVoiceContext(
 
   const isTemporary = conversation.is_temporary === true;
   const projectId = conversation.project_id;
+  const personalizationLoad = isTemporary
+    ? Promise.resolve(null)
+    : loadLiveVoicePersonalization(db, {
+        userId: params.userId,
+        projectId,
+        onSourceFailure: params.onSourceFailure,
+      });
 
   const turns = await loadLiveVoiceTranscript(db, {
     conversationId: conversation.id,
@@ -242,6 +283,7 @@ export async function loadLiveVoiceContext(
     turns,
     projectBrief,
     projectPrompt,
+    personalizationPrompt: await personalizationLoad,
     memoryPrompt,
   };
 }
@@ -282,6 +324,7 @@ export function buildLiveVoiceInstructions(
       base,
       options.toolNotice ?? null,
       formatLiveVoiceLanguage(options.language ?? null),
+      bundle.personalizationPrompt,
       bundle.memoryPrompt,
       bundle.projectBrief,
       formatLiveVoiceTranscript(bundle.turns),
@@ -299,6 +342,7 @@ export function buildLiveVoiceBackendInstructions(
     [
       base,
       options.toolNotice ?? null,
+      bundle.personalizationPrompt,
       bundle.memoryPrompt,
       bundle.projectPrompt,
       formatLiveVoiceTranscript(bundle.turns),

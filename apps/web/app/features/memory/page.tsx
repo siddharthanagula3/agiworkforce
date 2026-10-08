@@ -36,7 +36,7 @@ const ORIGINS = [
   {
     meta: 'A chat produces it',
     title: 'Scanned from a finished turn',
-    body: 'With Memory and Generate from past chats both on, first-person statements are rewritten in the third person before being offered to the list.',
+    body: 'With Memory and Save memories from chats both on, first-person statements are rewritten in the third person before being offered to the list.',
   },
   {
     meta: 'You import it',

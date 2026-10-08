@@ -95,7 +95,7 @@ describe('ReflectSection', () => {
         {
           error: {
             code: 'memory_required',
-            message: 'Turn on Memory and Generate from past chats to view Reflect.',
+            message: 'Turn on Memory and Save memories from chats to view Reflect.',
           },
         },
         409,

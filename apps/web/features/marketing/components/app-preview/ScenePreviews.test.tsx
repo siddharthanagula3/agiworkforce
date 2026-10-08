@@ -462,13 +462,13 @@ describe('memory settings', () => {
     expect(text(controls, '.agi-scene-helplink')).toBe('How memory works');
     expect(texts(controls, '.agi-scene-setting-title')).toEqual([
       'Persistent memory',
-      'Generate from past chats',
+      'Save memories from chats',
       'Search past chats',
       'Allow memory generation from tool-assisted chats',
     ]);
     expect(texts(controls, '.agi-scene-setting-note')).toEqual([
       'Allow AGI to remember details across conversations',
-      'Use conversation history to generate better responses',
+      'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
       'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
       'Create memories from chats that use tools, connectors, code, or web search',
     ]);
@@ -512,8 +512,8 @@ describe('memory settings', () => {
       'Import memories',
       'Manage memories',
       'Clear all memories',
-      "'Generate from past chats',",
-      "'Use conversation history to generate better responses',",
+      "'Save memories from chats',",
+      "'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',",
       "'Search past chats',",
       "'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',",
       "'Allow memory generation from tool-assisted chats',",

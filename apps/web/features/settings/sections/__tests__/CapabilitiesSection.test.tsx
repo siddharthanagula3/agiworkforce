@@ -42,7 +42,7 @@ describe('CapabilitiesSection', () => {
     render(<CapabilitiesSection />);
 
     expect(screen.queryByRole('switch', { name: 'Memory' })).toBeNull();
-    expect(screen.queryByRole('switch', { name: 'Generate from past chats' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Save memories from chats' })).toBeNull();
     expect(screen.queryByRole('switch', { name: 'Search past chats' })).toBeNull();
   });
 

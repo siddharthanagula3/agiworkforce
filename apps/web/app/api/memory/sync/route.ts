@@ -223,8 +223,9 @@ async function handlePost(request: NextRequest) {
               from jsonb_array_elements($2::jsonb) as source(item)
           ), updated as (
             update user_memories as existing
-               set content = incoming.content,
-                   category = incoming.category,
+               set content = case when incoming.should_delete then '' else incoming.content end,
+                   category = case when incoming.should_delete then null else incoming.category end,
+                   import_key = case when incoming.should_delete then null else existing.import_key end,
                    source = incoming.source,
                    pinned = case when incoming.has_pinned then incoming.pinned else existing.pinned end,
                    is_deleted = incoming.should_delete,
@@ -240,8 +241,10 @@ async function handlePost(request: NextRequest) {
             insert into user_memories
               (id, user_id, content, category, source, pinned, is_deleted, organization_id,
                created_at, updated_at)
-            select incoming.id, $1, incoming.content, incoming.category, incoming.source,
-                   incoming.pinned, incoming.should_delete, $3::uuid, now(), now()
+            select incoming.id, $1,
+                   case when incoming.should_delete then '' else incoming.content end,
+                   case when incoming.should_delete then null else incoming.category end,
+                   incoming.source, incoming.pinned, incoming.should_delete, $3::uuid, now(), now()
               from input as incoming
              where incoming.base_version = 0
             on conflict (user_id, id) do nothing

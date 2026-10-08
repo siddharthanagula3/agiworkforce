@@ -119,6 +119,28 @@ describe('POST /api/memory/commands', () => {
     );
   });
 
+  it('keeps what a Health chat remembers inside Health, whatever project the client names', async () => {
+    const healthSpaceId = '0190a000-0000-7000-8000-0000000000e1';
+    mocks.query.mockImplementation(async (...args: unknown[]) =>
+      String(args[0]).includes('space_kind') ? [{ health_space_id: healthSpaceId }] : [],
+    );
+    mocks.runMemoryCommand.mockResolvedValue(null);
+
+    await POST(
+      postRequest({
+        message: 'Remember that I walk every morning',
+        conversationId: '0190a000-0000-7000-8000-0000000000c1',
+        projectId: '0190a000-0000-7000-8000-0000000000e2',
+      }),
+    );
+
+    expect(mocks.runMemoryCommand).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ projectId: healthSpaceId }),
+      expect.anything(),
+    );
+  });
+
   it('refuses a cross-site command before reading anything', async () => {
     mocks.csrf.mockResolvedValue(NextResponse.json({ error: 'csrf' }, { status: 403 }));
     const response = await POST(postRequest({ message: 'Forget about Berlin', confirmed: true }));

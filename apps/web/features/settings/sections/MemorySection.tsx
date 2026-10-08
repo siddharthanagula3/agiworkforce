@@ -60,7 +60,7 @@ function memoryRow(title: string, description: string, control: ReactNode) {
     >
       <div>
         <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: 0 }}>{title}</p>
-        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
           {description}
         </p>
       </div>
@@ -303,10 +303,10 @@ export function MemorySection() {
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         {memoryRow(
-          'Generate from past chats',
-          'Use conversation history to generate better responses',
+          'Save memories from chats',
+          'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
           <Switch
-            aria-label="Generate from past chats"
+            aria-label="Save memories from chats"
             checked={settings.generateFromHistory}
             disabled={togglesDisabled || !settings.memory}
             onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
