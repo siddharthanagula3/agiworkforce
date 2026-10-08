@@ -2178,10 +2178,10 @@ describe('ChatComposerNew', () => {
   describe('Create video', () => {
     const MAX_15X_SUBSCRIPTION: SubscriptionPlan = {
       tier: 'max_15x',
-      display_name: 'Max 15x',
+      display_name: 'Max 20x',
       status: 'active',
       current_period_end: null,
-      plan_name: 'Max 15x',
+      plan_name: 'Max 20x',
     };
 
     it('offers Create video to an entitled tier and routes the prompt to onGenerateVideo', async () => {

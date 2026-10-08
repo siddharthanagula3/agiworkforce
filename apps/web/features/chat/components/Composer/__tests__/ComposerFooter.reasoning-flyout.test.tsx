@@ -267,7 +267,7 @@ vi.mock('@features/chat/lib/use-model-catalogue', () => ({
     entries: CATALOGUE_ENTRIES,
     developers: [{ key: 'openai', label: 'openai', admittedCount: 1, totalCount: 1 }],
     count: CATALOGUE_ENTRIES.length,
-    planLabel: 'Max 15x',
+    planLabel: 'Max 20x',
   }),
 }));
 

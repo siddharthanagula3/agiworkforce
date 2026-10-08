@@ -361,7 +361,7 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Image')).toBeNull();
     });
 
-    it('hides Video below Max 15x', () => {
+    it('hides Video below Max 20x', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
 

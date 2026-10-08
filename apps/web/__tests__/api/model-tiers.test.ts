@@ -117,7 +117,7 @@ describe('every plan a customer can actually buy', () => {
     for (const model of MAX_MODELS) expect(canAccessModel(model, 'team')).toBe(false);
   });
 
-  it('gives Max 15x everything Max has, under the name billing stores', () => {
+  it('gives Max 20x everything Max has, under the name billing stores', () => {
     for (const model of EVERY_MODEL) {
       expect(canAccessModel(model, 'max_15x')).toBe(canAccessModel(model, 'max'));
     }

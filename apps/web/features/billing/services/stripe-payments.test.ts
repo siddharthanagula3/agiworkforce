@@ -58,7 +58,7 @@ describe('stripe payments', () => {
     await expect(fetchSavedPaymentMethods()).resolves.toEqual([]);
   });
 
-  it('starts Max 15x checkout with the canonical tier id', async () => {
+  it('starts Max 20x checkout with the canonical tier id', async () => {
     const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({ url: 'https://checkout.example/max-15x' }),

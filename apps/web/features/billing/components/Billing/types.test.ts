@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizePlan, normalizeStatus } from './types';
 
 describe('billing value normalization', () => {
-  it('preserves Team and Max 15x subscription tiers', () => {
+  it('preserves Team and Max 20x subscription tiers', () => {
     expect(normalizePlan('team')).toBe('team');
     expect(normalizePlan('max_15x')).toBe('max_15x');
   });

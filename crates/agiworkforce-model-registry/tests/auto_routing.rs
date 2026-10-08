@@ -219,7 +219,7 @@ fn treats_max_15x_as_max_for_auto_routing() {
     .expect("generated registry should load");
 
     let AutoRouteDecision::Selected(max_15x) = max_15x else {
-        panic!("expected Max 15x to select its Max-class route");
+        panic!("expected Max 20x to select its Max-class route");
     };
     let AutoRouteDecision::Selected(max) = max else {
         panic!("expected Max to select its route");
