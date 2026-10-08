@@ -339,7 +339,7 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     expect(response.status).toBe(501);
     expect(await response.json()).toMatchObject({
       connectorId: 'local-filesystem',
-      error: expect.stringContaining('released CLI'),
+      error: expect.stringContaining('Connect it from the CLI'),
     });
     expect(mocks.query).not.toHaveBeenCalled();
   });

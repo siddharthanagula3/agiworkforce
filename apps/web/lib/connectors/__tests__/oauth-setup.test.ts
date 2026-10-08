@@ -124,12 +124,12 @@ describe('describeConnectorSetup', () => {
     });
   });
 
-  it('names the released CLI for a device-local connector, not a missing credential', () => {
+  it('names the CLI for a device-local connector, not a missing credential', () => {
     expect(describeConnectorSetup('local-filesystem', 'Local Filesystem')).toMatchObject({
       kind: 'device-local',
       missingEnv: [],
       message:
-        'Local Filesystem runs on your own machine, so connect it from the released CLI rather than from the browser. The current public Desktop reports no local MCP capability.',
+        'Local Filesystem runs on your own machine, so connect it from the CLI rather than from the browser. The current public Desktop reports no local MCP capability.',
     });
   });
 

@@ -110,15 +110,15 @@ export const RUNTIME_NOTE_COWORK_ONLY =
 export const RUNTIME_NOTE_SOURCE_UNKNOWN =
   'This plugin is not listed in a marketplace manifest we can read, so install it from the CLI with the command shown.';
 export const RUNTIME_NOTE_NOT_INSPECTED =
-  'This plugin has not been inspected yet, so install it from the released CLI.';
+  'This plugin has not been inspected yet, so install it from the CLI.';
 export const RUNTIME_NOTE_HOOKS =
-  'This plugin runs CLI hooks the web app cannot execute, so install it from the released CLI.';
+  'This plugin runs CLI hooks the web app cannot execute, so install it from the CLI.';
 export const RUNTIME_NOTE_LSP =
-  'This plugin starts a language server the web app cannot run, so install it from the released CLI.';
+  'This plugin starts a language server the web app cannot run, so install it from the CLI.';
 export const RUNTIME_NOTE_STDIO_MCP =
-  'This plugin starts a local MCP server process the web app cannot run, so install it from the released CLI.';
+  'This plugin starts a local MCP server process the web app cannot run, so install it from the CLI.';
 export const RUNTIME_NOTE_NO_SKILLS =
-  'This plugin ships only agents for the CLI and no skills or commands the web app can load, so install it from the released CLI.';
+  'This plugin ships only agents for the CLI and no skills or commands the web app can load, so install it from the CLI.';
 
 export const INSTALLS_DISABLED_MESSAGE = 'Plugin installs are not enabled on this deployment yet';
 export const MARKETPLACE_UNAVAILABLE_MESSAGE =
