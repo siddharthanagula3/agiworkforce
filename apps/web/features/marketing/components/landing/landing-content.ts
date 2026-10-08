@@ -327,12 +327,12 @@ export const ROUTES = {
 
 export const MODELS_SECTION = {
   title: 'Every model. One composer.',
-  lede: `Pick any of ${CATALOG_SCOPES.catalogueEntries.text} by name and that model answers, nothing substitutes behind your back. Or leave it on Auto and the router takes the lowest-cost route whose terms allow it, counting prompt-cache hits before it decides.`,
+  lede: `Pick any of ${CATALOG_SCOPES.catalogueEntries.text} by name and that model answers, nothing substitutes behind your back. Or leave it on Auto and the router picks a model suited to the task and your plan, weighing cost before it decides.`,
   points: [
     { title: 'Exact means exact', body: 'Ask for a model by name and that model answers.' },
     {
-      title: 'Auto is priced before it routes',
-      body: 'The router weighs cost, terms and cache hits, then names its choice on the receipt.',
+      title: 'Auto weighs cost before it routes',
+      body: 'The router weighs the task, your plan and cost, then names its choice on the receipt.',
     },
     {
       title: `${CATALOG_SCOPES.byokProviders.text} and ${CATALOG_SCOPES.localRuntimes.text}`,

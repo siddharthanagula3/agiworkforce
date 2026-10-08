@@ -3,13 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import {
+  AuthSceneBridgeProvider,
+  createSceneStore,
+  SCENE_CHARACTERS,
+  SCENE_MOTION,
+  type SceneStore,
+} from '@agiworkforce/ui/auth-scene';
+
 import { AuthCodeStep } from '../AuthCodeStep';
 import { AuthEmailStep } from '../AuthEmailStep';
 import { AuthLayout } from '../AuthLayout';
 import { AuthPasswordStep } from '../AuthPasswordStep';
-import { AuthSceneBridgeProvider } from '../scene/AuthSceneContext';
-import { SCENE_CHARACTERS, SCENE_MOTION } from '../scene/sceneConfig';
-import { createSceneStore, type SceneStore } from '../scene/sceneStore';
 
 const EMAIL = 'person@example.com';
 const SECRET = 'correct horse';

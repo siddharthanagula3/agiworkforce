@@ -139,7 +139,7 @@ describe('POST /api/upgrade, stale plan_tier vs the live Stripe price', () => {
 
   it('refuses a downgrade that the stale DB tier would have read as an upgrade', async () => {
     // always_invoice would return the difference as customer balance rather than
-    // a refund, leaving someone who had just paid the full jump to Max 15x
+    // a refund, leaving someone who had just paid the full jump to Max 20x
     // sitting on Pro with the money stuck as credit.
     const response = await POST(
       request({

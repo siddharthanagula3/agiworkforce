@@ -2,10 +2,9 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 
 import { AuthField } from './AuthField';
+import { AUTH_FIELD_TOGGLE_CLASS } from './authStyles';
 
-const TOGGLE_CLASS =
-  'absolute right-2 top-2 flex size-9 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary';
-const TOGGLE_ICON_SIZE = 16;
+const TOGGLE_ICON_SIZE = 18;
 
 export function AuthPasswordField({
   label,
@@ -29,6 +28,7 @@ export function AuthPasswordField({
     <AuthField
       label={label}
       type={revealed ? 'text' : 'password'}
+      sensitive={revealed ? 'readable' : 'masked'}
       value={value}
       error={error ?? null}
       disabled={disabled}
@@ -38,7 +38,7 @@ export function AuthPasswordField({
       trailing={
         <button
           type="button"
-          className={TOGGLE_CLASS}
+          className={AUTH_FIELD_TOGGLE_CLASS}
           onClick={() => setRevealed((current) => !current)}
           aria-label={revealed ? 'Hide password' : 'Show password'}
         >

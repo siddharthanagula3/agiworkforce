@@ -149,7 +149,7 @@ describe('public billing truth', () => {
           `${locale}/pricing.json ${key} states a usage multiple the catalog computes`,
         ).not.toMatch(/five times|cinco veces|pro-level|nivel pro|\d+x/i);
       }
-      expect(pricing['maxVariant15x']).toBe(`${topPlanOverPro?.fiveHour}x`);
+      expect(pricing['maxVariant20x']).toBe(`${topPlanOverPro?.fiveHour}x`);
       expect(pricing['compareSubheading']).toContain('{{topPlan}}');
       expect(pricing['compareSubheading']).not.toMatch(/Max \d+x/i);
       for (const key of [

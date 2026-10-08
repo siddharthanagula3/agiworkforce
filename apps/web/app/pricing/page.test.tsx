@@ -2,7 +2,6 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
-import { freeMediaLastDayLabel } from '@/features/models/lib/free-media-offer';
 import { SURFACE_NAMES, SURFACE_STATUS } from '@/lib/surface-status';
 
 const testState = vi.hoisted(() => ({
@@ -106,9 +105,6 @@ vi.mock('react-i18next', async (importOriginal) => {
         }
         if (key === 'compareTableHint') {
           return `${String(values?.['plans'])} plans across ${String(values?.['capabilities'])} capabilities`;
-        }
-        if (key.startsWith('freeMediaLine') && values?.['date']) {
-          return `${key} ${String(values['date'])}`;
         }
         return key;
       },
@@ -418,7 +414,7 @@ describe('PricingPage', () => {
     expect(card.getByText('perSeatPricingSub')).toBeVisible();
     expect(card.getByText('billedYearly')).toBeVisible();
     expect(card.getByText('$20').closest('.agi-tier-price')!.textContent).toBe(
-      '$20 perSeatPricingSub billedYearly',
+      '$20 perSeatPricingSub billedYearly annualSave',
     );
     expect(card.getByText('Seats: 2 · $480/yr')).toBeVisible();
     expect(card.queryByText('$240')).toBeNull();
@@ -857,7 +853,7 @@ describe('PricingPage', () => {
       expect(screen.queryByText(/^freeMedia/)).toBeNull();
     });
 
-    it('says Limited preview for plans without the capability, with the latest last day and its zone, while it runs', async () => {
+    it('says Limited preview for plans without the capability while it runs, with no line under the page title', async () => {
       mockFreeMediaOffer({ image: { lastDay: '2026-10-20' }, video: { lastDay: '2026-11-04' } });
       render(<PricingPage />);
 
@@ -868,10 +864,7 @@ describe('PricingPage', () => {
       expect(mediaCells(/^Pro/)).toEqual(['Yes', 'Limited preview']);
       expect(mediaCells(/^Team/)).toEqual(['Yes', 'Limited preview']);
       expect(mediaCells(/^Max 20x/)).toEqual(['Yes', 'Yes']);
-      expect(
-        screen.getByText(`freeMediaLineBoth ${freeMediaLastDayLabel('2026-11-04')}`),
-      ).toBeVisible();
-      expect(screen.getByText(/^freeMediaLineBoth /)).toHaveTextContent(/ \(UTC\)$/);
+      expect(screen.queryByText(/^freeMediaLine/)).toBeNull();
       const freeCard = within(screen.getByRole('heading', { name: 'Free' }).closest('article')!);
       expect(freeCard.getByText('freeMediaFeatureBoth')).toBeVisible();
     });
@@ -882,9 +875,7 @@ describe('PricingPage', () => {
 
       await waitFor(() => expect(mediaCells(/^Free/)).toEqual(['Limited preview', 'No']));
       expect(mediaCells(/^Pro/)).toEqual(['Yes', 'No']);
-      expect(
-        screen.getByText(`freeMediaLineImage ${freeMediaLastDayLabel('2026-10-20')}`),
-      ).toBeVisible();
+      expect(screen.queryByText(/^freeMediaLine/)).toBeNull();
       expect(screen.getByText('freeMediaFeatureImage')).toBeVisible();
     });
 

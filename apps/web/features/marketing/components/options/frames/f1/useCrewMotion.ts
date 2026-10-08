@@ -3,19 +3,17 @@
 import { useEffect, type RefObject } from 'react';
 
 import {
-  SCENE_BASELINE,
-  SCENE_CHARACTERS,
-  SCENE_MOTION,
-  type SceneCharacter,
-} from '@/features/auth/scene/sceneConfig';
-import {
   approach,
   clamp,
   clampRadius,
   leanToward,
-  skewAbout,
   type Point,
-} from '@/features/auth/scene/sceneMath';
+  SCENE_BASELINE,
+  SCENE_CHARACTERS,
+  SCENE_MOTION,
+  type SceneCharacter,
+  skewAbout,
+} from '@agiworkforce/ui/auth-scene';
 
 import { CREW_BEATS } from './crewGeometry';
 

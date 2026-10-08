@@ -573,7 +573,7 @@ describe('resolveEffectiveModelPricing', () => {
 });
 
 describe('model catalog helpers', () => {
-  it('keeps Max 15x on the Max model-access roster', () => {
+  it('keeps Max 20x on the Max model-access roster', () => {
     expect(normalizeSubscriptionAccessTier('max_15x')).toBe('max');
   });
 

@@ -317,7 +317,7 @@ export function LandingNext() {
           <RouteFlow
             eyebrow="Routing"
             title="Every model. One router. Your call."
-            lede="Ask for a model by name and that model answers. Leave it on Auto and the router reads the intent of each request, takes the cheapest route that fits it, and prints the label under the answer."
+            lede="Ask for a model by name and that model answers. Leave it on Auto and the router reads each request, picks a model suited to the task and your plan while weighing cost, and prints the label under the answer."
           />
         </div>
 

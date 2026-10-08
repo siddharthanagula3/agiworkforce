@@ -3,11 +3,13 @@
 import { useCompletedSignUpForCurrentSession, useSession } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Spinner } from '@agiworkforce/ui';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { AuthProgress } from '@/features/auth/AuthProgress';
+import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
+import { AUTH_MUTED_LINE_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 import { useMarketingEmailGrant } from '@/features/auth/marketingEmailChoice';
 import {
   carriedChoiceMustBeAskedAgain,
@@ -15,6 +17,8 @@ import {
   hasCurrentTermsGateMarker,
   readCarriedMarketingEmailChoice,
 } from '../signupAttemptMarkers';
+
+const RECORD_TIMEOUT_MS = 20_000;
 
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
@@ -24,7 +28,11 @@ export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string })
     router.replace(redirectTo);
   }, [redirectTo, router]);
 
-  return <p role="status">Finishing signing in…</p>;
+  return (
+    <AuthStepFrame heading="Finishing signing in">
+      <AuthProgress label="Taking you to your workspace" />
+    </AuthStepFrame>
+  );
 }
 
 export function RecordTermsAcceptance({
@@ -50,6 +58,7 @@ export function RecordTermsAcceptance({
       const response = await fetch('/api/terms/accept', {
         method: 'POST',
         credentials: 'include',
+        signal: AbortSignal.timeout(RECORD_TIMEOUT_MS),
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           surface,
@@ -106,18 +115,15 @@ export function RecordTermsAcceptance({
 
   if (failure === 'outdated') {
     return (
-      <div
-        className="flex flex-col items-center gap-4 text-center"
-        data-testid="terms-version-outdated"
-      >
-        <p className="text-sm text-foreground">
+      <div className="flex flex-col" data-testid="terms-version-outdated">
+        <p className={AUTH_MUTED_LINE_CLASS}>
           The policies changed after this page loaded. Reload to review and accept the current
           version.
         </p>
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className={AUTH_PRIMARY_BUTTON_CLASS}
         >
           Reload and review current policies
         </button>
@@ -127,18 +133,11 @@ export function RecordTermsAcceptance({
 
   if (failure === 'retryable') {
     return (
-      <div
-        className="flex flex-col items-center gap-4 text-center"
-        data-testid="terms-record-failed"
-      >
-        <p className="text-sm text-foreground">
+      <div className="flex flex-col" data-testid="terms-record-failed">
+        <p className={AUTH_MUTED_LINE_CLASS} role="alert">
           We could not record your agreement to the terms. Try again to continue.
         </p>
-        <button
-          type="button"
-          onClick={() => void record()}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
+        <button type="button" onClick={() => void record()} className={AUTH_PRIMARY_BUTTON_CLASS}>
           Try again
         </button>
       </div>
@@ -146,11 +145,8 @@ export function RecordTermsAcceptance({
   }
 
   return (
-    <div className="flex flex-col items-center gap-4" role="status" aria-live="polite">
-      <Spinner size="lg" className="text-primary" aria-hidden="true" />
-      <p className="text-sm text-muted-foreground">
-        {surface === 'web-login' ? 'Finishing signing in…' : 'Finishing setting up your account…'}
-      </p>
-    </div>
+    <AuthProgress
+      label={surface === 'web-login' ? 'Finishing signing in' : 'Finishing setting up your account'}
+    />
   );
 }

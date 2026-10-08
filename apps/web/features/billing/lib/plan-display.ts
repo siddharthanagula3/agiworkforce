@@ -42,16 +42,6 @@ export function planCreditWindows(plan: string | null | undefined): PlanCreditWi
   return { fiveHour: allowance.fiveHour, weekly: allowance.weekly, monthly: allowance.monthly };
 }
 
-export function formatPlanCreditWindows(plan: string | null | undefined): string | null {
-  const windows = planCreditWindows(plan);
-  if (!windows) return null;
-  return [
-    `${formatCredits(windows.fiveHour)} per 5 hours`,
-    `${formatCredits(windows.weekly)} a week`,
-    `${formatCredits(windows.monthly)} a month`,
-  ].join(' · ');
-}
-
 export function planUsageComparisonLabel(plan: string | null | undefined): string | null {
   const tier = normalizeBillingPlanTier(plan);
   const baseline = MANAGED_USAGE_BASELINES[tier];

@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 
-import { AUTH_BODY_CLASS, AUTH_HEADING_CLASS, AUTH_MUTED_LINE_CLASS } from './authStyles';
+import {
+  AUTH_BODY_CLASS,
+  AUTH_HEADING_CLASS,
+  AUTH_MUTED_LINE_CLASS,
+  AUTH_TAIL_CLASS,
+  AUTH_TAIL_RULE_CLASS,
+} from './authStyles';
 
 export function AuthStepFrame({
   heading,
@@ -14,11 +20,15 @@ export function AuthStepFrame({
   footer?: ReactNode;
 }) {
   return (
-    <div className="flex w-full flex-col">
+    <div className="flex w-full flex-1 flex-col">
       <h1 className={AUTH_HEADING_CLASS}>{heading}</h1>
       {detail ? <div className={`mt-3 ${AUTH_MUTED_LINE_CLASS}`}>{detail}</div> : null}
       <div className={AUTH_BODY_CLASS}>{children}</div>
-      {footer}
+      {footer ? (
+        <div className={AUTH_TAIL_CLASS}>
+          <div className={AUTH_TAIL_RULE_CLASS}>{footer}</div>
+        </div>
+      ) : null}
     </div>
   );
 }

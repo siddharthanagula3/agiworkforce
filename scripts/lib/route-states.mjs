@@ -16,7 +16,7 @@ const STATE_RULES = [
     id: 'loading',
     signals: [
       /\bis(?:Loading|Pending|Fetching|Validating|Refetching)\b/,
-      /<(?:Spinner|Skeleton|LoadingButton|Progress)\b/,
+      /<(?:Spinner|Skeleton|LoadingButton|Progress|AuthProgress)\b/,
       /\baria-busy\b/,
       /\bloadingState\b/,
       /(?:\bkind|(?<![\w$.])(?:state|status))\s*===\s*'(?:loading|checking|working)'/,

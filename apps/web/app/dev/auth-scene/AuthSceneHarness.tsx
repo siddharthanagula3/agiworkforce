@@ -2,7 +2,10 @@
 
 import { useEffect } from 'react';
 
+import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+
 import { TermsGate } from '@/app/signup/TermsGate';
+import { AccountPolicyLinks } from '@/features/auth/AccountDataDisclosure';
 import { AuthCodeStep } from '@/features/auth/AuthCodeStep';
 import { AuthEmailStep } from '@/features/auth/AuthEmailStep';
 import { AuthNewPasswordStep } from '@/features/auth/AuthNewPasswordStep';
@@ -15,7 +18,6 @@ import type {
   AuthPhase,
   AuthProvider,
 } from '@/features/auth/authContract';
-import { useAuthSceneBridge } from '@/features/auth/scene/AuthSceneContext';
 
 export type HarnessStep = 'email' | 'password' | 'code' | 'new_password' | 'terms';
 export type HarnessState = 'idle' | 'pending' | 'error' | 'success';
@@ -24,7 +26,7 @@ export type HarnessErrorField = 'email' | 'password';
 const PROBE_EMAIL = 'person@example.invalid';
 const PROBE_ERROR = 'The email and password do not match an account.';
 const TERMS_HEADING = 'Finish signing in';
-const TERMS_DETAIL = 'Review and accept our terms to continue to your account.';
+const TERMS_DETAIL = 'Review the details below to continue.';
 const TERMS_CONFIRMATION = 'Continue';
 
 const none = () => undefined;
@@ -62,7 +64,11 @@ export function AuthSceneHarness({
 
   if (step === 'terms') {
     return (
-      <AuthStepFrame heading={TERMS_HEADING} detail={<p>{TERMS_DETAIL}</p>}>
+      <AuthStepFrame
+        heading={TERMS_HEADING}
+        detail={<p>{TERMS_DETAIL}</p>}
+        footer={<AccountPolicyLinks />}
+      >
         <TermsGate
           restorePreAuthMarker={false}
           confirmationLabel={TERMS_CONFIRMATION}

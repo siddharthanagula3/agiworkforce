@@ -208,7 +208,7 @@ describe('InlinePaywallCard', () => {
       expect(screen.queryByText('Upgrade to Max 20x', { exact: false })).toBeNull();
     });
 
-    // QA-037: a Max 15x subscriber whose credit account had no allocation read
+    // QA-037: a Max 20x subscriber whose credit account had no allocation read
     // as "budget exhausted", and the card answered with "Upgrade to Basic.
     // $7/mo". The card is handed the current tier; it must use it.
     it('never offers a tier the subscriber already holds', () => {

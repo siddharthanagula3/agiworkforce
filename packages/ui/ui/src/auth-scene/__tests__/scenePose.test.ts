@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { SCENE_BASELINE, SCENE_CHARACTERS, SCENE_MOTION, SCENE_SHAPE } from '../scene/sceneConfig';
-import { columnPath, leanShift, skewAbout, spineAt } from '../scene/sceneMath';
-import { aim, looksAwayFromForm, poseName, restingPose, type SceneCue } from '../scene/scenePose';
+import { SCENE_BASELINE, SCENE_CHARACTERS, SCENE_MOTION, SCENE_SHAPE } from '../sceneConfig';
+import { columnPath, leanShift, skewAbout, spineAt } from '../sceneMath';
+import { aim, looksAwayFromForm, poseName, restingPose, type SceneCue } from '../scenePose';
 
 const TOWARD_THE_FORM = { x: 900, y: 200 };
 const FAR_SIDE_AND_BELOW = { x: -300, y: 430 };

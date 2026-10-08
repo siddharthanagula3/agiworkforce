@@ -1,0 +1,347 @@
+[data-auth-column] .auth-char {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: auth-char-enter-purple var(--auth-scene-arrive) var(--curve-reveal) both;
+}
+
+[data-auth-column] .auth-char-black {
+  animation-name: auth-char-enter-black;
+  animation-delay: var(--auth-scene-arrive-stagger);
+}
+
+[data-auth-column] .auth-char-orange {
+  animation-name: auth-char-enter-orange;
+  animation-delay: calc(var(--auth-scene-arrive-stagger) * 2);
+}
+
+[data-auth-column] .auth-char-yellow {
+  animation-name: auth-char-enter-yellow;
+  animation-delay: calc(var(--auth-scene-arrive-stagger) * 3);
+}
+
+@keyframes auth-char-enter-purple {
+  0% {
+    transform: translate(-30%, -70%) rotate(-26deg) scale(0.9, 1.16);
+  }
+  58% {
+    transform: translate(0, 0) rotate(0deg) scale(1.06, 0.9);
+  }
+  78% {
+    transform: scale(0.98, 1.03);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes auth-char-enter-black {
+  0% {
+    transform: translate(55%, -60%) rotate(24deg) scale(0.9, 1.14);
+  }
+  58% {
+    transform: translate(0, 0) rotate(0deg) scale(1.08, 0.9);
+  }
+  78% {
+    transform: scale(0.98, 1.03);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes auth-char-enter-orange {
+  0% {
+    transform: translate(-40%, 35%) rotate(-14deg) scale(0.72, 1.3);
+  }
+  55% {
+    transform: translate(0, 0) rotate(0deg) scale(1.14, 0.84);
+  }
+  78% {
+    transform: scale(0.96, 1.05);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes auth-char-enter-yellow {
+  0% {
+    transform: translate(70%, -45%) rotate(34deg) scale(0.9, 1.14);
+  }
+  58% {
+    transform: translate(0, 0) rotate(0deg) scale(1.08, 0.88);
+  }
+  78% {
+    transform: scale(0.98, 1.04);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+[data-auth-column] .auth-hop {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-hop {
+  animation: auth-char-hop var(--duration-moved) var(--curve-spring) both;
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-char-black .auth-hop {
+  animation-delay: calc(var(--auth-scene-stagger) / 2);
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-char-orange .auth-hop {
+  animation-delay: var(--auth-scene-stagger);
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-char-yellow .auth-hop {
+  animation-delay: calc(var(--auth-scene-stagger) * 1.5);
+}
+
+@keyframes auth-char-hop {
+  50% {
+    transform: translateY(calc(-1 * var(--auth-scene-hop)));
+  }
+}
+
+[data-auth-column] .auth-breath {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+[data-auth-column] .auth-char-purple .auth-breath {
+  animation: auth-breath var(--auth-scene-breath) var(--auth-scene-breath-curve) infinite alternate;
+}
+
+[data-auth-column] .auth-char-yellow .auth-breath {
+  animation: auth-breath var(--auth-scene-breath) var(--auth-scene-breath-curve)
+    var(--auth-scene-breath-offset) infinite alternate;
+}
+
+@keyframes auth-breath {
+  to {
+    transform: scaleY(1.005);
+  }
+}
+
+[data-auth-column] .auth-char-purple .auth-body {
+  fill: var(--auth-scene-purple);
+}
+
+[data-auth-column] .auth-char-black .auth-body {
+  fill: var(--auth-scene-black);
+}
+
+[data-auth-column] .auth-char-orange .auth-body {
+  fill: var(--auth-scene-orange);
+}
+
+[data-auth-column] .auth-char-yellow .auth-body {
+  fill: var(--auth-scene-yellow);
+}
+
+[data-auth-column] .auth-eye-white {
+  fill: var(--auth-scene-eye);
+}
+
+[data-auth-column] .auth-pupil {
+  fill: var(--auth-scene-face);
+}
+
+[data-auth-column] .auth-eye-lid {
+  fill: none;
+  stroke: var(--auth-scene-face);
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0;
+  transition: opacity var(--duration-quick) var(--curve-standard);
+}
+
+[data-auth-column] .auth-char-black .auth-eye-lid {
+  stroke: var(--auth-scene-eye);
+}
+
+[data-auth-column] .auth-eye-open {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--duration-quick) var(--curve-standard);
+}
+
+[data-auth-column] .auth-brow {
+  fill: var(--auth-scene-black);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    opacity var(--duration-quick) var(--curve-standard),
+    transform var(--duration-quick) var(--curve-standard);
+}
+
+[data-auth-column] .auth-scene[data-lean-in='true'] .auth-char[data-pose='watch'] .auth-brow {
+  opacity: 1;
+  transform: translateY(5px) rotate(-14deg);
+}
+
+[data-auth-column] .auth-char[data-blink='closed'] .auth-eye-open {
+  transform: scaleY(0.04);
+}
+
+[data-auth-column] .auth-char[data-blink='closed'] .auth-eye-lid {
+  opacity: 1;
+}
+
+/* Looking away: every eye shuts the instant a secret becomes readable, with no
+   transition to cross, and reopens only for a character the motion loop has
+   marked as turned from the form. The one whose gesture is shut eyes never
+   reopens while it is readable, and under reduced motion none does. */
+[data-auth-column] .auth-char[data-pose='away']:not([data-turned='true']) .auth-eye-open,
+[data-auth-column] .auth-char[data-pose='away'][data-gesture='shut'] .auth-eye-open {
+  transform: scaleY(0.04);
+  transition-duration: 0s;
+}
+
+[data-auth-column] .auth-char[data-pose='away']:not([data-turned='true']) .auth-eye-lid,
+[data-auth-column] .auth-char[data-pose='away'][data-gesture='shut'] .auth-eye-lid {
+  opacity: 1;
+  transition-duration: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-auth-column] .auth-char {
+    animation-delay: 0s;
+  }
+
+  [data-auth-column] .auth-char[data-pose='away'] .auth-eye-open {
+    transform: scaleY(0.04);
+  }
+
+  [data-auth-column] .auth-char[data-pose='away'] .auth-eye-lid {
+    opacity: 1;
+  }
+}
+
+:root[data-motion='reduced'] [data-auth-column] .auth-char {
+  animation-delay: 0s;
+}
+
+:root[data-motion='reduced'] [data-auth-column] .auth-char[data-pose='away'] .auth-eye-open {
+  transform: scaleY(0.04);
+}
+
+:root[data-motion='reduced'] [data-auth-column] .auth-char[data-pose='away'] .auth-eye-lid {
+  opacity: 1;
+}
+
+[data-auth-column] .auth-mouth {
+  fill: var(--auth-scene-face);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform var(--duration-moved) var(--curve-standard),
+    opacity var(--duration-quick) var(--curve-standard);
+}
+
+[data-auth-column] .auth-mouth-line,
+[data-auth-column] .auth-mouth-wavy,
+[data-auth-column] .auth-mouth-frown {
+  fill: none;
+  stroke: var(--auth-scene-face);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+[data-auth-column] .auth-mouth-line,
+[data-auth-column] .auth-mouth-wavy {
+  transform-origin: left center;
+}
+
+[data-auth-column] .auth-mouth-frown,
+[data-auth-column] .auth-mouth-wavy,
+[data-auth-column] .auth-mouth-dot {
+  opacity: 0;
+}
+
+[data-auth-column] .auth-char[data-pose='attend'] .auth-mouth-dash,
+[data-auth-column] .auth-char[data-pose='watch'] .auth-mouth-dash {
+  transform: translateY(-11px) rotate(90deg) scale(2.3, 1.4);
+}
+
+[data-auth-column] .auth-char[data-pose='attend'] .auth-mouth-smile,
+[data-auth-column] .auth-char[data-pose='watch'] .auth-mouth-smile,
+[data-auth-column] .auth-char[data-pose='away'] .auth-mouth-smile {
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+[data-auth-column] .auth-char[data-pose='attend'] .auth-mouth-dot,
+[data-auth-column] .auth-char[data-pose='watch'] .auth-mouth-dot,
+[data-auth-column] .auth-char[data-pose='away'] .auth-mouth-dot {
+  opacity: 1;
+}
+
+[data-auth-column] .auth-char-purple[data-pose='away'] .auth-mouth-dash {
+  opacity: 0;
+  transition-duration: 0s;
+}
+
+[data-auth-column] .auth-char-purple[data-pose='away'] .auth-mouth-frown {
+  opacity: 1;
+}
+
+[data-auth-column]
+  .auth-scene[data-relief='true']
+  .auth-char:not([data-pose='away'])
+  .auth-mouth-smile {
+  opacity: 1;
+  transform: scale(1.25);
+}
+
+[data-auth-column]
+  .auth-scene[data-relief='true']
+  .auth-char:not([data-pose='away'])
+  .auth-mouth-dot {
+  opacity: 0;
+}
+
+[data-auth-column] .auth-scene[data-mood='pending'] .auth-mouth-smile {
+  transform: scaleY(0.7);
+}
+
+[data-auth-column] .auth-scene[data-mood='pending'] .auth-mouth-dash {
+  transform: scaleY(0.75);
+}
+
+[data-auth-column] .auth-scene[data-mood='pending'] .auth-mouth-line {
+  transform: scaleX(0.9);
+}
+
+[data-auth-column] .auth-scene[data-mood='error'] .auth-mouth-dash,
+[data-auth-column] .auth-scene[data-mood='error'] .auth-mouth-smile,
+[data-auth-column] .auth-scene[data-mood='error'] .auth-mouth-dot,
+[data-auth-column] .auth-scene[data-mood='error'] .auth-mouth-line {
+  opacity: 0;
+}
+
+[data-auth-column] .auth-scene[data-mood='error'] .auth-mouth-frown,
+[data-auth-column] .auth-scene[data-mood='error'] .auth-mouth-wavy {
+  opacity: 1;
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-mouth-smile {
+  opacity: 1;
+  transform: scale(1.3);
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-mouth-dot {
+  opacity: 0;
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-mouth-dash {
+  transform: scale(1.6, 1.3);
+}
+
+[data-auth-column] .auth-scene[data-mood='success'] .auth-mouth-line {
+  transform: rotate(-7deg);
+}

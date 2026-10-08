@@ -28,7 +28,7 @@ describe('price tier mapping', () => {
     vi.resetModules();
   });
 
-  it('maps and validates the Max 15x Stripe price as the canonical tier', async () => {
+  it('maps and validates the Max 20x Stripe price as the canonical tier', async () => {
     process.env['STRIPE_PRICE_MAX_15X_MONTHLY'] = 'price_max_15x_monthly';
     const { getPlanTierFromPriceId, isValidPlanTier } = await import('../price-tier-mapping');
 

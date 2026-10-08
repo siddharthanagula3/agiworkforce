@@ -36,7 +36,7 @@ function projectRealDeviceSession(): void {
     email: null,
     displayName: 'demo',
     plan: 'max_15x',
-    planDisplayName: 'Max 15x',
+    planDisplayName: 'Max 20x',
     subscriptionStatus: 'active',
     subscriptionFetchStatus: 'succeeded',
     accessToken: 'device-bearer',

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SCENE_MOTION } from '../scene/sceneConfig';
-import { createSceneStore } from '../scene/sceneStore';
+import { SCENE_MOTION } from '../sceneConfig';
+import { createSceneStore } from '../sceneStore';
 
 describe('the scene store keeps privacy as an override nothing else can undo', () => {
   beforeEach(() => {

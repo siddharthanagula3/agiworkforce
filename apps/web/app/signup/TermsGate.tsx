@@ -5,7 +5,13 @@ import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { AUTH_OPTIONAL_CONSENT_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
+import {
+  AUTH_CHECKBOX_CLASS,
+  AUTH_CHECK_NOTE_CLASS,
+  AUTH_CHECK_ROW_CLASS,
+  AUTH_OPTIONAL_CONSENT_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+} from '@/features/auth/authStyles';
 import { AccountDataDisclosure } from '@/features/auth/AccountDataDisclosure';
 import { AuthAgeConfirmation } from '@/features/auth/AuthAgeConfirmation';
 import { AuthMarketingEmailConsent } from '@/features/auth/AuthMarketingEmailConsent';
@@ -45,6 +51,7 @@ export function TermsGate({
   const [confirmed, setConfirmed] = useState(false);
   const marketingEmail = useMarketingEmailChoice(optedOutBySignal);
   const checkboxId = useId();
+  const noteId = useId();
   const ready = accepted && (!confirmAge || ageConfirmed);
   const marketingEmailGrant =
     offerMarketingEmail && marketingEmail.wanted ? POLICY_LAST_UPDATED.privacy : null;
@@ -70,51 +77,48 @@ export function TermsGate({
         />
       ) : null}
 
-      <div className="rounded-xl border border-border bg-muted/30 p-4">
-        <label
-          htmlFor={checkboxId}
-          className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-foreground"
-        >
-          <input
-            id={checkboxId}
-            type="checkbox"
-            checked={accepted}
-            disabled={!hydrated || confirmed}
-            onChange={(event) => onToggle(event.target.checked)}
-            className="auth-inline mt-1 h-4 w-4 shrink-0 accent-primary"
-          />
-          <span>
-            I agree to the{' '}
-            <Link
-              href={CANONICAL_POLICY_ROUTES.terms}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="auth-inline rounded-compact underline underline-offset-2"
-            >
-              Terms of Service
-            </Link>
-            , including the arbitration clause and class-action waiver, and acknowledge the{' '}
-            <Link
-              href={CANONICAL_POLICY_ROUTES.privacy}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="auth-inline rounded-compact underline underline-offset-2"
-            >
-              Privacy Policy
-            </Link>
-            .
-          </span>
-        </label>
-        <p className="mt-3 ps-7 text-sm leading-relaxed text-muted-foreground">
-          Version dated {POLICY_LAST_UPDATED.terms}. Your agreement is recorded with your account.
-        </p>
-      </div>
+      <label htmlFor={checkboxId} className={AUTH_CHECK_ROW_CLASS}>
+        <input
+          id={checkboxId}
+          type="checkbox"
+          checked={accepted}
+          disabled={!hydrated || confirmed}
+          aria-describedby={noteId}
+          onChange={(event) => onToggle(event.target.checked)}
+          className={AUTH_CHECKBOX_CLASS}
+        />
+        <span>
+          I agree to the{' '}
+          <Link
+            href={CANONICAL_POLICY_ROUTES.terms}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="auth-inline rounded-compact text-text-primary underline underline-offset-4"
+          >
+            Terms of Service
+          </Link>{' '}
+          and acknowledge the{' '}
+          <Link
+            href={CANONICAL_POLICY_ROUTES.privacy}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="auth-inline rounded-compact text-text-primary underline underline-offset-4"
+          >
+            Privacy Policy
+          </Link>
+          .
+        </span>
+      </label>
+      <p id={noteId} className={AUTH_CHECK_NOTE_CLASS}>
+        Terms include arbitration and a class-action waiver.
+      </p>
 
       {offerMarketingEmail ? (
         <AuthMarketingEmailConsent
           choice={marketingEmail}
           disabled={!hydrated || confirmed}
-          className={`mt-2 ${AUTH_OPTIONAL_CONSENT_CLASS}`}
+          className={AUTH_OPTIONAL_CONSENT_CLASS}
+          optionalTag
         />
       ) : null}
 

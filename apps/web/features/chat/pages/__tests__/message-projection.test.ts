@@ -72,7 +72,7 @@ describe('WebChatPage message projection', () => {
         paywall: {
           feature: 'video_generation',
           requiredTier: 'max_15x',
-          reason: 'Video generation requires Max 15x.',
+          reason: 'Video generation requires Max 20x.',
           recoveryAction: 'upgrade',
           showUpgradeCta: true,
           showResetTime: false,
@@ -195,7 +195,7 @@ describe('WebChatPage account identity', () => {
   });
 
   it('does not call an unknown tier Free once the policy reports ready', () => {
-    // The live regression on 2026-08-17: Basic and Max 15x accounts rendered
+    // The live regression on 2026-08-17: Basic and Max 20x accounts rendered
     // "Free plan" with an Upgrade button. billingPolicyReady was true while the
     // subscription was still null, and the Free fallback filled the gap. The
     // button then started Stripe CHECKOUT rather than the in-app upgrade, and
