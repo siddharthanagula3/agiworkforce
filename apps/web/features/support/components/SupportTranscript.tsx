@@ -39,9 +39,9 @@ export function SupportTranscript({
     >
       {turns.length === 0 ? (
         <p className={styles['intro']}>
-          Ask a question about the product. I answer from the documentation and always show you
-          where the answer came from. If I do not have a source, I will say so and pass you to a
-          person instead of guessing.
+          Ask a question about AGI Workforce. I answer from the help articles and show you where the
+          answer came from. If I do not have a source I say so, and you can send the question to a
+          person. I cannot help with anything other than this product.
         </p>
       ) : null}
 
