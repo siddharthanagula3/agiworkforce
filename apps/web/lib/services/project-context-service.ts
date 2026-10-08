@@ -8,7 +8,10 @@ import {
   type InstructionLayer,
 } from '@agiworkforce/context';
 import type { ContextCandidate, ContextSourceLoader } from '@agiworkforce/context-engine';
-import { PROJECT_INSTRUCTIONS_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import {
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_INSTRUCTIONS_MAX_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 import { MAX_PROJECT_KNOWLEDGE_FILES } from '@agiworkforce/types';
 
 import { fenceContextSource } from '@/app/api/llm/v1/chat/completions/lib/context/context-manifest';
@@ -73,7 +76,6 @@ export interface LoadedProjectContext extends ProjectContext {
   sources: ContextSource[];
 }
 
-const MAX_DESCRIPTION_CHARS = 1_000;
 export const MAX_KNOWLEDGE_FILES = MAX_PROJECT_KNOWLEDGE_FILES;
 const MAX_FILE_SUMMARY_CHARS = 300;
 const MAX_FILE_NAME_CHARS = 200;
@@ -91,7 +93,7 @@ const MAX_TOTAL_SIBLING_CHARS = 16_000;
  * that pushes past it is given up in `projectContextDropOrder`.
  */
 export const MAX_PROJECT_CONTEXT_CHARS =
-  MAX_DESCRIPTION_CHARS +
+  PROJECT_DESCRIPTION_MAX_LENGTH +
   PROJECT_INSTRUCTIONS_MAX_LENGTH +
   MAX_TOTAL_FILE_CONTENT_CHARS +
   MAX_TOTAL_SIBLING_CHARS +
@@ -604,7 +606,7 @@ export function renderProjectContextBlocks(context: ProjectContext): {
 
   if (context.description?.trim()) {
     instructionSections.push(
-      `Project description: ${truncate(context.description.trim(), MAX_DESCRIPTION_CHARS)}`,
+      `Project description: ${truncate(context.description.trim(), PROJECT_DESCRIPTION_MAX_LENGTH)}`,
     );
   }
 

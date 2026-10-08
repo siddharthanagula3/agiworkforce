@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   ManagedCloudProjectUpdateRequestSchema,
+  PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
 } from '@agiworkforce/cloud-contracts';
 
@@ -87,6 +88,20 @@ describe('ProjectSettingsDialog description', () => {
         instructions: 'x'.repeat(PROJECT_INSTRUCTIONS_MAX_LENGTH + 1),
       }).success,
     ).toBe(false);
+  });
+
+  it('stops the description at the length the server accepts and counts toward it', () => {
+    renderDialog();
+
+    expect(screen.getByLabelText('Description')).toHaveAttribute(
+      'maxLength',
+      String(PROJECT_DESCRIPTION_MAX_LENGTH),
+    );
+    expect(
+      screen.getByText(
+        `${'Everything for the September launch.'.length} / ${PROJECT_DESCRIPTION_MAX_LENGTH.toLocaleString()}`,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('shows the saved description and persists an edit', async () => {

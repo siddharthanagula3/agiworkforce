@@ -1640,3 +1640,58 @@ describe('no paid route is reachable from a free quota turn', () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('chats a promotional free model never receives', () => {
+  function conversationHolds(rows: { healthSpace?: boolean; googleData?: boolean }) {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('as health_space_id')) {
+        return rows.healthSpace ? [{ health_space_id: 'health-space' }] : [];
+      }
+      if (sql.includes('google_user_data_at is not null as marked')) {
+        return [{ marked: rows.googleData === true, project_id: null }];
+      }
+      return [{ id: 'conversation', data_region: null }];
+    });
+  }
+
+  it.each([
+    ['a chat in the Health space', { healthSpace: true }],
+    ['a chat holding data from a Google account', { googleData: true }],
+  ])('refuses %s before any model request', async (_label, rows) => {
+    conversationHolds(rows);
+
+    const response = await post();
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toEqual({
+      code: 'free_quota_conversation_excluded',
+      message:
+        'Promotional free models are not used for chats in Health or chats that include data from your Google account. Choose another model. No model request was sent.',
+    });
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.persistUser).not.toHaveBeenCalled();
+  });
+
+  it('refuses when it cannot tell whether the chat holds either', async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('as health_space_id')) throw new Error('connection reset');
+      return [{ id: 'conversation', data_region: null }];
+    });
+
+    const response = await post();
+
+    expect(response.status).toBe(403);
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('serves an ordinary chat', async () => {
+    conversationHolds({});
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+
+    const response = await post();
+    await response.text();
+
+    expect(response.status).toBe(200);
+    expect(mocks.stream).toHaveBeenCalledOnce();
+  });
+});

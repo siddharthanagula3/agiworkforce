@@ -17,6 +17,7 @@ import {
   SettingsSyncPushRequestSchema,
   SettingsSyncPushResponseSchema,
 } from '../sync';
+import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_INSTRUCTIONS_MAX_LENGTH } from '../projects';
 
 const conversationDelta = {
   id: '018f6f2a-0000-7000-8000-000000000001',
@@ -566,5 +567,27 @@ describe('SettingsSync schemas', () => {
     expect(SettingsSyncPushResponseSchema.safeParse({ applied: false, cursor: '13' }).success).toBe(
       true,
     );
+  });
+});
+
+describe('a synced project carries the same text limits as the project editor', () => {
+  const project = (fields: Record<string, string>) =>
+    ProjectsSyncPushRequestSchema.safeParse({
+      projects: [
+        {
+          id: '018f6f2a-0000-7000-8000-0000000000aa',
+          name: 'Launch plan',
+          baseVersion: '0',
+          ...fields,
+        },
+      ],
+    }).success;
+
+  it.each([
+    ['description', PROJECT_DESCRIPTION_MAX_LENGTH],
+    ['instructions', PROJECT_INSTRUCTIONS_MAX_LENGTH],
+  ])('accepts a %s at the limit and refuses one past it', (field, limit) => {
+    expect(project({ [field]: 'x'.repeat(limit) })).toBe(true);
+    expect(project({ [field]: 'x'.repeat(limit + 1) })).toBe(false);
   });
 });
