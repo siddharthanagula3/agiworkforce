@@ -416,7 +416,7 @@ export async function findCustomConnectorRow(
 ): Promise<{ id: string; short_id: string; name: string } | null> {
   try {
     const rows = await db.query<{ id: string; short_id: string; name: string }>(
-      `select id, short_id, name from user_custom_connectors where id = $1 and user_id = $2`,
+      `select id, short_id, name from user_custom_connectors where id = $1 and user_id = $2 and organization_id is null`,
       [rowId, userId],
     );
     return rows[0] ?? null;
