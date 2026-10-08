@@ -30,7 +30,6 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
 import type { LimitedPromotionalMedia } from '@features/chat/hooks/use-promotional-media-models';
-import { freeMediaLimitedLine } from '@/features/models/lib/free-media-offer';
 
 const chatComposerMocks = vi.hoisted(() => ({
   skillResult: {
@@ -2490,7 +2489,7 @@ describe('ChatComposerNew', () => {
       const row = screen.getByText('Create image').closest('button')!;
       expect(row).toHaveTextContent('Limited');
       expect(row).not.toHaveTextContent(/upgrade/i);
-      expect(screen.getByText(freeMediaLimitedLine(TERMS.lastDay))).toBeVisible();
+      expect(screen.queryByText(/Free while our free capacity lasts/)).toBeNull();
 
       fireEvent.click(row);
       expect(onUpgradeRequest).not.toHaveBeenCalled();
@@ -2595,7 +2594,7 @@ describe('ChatComposerNew', () => {
       fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       expect(screen.getByText('Create image').closest('button')).toHaveTextContent('Limited');
       expect(screen.getByText(/^Today's free limit is used\. Resets in /)).toBeVisible();
-      expect(screen.queryByText(freeMediaLimitedLine(TERMS.lastDay))).toBeNull();
+      expect(screen.queryByText(/Free while our free capacity lasts/)).toBeNull();
     });
 
     it('opens video on a paid plan without it and keeps the paid video route out of reach', () => {

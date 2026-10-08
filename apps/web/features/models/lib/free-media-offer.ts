@@ -103,16 +103,6 @@ export function catalogueFreeMediaOffer(
   return readyFreeMediaOffer(catalogue.models, category);
 }
 
-export function freeMediaLastDayLabel(lastDay: string, locale?: string): string {
-  return `${freeQuotaCalendarDay(lastDay, locale)} (${FREE_QUOTA_DAY_ZONE})`;
-}
-
-export function freeMediaLimitedLine(lastDay: string | null, locale?: string): string {
-  return lastDay
-    ? `Free while our free capacity lasts, until ${freeMediaLastDayLabel(lastDay, locale)} at the latest.`
-    : 'Free while our free capacity lasts.';
-}
-
 export function freeMediaTodayLine(
   terms: Pick<FreeQuotaLimitedOffer, 'remainingToday' | 'resetsAt'>,
   nowMs: number = Date.now(),
@@ -165,6 +155,9 @@ export function limitedFreeMedia(
   };
 }
 
-export function freeMediaOfferNote(limited: LimitedFreeMedia, nowMs: number = Date.now()): string {
-  return freeMediaTodayLine(limited, nowMs) ?? freeMediaLimitedLine(limited.lastDay);
+export function freeMediaOfferNote(
+  limited: LimitedFreeMedia,
+  nowMs: number = Date.now(),
+): string | null {
+  return freeMediaTodayLine(limited, nowMs);
 }
