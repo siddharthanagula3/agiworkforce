@@ -65,14 +65,19 @@ export async function listStudySessions(
 
 export async function readStudySessionForConversation(
   db: DatabaseAdapter,
-  userId: string,
+  scope: WorkspaceScope,
   conversationId: string,
 ): Promise<StudySession | null> {
+  const { userId, organizationId } = assertWorkspaceScope(scope);
   const [row] = await db.query<StudySessionRow>(
-    `select ${COLUMNS}
-       from public.study_sessions
-      where user_id = $1 and conversation_id = $2`,
-    [userId, conversationId],
+    `select s.id, s.conversation_id, s.topic, s.mode, s.level, s.started_at, s.ended_at
+       from public.study_sessions s
+       join public.web_conversations c on c.id = s.conversation_id and c.user_id = s.user_id
+      where s.user_id = $1
+        and s.conversation_id = $2
+        and c.organization_id is not distinct from $3::uuid
+        and c.deleted_at is null`,
+    [userId, conversationId, organizationId],
   );
   return row ? present(row) : null;
 }
@@ -100,30 +105,42 @@ export async function readActiveStudyInstruction(
  * with the new topic rather than refusing. The conversation is the session, so
  * a second start is the user changing their mind about what they are studying,
  * not a duplicate.
+ *
+ * The row is only written for a live, non-temporary conversation the caller
+ * owns in the active workspace. `conversation_id` is unique, so a row attached
+ * to someone else's conversation would block its owner from ever starting one;
+ * null means the caller cannot see that conversation.
  */
 export async function startStudySession(
   db: DatabaseAdapter,
+  scope: WorkspaceScope,
   input: {
-    userId: string;
     conversationId: string;
     topic: string;
     mode: StudyMode;
     level: StudyLevel;
   },
-): Promise<StudySession> {
+): Promise<StudySession | null> {
+  const { userId, organizationId } = assertWorkspaceScope(scope);
   const [row] = await db.query<StudySessionRow>(
     `insert into public.study_sessions (user_id, conversation_id, topic, mode, level)
-     values ($1, $2, $3, $4, $5)
+     select c.user_id, c.id, $3, $4, $5
+       from public.web_conversations c
+      where c.id = $2
+        and c.user_id = $1
+        and c.organization_id is not distinct from $6::uuid
+        and c.deleted_at is null
+        and c.is_temporary = false
      on conflict (conversation_id) do update
        set topic = excluded.topic,
            mode = excluded.mode,
            level = excluded.level,
            ended_at = null
+       where public.study_sessions.user_id = excluded.user_id
      returning ${COLUMNS}`,
-    [input.userId, input.conversationId, input.topic, input.mode, input.level],
+    [userId, input.conversationId, input.topic, input.mode, input.level, organizationId],
   );
-  if (!row) throw new Error('The study session was not stored.');
-  return present(row);
+  return row ? present(row) : null;
 }
 
 /** Leaving study mode. The conversation stays, readable in normal chat. */
