@@ -1099,38 +1099,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "grok-4.6": {
-      "identity": {
-        "key": "grok-4.6",
-        "displayName": "Grok 4.6",
-        "provider": "xai",
-        "developer": "xai",
-        "providerModelId": "grok-4.6",
-        "openRouterSlug": "x-ai/grok-4.6",
-        "kind": "reasoning",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["x-ai/grok-4.6"],
-        "family": "grok",
-        "version": "4.6"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "August 12, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-08-12",
-        "deprecatedOn": null,
-        "stage": "evaluated",
-        "stagedOn": "2026-10-07",
-        "stageSource": "tools/evals/measurements/runs/grok-4.6.json",
-        "replacedBy": null
-      },
-      "speed": "fast",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "grok-4.7": {
       "identity": {
         "key": "grok-4.7",
@@ -1154,9 +1122,9 @@
         "deprecated": false,
         "releasedOn": null,
         "deprecatedOn": null,
-        "stage": "evaluated",
+        "stage": "promoted",
         "stagedOn": "2026-10-07",
-        "stageSource": "tools/evals/measurements/runs/grok-4.7.json",
+        "stageSource": "catalog/model-families.json#xai/grok",
         "replacedBy": null
       },
       "speed": "fast",
@@ -13222,7 +13190,7 @@
     ],
     "zhipu": ["glm-5.3", "glm-5.3-flash"],
     "moonshot": ["kimi-k3", "kimi-k2.7-code"],
-    "xai": ["grok-4.6", "grok-4.7"],
+    "xai": ["grok-4.7"],
     "minimax": ["minimax-m3", "minimax-m2.7"],
     "groq": ["gpt-oss-safeguard-20b", "qwen-3.6-27b", "qwen-3.8-27b"]
   },
@@ -15638,98 +15606,6 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 0.95,
         "outputPerMillion": 4
-      }
-    },
-    "xai/grok-4.6": {
-      "modelKey": "grok-4.6",
-      "provider": "xai",
-      "providerModelId": "grok-4.6",
-      "harnessId": "xai/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "unknown",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 6,
-        "cacheReadPerMillion": 0.5,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 200000,
-            "thresholdBoundary": "inclusive",
-            "inputPerMillion": 4,
-            "outputPerMillion": 12,
-            "cacheReadPerMillion": 1
-          }
-        ]
-      }
-    },
-    "open_router/grok-4.6": {
-      "modelKey": "grok-4.6",
-      "provider": "open_router",
-      "providerModelId": "x-ai/grok-4.6",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 6,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "vercel_gateway/grok-4.6": {
-      "modelKey": "grok-4.6",
-      "provider": "vercel_gateway",
-      "providerModelId": "spacexai/grok-4.6",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 6,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "experientiallabs/grok-4.6": {
-      "modelKey": "grok-4.6",
-      "provider": "experientiallabs",
-      "providerModelId": "grok-4.6",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 6,
-        "cacheReadPerMillion": 0.5,
-        "cacheWritePerMillion": 2
       }
     },
     "xai/grok-4.7": {
@@ -25377,30 +25253,6 @@
       "webSearch": false,
       "deepResearch": false,
       "codeExecution": false,
-      "promptCaching": true
-    },
-    "grok-4.6": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": true,
-      "webSearch": true,
-      "deepResearch": true,
-      "codeExecution": true,
       "promptCaching": true
     },
     "grok-4.7": {
@@ -35098,22 +34950,6 @@
       "outputPerMillion": 4,
       "cacheReadPerMillion": 0.19
     },
-    "grok-4.6": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 2,
-      "outputPerMillion": 6,
-      "cacheReadPerMillion": 0.5,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 200000,
-          "thresholdBoundary": "inclusive",
-          "inputPerMillion": 4,
-          "outputPerMillion": 12,
-          "cacheReadPerMillion": 1
-        }
-      ]
-    },
     "grok-4.7": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -38077,7 +37913,6 @@
     "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "kimi-k3": { "contextTokens": 1048576, "maxOutputTokens": 1048576 },
     "kimi-k2.7-code": { "contextTokens": 262144, "maxOutputTokens": 32768 },
-    "grok-4.6": { "contextTokens": 500000, "knowledgeCutoff": "2026-02-01" },
     "grok-4.7": { "contextTokens": 500000, "knowledgeCutoff": "2026-05" },
     "veo-3.1": {
       "contextTokens": 1024,
@@ -38799,7 +38634,6 @@
     "qwen-3.7-plus": {},
     "kimi-k3": {},
     "kimi-k2.7-code": {},
-    "grok-4.6": {},
     "grok-4.7": {},
     "veo-3.1": {},
     "veo-3.1-fast": {},
@@ -39715,6 +39549,13 @@
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the three OpenAI chat slots follow the tier names OpenAI uses from generation 6: the frontier slot now matches the astra name and holds gpt-6-astra, the balanced slot matches sol and holds gpt-6.1-sol, and the fast slot holds gpt-6-luna. The eval gate was not run for any of them: no OpenAI slot has a committed baseline and no run was recorded for these models. The catalog-side gates are recorded on each slot, and one of them fails: gpt-6-astra lists at $10/$50 per million against $4/$20 for gpt-5.6-sol, a 150% rise on both sides against the 25% ceiling, so the frontier slot, the OpenAI default and the flagship_general Auto slot now cost two and a half times what they did. gpt-6.1-sol lists at $2/$10 against $2/$12 for gpt-5.6-terra and gpt-6-luna at $0.10/$0.50 against $0.20/$1.20. gpt-6.1-sol moves from the Max list to the Pro list with the balanced slot it now holds, and its minTier follows; the direct entries for gpt-6-astra, gpt-6.1-sol and gpt-6-luna in tierAllowedModels are dropped because the slots now name them. The openai/gpt-image slot matches the sunburst name and holds gpt-image-2.5-sunburst, the model OpenAI describes as its most capable for generation and editing; gpt-image-2.5-flare stays as a registered row outside the slot. Both 2.5 image rows now declare image input and prompt caching, which their pricing rows (image input and cached input prices) and the edits endpoint already stated; OpenAI publishes no context limit for them, so the slot's 4,000 token minimum is unmet by data and recorded as such on the slot. gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and gpt-image-2 leave through the retire tool into retired-models.json, each naming the model that took its slot, with their route, probe and synced records. The successors carry fewer routes: gpt-6-astra keeps its Experiential Labs and Cheaper Inference routes, gpt-6.1-sol and gpt-6-luna have only the direct OpenAI route, and the OpenRouter and Vercel AI Gateway routes of the 5.6 rows were not copied because nothing read for this change says those gateways serve the new ids. The GPT-6 rows record no ultra, pro or persistent reasoning surface and gpt-6-astra and gpt-6.1-sol do not accept effort none; nothing in product code reads the three surface records. No provider call was made."
+    },
+    {
+      "id": "verification/2026-10-07/79",
+      "date": "2026-10-07",
+      "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the xai/grok slot moves from grok-4.6 to grok-4.7 against the eval gate. The gate was run on 2026-10-07 and refused grok-4.7: it scored 0.818 on the jailbreak corpus against a floor of 1.000, and its p95 latency rose past the 50% tolerance on coding, files and computer use; it scored 1.000 on the other fourteen corpora, where grok-4.6 scored 0.600 on refusal, 0.778 on chat and 0.833 on coding. The slot records the refusal as its promotion reason. Both models list at $2/$6 per million with a 500,000 token context. grok-4.6 leaves through the retire tool into retired-models.json naming grok-4.7, with its route and probe records; its run file and the slot's baseline, which measured it, stay as recorded. No Auto slot names the Grok family, so the model is reached only when picked by name. No provider call was made for this change."
     }
   ],
   "retiredModels": {
@@ -40313,6 +40154,39 @@
       "released": "July 2026",
       "retiredOn": "2026-09-04",
       "metadataSource": "packages/contracts/types/src/models.json@22fa072c3",
+      "metadataPreserved": true
+    },
+    "grok-4.6": {
+      "id": "grok-4.6",
+      "displayName": "Grok 4.6",
+      "provider": "xai",
+      "developer": "xai",
+      "modelType": "reasoning",
+      "contextWindow": 500000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": null,
+      "retiredOn": "2026-10-08",
+      "replacedBy": "grok-4.7",
+      "metadataSource": "catalog/models.curation.json#grok-4.6",
       "metadataPreserved": true
     },
     "groq-llama-3.1-8b": {
@@ -40958,13 +40832,13 @@
       "canonicalFamily": "grok",
       "tier": "frontier",
       "lifecyclePolicy": "stable",
-      "activeModelKey": "grok-4.6",
-      "activeGeneration": "4.6",
+      "activeModelKey": "grok-4.7",
+      "activeGeneration": "4.7",
       "activeLifecycle": "stable",
-      "previousModelKey": "grok-4.5",
+      "previousModelKey": "grok-4.6",
       "fallbackChain": [],
-      "promotedAt": "2026-09-05",
-      "promotionReason": "automatic family upgrade from grok-4.5 to grok-4.6"
+      "promotedAt": "2026-10-07",
+      "promotionReason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day and refused this model: jailbreak 0.818 against a floor of 1.000, and p95 latency past tolerance on coding, files and computer use"
     },
     "zhipu/glm": {
       "provider": "zhipu",
@@ -41608,7 +41482,7 @@
         "glm-5.3",
         "kimi-k3"
       ],
-      "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.6"]
+      "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.7"]
     },
     "release": { "policyVersion": 19 }
   }

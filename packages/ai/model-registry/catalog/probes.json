@@ -122,16 +122,6 @@
       "toolOutcome": "honoured",
       "toolDetail": null
     },
-    "grok-4.6": {
-      "routeId": "xai/grok-4.6",
-      "probedOn": "2026-10-07",
-      "outcome": "answered",
-      "ttfbMs": 1648,
-      "echoedModelId": "grok-4.6",
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
     "grok-4.7": {
       "routeId": "xai/grok-4.7",
       "probedOn": "2026-10-07",

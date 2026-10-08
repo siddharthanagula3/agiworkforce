@@ -960,49 +960,6 @@
         }
       ]
     },
-    "grok-4.6": {
-      "additionalRoutes": [
-        {
-          "provider": "open_router",
-          "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "x-ai/grok-4.6",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 6,
-            "cacheReadPerMillion": 0.5,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "spacexai/grok-4.6",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 6,
-            "cacheReadPerMillion": 0.5,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "experientiallabs",
-          "harnessId": "experientiallabs/chat-completions",
-          "upstreamModelId": "grok-4.6",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2.0,
-            "outputPerMillion": 6.0,
-            "cacheReadPerMillion": 0.5
-          },
-          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug grok-4.6 (xai at $2/$6, openrouter at $2/$6); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/grok-4.6 on 2026-09-06."
-        }
-      ]
-    },
     "grok-4.7": {
       "additionalRoutes": [
         {

@@ -1849,6 +1849,57 @@
       "minContextTokens": 500000,
       "minMaxOutputTokens": null,
       "active": {
+        "modelKey": "grok-4.7",
+        "generation": "4.7",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-07",
+        "promotionReason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day and refused this model: jailbreak 0.818 against a floor of 1.000, and p95 latency past tolerance on coding, files and computer use",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on xai",
+            "familyIdentity": "matches grok at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 6,
+          "cacheReadPerMillion": 0.5
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": false,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": true,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": { "contextTokens": 500000, "knowledgeCutoff": "2026-05" },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "grok-4.6",
         "generation": "4.6",
         "lifecycle": "stable",
@@ -1889,43 +1940,6 @@
         "limitSnapshot": { "contextTokens": 500000, "knowledgeCutoff": "2026-02-01" },
         "benchmarkSnapshot": {}
       },
-      "previous": {
-        "modelKey": "grok-4.5",
-        "generation": "4.5",
-        "lifecycle": "stable",
-        "promotedAt": "2026-08-18",
-        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
-        "evaluation": { "gates": {}, "seeded": true },
-        "availability": "live",
-        "pricingSnapshot": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 2,
-          "outputPerMillion": 6
-        },
-        "capabilitySnapshot": {
-          "textInput": true,
-          "imageInput": true,
-          "audioInput": false,
-          "videoInput": false,
-          "textOutput": true,
-          "imageOutput": false,
-          "audioOutput": false,
-          "videoOutput": false,
-          "streaming": true,
-          "structuredOutput": true,
-          "functionCalling": true,
-          "reasoning": true
-        },
-        "limitSnapshot": { "contextTokens": 500000 },
-        "benchmarkSnapshot": {
-          "swebench": 68,
-          "humaneval": 96.5,
-          "mmlu": 91.5,
-          "gpqa": 80,
-          "aime": 82
-        }
-      },
       "fallbackChain": [],
       "history": [
         {
@@ -1933,6 +1947,12 @@
           "from": "grok-4.5",
           "to": "grok-4.6",
           "reason": "automatic family upgrade from grok-4.5 to grok-4.6"
+        },
+        {
+          "promotedAt": "2026-10-07",
+          "from": "grok-4.6",
+          "to": "grok-4.7",
+          "reason": "moved on the owner's instruction of 2026-10-07 against the eval gate, which was run that day and refused this model: jailbreak 0.818 against a floor of 1.000, and p95 latency past tolerance on coding, files and computer use"
         }
       ]
     },

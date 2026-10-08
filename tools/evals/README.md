@@ -172,7 +172,11 @@ the refusal and jailbreak floors at 1.0 regardless.
 The Grok baseline was recorded with `--allow-costly` on 2026-10-07, 107 cases
 for about $0.54. Its two PDF rows in the files corpus are skipped, because that
 route has no document channel. The candidate measured against it the same day
-scored 1.000 on every corpus but jailbreak, 0.818, and was refused.
+scored 1.000 on every corpus but jailbreak, 0.818, and was refused. The owner
+moved the slot to that candidate the same day regardless, as part of keeping
+only the newest version of every model. The baseline is therefore a measurement
+of the model the slot held before, which has since left the catalog; the slot's
+current model has a run file and no baseline of its own.
 
 The other family slots have no baseline. As of 2026-10-07 the Anthropic account
 is out of credit and there is no MiniMax or Zhipu key; the OpenAI, Google and
