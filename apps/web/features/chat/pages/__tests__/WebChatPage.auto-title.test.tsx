@@ -76,6 +76,19 @@ vi.mock('@/lib/hooks/useConversations', async () => {
   };
 });
 
+vi.mock('@/features/study/hooks/use-conversation-study-session', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/study/hooks/use-conversation-study-session')
+  >()),
+  useConversationStudySession: () => ({
+    session: null,
+    endedHere: false,
+    pending: false,
+    error: null,
+    leave: vi.fn(),
+    resume: vi.fn(),
+  }),
+}));
 vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
   getWorstUsagePercent: () => 0,
   readManagedUsageBuckets: () => [],

@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen } from '@agiworkforce/icons';
-import { Spinner } from '@agiworkforce/ui';
+import { BookOpen, Trash2 } from '@agiworkforce/icons';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { toUserMessage } from '@/lib/user-error-message';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useConversations } from '@/lib/hooks/useConversations';
 import { PaneTitle } from '@shared/components/PaneTitle';
+import {
+  conversationDeleteConfirm,
+  runSessionRowAction,
+} from '@shared/components/layout/sidebar-session-actions';
 
 import {
   MAX_STUDY_TOPIC_LENGTH,
@@ -25,12 +30,16 @@ import {
   type StudySession,
 } from '../lib/study-session';
 import { studyApi, type StudyApi } from '../services/study-api';
+import { resumeStudySession } from '../hooks/use-conversation-study-session';
 
 export interface StudyPageProps {
   api?: StudyApi;
   /** Creates the conversation a session runs in. Injected so the page can be driven in a test. */
   createConversation?: (title: string) => Promise<string>;
 }
+
+const ROW_ACTION_CLASS =
+  'min-h-11 shrink-0 rounded-md border border-border px-3 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60';
 
 const SELECT_CLASS =
   'w-full cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring';
@@ -59,6 +68,8 @@ export function StudyPage({
   createConversation = createConversationForStudy,
 }: StudyPageProps) {
   const router = useRouter();
+  const { conversations, deleteConversation } = useConversations();
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState<StudyMode>('learn');
   const [level, setLevel] = useState<StudyLevel>('beginner');
@@ -105,6 +116,35 @@ export function StudyPage({
     } catch (cause) {
       setError(toUserMessage(cause, 'The study session could not be closed.'));
     }
+  }
+
+  async function handleResume(session: StudySession) {
+    setError(null);
+    try {
+      await resumeStudySession(api, session);
+      router.push(`/chat/${session.conversationId}`);
+    } catch (cause) {
+      setError(toUserMessage(cause, 'Study mode could not be turned back on.'));
+    }
+  }
+
+  function handleDelete(session: StudySession) {
+    const title =
+      conversations.find((conversation) => conversation.id === session.conversationId)?.title ??
+      studyConversationTitle(session.topic, session.mode);
+    confirm({
+      ...conversationDeleteConfirm(title),
+      onConfirm: async () => {
+        const deleted = await runSessionRowAction('delete', () =>
+          deleteConversation(session.conversationId),
+        );
+        if (deleted) {
+          setSessions((current) =>
+            (current ?? []).filter((entry) => entry.conversationId !== session.conversationId),
+          );
+        }
+      },
+    });
   }
 
   const active = (sessions ?? []).filter((session) => session.endedAt === null);
@@ -221,33 +261,55 @@ export function StudyPage({
             {[...active, ...past].map((session) => (
               <li
                 key={session.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2"
               >
                 <button
                   type="button"
                   onClick={() => router.push(`/chat/${session.conversationId}`)}
-                  className="flex min-h-11 flex-col items-start gap-0.5 text-start"
+                  className="flex min-h-11 min-w-0 flex-1 basis-40 flex-col items-start gap-0.5 text-start"
                 >
-                  <span className="text-[13px] font-medium text-foreground">{session.topic}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="max-w-full truncate text-[13px] font-medium text-foreground">
+                    {session.topic}
+                  </span>
+                  <span className="max-w-full truncate text-xs text-muted-foreground">
                     {STUDY_MODE_LABELS[session.mode]} · {STUDY_LEVEL_LABELS[session.level]}
                     {session.endedAt === null ? ' · running' : ''}
                   </span>
                 </button>
-                {session.endedAt === null && (
+                <div className="ms-auto flex shrink-0 items-center gap-1">
+                  {session.endedAt === null ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleEnd(session)}
+                      className={ROW_ACTION_CLASS}
+                    >
+                      Leave study mode
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleResume(session)}
+                      className={ROW_ACTION_CLASS}
+                    >
+                      Resume study mode
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => void handleEnd(session)}
-                    className="min-h-11 shrink-0 rounded-md border border-border px-3 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => handleDelete(session)}
+                    aria-label={`Delete conversation: ${session.topic}`}
+                    title="Delete conversation"
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
-                    Leave study mode
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
-                )}
+                </div>
               </li>
             ))}
           </ul>
         )}
       </section>
+      {confirmDialog}
     </div>
   );
 }

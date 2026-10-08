@@ -389,6 +389,70 @@ describe('WebChatPage conversation title slot', () => {
   });
 });
 
+function studyFetch(): ReturnType<typeof vi.fn> {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith('/api/study/sessions')) {
+      return new Response(
+        JSON.stringify({
+          sessions: [
+            {
+              id: 'study-1',
+              conversationId: CONVERSATION_ID,
+              topic: 'Eigenvalues',
+              mode: 'learn',
+              level: 'beginner',
+              startedAt: '2026-08-15T00:00:00.000Z',
+              endedAt: null,
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response('{}', { status: 200 });
+  });
+}
+
+function studyReads(fetchMock: ReturnType<typeof vi.fn>): string[] {
+  return fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((url) => url.startsWith('/api/study/sessions'));
+}
+
+describe('WebChatPage study mode', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the running study session above the composer with a way out', async () => {
+    const fetchMock = studyFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    openConversation();
+
+    render(<WebChatPage />);
+
+    expect(await screen.findByText('Studying: Eigenvalues')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Leave study mode' })).toBeVisible();
+    expect(studyReads(fetchMock)).toEqual([
+      `/api/study/sessions?conversationId=${CONVERSATION_ID}`,
+    ]);
+  });
+
+  it('never asks about study mode for a temporary chat', async () => {
+    const fetchMock = studyFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    openConversation();
+    useChatStore.getState().updateConversation(CONVERSATION_ID, { isTemporary: true });
+
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+
+    expect(studyReads(fetchMock)).toEqual([]);
+    expect(screen.queryByTestId('study-mode-indicator')).toBeNull();
+  });
+});
+
 describe('WebChatPage tab title', () => {
   const SERVER_TITLE = 'Pineapple identity check · AGI';
   let titleBefore: string;

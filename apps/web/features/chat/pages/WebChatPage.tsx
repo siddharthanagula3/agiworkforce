@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
+import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicator';
+import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
@@ -1878,6 +1880,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const temporaryChatActive = displayedConversation
     ? Boolean(displayedConversation.isTemporary)
     : resolveNewChatTemporary(pendingTemporaryChat, newChatsTemporary, activeProjectId);
+  const studySession = useConversationStudySession(
+    temporaryChatActive ? null : (displayedConversationId ?? null),
+  );
+  const studyModeIndicator = <StudyModeIndicator {...studySession} />;
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
 
@@ -6473,6 +6479,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       active={composerToggles?.workMode === AGI_WORK_MODE}
                       onReviewApprovals={handleReviewApprovals}
                     />
+                    {studyModeIndicator}
                     {voiceModeActive ? (
                       <VoiceModeSurface
                         variant={VOICE_SURFACE_VARIANT.empty}
@@ -6604,6 +6611,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       active={composerToggles?.workMode === AGI_WORK_MODE}
                       onReviewApprovals={handleReviewApprovals}
                     />
+                    {studyModeIndicator}
                     {turnErrorNoticeElement}
                     {voiceModeActive ? (
                       <VoiceModeSurface

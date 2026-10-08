@@ -2,9 +2,19 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ push: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  deleteConversation: vi.fn(async (_id: string) => true),
+  conversations: [] as Array<{ id: string; title: string }>,
+}));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock('@/lib/hooks/useConversations', () => ({
+  useConversations: () => ({
+    conversations: mocks.conversations,
+    deleteConversation: mocks.deleteConversation,
+  }),
+}));
 
 import { StudyPage } from './StudyPage';
 import type { StudyApi } from '../services/study-api';
@@ -33,7 +43,11 @@ function api(over: Partial<StudyApi> = {}): StudyApi {
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.conversations = [];
+  mocks.deleteConversation.mockImplementation(async () => true);
+});
 
 describe('the entry point', () => {
   it('asks what is being studied, how and at what level', async () => {
@@ -143,7 +157,7 @@ describe('history and exit', () => {
     const items = await screen.findAllByRole('listitem');
     expect(items[0]).toHaveTextContent('Newer');
 
-    await user.click(screen.getByRole('button', { name: /Newer/ }));
+    await user.click(screen.getByRole('button', { name: /^Newer/ }));
     expect(mocks.push).toHaveBeenCalledWith('/chat/22222222-2222-4222-8222-222222222222');
   });
 
@@ -183,5 +197,143 @@ describe('history and exit', () => {
     );
 
     expect(await screen.findByRole('alert')).toBeVisible();
+  });
+});
+
+describe('resuming an ended session', () => {
+  it('turns study mode back on with the same topic, mode and level and opens the chat', async () => {
+    const user = userEvent.setup();
+    const studyApi = api({
+      list: vi.fn(async () => [
+        session({ mode: 'review', level: 'expert', endedAt: '2026-09-18T02:00:00.000Z' }),
+      ]),
+    });
+    render(<StudyPage api={studyApi} createConversation={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Resume study mode' }));
+
+    expect(studyApi.start).toHaveBeenCalledWith({
+      conversationId: '11111111-1111-4111-8111-111111111111',
+      topic: 'Eigenvalues',
+      mode: 'review',
+      level: 'expert',
+    });
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/chat/11111111-1111-4111-8111-111111111111'),
+    );
+  });
+
+  it('offers no resume on a session that is still running', async () => {
+    render(
+      <StudyPage
+        api={api({ list: vi.fn(async () => [session()]) })}
+        createConversation={vi.fn()}
+      />,
+    );
+
+    await screen.findByText('Eigenvalues');
+    expect(screen.queryByRole('button', { name: 'Resume study mode' })).toBeNull();
+  });
+
+  it('stays put and says so when study mode cannot be turned back on', async () => {
+    const user = userEvent.setup();
+    render(
+      <StudyPage
+        api={api({
+          list: vi.fn(async () => [session({ endedAt: '2026-09-18T02:00:00.000Z' })]),
+          start: vi.fn(async () => {
+            throw new Error('Study mode is unavailable right now.');
+          }),
+        })}
+        createConversation={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Resume study mode' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/unavailable/i);
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleting a session', () => {
+  it('asks first, naming the chat and that it cannot be recovered', async () => {
+    const user = userEvent.setup();
+    mocks.conversations = [
+      { id: '11111111-1111-4111-8111-111111111111', title: 'Eigenvalues for the exam' },
+    ];
+    render(
+      <StudyPage
+        api={api({ list: vi.fn(async () => [session()]) })}
+        createConversation={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete conversation: Eigenvalues' }),
+    );
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Eigenvalues for the exam');
+    expect(dialog).toHaveTextContent(/every message in it/);
+    expect(dialog).toHaveTextContent(/cannot be undone/);
+    expect(mocks.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing when the question is cancelled', async () => {
+    const user = userEvent.setup();
+    render(
+      <StudyPage
+        api={api({ list: vi.fn(async () => [session()]) })}
+        createConversation={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete conversation: Eigenvalues' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect(mocks.deleteConversation).not.toHaveBeenCalled();
+    expect(screen.getByText('Eigenvalues')).toBeVisible();
+  });
+
+  it('deletes the conversation through the shared delete and drops the row', async () => {
+    const user = userEvent.setup();
+    render(
+      <StudyPage
+        api={api({ list: vi.fn(async () => [session({ endedAt: '2026-09-18T02:00:00.000Z' })]) })}
+        createConversation={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete conversation: Eigenvalues' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Delete conversation' }));
+
+    await waitFor(() =>
+      expect(mocks.deleteConversation).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111'),
+    );
+    expect(await screen.findByText(/Nothing yet/)).toBeVisible();
+  });
+
+  it('keeps the row when the delete fails', async () => {
+    const user = userEvent.setup();
+    mocks.deleteConversation.mockImplementation(async () => false);
+    render(
+      <StudyPage
+        api={api({ list: vi.fn(async () => [session()]) })}
+        createConversation={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete conversation: Eigenvalues' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Delete conversation' }));
+
+    await waitFor(() => expect(mocks.deleteConversation).toHaveBeenCalled());
+    expect(screen.getByText('Eigenvalues')).toBeVisible();
   });
 });
