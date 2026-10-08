@@ -29,7 +29,7 @@ import {
   liveSessionProviderCostMicrousd,
   liveSessionSecondsCoveredBy,
 } from '@/lib/voice/live-voice-billing';
-import { readVoiceReservation } from '../../lib/voice-session-budget';
+import { readVoiceReservation, voiceJsonError } from '../../lib/voice-session-budget';
 import {
   priceLiveVoiceBackend,
   recordLiveVoiceBackendCost,
@@ -121,6 +121,20 @@ async function handleCloseLiveSession(
       record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);
     } catch (error) {
       logger.warn({ error, userId, sessionId }, 'Voice session record could not be read');
+      return voiceJsonError(
+        request,
+        503,
+        'voice_session_unreadable',
+        'The voice session could not be read, so it was not settled. Try again.',
+      );
+    }
+    if (!record) {
+      return voiceJsonError(
+        request,
+        404,
+        'voice_session_not_found',
+        'No voice session with this id was started.',
+      );
     }
   }
 

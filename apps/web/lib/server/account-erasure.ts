@@ -667,20 +667,20 @@ async function sealAndCheckMediaJobsForErasure(
  */
 async function eraseBackupCopies(
   keys: ReadonlyArray<string>,
-): Promise<{ deleted: number; failed: number }> {
-  if (keys.length === 0) return { deleted: 0, failed: 0 };
+): Promise<{ deleted: number; failedKeys: string[] }> {
+  if (keys.length === 0) return { deleted: 0, failedKeys: [] };
   const target = resolveObjectBackupTarget();
-  if (!target) return { deleted: 0, failed: 0 };
+  if (!target) return { deleted: 0, failedKeys: [] };
 
   const removed: string[] = [];
-  let failed = 0;
+  const failedKeys: string[] = [];
   for (const key of keys) {
     try {
       const outcome = await deleteBackupObject(key, { target });
       if (outcome === 'deleted') removed.push(key);
       else if (outcome === 'absent') removed.push(key);
     } catch (error) {
-      failed += 1;
+      failedKeys.push(key);
       logger.warn({ key, error }, 'Failed to delete the backup copy of an erased object');
     }
   }
@@ -691,7 +691,7 @@ async function eraseBackupCopies(
     logger.warn({ error }, 'Backup replica records outlived the objects they tracked');
   }
 
-  return { deleted: removed.length, failed };
+  return { deleted: removed.length, failedKeys };
 }
 
 export async function eraseUserMedia(
@@ -740,8 +740,19 @@ export async function eraseUserMedia(
     rows.map((row) => row.storage_pathname),
   );
   const stillStored = new Set(failedPathnames);
+  const backup = await eraseBackupCopies(
+    rows
+      .map((row) => row.storage_pathname)
+      .filter((key): key is string => key !== null && !stillStored.has(key)),
+  );
+  // The row is the only record of the key, so it outlives any copy that survived.
+  const backupStillStored = new Set(backup.failedKeys);
   const deletableIds = rows
-    .filter((row) => !row.storage_pathname || !stillStored.has(row.storage_pathname))
+    .filter(
+      (row) =>
+        !row.storage_pathname ||
+        (!stillStored.has(row.storage_pathname) && !backupStillStored.has(row.storage_pathname)),
+    )
     .map((row) => row.id);
 
   let mediaRowsDeleted = 0;
@@ -753,18 +764,12 @@ export async function eraseUserMedia(
     mediaRowsDeleted = purged.length;
   }
 
-  const backup = await eraseBackupCopies(
-    rows
-      .map((row) => row.storage_pathname)
-      .filter((key): key is string => key !== null && !stillStored.has(key)),
-  );
-
   return {
     mediaObjectsDeleted: deleted,
     mediaObjectsFailed: failedPathnames.length,
     mediaRowsDeleted,
     backupObjectsDeleted: backup.deleted,
-    backupObjectsFailed: backup.failed,
+    backupObjectsFailed: backup.failedKeys.length,
   };
 }
 
@@ -1077,6 +1082,7 @@ export async function eraseUserAccountData(
 
     const dataDisposed =
       media.mediaObjectsFailed === 0 &&
+      media.backupObjectsFailed === 0 &&
       knowledge.failed === 0 &&
       exportArchives.failed === 0 &&
       avatar.failed === 0 &&

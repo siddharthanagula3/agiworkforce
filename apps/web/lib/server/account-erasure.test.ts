@@ -471,6 +471,33 @@ describe('eraseUserAccountData', () => {
     expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
   });
 
+  it('keeps the account and the media row open for retry when a backup copy survived', async () => {
+    primeDb({
+      mediaRows: [
+        { id: '11111111-1111-4111-8111-111111111111', storage_pathname: 'private-media/a.png' },
+        { id: '22222222-2222-4222-8222-222222222222', storage_pathname: 'private-media/b.png' },
+      ],
+    });
+    mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 2, failedPathnames: [] });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'agi-backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteBackupObject.mockRejectedValueOnce(new Error('backup bucket unavailable'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.backupObjectsFailed).toBe(1);
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+    const rowDelete = mocks.query.mock.calls.find((call) =>
+      String(call[0]).includes('delete from public.media_assets'),
+    );
+    expect(rowDelete?.[1]).toEqual([['22222222-2222-4222-8222-222222222222']]);
+  });
+
   it('keeps the account open for retry when cached sandbox state survived', async () => {
     primeDb({});
     mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 0, failed: 2, reachable: true });

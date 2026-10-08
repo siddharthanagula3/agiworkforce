@@ -683,6 +683,30 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
 
 export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
 
+/**
+ * The server treats an absent field as "on", so every request that produces a
+ * turn in an existing conversation must carry these or the user's opt-outs are lost.
+ */
+function turnPrivacyRequestFields(
+  options: Pick<
+    SendMessageOptions,
+    'disabledConnectorIds' | 'connectorToolsEnabled' | 'memoryEnabled'
+  >,
+  isTemporaryConversation: boolean,
+) {
+  return {
+    disabled_connector_ids: options.disabledConnectorIds?.length
+      ? options.disabledConnectorIds
+      : undefined,
+    connector_tools_enabled: options.connectorToolsEnabled,
+    memory_enabled: options.memoryEnabled === false ? false : undefined,
+    personalization:
+      isTemporaryConversation && !useChatStore.getState().temporaryChatPersonalized
+        ? false
+        : undefined,
+  };
+}
+
 /** Every row this conversation has loaded, variants included. */
 function readConversationRows(conversationId: string): Message[] {
   const state = useChatStore.getState();
@@ -4190,15 +4214,7 @@ export function useChatStream(
               office_creation: options.officeCreation || undefined,
               office_format: (options.officeCreation && options.officeFormat) || undefined,
               skill_name: options.skillName,
-              disabled_connector_ids: options.disabledConnectorIds?.length
-                ? options.disabledConnectorIds
-                : undefined,
-              connector_tools_enabled: options.connectorToolsEnabled,
-              memory_enabled: options.memoryEnabled === false ? false : undefined,
-              personalization:
-                isTemporaryConversation && !useChatStore.getState().temporaryChatPersonalized
-                  ? false
-                  : undefined,
+              ...turnPrivacyRequestFields(options, isTemporaryConversation),
               memory_command: options.memoryCommand,
               routing_profile:
                 options.routingProfile && options.routingProfile !== 'auto'
@@ -4534,6 +4550,13 @@ export function useChatStream(
               assistant_message_id: assistantMessageId,
               stream: true,
               use_prompt_cache: true,
+              ...turnPrivacyRequestFields(
+                {
+                  disabledConnectorIds: store.getDisabledConnectorIds(conversationId),
+                  memoryEnabled: store.getMemoryEnabled(conversationId),
+                },
+                isTemporaryConversation,
+              ),
             }),
             signal: abortController.signal,
           });

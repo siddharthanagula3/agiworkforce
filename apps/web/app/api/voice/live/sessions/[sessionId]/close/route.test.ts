@@ -254,6 +254,34 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     expect(finalized()['actualCostMicrousd']).toBe(charge(30) + 32_000);
   });
 
+  it('settles nothing for a session id the server never started', async () => {
+    const db = {
+      query: async (sql: string) => (sql.includes('to_regclass') ? [{ ready: true }] : []),
+    };
+    mocks.userScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
+
+    const response = await close({ seconds: 5, settlement: SETTLEMENT });
+
+    expect(response.status).toBe(404);
+    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.clientDelivered).not.toHaveBeenCalled();
+  });
+
+  it('settles nothing while the session record cannot be read', async () => {
+    const db = {
+      query: async (sql: string) => {
+        if (sql.includes('to_regclass')) return [{ ready: true }];
+        throw new Error('database unavailable');
+      },
+    };
+    mocks.userScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
+
+    const response = await close({ seconds: 5, settlement: SETTLEMENT });
+
+    expect(response.status).toBe(503);
+    expect(mocks.finalize).not.toHaveBeenCalled();
+  });
+
   it('refuses a close that carries no usage report at all', async () => {
     scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
 
