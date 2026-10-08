@@ -11,7 +11,6 @@ import {
   freeMediaAccess,
   freeMediaOfferNote,
   freeMediaPlanStanding,
-  freeQuotaCalendarDay,
   limitedFreeMedia,
   orderedReadyFreeMedia,
   readyFreeMediaOffer,

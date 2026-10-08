@@ -3368,7 +3368,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           const placeholderMetadata: MessageMetadata = {
             toolType: 'video-generation',
             videoStatus: 'queued',
-            // Sizes VideoGenerationPlaceholder to the requested shape before the
+            // Sizes MediaGenerationPlaceholder to the requested shape before the
             // provider returns anything, so the transcript doesn't jump later.
             ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
             ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
