@@ -65,6 +65,12 @@ interface SsoPending {
 
 const SUPPORTED_SECOND_FACTORS = new Set(['totp', 'phone_code', 'backup_code']);
 const PASSWORD_FACTOR = 'password';
+const DEVICE_CHECK_FACTOR = 'email_code';
+const DEVICE_CHECK_HEADING = 'Verify this device';
+const SECOND_STEP_STATUSES: ReadonlySet<string> = new Set([
+  'needs_second_factor',
+  'needs_client_trust',
+]);
 const WEB_SIGNUP_PATH = '/signup';
 const DESKTOP_SURFACE_QUERY = 'surface=desktop';
 
@@ -92,6 +98,8 @@ function secondFactorLabel(factor: ClerkSecondFactor): string {
         : 'Text message code';
     case 'backup_code':
       return 'Backup code';
+    case DEVICE_CHECK_FACTOR:
+      return 'Emailed code';
     default:
       return factor.strategy;
   }
@@ -198,15 +206,25 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         return;
       }
 
-      if (next.status === 'needs_second_factor') {
+      if (SECOND_STEP_STATUSES.has(next.status)) {
         const usable = next.supportedSecondFactors.filter((factor) =>
           SUPPORTED_SECOND_FACTORS.has(factor.strategy),
         );
         const chosen = usable.find((factor) => factor.strategy === 'totp') ?? usable[0] ?? null;
         if (!chosen) {
-          setError(
-            'This account requires a second factor AGI Desktop cannot collect yet. Finish signing in through your browser.',
+          const deviceCheck = next.supportedSecondFactors.find(
+            (factor) => factor.strategy === DEVICE_CHECK_FACTOR,
           );
+          if (!deviceCheck) {
+            setError(
+              'This account requires a second factor AGI Desktop cannot collect yet. Finish signing in through your browser.',
+            );
+            return;
+          }
+          setSecondFactor(deviceCheck);
+          setCode('');
+          setStep('second_factor');
+          setSignIn(await prepareSecondFactor(next.id, deviceCheck));
           return;
         }
         setSecondFactor(chosen);
@@ -454,7 +472,11 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         </button>
       </div>
     ) : step === 'second_factor' && secondFactor ? (
-      <p className="text-center">{secondFactorLabel(secondFactor)}</p>
+      <p className="text-center">
+        {secondFactor.strategy === DEVICE_CHECK_FACTOR
+          ? `You are signing in on a new device. We emailed a code to ${secondFactor.safeIdentifier ?? email.trim()}.`
+          : secondFactorLabel(secondFactor)}
+      </p>
     ) : undefined;
 
   const messages = (
@@ -566,7 +588,13 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
 
   if (step === 'second_factor' && secondFactor) {
     return (
-      <AuthStepFrame heading={HEADINGS[step]} detail={detail} footer={footer}>
+      <AuthStepFrame
+        heading={
+          secondFactor.strategy === DEVICE_CHECK_FACTOR ? DEVICE_CHECK_HEADING : HEADINGS[step]
+        }
+        detail={detail}
+        footer={footer}
+      >
         <form
           onSubmit={(event) => {
             event.preventDefault();

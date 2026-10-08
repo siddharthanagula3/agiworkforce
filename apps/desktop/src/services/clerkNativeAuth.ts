@@ -1,8 +1,8 @@
-
 export type ClerkSignInStatus =
   | 'needs_identifier'
   | 'needs_first_factor'
   | 'needs_second_factor'
+  | 'needs_client_trust'
   | 'needs_new_password'
   | 'complete';
 
@@ -15,6 +15,7 @@ export interface ClerkFirstFactor {
 
 export interface ClerkSecondFactor {
   strategy: string;
+  emailAddressId?: string;
   phoneNumberId?: string;
   safeIdentifier?: string;
 }
@@ -367,6 +368,7 @@ const KNOWN_STATUSES: ReadonlySet<string> = new Set<ClerkSignInStatus>([
   'needs_identifier',
   'needs_first_factor',
   'needs_second_factor',
+  'needs_client_trust',
   'needs_new_password',
   'complete',
 ]);
@@ -460,6 +462,7 @@ export async function prepareSecondFactor(
       form: {
         strategy: factor.strategy,
         ...(factor.phoneNumberId ? { phone_number_id: factor.phoneNumberId } : {}),
+        ...(factor.emailAddressId ? { email_address_id: factor.emailAddressId } : {}),
       },
       context: 'prepare',
     }),
