@@ -209,6 +209,7 @@ async function upgradeToPlan(data: {
   plan: SelfServePaidPlanTier;
   billingPeriod?: 'monthly' | 'yearly';
   seats?: number;
+  premiumSeats?: number;
 }): Promise<void> {
   void data.userId;
   void data.userEmail;
@@ -231,6 +232,7 @@ async function upgradeToPlan(data: {
       plan: data.plan,
       billingInterval,
       ...(seats === undefined ? {} : { seats }),
+      ...(seats !== undefined && data.premiumSeats ? { premiumSeats: data.premiumSeats } : {}),
     }),
   });
 
@@ -296,6 +298,7 @@ export async function startTopUpCheckout(amountUsd: number): Promise<void> {
 
 export async function upgradeToTeamPlan(data: {
   seats: number;
+  premiumSeats?: number;
   billingPeriod?: 'monthly' | 'yearly';
 }): Promise<void> {
   return upgradeToPlan({
@@ -303,6 +306,7 @@ export async function upgradeToTeamPlan(data: {
     userEmail: '',
     plan: 'team',
     seats: data.seats,
+    ...(data.premiumSeats ? { premiumSeats: data.premiumSeats } : {}),
     ...(data.billingPeriod ? { billingPeriod: data.billingPeriod } : {}),
   });
 }

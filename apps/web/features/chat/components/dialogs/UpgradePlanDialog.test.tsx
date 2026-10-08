@@ -106,4 +106,29 @@ describe('UpgradePlanDialog', () => {
     expect(screen.getByRole('button', { name: 'Upgrade to Max 20x' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Upgrade to Max 5x' })).toBeNull();
   });
+
+  it('shows a Premium seat holder exactly what a Standard seat holder sees, never Free as their plan', () => {
+    const standard = render(
+      <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="team" onUpgrade={vi.fn()} />,
+    );
+    fireEvent.click(within(standard.container).getByRole('button', { name: 'See all plans' }));
+    const standardMarkup = standard.container.innerHTML;
+    standard.unmount();
+
+    const premium = render(
+      <UpgradePlanDialog
+        open
+        onOpenChange={vi.fn()}
+        currentTier="team_premium"
+        onUpgrade={vi.fn()}
+      />,
+    );
+    fireEvent.click(within(premium.container).getByRole('button', { name: 'See all plans' }));
+
+    expect(premium.container.innerHTML).toBe(standardMarkup);
+    const freeCard = within(
+      screen.getByRole('heading', { name: 'Free' }).closest<HTMLElement>('.rounded-2xl')!,
+    );
+    expect(freeCard.queryByText('Your current plan')).toBeNull();
+  });
 });

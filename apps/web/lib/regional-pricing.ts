@@ -8,7 +8,7 @@ import {
 
 export type PublicCheckoutPlan = Extract<
   BillingPlanTier,
-  'basic' | 'pro' | 'max' | 'max_15x' | 'team'
+  'basic' | 'pro' | 'max' | 'max_15x' | 'team' | 'team_premium'
 >;
 
 export interface StripePriceLike {

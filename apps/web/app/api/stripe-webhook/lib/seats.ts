@@ -7,7 +7,9 @@ import {
   isEntitledSubscriptionStatus,
   isEntitledSubscriptionStatusForTier,
   isPerSeatBillingPlan,
+  totalTeamSeats,
 } from '@agiworkforce/types';
+import { resolveSeatQuantities, type SeatLineItem } from '@/lib/billing/team-seat-items';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
@@ -15,19 +17,27 @@ import { readOrganizationCollectionState } from '@/lib/services/enterprise-colle
 const ENTERPRISE_PLAN_TIER = 'enterprise';
 const SEAT_EXPANSION_BLOCKED_AUDIT_REASON = 'seat_expansion_blocked';
 
-export function resolveSubscriptionSeats(subscription: {
-  items?: { data?: Array<{ quantity?: number | null }> } | null;
-}): number {
-  const quantity = subscription.items?.data?.[0]?.quantity;
+interface SeatedSubscription {
+  items?: { data?: SeatLineItem[] } | null;
+}
+
+export function resolveSubscriptionSeats(subscription: SeatedSubscription): number {
+  const seatTypes = resolveSeatQuantities(subscription.items?.data);
+  const quantity = seatTypes ? totalTeamSeats(seatTypes) : subscription.items?.data?.[0]?.quantity;
   if (typeof quantity !== 'number' || !Number.isInteger(quantity)) return 1;
   if (quantity < 1) return 1;
   return Math.min(quantity, MAX_PURCHASABLE_SEATS);
 }
 
+export function resolveSubscriptionPremiumSeats(subscription: SeatedSubscription): number {
+  return resolveSeatQuantities(subscription.items?.data)?.premium ?? 0;
+}
+
 export function resolveCheckoutSessionSeats(session: {
-  line_items?: { data?: Array<{ quantity?: number | null }> } | null;
+  line_items?: { data?: SeatLineItem[] } | null;
 }): number | null {
-  const quantity = session.line_items?.data?.[0]?.quantity;
+  const seatTypes = resolveSeatQuantities(session.line_items?.data);
+  const quantity = seatTypes ? totalTeamSeats(seatTypes) : session.line_items?.data?.[0]?.quantity;
   if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 1) return null;
   return Math.min(quantity, MAX_PURCHASABLE_SEATS);
 }
@@ -35,6 +45,7 @@ export function resolveCheckoutSessionSeats(session: {
 export interface PurchasedSeatRecord {
   planTier: string;
   seats: number;
+  premiumSeats: number;
   perSeat: boolean;
 }
 
@@ -44,12 +55,16 @@ function isEnterprisePlanTier(planTier: string): boolean {
 
 export function buildPurchasedSeatRecord(
   planTier: string,
-  subscription: Stripe.Subscription | { items?: { data?: Array<{ quantity?: number | null }> } },
+  subscription: Stripe.Subscription | SeatedSubscription,
 ): PurchasedSeatRecord {
   const perSeat = isPerSeatBillingPlan(planTier) || isEnterprisePlanTier(planTier);
+  const seats = perSeat ? resolveSubscriptionSeats(subscription) : 1;
   return {
     planTier,
-    seats: perSeat ? resolveSubscriptionSeats(subscription) : 1,
+    seats,
+    premiumSeats: isPerSeatBillingPlan(planTier)
+      ? Math.min(resolveSubscriptionPremiumSeats(subscription), seats)
+      : 0,
     perSeat,
   };
 }
@@ -111,11 +126,61 @@ async function guardEnterpriseSeatExpansion(
   return { blocked: true };
 }
 
+async function applyPremiumSeatCount(
+  db: DatabaseAdapter,
+  organizationId: string,
+  premiumSeats: number,
+): Promise<void> {
+  await db.query(
+    `update public.organizations
+        set licensed_premium_seats = $1
+      where id = $2
+        and licensed_premium_seats is distinct from $1`,
+    [premiumSeats, organizationId],
+  );
+  const demoted = await db.query<{ user_id: string }>(
+    `update public.organization_members as member
+        set seat_type = 'standard',
+            premium_paid_through = greatest(
+              member.premium_paid_through,
+              (
+                select owner_period.current_period_end
+                  from public.organizations organization
+                  join public.subscriptions owner_period
+                    on owner_period.user_id = organization.owner_user_id
+                 where organization.id = member.organization_id
+                 limit 1
+              )
+            )
+      where member.organization_id = $1
+        and member.seat_type = 'premium'
+        and member.status = 'active'
+        and (
+          select count(*)
+            from public.organization_members peer
+           where peer.organization_id = member.organization_id
+             and peer.seat_type = 'premium'
+             and peer.status = 'active'
+             and (coalesce(peer.seat_type_changed_at, peer.joined_at), peer.user_id)
+                 <= (coalesce(member.seat_type_changed_at, member.joined_at), member.user_id)
+        ) > $2
+      returning member.user_id`,
+    [organizationId, premiumSeats],
+  );
+  if (demoted.length > 0) {
+    logger.warn(
+      { organizationId, premiumSeats, demotedMembers: demoted.length },
+      'Paid Premium seats fell below the assigned Premium seats; the latest assignments returned to Standard and keep Premium to the end of the paid period',
+    );
+  }
+}
+
 export async function persistPurchasedSeatsOnOrganization(
   db: DatabaseAdapter,
   input: {
     ownerUserId: string;
     seats: number;
+    premiumSeats: number;
     planTier: string;
     stripeSubscriptionId: string | null;
     stripeCustomerId: string | null;
@@ -151,11 +216,13 @@ export async function persistPurchasedSeatsOnOrganization(
   );
 
   if (updated[0]) {
+    await applyPremiumSeatCount(db, updated[0].id, input.premiumSeats);
     logger.info(
       {
         organizationId: updated[0].id,
         ownerUserId: input.ownerUserId,
         licensedSeats: updated[0].licensed_seats,
+        licensedPremiumSeats: input.premiumSeats,
         planTier: input.planTier,
       },
       'Persisted purchased seat count onto organization',
@@ -201,6 +268,7 @@ export async function persistPurchasedSeatsOnOrganization(
     return 'subscription_mismatch';
   }
 
+  await applyPremiumSeatCount(db, organization.id, input.premiumSeats);
   logger.error(
     {
       organizationId: organization.id,
@@ -217,6 +285,7 @@ export type SubscriptionSeatReader = Pick<Stripe, 'subscriptions'>;
 
 export interface OwnerPurchasedSeats {
   seats: number;
+  premiumSeats: number;
   planTier: string;
 }
 
@@ -257,5 +326,5 @@ export async function resolvePurchasedSeatsForOwner(
   const subscription = await getStripe().subscriptions.retrieve(row.stripe_subscription_id);
   const purchased = buildPurchasedSeatRecord(planTier, subscription);
 
-  return { seats: purchased.seats, planTier };
+  return { seats: purchased.seats, premiumSeats: purchased.premiumSeats, planTier };
 }

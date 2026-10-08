@@ -8,6 +8,8 @@ import {
   type ManagedUsageCredits,
   type ManagedUsagePurchaseExpiry,
   type ManagedUsageSummaryResponse,
+  seatTypeField,
+  wirePlanOf,
 } from '@agiworkforce/types';
 import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-credits';
 import { logger } from '@/lib/logger';
@@ -153,8 +155,10 @@ export async function getManagedUsageSummary(
       }
     : null;
 
+  const wirePlan = wirePlanOf(planTier);
   return {
-    plan_tier: planTier,
+    plan_tier: wirePlan.tier,
+    ...seatTypeField(wirePlan.seatType),
     usage_percentage: usagePercentage,
     usage_reset_at: usageResetAt,
     has_usage_remaining: freeUsage?.hasUsageRemaining ?? hasPaidUsageRemaining,

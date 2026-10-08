@@ -28,6 +28,7 @@ const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'max',
   'max_15x',
   'team',
+  'team_premium',
   'enterprise',
 ]);
 
@@ -46,6 +47,7 @@ export const TIER_ORDER: readonly Tier[] = [
   'pro',
   'team',
   'max',
+  'team_premium',
   'max_15x',
   'enterprise',
 ];

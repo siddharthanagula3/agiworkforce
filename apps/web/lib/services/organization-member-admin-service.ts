@@ -38,7 +38,7 @@ export interface WorkspaceMemberPage {
   lastId: string | null;
 }
 
-interface Authority {
+export interface Authority {
   actorId: string;
   role: OrganizationRole | null;
   permissions: ReadonlySet<OrganizationPermission>;
@@ -137,7 +137,7 @@ export async function readWorkspaceMember(
   return row ? toWorkspaceMember(row) : null;
 }
 
-async function lockMembership(tx: DatabaseAdapter, organizationId: string): Promise<void> {
+export async function lockMembership(tx: DatabaseAdapter, organizationId: string): Promise<void> {
   await tx.query(
     `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
     [organizationId],
@@ -159,7 +159,7 @@ async function readMemberRow(
   return row ?? null;
 }
 
-async function resolveAuthority(
+export async function resolveAuthority(
   tx: DatabaseAdapter,
   organizationId: string,
   administrator: MemberAdministrator,

@@ -38,7 +38,8 @@ import {
   assertUpgradeBillingInterval,
   checkoutBillingIntervalFromStripePrice,
   classifyPlanChange,
-  currentSeatsFromStripeItem,
+  planChangeItems,
+  seatChangeBasis,
   isUpgrade,
   planChangeAnchor,
   planChangeProration,
@@ -370,7 +371,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         [
           recovered.id,
           typeof recovered.customer === 'string' ? recovered.customer : recovered.customer.id,
-          recovered.items.data[0]?.price.id ?? null,
+          seatChangeBasis(recovered)?.item.price.id ?? null,
           userId,
         ],
       );
@@ -399,9 +400,10 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
 
   const stripeSub = resolved.subscription;
   const stripeSubId = stripeSub.id;
-  const stripeItem = stripeSub.items.data[0];
+  const seatBasis = seatChangeBasis(stripeSub);
+  const stripeItem = seatBasis?.item;
   const stripeItemId = stripeItem?.id ?? null;
-  const currentSeats = currentSeatsFromStripeItem(stripeItem?.quantity);
+  const currentSeats = seatBasis?.currentSeats ?? 1;
   const currentPriceRecurring = stripeItem?.price.recurring ?? null;
   const customerId =
     typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
@@ -410,7 +412,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   const subscriptionEndsAt = stripeSub.cancel_at ?? stripeItem?.current_period_end ?? null;
   const scheduleId =
     typeof stripeSub.schedule === 'string' ? stripeSub.schedule : (stripeSub.schedule?.id ?? null);
-  if (!stripeItemId || !customerId) {
+  if (!seatBasis || !stripeItemId || !customerId) {
     throw createError.internal('Subscription has no items');
   }
 
@@ -482,7 +484,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       customer: customerId,
       subscription: stripeSubId,
       subscription_details: {
-        items: [{ id: stripeItemId, price: newPriceId, quantity: requestedSeats }],
+        items: planChangeItems(seatBasis, newPriceId, requestedSeats),
         ...planChangeProration(anchor, prorationDate),
       },
       ...(promotion
@@ -515,7 +517,9 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     charge,
     grandfatheredNotice:
       currentInterval === 'yearly' ? grandfatheredYearlyBillingNotice(currentTier) : null,
-    recurringAmountCents: priceSelection.amountMinor * requestedSeats,
+    recurringAmountCents:
+      priceSelection.amountMinor * (requestedSeats - seatBasis.premiumSeats) +
+      seatBasis.premiumRecurringCents,
     seats: requestedSeats,
     promotion,
     replacesScheduledChange: scheduleId !== null,

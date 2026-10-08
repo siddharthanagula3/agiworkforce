@@ -56,6 +56,7 @@ import {
   isMaxPlanTier,
   isMax15xPlanTier,
   isSelfServeIndividualPlanTier,
+  managedUsageMultiplier,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
@@ -140,6 +141,7 @@ const localizedPricingCatalogSchema = z.object({
     max: localizedPlanPricesSchema,
     max_15x: localizedPlanPricesSchema,
     team: localizedPlanPricesSchema,
+    team_premium: localizedPlanPricesSchema.optional(),
   }),
 });
 
@@ -183,7 +185,7 @@ type PricingAudience = 'individual' | 'business';
 
 const COMPARED_PLANS = {
   individual: ['free', ...SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER],
-  business: ['team', 'enterprise'],
+  business: ['team', 'team_premium', 'enterprise'],
 } as const satisfies Record<PricingAudience, readonly BillingPlanTier[]>;
 
 type ComparedPlan = (typeof COMPARED_PLANS)[PricingAudience][number];
@@ -336,6 +338,7 @@ export default function PricingPage() {
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
+  const [teamPremiumSeatsChoice, setTeamPremiumSeatsChoice] = useState<number>(0);
   const [teamAnnualChoice, setTeamAnnualChoice] = useState<boolean | null>(null);
   const [subscribedInterval, setSubscribedInterval] = useState<BillingInterval | null>(null);
 
@@ -494,6 +497,22 @@ export default function PricingPage() {
     priceLocale,
     12,
   );
+  const teamPremium = BILLING_PLAN_PRICING.team_premium;
+  const teamSeatEntry = localizedPlans?.team[teamInterval];
+  const premiumSeatEntry = localizedPlans?.team_premium?.[teamInterval];
+  const premiumSeatsOffered =
+    !hasActivePaidPlan &&
+    (premiumSeatEntry?.currency ?? 'usd').toLowerCase() ===
+      (teamSeatEntry?.currency ?? 'usd').toLowerCase();
+  const teamPremiumSeats = premiumSeatsOffered ? Math.min(teamPremiumSeatsChoice, teamSeats) : 0;
+  const teamStandardSeats = teamSeats - teamPremiumSeats;
+  const premiumSeatPricePerMonth = formatLocalizedAmount(
+    premiumSeatEntry,
+    teamInterval === 'yearly' ? teamPremium.yearlyPriceUsd : teamPremium.monthlyPriceUsd,
+    priceLocale,
+    teamInterval === 'yearly' ? 12 : 1,
+  );
+  const premiumUsageFactor = managedUsageMultiplier('team_premium', 'team');
   const teamYearlyTotalPrice = formatLocalizedAmount(
     localizedPlans?.team.yearly,
     team.yearlyPriceUsd,
@@ -501,6 +520,23 @@ export default function PricingPage() {
     1,
     teamSeats,
   );
+  const teamMixedTotalPrice =
+    teamSeatEntry && premiumSeatEntry
+      ? formatPlanAmount(
+          (teamSeatEntry.amountMinor * teamStandardSeats +
+            premiumSeatEntry.amountMinor * teamPremiumSeats) /
+            10 ** currencyMinorUnitDigits(teamSeatEntry.currency),
+          teamSeatEntry.currency,
+          priceLocale,
+        )
+      : formatPlanAmount(
+          (teamInterval === 'yearly' ? team.yearlyPriceUsd : team.monthlyPriceUsd) *
+            teamStandardSeats +
+            (teamInterval === 'yearly' ? teamPremium.yearlyPriceUsd : teamPremium.monthlyPriceUsd) *
+              teamPremiumSeats,
+          'USD',
+          priceLocale,
+        );
   const paidPlanSelectionDisabled =
     pendingPlan !== null ||
     !authInitialized ||
@@ -700,7 +736,7 @@ export default function PricingPage() {
     setWaitlistRequest({
       plan,
       billingInterval: selectedInterval(plan),
-      ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats } : {}),
+      ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats, premiumSeats: teamPremiumSeats } : {}),
     });
   }
 
@@ -722,6 +758,7 @@ export default function PricingPage() {
       } else if (isPerSeatBillingPlan(request.plan)) {
         await upgradeToTeamPlan({
           seats: request.seats ?? MIN_PURCHASABLE_SEATS,
+          ...(request.premiumSeats ? { premiumSeats: request.premiumSeats } : {}),
           ...(request.billingInterval === 'yearly' ? { billingPeriod: 'yearly' } : {}),
         });
       }
@@ -794,6 +831,13 @@ export default function PricingPage() {
     t('proFeature6'),
   ]);
   const teamFeatures = presentCopy([
+    t('seatTypeStandardLine', {
+      price: teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice,
+    }),
+    premiumUsageFactor === null
+      ? null
+      : t('seatTypePremiumLine', { price: premiumSeatPricePerMonth, factor: premiumUsageFactor }),
+    t('seatTypesNote'),
     ...usageComparisonCopy('team'),
     t('teamFeature2'),
     t('teamFeature3'),
@@ -829,6 +873,10 @@ export default function PricingPage() {
     max_15x: { price: perMonthPrice(max15xPrice) },
     team: {
       price: `${teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice} ${t('perSeatPricingSub')}`,
+      billing: teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly'),
+    },
+    team_premium: {
+      price: `${premiumSeatPricePerMonth} ${t('perSeatPricingSub')}`,
       billing: teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly'),
     },
     enterprise: {
@@ -1090,10 +1138,43 @@ export default function PricingPage() {
                   }}
                 />
               </div>
+              {premiumSeatsOffered ? (
+                <div className="agi-tier-seats">
+                  <label className="agi-tier-seats-label" htmlFor="team-premium-seat-count">
+                    {t('premiumSeatCountLabel')}
+                  </label>
+                  <input
+                    id="team-premium-seat-count"
+                    className="agi-tier-seats-input"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={teamSeats}
+                    step={1}
+                    value={teamPremiumSeats}
+                    onChange={(event) => {
+                      const parsed = Number.parseInt(event.target.value, 10);
+                      setTeamPremiumSeatsChoice(
+                        Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), teamSeats) : 0,
+                      );
+                    }}
+                  />
+                </div>
+              ) : (
+                <p className="agi-tier-seats-total">
+                  {hasActivePaidPlan ? t('premiumSeatsInSettings') : t('premiumSeatsUnavailable')}
+                </p>
+              )}
               <p className="agi-tier-seats-total">
-                {teamInterval === 'yearly'
-                  ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
-                  : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
+                {teamPremiumSeats > 0
+                  ? t(teamInterval === 'yearly' ? 'seatTotalMixedAnnual' : 'seatTotalMixed', {
+                      standard: teamStandardSeats,
+                      premium: teamPremiumSeats,
+                      total: teamMixedTotalPrice,
+                    })
+                  : teamInterval === 'yearly'
+                    ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
+                    : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
               </p>
               <div className="agi-tier-cta-group">
                 {renderPlanAction(

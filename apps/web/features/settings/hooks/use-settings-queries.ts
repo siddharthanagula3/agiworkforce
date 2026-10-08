@@ -26,7 +26,16 @@ import settingsService, { type UserSettings, type APIKey } from '../services/use
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
 import { TimeoutPresets, withTimeout } from '@shared/lib/error-utils';
-import type { AdminPolicy, BillingPlanTier } from '@agiworkforce/types';
+import {
+  BILLING_INTERVALS,
+  normalizeTeamSeatType,
+  type AdminPolicy,
+  type BillingPlanTier,
+  type TeamSeatBillingEffect,
+  type TeamSeatType,
+  type TeamSeatTypeChange,
+  type TeamSeatTypeSummary,
+} from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
@@ -855,6 +864,8 @@ export interface TeamMember {
   name: string;
   avatarUrl: string | null;
   role: 'owner' | 'admin' | 'member' | 'viewer';
+  seatType: TeamSeatType;
+  premiumPaidThrough: string | null;
   status: 'active';
   provisionedAt: string | null;
   joinedAt: string | null;
@@ -888,13 +899,140 @@ export function useTeamMembers(
       }
 
       const json = (await res.json()) as { members: TeamMember[] };
-      return json.members ?? [];
+      return (json.members ?? []).map((member) => ({
+        ...member,
+        seatType: normalizeTeamSeatType(member.seatType),
+        premiumPaidThrough: member.premiumPaidThrough ?? null,
+      }));
     },
     enabled: !!organizationId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 15 * 60 * 1000, // 15 minutes
     meta: {
       errorMessage: 'Failed to load team members',
+    },
+  });
+}
+
+export type TeamSeatTypes = TeamSeatTypeSummary;
+
+const TeamSeatTypesSchema = z.object({
+  seatTypes: z
+    .object({
+      licensedPremiumSeats: z.number().int().nonnegative(),
+      premiumSeatsAssigned: z.number().int().nonnegative(),
+      billing: z.object({
+        interval: z.enum(BILLING_INTERVALS),
+        currency: z.string(),
+        premiumSeatsSold: z.boolean(),
+      }),
+    })
+    .nullable(),
+});
+
+export function useTeamSeatTypes(
+  organizationId: string | undefined,
+): UseQueryResult<TeamSeatTypes | null, Error> {
+  return useQuery<TeamSeatTypes | null, Error>({
+    queryKey: ['settings', 'team', organizationId ?? '', 'seat-types'],
+    queryFn: async (): Promise<TeamSeatTypes | null> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const res = await fetch(
+        `/api/settings/team/seat-types?organizationId=${encodeURIComponent(organizationId!)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+      return TeamSeatTypesSchema.parse(await res.json()).seatTypes;
+    },
+    enabled: !!organizationId,
+    staleTime: 60 * 1000,
+    meta: { errorMessage: 'Failed to load seat types' },
+  });
+}
+
+const SEAT_TYPE_CHANGE_MESSAGES: Readonly<Record<TeamSeatBillingEffect, string>> = {
+  none: 'Seat type is unchanged',
+  uses_paid_seat: 'Premium seat assigned. It was already paid for, so nothing was charged.',
+  charged_now: 'Premium seat assigned. The rest of this billing period was charged.',
+  restored_paid_seat: 'Premium seat restored. This period was already paid for.',
+  reduced_at_renewal: 'Seat moves to Standard. Premium usage stays until this period ends.',
+};
+
+export class SeatTypePaymentRequiredError extends Error {
+  readonly paymentUrl: string | null;
+
+  constructor(message: string, paymentUrl: string | null) {
+    super(message);
+    this.name = 'SeatTypePaymentRequiredError';
+    this.paymentUrl = paymentUrl;
+  }
+}
+
+const SEAT_PAYMENT_REQUIRED_MESSAGE =
+  'The charge for the Premium seat has not completed, so the member is still on a Standard seat. Pay the invoice, then assign the Premium seat again: the paid seat is used and nothing is charged twice.';
+
+function securePaymentUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    return new URL(value).protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function useUpdateTeamMemberSeatType(): UseMutationResult<
+  TeamSeatTypeChange,
+  Error,
+  { memberId: string; organizationId: string; seatType: TeamSeatType }
+> {
+  const queryClient: QueryClient = useQueryClient();
+
+  return useMutation<
+    TeamSeatTypeChange,
+    Error,
+    { memberId: string; organizationId: string; seatType: TeamSeatType }
+  >({
+    mutationFn: async ({ memberId, seatType }): Promise<TeamSeatTypeChange> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch(`/api/settings/team/${encodeURIComponent(memberId)}/seat`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ seatType }),
+      });
+
+      if (res.status === 402) {
+        const pending = (await res.json().catch(() => ({}))) as { paymentUrl?: unknown };
+        throw new SeatTypePaymentRequiredError(
+          SEAT_PAYMENT_REQUIRED_MESSAGE,
+          securePaymentUrl(pending.paymentUrl),
+        );
+      }
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+      return (await res.json()) as TeamSeatTypeChange;
+    },
+    onSuccess: (change, { organizationId }) => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'team', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
+      toast.success(SEAT_TYPE_CHANGE_MESSAGES[change.billing]);
+    },
+    onError: (error: Error) => {
+      logger.error('Failed to change team member seat type:', error);
+      if (error instanceof SeatTypePaymentRequiredError) return;
+      toast.error(toUserMessage(error, 'The seat type was not changed.'));
     },
   });
 }

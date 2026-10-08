@@ -143,7 +143,6 @@
     "settings/preferences",
     "settings/sessions",
     "settings/sessions/[sessionId]",
-    "settings/team",
     "settings/team/[memberId]",
     "settings/team/invitations/[invitationId]",
     "settings/team/invitations/accept",

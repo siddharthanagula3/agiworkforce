@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { billingPlanCapabilityWireTiers } from '@agiworkforce/types';
 
 const REPO_WEB = join(__dirname, '..', '..');
 const VIDEO_ROUTE = join(REPO_WEB, 'app/api/media/video/generate/route.ts');
@@ -36,6 +37,8 @@ describe('media paywall contract', () => {
 
   it('names Max 20x and Enterprise as the plans that unlock video', () => {
     const video = readFileSync(VIDEO_ROUTE, 'utf8');
-    expect(video).toContain("required_plans: ['max_15x', 'enterprise']");
+    expect(billingPlanCapabilityWireTiers('video_generation')).toEqual(['max_15x', 'enterprise']);
+    expect(video).toContain("required_plans: billingPlanCapabilityWireTiers('video_generation')");
+    expect(video).not.toMatch(/required_plans: \[/);
   });
 });

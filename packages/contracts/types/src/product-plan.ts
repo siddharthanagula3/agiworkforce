@@ -99,6 +99,7 @@ const PRODUCT_AUDIENCE: Readonly<Record<ProductId, ProductAudience>> = Object.fr
   max: 'individual',
   max_15x: 'individual',
   team: 'workspace',
+  team_premium: 'workspace',
   enterprise: 'enterprise',
 });
 

@@ -1,26 +1,28 @@
 use crate::cost_ledger::credit_amount;
 use crate::tier_cache::{self, UserTier};
 
-const PLAN_ORDER: [&str; 7] = [
+const PLAN_ORDER: [&str; 8] = [
     "free",
     "basic",
     "pro",
     "max",
     "max_15x",
     "team",
+    "team_premium",
     "enterprise",
 ];
 
-const PLAN_WINDOW_CREDITS: [(&str, u32, u32, u32); 6] = [
+const PLAN_WINDOW_CREDITS: [(&str, u32, u32, u32); 7] = [
     ("free", 2, 15, 20),
     ("basic", 10, 100, 400),
     ("pro", 50, 500, 2_000),
     ("max", 250, 2_500, 10_000),
     ("max_15x", 1_000, 5_000, 20_000),
     ("team", 50, 500, 2_000),
+    ("team_premium", 250, 2_500, 10_000),
 ];
 
-const PER_SEAT_PLANS: [&str; 1] = ["team"];
+const PER_SEAT_PLANS: [&str; 2] = ["team", "team_premium"];
 
 const CLOUD_CHAT_TIERS: &[&str] = &[
     "free",
@@ -29,10 +31,18 @@ const CLOUD_CHAT_TIERS: &[&str] = &[
     "max",
     "max_15x",
     "team",
+    "team_premium",
     "enterprise",
 ];
 
-const PRO_TIERS: &[&str] = &["pro", "max", "max_15x", "team", "enterprise"];
+const PRO_TIERS: &[&str] = &[
+    "pro",
+    "max",
+    "max_15x",
+    "team",
+    "team_premium",
+    "enterprise",
+];
 
 const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 16] = [
     ("managed_chat", CLOUD_CHAT_TIERS),
@@ -49,7 +59,7 @@ const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 16] = [
     ("developer_surfaces", PRO_TIERS),
     ("slack_app", PRO_TIERS),
     ("artifact_connectors", PRO_TIERS),
-    ("team_admin", &["team", "enterprise"]),
+    ("team_admin", &["team", "team_premium", "enterprise"]),
     ("enterprise_controls", &["enterprise"]),
 ];
 
@@ -233,6 +243,7 @@ mod tests {
                 "Max 5x",
                 "Max 20x",
                 "Team",
+                "Team Premium",
                 "Enterprise"
             ]
         );
@@ -269,7 +280,14 @@ mod tests {
             rows[5].0,
             format!("  Team: {} per seat", window_credits("team"))
         );
-        assert_eq!(rows[6].0, "  Enterprise: usage set by your contract");
+        assert_eq!(
+            rows[6].0,
+            format!(
+                "  Team Premium: {} per seat",
+                window_credits("team_premium")
+            )
+        );
+        assert_eq!(rows[7].0, "  Enterprise: usage set by your contract");
         for (heading, detail) in rows {
             assert!(!heading.contains("(your plan)"), "{heading}");
             assert!(detail.starts_with("    Includes: "), "{detail}");
@@ -333,7 +351,7 @@ mod tests {
         );
         assert_eq!(rows[3].1, "    No features beyond Max 20x");
         assert_eq!(
-            rows[6].1,
+            rows[7].1,
             format!(
                 "    Adds over Max 20x: {}",
                 labels(&["team_admin", "enterprise_controls"])

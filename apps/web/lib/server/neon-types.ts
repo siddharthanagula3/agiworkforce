@@ -126,6 +126,7 @@ export type OrganizationRow = {
 export type OrganizationSeatColumns = {
   owner_user_id: string | null;
   licensed_seats: number;
+  licensed_premium_seats: number;
   seats_consumed: number;
   stripe_subscription_id: string | null;
   stripe_customer_id: string | null;

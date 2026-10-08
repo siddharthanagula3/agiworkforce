@@ -146,6 +146,7 @@ async function reconcileSeatCatchUp(
   const outcome = await persistPurchasedSeatsOnOrganization(db, {
     ownerUserId: seatState.ownerUserId,
     seats: contract.committed_seats,
+    premiumSeats: 0,
     planTier: SEAT_CATCH_UP_PLAN_TIER,
     stripeSubscriptionId: contract.stripe_subscription_id,
     stripeCustomerId: contract.stripe_customer_id,

@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  TEAM_SEAT_TYPES,
+  TEAM_SEAT_TYPE_LABELS,
   getBillingPlanPricing,
   isContractPricedPlan,
   isOrganizationAdminRole,
+  type TeamSeatType,
 } from '@agiworkforce/types';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Building2, Copy, Mail, RefreshCw, RotateCw, Trash2, Users, X } from 'lucide-react';
@@ -30,15 +33,20 @@ import {
   useRevokeTeamInvitation,
   useTeamInvitations,
   useTeamMembers,
+  useTeamSeatTypes,
   useUpdateOrganizationSettings,
   useTransferOrganizationOwnership,
   useUpdateTeamMemberRole,
+  useUpdateTeamMemberSeatType,
+  SeatTypePaymentRequiredError,
   type OrganizationOwnerRoleAfterTransfer,
   type TeamInvitation,
   type TeamInvitationCredentialResult,
   type TeamMember,
 } from '../hooks/use-settings-queries';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
+import { seatChangeQuestion, seatPriceLabel } from '../lib/team-seat-change';
+import { formatBillingDate } from '@/features/billing/lib/billing-format';
 import { WORKSPACE_DELETION_PATH } from '@/features/admin/pages/workspace-deletion-route';
 import { SSOPanel } from './team/SSOPanel';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -181,6 +189,7 @@ export function TeamSection() {
   const access = overview?.access;
 
   const membersQuery = useTeamMembers(organization?.id);
+  const seatTypesQuery = useTeamSeatTypes(organization?.id);
   const invitationsQuery = useTeamInvitations(organization?.id);
   const createOrganization = useCreateOrganization();
   const updateOrganization = useUpdateOrganizationSettings();
@@ -191,6 +200,7 @@ export function TeamSection() {
   const revokeInvitation = useRevokeTeamInvitation();
   const leaveOrganization = useLeaveOrganization();
   const updateRole = useUpdateTeamMemberRole();
+  const updateSeatType = useUpdateTeamMemberSeatType();
   const removeMember = useRemoveTeamMember();
   const transferOwnership = useTransferOrganizationOwnership();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -267,7 +277,45 @@ export function TeamSection() {
   const seatsAvailable = invitationsQuery.data?.seats?.seatsAvailable ?? access.seatsAvailable;
   const seatSource = invitationsQuery.data?.seats?.seatSource ?? access.seatSource;
   const contractPriced = isContractPricedPlan(access.plan);
+  const seatBilling = seatTypesQuery.data?.billing ?? null;
+  const licensedPremiumSeats = seatTypesQuery.data?.licensedPremiumSeats ?? 0;
+  const premiumSeatsAssigned = seatTypesQuery.data?.premiumSeatsAssigned ?? 0;
+  const unassignedPremiumSeats = Math.max(0, licensedPremiumSeats - premiumSeatsAssigned);
   const workspaces = overview.workspaces ?? [];
+
+  function requestSeatChange(member: TeamMember, seatType: TeamSeatType) {
+    if (!organization || !seatBilling || seatType === member.seatType) return;
+    const organizationId = organization.id;
+    confirm({
+      ...seatChangeQuestion({
+        memberName: member.name,
+        from: member.seatType,
+        to: seatType,
+        interval: seatBilling.interval,
+        unassignedPremiumSeats,
+        premiumPaidThrough: member.premiumPaidThrough,
+      }),
+      onConfirm: () =>
+        updateSeatType
+          .mutateAsync({ memberId: member.id, organizationId, seatType })
+          .catch(() => undefined),
+    });
+  }
+
+  function seatChangeBlockedReason(member: TeamMember): string | null {
+    if (!seatBilling) return null;
+    if (member.seatType === 'standard' && !seatBilling.premiumSeatsSold) {
+      return 'Premium seats are not sold in the currency or billing period this workspace uses.';
+    }
+    if (isOwner) return null;
+    if (member.seatType === 'standard' && unassignedPremiumSeats > 0) return null;
+    return member.seatType === 'premium'
+      ? 'Only the workspace owner can move a Premium seat back to Standard, because it changes what the workspace pays.'
+      : 'Every paid Premium seat is in use. Only the workspace owner can buy another.';
+  }
+
+  const seatPaymentPending =
+    updateSeatType.error instanceof SeatTypePaymentRequiredError ? updateSeatType.error : null;
 
   const workspacePicker =
     workspaces.length > 0 ? (
@@ -660,6 +708,15 @@ export function TeamSection() {
               {seatsAvailable ?? 'Unknown'}
             </div>
           </div>
+          {seatBilling ? (
+            <div data-testid="team-premium-seats">
+              <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Premium seats</div>
+              <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
+                {premiumSeatsAssigned} of {licensedPremiumSeats}
+              </div>
+              <div style={{ color: 'var(--text-3)', fontSize: 12 }}>assigned</div>
+            </div>
+          ) : null}
           <div
             style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 'var(--space-2)' }}
           >
@@ -694,7 +751,33 @@ export function TeamSection() {
           }}
         >
           Active members and pending invitations each reserve one seat.
+          {seatBilling?.premiumSeatsSold
+            ? ` A Standard seat is ${seatPriceLabel('standard', seatBilling.interval)} and a Premium seat is ${seatPriceLabel('premium', seatBilling.interval)}. Set each member's seat type in the member list.`
+            : ''}
         </p>
+        {seatPaymentPending ? (
+          <p
+            role="alert"
+            data-testid="team-seat-payment-pending"
+            style={{
+              borderTop: '1px solid var(--settings-border)',
+              color: 'var(--text-1)',
+              fontSize: 13,
+              lineHeight: 1.5,
+              margin: 0,
+              padding: 'var(--space-3) var(--space-5)',
+            }}
+          >
+            {seatPaymentPending.message}{' '}
+            {seatPaymentPending.paymentUrl ? (
+              <a href={seatPaymentPending.paymentUrl} target="_blank" rel="noopener noreferrer">
+                Pay the invoice
+              </a>
+            ) : (
+              <SettingsSectionLink section="billing">Open billing to pay it</SettingsSectionLink>
+            )}
+          </p>
+        ) : null}
       </SectionCard>
 
       {canAdminister ? (
@@ -1040,7 +1123,34 @@ export function TeamSection() {
                   >
                     {member.email}
                   </div>
+                  {member.premiumPaidThrough ? (
+                    <div style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                      Premium usage until {formatBillingDate(member.premiumPaidThrough)}
+                    </div>
+                  ) : null}
                 </div>
+                {seatBilling && canAdminister ? (
+                  <select
+                    aria-label={`Seat type for ${member.name}`}
+                    value={member.seatType}
+                    disabled={updateSeatType.isPending || seatChangeBlockedReason(member) !== null}
+                    title={seatChangeBlockedReason(member) ?? undefined}
+                    onChange={(event) =>
+                      requestSeatChange(member, event.target.value as TeamSeatType)
+                    }
+                    style={{ ...controlStyle, width: 150, flexShrink: 0 }}
+                  >
+                    {TEAM_SEAT_TYPES.map((seatType) => (
+                      <option key={seatType} value={seatType}>
+                        {TEAM_SEAT_TYPE_LABELS[seatType]} seat
+                      </option>
+                    ))}
+                  </select>
+                ) : seatBilling ? (
+                  <span style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                    {TEAM_SEAT_TYPE_LABELS[member.seatType]} seat
+                  </span>
+                ) : null}
                 {canManageThisMember ? (
                   <>
                     <select

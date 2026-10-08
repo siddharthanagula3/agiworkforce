@@ -25,6 +25,7 @@ const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'max',
   'max_15x',
   'team',
+  'team_premium',
   'enterprise',
 ]);
 

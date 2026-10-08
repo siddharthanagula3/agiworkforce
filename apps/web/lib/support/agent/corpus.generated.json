@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 43,
-  "chunkCount": 237,
+  "chunkCount": 238,
   "documents": [
     {
       "id": "account-security",
@@ -302,7 +302,7 @@
         "seats",
         "renewal"
       ],
-      "updated": "2026-09-27",
+      "updated": "2026-10-08",
       "source": "content/support/billing-and-plans.md",
       "chunks": [
         {
@@ -322,41 +322,48 @@
         {
           "id": "billing-and-plans#2",
           "ordinal": 2,
+          "heading": "Team seat types",
+          "headingPath": "Plans, upgrading, and cancelling › Team seat types",
+          "text": "A Team plan sells two seat types on one subscription, Standard and Premium, and\none team can hold both. A Premium seat carries the usage limits and model access\nof Max 5x, which is five times the usage of a Standard seat, and keeps every\nTeam feature.\n\nSeat types are set in Settings, Team. An owner or admin can assign a Premium\nseat the team already pays for and has not assigned, at no extra charge. Only\nthe workspace owner can make a change that alters the bill. Moving a member to\nPremium when no paid Premium seat is free charges the difference for the rest of\nthe current period straight away and keeps the renewal date. Moving a member\nback to Standard bills the Standard price from the next renewal: the current\nperiod is not refunded, and the member keeps Premium usage until it ends.\n\nPremium seats are priced in US dollars only. The pricing page carries the price\nof each seat type."
+        },
+        {
+          "id": "billing-and-plans#3",
+          "ordinal": 3,
           "heading": "Monthly and yearly billing",
           "headingPath": "Plans, upgrading, and cancelling › Monthly and yearly billing",
           "text": "Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed\nmonthly or yearly.\n\nIf you already pay yearly for Pro, nothing changes. Your subscription keeps its\nprice and renews yearly until you switch to monthly or cancel. Once you switch\nto monthly, yearly billing is no longer available for that plan.\n\n**Switch to monthly billing** in Settings, Billing makes the switch when your\nyearly term ends. Upgrading to Max 5x or Max 20x moves you to that plan's\nmonthly price straight away, and the unused part of your year is credited\ntoward future invoices."
         },
         {
-          "id": "billing-and-plans#3",
-          "ordinal": 3,
+          "id": "billing-and-plans#4",
+          "ordinal": 4,
           "heading": "Cancelling",
           "headingPath": "Plans, upgrading, and cancelling › Cancelling",
           "text": "On a plan billed through the web, **Cancel plan** in Settings, Billing opens the\nbilling portal at the cancellation flow. Once cancellation is scheduled the\nperiod row changes from \"Renews on\" to \"Cancels on\", and access continues to\nthat date."
         },
         {
-          "id": "billing-and-plans#4",
-          "ordinal": 4,
+          "id": "billing-and-plans#5",
+          "ordinal": 5,
           "heading": "Subscriptions bought in an app store",
           "headingPath": "Plans, upgrading, and cancelling › Subscriptions bought in an app store",
           "text": "If the subscription was bought through Apple or Google, AGI cannot change it.\nThe page says so and points you at the store: \"Change or cancel this\nsubscription with Apple before starting web billing\", and the equivalent for\nGoogle Play. Cancel there first if you want to move to web billing."
         },
         {
-          "id": "billing-and-plans#5",
-          "ordinal": 5,
+          "id": "billing-and-plans#6",
+          "ordinal": 6,
           "heading": "Plans your organization pays for",
           "headingPath": "Plans, upgrading, and cancelling › Plans your organization pays for",
           "text": "On a workspace-managed plan the controls are read-only: \"This plan is managed by\nyour organization. Contact an administrator to change it\", and invoices are\nprovided by the organization rather than shown here."
         },
         {
-          "id": "billing-and-plans#6",
-          "ordinal": 6,
+          "id": "billing-and-plans#7",
+          "ordinal": 7,
           "heading": "Invoices",
           "headingPath": "Plans, upgrading, and cancelling › Invoices",
           "text": "Invoices appear once you are billed on a paid plan. Before the first cycle\ncloses the list says so rather than showing an error."
         },
         {
-          "id": "billing-and-plans#7",
-          "ordinal": 7,
+          "id": "billing-and-plans#8",
+          "ordinal": 8,
           "heading": "When billing will not let you change plans",
           "headingPath": "Plans, upgrading, and cancelling › When billing will not let you change plans",
           "text": "- \"Billing ownership is not verified. Refresh your account before changing\n  plans.\" Reload and sign in again.\n- \"Resolve the current billing status in Manage billing before changing plans.\"\n  A renewal payment failed. Paid features stay off until it succeeds; there is\n  no grace period. In Settings, Billing, pay the open invoice or update your\n  payment method."

@@ -193,7 +193,24 @@ describe('BillingSection', () => {
       subscription_source: 'stripe',
     };
     render(<BillingSection />);
-    expect(screen.getByText('$25/mo per seat')).toBeTruthy();
+    expect(screen.getByText('$25/mo per Standard seat, $125/mo per Premium seat')).toBeTruthy();
+  });
+
+  it('shows the owner of a team the Team plan and both seat prices, whichever seat the owner holds', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    mockSubscription = {
+      tier: 'team_premium',
+      display_name: 'Team Premium',
+      status: 'active',
+      current_period_end: 1_800_000_000,
+      subscription_source: 'stripe',
+    };
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('$25/mo per Standard seat, $125/mo per Premium seat')).toBeTruthy();
+    expect(screen.queryByText('$125/mo per seat')).toBeNull();
+    expect(screen.queryByText('Team Premium')).toBeNull();
   });
 
   const YEARLY_PRO_PRICE = { amountCents: 20_000, currency: 'usd', interval: 'yearly' };

@@ -65,6 +65,11 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   const teamYearlyUsd = process.env['STRIPE_PRICE_TEAM_YEARLY_USD'];
   registerPrice(mapping, teamYearlyUsd, { tier: 'team', interval: 'yearly' });
 
+  const teamPremiumMonthlyUsd = process.env['STRIPE_PRICE_TEAM_PREMIUM_MONTHLY_USD'];
+  const teamPremiumYearlyUsd = process.env['STRIPE_PRICE_TEAM_PREMIUM_YEARLY_USD'];
+  registerPrice(mapping, teamPremiumMonthlyUsd, { tier: 'team', interval: 'monthly' });
+  registerPrice(mapping, teamPremiumYearlyUsd, { tier: 'team', interval: 'yearly' });
+
   const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
   const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
   registerPrice(mapping, enterpriseMonthly, { tier: 'enterprise', interval: 'monthly' });

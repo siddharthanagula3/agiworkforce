@@ -2,14 +2,20 @@ import 'server-only';
 
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  TEAM_SEAT_TYPE_LABELS,
   getBillingPlanPricing,
+  isEntitledSubscriptionStatus,
   isPerSeatBillingPlan,
   isSelfServeIndividualPlanTier,
   normalizeBillingPlanTier,
   planOffersBillingInterval,
+  teamSeatPlanTier,
+  totalTeamSeats,
   type BillingInterval,
   type BillingPlanTier,
   type SelfServeIndividualPlanTier,
+  type TeamSeatQuantities,
+  type TeamSeatType,
 } from '@agiworkforce/types';
 import type Stripe from 'stripe';
 import type {
@@ -20,9 +26,17 @@ import type {
   ScheduledPlanChange,
 } from '@/features/billing/lib/billing-account-types';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import {
+  primarySeatLineItem,
+  resolveSeatQuantities,
+  seatLineItemOfType,
+  seatTypeOfLineItem,
+} from '@/lib/billing/team-seat-items';
 import { resolvePlanTier } from '@/lib/price-tier-mapping';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
 import type { ManagedStripeSubscription } from '@/lib/server/stripe-upgrade-subscription';
+import { getSubscriptionPeriod } from '@/lib/stripe-types';
 
 export type CheckoutBillingInterval = 'monthly' | 'yearly';
 
@@ -164,6 +178,53 @@ export function currentSeatsFromStripeItem(quantity: number | null | undefined):
   return typeof quantity === 'number' && Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
 }
 
+export interface SeatChangeBasis {
+  item: Stripe.SubscriptionItem;
+  currentSeats: number;
+  premiumSeats: number;
+  premiumRecurringCents: number;
+}
+
+export function seatChangeBasis(subscription: Stripe.Subscription): SeatChangeBasis | null {
+  const item = primarySeatLineItem(subscription.items.data);
+  if (!item) return null;
+  const seatTypes = resolveSeatQuantities(subscription.items.data);
+  const premiumLine = seatLineItemOfType(subscription.items.data, 'premium');
+  const premiumSeats = seatTypes?.premium ?? 0;
+  return {
+    item,
+    currentSeats: seatTypes
+      ? Math.max(totalTeamSeats(seatTypes), 1)
+      : currentSeatsFromStripeItem(item.quantity),
+    premiumSeats,
+    premiumRecurringCents: (premiumLine?.price.unit_amount ?? 0) * premiumSeats,
+  };
+}
+
+export function planChangeItems(
+  basis: SeatChangeBasis,
+  priceId: string,
+  requestedSeats: number,
+): Array<{ id?: string; price: string; quantity: number }> {
+  const quantity = requestedSeats - basis.premiumSeats;
+  return seatTypeOfLineItem(basis.item) === 'premium'
+    ? [{ price: priceId, quantity }]
+    : [{ id: basis.item.id, price: priceId, quantity }];
+}
+
+export function planChangeApplied(
+  subscription: Stripe.Subscription,
+  priceId: string,
+  requestedSeats: number,
+): boolean {
+  const applied = seatChangeBasis(subscription);
+  return (
+    applied !== null &&
+    subscription.items.data.some((line) => line.price.id === priceId) &&
+    applied.currentSeats === requestedSeats
+  );
+}
+
 const STRIPE_INTERVAL: Readonly<Record<BillingInterval, 'month' | 'year'>> = {
   monthly: 'month',
   yearly: 'year',
@@ -209,12 +270,21 @@ function recurringPriceOf(
 }
 
 function currentItemOf(subscription: Stripe.Subscription): Stripe.SubscriptionItem | null {
-  return subscription.items.data[0] ?? null;
+  return primarySeatLineItem(subscription.items.data);
 }
 
 function currentPriceOf(subscription: Stripe.Subscription): RecurringPrice | null {
   const item = currentItemOf(subscription);
-  return recurringPriceOf(item?.price, item?.quantity ?? 1);
+  const price = recurringPriceOf(item?.price, item?.quantity ?? 1);
+  if (!price || !resolveSeatQuantities(subscription.items.data)) return price;
+  const amountCents = subscription.items.data.reduce(
+    (total, line) =>
+      seatTypeOfLineItem(line) === null
+        ? total
+        : total + (line.price.unit_amount ?? 0) * (line.quantity ?? 0),
+    0,
+  );
+  return { ...price, amountCents };
 }
 
 function cancelAtOf(subscription: Stripe.Subscription): string | null {
@@ -512,4 +582,151 @@ async function releaseAndResume(
     );
   }
   return stripe.subscriptions.retrieve(subscription.id, { expand });
+}
+
+export type TeamSeatStripe = Pick<Stripe, 'subscriptions'>;
+
+export class SeatTypePaymentPendingError extends Error {
+  readonly paymentUrl: string | null;
+
+  constructor(pending: { paymentUrl: string | null }) {
+    super('The Premium seat charge has not completed');
+    this.name = 'SeatTypePaymentPendingError';
+    this.paymentUrl = pending.paymentUrl;
+  }
+}
+
+export interface TeamSeatMove {
+  seats: TeamSeatQuantities;
+  charge: boolean;
+  idempotencyKey: string | null;
+}
+
+export interface TeamSeatBillingHandle {
+  seats: TeamSeatQuantities;
+  paidThrough: string | null;
+  assertChangeable(): void;
+  moveSeat(move: TeamSeatMove): Promise<TeamSeatQuantities>;
+}
+
+function requireSeatQuantities(subscription: Stripe.Subscription): TeamSeatQuantities {
+  const seats = resolveSeatQuantities(subscription.items.data);
+  if (!seats) {
+    throw createError.conflict(
+      'This subscription is not billed at a current Team seat price, so its seat types cannot be changed here. Nothing was changed.',
+    );
+  }
+  return seats;
+}
+
+function requireChangeableSubscription(subscription: Stripe.Subscription): void {
+  if (!isEntitledSubscriptionStatus(subscription.status)) {
+    throw createError.conflict(
+      'Resolve the current billing status in Manage billing before changing seat types. Nothing was changed.',
+    );
+  }
+  if (subscription.cancel_at_period_end || subscription.cancel_at) {
+    throw createError.conflict(
+      'This plan is scheduled to end, so seat types cannot be changed. Resume the subscription from billing first. Nothing was charged.',
+    );
+  }
+  if (subscription.pending_update) {
+    throw createError.conflict(
+      'An earlier seat change is waiting for its payment to complete. Finish or cancel that payment in Manage billing first.',
+    );
+  }
+}
+
+async function seatPriceId(
+  seatType: TeamSeatType,
+  subscription: Stripe.Subscription,
+): Promise<string> {
+  const interval = checkoutBillingIntervalFromStripePrice(
+    subscription.items.data[0]?.price.recurring,
+  );
+  const selection = interval
+    ? await getPriceSelectionForCurrency(
+        teamSeatPlanTier(seatType),
+        interval,
+        subscription.currency,
+      )
+    : null;
+  if (!selection || selection.currency.toLowerCase() !== subscription.currency.toLowerCase()) {
+    throw createError.conflict(
+      `${TEAM_SEAT_TYPE_LABELS[seatType]} seats are not sold in ${subscription.currency.toUpperCase()} with this billing period. Nothing was changed.`,
+    );
+  }
+  return selection.priceId;
+}
+
+async function seatLineUpdate(
+  subscription: Stripe.Subscription,
+  seatType: TeamSeatType,
+  quantity: number,
+): Promise<Stripe.SubscriptionUpdateParams.Item> {
+  const line = seatLineItemOfType(subscription.items.data, seatType);
+  return line
+    ? { id: line.id, quantity }
+    : { price: await seatPriceId(seatType, subscription), quantity };
+}
+
+function hostedInvoiceUrl(subscription: Stripe.Subscription): string | null {
+  const invoice = subscription.latest_invoice;
+  return invoice && typeof invoice === 'object' ? (invoice.hosted_invoice_url ?? null) : null;
+}
+
+// Both quantities are written as absolute values: an increment here would charge twice on a
+// retried request.
+async function moveTeamSeat(
+  stripe: TeamSeatStripe,
+  subscription: Stripe.Subscription,
+  move: TeamSeatMove,
+): Promise<TeamSeatQuantities> {
+  const items = [
+    await seatLineUpdate(subscription, 'standard', move.seats.standard),
+    await seatLineUpdate(subscription, 'premium', move.seats.premium),
+  ];
+  const updated = await stripe.subscriptions.update(
+    subscription.id,
+    move.charge
+      ? {
+          items,
+          proration_behavior: 'always_invoice',
+          billing_cycle_anchor: 'unchanged',
+          payment_behavior: 'pending_if_incomplete',
+          expand: ['latest_invoice'],
+        }
+      : { items, proration_behavior: 'none' },
+    move.idempotencyKey
+      ? { idempotencyKey: `seat-type:${subscription.id}:${move.idempotencyKey}` }
+      : undefined,
+  );
+  if (updated.pending_update) {
+    throw new SeatTypePaymentPendingError({ paymentUrl: hostedInvoiceUrl(updated) });
+  }
+  const applied = requireSeatQuantities(updated);
+  if (applied.standard !== move.seats.standard || applied.premium !== move.seats.premium) {
+    logger.error(
+      { subscriptionId: subscription.id, expected: move.seats, applied },
+      'Stripe returned a seat type change without the requested quantities applied',
+    );
+    throw createError.internal('The seat change could not be verified with the payment provider');
+  }
+  return applied;
+}
+
+export async function openTeamSeatBilling(
+  stripe: TeamSeatStripe,
+  subscriptionId: string,
+): Promise<TeamSeatBillingHandle> {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    expand: ['items.data.price'],
+  });
+  const period = getSubscriptionPeriod(subscription);
+  return {
+    seats: requireSeatQuantities(subscription),
+    paidThrough: period ? new Date(period.end * 1000).toISOString() : null,
+    assertChangeable: () => requireChangeableSubscription(subscription),
+    moveSeat: (move) => moveTeamSeat(stripe, subscription, move),
+  };
 }

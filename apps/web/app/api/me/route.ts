@@ -25,6 +25,8 @@ import {
   type PlatformCapability,
   type SyncedAppSurface,
   type WorkspaceFeature,
+  seatTypeField,
+  wirePlanOf,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type {
@@ -298,16 +300,17 @@ async function handleGetMe(request: NextRequest) {
     const subscriptionSource = entitlement.seatSource
       ? 'manual'
       : resolveSubscriptionBillingSource(subscription);
-    const planTier = subscription?.plan_tier || 'free';
+    const wirePlan = wirePlanOf(subscription?.plan_tier);
     const plan = {
-      tier: planTier,
-      display_name: getBillingPlanPricing(planTier).label,
+      tier: wirePlan.tier,
+      display_name: getBillingPlanPricing(wirePlan.tier).label,
       status: subscription?.status || 'none',
       current_period_end: subscription?.current_period_end
         ? new Date(subscription.current_period_end).getTime() / 1000
         : null,
       cancel_at_period_end: subscription?.cancel_at_period_end ?? false,
-      effective_tier: effectiveTier,
+      effective_tier: wirePlanOf(effectiveTier).tier,
+      ...seatTypeField(wirePlanOf(effectiveTier).seatType),
       ...(subscriptionSource === 'unverified' ? {} : { subscription_source: subscriptionSource }),
     };
 
