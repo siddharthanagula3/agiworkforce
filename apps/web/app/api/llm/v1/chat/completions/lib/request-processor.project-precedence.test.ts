@@ -9,6 +9,8 @@ import {
   type InstructionLayer,
 } from '@/lib/prompts/instruction-precedence';
 import type { LoadedProjectContext } from '@/lib/services/project-context-service';
+import { StatementScanPostgres } from '@/lib/services/__tests__/statement-scan-postgres';
+import { composeStudyInstruction } from '@/features/study/lib/study-session';
 type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule1 = typeof import('./chat-attachment-hydration');
 type ScanModule2 = typeof import('@/lib/services/managed-memory-context-service');
@@ -310,5 +312,92 @@ describe('the three trust levels a project carries are three blocks, not one', (
     expect(boundaryIndex).toBeGreaterThan(-1);
     expect(joined.indexOf(KNOWLEDGE_TEXT)).toBeGreaterThan(boundaryIndex);
     expect(joined.indexOf(SIBLING_PREVIEW)).toBeGreaterThan(boundaryIndex);
+  });
+});
+
+describe('an open study session instructs the turn', () => {
+  const STUDY = { topic: 'contract law', mode: 'practice', level: 'beginner' } as const;
+
+  function studying(endedAt: string | null) {
+    const sessions = new StatementScanPostgres({
+      study_sessions: [
+        {
+          id: 'study-1',
+          user_id: 'user-pro',
+          conversation_id: CONVERSATION_ID,
+          ...STUDY,
+          started_at: '2026-07-10T09:00:00.000Z',
+          ended_at: endedAt,
+        },
+      ],
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (sql.includes('study_sessions')) return sessions.query(sql, params);
+      return sql.includes('from web_conversations')
+        ? [{ id: CONVERSATION_ID, project_id: PROJECT_ID, is_temporary: false }]
+        : [];
+    });
+  }
+
+  it('carries the study instruction at the developer layer, ahead of the project', async () => {
+    studying(null);
+
+    const joined = await assembledSystemText('study-open');
+
+    const observed = observedLayers(joined, [
+      { layer: 'system', needle: 'You are AGI Workforce' },
+      { layer: 'developer', needle: composeStudyInstruction(STUDY) },
+      { layer: 'project', needle: PROJECT_INSTRUCTION },
+      { layer: 'personalized', needle: 'Preferred name: Ada' },
+    ]);
+    expect(instructionOrderProblems(observed)).toEqual([]);
+  });
+
+  it('stops instructing the turn once the session has ended', async () => {
+    studying('2026-07-10T10:00:00.000Z');
+
+    const joined = await assembledSystemText('study-ended');
+
+    expect(joined).not.toContain('The user is studying');
+  });
+});
+
+describe('a project turn whose context cannot be decided', () => {
+  function memorySettingsUnreadable(projectId: string | null) {
+    mocks.loadPolicy.mockResolvedValue({
+      enabled: true,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+      searchPastChats: false,
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes("settings -> 'memory'")) throw new Error('connection reset');
+      return sql.includes('from web_conversations')
+        ? [{ id: CONVERSATION_ID, project_id: projectId, is_temporary: false }]
+        : [];
+    });
+  }
+
+  it('refuses instead of sending the project unfiltered', async () => {
+    memorySettingsUnreadable(PROJECT_ID);
+
+    const result = await processRequest(chatRequestFor('project-undecided'), auth());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(503);
+    expect((await result.response.json()).error).toMatchObject({
+      code: 'project_context_load_failed',
+      message:
+        'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
+    });
+  });
+
+  it('still answers a chat outside a project without account memory', async () => {
+    memorySettingsUnreadable(null);
+
+    const joined = await assembledSystemText('loose-undecided');
+
+    expect(joined).not.toContain(PROJECT_INSTRUCTION);
   });
 });

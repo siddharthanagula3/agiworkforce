@@ -23,12 +23,7 @@ import {
 } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
-import {
-  composeStudyInstruction,
-  isStudyLevel,
-  isStudyMode,
-  normalizeStudyTopic,
-} from '@/features/study/lib/study-session';
+import { readActiveStudyInstruction } from '@/features/study/server/study-session-store';
 import { AgiWorkGoalSchema, AgiWorkSuppliedPlanSchema } from './agiwork-plan';
 import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
@@ -1407,6 +1402,23 @@ type ProcessFailure = { ok: false; response: NextResponse };
 type ProcessSuccess = { ok: true } & ProcessedRequest;
 export type ProcessResult = ProcessSuccess | ProcessFailure;
 
+function projectContextLoadFailure(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message:
+            'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
+          type: 'server_error',
+          code: 'project_context_load_failed',
+        },
+      },
+      { status: 503 },
+    ),
+  };
+}
+
 const EFFORT_VALUES: ReadonlySet<string> = new Set([
   'none',
   'minimal',
@@ -1623,16 +1635,6 @@ export function composeManagedSystemPreamble(input: {
   return dynamicBlock
     ? `${stableBlock}${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicBlock}`
     : stableBlock;
-}
-
-function activeStudyInstruction(row: {
-  study_topic: string | null;
-  study_mode: string | null;
-  study_level: string | null;
-}): string | null {
-  const topic = normalizeStudyTopic(row.study_topic);
-  if (!topic || !isStudyMode(row.study_mode) || !isStudyLevel(row.study_level)) return null;
-  return composeStudyInstruction({ topic, mode: row.study_mode, level: row.study_level });
 }
 
 function lastUserMessageText(request: ChatCompletionRequest): string {
@@ -3088,7 +3090,7 @@ export async function processRequest(
       }
     | ProcessFailure
   > = chatRequest.conversation_id
-    ? (async () => {
+    ? (async (conversationId: string) => {
         let projectSources: ProjectFileCitation[] = [];
         let projectBlocks: readonly ProjectContextBlock[] = [];
         let loadedProjectContext: LoadedProjectContext | null = null;
@@ -3111,24 +3113,21 @@ export async function processRequest(
             };
           }
 
-          const ownedRows = await scoped.db.query<{
-            id: string;
-            project_id: string | null;
-            is_temporary: boolean;
-            selected_route_id: string | null;
-            study_topic: string | null;
-            study_mode: string | null;
-            study_level: string | null;
-          }>(
-            `select c.id, c.project_id, c.is_temporary, to_jsonb(c)->>'selected_route_id' as selected_route_id,
-                    s.topic as study_topic, s.mode as study_mode, s.level as study_level
-                 from web_conversations c
-                 left join study_sessions s
-                   on s.conversation_id = c.id and s.user_id = c.user_id and s.ended_at is null
-                where c.id = $1 and c.user_id = $2 and c.deleted_at is null
-                limit 1`,
-            [chatRequest.conversation_id, userId],
-          );
+          const [ownedRows, studyInstruction] = await Promise.all([
+            scoped.db.query<{
+              id: string;
+              project_id: string | null;
+              is_temporary: boolean;
+              selected_route_id: string | null;
+            }>(
+              `select c.id, c.project_id, c.is_temporary, to_jsonb(c)->>'selected_route_id' as selected_route_id
+                   from web_conversations c
+                  where c.id = $1 and c.user_id = $2 and c.deleted_at is null
+                  limit 1`,
+              [chatRequest.conversation_id, userId],
+            ),
+            readActiveStudyInstruction(scoped.db, userId, conversationId),
+          ]);
           if (!ownedRows[0]) {
             return {
               ok: false,
@@ -3184,20 +3183,7 @@ export async function processRequest(
                 },
                 'Project context load failed',
               );
-              return {
-                ok: false,
-                response: NextResponse.json(
-                  {
-                    error: {
-                      message:
-                        'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
-                      type: 'server_error',
-                      code: 'project_context_load_failed',
-                    },
-                  },
-                  { status: 503 },
-                ),
-              };
+              return projectContextLoadFailure();
             }
           }
 
@@ -3210,7 +3196,7 @@ export async function processRequest(
             projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
             projectHasKnowledgeFiles,
-            studyInstruction: activeStudyInstruction(ownedRows[0]),
+            studyInstruction,
           };
         } catch (error) {
           logger.error(
@@ -3231,7 +3217,7 @@ export async function processRequest(
             ),
           };
         }
-      })()
+      })(chatRequest.conversation_id)
     : Promise.resolve({
         ok: true,
         isTemporary: false,
@@ -3467,6 +3453,13 @@ export async function processRequest(
       }),
     );
   } catch (error) {
+    if (ownership.projectContext) {
+      logger.error(
+        { error, userId, conversationId: chatRequest.conversation_id },
+        'Project context could not be admitted to the turn; no model request was sent',
+      );
+      return projectContextLoadFailure();
+    }
     logger.error(
       { error, userId, conversationId: chatRequest.conversation_id },
       'Turn context could not be assembled; continuing without account memory or past chats',
@@ -3476,7 +3469,7 @@ export async function processRequest(
   // The project instruction is stable for the conversation and joins the cached
   // preamble below. What the project merely supplies to read varies with the
   // question, so each remaining block is carried at its own layer instead.
-  for (const block of turnContext?.projectBlocks ?? ownership.projectBlocks) {
+  for (const block of turnContext?.projectBlocks ?? []) {
     if (block.layer === 'project') continue;
     chatRequest.messages.unshift({ role: 'system', content: block.text });
     dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, block.layer);

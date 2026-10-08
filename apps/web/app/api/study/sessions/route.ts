@@ -51,7 +51,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation-list');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const conversationId = new URL(request.url).searchParams.get('conversationId');
   if (conversationId !== null) {
     if (!UUID.test(conversationId)) {
@@ -62,7 +62,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(payload);
   }
 
-  const payload: StudySessionsResponse = { sessions: await listStudySessions(db, userId) };
+  const payload: StudySessionsResponse = {
+    sessions: await listStudySessions(db, { userId, organizationId }),
+  };
   return NextResponse.json(payload);
 }
 

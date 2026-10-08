@@ -2,7 +2,17 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-import type { StudyLevel, StudyMode, StudySession } from '../lib/study-session';
+import { assertWorkspaceScope, type WorkspaceScope } from '@/lib/server/workspace-scope';
+
+import {
+  composeStudyInstruction,
+  isStudyLevel,
+  isStudyMode,
+  normalizeStudyTopic,
+  type StudyLevel,
+  type StudyMode,
+  type StudySession,
+} from '../lib/study-session';
 
 interface StudySessionRow {
   id: string;
@@ -35,16 +45,20 @@ function present(row: StudySessionRow): StudySession {
 
 export async function listStudySessions(
   db: DatabaseAdapter,
-  userId: string,
+  scope: WorkspaceScope,
   limit = 50,
 ): Promise<StudySession[]> {
+  const { userId, organizationId } = assertWorkspaceScope(scope);
   const rows = await db.query<StudySessionRow>(
-    `select ${COLUMNS}
-       from public.study_sessions
-      where user_id = $1
-      order by started_at desc
-      limit $2`,
-    [userId, limit],
+    `select s.id, s.conversation_id, s.topic, s.mode, s.level, s.started_at, s.ended_at
+       from public.study_sessions s
+       join public.web_conversations c on c.id = s.conversation_id and c.user_id = s.user_id
+      where s.user_id = $1
+        and c.organization_id is not distinct from $2::uuid
+        and c.deleted_at is null
+      order by s.started_at desc
+      limit $3`,
+    [userId, organizationId, limit],
   );
   return rows.map(present);
 }
@@ -61,6 +75,24 @@ export async function readStudySessionForConversation(
     [userId, conversationId],
   );
   return row ? present(row) : null;
+}
+
+/** What a turn in this conversation is told while its study session is open. */
+export async function readActiveStudyInstruction(
+  db: DatabaseAdapter,
+  userId: string,
+  conversationId: string,
+): Promise<string | null> {
+  const [row] = await db.query<Pick<StudySessionRow, 'topic' | 'mode' | 'level'>>(
+    `select topic, mode, level
+       from public.study_sessions
+      where user_id = $1 and conversation_id = $2 and ended_at is null
+      limit 1`,
+    [userId, conversationId],
+  );
+  const topic = normalizeStudyTopic(row?.topic);
+  if (!row || !topic || !isStudyMode(row.mode) || !isStudyLevel(row.level)) return null;
+  return composeStudyInstruction({ topic, mode: row.mode, level: row.level });
 }
 
 /**
