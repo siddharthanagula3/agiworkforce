@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FEATURE_RATE_CARD,
   chargeMicrousdForProviderCost,
+  getModelMetadataById,
   requireProviderDefaultModel,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
@@ -14,6 +15,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   finalizeManagedUsageRequest,
 }));
 
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
 
 import {
@@ -22,10 +24,10 @@ import {
   createObservedProviderUsage,
   finalizeObservedManagedUsage,
   mergeObservedProviderUsage,
-  observedListLedgerMicrousd,
   observedProviderUsageLedgerMicrousd,
   observedTurnCost,
   priceServerToolUsage,
+  type ObservedProviderUsage,
 } from '../managed-usage-accounting-service';
 
 const ANTHROPIC_SEARCH_MICROUSD = FEATURE_RATE_CARD.web_search_anthropic
@@ -203,10 +205,121 @@ describe('finalizeObservedManagedUsage', () => {
       expect.objectContaining({
         outcome: 'completed',
         actualCostMicrousd:
-          observedListLedgerMicrousd(usage, pricing) + chargeMicrousdForProviderCost(fees),
+          listMicrousd(OPENAI_MODEL, { promptTokens: 2_000, completionTokens: 500 }) +
+          chargeMicrousdForProviderCost(fees),
         providerCostMicrousd: observedProviderUsageLedgerMicrousd(usage, pricing) + fees,
         usage: expect.objectContaining({ webSearchRequests: 2 }),
       }),
     );
+  });
+});
+
+function listMicrousd(
+  model: string,
+  tokens: { promptTokens: number; completionTokens: number },
+): number {
+  const microusd = LLMCostCalculator.calculateListCostMicrousd(model, {
+    ...tokens,
+    totalTokens: tokens.promptTokens + tokens.completionTokens,
+    reasoningTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+  });
+  if (microusd === null) throw new Error(`Expected a catalog list price for ${model}`);
+  return microusd;
+}
+
+async function settledMicrousd(model: string, usage: ObservedProviderUsage): Promise<number> {
+  await finalizeObservedManagedUsage({
+    reservation,
+    provider: 'open_router',
+    model,
+    usage,
+    reason: 'tool_loop_completed',
+  });
+  return finalizeManagedUsageRequest.mock.calls.at(-1)?.[0].actualCostMicrousd;
+}
+
+describe('the list price an agent turn settles at', () => {
+  const servedRoute = { provider: 'open_router', model: ANTHROPIC_MODEL };
+
+  it('settles one call at the catalog list price in microUSD', async () => {
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 1_000, outputTokens: 100 }, servedRoute);
+
+    const expected = listMicrousd(ANTHROPIC_MODEL, { promptTokens: 1_000, completionTokens: 100 });
+    const metadata = getModelMetadataById(ANTHROPIC_MODEL);
+    if (!metadata) throw new Error('Expected catalog metadata for the default model');
+
+    const perMillionTimesTokens = 1_000 * metadata.inputCost + 100 * metadata.outputCost;
+
+    expect(await settledMicrousd(ANTHROPIC_MODEL, usage)).toBe(expected);
+    expect(Math.abs(expected - perMillionTimesTokens)).toBeLessThanOrEqual(1);
+  });
+
+  it('settles a sub-cent call below one cent rather than at a cent floor', async () => {
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 10, outputTokens: 1 }, servedRoute);
+
+    const settled = await settledMicrousd(ANTHROPIC_MODEL, usage);
+
+    expect(settled).toBe(listMicrousd(ANTHROPIC_MODEL, { promptTokens: 10, completionTokens: 1 }));
+    expect(settled).toBeGreaterThan(0);
+    expect(settled).toBeLessThan(10_000);
+  });
+
+  it('sums each observed call of a multi-call turn at its own list price', async () => {
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 1_000, outputTokens: 100 }, servedRoute);
+    accumulateObservedProviderUsage(usage, { inputTokens: 3_000, outputTokens: 400 }, servedRoute);
+
+    expect(await settledMicrousd(ANTHROPIC_MODEL, usage)).toBe(
+      listMicrousd(ANTHROPIC_MODEL, { promptTokens: 1_000, completionTokens: 100 }) +
+        listMicrousd(ANTHROPIC_MODEL, { promptTokens: 3_000, completionTokens: 400 }),
+    );
+  });
+
+  it('prices the aggregate at list when the calls were not individually observed', async () => {
+    const usage = createObservedProviderUsage();
+    usage.providerCalls = 2;
+    usage.inputTokens = 4_000;
+    usage.outputTokens = 500;
+
+    expect(await settledMicrousd(ANTHROPIC_MODEL, usage)).toBe(
+      listMicrousd(ANTHROPIC_MODEL, { promptTokens: 4_000, completionTokens: 500 }),
+    );
+  });
+
+  it('settles a model with no published list sheet at its recorded route cost', async () => {
+    const unlistedModel = 'fixture-unlisted-model';
+    const usage: ObservedProviderUsage = {
+      ...createObservedProviderUsage(),
+      providerCalls: 1,
+      inputTokens: 1_000,
+      outputTokens: 100,
+      providerCallObservations: [
+        {
+          inputTokens: 1_000,
+          outputTokens: 100,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
+          reasoningTokens: 0,
+          provider: 'open_router',
+          model: unlistedModel,
+          costDollars: 0.0123,
+        },
+      ],
+    };
+
+    expect(
+      LLMCostCalculator.calculateListCostMicrousd(unlistedModel, {
+        promptTokens: 1_000,
+        completionTokens: 100,
+        totalTokens: 1_100,
+      }),
+    ).toBeNull();
+    expect(await settledMicrousd(unlistedModel, usage)).toBe(12_300);
   });
 });

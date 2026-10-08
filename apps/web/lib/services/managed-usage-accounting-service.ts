@@ -399,52 +399,6 @@ export function calculateObservedProviderUsageCostDollars(
   );
 }
 
-/**
- * What the user owes for observed usage: the model's official list price,
- * whichever route actually served it.
- *
- * The chat paths have always billed `calculateListCost` and reported the served
- * route's cost separately as COGS. This path billed the served route's cost
- * itself, so the same turn cost a different amount depending on whether it ran
- * durably. An observation whose model has no published list sheet falls back to
- * its route cost, which is what the caller would have been charged anyway.
- */
-export function calculateObservedListCostDollars(
-  usage: ObservedProviderUsage,
-  fallbackPricing: ProviderUsagePricingContext,
-): number {
-  const observedCallListCost = (observation: ProviderUsageObservation): number =>
-    LLMCostCalculator.calculateListCost(
-      observation.model ?? fallbackPricing.model,
-      toTokenUsage(observation),
-    ) ?? observedCallProviderCostDollars(observation, fallbackPricing);
-
-  const observations = usage.providerCallObservations;
-  if (observations?.length === usage.providerCalls && observations.length > 0) {
-    return observations.reduce(
-      (total, observation) => total + observedCallListCost(observation),
-      0,
-    );
-  }
-
-  const { fast, standard } = splitAggregateBySpeed(usage);
-  const standardList = LLMCostCalculator.calculateListCost(fallbackPricing.model, standard);
-  if (standardList === null && fast.length === 0) {
-    return calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
-  }
-  return (
-    fast.reduce((total, observation) => total + observedCallListCost(observation), 0) +
-    (standardList ??
-      LLMCostCalculator.calculateCostDollars(
-        fallbackPricing.provider,
-        fallbackPricing.model,
-        standard,
-        undefined,
-        fallbackPricing.routeId,
-      ))
-  );
-}
-
 const MICROUSD_PER_USD = 1_000_000;
 const MICROUSD_PER_LEDGER_CENT = 10_000;
 
@@ -462,11 +416,52 @@ function toLedgerCents(microusd: number): number {
   return microusd > 0 ? Math.max(1, Math.ceil(microusd / MICROUSD_PER_LEDGER_CENT)) : 0;
 }
 
+/**
+ * What the user owes for observed usage: the model's official list price,
+ * whichever route actually served it, priced per call in the ledger's unit.
+ *
+ * The chat paths bill `calculateListCostMicrousd` and report the served route's
+ * cost separately as COGS; this is the same price for a turn that ran a tool
+ * loop or ran durably. An observation whose model has no published list sheet
+ * falls back to its route cost, which is what the caller would have been
+ * charged anyway.
+ */
 export function observedListLedgerMicrousd(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,
 ): number {
-  return toLedgerMicrousd(calculateObservedListCostDollars(usage, fallbackPricing));
+  const observedCallListMicrousd = (observation: ProviderUsageObservation): number =>
+    LLMCostCalculator.calculateListCostMicrousd(
+      observation.model ?? fallbackPricing.model,
+      toTokenUsage(observation),
+    ) ?? toLedgerMicrousd(observedCallProviderCostDollars(observation, fallbackPricing));
+
+  const observations = usage.providerCallObservations;
+  if (observations?.length === usage.providerCalls && observations.length > 0) {
+    return observations.reduce(
+      (total, observation) => total + observedCallListMicrousd(observation),
+      0,
+    );
+  }
+
+  const { fast, standard } = splitAggregateBySpeed(usage);
+  const standardList = LLMCostCalculator.calculateListCostMicrousd(fallbackPricing.model, standard);
+  if (standardList === null && fast.length === 0) {
+    return observedProviderUsageLedgerMicrousd(usage, fallbackPricing);
+  }
+  return (
+    fast.reduce((total, observation) => total + observedCallListMicrousd(observation), 0) +
+    (standardList ??
+      toLedgerMicrousd(
+        LLMCostCalculator.calculateCostDollars(
+          fallbackPricing.provider,
+          fallbackPricing.model,
+          standard,
+          undefined,
+          fallbackPricing.routeId,
+        ),
+      ))
+  );
 }
 
 export function observedProviderUsageLedgerMicrousd(

@@ -355,7 +355,7 @@ describe('managed usage accounting', () => {
   });
 
   it('bills the observed usage at list and reports the served route as provider cost', async () => {
-    vi.mocked(LLMCostCalculator.calculateListCost).mockReset().mockReturnValue(0.4);
+    vi.mocked(LLMCostCalculator.calculateListCostMicrousd).mockReset().mockReturnValue(400_000);
     vi.mocked(LLMCostCalculator.calculateCostDollars).mockReset().mockReturnValue(0.1);
     const pricing = { provider: 'open_router', model: ANTHROPIC_MODEL };
 
@@ -373,11 +373,11 @@ describe('managed usage accounting', () => {
     const finalized = vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0];
     expect(finalized?.actualCostMicrousd).toBe(800_000);
     expect(finalized?.providerCostMicrousd).toBe(200000);
-    vi.mocked(LLMCostCalculator.calculateListCost).mockReset().mockReturnValue(null);
+    vi.mocked(LLMCostCalculator.calculateListCostMicrousd).mockReset().mockReturnValue(null);
   });
 
   it('bills the served route when the model publishes no list sheet', async () => {
-    vi.mocked(LLMCostCalculator.calculateListCost).mockReset().mockReturnValue(null);
+    vi.mocked(LLMCostCalculator.calculateListCostMicrousd).mockReset().mockReturnValue(null);
     vi.mocked(LLMCostCalculator.calculateCostDollars).mockReset().mockReturnValue(0.1);
     const pricing = { provider: 'open_router', model: 'fixture-unlisted-model' };
 

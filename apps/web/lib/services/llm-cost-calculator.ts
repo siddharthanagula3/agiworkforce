@@ -206,7 +206,8 @@ export class LLMCostCalculator {
   }
 
   /**
-   * Whole ledger cents, with a one-cent floor on any non-empty provider work.
+   * Whole ledger cents, never dollars, with a one-cent floor on any non-empty
+   * provider work. Read as dollars, a sub-cent call becomes a whole dollar.
    * The floor is arbitrage in both directions: it overcharges a sub-cent turn
    * elevenfold and makes a hundred of them cost more than one call of the same
    * total. The managed-usage ledger settles in microUSD since 0182, so billing
@@ -237,6 +238,7 @@ export class LLMCostCalculator {
     return { provider: metadata.provider, routeId: `${metadata.provider}/${canonicalModelId}` };
   }
 
+  /** Whole cents with the floor of `calculateCost`; the ledger bills `calculateListCostMicrousd`. */
   static calculateListCost(
     model: string,
     usage: TokenUsage,
