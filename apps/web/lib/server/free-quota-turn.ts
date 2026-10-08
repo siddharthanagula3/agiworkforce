@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
 import { resolveFreeOfferingPersonalContext } from '@/lib/services/turn-context-service';
 import { freeQuotaSystemMessages } from '@/lib/server/free-quota-system-messages';
+import { readActiveStudyInstruction } from '@/features/study/server/study-session-store';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 import {
   PROJECT_FILE_CITATIONS_HEADER,
@@ -871,17 +872,20 @@ export async function serveFreeQuotaTurn(
   let projectSources: ProjectFileCitation[] = [];
   if (offering.quotaProbeProtocol === 'chat') {
     const query = latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : '';
-    const personalContext = await resolveFreeOfferingPersonalContext(scoped.db, {
-      turnId,
-      userId: scoped.userId,
-      organizationId: scoped.organizationId,
-      projectId: conversation.project_id,
-      conversationId: body.conversation_id,
-      temporaryChat: conversation.is_temporary === true,
-      memoryEnabled: body.memory_enabled,
-      personalization: body.personalization,
-      query,
-    });
+    const [personalContext, studyInstruction] = await Promise.all([
+      resolveFreeOfferingPersonalContext(scoped.db, {
+        turnId,
+        userId: scoped.userId,
+        organizationId: scoped.organizationId,
+        projectId: conversation.project_id,
+        conversationId: body.conversation_id,
+        temporaryChat: conversation.is_temporary === true,
+        memoryEnabled: body.memory_enabled,
+        personalization: body.personalization,
+        query,
+      }),
+      readActiveStudyInstruction(scoped.db, scoped.userId, body.conversation_id),
+    ]);
     if (personalContext.status === 'project_load_failed') {
       return policyRefusal(
         'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
@@ -903,6 +907,7 @@ export async function serveFreeQuotaTurn(
     messages.unshift(
       ...freeQuotaSystemMessages({
         preamble: preamble ? stripSystemPromptCacheBoundary(preamble) : '',
+        studyInstruction,
         personal: [...personalContext.projectBlocks, ...personalContext.blocks],
       }),
     );

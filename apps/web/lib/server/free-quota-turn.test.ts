@@ -21,6 +21,8 @@ import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
+import { StatementScanPostgres } from '@/lib/services/__tests__/statement-scan-postgres';
+import { composeStudyInstruction } from '@/features/study/lib/study-session';
 type ScanModule0 = typeof import('next/server');
 type ScanModule1 = typeof import('@/lib/server/key-value');
 type ScanModule2 = typeof import('@/lib/services/entitlement-resolution');
@@ -665,6 +667,18 @@ describe('the cached catalogue the picker reads, after a provider answer', () =>
   });
 });
 
+function systemMessages(): string[] {
+  const [, , , turn] = mocks.stream.mock.calls[0] as [
+    string,
+    string,
+    unknown,
+    { messages: Array<{ role: string; content: unknown }> },
+  ];
+  return turn.messages
+    .filter((message) => message.role === 'system')
+    .map((message) => String(message.content));
+}
+
 describe('a chat inside a project on a free model', () => {
   const PROJECT_ID = '1f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
   const FILE_ID = '2f6c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f';
@@ -766,18 +780,6 @@ describe('a chat inside a project on a free model', () => {
         ...request,
       }),
     );
-  }
-
-  function systemMessages(): string[] {
-    const [, , , turn] = mocks.stream.mock.calls[0] as [
-      string,
-      string,
-      unknown,
-      { messages: Array<{ role: string; content: unknown }> },
-    ];
-    return turn.messages
-      .filter((message) => message.role === 'system')
-      .map((message) => String(message.content));
   }
 
   beforeEach(() => {
@@ -933,5 +935,59 @@ describe('a chat inside a project on a free model', () => {
     expect(response.status).toBe(503);
     expect((await response.json()).error.code).toBe('project_context_load_failed');
     expect(mocks.stream).not.toHaveBeenCalled();
+  });
+});
+
+describe('a study chat on a free model', () => {
+  const CONVERSATION_ID = '52d14f7e-0b3d-40c7-952d-987e841033c5';
+  const STUDY = { topic: 'photosynthesis', mode: 'practice', level: 'beginner' } as const;
+
+  function studying(endedAt: string | null) {
+    const sessions = new StatementScanPostgres({
+      study_sessions: [
+        {
+          id: 'study-1',
+          user_id: USER_ID,
+          conversation_id: CONVERSATION_ID,
+          ...STUDY,
+          started_at: '2026-10-01T09:00:00.000Z',
+          ended_at: endedAt,
+        },
+      ],
+    });
+    mocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (sql.includes('study_sessions')) return sessions.query(sql, params);
+      if (sql.includes('from web_conversations c left join organizations')) {
+        return [{ id: CONVERSATION_ID, data_region: null, project_id: null, is_temporary: false }];
+      }
+      return [];
+    });
+  }
+
+  beforeEach(() => {
+    mocks.stream.mockReset();
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({ choices: [{ index: 0, delta: { content: 'Q1' }, finish_reason: null }] }),
+        '[DONE]',
+      ),
+    );
+  });
+
+  it('tells the model how to teach while the study session is open', async () => {
+    studying(null);
+
+    await (await send(chatModel, 'study-open')).text();
+
+    const system = systemMessages();
+    expect(system[1]).toBe(composeStudyInstruction(STUDY));
+  });
+
+  it('stops once the study session has ended', async () => {
+    studying('2026-10-01T10:00:00.000Z');
+
+    await (await send(chatModel, 'study-ended')).text();
+
+    expect(systemMessages().join('\n')).not.toContain('The user is studying');
   });
 });

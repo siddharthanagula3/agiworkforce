@@ -13,6 +13,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
     userId: 'user-1',
+    organizationId: null,
   })),
 }));
 
