@@ -38,14 +38,10 @@ describe('resolveOpenAISupportedReasoningEfforts, golden snapshots', () => {
   });
 
   it('uses the registry effort set for the current OpenAI chat model', () => {
-    expect(resolveOpenAISupportedReasoningEfforts({ id: openAIChatModelId })).toEqual([
-      'none',
-      'low',
-      'medium',
-      'high',
-      'xhigh',
-      'max',
-    ]);
+    const chatEfforts = getModelReasoning(openAIChatModelId).supportedEfforts;
+
+    expect(chatEfforts?.length).toBeGreaterThan(0);
+    expect(resolveOpenAISupportedReasoningEfforts({ id: openAIChatModelId })).toEqual(chatEfforts);
   });
 
   it('uses the endpoint-level fallback for an unregistered OpenAI Codex model', () => {
