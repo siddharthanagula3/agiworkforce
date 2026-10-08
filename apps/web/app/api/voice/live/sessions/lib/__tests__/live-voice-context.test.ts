@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -20,9 +21,7 @@ const LEAF_ID = '33333333-3333-4333-8333-333333333333';
 
 type Row = Record<string, unknown>;
 
-type StubDb = { query<T>(sql: string, params?: unknown[]): Promise<T[]> } & {
-  query: ReturnType<typeof vi.fn>;
-};
+type StubDb = DatabaseAdapter & { query: ReturnType<typeof vi.fn> };
 
 interface Stub {
   db: StubDb;
@@ -45,6 +44,21 @@ function conversationRow(overrides: Row = {}): Row {
     is_temporary: false,
     active_leaf_message_id: null,
     ...overrides,
+  };
+}
+
+const PERSONALIZED_SETTINGS = {
+  general: { preferredName: 'Ada', instructions: 'Keep answers under three sentences.' },
+  personalization: { responseLanguage: 'fr' },
+};
+
+function personalizedHandler(rows: Partial<Record<string, Row[]>> = {}) {
+  return (sql: string): Row[] => {
+    if (sql.includes('from web_conversations')) return rows['conversation'] ?? [conversationRow()];
+    if (sql.includes('select settings from public.user_settings')) {
+      return [{ settings: PERSONALIZED_SETTINGS }];
+    }
+    return [];
   };
 }
 
@@ -123,12 +137,40 @@ describe('loadLiveVoiceContext', () => {
     vi.clearAllMocks();
   });
 
-  it('returns nothing when no conversation is named', async () => {
-    const stub = stubDb(defaultHandler());
-    await expect(
-      loadLiveVoiceContext(stub.db, { userId: 'user-1', conversationId: null }),
-    ).resolves.toEqual(EMPTY_LIVE_VOICE_CONTEXT);
-    expect(stub.db.query).not.toHaveBeenCalled();
+  it('carries only the account personalization when no conversation is named', async () => {
+    const stub = stubDb(personalizedHandler());
+    const bundle = await loadLiveVoiceContext(stub.db, { userId: 'user-1', conversationId: null });
+
+    expect(bundle).toEqual({
+      ...EMPTY_LIVE_VOICE_CONTEXT,
+      personalizationPrompt: expect.stringContaining('Address the user as: Ada'),
+    });
+    expect(stub.calls.some((call) => call.sql.includes('web_conversations'))).toBe(false);
+  });
+
+  it('gives the voice the name, style and instructions a text chat gets', async () => {
+    const stub = stubDb(personalizedHandler());
+    const bundle = await loadLiveVoiceContext(stub.db, {
+      userId: 'user-1',
+      conversationId: CONVERSATION_ID,
+    });
+
+    expect(bundle.personalizationPrompt).toContain('Address the user as: Ada');
+    expect(bundle.personalizationPrompt).toContain('Keep answers under three sentences.');
+    expect(bundle.personalizationPrompt).toContain('Respond in French');
+  });
+
+  it('withholds personalization from a temporary conversation', async () => {
+    const stub = stubDb(
+      personalizedHandler({ conversation: [conversationRow({ is_temporary: true })] }),
+    );
+    const bundle = await loadLiveVoiceContext(stub.db, {
+      userId: 'user-1',
+      conversationId: CONVERSATION_ID,
+    });
+
+    expect(bundle.personalizationPrompt).toBeNull();
+    expect(stub.calls.some((call) => call.sql.includes('public.user_settings'))).toBe(false);
   });
 
   it('returns nothing when the conversation does not belong to the caller', async () => {
@@ -256,8 +298,16 @@ describe('instruction assembly', () => {
     ],
     projectBrief: 'Project instructions: answer in euros.',
     projectPrompt: 'Project instructions: answer in euros.\n\nfile passage: invoice totals',
+    personalizationPrompt: 'Address the user as: Ada',
     memoryPrompt: 'Prefers metric units.',
   };
+
+  it('gives both the speech layer and the delegated turn the personalization', () => {
+    expect(buildLiveVoiceInstructions('BASE', bundle)).toContain('Address the user as: Ada');
+    expect(buildLiveVoiceBackendInstructions('BACKEND', bundle)).toContain(
+      'Address the user as: Ada',
+    );
+  });
 
   it('gives the speech layer the conversation, the memory and the project brief only', () => {
     const instructions = buildLiveVoiceInstructions('BASE', bundle);

@@ -171,8 +171,8 @@ export function ReflectSection() {
         <div className="rounded-xl border border-border/50 bg-muted/20 p-6">
           <h2 className="text-h4 text-foreground">Memory is off</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Reflect uses the same account chat history controls as Memory. Turn on Memory and
-            Generate from past chats to create a recap.
+            Reflect uses the same account chat history controls as Memory. Turn on Memory and Save
+            memories from chats to create a recap.
           </p>
           <SettingsSectionLink
             section="capabilities"

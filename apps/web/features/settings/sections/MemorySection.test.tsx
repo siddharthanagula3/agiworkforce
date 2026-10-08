@@ -30,7 +30,7 @@ import { MemorySection } from './MemorySection';
 
 const TOGGLES = [
   'Persistent memory',
-  'Generate from past chats',
+  'Save memories from chats',
   'Search past chats',
   'Allow memory generation from tool-assisted chats',
 ];
@@ -88,6 +88,17 @@ describe('MemorySection under a workspace policy', () => {
     expect(explanation).toHaveTextContent('Project');
     expect(explanation).toHaveTextContent(/never sees your account facts/i);
     expect(explanation).toHaveTextContent(/no longer read into any answer/i);
+  });
+
+  it('says the history switch saves details on its own, not that it reads old chats', () => {
+    mockCapabilities.mockReturnValue(capabilities(true));
+    render(<MemorySection />);
+
+    expect(screen.getByRole('switch', { name: 'Save memories from chats' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/save lasting details you mention in a chat without being asked/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/saves only what you ask it to remember/i)).toBeInTheDocument();
   });
 
   it('leaves the toggles usable when the workspace allows memory', () => {

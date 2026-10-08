@@ -32,6 +32,7 @@ const MEMORY_ON: ManagedMemoryPolicy = {
 };
 
 const PROJECT = '11111111-2222-4333-8444-555555555555';
+const HEALTH_PROJECT = '11111111-2222-4333-8444-5555555500e1';
 
 function db(rows: unknown[] = []) {
   const query = vi.fn(async () => rows);
@@ -139,6 +140,43 @@ describe('reading a project memory posture', () => {
     const [sql, params] = d.calls.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain('user_id = $2');
     expect(params).toEqual([PROJECT, 'u1']);
+  });
+
+  it('lets a Health chat draw on account memory when its setting allows, like any project', async () => {
+    const d = db([{ uses_global_memory: true, space_kind: 'health', health_space: true }]);
+    const scope = await loadProjectMemoryScope(d as never, {
+      userId: 'u1',
+      projectId: HEALTH_PROJECT,
+    });
+
+    expect(scope).toEqual({ projectId: HEALTH_PROJECT, usesGlobalMemory: true });
+  });
+});
+
+// Health memories are project rows of the Health space, so the same scoping
+// keeps them out of every chat that is not in Health.
+describe('Health memories outside Health', () => {
+  it('never reach a loose chat', async () => {
+    const d = db();
+    await loadManagedMemoryContext(d as never, { userId: 'u1', policy: MEMORY_ON });
+
+    const [sql, params] = d.calls.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain('and project_id is null');
+    expect(params).not.toContain(HEALTH_PROJECT);
+  });
+
+  it('never reach a chat in another project', async () => {
+    const d = db();
+    await loadManagedMemoryContext(d as never, {
+      userId: 'u1',
+      policy: MEMORY_ON,
+      scope: { projectId: PROJECT, usesGlobalMemory: true },
+    });
+
+    const [sql, params] = d.calls.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toMatch(/and \(project_id is null or project_id = \$\d+::uuid\)/);
+    expect(params).toContain(PROJECT);
+    expect(params).not.toContain(HEALTH_PROJECT);
   });
 });
 

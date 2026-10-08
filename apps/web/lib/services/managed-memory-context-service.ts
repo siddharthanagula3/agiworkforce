@@ -340,6 +340,13 @@ export function workspaceMemoryPredicate(paramIndex: number, alias = ''): string
   return `${alias}organization_id is not distinct from $${paramIndex}::uuid`;
 }
 
+/**
+ * A deleted memory keeps its row so other devices learn of the deletion, and
+ * nothing else: import_key is a normalised copy of the text, so it goes too.
+ */
+export const DELETED_MEMORY_ASSIGNMENTS =
+  "is_deleted = true, content = '', category = null, import_key = null, updated_at = now()";
+
 function memoryContentKeySql(expression: string): string {
   return `btrim(regexp_replace(lower(${expression}), '[^[:alnum:]]+', ' ', 'g'))`;
 }
@@ -811,7 +818,7 @@ export async function sweepExpiredMemories(
           limit $1
        ), expired as (
          update user_memories as memory
-            set is_deleted = true, content = '', category = null, updated_at = now()
+            set ${DELETED_MEMORY_ASSIGNMENTS}
            from due
           where memory.user_id = due.user_id and memory.id = due.id
          returning memory.id
@@ -878,7 +885,7 @@ async function mergeDuplicateMemoryBatch(
        returning memory.id
      ), merged as (
        update user_memories as memory
-          set is_deleted = true, content = '', category = null, updated_at = now()
+          set ${DELETED_MEMORY_ASSIGNMENTS}
          from duplicates
         where memory.user_id = duplicates.user_id and memory.id = duplicates.id
           and ${activeMemoryPredicate('memory.')}
@@ -982,7 +989,7 @@ export async function consolidateMemories(
   return { merged: duplicates.count, superseded: stale.count, remaining: stale.remaining };
 }
 
-function scopePredicate(scope: MemoryScope, projectParamIndex: number): string {
+export function memoryScopePredicate(scope: MemoryScope, projectParamIndex: number): string {
   if (!scope.projectId) return 'and project_id is null';
   if (!scope.usesGlobalMemory) return `and project_id = $${projectParamIndex}::uuid`;
   return `and (project_id is null or project_id = $${projectParamIndex}::uuid)`;
@@ -1055,7 +1062,7 @@ export async function loadManagedMemoryContext(
       const sourceFilter = suppressed.length
         ? `and coalesce(source, 'web') <> all($${values.push(suppressed)}::text[])`
         : '';
-      const projectFilter = scopePredicate(
+      const projectFilter = memoryScopePredicate(
         scope,
         scope.projectId ? values.push(scope.projectId) : 0,
       );

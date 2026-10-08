@@ -393,7 +393,11 @@ export const MEMORY_SCENE_REQUESTS: readonly ManagedMemoryCreateRequest[] = MEMO
   (fact) => fact.request,
 );
 const MEMORY_TOGGLES = [
-  ['Generate from past chats', 'Use conversation history to generate better responses', true],
+  [
+    'Save memories from chats',
+    'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
+    true,
+  ],
   [
     'Search past chats',
     'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
