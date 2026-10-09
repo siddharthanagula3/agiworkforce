@@ -19,6 +19,7 @@ const SCHEMA_PATH = 'packages/ai/model-registry/schema/registry.schema.json';
 const MANAGED_TRUST_MODE = 'managed_cloud';
 const LIVE_AVAILABILITY = 'live';
 const ROUTER_ROLE = 'router';
+const SOURCE_URL_PREFIX = 'https://';
 
 /** Kinds whose answer is a token stream, so a context window is meaningful. */
 const TOKEN_CONTEXT_KINDS = new Set(['chat', 'reasoning', 'code', 'multimodal', 'embedding']);
@@ -119,9 +120,27 @@ export function collectViolations(registry, schema) {
     if (!limits[modelKey]) fail('model limits', modelKey, 'no limits record');
     if (!pricing[modelKey]) fail('model pricing', modelKey, 'no pricing record');
 
+    const contextTokens = limits[modelKey]?.contextTokens;
+    const contextUnpublished = limits[modelKey]?.contextWindowUnpublished;
+    if (contextUnpublished !== undefined) {
+      if (lifecycle.availability === LIVE_AVAILABILITY) {
+        fail(
+          'model limits',
+          modelKey,
+          'is live but still carries contextWindowUnpublished; publish the real context window before promoting to live',
+        );
+      }
+      if (contextTokens !== undefined) {
+        fail('model limits', modelKey, 'declares both contextTokens and contextWindowUnpublished');
+      }
+    }
     if (TOKEN_CONTEXT_KINDS.has(identity.kind)) {
-      const contextTokens = limits[modelKey]?.contextTokens;
-      if (!(typeof contextTokens === 'number' && contextTokens > 0)) {
+      const unpublishedWhileNotLive =
+        lifecycle.availability !== LIVE_AVAILABILITY &&
+        contextTokens === undefined &&
+        typeof contextUnpublished?.source === 'string' &&
+        contextUnpublished.source.startsWith(SOURCE_URL_PREFIX);
+      if (!(typeof contextTokens === 'number' && contextTokens > 0) && !unpublishedWhileNotLive) {
         fail('model limits', modelKey, `kind ${identity.kind} declares no positive contextTokens`);
       }
     }

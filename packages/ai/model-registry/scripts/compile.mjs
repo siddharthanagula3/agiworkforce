@@ -117,6 +117,7 @@ const CANONICAL_ORDER = [
   'outputModalities',
   'variantPartner',
   'contextWindow',
+  'contextWindowUnpublished',
   'inputCost',
   'outputCost',
   'cached_input',
@@ -1689,6 +1690,39 @@ function positiveIntegerOrUndefined(value) {
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
+const CONTEXT_WINDOW_UNPUBLISHED_FIELDS = ['source', 'verifiedOn'];
+
+export function normalizeContextWindowUnpublished(modelKey, model) {
+  const marker = model.contextWindowUnpublished;
+  if (marker === undefined) return undefined;
+  assert.ok(
+    marker && typeof marker === 'object' && !Array.isArray(marker),
+    `${modelKey} contextWindowUnpublished must be an object naming its source and verifiedOn`,
+  );
+  const unsupported = Object.keys(marker).filter(
+    (key) => !CONTEXT_WINDOW_UNPUBLISHED_FIELDS.includes(key),
+  );
+  assert.deepEqual(
+    unsupported,
+    [],
+    `${modelKey} contextWindowUnpublished has unsupported keys: ${unsupported.join(', ')}`,
+  );
+  assert.ok(
+    typeof marker.source === 'string' && marker.source.startsWith(GOVERNANCE_SOURCE_URL_PREFIX),
+    `${modelKey} contextWindowUnpublished.source must be the https URL that publishes no context window`,
+  );
+  assert.ok(
+    typeof marker.verifiedOn === 'string' && ISO_DATE_PATTERN.test(marker.verifiedOn),
+    `${modelKey} contextWindowUnpublished.verifiedOn must be a calendar day`,
+  );
+  assert.equal(
+    model.contextWindow,
+    undefined,
+    `${modelKey} declares a contextWindow and contextWindowUnpublished; keep only one`,
+  );
+  return { source: marker.source, verifiedOn: marker.verifiedOn };
+}
+
 function normalizeVideoGeneration(modelKey, video) {
   if (video === undefined) return undefined;
   const label = `${modelKey} videoGeneration`;
@@ -2712,6 +2746,7 @@ function buildNormalizedRegistry(
     }
     limits[modelKey] = defined({
       contextTokens: positiveIntegerOrUndefined(model.contextWindow),
+      contextWindowUnpublished: normalizeContextWindowUnpublished(modelKey, model),
       maxInputTokens: positiveIntegerOrUndefined(model.maxInputTokens),
       maxOutputTokens: positiveIntegerOrUndefined(model.maxOutputTokens),
       responseBudgetFloorTokens: positiveIntegerOrUndefined(model.responseBudgetFloorTokens),

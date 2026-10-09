@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-07",
+  "lastUpdated": "2026-10-09",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -499,6 +499,12 @@
       "verifiedBy": "catalog-type-contract-no-live-call",
       "status": "CORRECTION",
       "notes": "gpt-image-2.5-sunburst and gpt-image-2.5-flare were added without a speed, which the compatibility catalog type requires of every model, so every package that typechecks against models.json failed from the commit that added them. Both now carry one. OpenAI publishes no speed for either model: the Sunburst row takes medium, the value the catalog uses where a provider states none and the value gpt-image-2 carried, and the Flare row takes fast, because OpenAI's own description of that model is fast everyday image generation. Neither value is a measurement. No provider call was made."
+    },
+    {
+      "date": "2026-10-09",
+      "verifiedBy": "official-google-gemini-4-argon-announcement",
+      "status": "ADDITION",
+      "notes": "Added Gemini 4 Argon (gemini-4-argon) as availability:\"coming_soon\", following the GPT-5.6 precedent: the model is non-routable while coming_soon and is kept OUT of tierAllowedModels, routing slots, taskRouting and defaultModel (enforced by check:availability-invariant); the web picker lists it under Google as a grayed, non-selectable row. Source: https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/ (published 2026-09-30, retrieved 2026-10-09): rolling out to trusted cyber defenders through the Fairwind Program, then paid API customers and Google AI Ultra subscribers, no date given; introductory $2/1M input and $10/1M output, cached input 95% below the input price, then $4/$20; output token limit expanded to 1M from 64K, no context window stated. ai.google.dev/gemini-api/docs/models did not list the model on 2026-10-09 and Google has published no API model code, so apiModelId, contextWindow, maxOutputTokens, released and reasoning controls are deliberately unset; contextWindowUnpublished cites the announcement, which check:model-registry-integrity accepts only while the model is not live. No live probe was made; a coming_soon model needs none. At GA: set apiModelId from Google's model page, replace contextWindowUnpublished with the published contextWindow, add the published limits and reasoning block, probe, and only then flip availability to live."
     }
   ],
   "providers": {
@@ -1517,6 +1523,50 @@
         "stage": "promoted",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced"
+      }
+    },
+    "gemini-4-argon": {
+      "id": "gemini-4-argon",
+      "name": "Gemini 4 Argon",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "reasoning",
+      "contextWindowUnpublished": {
+        "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
+        "verifiedOn": "2026-10-09"
+      },
+      "inputCost": 2,
+      "outputCost": 10,
+      "cached_input": 0.1,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Coding", "Reasoning", "Multimodal"],
+      "deprecation_date": null,
+      "pricingNote": "Google lists an introductory price of $2.00/1M input and $10.00/1M output, with cached input discounted 95% from the input price ($0.10/1M). After the introductory period Google states $4.00/1M input and $20.00/1M output; it publishes no end date for the introductory period, so post_promo_prices is not set. Google states a 1M-token output limit, up from 64K, and publishes no separate context window, so maxOutputTokens is not set and contextWindowUnpublished records the page in place of a contextWindow. Google has published no Gemini API model code, so apiModelId is not set and the key follows the catalog's model-name pattern; set apiModelId to Google's code at GA. Verified against https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/, retrieved 2026-10-09; ai.google.dev/gemini-api/docs/models did not list the model on 2026-10-09.",
+      "openWeight": false,
+      "license": "proprietary",
+      "availability": "coming_soon",
+      "unavailableReason": "Google announced Gemini 4 Argon on September 30, 2026 with access limited to trusted cyber defenders in its Fairwind Program; paid API customers and Google AI Ultra subscribers come next, with no date published.",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-10-09",
+        "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/"
       }
     },
     "gemini-3.5-flash-lite": {
