@@ -16,11 +16,13 @@ import {
   COOKIE_NOTICE_VERSION,
   CONSENT_LEDGER_NOTICE_VERSION,
   NECESSARY_ONLY_PREFERENCES,
+  adoptAccountCookieConsent,
   applyAnalyticsConsentLocally,
   buildCookieConsentRecord,
   isAnalyticsAllowed,
   isAnalyticsLockedByOptOutSignal,
   parseCookieConsentRecord,
+  readAccountCookieConsent,
   readCookieConsentRecord,
   readCookiePreferences,
   writeCookiePreferences,
@@ -67,9 +69,8 @@ describe('cookie consent proof of consent', () => {
     expect(readCookiePreferences()).toEqual({ necessary: true, analytics: false });
   });
 
-  it('ties the version to both notices the banner answers for', () => {
-    expect(COOKIE_NOTICE_VERSION).toContain(POLICY_LAST_UPDATED.cookies);
-    expect(COOKIE_NOTICE_VERSION).toContain(POLICY_LAST_UPDATED.privacy);
+  it('ties the version to the cookie notice alone, so a privacy edit does not re-ask', () => {
+    expect(COOKIE_NOTICE_VERSION).toBe(`cookies:${POLICY_LAST_UPDATED.cookies}`);
   });
 });
 
@@ -214,5 +215,59 @@ describe('a browser that sends the opt-out signal', () => {
     expect(isAnalyticsLockedByOptOutSignal()).toBe(true);
     optOut(false);
     expect(isAnalyticsLockedByOptOutSignal()).toBe(false);
+  });
+});
+
+describe('a signed-in account that already answered elsewhere', () => {
+  const afterNotice = `${POLICY_LAST_UPDATED.cookies}T12:00:00.000Z`;
+
+  function signIn(signedIn: boolean): void {
+    document.cookie = signedIn
+      ? '__client_uat=1700000000; path=/'
+      : '__client_uat=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+  }
+
+  function ledgerAnswers(consents: unknown[]): void {
+    fetchMock.mockImplementation(
+      async () => new Response(JSON.stringify({ consents }), { status: 200 }),
+    );
+  }
+
+  afterEach(() => signIn(false));
+
+  it('asks the ledger only when a session exists', async () => {
+    signIn(false);
+    expect(await readAccountCookieConsent()).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('carries a decision made under the current cookie notice to this browser', async () => {
+    signIn(true);
+    ledgerAnswers([{ purpose: ANALYTICS_CONSENT_PURPOSE, granted: true, recordedAt: afterNotice }]);
+
+    const record = await readAccountCookieConsent();
+    expect(record).not.toBeNull();
+    adoptAccountCookieConsent(record!);
+
+    expect(readCookiePreferences()).toEqual({ necessary: true, analytics: true });
+    expect(readCookieConsentRecord()?.decidedAt).toBe(afterNotice);
+  });
+
+  it('asks again when the account decision predates the current cookie notice', async () => {
+    signIn(true);
+    ledgerAnswers([
+      { purpose: ANALYTICS_CONSENT_PURPOSE, granted: true, recordedAt: '1999-01-01T00:00:00.000Z' },
+    ]);
+
+    expect(await readAccountCookieConsent()).toBeNull();
+  });
+
+  it('treats a failed or empty ledger read as undecided', async () => {
+    signIn(true);
+    ledgerAnswers([]);
+    expect(await readAccountCookieConsent()).toBeNull();
+
+    fetchMock.mockImplementation(async () => new Response('{}', { status: 401 }));
+    expect(await readAccountCookieConsent()).toBeNull();
   });
 });

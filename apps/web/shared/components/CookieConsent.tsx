@@ -21,7 +21,9 @@ import {
   COOKIE_CONSENT_UPDATED_EVENT,
   COOKIE_PREFERENCES_LABEL,
   NECESSARY_ONLY_PREFERENCES,
+  adoptAccountCookieConsent,
   isAnalyticsLockedByOptOutSignal,
+  readAccountCookieConsent,
   readCookiePreferences,
   writeCookiePreferences,
   type CookiePreferences,
@@ -50,10 +52,22 @@ export const CookieConsent = () => {
       setPreferences(stored);
       return undefined;
     }
+    let cancelled = false;
     const timer = setTimeout(() => {
-      if (!readCookiePreferences()) setShowBanner(true);
+      if (readCookiePreferences()) return;
+      void readAccountCookieConsent().then((accountDecision) => {
+        if (cancelled || readCookiePreferences()) return;
+        if (accountDecision) {
+          adoptAccountCookieConsent(accountDecision);
+          return;
+        }
+        setShowBanner(true);
+      });
     }, PROMPT_DELAY_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -126,7 +140,7 @@ export const CookieConsent = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={reducedMotion ? { opacity: 0 } : { y: 24, opacity: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--z-notification)] flex justify-center p-3 sm:justify-start sm:p-6"
+            className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--z-notification)] flex justify-center p-3 sm:justify-end sm:p-6"
             role="region"
             aria-label="Cookie consent"
           >
