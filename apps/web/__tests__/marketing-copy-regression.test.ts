@@ -295,17 +295,26 @@ describe('public marketing copy regressions', () => {
     expect(waitlist).toContain('Team');
   });
 
-  it('chat upgrade dialog presents managed cloud as open by default, not waitlist-gated (WEB-12 / PA-1)', () => {
+  it('chat upgrade dialog tells the pricing page story, not a waitlist-gated cloud (WEB-12 / PA-1)', () => {
     const dialog = readWebFile('features/chat/components/dialogs/UpgradePlanDialog.tsx');
+    const pricing = readWebFile('app/pricing/page.tsx');
 
     expect(dialog).not.toContain('open by waitlist invite');
     expect(dialog).not.toContain('invite-only');
     expect(dialog).not.toContain('Join waitlist');
     expect(dialog).not.toContain('account-gated');
     expect(dialog).not.toContain('Current plan');
-    expect(dialog).toContain('Upgrade to');
-    expect(dialog).toContain('open by default');
+    expect(dialog).not.toContain('CLI_AVAILABILITY_NOTE');
     expect(dialog).toContain('onUpgrade');
+    for (const shared of [
+      "from '@features/billing/lib/plan-card-copy'",
+      "from '@features/billing/lib/localized-pricing'",
+      "from '@features/billing/hooks/use-localized-pricing'",
+      "from '@features/billing/hooks/use-free-media-offer'",
+    ]) {
+      expect(dialog, `dialog must read ${shared}`).toContain(shared);
+      expect(pricing, `pricing page must read ${shared}`).toContain(shared);
+    }
   });
 
   it('retires the cloud-upgrade waitlist email-capture dialog from the chat flow (PA-1)', () => {

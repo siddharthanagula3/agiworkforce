@@ -114,6 +114,15 @@ vi.mock('react-i18next', async (importOriginal) => {
         if (key === 'usageMultiplierWeekly') {
           return `${String(values?.['factor'])}x more weekly usage than ${String(values?.['baseline'])}`;
         }
+        if (key === 'usageSameAs') {
+          return `Same usage as ${String(values?.['baseline'])}`;
+        }
+        if (key === 'seatPremiumDescription') {
+          return `${String(values?.['factor'])}x the usage of a Standard seat`;
+        }
+        if (key === 'seatPriceMonthlyAlternate' || key === 'seatPriceYearlyAlternate') {
+          return `${key} ${String(values?.['price'])}`;
+        }
         if (key === 'usageSameAsPerSeat') {
           return `Same usage as ${String(values?.['baseline'])} for every seat`;
         }
@@ -201,6 +210,18 @@ async function showTeamAndEnterprise() {
 async function showMax20x() {
   const selector = await screen.findByRole('group', { name: 'maxVariantLabel' });
   fireEvent.click(within(selector).getByRole('button', { name: 'Max 20x' }));
+}
+
+function teamSeatRow(name: 'seatStandardName' | 'seatPremiumName') {
+  const card = screen.getByRole('heading', { name: 'Team' }).closest('article')!;
+  return within(within(card).getByRole('heading', { name }).closest('li')!);
+}
+
+function teamBillingLine(): string | null | undefined {
+  return screen
+    .getByRole('heading', { name: 'Team' })
+    .closest('article')!
+    .querySelector('.agi-tier-seat-billing')?.textContent;
 }
 
 const INCLUDED = 'Included';
@@ -414,23 +435,25 @@ describe('PricingPage', () => {
     );
   });
 
-  it('leads the Team card with the per-seat price and totals the chosen seats beside the picker', async () => {
+  it('prices each seat type in its own row and totals the chosen seats beside the picker', async () => {
     render(<PricingPage />);
     await showTeamAndEnterprise();
 
     const teamCard = screen.getByRole('heading', { name: 'Team' }).closest('article');
     expect(teamCard).not.toBeNull();
     const card = within(teamCard!);
-    expect(card.getByText('$25')).toBeVisible();
-    expect(card.getByText('perSeatPricingSub')).toBeVisible();
-    expect(card.getByText('billedMonthly')).toBeVisible();
+    expect(teamSeatRow('seatStandardName').getByText('$25')).toBeVisible();
+    expect(teamSeatRow('seatStandardName').getByText('perSeatPricingSub')).toBeVisible();
+    expect(teamSeatRow('seatPremiumName').getByText('$125')).toBeVisible();
+    expect(teamBillingLine()).toBe('billedMonthly');
+    expect(card.queryByText(/seatPriceYearlyAlternate/)).toBeNull();
     expect(card.getByText('Seats: 2 · $50/mo')).toBeVisible();
 
     fireEvent.change(card.getByRole('spinbutton', { name: 'seatCountLabel' }), {
       target: { value: '7' },
     });
 
-    expect(card.getByText('$25')).toBeVisible();
+    expect(teamSeatRow('seatStandardName').getByText('$25')).toBeVisible();
     expect(card.getByText('Seats: 7 · $175/mo')).toBeVisible();
     expect(card.queryByText('$175')).toBeNull();
   });
@@ -513,12 +536,16 @@ describe('PricingPage', () => {
     );
 
     const card = within(screen.getByRole('heading', { name: 'Team' }).closest('article')!);
-    expect(card.getByText('$20')).toBeVisible();
-    expect(card.getByText('perSeatPricingSub')).toBeVisible();
-    expect(card.getByText('billedYearly')).toBeVisible();
-    expect(card.getByText('$20').closest('.agi-tier-price')!.textContent).toBe(
-      '$20 perSeatPricingSub billedYearly annualSave',
-    );
+    expect(teamSeatRow('seatStandardName').getByText('$20')).toBeVisible();
+    expect(teamSeatRow('seatStandardName').getByText('perSeatPricingSub')).toBeVisible();
+    expect(
+      teamSeatRow('seatStandardName').getByText('seatPriceMonthlyAlternate $25'),
+    ).toBeVisible();
+    expect(teamSeatRow('seatPremiumName').getByText('$100')).toBeVisible();
+    expect(
+      teamSeatRow('seatPremiumName').getByText('seatPriceMonthlyAlternate $125'),
+    ).toBeVisible();
+    expect(teamBillingLine()).toBe('billedYearly · annualSave');
     expect(card.getByText('Seats: 2 · $480/yr')).toBeVisible();
     expect(card.queryByText('$240')).toBeNull();
     expect(card.queryByText('$480')).toBeNull();
@@ -549,9 +576,10 @@ describe('PricingPage', () => {
     fireEvent.click(within(teamCadence).getByRole('button', { name: 'monthly' }));
 
     const card = within(screen.getByRole('heading', { name: 'Team' }).closest('article')!);
-    expect(card.getByText('$25')).toBeVisible();
-    expect(card.getByText('perSeatPricingSub')).toBeVisible();
-    expect(card.getByText('billedMonthly')).toBeVisible();
+    expect(teamSeatRow('seatStandardName').getByText('$25')).toBeVisible();
+    expect(teamSeatRow('seatStandardName').getByText('seatPriceYearlyAlternate $20')).toBeVisible();
+    expect(teamSeatRow('seatPremiumName').getByText('$125')).toBeVisible();
+    expect(teamBillingLine()).toBe('billedMonthly · annualSave');
     expect(card.getByText('Seats: 2 · $50/mo')).toBeVisible();
 
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
@@ -1138,7 +1166,10 @@ describe('PricingPage', () => {
     expect(screen.getAllByText('10x more weekly usage than Pro').length).toBeGreaterThan(0);
     expect(screen.getByText('usageWindowsExplainer flagshipShare')).toBeVisible();
     await showTeamAndEnterprise();
-    expect(cardOf('Team').getByText('Same usage as Pro for every seat')).toBeVisible();
+    expect(teamSeatRow('seatStandardName').getByText('Same usage as Pro')).toBeVisible();
+    expect(
+      teamSeatRow('seatPremiumName').getByText('5x the usage of a Standard seat'),
+    ).toBeVisible();
 
     expect(screen.queryByText(/credits per 5 hours|planCreditWindows/)).toBeNull();
   });
@@ -1541,10 +1572,11 @@ describe('PricingPage', () => {
       await showTeamAndEnterprise();
 
       const card = teamCard();
-      expect(card.getByText('$25')).toBeVisible();
-      expect(card.getByText('seatTypeStandardLine')).toBeVisible();
-      expect(card.getByText('seatTypePremiumLine')).toBeVisible();
+      expect(teamSeatRow('seatStandardName').getByText('$25')).toBeVisible();
+      expect(teamSeatRow('seatPremiumName').getByText('$125')).toBeVisible();
       expect(card.getByText('seatTypesNote')).toBeVisible();
+      expect(card.queryByText('seatTypeStandardLine')).toBeNull();
+      expect(card.queryByText('seatTypePremiumLine')).toBeNull();
     });
 
     it('gives the Premium seat its own comparison column, priced per seat with the Max 5x limits', async () => {
