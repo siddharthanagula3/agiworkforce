@@ -79,6 +79,7 @@ const cloudModules = [
   'mobile-intent',
   'bank-accounts',
   'waitlist',
+  'localized-pricing',
 ];
 
 const cloudMovedFiles = [
