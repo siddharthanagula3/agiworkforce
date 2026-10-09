@@ -200,21 +200,28 @@ function toCatalogueEntry(
   // approved route is on a provider this deployment holds no credential for and
   // admission never consulted that. The registry keeps knowing about the model; the
   // customer surface simply stops offering something it cannot serve.
-  const routes = toCatalogueRoutes(model.id, context);
-  if (routes.length === 0) return null;
+  const availability = getModelAvailability(model);
+  // An announced model has no route by design (check:availability-invariant),
+  // so it is listed as a non-selectable "Coming soon" row instead of being
+  // dropped for having nothing to execute on.
+  const announced = availability === 'coming_soon';
+  const routes = announced ? [] : toCatalogueRoutes(model.id, context);
+  if (!announced && routes.length === 0) return null;
   // Permanent entitlement OR an active event promotion, AND executable. The
   // promotion widens who may ask; it never manufactures supply, so the route
   // requirement above still decides whether anyone can be offered the model.
   // Health is separate from supply: a route that exists but is degraded still
   // proves the model is configured, so it is reported rather than removed. An
   // event never promotes a model nobody can currently reach.
-  const temporarilyUnavailable = routes.every((route) => route.status === 'degraded');
+  const temporarilyUnavailable = !announced && routes.every((route) => route.status === 'degraded');
   const eventAllowed =
-    !temporarilyUnavailable && eventAllowsModel(model.id, planTier, context.eventPromotion);
-  const permanentlyAllowed = canAccessModelForSubscriptionTier(model.id, planTier);
+    !announced &&
+    !temporarilyUnavailable &&
+    eventAllowsModel(model.id, planTier, context.eventPromotion);
+  const permanentlyAllowed = !announced && canAccessModelForSubscriptionTier(model.id, planTier);
   const admitted = (permanentlyAllowed || eventAllowed) && routes.length > 0;
-  const minimumTier = getMinimumRequiredTier(model.id);
-  if (!admitted && !minimumTier) return null;
+  const minimumTier = announced ? null : getMinimumRequiredTier(model.id);
+  if (!announced && !admitted && !minimumTier) return null;
   return {
     id: model.id,
     displayName: model.name,
@@ -242,7 +249,7 @@ function toCatalogueEntry(
     minimumPlanLabel: admitted || !minimumTier ? null : PLAN_LABEL[minimumTier],
     minimumPlan:
       admitted || !minimumTier || isFreeBillingPlanTier(minimumTier) ? null : minimumTier,
-    availability: getModelAvailability(model),
+    availability,
     requiresEnvironment: model.requiresEnvironment ?? null,
     deprecatedOn: model.deprecation_date ?? null,
   };

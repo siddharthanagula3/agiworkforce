@@ -85,6 +85,7 @@ describe('model catalogue · executability gates selection', () => {
     // curation edit: a model reachable by no configured provider must be absent,
     // whichever models those turn out to be.
     const unservable = listCanonicalModels()
+      .filter((model) => model.availability !== 'coming_soon')
       .map((model) => model.id)
       .filter((id) =>
         listManagedRoutesForModel(id).every((route) => !configured.has(route.provider)),
@@ -100,8 +101,29 @@ describe('model catalogue · executability gates selection', () => {
     const body = await fetchCatalogue();
 
     for (const model of body.models) {
+      if (model.availability === 'coming_soon') {
+        expect(model.admitted).toBe(false);
+        expect(model.routes).toEqual([]);
+        continue;
+      }
       expect(model.routes.length).toBeGreaterThan(0);
       if (model.admitted) expect(model.routes.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('lists an announced model as coming soon and never admits it', async () => {
+    mockConfiguredProviders.mockReturnValue(new Set<string>());
+
+    const body = await fetchCatalogue();
+    const announced = listCanonicalModels().filter((model) => model.availability === 'coming_soon');
+    const listed = body.models.filter((model) => model.availability === 'coming_soon');
+
+    expect(listed.length).toBeGreaterThan(0);
+    for (const model of listed) {
+      expect(announced.some((candidate) => candidate.id === model.id)).toBe(true);
+      expect(model.admitted).toBe(false);
+      expect(model.routeCount).toBe(0);
+      expect(model.minimumPlan).toBeNull();
     }
   });
 
@@ -110,7 +132,7 @@ describe('model catalogue · executability gates selection', () => {
 
     const body = await fetchCatalogue();
 
-    expect(body.models).toEqual([]);
+    expect(body.models.filter((model) => model.availability !== 'coming_soon')).toEqual([]);
   });
 
   it('only lists routes whose provider is configured', async () => {
@@ -177,7 +199,10 @@ describe('model catalogue · the wire body names no supplier', () => {
   it('still tells the client a model is backed, without naming what backs it', async () => {
     const body = await fetchWireBody();
 
-    for (const model of body.models) expect(model.routeCount).toBeGreaterThan(0);
+    for (const model of body.models) {
+      if (model.availability === 'coming_soon') expect(model.routeCount).toBe(0);
+      else expect(model.routeCount).toBeGreaterThan(0);
+    }
   });
 
   it('mentions no supplier anywhere in the payload', async () => {
