@@ -38,6 +38,7 @@ import {
   isProPlanTier,
   isMaxPlanTier,
   isMax15xPlanTier,
+  isEnterprisePlanTier,
   isLocalOnlyPlanTier,
   isByokPlanTier,
   isFreeOfChargePlanTier,
@@ -368,7 +369,7 @@ describe('billing catalog', () => {
   describe('single-tier identity predicates', () => {
     const PREDICATE_BY_TIER: Readonly<
       Record<
-        Exclude<BillingPlanTier, 'team' | 'team_premium' | 'enterprise'>,
+        Exclude<BillingPlanTier, 'team' | 'team_premium'>,
         (value: string | null | undefined) => boolean
       >
     > = {
@@ -379,6 +380,7 @@ describe('billing catalog', () => {
       pro: isProPlanTier,
       max: isMaxPlanTier,
       max_15x: isMax15xPlanTier,
+      enterprise: isEnterprisePlanTier,
     };
 
     it('matches only its own tier and rejects every other one, null and undefined', () => {
