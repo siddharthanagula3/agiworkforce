@@ -6,8 +6,11 @@ import { useTranslation } from 'react-i18next';
 import {
   BILLING_PLAN_PRICING,
   isBillingPlanTier,
+  isEnterprisePlanTier,
+  isFreeBillingPlanTier,
   isFreeOfChargePlanTier,
   isPlanSelectableOnSurface,
+  isTeamPlanTier,
   subscriptionPlanTierOf,
   type SelfServeIndividualPlanTier,
 } from '@agiworkforce/types';
@@ -84,7 +87,8 @@ const PLAN_ORDER: readonly PlanCard[] = [...INDIVIDUAL_PLAN_CARDS, ...BUSINESS_P
 );
 
 const PAID_INDIVIDUAL_PLANS = PLAN_ORDER.filter(
-  (plan): plan is SelfServeIndividualPlanTier => plan !== 'free' && !isBusinessPlan(plan),
+  (plan): plan is SelfServeIndividualPlanTier =>
+    !isFreeBillingPlanTier(plan) && !isBusinessPlan(plan),
 );
 
 const CARD_LINK_CLASS =
@@ -96,7 +100,7 @@ function isBusinessPlan(plan: string): plan is BusinessPlanCard {
 
 function planRelationship(current: string | undefined, plan: PlanCard): Relationship {
   const currentIndex = current ? PLAN_ORDER.indexOf(current as PlanCard) : -1;
-  if (currentIndex < 0) return plan === 'free' ? 'none' : 'upgrade';
+  if (currentIndex < 0) return isFreeBillingPlanTier(plan) ? 'none' : 'upgrade';
   if (plan === current) return 'current';
   if (isBusinessPlan(current as PlanCard) && !isBusinessPlan(plan)) return 'none';
   if (PLAN_ORDER.indexOf(plan) > currentIndex) return 'upgrade';
@@ -110,7 +114,7 @@ function buildPlanCard(
   freeMediaOffer: FreeQuotaMediaOffer,
 ): PlanCardModel {
   const name = BILLING_PLAN_PRICING[plan].label;
-  if (plan === 'enterprise') {
+  if (isEnterprisePlanTier(plan)) {
     return {
       id: plan,
       name,
@@ -123,7 +127,7 @@ function buildPlanCard(
       features: enterprisePlanFeatures(t),
     };
   }
-  if (plan === 'team') {
+  if (isTeamPlanTier(plan)) {
     const interval = teamBillingInterval(plans, true);
     return {
       id: plan,
@@ -140,10 +144,9 @@ function buildPlanCard(
   return {
     id: plan,
     name,
-    price:
-      plan === 'free'
-        ? localizedFreePrice(plans, undefined)
-        : localizedPricePerMonth(plans, plan, 'monthly', undefined),
+    price: isFreeBillingPlanTier(plan)
+      ? localizedFreePrice(plans, undefined)
+      : localizedPricePerMonth(plans, plan, 'monthly', undefined),
     priceSub: t('perMonth'),
     billing: null,
     seats: [],
@@ -185,7 +188,7 @@ interface PlanCardViewProps {
 }
 
 function PlanCardAction({ plan, relationship, checkoutBlocked, t, onUpgrade }: PlanCardViewProps) {
-  if (plan.id === 'team' && (relationship === 'current' || relationship === 'upgrade')) {
+  if (isTeamPlanTier(plan.id) && (relationship === 'current' || relationship === 'upgrade')) {
     return (
       <a
         className={CARD_LINK_CLASS}
@@ -204,7 +207,7 @@ function PlanCardAction({ plan, relationship, checkoutBlocked, t, onUpgrade }: P
       </Button>
     );
   }
-  if (plan.id === 'enterprise' && relationship === 'upgrade') {
+  if (isEnterprisePlanTier(plan.id) && relationship === 'upgrade') {
     return (
       <a
         className={CARD_LINK_CLASS}
@@ -216,7 +219,7 @@ function PlanCardAction({ plan, relationship, checkoutBlocked, t, onUpgrade }: P
       </a>
     );
   }
-  if (relationship === 'upgrade' && plan.id !== 'free' && !isBusinessPlan(plan.id)) {
+  if (relationship === 'upgrade' && !isFreeBillingPlanTier(plan.id) && !isBusinessPlan(plan.id)) {
     const target = plan.id;
     return (
       <Button

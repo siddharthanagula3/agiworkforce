@@ -275,6 +275,10 @@ export function isMax15xPlanTier(value: string | null | undefined): value is 'ma
   return value === 'max_15x';
 }
 
+export function isEnterprisePlanTier(value: string | null | undefined): value is 'enterprise' {
+  return value === 'enterprise';
+}
+
 export function isLocalOnlyPlanTier(value: string | null | undefined): value is 'local-only' {
   return value === 'local-only';
 }

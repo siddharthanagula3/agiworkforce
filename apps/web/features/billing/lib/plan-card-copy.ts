@@ -7,6 +7,7 @@ import {
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
+  isEnterprisePlanTier,
   isPlanSelectableOnSurface,
   managedUsageMultiplier,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
@@ -247,7 +248,7 @@ export function enterprisePlanFeatures(t: PricingT): string[] {
 }
 
 export function planTierBody(plan: PlanCard, t: PricingT): string {
-  return plan === 'enterprise' ? ENTERPRISE_TIER_BODY : t(TIER_BODY_KEYS[plan]);
+  return isEnterprisePlanTier(plan) ? ENTERPRISE_TIER_BODY : t(TIER_BODY_KEYS[plan]);
 }
 
 export function planFeatureLead(plan: IndividualPlanCard, t: PricingT): string | null {
