@@ -34,7 +34,9 @@ describe('UpgradePlanDialog header, close control has its own space', () => {
 
     const dialog = screen.getByRole('dialog');
     const close = screen.getByRole('button', { name: 'Close upgrade plan dialog' });
-    const lede = screen.getByText(/sign in and start now/i);
+    const heading = screen
+      .getAllByRole('heading', { name: 'Upgrade your plan' })
+      .find((candidate) => !candidate.closest('.sr-only'));
 
     expect(close.parentElement).toBe(dialog);
     expect(close.className).toContain('absolute');
@@ -42,7 +44,7 @@ describe('UpgradePlanDialog header, close control has its own space', () => {
     const closeFootprintRem = spacing(close.className, ['end']) + spacing(close.className, ['w']);
     expect(closeFootprintRem).toBeGreaterThan(0);
 
-    const headerRow = lede.closest('.flex.items-start.justify-between') as HTMLElement | null;
+    const headerRow = heading?.closest('.flex.items-start.justify-between') as HTMLElement | null;
     expect(headerRow).not.toBeNull();
 
     const reserved = reservedRightGutterRem(headerRow!, dialog);

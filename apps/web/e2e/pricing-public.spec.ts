@@ -102,6 +102,51 @@ test.describe('/pricing Team billing toggle', () => {
   }
 });
 
+const SEAT_ROW_VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+  { width: 320, height: 700 },
+] as const;
+
+test.describe('/pricing Team card prices each seat type in its own row', () => {
+  for (const viewport of SEAT_ROW_VIEWPORTS) {
+    test(`Standard and Premium seats follow the billing toggle at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await mockAuthProvider(page);
+      await page.route('**/api/pricing/localized', (route) =>
+        route.fulfill({ contentType: 'application/json', body: JSON.stringify(LOCALIZED_PRICING) }),
+      );
+      const response = await page.goto('/pricing#pricing-team-title');
+      expect(response?.status()).toBe(200);
+
+      const card = page.locator('article').filter({ has: page.locator('#pricing-team-title') });
+      const seatRow = (name: string) =>
+        card.locator('.agi-tier-seat-row').filter({ has: page.getByRole('heading', { name }) });
+      const standard = seatRow('Standard seat');
+      const premium = seatRow('Premium seat');
+
+      await expect(card.locator('.agi-tier-seat-row')).toHaveCount(2);
+      await expect(standard.locator('.agi-tier-seat-price')).toHaveText('$20 per seat / month');
+      await expect(standard).toContainText('$25 per seat / month when billed monthly');
+      await expect(premium.locator('.agi-tier-seat-price')).toHaveText('$100 per seat / month');
+      await expect(premium).toContainText('$125 per seat / month when billed monthly');
+      await expect(premium).toContainText('5x the usage of a Standard seat');
+      await expect(card).toContainText('Mix both seat types in one team');
+      expect(await pageOverflow(page)).toBe(0);
+
+      await card.getByRole('button', { name: /^Monthly/ }).click();
+      await expect(standard.locator('.agi-tier-seat-price')).toHaveText('$25 per seat / month');
+      await expect(standard).toContainText('$20 per seat / month when billed yearly');
+      await expect(premium.locator('.agi-tier-seat-price')).toHaveText('$125 per seat / month');
+      await expect(card.getByRole('spinbutton', { name: 'Seats', exact: true })).toBeVisible();
+      await expect(card.getByRole('button', { name: 'Get Team' })).toBeVisible();
+      expect(await pageOverflow(page)).toBe(0);
+    });
+  }
+});
+
 const TABLE_VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 1100, height: 757 },

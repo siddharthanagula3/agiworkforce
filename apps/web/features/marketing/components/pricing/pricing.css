@@ -220,6 +220,64 @@
   color: var(--public-ink-secondary);
 }
 
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-start: var(--stroke-hairline) solid var(--public-rule);
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-row {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-4);
+  border-block-end: var(--stroke-hairline) solid var(--public-rule);
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-name {
+  margin: 0;
+  font-family: var(--public-font-text);
+  font-size: var(--public-text-control);
+  font-weight: var(--public-heading-weight);
+  line-height: var(--public-leading-control);
+  color: var(--public-ink);
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-price-num {
+  font-size: var(--public-text-section);
+  font-weight: var(--public-heading-weight);
+  line-height: var(--public-leading-heading);
+  color: var(--public-ink);
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-price .agi-tier-price-sub {
+  flex-basis: auto;
+  font-size: var(--public-text-control);
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-detail {
+  margin: 0;
+  font-size: var(--public-text-control);
+  line-height: var(--public-leading-control);
+  color: var(--public-ink-secondary);
+  text-wrap: wrap;
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-billing {
+  margin: 0;
+  font-size: var(--public-text-control);
+}
+
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-body {
   flex: none;
   font-size: var(--public-text-control);
