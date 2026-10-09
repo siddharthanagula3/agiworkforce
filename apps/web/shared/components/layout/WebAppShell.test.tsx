@@ -336,6 +336,9 @@ vi.mock('@agiworkforce/ui', async () => {
       ),
     DropdownMenuLabel: () => null,
     DropdownMenuSeparator: () => null,
+    DropdownMenuSub: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DropdownMenuSubTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DropdownMenuSubContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     // The collapsed rail's account trigger wraps itself in a Tooltip so a
     // hovered avatar-only button still names itself; passthrough fragments
     // keep that trigger and its menu in the tree without pulling in Radix.

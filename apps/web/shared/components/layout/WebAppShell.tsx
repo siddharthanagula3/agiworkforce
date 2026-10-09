@@ -508,7 +508,6 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       onOpenKeyboardShortcuts={handleShowShortcuts}
       showUpgrade={hasSelfServeUpgradePath(currentTier)}
       onUpgrade={() => openAfterMobileNavClose(openUpgradeDialog)}
-      onDownloadApps={() => router.push('/download')}
       onLogout={() => void handleLogout()}
     />
   );

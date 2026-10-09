@@ -5948,7 +5948,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
       showUpgrade={hasSelfServeUpgradePath(subscriptionTier)}
       onUpgrade={() => handleOpenUpgradeDialog()}
-      onDownloadApps={() => router.push('/download')}
       onLogout={() => void handleLogout()}
     />
   );
