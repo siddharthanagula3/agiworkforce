@@ -1,4 +1,5 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { hasClerkSessionCookie } from '@/lib/clerk-session';
 import type { ConsentSurface } from '@/lib/consent-purposes';
 import { readBrowserGlobalPrivacyControl } from '@/lib/consent-signals';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
@@ -13,10 +14,11 @@ export const COOKIE_CONSENT_OPEN_EVENT = 'cookie-consent-open';
 
 export const COOKIE_PREFERENCES_LABEL = 'Cookie preferences';
 
-// The banner answers for both notices, so either one moving must re-ask. The
-// server ledger stamps the privacy revision alone and rejects anything else,
-// which is why the posted version is not this composite.
-export const COOKIE_NOTICE_VERSION = `cookies:${POLICY_LAST_UPDATED.cookies}+privacy:${POLICY_LAST_UPDATED.privacy}`;
+// Only a change to the cookie notice re-asks; a privacy-policy edit does not
+// change what the banner asks about. The server ledger stamps the privacy
+// revision alone and rejects anything else, which is why the posted version
+// differs from this one.
+export const COOKIE_NOTICE_VERSION = `cookies:${POLICY_LAST_UPDATED.cookies}`;
 
 export const CONSENT_LEDGER_NOTICE_VERSION: string = POLICY_LAST_UPDATED.privacy;
 
@@ -171,6 +173,47 @@ export function applyAnalyticsConsentLocally(granted: boolean): void {
   const effective = resolvePreferences({ necessary: true, analytics: granted });
   if (readCookiePreferences()?.analytics === effective.analytics) return;
   storeCookieConsentRecord(buildCookieConsentRecord(effective));
+}
+
+const COOKIE_NOTICE_EFFECTIVE_AT = Date.parse(`${POLICY_LAST_UPDATED.cookies}T00:00:00Z`);
+
+export function accountDecisionCoversCookieNotice(recordedAt: string): boolean {
+  const decidedAt = Date.parse(recordedAt);
+  return Number.isFinite(decidedAt) && decidedAt >= COOKIE_NOTICE_EFFECTIVE_AT;
+}
+
+// A signed-in visitor who already answered on another browser or device has
+// that answer in the account ledger. It stands here too when it was given
+// under the current cookie notice, so the banner does not ask again.
+export async function readAccountCookieConsent(): Promise<CookieConsentRecord | null> {
+  if (typeof window === 'undefined' || !hasClerkSessionCookie()) return null;
+  try {
+    const response = await fetch('/api/consent', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { consents?: unknown };
+    if (!Array.isArray(body.consents)) return null;
+    const decision = (body.consents as Array<Record<string, unknown>>).find(
+      (row) => row['purpose'] === ANALYTICS_CONSENT_PURPOSE,
+    );
+    const granted = decision?.['granted'];
+    const recordedAt = decision?.['recordedAt'];
+    if (typeof granted !== 'boolean' || typeof recordedAt !== 'string') return null;
+    if (!accountDecisionCoversCookieNotice(recordedAt)) return null;
+    return buildCookieConsentRecord(
+      resolvePreferences({ necessary: true, analytics: granted }),
+      new Date(recordedAt),
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function adoptAccountCookieConsent(record: CookieConsentRecord): void {
+  if (typeof window === 'undefined') return;
+  storeCookieConsentRecord(record);
 }
 
 export function isAnalyticsAllowed(preferences: CookiePreferences | null): boolean {
