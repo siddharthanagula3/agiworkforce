@@ -352,5 +352,11 @@
   "0351_auth_flow_update_times.sql": "b14e63937458af8dd1805b32e2830603c27e2887f5c404b32f3df1d57de07790",
   "0352_feedback_response_rating_index.sql": "4f261b2db1de0a4475dfe3fb00af05748a7e2a009d2b421f6227fd05f8bdc5d4",
   "0353_feedback_ratings_drop_answer_text.sql": "e582dadf245a9d8a4537de0fce6ffddfed831db01ae2d3333c8abab0065d9e1e",
-  "0354_signaling_sessions.sql": "7b6356658020f4dac9ee68946f69eb9f0a8ad109955260102d5b2167db9a3460"
+  "0354_signaling_sessions.sql": "7b6356658020f4dac9ee68946f69eb9f0a8ad109955260102d5b2167db9a3460",
+  "0355_user_memories_purge_deleted_text.sql": "3cf8e6ad73989d94d3ca714ad7fd1f4cc42291b904c3322346a98f8ca1a6b10f",
+  "0356_custom_connector_plugin_disabled.sql": "27feacba99ae83c8ace43a170a43813d480f70eaae4370e92674c1561e6edcfb",
+  "0357_user_skill_description_limit.sql": "debaedb2e85e66e2f9c25424dad5847eb1e408eec587531da2cd0fa8f091d287",
+  "0358_shared_project_editor_needs_share_permission.sql": "c99ac8f10f9c511b3e47d00046b2045e95186c4d9ae48e9f964d394e5c57f236",
+  "0359_settlement_recovery_binds_job_owner.sql": "46969f882409b32f2d6c479eb01e3f79ef88e8e07574f760639f8d781c719327",
+  "0360_team_premium_seats.sql": "d013b29ade6868e1dce4b306e78d675b6af74fdae7aff737b1b6925d60eda415"
 }
