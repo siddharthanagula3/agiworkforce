@@ -8,11 +8,11 @@ import { isFreeBillingPlanTier, normalizeBillingPlanTier } from '@agiworkforce/t
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import {
+  FREE_PLAN_TRAINING_CHAT_NOTICE_LEAD,
+  FREE_PLAN_TRAINING_CHAT_NOTICE_TAIL,
   FREE_PLAN_TRAINING_DATA_DISCLOSURE,
   FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL,
-  FREE_PLAN_TRAINING_NOTICE_LEAD,
   FREE_PLAN_TRAINING_NOTICE_LINK_LABEL,
-  FREE_PLAN_TRAINING_NOTICE_TAIL,
   FREE_PLAN_TRAINING_NOTICE_TITLE,
 } from '@/lib/compliance/free-plan-training-disclosure';
 import { readAcknowledgedAccount, rememberAcknowledgedAccount } from '../lib/account-notice';
@@ -45,12 +45,12 @@ export function FreePlanTrainingNotice() {
       role="note"
       aria-label={FREE_PLAN_TRAINING_NOTICE_TITLE}
       data-testid="free-plan-training-notice"
-      className="mb-2 flex items-start gap-2 rounded-lg border border-[var(--chat-border-subtle)] bg-[var(--chat-surface-elevated)] px-3 py-2 text-[13px] leading-relaxed text-[var(--chat-text-secondary)]"
+      className="mb-2 flex items-center gap-2 rounded-lg border border-[var(--chat-border-subtle)] bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-[13px] leading-5 text-[var(--chat-text-secondary)]"
     >
-      <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--chat-text-muted)]" aria-hidden="true" />
+      <Info className="h-4 w-4 shrink-0 text-[var(--chat-text-muted)]" aria-hidden="true" />
       <p className="min-w-0 flex-1">
-        {FREE_PLAN_TRAINING_NOTICE_LEAD} {FREE_PLAN_TRAINING_DATA_DISCLOSURE}{' '}
-        {FREE_PLAN_TRAINING_NOTICE_TAIL}{' '}
+        {FREE_PLAN_TRAINING_CHAT_NOTICE_LEAD} {FREE_PLAN_TRAINING_DATA_DISCLOSURE}{' '}
+        {FREE_PLAN_TRAINING_CHAT_NOTICE_TAIL}{' '}
         <Link
           href="/data-use"
           className="rounded-sm text-[var(--chat-accent-primary-text)] underline underline-offset-2 transition-colors hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
