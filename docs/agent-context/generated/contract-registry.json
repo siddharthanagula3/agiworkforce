@@ -190,6 +190,7 @@
     "library",
     "live-voice-tools",
     "local-code-session-activity",
+    "localized-pricing",
     "managed-cloud-agent-run-reference",
     "managed-cloud-agent-runs-client",
     "managed-cloud-chat-attachments-client",
