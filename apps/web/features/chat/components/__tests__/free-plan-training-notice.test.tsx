@@ -56,6 +56,15 @@ describe('the free model data notice', () => {
     );
   });
 
+  it('fits on one line above the composer and still names the opt-out', () => {
+    signedInOn('free');
+    render(<FreePlanTrainingNotice />);
+
+    const text = screen.getByTestId('free-plan-training-notice').textContent ?? '';
+    expect(text.length).toBeLessThanOrEqual(130);
+    expect(text).toContain('Settings > Privacy');
+  });
+
   it('is a note a screen reader can find, and offers the fuller explanation', () => {
     signedInOn('free');
     render(<FreePlanTrainingNotice />);
