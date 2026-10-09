@@ -1,12 +1,10 @@
 import { useMemo } from 'react';
-import { AgiMark } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 
 export interface BrandedGreetingProps {
   headline?: string;
   userName?: string | null;
-  busy?: boolean;
   workspaceLabel?: string | null;
   onSelectWorkspace?: () => void;
   className?: string;
@@ -15,7 +13,6 @@ export interface BrandedGreetingProps {
 export function BrandedGreeting({
   headline,
   userName = null,
-  busy = false,
   workspaceLabel = null,
   onSelectWorkspace,
   className,
@@ -33,14 +30,6 @@ export function BrandedGreeting({
         className,
       )}
     >
-      <div
-        aria-hidden="true"
-        className="flex h-10 w-10 items-center justify-center rounded-full"
-        role="presentation"
-      >
-        <AgiMark size={28} spinning={busy} />
-      </div>
-
       <h1
         className="text-display font-normal"
         style={{
