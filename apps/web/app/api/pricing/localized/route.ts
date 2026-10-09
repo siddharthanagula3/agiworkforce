@@ -1,13 +1,14 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { LocalizedPricingCatalog as LocalizedPricingCatalogBody } from '@agiworkforce/cloud-contracts';
 import { getLocalizedPricingCatalog } from '@/lib/server/localized-pricing-service';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
-  const catalog = await getLocalizedPricingCatalog(country);
+  const catalog: LocalizedPricingCatalogBody = await getLocalizedPricingCatalog(country);
 
   return NextResponse.json(catalog, {
     headers: {
