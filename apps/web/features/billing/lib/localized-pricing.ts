@@ -1,4 +1,12 @@
-import { z } from 'zod';
+import {
+  LOCALIZED_PRICING_PATH,
+  localizedPriceEntrySchema,
+  localizedPricingCatalogSchema,
+  type LocalizedPlanPrices,
+  type LocalizedPriceEntry,
+  type LocalizedPricedPlan,
+  type LocalizedPricingCatalog,
+} from '@agiworkforce/cloud-contracts';
 import {
   BILLING_PLAN_PRICING,
   currencyMinorUnitDigits,
@@ -20,8 +28,6 @@ export const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
 
-export const LOCALIZED_PRICING_PATH = '/api/pricing/localized';
-
 export const CHECKOUT_DISABLED_NOTICE =
   'Checkout is temporarily unavailable. Please try again later. Existing plans and Enterprise contact are unaffected.';
 export const CHECKOUT_AVAILABILITY_LOADING_NOTICE = 'Loading checkout availability…';
@@ -32,36 +38,6 @@ export function checkoutUnavailableInRegionNotice(plan: SelfServePaidPlanTier): 
   return `${BILLING_PLAN_PRICING[plan].label} checkout is not available in your region yet.`;
 }
 
-export const localizedPriceEntrySchema = z.object({
-  amountMinor: z.number().int().nonnegative(),
-  currency: z.string().regex(/^[a-z]{3}$/i),
-  localized: z.boolean(),
-  checkoutReady: z.boolean(),
-});
-
-export type LocalizedPriceEntry = z.infer<typeof localizedPriceEntrySchema>;
-
-const localizedPlanPricesSchema = z.object({
-  monthly: localizedPriceEntrySchema.optional(),
-  yearly: localizedPriceEntrySchema.optional(),
-});
-
-export const localizedPricingCatalogSchema = z.object({
-  country: z.string().min(2).max(2),
-  requestedCurrency: z.string().regex(/^[a-z]{3}$/i),
-  plans: z.object({
-    basic: localizedPlanPricesSchema,
-    pro: localizedPlanPricesSchema,
-    max: localizedPlanPricesSchema,
-    max_15x: localizedPlanPricesSchema,
-    team: localizedPlanPricesSchema,
-    team_premium: localizedPlanPricesSchema.optional(),
-  }),
-});
-
-export type LocalizedPricingCatalog = z.infer<typeof localizedPricingCatalogSchema>;
-export type LocalizedPlanPrices = LocalizedPricingCatalog['plans'];
-export type LocalizedPricedPlan = keyof LocalizedPlanPrices;
 export type LocalizedPricingStatus = 'loading' | 'ready' | 'error';
 
 export function formatPlanAmount(
@@ -146,3 +122,13 @@ export function planCheckoutReady(
 ): boolean {
   return localizedPriceEntry(plans, plan, interval)?.checkoutReady === true;
 }
+
+export {
+  LOCALIZED_PRICING_PATH,
+  localizedPriceEntrySchema,
+  localizedPricingCatalogSchema,
+  type LocalizedPlanPrices,
+  type LocalizedPriceEntry,
+  type LocalizedPricedPlan,
+  type LocalizedPricingCatalog,
+};
