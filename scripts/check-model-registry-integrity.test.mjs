@@ -258,6 +258,87 @@ test('a token-context model with no context window is caught', () => {
   );
 });
 
+const UNPUBLISHED_CONTEXT = {
+  source: 'https://provider.example/announcing-alpha-1',
+  verifiedOn: '2026-10-09',
+};
+
+function comingSoon(registry) {
+  registry.models['alpha-1'].lifecycle.availability = 'coming_soon';
+  registry.routes['acme/alpha-1'].availability = 'coming_soon';
+  registry.routes['acme/alpha-1'].selectable = false;
+}
+
+function limitViolations(mutate) {
+  const registry = baseRegistry();
+  mutate(registry);
+  return collectViolations(registry, schema).filter(
+    (violation) => violation.check === 'model limits',
+  );
+}
+
+test('a coming-soon model whose provider publishes no context window may say so', () => {
+  assert.deepEqual(
+    limitViolations((registry) => {
+      comingSoon(registry);
+      registry.limits['alpha-1'] = { contextWindowUnpublished: { ...UNPUBLISHED_CONTEXT } };
+    }),
+    [],
+  );
+});
+
+test('a coming-soon model with no context window and no sourced marker is caught', () => {
+  assert.equal(
+    limitViolations((registry) => {
+      comingSoon(registry);
+      registry.limits['alpha-1'] = {};
+    }).length,
+    1,
+  );
+});
+
+test('a coming-soon model whose marker names no source URL is caught', () => {
+  assert.equal(
+    limitViolations((registry) => {
+      comingSoon(registry);
+      registry.limits['alpha-1'] = {
+        contextWindowUnpublished: { source: '', verifiedOn: '2026-10-09' },
+      };
+    }).length,
+    1,
+  );
+});
+
+test('a live model still carrying the unpublished-context marker is caught', () => {
+  const violations = limitViolations((registry) => {
+    registry.limits['alpha-1'] = { contextWindowUnpublished: { ...UNPUBLISHED_CONTEXT } };
+  });
+  assert.ok(
+    violations.some((violation) =>
+      violation.detail.includes('publish the real context window before promoting to live'),
+    ),
+  );
+  assert.ok(violations.some((violation) => violation.detail.includes('no positive contextTokens')));
+});
+
+test('a live model with no context window is still caught', () => {
+  assert.deepEqual(
+    limitViolations((registry) => {
+      delete registry.limits['alpha-1'].contextTokens;
+    }).map((violation) => violation.detail),
+    ['kind chat declares no positive contextTokens'],
+  );
+});
+
+test('a model declaring a context window and the unpublished marker is caught', () => {
+  assert.ok(
+    limitViolations((registry) => {
+      comingSoon(registry);
+      registry.limits['alpha-1'].contextWindowUnpublished = { ...UNPUBLISHED_CONTEXT };
+    }).some((violation) => violation.detail.includes('declares both')),
+  );
+});
+
 test('a residency region no provider publishes is caught', () => {
   assert.ok(
     checksFor((registry) => {

@@ -1248,6 +1248,21 @@
           "type": "integer",
           "minimum": 1
         },
+        "contextWindowUnpublished": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "verifiedOn"],
+          "description": "The provider page, checked on verifiedOn, that announces the model without publishing its context window. Only a model that is not live may carry it, and never beside contextTokens.",
+          "properties": {
+            "source": {
+              "type": "string",
+              "pattern": "^https://"
+            },
+            "verifiedOn": {
+              "$ref": "#/definitions/isoDate"
+            }
+          }
+        },
         "maxInputTokens": {
           "type": "integer",
           "minimum": 1
