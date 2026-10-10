@@ -1,3 +1,6 @@
+import { MICROUSD_PER_USD } from './credits';
+import { FEATURE_RATE_CARD } from './rate-card';
+
 export type BillingPlanTier =
   | 'local-only'
   | 'byok'
@@ -446,21 +449,70 @@ export const PLATFORM_EVENT_TRIGGER_RUNS_PER_HOUR = 30;
 
 export const PLATFORM_EVENT_TRIGGER_RUNS_PER_DAY = 720;
 
+export const FREE_DAILY_CAPS = Object.freeze({
+  messageWrites: 1_000,
+  conversationCreates: 100,
+  egressBytes: 500 * 1024 * 1024,
+  emailSends: 10,
+  vectorQueries: 200,
+});
+
+const DAYS_IN_LONGEST_MONTH = 31;
+
+export const STORAGE_COST_SHARE_OF_PRICE = 0.01;
+
+export const DOWNLOAD_COST_SHARE_OF_PRICE = 0.03;
+
+const BYTES_PER_GIB = 1024 ** 3;
+
+function usdPerGib(feature: 'object_storage_gib_month' | 'network_egress_gib'): number | null {
+  const microusd = FEATURE_RATE_CARD[feature].providerCogsMicrousd;
+  return microusd === null || microusd <= 0 ? null : microusd / MICROUSD_PER_USD;
+}
+
+/**
+ * Whole GiB of file storage a plan's price funds at its storage share. A
+ * storage rate the rate card cannot price funds nothing.
+ */
+function storageCapBytes(monthlyPriceUsd: number): number {
+  const rate = usdPerGib('object_storage_gib_month');
+  if (rate === null) return 0;
+  return Math.floor((monthlyPriceUsd * STORAGE_COST_SHARE_OF_PRICE) / rate) * BYTES_PER_GIB;
+}
+
+/** Bytes of downloads a month a plan's price funds at its download share. */
+function downloadCapBytes(monthlyPriceUsd: number): number {
+  const rate = usdPerGib('network_egress_gib');
+  if (rate === null) return 0;
+  return Math.floor(((monthlyPriceUsd * DOWNLOAD_COST_SHARE_OF_PRICE) / rate) * BYTES_PER_GIB);
+}
+
 export interface BillingPlanProductLimits {
   projects: BillingPlanLimit;
   customMcpServers: BillingPlanLimit;
   knowledgeStorageBytes: BillingPlanLimit;
+  monthlyDownloadBytes: BillingPlanLimit;
   maxConcurrentTurns: BillingPlanLimit;
   maxSandboxes: BillingPlanLimit;
   sandboxTtlMs: number;
   maxConnectorTools: BillingPlanLimit;
   maxScheduledTasks: BillingPlanLimit;
   codeHarnessDailyCeilingCents: BillingPlanLimit;
+  maxAttachmentBytes: number;
+  maxAttachmentsPerMessage: number;
+  dailyAttachmentUploads: BillingPlanLimit;
 }
+
+const MIB = 1024 * 1024;
+
+const FREE_ATTACHMENTS_PER_MESSAGE = 10;
+
+const PAID_ATTACHMENTS_PER_MESSAGE = 20;
 
 const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   projects: 'unlimited',
-  knowledgeStorageBytes: 'unlimited',
+  knowledgeStorageBytes: storageCapBytes(BILLING_PLAN_PRICING.max.monthlyPriceUsd),
+  monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.max.monthlyPriceUsd),
   customMcpServers: 'unlimited',
   maxConcurrentTurns: 8,
   maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
@@ -468,6 +520,9 @@ const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   maxConnectorTools: 300,
   maxScheduledTasks: 10,
   codeHarnessDailyCeilingCents: 2500,
+  maxAttachmentBytes: 512 * MIB,
+  maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+  dailyAttachmentUploads: 'unlimited',
 };
 
 export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
@@ -476,6 +531,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   'local-only': {
     projects: 'unlimited',
     knowledgeStorageBytes: 'unlimited',
+    monthlyDownloadBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 'unlimited',
     maxSandboxes: 0,
@@ -483,10 +539,14 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
+    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   byok: {
     projects: 'unlimited',
     knowledgeStorageBytes: 'unlimited',
+    monthlyDownloadBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 'unlimited',
     maxSandboxes: 0,
@@ -494,10 +554,14 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
+    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   free: {
     projects: 1,
     knowledgeStorageBytes: 104857600,
+    monthlyDownloadBytes: FREE_DAILY_CAPS.egressBytes * DAYS_IN_LONGEST_MONTH,
     customMcpServers: 1,
     maxConcurrentTurns: 1,
     maxSandboxes: 1,
@@ -505,10 +569,14 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 25,
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
+    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 5,
   },
   basic: {
     projects: 5,
     knowledgeStorageBytes: 1073741824,
+    monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.basic.monthlyPriceUsd),
     customMcpServers: 5,
     maxConcurrentTurns: 2,
     maxSandboxes: 2,
@@ -516,10 +584,14 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 50,
     maxScheduledTasks: 2,
     codeHarnessDailyCeilingCents: 100,
+    maxAttachmentBytes: 100 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   pro: {
     projects: 25,
     knowledgeStorageBytes: 10737418240,
+    monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.pro.monthlyPriceUsd),
     customMcpServers: 25,
     maxConcurrentTurns: 4,
     maxSandboxes: 5,
@@ -527,11 +599,15 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
+    maxAttachmentBytes: 250 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   max: MAX_PLAN_PRODUCT_LIMITS,
   max_15x: {
     projects: 'unlimited',
-    knowledgeStorageBytes: 'unlimited',
+    knowledgeStorageBytes: storageCapBytes(BILLING_PLAN_PRICING.max_15x.monthlyPriceUsd),
+    monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.max_15x.monthlyPriceUsd),
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 12,
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
@@ -539,10 +615,14 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 500,
     maxScheduledTasks: 25,
     codeHarnessDailyCeilingCents: 7500,
+    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   team: {
     projects: 25,
     knowledgeStorageBytes: 26843545600,
+    monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.team.monthlyPriceUsd),
     customMcpServers: 25,
     maxConcurrentTurns: 4,
     maxSandboxes: 5,
@@ -550,11 +630,19 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
+    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
-  team_premium: MAX_PLAN_PRODUCT_LIMITS,
+  team_premium: {
+    ...MAX_PLAN_PRODUCT_LIMITS,
+    knowledgeStorageBytes: storageCapBytes(BILLING_PLAN_PRICING.team_premium.monthlyPriceUsd),
+    monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.team_premium.monthlyPriceUsd),
+  },
   enterprise: {
     projects: 'custom',
     knowledgeStorageBytes: 'custom',
+    monthlyDownloadBytes: 'custom',
     customMcpServers: 'custom',
     maxConcurrentTurns: 'custom',
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
@@ -562,18 +650,13 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'custom',
     maxScheduledTasks: 'custom',
     codeHarnessDailyCeilingCents: 'custom',
+    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
 });
 
-export const FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD = 1_000_000;
-
-export const FREE_DAILY_CAPS = Object.freeze({
-  messageWrites: 1_000,
-  conversationCreates: 100,
-  egressBytes: 500 * 1024 * 1024,
-  emailSends: 10,
-  vectorQueries: 200,
-});
+export const SANDBOX_MINIMUM_FUNDED_RUN_MS = MINUTE_MS;
 
 export type FreeDailyCap = keyof typeof FREE_DAILY_CAPS;
 
@@ -586,6 +669,26 @@ export function getBillingPlanProductLimits(
 ): BillingPlanProductLimits | null {
   if (!isBillingPlanTier(plan)) return null;
   return BILLING_PLAN_PRODUCT_LIMITS[plan];
+}
+
+export const MAX_PLAN_ATTACHMENT_BYTES = Math.max(
+  ...Object.values(BILLING_PLAN_PRODUCT_LIMITS).map((limits) => limits.maxAttachmentBytes),
+);
+
+/** The largest single file a plan may upload; an unknown plan may upload nothing. */
+export function getPlanMaxAttachmentBytes(plan: string | null | undefined): number {
+  return getBillingPlanProductLimits(plan)?.maxAttachmentBytes ?? 0;
+}
+
+export function getPlanMaxAttachmentsPerMessage(plan: string | null | undefined): number {
+  return getBillingPlanProductLimits(plan)?.maxAttachmentsPerMessage ?? 0;
+}
+
+/** Uploads a plan may start in a UTC day, or null when it is not counted. */
+export function getPlanDailyAttachmentUploads(plan: string | null | undefined): number | null {
+  const limits = getBillingPlanProductLimits(plan);
+  if (!limits) return 0;
+  return toEnforceableBillingPlanLimit(limits.dailyAttachmentUploads);
 }
 
 export function toEnforceableBillingPlanLimit(limit: BillingPlanLimit | undefined): number | null {

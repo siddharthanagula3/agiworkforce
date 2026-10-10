@@ -219,6 +219,8 @@
   "compareRowManagedUsage": "Uso gestionado",
   "compareRowContextWindow": "Ventana de contexto",
   "compareRowKnowledgeStorage": "Almacenamiento de conocimiento",
+  "compareRowMonthlyDownloads": "Descargas de archivos al mes",
+  "compareRowAttachmentSize": "Archivo más grande que se puede subir",
   "compareRowCustomMcp": "Servidores MCP personalizados",
   "compareRowTrainsOnContent": "Entrena con tu contenido",
   "compareModelsFree": "Modelos gratuitos",

@@ -14,6 +14,10 @@ import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
 import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
 import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
 import { readFileStorageMeter } from '@/lib/server/file-storage';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { logger } from '@/lib/logger';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { readDownloadUsage } from '@/lib/services/tier-unit-quota-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -82,6 +86,22 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
   };
 }
 
+async function readLibraryDownloadMeter(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<{ usedBytes: number; limitBytes: number } | null> {
+  try {
+    const planTier = await resolveEntitledPlanTier(db, userId);
+    const usage = await readDownloadUsage({ userId, planTier });
+    return usage.limitBytes === null
+      ? null
+      : { usedBytes: usage.usedBytes, limitBytes: usage.limitBytes };
+  } catch (error) {
+    logger.warn({ error, userId }, 'Library download meter could not be read');
+    return null;
+  }
+}
+
 async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -128,10 +148,14 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
   };
   const storage =
     offset === 0 && !deleted ? await readFileStorageMeter({ db, userId, organizationId }) : null;
+  const downloads = offset === 0 && !deleted ? await readLibraryDownloadMeter(db, userId) : null;
   const response: LibraryListResponse = {
     ...body,
     ...(storage?.usedBytes != null ? { storage_used_bytes: storage.usedBytes } : {}),
     ...(storage?.limitBytes != null ? { storage_limit_bytes: storage.limitBytes } : {}),
+    ...(downloads
+      ? { download_used_bytes: downloads.usedBytes, download_limit_bytes: downloads.limitBytes }
+      : {}),
   };
   return NextResponse.json(response, { headers: headers(request) });
 }

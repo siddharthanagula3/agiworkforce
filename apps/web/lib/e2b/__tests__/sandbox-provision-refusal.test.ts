@@ -28,8 +28,9 @@ vi.mock('../gate', async (importOriginal) => ({
 }));
 
 const sandboxComputeIsPriceable = vi.fn(() => true);
-const reserveSandboxComputeInterval = vi.fn(async (_input: unknown) => ({
+const reserveSandboxComputeInterval = vi.fn(async (input: unknown) => ({
   outcome: 'reserved' as const,
+  ttlMs: (input as { ttlMs: number }).ttlMs,
   reservation: {
     idempotencyKey: 'agi.e2b.compute.res-1',
     requestHash: 'hash-1',
@@ -156,14 +157,6 @@ const DRIVES: Readonly<Record<string, RefusalDrive>> = {
         error: { status: 402, code: 'insufficient_credits' },
       } as never),
     scope: () => chatScope('user-broke'),
-  },
-  'free-allowance-exhausted': {
-    arrange: () =>
-      reserveSandboxComputeInterval.mockResolvedValueOnce({
-        outcome: 'refused',
-        error: { status: 429, code: 'free_sandbox_allowance_exhausted' },
-      } as never),
-    scope: () => chatScope('user-free-allowance'),
   },
   'provider-error': {
     arrange: () => {},

@@ -219,6 +219,8 @@
   "compareRowManagedUsage": "الاستخدام المُدار",
   "compareRowContextWindow": "نافذة السياق",
   "compareRowKnowledgeStorage": "تخزين المعرفة",
+  "compareRowMonthlyDownloads": "تنزيلات الملفات شهريًا",
+  "compareRowAttachmentSize": "أكبر حجم لتحميل ملف",
   "compareRowCustomMcp": "خوادم MCP مخصصة",
   "compareRowTrainsOnContent": "التدريب على محتواك",
   "compareModelsFree": "نماذج مجانية",

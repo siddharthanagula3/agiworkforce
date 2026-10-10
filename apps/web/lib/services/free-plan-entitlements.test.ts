@@ -68,12 +68,23 @@ describe('managed cloud resource entitlements', () => {
       expect(getFileStorageLimitBytes(plan)).toBe(expected);
     });
 
-    it.each(['max', 'max_15x', 'enterprise'] as const)(
-      'leaves %s uncapped rather than zero',
-      (plan) => {
-        expect(getFileStorageLimitBytes(plan)).toBeNull();
-      },
-    );
+    it.each([
+      ['max', 62 * 1024 ** 3],
+      ['max_15x', 124 * 1024 ** 3],
+      ['team_premium', 77 * 1024 ** 3],
+    ] as const)('caps %s at the storage its price funds', (plan, expected) => {
+      expect(getFileStorageLimitBytes(plan)).toBe(expected);
+    });
+
+    it('leaves enterprise storage to its contract', () => {
+      expect(getFileStorageLimitBytes('enterprise')).toBeNull();
+    });
+
+    it('names Team Premium in its storage limit message', () => {
+      expect(getFileStorageLimitErrorMessage('team_premium', 77 * 1024 ** 3)).toContain(
+        'Team Premium accounts include 77 GB',
+      );
+    });
 
     it('fails closed for an unknown plan', () => {
       expect(getFileStorageLimitBytes('not-a-plan')).toBe(0);

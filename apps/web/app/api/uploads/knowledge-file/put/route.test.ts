@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 const { mockGetUserScopedDb, mockNeonQuery, mockPutPrivateObject } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
@@ -156,7 +157,7 @@ describe('PUT /api/uploads/knowledge-file/put', () => {
   it('refuses a body over the declared content-length cap before this route ever reads it', async () => {
     // Caught by the shared payload-ceiling guard in error-handler.ts, whose
     // `/api/uploads/` prefix entry already matches this route at the same
-    // MAX_ATTACHMENT_BYTES bound this route's own declaredLength check
+    // MAX_PLAN_ATTACHMENT_BYTES bound this route's own declaredLength check
     // enforces -- this route's check is the defense-in-depth layer for a
     // request that skips or lies about Content-Length.
     const oversized = 'x'.repeat(1024);
@@ -164,7 +165,10 @@ describe('PUT /api/uploads/knowledge-file/put', () => {
       `http://localhost:3100/api/uploads/knowledge-file/put?${await tokenQuery()}`,
       {
         method: 'PUT',
-        headers: { 'Content-Type': 'text/plain', 'Content-Length': String(26 * 1024 * 1024) },
+        headers: {
+          'Content-Type': 'text/plain',
+          'Content-Length': String(MAX_PLAN_ATTACHMENT_BYTES + 1),
+        },
         body: oversized,
       },
     );

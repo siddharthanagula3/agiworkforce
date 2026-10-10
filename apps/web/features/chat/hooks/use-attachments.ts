@@ -6,6 +6,7 @@ import {
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+  CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE,
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
 } from '@/lib/chat-attachment-policy';
@@ -57,6 +58,13 @@ export interface UseAttachmentsOptions {
   maxFiles?: number;
   maxFileSize?: number;
   maxTotalBytes?: number;
+  /**
+   * The plan's largest upload. A file above what chat sends inline but within
+   * this belongs in a project, and the notice says so.
+   */
+  planFileLimitBytes?: number;
+  /** Names the plan in a notice about a file larger than it allows. */
+  planLabel?: string;
   onError?: (message: string) => void;
 }
 
@@ -90,6 +98,7 @@ function formatFileSize(bytes: number): string {
 type IntakeIssueReason =
   | 'empty'
   | 'too_large'
+  | 'needs_project'
   | 'unsupported'
   | 'too_many'
   | 'over_message_budget'
@@ -110,6 +119,8 @@ interface IntakeLimits {
   maxFiles: number;
   maxFileSize: number;
   maxTotalBytes: number;
+  planFileLimitBytes?: number | undefined;
+  planLabel?: string | undefined;
 }
 
 function fileIdentity(file: File): string {
@@ -122,7 +133,11 @@ function singleIssueNotice(issue: IntakeIssue, limits: IntakeLimits): string {
     case 'empty':
       return `"${file.name}" is empty. Add content to the file and attach it again.`;
     case 'too_large':
-      return `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(limits.maxFileSize)}.`;
+      return limits.planLabel && limits.planFileLimitBytes !== undefined
+        ? `"${file.name}" is too large (${formatFileSize(file.size)}). ${limits.planLabel} accounts can upload files up to ${formatFileSize(limits.planFileLimitBytes)} each.`
+        : `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(limits.maxFileSize)}.`;
+    case 'needs_project':
+      return `"${file.name}" was not attached. ${CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE}`;
     case 'unsupported':
       return `"${file.name}" has an unsupported file type (${file.type || 'unknown'}).`;
     case 'too_many':
@@ -141,7 +156,9 @@ function issueReasonPhrase(reason: IntakeIssueReason, limits: IntakeLimits): str
     case 'empty':
       return 'empty';
     case 'too_large':
-      return `larger than ${formatFileSize(limits.maxFileSize)}`;
+      return `larger than ${formatFileSize(limits.planFileLimitBytes ?? limits.maxFileSize)}`;
+    case 'needs_project':
+      return `over ${formatFileSize(limits.maxFileSize)}, add it to a project`;
     case 'unsupported':
       return 'unsupported file type';
     case 'too_many':
@@ -177,7 +194,10 @@ function intakeNotice(
 
 function refusalOf(issue: IntakeIssue): ChatDraftRefusal | null {
   if (issue.reason === 'duplicate') return null;
-  return { filename: issue.file.name, reason: issue.reason };
+  return {
+    filename: issue.file.name,
+    reason: issue.reason === 'needs_project' ? 'too_large' : issue.reason,
+  };
 }
 
 /**
@@ -195,6 +215,8 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     maxFiles = MAX_FILE_COUNT,
     maxFileSize = MAX_FILE_SIZE_BYTES,
     maxTotalBytes = MAX_MESSAGE_BYTES,
+    planFileLimitBytes,
+    planLabel,
     onError,
   } = options;
 
@@ -258,7 +280,13 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     (incoming: File[]) => {
       if (incoming.length === 0) return;
 
-      const limits: IntakeLimits = { maxFiles, maxFileSize, maxTotalBytes };
+      const limits: IntakeLimits = {
+        maxFiles,
+        maxFileSize,
+        maxTotalBytes,
+        planFileLimitBytes,
+        planLabel,
+      };
       const report = (attached: number, issues: readonly IntakeIssue[]) => {
         const notice = intakeNotice(incoming.length, attached, issues, limits);
         if (notice) onError?.(notice);
@@ -284,7 +312,13 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           continue;
         }
         if (file.size > maxFileSize) {
-          issues.push({ file, reason: 'too_large' });
+          issues.push({
+            file,
+            reason:
+              planFileLimitBytes !== undefined && file.size <= planFileLimitBytes
+                ? 'needs_project'
+                : 'too_large',
+          });
           continue;
         }
         if (!isAllowedType(file)) {
@@ -354,7 +388,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           if (pendingBatchesRef.current === 0) setPreparing(false);
         });
     },
-    [admit, maxFiles, maxFileSize, maxTotalBytes, onError],
+    [admit, maxFiles, maxFileSize, maxTotalBytes, planFileLimitBytes, planLabel, onError],
   );
 
   const removeFile = useCallback(

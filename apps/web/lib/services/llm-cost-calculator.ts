@@ -1,9 +1,11 @@
 import 'server-only';
 import {
+  applyInputTokenPricingTiers,
   getModelMetadataById,
   getProviderCacheTokenBillingClass,
   getProviderConfig,
   getProviderReasoningTokenBillingClass,
+  isModelPromoExpired,
   listCanonicalModels,
   normalizeModelId,
   resolveEffectiveModelPricingForInputTokens,
@@ -32,6 +34,27 @@ export interface RoutePriceSheet {
   cacheReadPerMillion: number | null;
   cacheWritePerMillion: number | null;
   cacheWrite1hPerMillion: number | null;
+  promoExpiresAt?: string | null;
+  postPromoPrices?: RoutePostPromoPrices | null;
+  inputTokenPricingTiers?: readonly RouteInputTokenPricingTier[];
+}
+
+interface RoutePostPromoPrices {
+  input?: number;
+  output?: number;
+  cached_input?: number;
+  cached_write?: number;
+  cached_write_1h?: number;
+}
+
+interface RouteInputTokenPricingTier {
+  thresholdTokens: number;
+  thresholdBoundary?: 'inclusive' | 'exclusive';
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
+  cacheWrite1hPerMillion?: number;
 }
 
 export interface RouteRegistryPricingLookup {
@@ -509,16 +532,51 @@ export class LLMCostCalculator {
   private static toModelPricingFromRouteSheet(
     sheet: RoutePriceSheet,
     fallbackProviderId: string | null,
+    now: Date,
+    inputTokens: number,
   ): ModelPricing | null {
     if (sheet.inputPerMillion === null || sheet.outputPerMillion === null) {
       return null;
     }
+    const postPromo =
+      sheet.postPromoPrices &&
+      sheet.promoExpiresAt &&
+      isModelPromoExpired({ promo_expires_at: sheet.promoExpiresAt }, now)
+        ? sheet.postPromoPrices
+        : null;
+    const effective = applyInputTokenPricingTiers(
+      {
+        inputTokenPricingTiers: (sheet.inputTokenPricingTiers ?? []).map((tier) => ({
+          thresholdTokens: tier.thresholdTokens,
+          ...(tier.thresholdBoundary ? { thresholdBoundary: tier.thresholdBoundary } : {}),
+          inputCost: tier.inputPerMillion,
+          outputCost: tier.outputPerMillion,
+          ...(tier.cacheReadPerMillion === undefined
+            ? {}
+            : { cached_input: tier.cacheReadPerMillion }),
+          ...(tier.cacheWritePerMillion === undefined
+            ? {}
+            : { cached_write: tier.cacheWritePerMillion }),
+          ...(tier.cacheWrite1hPerMillion === undefined
+            ? {}
+            : { cached_write_1h: tier.cacheWrite1hPerMillion }),
+        })),
+      },
+      {
+        inputCost: postPromo?.input ?? sheet.inputPerMillion,
+        outputCost: postPromo?.output ?? sheet.outputPerMillion,
+        cached_input: postPromo?.cached_input ?? sheet.cacheReadPerMillion ?? undefined,
+        cached_write: postPromo?.cached_write ?? sheet.cacheWritePerMillion ?? undefined,
+        cached_write_1h: postPromo?.cached_write_1h ?? sheet.cacheWrite1hPerMillion ?? undefined,
+      },
+      inputTokens,
+    );
     return {
-      inputCostPer1MTokens: sheet.inputPerMillion,
-      outputCostPer1MTokens: sheet.outputPerMillion,
-      cachedInputCostPer1MTokens: sheet.cacheReadPerMillion ?? undefined,
-      cachedWriteCostPer1MTokens: sheet.cacheWritePerMillion ?? undefined,
-      cachedWrite1hCostPer1MTokens: sheet.cacheWrite1hPerMillion ?? undefined,
+      inputCostPer1MTokens: effective.inputCost,
+      outputCostPer1MTokens: effective.outputCost,
+      cachedInputCostPer1MTokens: effective.cached_input,
+      cachedWriteCostPer1MTokens: effective.cached_write,
+      cachedWrite1hCostPer1MTokens: effective.cached_write_1h,
       cacheTokensDisjointFromInput: isCacheTokensDisjointFromInput(
         sheet.provider ?? fallbackProviderId,
       ),
@@ -532,11 +590,13 @@ export class LLMCostCalculator {
     routeId: string | null | undefined,
     providerId: string | null,
     modelId: string,
+    now: Date,
+    inputTokens: number,
   ): ModelPricing | null {
     const getRoutePricing = registryExport(routeRegistryLookup, 'getRoutePricing');
     const routeSheet = routeId ? getRoutePricing?.(routeId) : undefined;
     if (routeSheet) {
-      const pricing = this.toModelPricingFromRouteSheet(routeSheet, providerId);
+      const pricing = this.toModelPricingFromRouteSheet(routeSheet, providerId, now, inputTokens);
       if (pricing) return pricing;
     }
 
@@ -546,7 +606,7 @@ export class LLMCostCalculator {
       modelSheets?.find((sheet) => sheet.provider === providerId && sheet.isDefault) ??
       modelSheets?.find((sheet) => sheet.provider === providerId);
     if (matchedSheet) {
-      const pricing = this.toModelPricingFromRouteSheet(matchedSheet, providerId);
+      const pricing = this.toModelPricingFromRouteSheet(matchedSheet, providerId, now, inputTokens);
       if (pricing) return pricing;
     }
 
@@ -573,6 +633,8 @@ export class LLMCostCalculator {
         routeId,
         providerId,
         resolvedModelId,
+        now,
+        inputTokens,
       );
       if (registryRoutePricing) {
         return registryRoutePricing;

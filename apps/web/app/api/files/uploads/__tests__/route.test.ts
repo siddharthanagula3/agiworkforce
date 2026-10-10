@@ -23,6 +23,12 @@ const {
   scopedDb: { query: vi.fn() },
 }));
 
+const mockAdmitAttachmentUpload = vi.hoisted(() => vi.fn(async (_input: unknown) => undefined));
+vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  admitAttachmentUpload: (input: unknown) => mockAdmitAttachmentUpload(input),
+}));
+
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/logger', () => ({
@@ -171,6 +177,45 @@ describe('resumable upload for every upload kind', () => {
     expect(opened.partCount).toBe(2);
     expect(Date.parse(opened.expiresAt)).toBeGreaterThan(Date.now());
     expect(await pendingKey()).toMatch(/^chat-attachments\/user-owner\/\d+_[A-Za-z0-9]+\.txt$/);
+  });
+
+  it('admits every new upload against the plan before storage opens it', async () => {
+    await openUpload();
+
+    expect(mockAdmitAttachmentUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-owner',
+        kind: 'chat-attachment',
+        byteCount: FILE_BYTES.byteLength,
+      }),
+    );
+  });
+
+  it('answers a plan refusal with its message and opens nothing', async () => {
+    const { attachmentSizeRefusal } = await import('@/lib/server/attachment-allowance');
+    mockAdmitAttachmentUpload.mockRejectedValueOnce(
+      attachmentSizeRefusal('pro', 'chat-attachment', 50 * 1024 * 1024),
+    );
+
+    const response = await createUpload(
+      createRequest('http://localhost:3000/api/files/uploads', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'chat-attachment',
+          fileName: 'notes.txt',
+          mimeType: 'text/plain',
+          byteCount: FILE_BYTES.byteLength,
+          checksumSha256: CHECKSUM,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    const body = (await response.json()) as { error?: { message?: string } };
+    expect(body.error?.message).toBe(
+      'Files over 12 MB go into a project, where AGI reads and searches them.',
+    );
+    expect(await store.current?.listPendingMultipartUploads(PRIVATE_BUCKET)).toHaveLength(0);
   });
 
   it('refuses a file type chat does not accept', async () => {

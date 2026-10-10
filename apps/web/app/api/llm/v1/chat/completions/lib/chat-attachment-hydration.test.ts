@@ -4,6 +4,9 @@ import {
   hydrateChatAttachments,
   MAX_PARALLEL_ATTACHMENT_FETCHES,
 } from './chat-attachment-hydration';
+import { getPlanMaxAttachmentsPerMessage } from '@agiworkforce/types';
+
+const PAID_ATTACHMENTS_PER_MESSAGE = getPlanMaxAttachmentsPerMessage('pro');
 
 const mocks = vi.hoisted(() => ({
   getMediaAssetById: vi.fn(),
@@ -78,7 +81,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1');
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
     expect(messages[0]?.content[1]).toMatchObject({
       type: 'text',
@@ -93,6 +96,26 @@ describe('hydrateChatAttachments', () => {
       'base64',
     ).toString('utf8');
     expect(decoded).toContain('PLUM-VECTOR-9182');
+  });
+
+  it('refuses a turn carrying more files than the plan allows on one message', async () => {
+    const freeLimit = getPlanMaxAttachmentsPerMessage('free');
+    const messages = [
+      {
+        role: 'user',
+        content: Array.from({ length: freeLimit + 1 }, (_, index) => ({
+          type: 'file',
+          file: { asset_id: `32b71cf4-c0d1-4cc7-b6c4-${String(index).padStart(12, '0')}` },
+        })),
+      },
+    ];
+
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, freeLimit),
+    ).rejects.toMatchObject({
+      message: `You can attach up to ${freeLimit} files to one message.`,
+    });
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
   it('fences extracted text as untrusted data a document cannot close', async () => {
@@ -112,7 +135,7 @@ describe('hydrateChatAttachments', () => {
     mocks.readStoredMedia.mockResolvedValue({ data: pdf, contentType: 'application/pdf' });
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    await hydrateChatAttachments(messages, 'user-1');
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
     const filePart = partsOf(messages[0])[1];
     const decoded = Buffer.from(
@@ -147,7 +170,9 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).resolves.toBeDefined();
 
     // Named, because a turn can carry several files and the reader has to know
     // which one to re-attach.
@@ -168,7 +193,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1');
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
     expect(messages[0]?.content).toEqual([
       {
@@ -224,7 +249,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1');
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
     expect(messages[0]?.content[0]).toEqual({
       type: 'text',
@@ -268,7 +293,9 @@ describe('hydrateChatAttachments', () => {
     });
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).rejects.toEqual(
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).rejects.toEqual(
       expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
         status: 400,
         code: 'unreadable_attachment',
@@ -295,7 +322,9 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).rejects.toEqual(
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).rejects.toEqual(
       expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
         status: 404,
         code: 'attachment_not_found',
@@ -333,7 +362,9 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).resolves.toBeDefined();
 
     const parts = partsOf(messages[0]);
     expect(parts[0]).toEqual({ type: 'text', text: 'Compare these' });
@@ -363,7 +394,9 @@ describe('hydrateChatAttachments', () => {
 
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).resolves.toBeDefined();
 
     expect(partsOf(messages[0])[0]?.text).toBe(
       '[attachment unavailable: truncated.txt could not be loaded. Attach it again to include it.]',
@@ -406,7 +439,9 @@ describe('hydrateChatAttachments', () => {
     it('lets a later plain-text turn proceed instead of bricking the conversation', async () => {
       const messages = conversationWithRottedHistory();
 
-      await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
+      await expect(
+        hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      ).resolves.toBeDefined();
 
       expect(partsOf(messages[2])).toEqual([
         { type: 'text', text: 'What could cause this to happen again?' },
@@ -416,7 +451,7 @@ describe('hydrateChatAttachments', () => {
     it('substitutes a note the model can answer around, naming the file', async () => {
       const messages = conversationWithRottedHistory();
 
-      await hydrateChatAttachments(messages, 'user-1');
+      await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
       const historyParts = partsOf(messages[0]);
       expect(historyParts[0]).toEqual({ type: 'text', text: 'What is in these?' });
@@ -429,7 +464,7 @@ describe('hydrateChatAttachments', () => {
     it('says nothing a reader could not act on', async () => {
       const messages = conversationWithRottedHistory();
 
-      await hydrateChatAttachments(messages, 'user-1');
+      await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
       const note = partsOf(messages[0])[1]?.text ?? '';
       expect(note).toContain('IMG_2215.PNG');
@@ -463,7 +498,9 @@ describe('hydrateChatAttachments', () => {
       { role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).rejects.toEqual(
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).rejects.toEqual(
       expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
         status: 400,
         code: 'unsupported_attachment',
@@ -488,7 +525,9 @@ describe('hydrateChatAttachments', () => {
       { role: 'user', content: [{ type: 'text', text: 'Follow-up' }] },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).resolves.toBeDefined();
 
     expect(partsOf(messages[0])[0]?.text).toBe(
       '[attachment unavailable: sheet.xls is not a file type this chat can read.]',
@@ -519,7 +558,9 @@ describe('hydrateChatAttachments', () => {
       { role: 'user', content: [{ type: 'file', file: { asset_id: attachedNowId } }] },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).resolves.toBeDefined();
 
     expect(partsOf(messages[2])[1]?.file?.filename).toBe('new-notes.txt');
     expect(partsOf(messages[0])[0]?.text).toBe(
@@ -552,7 +593,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1');
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
     const parts = partsOf(messages[0]);
     expect(parts[1]).toEqual({ type: 'text', text: '[attached file: notes.txt (text/plain)]' });
@@ -583,7 +624,9 @@ describe('hydrateChatAttachments', () => {
       { role: 'user', content: [{ type: 'file', file: { asset_id: 'attached-now' } }] },
     ];
 
-    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeDefined();
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+    ).resolves.toBeDefined();
 
     expect(partsOf(messages[21])[1]?.file?.filename).toBe('file-attached-now.txt');
     // No filename here: the cap is reached before the asset row is read, and a
@@ -628,7 +671,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     const startedAt = Date.now();
-    await hydrateChatAttachments(messages, 'user-1');
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
     const elapsedMs = Date.now() - startedAt;
 
     expect(peakInFlight).toBeGreaterThan(1);
@@ -653,7 +696,7 @@ describe('hydrateChatAttachments', () => {
     mocks.readStoredMedia.mockResolvedValue({ data: Buffer.from('a,b,c\n1') });
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    await hydrateChatAttachments(messages, 'user-1');
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
 
     expect(partsOf(messages[0])).toEqual([
       { type: 'text', text: '[attached file: report.csv (text/csv)]' },
@@ -705,7 +748,12 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
       },
     ];
 
-    const staged = await hydrateChatAttachments(messages, 'user-1');
+    const staged = await hydrateChatAttachments(
+      messages,
+      'user-1',
+      undefined,
+      PAID_ATTACHMENTS_PER_MESSAGE,
+    );
 
     expect(staged).toEqual([
       { filename: 'sales.csv', mimeType: 'text/csv', base64: csv.toString('base64') },
@@ -739,7 +787,12 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
       { role: 'user', content: [{ type: 'file', file: { asset_id: newId } }] },
     ];
 
-    const staged = await hydrateChatAttachments(messages, 'user-1');
+    const staged = await hydrateChatAttachments(
+      messages,
+      'user-1',
+      undefined,
+      PAID_ATTACHMENTS_PER_MESSAGE,
+    );
 
     expect(staged.map((entry) => entry.filename)).toEqual(['second.csv']);
   });
@@ -768,7 +821,12 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
     mocks.readStoredMedia.mockResolvedValue({ data: notebook });
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    const staged = await hydrateChatAttachments(messages, 'user-1');
+    const staged = await hydrateChatAttachments(
+      messages,
+      'user-1',
+      undefined,
+      PAID_ATTACHMENTS_PER_MESSAGE,
+    );
 
     expect(staged).toHaveLength(1);
     expect(Buffer.from(staged[0]!.base64, 'base64').toString('utf8')).toBe(
@@ -791,7 +849,12 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
     mocks.readStoredMedia.mockResolvedValue(null);
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    const staged = await hydrateChatAttachments(messages, 'user-1');
+    const staged = await hydrateChatAttachments(
+      messages,
+      'user-1',
+      undefined,
+      PAID_ATTACHMENTS_PER_MESSAGE,
+    );
 
     expect(staged).toEqual([]);
   });

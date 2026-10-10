@@ -63,6 +63,7 @@ export async function downloadGoogleDriveFile(
   accessToken: string,
   fileId: string,
   maxBytes: number,
+  tooLargeReason = 'is larger than a project source can be.',
 ): Promise<GoogleDriveFile> {
   const metadataUrl = new URL(`${DRIVE_FILES_ENDPOINT}/${encodeURIComponent(fileId)}`);
   metadataUrl.searchParams.set('fields', 'id,name,mimeType,size,version,webViewLink');
@@ -77,7 +78,7 @@ export async function downloadGoogleDriveFile(
   const name = metadata.name?.trim() || 'Google Drive file';
   const sourceMime = metadata.mimeType ?? 'application/octet-stream';
   if (metadata.size && Number(metadata.size) > maxBytes) {
-    throw new GoogleDriveFileError(`"${name}" is larger than a project source can be.`, 413);
+    throw new GoogleDriveFileError(`"${name}" ${tooLargeReason}`, 413);
   }
 
   const exported = GOOGLE_WORKSPACE_EXPORTS[sourceMime];
@@ -96,7 +97,7 @@ export async function downloadGoogleDriveFile(
   }
   const data = Buffer.from(await (await driveRequest(contentUrl, accessToken)).arrayBuffer());
   if (data.byteLength > maxBytes) {
-    throw new GoogleDriveFileError(`"${name}" is larger than a project source can be.`, 413);
+    throw new GoogleDriveFileError(`"${name}" ${tooLargeReason}`, 413);
   }
   return {
     fileName: exported ? withExtension(name, exported.extension) : name,

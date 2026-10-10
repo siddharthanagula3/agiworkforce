@@ -219,6 +219,8 @@
   "compareRowManagedUsage": "관리형 사용량",
   "compareRowContextWindow": "컨텍스트 창",
   "compareRowKnowledgeStorage": "지식 저장소",
+  "compareRowMonthlyDownloads": "월간 파일 다운로드",
+  "compareRowAttachmentSize": "최대 파일 업로드 크기",
   "compareRowCustomMcp": "맞춤 MCP 서버",
   "compareRowTrainsOnContent": "내 콘텐츠로 학습",
   "compareModelsFree": "무료 모델",

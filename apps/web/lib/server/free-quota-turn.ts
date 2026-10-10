@@ -14,6 +14,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   getModelMetadataById,
+  getPlanMaxAttachmentsPerMessage,
   getProviderOffering,
   getProviderOfferingMediaRequestUnits,
   getProviderOfferingQuotaUnit,
@@ -820,7 +821,12 @@ export async function serveFreeQuotaTurn(
   }));
   if (hasAttachmentReferences) {
     try {
-      const hydrated = await hydrateChatAttachments(messages, scoped.userId);
+      const hydrated = await hydrateChatAttachments(
+        messages,
+        scoped.userId,
+        undefined,
+        getPlanMaxAttachmentsPerMessage(planTier),
+      );
       const expected = body.messages.reduce(
         (count, message) =>
           count +

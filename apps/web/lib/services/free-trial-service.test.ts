@@ -56,6 +56,7 @@ import {
   releaseExpiredFreeTrialReservations,
   scopeFreeTrialToolSpend,
   settleFreeTrialRequest,
+  transferFreeTrialHold,
   type FreeTrialReservation,
 } from './free-trial-service';
 import { LLMCostCalculator } from './llm-cost-calculator';
@@ -304,6 +305,23 @@ describe('beginFreeTrialRequest', () => {
       code: 'budget_reached',
       resetAt: '2026-07-22T17:00:00.000Z',
     });
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
+  });
+
+  it('holds what the window has left when that still covers the minimum asked for', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET - 2_000, weekly: 8_000, monthly: 8_000 });
+
+    await expect(
+      beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 3_000, minimumMicrousd: 1_000 }),
+    ).resolves.toMatchObject({ ok: true, reservation: { reservedMicrousd: 2_000 } });
+  });
+
+  it('refuses when what the window has left is under the minimum asked for', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET - 2_000, weekly: 8_000, monthly: 8_000 });
+
+    await expect(
+      beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 3_000, minimumMicrousd: 2_500 }),
+    ).resolves.toMatchObject({ ok: false, code: 'budget_reached' });
     expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
   });
 
@@ -562,11 +580,61 @@ describe('settleFreeTrialRequest', () => {
         reservation: reservation({ requestId: 'request-log', reservedMicrousd: 5_000 }),
         outcome: 'failed',
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1', requestId: 'request-log' }),
       'Free-tier usage settlement failed',
     );
+  });
+});
+
+describe('transferFreeTrialHold', () => {
+  const parent: FreeTrialReservation = {
+    kind: 'free_trial',
+    userId: 'user-1',
+    requestId: 'turn-1',
+    reservedMicrousd: 10_000,
+  };
+  const TRANSFER = {
+    parent,
+    requestId: 'agi.e2b.free.sandbox-1',
+    reservedMicrousd: 4_000,
+    leaseSeconds: 1_500,
+    provider: 'e2b',
+    model: 'tpl-1',
+  };
+
+  it('moves the amount out of the turn hold onto a reservation of its own', async () => {
+    const moved = await transferFreeTrialHold(TRANSFER);
+
+    expect(moved).toEqual({
+      kind: 'free_trial',
+      userId: 'user-1',
+      requestId: 'agi.e2b.free.sandbox-1',
+      reservedMicrousd: 4_000,
+    });
+    const [shrink] = executed('set reserved_microusd = reserved_microusd - $3');
+    expect(shrink?.[1]).toEqual(['user-1', 'turn-1', 4_000]);
+    expect(shrink?.[0]).toContain('reserved_microusd >= $3');
+    const [insert] = executed('insert into public.free_daily_usage_reservations');
+    expect(insert?.[1]).toEqual([
+      'user-1',
+      'agi.e2b.free.sandbox-1',
+      4_000,
+      1_500,
+      'e2b',
+      'tpl-1',
+      null,
+    ]);
+  });
+
+  it('moves nothing when the turn hold cannot spare the amount', async () => {
+    tx.execute.mockImplementation(async (sql: string) =>
+      sql.includes('reserved_microusd - $3') ? 0 : 1,
+    );
+
+    await expect(transferFreeTrialHold(TRANSFER)).resolves.toBeNull();
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
   });
 });
 
@@ -586,6 +654,20 @@ describe('Free tool spend inside a turn', () => {
     spend.settle(5_000, 5_000);
     expect(recorded).toEqual([5_000]);
     expect(spend.hold(1_000)).toBe(true);
+  });
+
+  it('reports the most one more hold can take, and that much is admitted', () => {
+    const spend = createFreeTrialToolSpend({
+      reservation: reservation({ reservedMicrousd: 10_000 }),
+      spent: () => ({ tokenMicrousd: 4_001, toolMicrousd: 0 }),
+      record: () => undefined,
+    });
+
+    const headroom = spend.headroomMicrousd();
+    expect(headroom).toBe(10_000 - chargeMicrousdForProviderCost(4_001));
+    expect(spend.hold(headroom)).toBe(true);
+    expect(spend.headroomMicrousd()).toBe(0);
+    expect(spend.hold(chargeMicrousdForProviderCost(1))).toBe(false);
   });
 
   it('leaves free-pool tokens out of what a tool call is held against', () => {

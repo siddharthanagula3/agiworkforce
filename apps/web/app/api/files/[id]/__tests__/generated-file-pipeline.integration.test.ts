@@ -147,7 +147,7 @@ const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+  assertDownloadAllowance: mockAssertFreeDailyAllowance,
 }));
 
 import { buildAdapterStreamResponse } from '../../../llm/v1/chat/completions/lib/stream-transform';

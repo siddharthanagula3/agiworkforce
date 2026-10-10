@@ -1,6 +1,9 @@
 import 'server-only';
 
-import type { SandboxComputeReservationRecord } from '@/lib/e2b/compute-metering';
+import type {
+  FreeTurnSandboxHold,
+  SandboxComputeReservationRecord,
+} from '@/lib/e2b/compute-metering';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import type { CloudCodeNetworkAccess } from '@agiworkforce/types';
@@ -43,6 +46,8 @@ export interface E2BSessionScope {
   explicitCredential?: { envVar: string; value: string } | null;
   /** Extra hostnames allowed on top of the networkAccess preset. */
   extraHosts?: readonly string[];
+  /** The Free chat turn whose window hold a new sandbox lifetime is taken from. */
+  freeTurnHold?: FreeTurnSandboxHold;
 }
 
 export const MANAGED_CLOUD_E2B_TENANT_ID = 'managed-cloud';

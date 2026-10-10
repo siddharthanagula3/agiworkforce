@@ -51,6 +51,7 @@ function freeSpend(canHold: boolean): FreeTrialToolSpend {
     hold: vi.fn(() => canHold),
     settle: vi.fn(),
     exhausted: vi.fn(() => !canHold),
+    headroomMicrousd: vi.fn(() => (canHold ? Number.MAX_SAFE_INTEGER : 0)),
   };
 }
 

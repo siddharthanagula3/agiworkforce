@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -525,10 +526,11 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       },
     );
 
-    const noTrainingOnly = await sideCallTrainingOptOut(
-      createClaimedUserScopedDb(db, { userId: installation.user_id, organizationId: null }),
-      installation.user_id,
-    );
+    const ownerDb = createClaimedUserScopedDb(db, {
+      userId: installation.user_id,
+      organizationId: null,
+    });
+    const noTrainingOnly = await sideCallTrainingOptOut(ownerDb, installation.user_id);
 
     const outcome = await reviewPullRequestDiff({
       diff: rawDiff,
@@ -538,7 +540,19 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       preferredModel: installation.review_model,
       ownerUserId: installation.user_id,
       noTrainingOnly,
+      billingDb: ownerDb,
+      reviewRef: attemptId ?? `${installationId}:${owner}/${repo}#${prNumber}:${randomUUID()}`,
     });
+
+    if (outcome.reason === 'usage-budget' && target.trigger === 'mention') {
+      await postIssueComment(
+        token,
+        owner,
+        repo,
+        prNumber,
+        '## AGI Code Review\n\nThe installing account’s usage budget cannot cover a review right now. It refills as earlier usage leaves the window, or the account can upgrade for a higher limit.',
+      );
+    }
 
     if (outcome.status === 'unavailable' || outcome.status === 'no-diff') {
       logger.warn(

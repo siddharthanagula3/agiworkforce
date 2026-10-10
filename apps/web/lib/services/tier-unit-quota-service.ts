@@ -4,15 +4,18 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   FREE_DAILY_CAPS,
   MONTHLY_METERED_UNITS,
+  getBillingPlanPricing,
+  getBillingPlanProductLimits,
   getFreeDailyCap,
   getTierPolicy,
+  toEnforceableBillingPlanLimit,
   type FreeDailyCap,
   type MonthlyMeteredUnit,
   type RateCardFeature,
   type TierUnitAllowance,
   type TierUnitUsage,
 } from '@agiworkforce/types';
-import { AppError, ErrorCode } from '@/lib/errors';
+import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { countUserFeatureUnitsSince } from './cogs-ledger-service';
 import { resolveEntitledPlanTier } from './entitlement-resolution';
@@ -384,6 +387,97 @@ export async function hasDailyAllowance(input: {
     return true;
   }
   return consumed + Math.max(0, Math.ceil(input.requestedUnits)) <= hardLimit;
+}
+
+export class PlanDownloadLimitError extends AppError {
+  constructor(
+    message: string,
+    readonly resetsAt: string,
+  ) {
+    super(ErrorCode.RATE_LIMIT_EXCEEDED, message, 429, {
+      code: MONTHLY_DOWNLOAD_LIMIT_CODE,
+      resetsAt,
+      recovery: { action: 'upgrade', href: UPGRADE_HREF },
+    });
+    this.name = 'PlanDownloadLimitError';
+    Object.setPrototypeOf(this, PlanDownloadLimitError.prototype);
+    this.asUserSafe();
+  }
+}
+
+export const MONTHLY_DOWNLOAD_LIMIT_CODE = 'monthly_download_limit_reached';
+
+function startOfUtcMonth(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+function formatDownloadBytes(bytes: number): string {
+  return `${(bytes / BYTES_PER_GIBIBYTE).toLocaleString('en-US', { maximumFractionDigits: 1 })} GB`;
+}
+
+export interface DownloadUsage {
+  usedBytes: number;
+  limitBytes: number | null;
+  resetsAt: string;
+}
+
+/**
+ * Bytes downloaded this calendar month (UTC) against the plan's monthly
+ * download allowance. A count that cannot be read throws, so a download is
+ * never served past a cap nobody can see.
+ */
+export async function readDownloadUsage(input: {
+  userId: string;
+  planTier: string | null | undefined;
+  now?: Date;
+}): Promise<DownloadUsage> {
+  const now = input.now ?? new Date();
+  const monthStart = startOfUtcMonth(now);
+  const resetsAt = new Date(
+    Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1),
+  ).toISOString();
+  const limitBytes = toEnforceableBillingPlanLimit(
+    getBillingPlanProductLimits(input.planTier)?.monthlyDownloadBytes,
+  );
+  if (limitBytes === null) return { usedBytes: 0, limitBytes: null, resetsAt };
+  const gib = await countUserFeatureUnitsSince(input.userId, ['network_egress_gib'], monthStart);
+  const usedBytes = Number.isFinite(gib) && gib > 0 ? Math.ceil(gib * BYTES_PER_GIBIBYTE) : 0;
+  return { usedBytes, limitBytes, resetsAt };
+}
+
+/**
+ * Refuses a download the plan's monthly allowance cannot cover, and on Free
+ * also the daily allowance.
+ */
+export async function assertDownloadAllowance(input: {
+  db: DatabaseAdapter;
+  userId: string;
+  bytes: number;
+}): Promise<void> {
+  const planTier = await resolveEntitledPlanTier(input.db, input.userId);
+  const requested = Math.max(0, Math.ceil(input.bytes));
+  const daily = await hasDailyAllowance({
+    db: input.db,
+    userId: input.userId,
+    planTier,
+    unit: 'egress_bytes',
+    requestedUnits: requested,
+  });
+  if (!daily) throw freeDailyLimitError('egress_bytes');
+  let usage: DownloadUsage;
+  try {
+    usage = await readDownloadUsage({ userId: input.userId, planTier });
+  } catch {
+    throw createError
+      .serviceUnavailable('Downloads are temporarily unavailable. Try again shortly.')
+      .asUserSafe();
+  }
+  if (usage.limitBytes === null || usage.usedBytes + requested <= usage.limitBytes) return;
+  const label = getBillingPlanPricing(planTier).label;
+  throw new PlanDownloadLimitError(
+    `${label} includes ${formatDownloadBytes(usage.limitBytes)} of file downloads a month, and this month’s is used up. Downloads return on ${usage.resetsAt.slice(0, 10)}, or upgrade for a higher limit.`,
+    usage.resetsAt,
+  );
 }
 
 export async function assertFreeDailyAllowance(input: {

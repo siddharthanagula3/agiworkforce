@@ -56,12 +56,16 @@ type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
 
 export const FREE_BUDGET_REACHED_ERROR_CLASS = 'free_trial_token_budget_reached';
 
+const CHARGE_STEP_MICROUSD = chargeMicrousdForProviderCost(1);
+
 export type FreeTrialCost = { tokenMicrousd: number; toolMicrousd: number };
 
 export interface FreeTrialToolSpend {
   hold(providerMicrousd: number): boolean;
   settle(heldMicrousd: number, spentMicrousd: number): void;
   exhausted(): boolean;
+  /** The most provider cost one more `hold` can still take. */
+  headroomMicrousd(): number;
 }
 
 type FreeTrialUsageSnapshotRow = {
@@ -267,6 +271,15 @@ export function createFreeTrialToolSpend(input: {
   let heldMicrousd = 0;
   let exhausted = false;
   return {
+    headroomMicrousd() {
+      const spent = input.spent();
+      const committed = freeTrialSpendMicrousd(input.reservation, {
+        tokenMicrousd: spent.tokenMicrousd,
+        toolMicrousd: spent.toolMicrousd + heldMicrousd,
+      });
+      const left = input.reservation.reservedMicrousd - chargeMicrousdForProviderCost(committed);
+      return Math.max(0, Math.floor(left / CHARGE_STEP_MICROUSD) * CHARGE_STEP_MICROUSD);
+    },
     hold(providerMicrousd) {
       const spent = input.spent();
       const committed = freeTrialSpendMicrousd(input.reservation, {
@@ -299,6 +312,7 @@ export function scopeFreeTrialToolSpend(
       parent.settle(heldMicrousd, spent);
     },
     exhausted: () => parent.exhausted(),
+    headroomMicrousd: () => parent.headroomMicrousd(),
     spentMicrousd: () => spentMicrousd,
   };
 }
@@ -540,6 +554,8 @@ export async function beginFreeTrialRequest(params: {
   eventPromoted?: boolean;
   freePoolRoute?: boolean;
   estimatedMicrousd?: number;
+  /** Below the estimate, the least that is still worth holding: the window's remainder is held instead when it covers this. */
+  minimumMicrousd?: number;
   leaseSeconds: number;
   provider: string;
   model: string;
@@ -588,10 +604,16 @@ export async function beginFreeTrialRequest(params: {
     if (!snapshot) throw new Error('Free-tier usage snapshot unavailable');
 
     const remainingMicrousd = remainingFromSnapshot(snapshot);
-    const reserveMicrousd =
+    const requestedMicrousd =
       params.estimatedMicrousd === undefined
         ? remainingMicrousd
         : Math.max(1, chargeMicrousdForProviderCost(params.estimatedMicrousd));
+    const reserveMicrousd =
+      params.minimumMicrousd !== undefined &&
+      requestedMicrousd > remainingMicrousd &&
+      remainingMicrousd >= Math.max(1, chargeMicrousdForProviderCost(params.minimumMicrousd))
+        ? remainingMicrousd
+        : requestedMicrousd;
     if (remainingMicrousd === 0 || reserveMicrousd > remainingMicrousd) {
       if (params.freePoolRoute !== true) {
         return { ok: false, code: 'budget_reached', resetAt: bindingResetAt(snapshot) };
@@ -644,6 +666,57 @@ export async function beginFreeTrialRequest(params: {
   return { ok: true, reservation: { ...userReservation.reservation, eventBudget } };
 }
 
+/**
+ * Moves part of a turn's Free-window hold onto a reservation of its own, for
+ * spend that outlives the turn (a sandbox runs until its lifetime ends). A turn
+ * holds the whole remaining window, so a separate reservation made during it
+ * would find nothing left; the moved amount leaves the turn's hold instead.
+ */
+export async function transferFreeTrialHold(params: {
+  parent: FreeTrialReservation;
+  requestId: string;
+  reservedMicrousd: number;
+  leaseSeconds: number;
+  provider: string;
+  model: string;
+  conversationId?: string;
+}): Promise<FreeTrialReservation | null> {
+  const amount = Math.max(1, Math.ceil(params.reservedMicrousd));
+  const userId = params.parent.userId;
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  return db.transaction(async (tx): Promise<FreeTrialReservation | null> => {
+    const [lockedUsage] = await tx.query<{ user_id: string }>(
+      `select user_id
+       from public.website_auto_economy_trial_usage
+       where user_id = $1
+       for update`,
+      [userId],
+    );
+    if (!lockedUsage) return null;
+    const moved = await tx.execute(
+      `update public.free_daily_usage_reservations
+          set reserved_microusd = reserved_microusd - $3
+        where user_id = $1 and request_id = $2
+          and settled_at is null and reserved_microusd >= $3`,
+      [userId, params.parent.requestId, amount],
+    );
+    if (moved !== 1) return null;
+    await insertFreeReservation(
+      tx,
+      {
+        userId,
+        requestId: params.requestId,
+        leaseSeconds: params.leaseSeconds,
+        provider: params.provider,
+        model: params.model,
+        ...(params.conversationId ? { conversationId: params.conversationId } : {}),
+      },
+      amount,
+    );
+    return { kind: 'free_trial', userId, requestId: params.requestId, reservedMicrousd: amount };
+  });
+}
+
 async function settleUnmeteredFreeTurn(
   reservation: FreeTrialReservation,
   outcome: FreeTrialSettlementOutcome,
@@ -682,13 +755,13 @@ export async function settleFreeTrialRequest(params: {
   usage?: TokenUsage;
   cost?: FreeTrialCost;
   attempt?: GenerationAttempt | null;
-}): Promise<void> {
+}): Promise<number | null> {
   const attempt = params.attempt === undefined ? { outcome: params.outcome } : params.attempt;
   const attemptOutcome = attempt?.outcome ?? null;
   const errorClass = attempt ? attemptErrorClass(attempt) : null;
   if (params.reservation.reservedMicrousd <= 0) {
     await settleUnmeteredFreeTurn(params.reservation, params.outcome, attemptOutcome, errorClass);
-    return;
+    return null;
   }
 
   const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
@@ -793,6 +866,7 @@ export async function settleFreeTrialRequest(params: {
   if (params.reservation.eventBudget && settledCostMicrousd !== null) {
     await settleEventSpend(params.reservation.eventBudget, settledCostMicrousd);
   }
+  return settledCostMicrousd;
 }
 
 export async function releaseExpiredFreeTrialReservations(

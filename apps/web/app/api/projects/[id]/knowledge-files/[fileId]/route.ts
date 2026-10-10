@@ -16,7 +16,7 @@ import {
   findOwnedProjectKnowledgeFile,
   type OwnedProjectKnowledgeFile,
 } from '@/lib/server/project-knowledge-files';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -51,7 +51,7 @@ async function handleGetKnowledgeFile(request: NextRequest, context: RouteContex
   const file = await ownedKnowledgeFile(request, context);
   const objectKey = objectKeyFromStorageUri(file.storageUri);
   if (!objectKey) throw createError.notFound('Knowledge file not found');
-  const object = await getProjectKnowledgeObject(objectKey, MAX_ATTACHMENT_BYTES);
+  const object = await getProjectKnowledgeObject(objectKey, MAX_PLAN_ATTACHMENT_BYTES);
   if (!object) throw createError.notFound('Knowledge file not found');
   const wantsDownload = request.nextUrl.searchParams.get('download') === 'true';
   const served = servedByteHeaders({

@@ -16,6 +16,12 @@ const {
   mockResolveActiveOrganizationId: vi.fn(),
 }));
 
+const mockAdmitAttachmentUpload = vi.hoisted(() => vi.fn(async (_input: unknown) => undefined));
+vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  admitAttachmentUpload: (input: unknown) => mockAdmitAttachmentUpload(input),
+}));
+
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/logger', () => ({

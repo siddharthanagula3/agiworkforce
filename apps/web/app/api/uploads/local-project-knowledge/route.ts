@@ -5,12 +5,12 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { storeLocalProjectKnowledgeUpload } from '@/lib/server/project-knowledge-object-storage';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 async function readBoundedUpload(request: NextRequest): Promise<Uint8Array> {
   const declaredLength = Number(request.headers.get('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_ATTACHMENT_BYTES) {
-    throw createError.validation('Project sources are limited to 25 MiB.');
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PLAN_ATTACHMENT_BYTES) {
+    throw createError.validation('This file is larger than the upload it was authorized for.');
   }
   if (!request.body) throw createError.validation('The local upload body is missing.');
 
@@ -21,9 +21,9 @@ async function readBoundedUpload(request: NextRequest): Promise<Uint8Array> {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_ATTACHMENT_BYTES) {
+    if (total > MAX_PLAN_ATTACHMENT_BYTES) {
       await reader.cancel().catch(() => undefined);
-      throw createError.validation('Project sources are limited to 25 MiB.');
+      throw createError.validation('This file is larger than the upload it was authorized for.');
     }
     chunks.push(value);
   }
