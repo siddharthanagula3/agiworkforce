@@ -166,8 +166,12 @@ describe('runToolLoop, required web search', () => {
     mockPauseE2BSession.mockReset();
     mockExecuteWebSearch.mockReset();
     mockResolveSearchBudget.mockReset();
-    mockResolveSearchBudget.mockResolvedValue({ outcome: 'included' });
+    mockResolveSearchBudget.mockResolvedValue({ outcome: 'charge' });
     mockReserveSearchCharge.mockReset();
+    mockReserveSearchCharge.mockResolvedValue({
+      outcome: 'admitted',
+      admission: { kind: 'included' },
+    });
     mockGetE2BExecutor.mockResolvedValue(null);
     mockSettlePerplexitySearchCall.mockClear();
     mockExecuteWebSearch.mockResolvedValue({
@@ -655,6 +659,31 @@ describe('runToolLoop, required web search', () => {
       'I could not search because the account reached its included search limit.',
     );
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [
+      'a Free search with no Free window to hold it against',
+      () => mockResolveSearchBudget.mockResolvedValue({ outcome: 'free_windows' }),
+    ],
+    [
+      'a search whose budget cannot be resolved',
+      () => mockResolveSearchBudget.mockRejectedValue(new Error('ledger down')),
+    ],
+  ])('refuses %s instead of running it free', async (_label, arrange) => {
+    arrange();
+    mockBuildToolLoopStream.mockResolvedValueOnce(searchToolCallStep());
+    mockBuildToolLoopStream.mockResolvedValueOnce(memoryAnswerStep('No search this time.'));
+
+    const processed = makeProcessed({
+      enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
+    });
+    processed.subscriptionTier = 'free';
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto', userId: 'user-1' }));
+
+    expect(mockExecuteWebSearch).not.toHaveBeenCalled();
+    expect(mockReserveSearchCharge).not.toHaveBeenCalled();
+    expect(output).toContain('"name":"web_search","status":"failed"');
   });
 
   it('marks a refused search charge unavailable without charging or invoking search', async () => {

@@ -68,7 +68,7 @@ export function includedMonthlySearchCalls(planTier: string | null | undefined):
 }
 
 export type SearchBudgetDecision =
-  | { outcome: 'included' }
+  | { outcome: 'free_windows' }
   | { outcome: 'charge' }
   | { outcome: 'blocked'; reason: 'plan_bound' | 'insufficient_credits' };
 
@@ -125,10 +125,10 @@ export async function readSearchAllowance(
 }
 
 /**
- * Whether this search call is included, charged, or refused, before it runs.
- * Paid plans and automated callers pay for every call. Free is bounded by a
- * rolling count; a count that cannot be read fails open for Free, whose calls
- * still draw on the Free usage windows.
+ * How this search call is paid for, or that it is refused, before it runs.
+ * Paid plans and automated callers are charged to managed credits. A Free call
+ * is held against the Free usage windows at its rate-card price, and is also
+ * bounded by a rolling count; a count that cannot be read refuses the call.
  */
 export async function resolveSearchBudget(input: SearchBudgetInput): Promise<SearchBudgetDecision> {
   if (input.callerKind === 'automated' || !isFreePlanTier(input.planTier)) {
@@ -136,9 +136,8 @@ export async function resolveSearchBudget(input: SearchBudgetInput): Promise<Sea
   }
 
   const used = await readSearchCallCount(input);
-  if (used === null) return { outcome: 'included' };
-  return used < FREE_PLAN_MONTHLY_SEARCH_CALLS
-    ? { outcome: 'included' }
+  return used !== null && used < FREE_PLAN_MONTHLY_SEARCH_CALLS
+    ? { outcome: 'free_windows' }
     : { outcome: 'blocked', reason: 'plan_bound' };
 }
 

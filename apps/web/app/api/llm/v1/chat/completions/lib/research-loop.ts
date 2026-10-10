@@ -126,7 +126,6 @@ import {
   WEB_SEARCH_TOOL,
 } from '@/lib/web-search/web-search-tool';
 import {
-  INCLUDED_SEARCH_ADMISSION,
   reserveSearchCharge,
   resolveSearchBudget,
   type SearchAdmission,
@@ -1669,9 +1668,7 @@ export async function* runResearchLoop(
         planTier: processed.subscriptionTier ?? null,
         callerKind: 'automated',
       });
-      if (decision.outcome !== 'charge') {
-        return { admitted: true, admission: INCLUDED_SEARCH_ADMISSION };
-      }
+      if (decision.outcome !== 'charge') return { admitted: false };
       const reserved = await reserveSearchCharge({
         userId: _billing.userId,
         organizationId: processed.organizationId ?? null,
@@ -1687,8 +1684,8 @@ export async function* runResearchLoop(
       if (reserved.outcome === 'refused') return { admitted: false };
       return { admitted: true, admission: reserved.admission };
     } catch (error) {
-      logger.warn({ error }, '[research] search charge skipped; the search runs uncharged');
-      return { admitted: true, admission: INCLUDED_SEARCH_ADMISSION };
+      logger.warn({ error }, '[research] search charge could not be held; the search is skipped');
+      return { admitted: false };
     }
   }
 

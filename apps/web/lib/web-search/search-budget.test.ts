@@ -203,7 +203,7 @@ describe('free plan bound', () => {
     expect(countUserFeatureUnitsSince).not.toHaveBeenCalled();
   });
 
-  it('includes a search while the account is under its monthly calls', async () => {
+  it('holds a Free search against the Free usage windows while it is under its monthly calls', async () => {
     countUserFeatureUnitsSince.mockResolvedValue(FREE_PLAN_MONTHLY_SEARCH_CALLS - 1);
     const decision = await resolveSearchBudget({
       userId: 'user-1',
@@ -211,7 +211,18 @@ describe('free plan bound', () => {
       callerKind: 'interactive',
       db,
     });
-    expect(decision).toEqual({ outcome: 'included' });
+    expect(decision).toEqual({ outcome: 'free_windows' });
+  });
+
+  it('refuses a Free search whose rolling count cannot be read, never running it free', async () => {
+    countUserFeatureUnitsSince.mockRejectedValue(new Error('ledger down'));
+    const decision = await resolveSearchBudget({
+      userId: 'user-1',
+      planTier: 'free',
+      callerKind: 'interactive',
+      db,
+    });
+    expect(decision).toEqual({ outcome: 'blocked', reason: 'plan_bound' });
   });
 
   it('blocks rather than charges once the free calls are spent', async () => {
