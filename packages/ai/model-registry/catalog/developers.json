@@ -1,26 +1,116 @@
 {
   "$schema": "../schema/registry.schema.json",
   "schemaVersion": 1,
-  "notes": "Who trained a model, separate from who serves it. A provider id names an inference route (an API account, a gateway, a local runtime); a developer id names the organisation that released the weights or the proprietary model. providerDeveloper maps a first-party provider to the developer it serves so a curated record on that provider inherits it; a host that serves other developers' models (groq, open_router, cheaperinference, nvidia_nim, vercel_gateway) has no entry and every model on it must resolve through an explicit developer field or the author segment of its upstream model id. aliases are matched case-insensitively against that segment; a leading ~ (OpenRouter's latest alias marker) is stripped first.",
+  "notes": "Who trained a model, separate from who serves it. A provider id names an inference route (an API account, a gateway, a local runtime); a developer id names the organisation that released the weights or the proprietary model. providerDeveloper maps a first-party provider to the developer it serves so a curated record on that provider inherits it; a host that serves other developers' models (groq, open_router, cheaperinference, nvidia_nim, vercel_gateway) has no entry and every model on it must resolve through an explicit developer field or the author segment of its upstream model id. aliases are matched case-insensitively against that segment; a leading ~ (OpenRouter's latest alias marker) is stripped first. jurisdiction is the ISO 3166-1 country the developing company is headquartered in, with the source it was read from; it describes who built the model, not where a route processes the request (packages/contracts/compliance/src/transport-residency.ts answers that). null means no single country applies.",
   "developers": {
-    "openai": { "label": "OpenAI", "aliases": ["openai"] },
-    "anthropic": { "label": "Anthropic", "aliases": ["anthropic"] },
-    "google": { "label": "Google", "aliases": ["google"] },
-    "meta": { "label": "Meta", "aliases": ["meta", "meta-llama"] },
-    "deepseek": { "label": "DeepSeek", "aliases": ["deepseek", "deepseek-ai"] },
-    "qwen": { "label": "Qwen", "aliases": ["qwen", "alibaba"] },
-    "mistral": { "label": "Mistral AI", "aliases": ["mistral", "mistralai"] },
-    "zhipu": { "label": "Z.AI", "aliases": ["z-ai", "zhipu", "zhipuai", "zai-org", "thudm"] },
-    "moonshot": { "label": "Moonshot AI", "aliases": ["moonshot", "moonshotai"] },
-    "minimax": { "label": "MiniMax", "aliases": ["minimax", "minimaxai"] },
-    "nvidia": { "label": "NVIDIA", "aliases": ["nvidia"] },
-    "xai": { "label": "xAI", "aliases": ["xai", "x-ai"] },
-    "perplexity": { "label": "Perplexity", "aliases": ["perplexity"] },
-    "cohere": { "label": "Cohere", "aliases": ["cohere"] },
-    "microsoft": { "label": "Microsoft", "aliases": ["microsoft"] },
-    "amazon": { "label": "Amazon", "aliases": ["amazon"] },
-    "runway": { "label": "Runway", "aliases": ["runway", "runwayml"] },
-    "openrouter": { "label": "OpenRouter", "aliases": ["openrouter"] }
+    "openai": {
+      "label": "OpenAI",
+      "aliases": ["openai"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/OpenAI"
+    },
+    "anthropic": {
+      "label": "Anthropic",
+      "aliases": ["anthropic"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Anthropic"
+    },
+    "google": {
+      "label": "Google",
+      "aliases": ["google"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Google"
+    },
+    "meta": {
+      "label": "Meta",
+      "aliases": ["meta", "meta-llama"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Meta_Platforms"
+    },
+    "deepseek": {
+      "label": "DeepSeek",
+      "aliases": ["deepseek", "deepseek-ai"],
+      "jurisdiction": "CN",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/DeepSeek"
+    },
+    "qwen": {
+      "label": "Qwen",
+      "aliases": ["qwen", "alibaba"],
+      "jurisdiction": "CN",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Alibaba_Group"
+    },
+    "mistral": {
+      "label": "Mistral AI",
+      "aliases": ["mistral", "mistralai"],
+      "jurisdiction": "FR",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Mistral_AI"
+    },
+    "zhipu": {
+      "label": "Z.AI",
+      "aliases": ["z-ai", "zhipu", "zhipuai", "zai-org", "thudm"],
+      "jurisdiction": "CN",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Zhipu_AI"
+    },
+    "moonshot": {
+      "label": "Moonshot AI",
+      "aliases": ["moonshot", "moonshotai"],
+      "jurisdiction": "CN",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Moonshot_AI"
+    },
+    "minimax": {
+      "label": "MiniMax",
+      "aliases": ["minimax", "minimaxai"],
+      "jurisdiction": "CN",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/MiniMax_(company)"
+    },
+    "nvidia": {
+      "label": "NVIDIA",
+      "aliases": ["nvidia"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Nvidia"
+    },
+    "xai": {
+      "label": "xAI",
+      "aliases": ["xai", "x-ai"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/XAI_(company)"
+    },
+    "perplexity": {
+      "label": "Perplexity",
+      "aliases": ["perplexity"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Perplexity_AI"
+    },
+    "cohere": {
+      "label": "Cohere",
+      "aliases": ["cohere"],
+      "jurisdiction": "CA",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Cohere"
+    },
+    "microsoft": {
+      "label": "Microsoft",
+      "aliases": ["microsoft"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Microsoft"
+    },
+    "amazon": {
+      "label": "Amazon",
+      "aliases": ["amazon"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Amazon_(company)"
+    },
+    "runway": {
+      "label": "Runway",
+      "aliases": ["runway", "runwayml"],
+      "jurisdiction": "US",
+      "jurisdictionSource": "https://en.wikipedia.org/wiki/Runway_(company)"
+    },
+    "openrouter": {
+      "label": "OpenRouter",
+      "aliases": ["openrouter"],
+      "jurisdiction": null,
+      "jurisdictionSource": "a router that forwards each request to a model chosen from many developers, so no single country of development applies"
+    }
   },
   "providerDeveloper": {
     "openai": "openai",

@@ -41,6 +41,12 @@ export {
 } from './provider-jurisdiction';
 
 export {
+  DEVELOPER_JURISDICTION_POLICIES,
+  allowedDeveloperJurisdictions,
+  type DeveloperJurisdictionPolicy,
+} from './developer-jurisdiction';
+
+export {
   NON_US_VENDOR_TRANSPORTS,
   isNonUsVendorTransport,
   transportResidency,
