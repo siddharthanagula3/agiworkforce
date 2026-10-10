@@ -20,19 +20,16 @@ import {
 import { isGuestChatAvailable } from '@/lib/guest-chat/guest-chat-access';
 import {
   buildGuestChatRequest,
+  estimateGuestTurnMicrousd,
   guestChatModel,
-  guestSpendToday,
-  recordGuestSpend,
+  reserveGuestSpend,
+  settleGuestSpend,
   streamGuestChat,
+  type GuestSpendAdmission,
 } from '@/lib/guest-chat/guest-chat-service';
 import { logger } from '@/lib/logger';
 import { moderateManagedPrompt } from '@/lib/moderation';
-import {
-  checkRateLimit,
-  clientIpRateLimitIdentifier,
-  resolveRedisOutagePolicy,
-  type RateLimitInfo,
-} from '@/lib/rate-limit';
+import { checkRateLimit, clientIpRateLimitIdentifier, type RateLimitInfo } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
 import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
@@ -135,11 +132,7 @@ async function handleGuestTurn(request: NextRequest) {
       'Chat without an account has reached today’s capacity. Sign in to keep going.',
       { signInPath: AUTH_LOGIN_PATH },
     );
-  if (!store) {
-    if (resolveRedisOutagePolicy() === 'fail-closed') return capacityReached();
-  } else if ((await guestSpendToday(store, now)) >= GUEST_CHAT_CONFIG.globalSpendMicrousdPerDay) {
-    return capacityReached();
-  }
+  if (!store) return capacityReached();
 
   const { messages } = parsed.data;
   const moderation = moderateManagedPrompt({
@@ -153,13 +146,40 @@ async function handleGuestTurn(request: NextRequest) {
   }
 
   const model = guestChatModel();
+  const chatRequest = buildGuestChatRequest(model, messages, GUEST_CHAT_CONFIG);
+  let admission: GuestSpendAdmission;
+  try {
+    admission = await reserveGuestSpend({
+      store,
+      now,
+      visitorId: visitor.id,
+      networkId: clientIpRateLimitIdentifier(request),
+      amountMicrousd: estimateGuestTurnMicrousd(model, chatRequest, now),
+      config: GUEST_CHAT_CONFIG,
+    });
+  } catch (error) {
+    logger.error({ error }, '[guest-chat] the turn could not be priced or held; refusing it');
+    return capacityReached();
+  }
+  if (!admission.ok) {
+    if (admission.limit === 'global') return capacityReached();
+    return refusal(
+      429,
+      GUEST_CHAT_ERROR_CODES.limitReached,
+      'You have reached today’s limit for chatting without an account. Sign in to keep going.',
+      { signInPath: AUTH_LOGIN_PATH },
+      limitHeaders(byDevice),
+    );
+  }
+  const hold = admission.hold;
+
   const signal = AbortSignal.any([
     request.signal,
     AbortSignal.timeout(GUEST_CHAT_CONFIG.turnTimeoutMs),
   ]);
   const body = streamGuestChat({
     model,
-    chatRequest: buildGuestChatRequest(model, messages, GUEST_CHAT_CONFIG),
+    chatRequest,
     signal,
     onSettled: async (usage) => {
       logger.info(
@@ -170,7 +190,7 @@ async function handleGuestTurn(request: NextRequest) {
         },
         '[guest-chat] turn settled',
       );
-      if (store && usage) await recordGuestSpend(store, model, usage, now);
+      await settleGuestSpend({ store, hold, model, usage, now });
     },
   });
 
