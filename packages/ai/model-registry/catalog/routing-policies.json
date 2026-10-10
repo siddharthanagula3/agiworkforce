@@ -709,6 +709,9 @@
       "voice_live_backend": {
         "modelKey": "family:openai/gpt-balanced"
       },
+      "voice_live_backend_free": {
+        "modelKey": "family:openai/gpt-fast"
+      },
       "voice_rewrite": {
         "modelKey": "family:google/gemini-flash-lite"
       },

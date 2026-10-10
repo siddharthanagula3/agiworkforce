@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent, RefObject } from 'react';
 import { Mic, MicOff, Plus, X } from '@agiworkforce/icons';
 
 import { cn } from '@shared/lib/utils';
@@ -36,6 +36,7 @@ export interface VoiceComposerProps {
   captionsOpen: boolean;
   deviceName: string;
   dockOpen: boolean;
+  dockTriggerRef: RefObject<HTMLButtonElement | null>;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onToggleMute: () => void;
@@ -50,6 +51,7 @@ export function VoiceComposer({
   captionsOpen,
   deviceName,
   dockOpen,
+  dockTriggerRef,
   onChange,
   onSubmit,
   onToggleMute,
@@ -92,6 +94,7 @@ export function VoiceComposer({
       className="mx-auto flex w-full max-w-3xl flex-row items-center gap-2 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] px-2 py-1.5"
     >
       <button
+        ref={dockTriggerRef}
         type="button"
         onClick={onToggleDock}
         aria-label={LABEL.add}

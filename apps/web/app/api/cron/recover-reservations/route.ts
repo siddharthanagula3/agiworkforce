@@ -7,6 +7,9 @@ import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { CreditService } from '@/lib/services/credit-service';
 import { releaseExpiredFreeTrialReservations } from '@/lib/services/free-trial-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
+import { getVoiceLiveBackendModel } from '@agiworkforce/types';
+import { settleAbandonedVoiceSessions } from '@/app/api/voice/live/sessions/lib/voice-session-settlement';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -50,6 +53,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const db = getNeonDb();
+    const voice = await settleAbandonedVoiceSessions({
+      db,
+      userId: null,
+      claimOwner: true,
+      limit: RECOVERY_DRAIN_BATCH,
+      backendModelFor: async (record) =>
+        getVoiceLiveBackendModel((await resolveEntitlementBundle(db, record.userId)).plan),
+    });
+    if (voice > 0) {
+      logger.info(
+        { event: 'voice_abandoned_session_recovery', settled: voice },
+        'Settled abandoned voice sessions a lease past their last check-in',
+      );
+    }
     const summary = await CreditService.processPendingSettlements(RECOVERY_DRAIN_BATCH, db);
     const free = await releaseExpiredFreeTrialReservations(db, RECOVERY_DRAIN_BATCH);
     if (free.released > 0) {
@@ -76,7 +93,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         'Reservation recovery filled its batch; a backlog remains for the next sweep',
       );
     }
-    return NextResponse.json({ ...summary, free });
+    return NextResponse.json({ ...summary, free, voice });
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },

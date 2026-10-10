@@ -2,6 +2,7 @@ import 'server-only';
 
 export const runtime = 'nodejs';
 
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { LIVE_VOICE_CLIENT_HANDOFFS } from '@agiworkforce/cloud-contracts';
@@ -27,7 +28,9 @@ import {
   getModelMetadataById,
   getRoutingSlotModel,
   getTierPolicy,
+  getVoiceLiveBackendModel,
   isModelLive,
+  type ModelMetadata,
 } from '@agiworkforce/types';
 import {
   GOOGLE_USER_DATA_VOICE_MESSAGE,
@@ -39,15 +42,12 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import {
-  ManagedUsageRequestError,
-  fingerprintManagedUsageRequest,
   finalizeManagedUsageRequest,
+  ManagedUsageRequestError,
   markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
-import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
-import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeSubscriptionAccess,
@@ -56,7 +56,13 @@ import {
   LIVE_VOICE_BACKEND_INSTRUCTIONS,
   LIVE_VOICE_INSTRUCTIONS,
 } from '@/lib/voice/live-voice-prompts';
-import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
+import {
+  isLiveVoice,
+  LIVE_DEFAULT_VOICE,
+  LIVE_VOICE_REASONING_LEVELS,
+  type LiveVoiceReasoning,
+} from '@features/chat/lib/live-voices';
+import { resolveLiveVoiceReasoning } from '@/lib/voice/live-voice-reasoning';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import {
   describeDelegationTools,
@@ -70,18 +76,20 @@ import {
 } from '@/lib/voice/live-voice-tools';
 import {
   describeLiveSessionFailure,
-  LIVE_SESSION_CEILING_SECONDS,
-  LIVE_SESSION_MIN_BLOCK_SECONDS,
+  LIVE_VOICE_BLOCK_SECONDS,
   LIVE_VOICE_FEATURE,
-  liveSessionChargeMicrousd,
-  liveSessionMinutes,
+  LIVE_VOICE_LEASE_SECONDS,
+  liveVoiceBlockChargeMicrousd,
 } from '@/lib/voice/live-voice-billing';
 import {
-  planVoiceSessionBlock,
+  assessVoiceBudget,
+  VOICE_USAGE_NOT_IN_PLAN,
   voiceJsonError,
+  voiceReservationIdentity,
   voiceUsageErrorResponse,
   type VoiceLimitResets,
 } from './lib/voice-session-budget';
+import { settleAbandonedVoiceSessions, settleVoiceSession } from './lib/voice-session-settlement';
 import {
   buildLiveVoiceBackendInstructions,
   buildLiveVoiceInstructions,
@@ -91,7 +99,7 @@ import {
 } from './lib/live-voice-context';
 import {
   clampVoicePace,
-  closeExpiredVoiceSessions,
+  closeVoiceSessionsForConversation,
   createVoiceSession,
   isVoiceSessionStoreReady,
   VOICE_PACE_DEFAULT,
@@ -100,11 +108,26 @@ import {
   type VoiceSessionSurface,
 } from './lib/voice-session-store';
 
-const LIVE_SESSION_LEASE_SECONDS = 4 * 60 * 60;
-const VOICE_LIVE_SESSION_NAMESPACE = 'agi.voice.live';
 const SESSION_CREATE_TIMEOUT_MS = 20_000;
 const OPENAI_KEY_ENV = 'OPENAI_API_KEY';
 const MAX_SDP_LENGTH = 65_536;
+
+/**
+ * The commands the browser may send on the session's data channel. GPT-Live
+ * allows every client event unless the session says otherwise, and the
+ * browser is untrusted: session.update would let it swap the backend model,
+ * its tools or its reasoning effort, which are chosen here by plan.
+ */
+const FRONTEND_CLIENT_EVENTS = [
+  'session.input_audio.mute',
+  'session.input_audio.unmute',
+  'session.instructions.append',
+  'session.thinking.append',
+  'session.commentary.append',
+  'response.item.create',
+  'response.create',
+  'session.close',
+] as const;
 
 const CreateLiveSessionSchema = z.object({
   sdp: z.string().min(1).max(MAX_SDP_LENGTH),
@@ -112,6 +135,9 @@ const CreateLiveSessionSchema = z.object({
   conversationId: z.string().min(1).max(128).nullable().optional(),
   language: z.string().min(2).max(32).nullable().optional(),
   pace: z.number().min(VOICE_PACE_MIN).max(VOICE_PACE_MAX).optional(),
+  reasoning: z
+    .enum(LIVE_VOICE_REASONING_LEVELS as [LiveVoiceReasoning, ...LiveVoiceReasoning[]])
+    .optional(),
   surface: z.enum(['web', 'mobile', 'desktop']).optional(),
   clientHandoffs: z
     .array(z.enum(LIVE_VOICE_CLIENT_HANDOFFS))
@@ -138,9 +164,8 @@ async function handleCreateLiveSession(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
 
   const liveModel = getModelMetadataById(getRoutingSlotModel('voice_live'));
-  const backendModel = getModelMetadataById(getRoutingSlotModel('voice_live_backend'));
-  if (!liveModel || !isModelLive(liveModel) || !backendModel || !isModelLive(backendModel)) {
-    throw new Error('The voice_live routing slots do not resolve to live models');
+  if (!liveModel || !isModelLive(liveModel)) {
+    throw new Error('The voice_live routing slot does not resolve to a live model');
   }
   const provider = String(liveModel.provider);
   if (!isManagedProviderId(provider)) {
@@ -212,19 +237,6 @@ async function handleCreateLiveSession(request: NextRequest) {
       'Live voice needs a conversation to record the session in.',
     );
   }
-  if (
-    !(
-      modelKeepsInputsOutOfTraining(liveModel.id) && modelKeepsInputsOutOfTraining(backendModel.id)
-    ) &&
-    (await storedConversationCarriesGoogleUserData(
-      scoped.db,
-      userId,
-      scoped.organizationId,
-      conversationId,
-    ))
-  ) {
-    return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
-  }
   let storeReady = false;
   try {
     storeReady = await isVoiceSessionStoreReady(scoped.db);
@@ -248,22 +260,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   const pace = clampVoicePace(body.pace ?? VOICE_PACE_DEFAULT);
   const surface: VoiceSessionSurface = body.surface ?? 'web';
 
-  // One offer is one session attempt: a client retrying the same POST sends the
-  // same SDP, and a user deliberately starting another session negotiates a
-  // fresh peer connection and therefore a different one. The header outranks it
-  // so a client that names its own retries is taken at its word.
-  const sessionIdentity = {
-    operation: 'voice_live_session',
-    model: liveModel.id,
-    conversationId,
-    voice,
-    language,
-    pace,
-    surface,
-    offer: body.sdp,
-  };
-
-  if (liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, liveModel.id) === null) {
+  if (liveVoiceBlockChargeMicrousd(liveModel.id, null) === null) {
     logger.error(
       { event: 'live_voice_unpriced', model: liveModel.id },
       'The live voice model declares no session rate, so its minutes cannot be charged',
@@ -275,11 +272,13 @@ async function handleCreateLiveSession(request: NextRequest) {
       'Live voice is unavailable right now.',
     );
   }
-  let reservation: ManagedUsageRequestReservation;
+  const voiceSessionId = randomUUID();
+  const reservationIdentity = voiceReservationIdentity(voiceSessionId);
+  let backendModel: ModelMetadata;
   let planTier: string | null = null;
+  let reasoning: ReturnType<typeof resolveLiveVoiceReasoning>;
+  let reservation: ManagedUsageRequestReservation;
   let limitResets: VoiceLimitResets | undefined;
-  let ceilingSeconds = LIVE_SESSION_MIN_BLOCK_SECONDS;
-  let estimatedCostMicrousd = 0;
   try {
     const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
@@ -307,43 +306,65 @@ async function handleCreateLiveSession(request: NextRequest) {
       return voiceJsonError(
         request,
         403,
-        'voice_not_in_plan',
-        'Voice conversations are not included in your plan.',
+        VOICE_USAGE_NOT_IN_PLAN.code,
+        VOICE_USAGE_NOT_IN_PLAN.message,
       );
     }
-    const block = await planVoiceSessionBlock({
+    const resolvedBackend = getModelMetadataById(getVoiceLiveBackendModel(planTier));
+    if (!resolvedBackend || !isModelLive(resolvedBackend)) {
+      throw new Error(`The live voice backend for plan ${planTier} is not a live model`);
+    }
+    backendModel = resolvedBackend;
+    if (
+      !(
+        modelKeepsInputsOutOfTraining(liveModel.id) &&
+        modelKeepsInputsOutOfTraining(backendModel.id)
+      ) &&
+      (await storedConversationCarriesGoogleUserData(
+        scoped.db,
+        userId,
+        scoped.organizationId,
+        conversationId,
+      ))
+    ) {
+      return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
+    }
+    reasoning = resolveLiveVoiceReasoning({
+      backendModelId: backendModel.id,
+      requested: body.reasoning,
+      planTier,
+    });
+    const blockMicrousd = liveVoiceBlockChargeMicrousd(liveModel.id, backendModel.id) ?? 0;
+    const budget = await assessVoiceBudget({
       db: scoped.db,
       userId,
       planTier,
       catalogVersion: entitlement.catalogVersion,
-      modelId: liveModel.id,
+      blockMicrousd,
     });
-    limitResets = block.resetsAt;
-    ceilingSeconds = Math.max(block.blockSeconds, LIVE_SESSION_MIN_BLOCK_SECONDS);
-    estimatedCostMicrousd = liveSessionChargeMicrousd(ceilingSeconds, liveModel.id) ?? 0;
-    await assertTierUnitAllowance({
-      db: scoped.db,
-      userId,
-      planTier,
-      unit: 'voice_minutes',
-      requestedUnits: liveSessionMinutes(ceilingSeconds),
-    });
+    limitResets = budget.resetsAt;
+    if (!budget.planFundsBlock) {
+      return voiceJsonError(
+        request,
+        402,
+        VOICE_USAGE_NOT_IN_PLAN.code,
+        VOICE_USAGE_NOT_IN_PLAN.message,
+      );
+    }
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
       userId,
-      idempotencyKey: managedUsageIdempotencyKey({
-        namespace: VOICE_LIVE_SESSION_NAMESPACE,
-        suppliedKey: request.headers.get('idempotency-key'),
-        identity: sessionIdentity,
-      }),
-      requestHash: fingerprintManagedUsageRequest(sessionIdentity),
+      idempotencyKey: reservationIdentity.idempotencyKey,
+      requestHash: reservationIdentity.requestHash,
+      leaseToken: reservationIdentity.leaseToken,
       provider,
       model: liveModel.id,
-      estimatedCostMicrousd,
-      leaseSeconds: LIVE_SESSION_LEASE_SECONDS,
+      estimatedCostMicrousd: blockMicrousd,
+      leaseSeconds: LIVE_VOICE_LEASE_SECONDS,
       planTier,
       isFlagship: false,
       quotaFeature: LIVE_VOICE_FEATURE,
+      conversationId,
     });
   } catch (error) {
     if (isAppError(error)) throw error;
@@ -457,12 +478,10 @@ async function handleCreateLiveSession(request: NextRequest) {
           model: liveModel.apiModelId ?? liveModel.id,
           instructions: buildLiveVoiceInstructions(LIVE_VOICE_INSTRUCTIONS, context, {
             language,
+            pace,
             toolNotice,
           }),
-          audio: {
-            output: { voice, speed: pace },
-            ...(language ? { input: { transcription: { language } } } : {}),
-          },
+          audio: { output: { voice } },
           delegation: {
             type: 'responses',
             responses: {
@@ -474,8 +493,10 @@ async function handleCreateLiveSession(request: NextRequest) {
               ),
               tools: [...delegation.tools, ...offered.tools],
               tool_choice: 'auto',
+              ...(reasoning.effort ? { reasoning: { effort: reasoning.effort } } : {}),
             },
           },
+          client: { data_channel: { allowed_client_events: [...FRONTEND_CLIENT_EVENTS] } },
         },
         transport: { type: 'webrtc', sdp: body.sdp },
       }),
@@ -546,21 +567,48 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
-  await closeExpiredVoiceSessions({
+  const settleBackend = async () => backendModel.id;
+  await settleAbandonedVoiceSessions({
     db: scoped.db,
     userId,
-    maxOpenSeconds: LIVE_SESSION_CEILING_SECONDS,
+    backendModelFor: settleBackend,
   }).catch((error: unknown) => {
     logger.warn(
       { event: 'voice_session_expiry_failed', error, userId },
-      'Expired voice sessions could not be closed',
+      'Expired voice sessions could not be settled',
     );
     return 0;
   });
+  const superseded = await closeVoiceSessionsForConversation({
+    db: scoped.db,
+    userId,
+    conversationId,
+    reason: 'superseded',
+  }).catch((error: unknown) => {
+    logger.warn(
+      { event: 'voice_session_supersede_failed', error, userId },
+      'The session this one replaces could not be closed',
+    );
+    return [];
+  });
+  for (const previous of superseded) {
+    await settleVoiceSession({
+      db: scoped.db,
+      record: previous,
+      backendModelId: backendModel.id,
+      reason: 'superseded',
+    }).catch((error: unknown) => {
+      logger.error(
+        { event: 'voice_superseded_settlement_failed', error, userId, voiceSessionId: previous.id },
+        'A superseded voice session could not be settled; the reservation sweep releases it',
+      );
+    });
+  }
   let record: Awaited<ReturnType<typeof createVoiceSession>> = null;
   try {
     record = await createVoiceSession({
       db: scoped.db,
+      id: voiceSessionId,
       userId,
       organizationId: scoped.organizationId,
       conversationId,
@@ -588,7 +636,6 @@ async function handleCreateLiveSession(request: NextRequest) {
       'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
     );
   }
-  const voiceSessionId = record.id;
 
   logger.info(
     {
@@ -597,7 +644,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       model: liveModel.id,
       sessionId,
       voiceSessionId,
-      estimatedCostMicrousd,
+      reservedMicrousd: reservation.estimatedCostMicrousd,
       contextTurns: context.turns.length,
       contextProject: context.projectPrompt !== null,
       contextMemory: context.memoryPrompt !== null,
@@ -612,14 +659,9 @@ async function handleCreateLiveSession(request: NextRequest) {
       sessionId,
       sdp: answer,
       voiceSessionId,
-      settings: { voice, language, pace },
+      settings: { voice, language, pace, reasoning: reasoning.level },
       tools: describeLiveVoiceTools(offeredToolIds),
-      settlement: {
-        idempotencyKey: reservation.idempotencyKey,
-        leaseToken: reservation.leaseToken,
-        requestHash: reservation.requestHash,
-        ceilingSeconds,
-      },
+      settlement: { ceilingSeconds: LIVE_VOICE_BLOCK_SECONDS },
     },
     { status: 201, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
   );

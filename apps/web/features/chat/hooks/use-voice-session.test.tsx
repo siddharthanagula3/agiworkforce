@@ -7,6 +7,8 @@ const live = vi.hoisted(() => ({
   close: vi.fn(),
   updateSettings: vi.fn(async () => undefined),
   cancelBackendWork: vi.fn(),
+  resumePlayback: vi.fn(async () => true),
+  backendUsage: null as null | Record<string, number>,
 }));
 
 vi.mock('@features/chat/lib/live-voice-session', async (importOriginal) => {
@@ -38,13 +40,7 @@ import {
 } from '@features/chat/lib/live-voice-session';
 import { INITIAL_VOICE_SESSION_STATE, VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 
-const SETTLEMENT = {
-  idempotencyKey: 'key',
-  leaseToken: 'lease',
-  requestHash: 'hash',
-  estimatedCostCents: 50,
-  ceilingSeconds: 600,
-};
+const SETTLEMENT = { ceilingSeconds: 600 };
 
 function fakeSession() {
   return {
@@ -57,6 +53,10 @@ function fakeSession() {
     close: live.close,
     updateSettings: live.updateSettings,
     cancelBackendWork: live.cancelBackendWork,
+    resumePlayback: live.resumePlayback,
+    get backendUsage() {
+      return live.backendUsage;
+    },
     dispose: vi.fn(),
   };
 }
@@ -104,7 +104,10 @@ describe('useVoiceSession', () => {
       voice: 'marin',
       language: '',
       pace: 1,
+      playbackBlocked: false,
+      providerNotice: null,
     });
+    live.resumePlayback.mockClear();
     live.start.mockReset();
     live.updateSettings.mockClear();
     live.setMuted.mockReset();
@@ -255,8 +258,49 @@ describe('useVoiceSession', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       seconds: 30,
       reason: 'close_requested',
-      settlement: SETTLEMENT,
     });
+  });
+
+  it('settles the delegated backend usage the session collected with the close', async () => {
+    live.backendUsage = {
+      inputTokens: 1_300,
+      outputTokens: 250,
+      cachedTokens: 700,
+      webSearchCalls: 1,
+    };
+    try {
+      const { result } = mount();
+      await enterAndStart(result);
+      await act(async () => {
+        result.current.exit();
+      });
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(String(init.body))).toMatchObject({
+        backend: { inputTokens: 1_300, outputTokens: 250, cachedTokens: 700, webSearchCalls: 1 },
+      });
+    } finally {
+      live.backendUsage = null;
+    }
+  });
+
+  it('shows a provider error without ending the call, and offers a tap when audio is blocked', async () => {
+    const { result } = mount();
+    await enterAndStart(result);
+
+    await act(async () => {
+      lastCallbacks().onProviderError?.({ code: 'moderation_blocked', message: 'Blocked.' });
+      lastCallbacks().onPlaybackBlocked?.();
+    });
+    expect(useVoiceSessionStore.getState().providerNotice).toBe(LIVE_SESSION_MESSAGE.providerError);
+    expect(useVoiceSessionStore.getState().playbackBlocked).toBe(true);
+    expect(result.current.state.status).not.toBe(VOICE_SESSION_STATUS.error);
+
+    await act(async () => {
+      result.current.resumePlayback();
+    });
+    await waitFor(() => expect(useVoiceSessionStore.getState().playbackBlocked).toBe(false));
+    expect(live.resumePlayback).toHaveBeenCalledTimes(1);
   });
 
   it('shows the permission failure and reconnects on retry', async () => {
@@ -274,6 +318,30 @@ describe('useVoiceSession', () => {
       result.current.retry();
     });
     await waitFor(() => expect(live.start).toHaveBeenCalledTimes(2));
+  });
+
+  it('marks a refused start as a usage limit, and a permission failure as not one', async () => {
+    live.start.mockRejectedValueOnce(
+      new LiveVoiceSessionError(
+        'Your rolling 5-hour usage limit is reached.',
+        'rolling_five_hour_limit_reached',
+      ),
+    );
+    const { result } = mount();
+    await act(async () => {
+      result.current.enter();
+    });
+    await waitFor(() => expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.error));
+    expect(useVoiceSessionStore.getState().usageLimited).toBe(true);
+
+    live.start.mockRejectedValueOnce(
+      new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.microphoneDenied, 'microphone_denied'),
+    );
+    await act(async () => {
+      result.current.retry();
+    });
+    await waitFor(() => expect(live.start).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(useVoiceSessionStore.getState().usageLimited).toBe(false));
   });
 
   describe('leaving the page', () => {

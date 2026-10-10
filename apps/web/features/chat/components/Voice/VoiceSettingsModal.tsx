@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { VoiceSampleButton } from './VoiceSampleButton';
 import {
   AudioLines,
+  Brain,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -30,6 +31,7 @@ import {
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { VoiceOrbPreview } from './VoiceOrb';
+import { LIVE_VOICE_REASONING, type LiveVoiceReasoning } from '@features/chat/lib/live-voices';
 
 const LABEL = {
   title: 'Voice settings',
@@ -39,6 +41,7 @@ const LABEL = {
   previous: 'Previous voice',
   next: 'Next voice',
   intelligence: 'Intelligence',
+  reasoning: 'Voice reasoning',
   language: 'Language',
   pace: 'Speaking pace',
   autoDetect: 'Auto-detect',
@@ -46,6 +49,15 @@ const LABEL = {
 } as const;
 
 const VOICE_CAROUSEL_DOTS_MAX = 12;
+
+const REASONING_OPTIONS: readonly PickerOption[] = [
+  { id: LIVE_VOICE_REASONING.instant, label: 'Instant', hint: 'Answers right away' },
+  {
+    id: LIVE_VOICE_REASONING.thinking,
+    label: 'Thinking',
+    hint: 'Thinks longer on harder questions. Paid plans, from your next voice session',
+  },
+];
 
 const PACE_OPTIONS: readonly PickerOption[] = [
   { id: '0.75', label: 'Slower', hint: '0.75x' },
@@ -187,6 +199,8 @@ export function VoiceSettingsModal({
   const [openPicker, setOpenPicker] = useState<string | null>(null);
   const pace = useVoiceSessionStore((state) => state.pace);
   const setPace = useVoiceSessionStore((state) => state.setPace);
+  const reasoning = useVoiceSessionStore((state) => state.reasoning);
+  const setReasoning = useVoiceSessionStore((state) => state.setReasoning);
 
   const intelligenceOptions = useMemo<PickerOption[]>(
     () =>
@@ -303,6 +317,16 @@ export function VoiceSettingsModal({
             open={openPicker === LABEL.intelligence}
             onOpenChange={(next) => setOpenPicker(next ? LABEL.intelligence : null)}
             onSelect={(id) => onIntelligenceChange(id as VoiceIntelligence)}
+          />
+          <Picker
+            id="reasoning"
+            label={LABEL.reasoning}
+            icon={Brain}
+            options={REASONING_OPTIONS}
+            selectedId={reasoning}
+            open={openPicker === LABEL.reasoning}
+            onOpenChange={(next) => setOpenPicker(next ? LABEL.reasoning : null)}
+            onSelect={(id) => setReasoning(id as LiveVoiceReasoning)}
           />
           <Picker
             id="language"

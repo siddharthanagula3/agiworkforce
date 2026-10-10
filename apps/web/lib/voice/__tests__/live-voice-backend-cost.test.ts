@@ -20,6 +20,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 
 import { FEATURE_RATE_CARD } from '@agiworkforce/types';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 
 import { recordLiveVoiceBackendCost } from '../live-voice-backend-cost';
 
@@ -138,13 +139,21 @@ describe('live voice backend cost', () => {
     );
   });
 
-  it('prefers the model the provider reported over the configured slot', async () => {
-    await recordLiveVoiceBackendCost({
-      ...BASE,
-      reported: { model: 'reported-model-under-test', inputTokens: 10, outputTokens: 10 },
-    });
+  it('prices and records the server-chosen backend even when the report names another model', async () => {
+    const claimingCheaperModel = {
+      model: 'a-cheaper-model',
+      inputTokens: 10,
+      outputTokens: 10,
+    } as Parameters<typeof recordLiveVoiceBackendCost>[0]['reported'];
 
-    expect(rowFor()['model']).toBe('reported-model-under-test');
+    await recordLiveVoiceBackendCost({ ...BASE, reported: claimingCheaperModel });
+
+    expect(rowFor()['model']).toBe('backend-model-under-test');
+    expect(LLMCostCalculator.calculateCostMicrousd).toHaveBeenLastCalledWith(
+      'openai',
+      'backend-model-under-test',
+      expect.objectContaining({ promptTokens: 10, completionTokens: 10 }),
+    );
   });
 
   it('marks the row as voice spend rather than an ordinary turn', async () => {

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRoutingSlotModel, MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/server/rolling-usage');
 type ScanModule1 = typeof import('@/lib/server/spendable-credits');
 type ScanModule2 = typeof import('@/lib/services/credit-service');
+type ScanModule3 = typeof import('@/lib/server/managed-usage-policy');
 
 vi.mock('server-only', () => ({}));
 
@@ -10,6 +10,16 @@ const mocks = vi.hoisted(() => ({
   rollingUsage: vi.fn(),
   balance: vi.fn(),
   spendable: vi.fn(),
+  sessionCap: vi.fn(),
+  weeklyCap: vi.fn(),
+  monthlyBudget: vi.fn(),
+}));
+
+vi.mock('@/lib/server/managed-usage-policy', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule3>()),
+  getPlanSessionUsageCapMicrousd: mocks.sessionCap,
+  getPlanWeeklyUsageCapMicrousd: mocks.weeklyCap,
+  getPlanUsageBudgetMicrousd: mocks.monthlyBudget,
 }));
 
 vi.mock('@/lib/server/rolling-usage', async (importOriginal) => ({
@@ -33,68 +43,66 @@ vi.mock('@/lib/services/credit-service', async (importOriginal) => {
 
 import {
   getPlanSessionUsageCapMicrousd,
+  getPlanUsageBudgetMicrousd,
   getPlanWeeklyUsageCapMicrousd,
 } from '@/lib/server/managed-usage-policy';
+
 import {
-  LIVE_SESSION_CEILING_SECONDS,
-  liveSessionChargeMicrousd,
-  liveSessionSecondsCoveredBy,
-} from '@/lib/voice/live-voice-billing';
+  assessVoiceBudget,
+  readVoiceReservation,
+  voiceReservationIdentity,
+} from '../voice-session-budget';
 
-import { planVoiceSessionBlock, readVoiceReservation } from '../voice-session-budget';
-
-const LIVE_MODEL = getRoutingSlotModel('voice_live');
-const FULL_BLOCK_MICROUSD = liveSessionChargeMicrousd(
-  LIVE_SESSION_CEILING_SECONDS,
-  LIVE_MODEL,
-) as number;
 const FIVE_HOUR_OLDEST = '2026-09-27T10:00:00.000Z';
 const WEEKLY_OLDEST = '2026-09-24T10:00:00.000Z';
 const PERIOD_END = '2026-10-15T00:00:00.000Z';
+const BLOCK = 60_000;
 const db = { query: vi.fn() } as never;
 
-function capsFor(tier: string): { session: number; weekly: number } {
-  const allowance = { tier, catalogVersion: null };
-  return {
-    session: getPlanSessionUsageCapMicrousd(allowance) as number,
-    weekly: getPlanWeeklyUsageCapMicrousd(allowance) as number,
-  };
-}
+/**
+ * Fixture budgets, not the plan table: the per-tier numbers wait on the
+ * owner's unit economics, so these only exercise the mechanism.
+ */
+const FIXTURE_BUDGETS: Record<string, { session: number; weekly: number; monthly: number }> = {
+  free: { session: 300_000, weekly: 1_000_000, monthly: 2_000_000 },
+  pro: { session: 5_000_000, weekly: 25_000_000, monthly: 100_000_000 },
+};
 
-function usage(input: { session: number; weekly: number }): void {
-  mocks.rollingUsage.mockImplementation(async (_db: unknown, _user: string, hours: number) =>
-    hours === 5
-      ? { usedMicrousd: input.session, oldestAt: FIVE_HOUR_OLDEST }
-      : { usedMicrousd: input.weekly, oldestAt: WEEKLY_OLDEST },
+function fixtureCaps(): void {
+  mocks.sessionCap.mockImplementation(({ tier }: { tier: string }) =>
+    tier === 'max' ? null : (FIXTURE_BUDGETS[tier]?.session ?? 0),
+  );
+  mocks.weeklyCap.mockImplementation(({ tier }: { tier: string }) =>
+    tier === 'max' ? null : (FIXTURE_BUDGETS[tier]?.weekly ?? 0),
+  );
+  mocks.monthlyBudget.mockImplementation(({ tier }: { tier: string }) =>
+    tier === 'max' ? 1_000_000_000_000 : (FIXTURE_BUDGETS[tier]?.monthly ?? 0),
   );
 }
 
-function monthly(remainingMicrousd: number | null, dailyRemainingMicrousd?: number | null): void {
-  mocks.balance.mockResolvedValue(
-    remainingMicrousd === null
-      ? null
-      : {
-          credits_remaining_microusd: remainingMicrousd,
-          daily_remaining_microusd: dailyRemainingMicrousd ?? null,
-          period_end: PERIOD_END,
-        },
-  );
-}
-
-function plan(tier: string) {
-  return planVoiceSessionBlock({
+function assess(tier: string) {
+  return assessVoiceBudget({
     db,
     userId: 'user-1',
     planTier: tier,
     catalogVersion: null,
-    modelId: LIVE_MODEL,
+    blockMicrousd: BLOCK,
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  usage({ session: 0, weekly: 0 });
-  monthly(1_000_000_000);
+  fixtureCaps();
+  mocks.rollingUsage.mockImplementation(async (_db: unknown, _user: string, hours: number) =>
+    hours === 5
+      ? { usedMicrousd: 0, oldestAt: FIVE_HOUR_OLDEST }
+      : { usedMicrousd: 0, oldestAt: WEEKLY_OLDEST },
+  );
+  mocks.balance.mockResolvedValue({
+    credits_remaining_microusd: 1_000_000,
+    daily_remaining_microusd: null,
+    period_end: PERIOD_END,
+  });
   mocks.spendable.mockResolvedValue({
     availableMicrousd: 0,
     availableCents: 0,
@@ -102,104 +110,44 @@ beforeEach(() => {
   });
 });
 
-describe('planVoiceSessionBlock', () => {
-  it('holds a Pro session to what its five-hour window covers', async () => {
-    const caps = capsFor('pro');
-    expect(caps.session).toBe(50 * MICROUSD_PER_CREDIT);
-    expect(caps.session).toBeLessThan(FULL_BLOCK_MICROUSD);
-
-    const block = await plan('pro');
-
-    expect(block.blockSeconds).toBe(liveSessionSecondsCoveredBy(caps.session, LIVE_MODEL));
-    expect(block.blockSeconds).toBeLessThan(LIVE_SESSION_CEILING_SECONDS);
+describe('assessVoiceBudget', () => {
+  it('lets a plan with a nonzero budget fund a block, Free included', async () => {
+    expect((await assess('free')).planFundsBlock).toBe(true);
+    expect((await assess('pro')).planFundsBlock).toBe(true);
+    expect((await assess('max')).planFundsBlock).toBe(true);
+    expect(getPlanSessionUsageCapMicrousd).toBe(mocks.sessionCap);
+    expect(getPlanWeeklyUsageCapMicrousd).toBe(mocks.weeklyCap);
+    expect(getPlanUsageBudgetMicrousd).toBe(mocks.monthlyBudget);
   });
 
-  it('gives a whole block when every window has room for it', async () => {
-    const caps = capsFor('max_15x');
-    expect(caps.session).toBeGreaterThan(FULL_BLOCK_MICROUSD);
-
-    const block = await plan('max_15x');
-
-    expect(block.blockSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
-  });
-
-  it('sizes the block to the smallest remaining window', async () => {
-    const caps = capsFor('max_15x');
-    const sessionLeft = 120_000;
-    usage({ session: caps.session - sessionLeft, weekly: 0 });
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(sessionLeft, LIVE_MODEL),
-    );
-
-    const weeklyLeft = 90_000;
-    usage({ session: 0, weekly: caps.weekly - weeklyLeft });
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(weeklyLeft, LIVE_MODEL),
-    );
-
-    usage({ session: 0, weekly: 0 });
-    monthly(60_000);
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(60_000, LIVE_MODEL),
-    );
-
-    monthly(1_000_000_000, 30_000);
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(30_000, LIVE_MODEL),
-    );
-  });
-
-  it('gives no block when nothing is left and overage is off', async () => {
-    const caps = capsFor('pro');
-    usage({ session: caps.session, weekly: 0 });
-
-    expect((await plan('pro')).blockSeconds).toBe(0);
-
-    usage({ session: 0, weekly: 0 });
-    monthly(null);
-    expect((await plan('pro')).blockSeconds).toBe(0);
-  });
-
-  it('draws on purchased credits only when overage is enabled', async () => {
-    const caps = capsFor('pro');
-    usage({ session: caps.session, weekly: 0 });
+  it('reports that a plan with no budget cannot fund a block, unless overage covers it', async () => {
+    expect((await assess('team_premium')).planFundsBlock).toBe(false);
     mocks.spendable.mockResolvedValue({
-      availableMicrousd: 80_000,
-      availableCents: 8,
-      overageEnabled: false,
-    });
-    expect((await plan('pro')).blockSeconds).toBe(0);
-
-    mocks.spendable.mockResolvedValue({
-      availableMicrousd: 80_000,
-      availableCents: 8,
+      availableMicrousd: BLOCK,
+      availableCents: 6,
       overageEnabled: true,
     });
-    expect((await plan('pro')).blockSeconds).toBe(liveSessionSecondsCoveredBy(80_000, LIVE_MODEL));
+    expect((await assess('team_premium')).planFundsBlock).toBe(true);
   });
 
-  it('never sizes a block past the ceiling, whatever overage is available', async () => {
-    const caps = capsFor('pro');
-    usage({ session: caps.session, weekly: 0 });
-    mocks.spendable.mockResolvedValue({
-      availableMicrousd: 100 * FULL_BLOCK_MICROUSD,
-      availableCents: 0,
-      overageEnabled: true,
-    });
-
-    expect((await plan('pro')).blockSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
-  });
-
-  it('names when each limit that could refuse the block resets', async () => {
-    const block = await plan('pro');
-
-    expect(block.resetsAt).toEqual({
+  it('names when each window that could refuse the next block resets', async () => {
+    expect((await assess('pro')).resetsAt).toEqual({
       rolling_five_hour_limit_reached: '2026-09-27T15:00:00.000Z',
       rolling_weekly_limit_reached: '2026-10-01T10:00:00.000Z',
       insufficient_credits: PERIOD_END,
     });
-    expect(mocks.rollingUsage).toHaveBeenCalledWith(db, 'user-1', 5, false);
-    expect(mocks.rollingUsage).toHaveBeenCalledWith(db, 'user-1', 7 * 24, false);
+  });
+});
+
+describe('voiceReservationIdentity', () => {
+  it('names a session reservation by its record so anything holding the record can settle it', () => {
+    const identity = voiceReservationIdentity('11111111-2222-4333-8444-555555555555');
+
+    expect(identity.idempotencyKey).toBe('agi.voice.live.11111111-2222-4333-8444-555555555555');
+    expect(identity.leaseToken).toBe('11111111-2222-4333-8444-555555555555');
+    expect(identity.requestHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(voiceReservationIdentity('11111111-2222-4333-8444-555555555555')).toEqual(identity);
+    expect(voiceReservationIdentity('other').requestHash).not.toBe(identity.requestHash);
   });
 });
 

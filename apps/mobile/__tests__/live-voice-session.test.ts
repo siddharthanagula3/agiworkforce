@@ -96,6 +96,7 @@ import {
   LIVE_VOICE_SESSION_PATH,
   LiveVoiceSession,
   LiveVoiceSessionError,
+  extendLiveVoiceSession,
   settleLiveVoiceSession,
   type LiveTranscriptTurn,
   type LiveVoiceSessionCallbacks,
@@ -108,13 +109,7 @@ import {
   liveVoiceUnavailableReason,
 } from '@/src/features/voice/services/liveVoiceAvailability';
 
-const SETTLEMENT = {
-  idempotencyKey: 'key',
-  leaseToken: 'lease',
-  requestHash: 'hash',
-  estimatedCostCents: 50,
-  ceilingSeconds: 600,
-};
+const SETTLEMENT = { ceilingSeconds: 600 };
 
 function callbacks(): LiveVoiceSessionCallbacks & { turns: LiveTranscriptTurn[] } {
   const turns: LiveTranscriptTurn[] = [];
@@ -229,6 +224,72 @@ describe('LiveVoiceSession', () => {
       event: { type: 'response.completed' },
     });
     expect(cb.onBackendBusy).toHaveBeenLastCalledWith(false);
+  });
+
+  it('totals the delegated backend usage once per response for the close', async () => {
+    const { session } = await startSession();
+    mockState.peer.channel.receive({ type: 'session.started' });
+    const completed = {
+      type: 'response.event',
+      delegation_id: 'del_1',
+      event: {
+        type: 'response.completed',
+        response: {
+          id: 'resp_1',
+          usage: {
+            input_tokens: 900,
+            output_tokens: 120,
+            input_tokens_details: { cached_tokens: 300 },
+          },
+        },
+      },
+    };
+    mockState.peer.channel.receive(completed);
+    mockState.peer.channel.receive(completed);
+    mockState.peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'del_1',
+      event: { type: 'response.output_item.done', item: { id: 'ws_1', type: 'web_search_call' } },
+    });
+
+    expect(session.backendUsage).toEqual({
+      inputTokens: 900,
+      outputTokens: 120,
+      cachedTokens: 300,
+      webSearchCalls: 1,
+    });
+  });
+
+  it('reports a provider error during the call without ending it', async () => {
+    const cb = { ...callbacks(), onProviderError: jest.fn() };
+    await startSession(cb);
+    mockState.peer.channel.receive({ type: 'session.started' });
+
+    mockState.peer.channel.receive({
+      type: 'error',
+      error: { type: 'invalid_request_error', code: 'moderation_blocked', message: 'Blocked.' },
+    });
+
+    expect(cb.onProviderError).toHaveBeenCalledTimes(1);
+    expect(cb.onError).not.toHaveBeenCalled();
+  });
+
+  it('stops a running task with an instruction, never the undefined delegation cancel', async () => {
+    const { session } = await startSession();
+    mockState.peer.channel.receive({ type: 'session.started' });
+    mockState.peer.channel.receive({
+      type: 'session.delegation.created',
+      delegation: { id: 'del_1' },
+    });
+
+    session.cancelBackendWork();
+
+    const types = mockState.peer.channel.sent.map((event) => event['type']);
+    expect(types).not.toContain('session.delegation.cancel');
+    expect(mockState.peer.channel.sent.at(-1)).toMatchObject({
+      type: 'session.instructions.append',
+      delegation_id: null,
+    });
   });
 
   it('names the running tool, flags a slow one and reports what it returned', async () => {
@@ -410,14 +471,57 @@ describe('LiveVoiceSession', () => {
     mockApiFetch.mockReset();
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    await settleLiveVoiceSession('live_1', SETTLEMENT, { reason: 'close_requested', seconds: 31 });
+    await settleLiveVoiceSession('live_1', { reason: 'close_requested', seconds: 31 });
 
     const [path, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
     expect(path).toBe(`${LIVE_VOICE_SESSION_PATH}/live_1/close`);
     expect(JSON.parse(init.body)).toEqual({
       seconds: 31,
       reason: 'close_requested',
-      settlement: SETTLEMENT,
+    });
+  });
+
+  it('sends the delegated backend usage with the close when the session collected any', async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const backend = { inputTokens: 900, outputTokens: 120, cachedTokens: 300, webSearchCalls: 1 };
+
+    await settleLiveVoiceSession('live_1', { reason: 'close_requested', seconds: 31 }, backend);
+
+    const [, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
+    expect(JSON.parse(init.body)).toMatchObject({ backend });
+  });
+
+  it('reserves the next block of a running session and reads the ceiling it covers', async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({ ceilingSeconds: 120 }) });
+
+    await expect(extendLiveVoiceSession('live_1', 2)).resolves.toEqual({
+      ok: true,
+      ceilingSeconds: 120,
+    });
+    const [path, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
+    expect(path).toBe(`${LIVE_VOICE_SESSION_PATH}/live_1/extend`);
+    expect(JSON.parse(init.body)).toEqual({ block: 2 });
+  });
+
+  it('carries the server sentence when the shared budget refuses the next block', async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        error: {
+          code: 'rolling_five_hour_limit_reached',
+          message: 'Your rolling 5-hour usage limit is reached.',
+        },
+      }),
+    });
+
+    await expect(extendLiveVoiceSession('live_1', 3)).resolves.toEqual({
+      ok: false,
+      retry: false,
+      message: 'Your rolling 5-hour usage limit is reached.',
     });
   });
 });

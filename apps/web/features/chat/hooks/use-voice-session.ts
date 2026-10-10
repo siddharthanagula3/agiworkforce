@@ -15,6 +15,7 @@ import {
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import {
   isVoiceSessionActive,
+  reportClientFailure,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
   type VoiceOrbLevelSource,
@@ -25,12 +26,15 @@ import {
   LIVE_SESSION_MESSAGE,
   LiveVoiceSession,
   LiveVoiceSessionError,
+  isUsageLimitError,
+  type VoiceAttachmentOutcome,
   readLiveSessionError,
   type LiveSessionClosed,
   type LiveTranscriptTurn,
   type LiveVoiceToolActivity,
   type LiveVoiceToolOutcome,
 } from '@features/chat/lib/live-voice-session';
+import type { LiveVoiceReasoning } from '@features/chat/lib/live-voices';
 
 const MESSAGE = {
   sendFailed: 'That turn could not be sent. Try again.',
@@ -39,7 +43,7 @@ const MESSAGE = {
 
 const CSRF_HEADER = 'x-csrf-token';
 const REMOTE_CLOSE_REASONS_WITH_NOTICE = new Set(['expired', 'content', 'connection_lost']);
-const EXTEND_LEAD_MS = 60_000;
+const EXTEND_LEAD_MS = 15_000;
 const EXTEND_RETRY_MS = 10_000;
 const FIRST_EXTENSION_BLOCK = 2;
 
@@ -51,7 +55,8 @@ interface SessionBudget {
 }
 
 type BlockExtension =
-  { ok: true; ceilingSeconds: number } | { ok: false; retry: boolean; notice: string };
+  | { ok: true; ceilingSeconds: number }
+  | { ok: false; retry: boolean; notice: string; usageLimited: boolean };
 
 export type { LiveTranscriptTurn as VoiceTranscriptTurn };
 
@@ -91,6 +96,8 @@ export interface VoiceSessionController {
   cancelPending: () => void;
   submitTyped: (text: string) => void;
   retry: () => void;
+  resumePlayback: () => void;
+  shareAttachment: (file: File) => void;
 }
 
 interface TranscriptSink {
@@ -101,6 +108,7 @@ interface TranscriptSink {
 }
 
 const NAVIGATION_HANDOFF_MS = 5_000;
+const PROVIDER_NOTICE_MS = 8_000;
 
 export const RECONNECT_MAX_ATTEMPTS = 3;
 export const RECONNECT_BASE_MS = 1_000;
@@ -129,6 +137,7 @@ const controller = {
   stableTimer: null as number | null,
   budget: null as SessionBudget | null,
   budgetTimer: null as number | null,
+  providerNoticeTimer: null as number | null,
   paused: false,
 };
 
@@ -241,8 +250,8 @@ function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Pr
         body: JSON.stringify({
           seconds: closed.seconds ?? session.lastUsageSeconds ?? 0,
           reason: closed.reason,
-          settlement: session.settlement,
           ...(session.lastTurnId ? { lastTurnId: session.lastTurnId } : {}),
+          ...(session.backendUsage ? { backend: session.backendUsage } : {}),
         }),
       }),
     )
@@ -277,29 +286,61 @@ function requestBlockExtension(session: LiveVoiceSession, block: number): Promis
       fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(session.sessionId)}/extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: token },
-        body: JSON.stringify({ block, settlement: session.settlement }),
+        body: JSON.stringify({ block }),
       }),
     )
     .then(async (response): Promise<BlockExtension> => {
       if (!response.ok) {
         const error = await readLiveSessionError(response);
-        return { ok: false, retry: response.status >= 500, notice: error.message };
+        return {
+          ok: false,
+          retry: response.status >= 500,
+          notice: error.message,
+          usageLimited: isUsageLimitError(error),
+        };
       }
       const body = (await response.json()) as { ceilingSeconds?: unknown };
       return typeof body.ceilingSeconds === 'number'
         ? { ok: true, ceilingSeconds: body.ceilingSeconds }
-        : { ok: false, retry: true, notice: LIVE_SESSION_MESSAGE.sessionEnded };
+        : {
+            ok: false,
+            retry: true,
+            notice: LIVE_SESSION_MESSAGE.sessionEnded,
+            usageLimited: false,
+          };
     })
     .catch((): BlockExtension => ({
       ok: false,
       retry: true,
       notice: LIVE_SESSION_MESSAGE.connectionDropped,
+      usageLimited: false,
     }));
 }
 
-function endSessionAtLimit(notice: string): void {
+function showVoiceNotice(message: string): void {
+  useVoiceSessionStore.getState().setProviderNotice(message);
+  if (controller.providerNoticeTimer !== null) window.clearTimeout(controller.providerNoticeTimer);
+  controller.providerNoticeTimer = window.setTimeout(() => {
+    controller.providerNoticeTimer = null;
+    useVoiceSessionStore.getState().setProviderNotice(null);
+  }, PROVIDER_NOTICE_MS);
+}
+
+export const VOICE_ATTACHMENT_MESSAGE: Readonly<Record<VoiceAttachmentOutcome, string>> = {
+  shared: 'Shared with the assistant. Ask about it.',
+  too_large:
+    'That file is too large to share during a voice conversation. Attach it to a typed message instead.',
+  unsupported: 'Voice can look at photos and PDFs.',
+  unreadable: 'That file could not be read.',
+  busy: 'Wait for the current action to finish, then share it.',
+  unavailable: 'Start talking first, then share it.',
+};
+
+function endSessionAtLimit(notice: string, usageLimited: boolean): void {
   endLiveVoiceSession('usage_limit');
-  useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.fail, message: notice });
+  const store = useVoiceSessionStore.getState();
+  store.setUsageLimited(usageLimited);
+  store.dispatch({ type: VOICE_SESSION_EVENT.fail, message: notice });
 }
 
 async function extendSessionBudget(budget: SessionBudget): Promise<void> {
@@ -319,7 +360,9 @@ async function extendSessionBudget(budget: SessionBudget): Promise<void> {
     });
     return;
   }
-  scheduleBudget(budget, msUntilCeiling(budget), () => endSessionAtLimit(result.notice));
+  scheduleBudget(budget, msUntilCeiling(budget), () =>
+    endSessionAtLimit(result.notice, result.usageLimited),
+  );
 }
 
 function trackSessionBudget(session: LiveVoiceSession): void {
@@ -400,11 +443,12 @@ interface LiveVoiceStartSettings {
   voice: string;
   language: string | null;
   pace: number;
+  reasoning: LiveVoiceReasoning;
 }
 
 function currentVoiceSettings(): LiveVoiceStartSettings {
-  const { voice, language, pace } = useVoiceSessionStore.getState();
-  return { voice, language: language || null, pace };
+  const { voice, language, pace, reasoning } = useVoiceSessionStore.getState();
+  return { voice, language: language || null, pace, reasoning };
 }
 
 function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVoiceSession> {
@@ -419,6 +463,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
         conversationId: conversationId ?? controller.sink?.conversationId ?? null,
         language: settings.language,
         pace: settings.pace,
+        reasoning: settings.reasoning,
         callbacks: {
           onStarted: () => store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true }),
           onSpeaking: (speaking) =>
@@ -460,6 +505,15 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
             stopVoiceReconnect();
             store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
           },
+          onProviderError: () => {
+            reportClientFailure({ failure: 'voice_provider_error', detail: 'rejected' });
+            showVoiceNotice(LIVE_SESSION_MESSAGE.providerError);
+          },
+          onSources: (sources) => store.setSources(sources),
+          onPlaybackBlocked: () => {
+            reportClientFailure({ failure: 'voice_audio_blocked', detail: 'permission_denied' });
+            store.setPlaybackBlocked(true);
+          },
           onConnectionLost: (message) => {
             const dropped = controller.session;
             clearSessionBudget();
@@ -497,11 +551,14 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           error instanceof LiveVoiceSessionError
             ? error.message
             : LIVE_SESSION_MESSAGE.connectionFailed;
+        const usageLimited = isUsageLimitError(error);
         const recoverable =
-          !(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code);
+          !usageLimited &&
+          (!(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code));
         if (!(reconnectState.active && recoverable && scheduleVoiceReconnect())) {
           stopVoiceReconnect();
         }
+        store.setUsageLimited(usageLimited);
         store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
         throw error;
       },
@@ -588,8 +645,8 @@ export function useVoiceSession({
     );
   }, []);
 
-  // A voice, language or pace change while the session is up re-negotiates it,
-  // so a language switch lands without dropping the utterance in flight.
+  // A language or pace change reaches the running session without dropping the
+  // utterance in flight; a voice change takes effect on the next session.
   useEffect(() => {
     if (!isVoiceSessionActive(status) || status === VOICE_SESSION_STATUS.entering) return undefined;
     void controller.session?.updateSettings({ voice, language: language || null, pace });
@@ -683,6 +740,25 @@ export function useVoiceSession({
     controller.session?.cancelBackendWork();
   }, []);
 
+  const shareAttachment = useCallback((file: File) => {
+    const session = controller.session;
+    if (!session) {
+      showVoiceNotice(VOICE_ATTACHMENT_MESSAGE.unavailable);
+      return;
+    }
+    void session.shareAttachment(file).then((outcome) => {
+      showVoiceNotice(VOICE_ATTACHMENT_MESSAGE[outcome]);
+    });
+  }, []);
+
+  const resumePlayback = useCallback(() => {
+    const session = controller.session;
+    if (!session) return;
+    void session.resumePlayback().then((played) => {
+      if (played) useVoiceSessionStore.getState().setPlaybackBlocked(false);
+    });
+  }, []);
+
   const decideToolApproval = useCallback((callId: string, decision: LiveVoiceToolDecision) => {
     void controller.session?.decideToolApproval(callId, decision);
   }, []);
@@ -731,5 +807,7 @@ export function useVoiceSession({
     cancelPending,
     submitTyped,
     retry,
+    resumePlayback,
+    shareAttachment,
   };
 }
