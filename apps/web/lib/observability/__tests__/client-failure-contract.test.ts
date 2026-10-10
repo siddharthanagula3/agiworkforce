@@ -39,6 +39,7 @@ const EMITTER_SOURCES = [
   'packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx',
   'apps/web/features/chat/components/ChatConversationBoundary.tsx',
   'apps/web/features/chat/hooks/use-stream-stall-report.ts',
+  'apps/web/features/chat/hooks/use-voice-session.ts',
 ];
 
 describe('the two ends of a client failure report agree on what may be said', () => {
