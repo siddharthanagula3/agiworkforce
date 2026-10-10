@@ -11,6 +11,8 @@ import {
   MIN_PURCHASABLE_SEATS,
   billingIntervalsForPlan,
   getPlanPriceCents,
+  BILLING_CURRENCY_TERMS,
+  getPlanPriceInCurrency,
   getPlanPriceInr,
   getPlanPriceUsd,
   getPublishedMonthlyPriceUsd,
@@ -165,12 +167,18 @@ describe('billing catalog', () => {
     });
   });
 
-  it('exposes founder-set India monthly pricing for individual paid tiers', () => {
+  it('exposes the GST-inclusive India prices the owner set on 2026-10-10', () => {
     expect(getPlanPriceInr('basic')).toBe(399);
     expect(getPlanPriceInr('pro')).toBe(1999);
     expect(getPlanPriceInr('max')).toBe(9999);
-    expect(getPlanPriceInr('max_15x')).toBe(24999);
-    expect(getPlanPriceInr('team')).toBe(1999);
+    expect(getPlanPriceInr('max_15x')).toBe(19999);
+    expect(getPlanPriceInr('team')).toBe(2499);
+    expect(getPlanPriceInr('team', 'yearly')).toBe(23988);
+    expect(getPlanPriceInr('pro', 'yearly')).toBeNull();
+    expect(BILLING_CURRENCY_TERMS.inr.taxBehavior).toBe('inclusive');
+    expect(BILLING_CURRENCY_TERMS.usd.taxBehavior).toBe('exclusive');
+    expect(getPlanPriceInCurrency('max_15x', 'monthly', 'inr')).toBe(19999);
+    expect(getPlanPriceInCurrency('max_15x', 'monthly', 'usd')).toBe(getPlanPriceUsd('max_15x'));
   });
 
   describe('plan surface visibility', () => {

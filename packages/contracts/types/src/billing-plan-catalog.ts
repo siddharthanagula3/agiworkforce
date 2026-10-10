@@ -16,7 +16,7 @@ import {
  * later reprice is visibly a different catalog rather than a silent rewrite of
  * what a customer agreed to.
  */
-export const BILLING_PLAN_CATALOG_VERSION = 3;
+export const BILLING_PLAN_CATALOG_VERSION = 4;
 
 export type PlanSellability =
   'self_serve' | 'seat_upgrade' | 'contract_only' | 'free_of_charge' | 'withdrawn';

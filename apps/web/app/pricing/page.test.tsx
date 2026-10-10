@@ -1186,6 +1186,7 @@ describe('PricingPage', () => {
               amountMinor: 39_900,
               currency: 'inr',
               localized: true,
+              taxIncluded: true,
               checkoutReady: true,
             },
           },
@@ -1194,6 +1195,7 @@ describe('PricingPage', () => {
               amountMinor: 199_900,
               currency: 'inr',
               localized: true,
+              taxIncluded: true,
               checkoutReady: true,
             },
           },
@@ -1202,14 +1204,16 @@ describe('PricingPage', () => {
               amountMinor: 999_900,
               currency: 'inr',
               localized: true,
+              taxIncluded: true,
               checkoutReady: true,
             },
           },
           max_15x: {
             monthly: {
-              amountMinor: 2_499_900,
+              amountMinor: 1_999_900,
               currency: 'inr',
               localized: true,
+              taxIncluded: true,
               checkoutReady: true,
             },
           },
@@ -1226,7 +1230,8 @@ describe('PricingPage', () => {
     // assertable after switching the selector.
     expect(screen.getAllByText('₹9,999').length).toBeGreaterThan(0);
     await showMax20x();
-    expect(screen.getAllByText('₹24,999').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('₹19,999').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/taxIncluded/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /INR/i })).not.toBeInTheDocument();
   });
 

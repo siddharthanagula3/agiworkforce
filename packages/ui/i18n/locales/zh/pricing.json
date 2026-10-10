@@ -8,6 +8,7 @@
   "monthly": "按月",
   "yearly": "按年",
   "perMonth": "/月",
+  "taxIncluded": "含{{tax}}",
   "perYear": "/年",
   "currentPlan": "当前计划",
   "upgrade": "升级",

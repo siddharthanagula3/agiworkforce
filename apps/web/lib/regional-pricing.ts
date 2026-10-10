@@ -1,10 +1,13 @@
 import countryToCurrency, { type Countries } from 'country-to-currency';
 import {
   currencyMinorUnitDigits,
+  getPlanPriceInCurrency,
   getPublishedPlanPriceCents,
+  isBillingCurrency,
   type BillingInterval,
   type BillingPlanTier,
 } from '@agiworkforce/types';
+import { priceTaxBehaviorForCurrency } from '@/lib/billing/tax-policy';
 
 export type PublicCheckoutPlan = Extract<
   BillingPlanTier,
@@ -14,23 +17,38 @@ export type PublicCheckoutPlan = Extract<
 export interface StripePriceLike {
   currency: string;
   unit_amount: number | null;
-  currency_options?: Record<string, { unit_amount?: number | null }> | null;
+  tax_behavior?: string | null;
+  currency_options?: Record<
+    string,
+    { unit_amount?: number | null; tax_behavior?: string | null }
+  > | null;
 }
 
 export interface LocalizedPlanPrice {
   amountMinor: number;
   currency: string;
   localized: boolean;
+  taxIncluded: boolean;
 }
 
-const INDIA_MONTHLY_PRICE_MINOR: Readonly<Partial<Record<PublicCheckoutPlan, number>>> =
-  Object.freeze({
-    basic: 39_900,
-    pro: 199_900,
-    max: 999_900,
-    max_15x: 2_499_900,
-    team: 199_900,
-  });
+function localizedPrice(amountMinor: number, currency: string): LocalizedPlanPrice {
+  return {
+    amountMinor,
+    currency,
+    localized: true,
+    taxIncluded: priceTaxBehaviorForCurrency(currency) === 'inclusive',
+  };
+}
+
+function cataloguePriceMinor(
+  plan: PublicCheckoutPlan,
+  interval: BillingInterval,
+  currency: string,
+): number | null {
+  if (!isBillingCurrency(currency) || currency === 'usd') return null;
+  const amount = getPlanPriceInCurrency(plan, interval, currency);
+  return amount === null ? null : Math.round(amount * 10 ** currencyMinorUnitDigits(currency));
+}
 
 export function getCurrencyForCountry(countryCode: string | null | undefined): string {
   const normalized = countryCode?.trim().toUpperCase();
@@ -53,27 +71,24 @@ export function resolveLocalizedPlanPrice(
     amountMinor: publishedMinor,
     currency: 'usd',
     localized: false,
+    taxIncluded: priceTaxBehaviorForCurrency('usd') === 'inclusive',
   };
 
   if (currency === 'usd') return publishedUsd;
 
-  const founderSetIndiaPrice =
-    interval === 'monthly' && currency === 'inr' ? INDIA_MONTHLY_PRICE_MINOR[plan] : undefined;
-
-  if (typeof founderSetIndiaPrice === 'number') {
-    return { amountMinor: founderSetIndiaPrice, currency: 'inr', localized: true };
-  }
+  const catalogueMinor = cataloguePriceMinor(plan, interval, currency);
+  if (catalogueMinor !== null) return localizedPrice(catalogueMinor, currency);
 
   const currencyOption = stripePrice?.currency_options?.[currency];
   if (typeof currencyOption?.unit_amount === 'number') {
-    return { amountMinor: currencyOption.unit_amount, currency, localized: true };
+    return localizedPrice(currencyOption.unit_amount, currency);
   }
 
   if (
     stripePrice?.currency.toLowerCase() === currency &&
     typeof stripePrice.unit_amount === 'number'
   ) {
-    return { amountMinor: stripePrice.unit_amount, currency, localized: true };
+    return localizedPrice(stripePrice.unit_amount, currency);
   }
 
   return publishedUsd;

@@ -8,6 +8,7 @@
   "monthly": "月払い",
   "yearly": "年払い",
   "perMonth": "/月",
+  "taxIncluded": "{{tax}}込み",
   "perYear": "/年",
   "currentPlan": "現在のプラン",
   "upgrade": "アップグレード",

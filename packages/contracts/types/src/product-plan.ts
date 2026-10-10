@@ -137,13 +137,14 @@ export function listPlansForProduct(productId: string | null | undefined): Plan[
     plans.push({ productId: id, interval, currency: 'usd', priceMinorUnits, perSeat, trialDays });
   }
 
-  const monthlyInr = getPlanPriceInr(id);
-  if (monthlyInr !== null) {
+  for (const interval of billingIntervalsForPlan(id)) {
+    const inr = getPlanPriceInr(id, interval);
+    if (inr === null) continue;
     plans.push({
       productId: id,
-      interval: 'monthly',
+      interval,
       currency: 'inr',
-      priceMinorUnits: Math.round(monthlyInr * 100),
+      priceMinorUnits: Math.round(inr * 100),
       perSeat,
       trialDays,
     });

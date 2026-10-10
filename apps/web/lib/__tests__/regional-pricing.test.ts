@@ -25,15 +25,27 @@ describe('regional pricing', () => {
     expect(getCurrencyForCountry('not-a-country')).toBe('usd');
   });
 
-  it('keeps founder-set India monthly prices exact', () => {
-    expect(resolveLocalizedPlanPrice('basic', 'monthly', 'inr', null)?.amountMinor).toBe(39_900);
+  it('keeps the GST-inclusive India prices exact and marks them as tax included', () => {
+    expect(resolveLocalizedPlanPrice('basic', 'monthly', 'inr', null)).toEqual({
+      amountMinor: 39_900,
+      currency: 'inr',
+      localized: true,
+      taxIncluded: true,
+    });
     expect(resolveLocalizedPlanPrice('pro', 'monthly', 'inr', proStripePrice)?.amountMinor).toBe(
       199_900,
     );
     expect(resolveLocalizedPlanPrice('max', 'monthly', 'inr', null)?.amountMinor).toBe(999_900);
     expect(resolveLocalizedPlanPrice('max_15x', 'monthly', 'inr', null)?.amountMinor).toBe(
-      2_499_900,
+      1_999_900,
     );
+    expect(resolveLocalizedPlanPrice('team', 'monthly', 'inr', null)?.amountMinor).toBe(249_900);
+    expect(resolveLocalizedPlanPrice('team', 'yearly', 'inr', null)).toEqual({
+      amountMinor: 2_398_800,
+      currency: 'inr',
+      localized: true,
+      taxIncluded: true,
+    });
   });
 
   it('uses Stripe multi-currency options for other configured countries', () => {
@@ -64,6 +76,7 @@ describe('regional pricing', () => {
       amountMinor: published,
       currency: 'usd',
       localized: false,
+      taxIncluded: false,
     });
   });
 
