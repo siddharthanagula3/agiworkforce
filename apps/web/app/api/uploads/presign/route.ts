@@ -26,11 +26,8 @@ import {
   validateAttachmentMeta,
 } from '@agiworkforce/types';
 import { randomUUID } from 'node:crypto';
-import {
-  chatAttachmentSizeLabel,
-  isSupportedChatAttachment,
-  MAX_CHAT_ATTACHMENT_BYTES,
-} from '@/lib/chat-attachment-policy';
+import { isSupportedChatAttachment } from '@/lib/chat-attachment-policy';
+import { admitAttachmentUpload } from '@/lib/server/attachment-allowance';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { uploadNeedsSameOriginRelay } from '@/lib/server/upload-transport';
 import { uploadObjectKey } from '@/lib/server/upload-keys';
@@ -93,11 +90,6 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(validation.message);
   }
   if (kind === 'chat-attachment') {
-    if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
-      throw createError.validation(
-        `Chat attachments are limited to ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)} each.`,
-      );
-    }
     if (!isSupportedChatAttachment(fileName, mimeType)) {
       throw createError.validation(
         'Chat supports images, PDFs, Word, Excel, PowerPoint, and text or code files.',
@@ -133,6 +125,9 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     if (!project) {
       throw createError.notFound('Project not found');
     }
+  }
+  if (kind === 'chat-attachment' || kind === 'knowledge-file') {
+    await admitAttachmentUpload({ db, userId, organizationId, kind, byteCount });
   }
   const key = uploadObjectKey(kind, { userId, projectId: projectId ?? null, fileName });
 

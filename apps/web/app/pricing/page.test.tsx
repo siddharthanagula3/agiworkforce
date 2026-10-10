@@ -702,6 +702,7 @@ describe('PricingPage', () => {
         projects: string;
         storage: string;
         downloads: string;
+        attachment: string;
         customMcp: string;
         training?: string;
         proFeatures?: boolean;
@@ -722,6 +723,7 @@ describe('PricingPage', () => {
         [CAPABILITY.projects]: facts.projects,
         compareRowKnowledgeStorage: facts.storage,
         compareRowMonthlyDownloads: facts.downloads,
+        compareRowAttachmentSize: facts.attachment,
         compareRowCustomMcp: facts.customMcp,
         [CAPABILITY.skills_connectors]: INCLUDED,
         [CAPABILITY.agi_work]: included(facts.proFeatures),
@@ -741,6 +743,7 @@ describe('PricingPage', () => {
       projects: '1',
       storage: '100 MB',
       downloads: '15.1 GB',
+      attachment: '25 MB',
       customMcp: '1',
       training: 'Not by AGI. Free model providers may.',
     });
@@ -749,6 +752,7 @@ describe('PricingPage', () => {
       projects: '5',
       storage: '1 GB',
       downloads: '953.7 MB',
+      attachment: '100 MB',
       customMcp: '5',
     });
     column('pro', {
@@ -756,6 +760,7 @@ describe('PricingPage', () => {
       projects: '25',
       storage: '10 GB',
       downloads: '2.7 GB',
+      attachment: '250 MB',
       customMcp: '25',
       proFeatures: true,
     });
@@ -764,6 +769,7 @@ describe('PricingPage', () => {
       projects: 'unlimited',
       storage: '62 GB',
       downloads: '13.3 GB',
+      attachment: '512 MB',
       customMcp: 'unlimited',
       proFeatures: true,
     });
@@ -772,6 +778,7 @@ describe('PricingPage', () => {
       projects: 'unlimited',
       storage: '124 GB',
       downloads: '26.6 GB',
+      attachment: '512 MB',
       customMcp: 'unlimited',
       proFeatures: true,
       video: true,
@@ -783,6 +790,7 @@ describe('PricingPage', () => {
       projects: '25',
       storage: '25 GB',
       downloads: '3.3 GB',
+      attachment: '512 MB',
       customMcp: '25',
       proFeatures: true,
       teamAdmin: true,
@@ -792,6 +800,7 @@ describe('PricingPage', () => {
       projects: 'custom',
       storage: 'custom',
       downloads: 'custom',
+      attachment: '512 MB',
       customMcp: 'custom',
       proFeatures: true,
       video: true,
@@ -923,6 +932,7 @@ describe('PricingPage', () => {
       CAPABILITY.projects,
       'compareRowKnowledgeStorage',
       'compareRowMonthlyDownloads',
+      'compareRowAttachmentSize',
       'compareRowCustomMcp',
       CAPABILITY.skills_connectors,
       CAPABILITY.agi_work,

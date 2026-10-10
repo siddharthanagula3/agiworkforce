@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
 
 vi.mock('server-only', () => ({}));
@@ -187,7 +187,7 @@ describe('GET /api/projects/[id]/knowledge-files/[fileId]/text', () => {
     );
     expect(mocks.getProjectKnowledgeObject).toHaveBeenCalledWith(
       'k/notes.md',
-      MAX_ATTACHMENT_BYTES,
+      MAX_PLAN_ATTACHMENT_BYTES,
     );
     expect(mocks.renderFileTextPreview).toHaveBeenCalledWith(
       'markdown',

@@ -13,6 +13,7 @@ import type {
 } from '@agiworkforce/types';
 import {
   IMAGE_CARD_KIND,
+  getPlanMaxAttachmentsPerMessage,
   normalizeResearchDeliverable,
   RESEARCH_GUIDANCE_MAX_CHARS,
 } from '@agiworkforce/types';
@@ -3388,8 +3389,11 @@ export async function processRequest(
     CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
     () =>
       Promise.all([
-        hydrateChatAttachments(chatRequest.messages, userId, (filename) =>
-          truncatedAttachments.push(filename),
+        hydrateChatAttachments(
+          chatRequest.messages,
+          userId,
+          (filename) => truncatedAttachments.push(filename),
+          getPlanMaxAttachmentsPerMessage(subscription.plan_tier),
         ).then(
           (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
           (error: unknown) => ({ ok: false as const, error }),

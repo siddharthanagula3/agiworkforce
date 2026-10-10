@@ -133,7 +133,10 @@ import {
   canUseBillingPlanCapability,
   connectorsReleased,
   describeCapabilityDenial,
+  getBillingPlanPricing,
   getModels,
+  getPlanMaxAttachmentBytes,
+  getPlanMaxAttachmentsPerMessage,
   isExecutableVideoModel,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -180,7 +183,8 @@ import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
-  MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  chatAttachmentSizeLabel,
   cloudAgentRunSteerProgressId,
   isCloudAgentRunSteerProgressId,
   type LibraryItem,
@@ -837,6 +841,11 @@ const ChatComposerNewComponent = ({
   /** Set while a queued message is being edited, so re-sending replaces its slot. */
   const editingQueuedIdRef = useRef<string | null>(null);
   const wasLoadingRef = useRef(false);
+  const attachmentPlanTier = useBillingStore((s) => normalizeBillingPlanTier(s.subscription?.tier));
+  const attachmentsPerMessage = getPlanMaxAttachmentsPerMessage(attachmentPlanTier);
+  const attachLimitNote = `Up to ${attachmentsPerMessage} files, ${chatAttachmentSizeLabel(
+    Math.min(MAX_CHAT_ATTACHMENT_BYTES, getPlanMaxAttachmentBytes(attachmentPlanTier)),
+  )} each`;
   const {
     attachments,
     previews,
@@ -846,6 +855,9 @@ const ChatComposerNewComponent = ({
     removeFile,
     clearAll: clearAttachments,
   } = useAttachments({
+    maxFiles: attachmentsPerMessage,
+    planFileLimitBytes: getPlanMaxAttachmentBytes(attachmentPlanTier),
+    planLabel: getBillingPlanPricing(attachmentPlanTier).label,
     onError: (message) => setLocalNotice(message),
   });
   const uploadAttemptId = attachmentUploadAttempt?.id;
@@ -2731,7 +2743,7 @@ const ChatComposerNewComponent = ({
   const handleMentionFolderSelect = useCallback(
     (folder: WorkspaceRoot) => {
       replaceMentionToken();
-      void readFolderForMention(folder, MAX_CHAT_ATTACHMENT_COUNT - attachments.length)
+      void readFolderForMention(folder, attachmentsPerMessage - attachments.length)
         .then(({ files, leftOut, unreadable }) => {
           if (files.length === 0 && leftOut === 0 && unreadable === 0) {
             setLocalNotice(`${folder.name} has no files this chat can read.`);
@@ -4143,7 +4155,7 @@ const ChatComposerNewComponent = ({
       }
       data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
     >
-      <DragDropOverlay onDrop={handleFileDrop} />
+      <DragDropOverlay onDrop={handleFileDrop} maxFiles={attachmentsPerMessage} />
       {leaveLocalModelDialog}
 
       {endTemporaryChatDialog}
@@ -5137,6 +5149,7 @@ const ChatComposerNewComponent = ({
                         ? 'This free model accepts text only. Choose Free Auto to attach files.'
                         : undefined
                     }
+                    attachLimitNote={attachLimitNote}
                     mediaModeNoun={mediaModeNoun}
                     billingPolicyReady={billingPolicyReady}
                     billingPolicyError={Boolean(billingPolicyError)}

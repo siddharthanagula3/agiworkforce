@@ -13,7 +13,7 @@ import {
   managedCloudDataExportArchivePath,
   type DataExportArchive,
 } from '@agiworkforce/cloud-contracts';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import type { JobHandlerContext } from '@/lib/jobs/job-drain';
@@ -259,7 +259,7 @@ function projectFile(row: Record<string, unknown>): ArchiveFile {
     read: async () => {
       const key = objectKeyFromStorageUri(storageUri);
       if (!key) return null;
-      const object = await getProjectKnowledgeObject(key, MAX_ATTACHMENT_BYTES);
+      const object = await getProjectKnowledgeObject(key, MAX_PLAN_ATTACHMENT_BYTES);
       return object ? bytesOf(object.data) : null;
     },
   };

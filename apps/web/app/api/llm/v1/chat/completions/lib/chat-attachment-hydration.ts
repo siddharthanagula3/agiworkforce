@@ -27,7 +27,6 @@ import type { ImageDetailValue } from './image-detail';
 import { markNativeDocument, type NativeDocument } from './media-input';
 import { mapWithConcurrency } from './tool-loop';
 
-const MAX_REQUEST_ATTACHMENT_COUNT = 20;
 const MAX_REQUEST_ATTACHMENT_BYTES = 18 * 1024 * 1024;
 const MAX_NOTEBOOK_TEXT_CHARS = 200_000;
 const NOTEBOOK_MIME_TYPE = 'application/x-ipynb+json';
@@ -311,7 +310,8 @@ async function fetchAttachmentPayload(
 export async function hydrateChatAttachments(
   messages: HydratableMessage[],
   userId: string,
-  onTruncated?: (filename: string) => void,
+  onTruncated: ((filename: string) => void) | undefined,
+  maxAttachments: number,
 ): Promise<TurnAttachment[]> {
   const turnAttachments: TurnAttachment[] = [];
   const slots = collectAttachmentSlots(messages);
@@ -341,12 +341,12 @@ export async function hydrateChatAttachments(
     }
 
     attachmentCount += 1;
-    if (attachmentCount > MAX_REQUEST_ATTACHMENT_COUNT) {
+    if (attachmentCount > maxAttachments) {
       if (live) {
         throw new ChatAttachmentHydrationError(
           413,
           'too_many_attachments',
-          `You can attach up to ${MAX_REQUEST_ATTACHMENT_COUNT} files to one message.`,
+          `You can attach up to ${maxAttachments} files to one message.`,
         );
       }
       slot.resolved = [{ type: 'text', text: UNNAMED_UNAVAILABLE_NOTE }];

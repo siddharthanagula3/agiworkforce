@@ -18,6 +18,7 @@ import type {
   ConversationId,
   ArtifactBase,
 } from './conversation';
+import { MAX_PLAN_ATTACHMENT_BYTES } from './billing-catalog';
 
 // Note: MessageRole, MessageKind, MessageStatus are already exported from
 
@@ -200,6 +201,7 @@ export function validateAttachmentMeta(
   name: string,
   mimeType: string,
   byteCount: number,
+  maxBytes: number = MAX_PLAN_ATTACHMENT_BYTES,
 ): AttachmentValidation {
   if (byteCount === 0) {
     return {
@@ -208,8 +210,8 @@ export function validateAttachmentMeta(
       message: `${name} is empty.`,
     };
   }
-  if (byteCount > MAX_ATTACHMENT_BYTES) {
-    const limitMb = Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024));
+  if (byteCount > maxBytes) {
+    const limitMb = Math.round(maxBytes / (1024 * 1024));
     return {
       ok: false,
       reason: 'too-large',
