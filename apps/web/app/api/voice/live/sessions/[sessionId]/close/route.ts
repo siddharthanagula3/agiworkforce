@@ -60,7 +60,6 @@ const CloseLiveSessionSchema = z.object({
    */
   backend: z
     .object({
-      model: z.string().min(1).max(128).optional(),
       inputTokens: z.number().int().min(0).optional(),
       outputTokens: z.number().int().min(0).optional(),
       cachedTokens: z.number().int().min(0).optional(),
@@ -183,13 +182,14 @@ async function handleCloseLiveSession(
     liveSessionSecondsCoveredBy(estimatedCostMicrousd, model),
   );
   const backendProvider = record?.provider ?? (liveModel ? String(liveModel.provider) : 'unknown');
-  const backendModel = body.backend ? await resolveSessionBackendModel(scoped.db, userId) : null;
-  const backendCost = body.backend
-    ? priceLiveVoiceBackend({
-        provider: backendProvider,
-        backendModel,
+  const backendUsage = body.backend
+    ? {
         reported: body.backend,
-      })
+        backendModel: await resolveSessionBackendModel(scoped.db, userId),
+      }
+    : null;
+  const backendCost = backendUsage
+    ? priceLiveVoiceBackend({ provider: backendProvider, ...backendUsage })
     : null;
   const actualCostMicrousd = Math.min(
     (liveSessionChargeMicrousd(billedSeconds, model) ?? 0) +
@@ -236,14 +236,13 @@ async function handleCloseLiveSession(
         : { providerCostMicrousd, costSource: LIVE_SESSION_PROVIDER_COST_SOURCE }),
     },
   });
-  if (body.backend) {
+  if (backendUsage) {
     await recordLiveVoiceBackendCost({
       userId,
       provider: reservation.provider ?? 'unknown',
       sessionId,
       surface: record?.surface ?? null,
-      backendModel,
-      reported: body.backend,
+      ...backendUsage,
     });
   }
   try {
