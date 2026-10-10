@@ -14,6 +14,7 @@ import {
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { useVisualSession } from '@/lib/visual/use-visual-session';
+import { VOICE_ATTACHMENT_ACCEPT } from '@features/chat/lib/voice-attachments';
 import { ToolTimeline, type ToolEntry } from '../messages/ToolTimeline';
 import { SourcesControl } from '../research/ResearchPanel';
 import { VoiceCaptions } from './VoiceCaptions';
@@ -134,6 +135,7 @@ export function VoiceModeSurface({
 
   const [typed, setTyped] = useState('');
   const dockTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [captionsOpen, setCaptionsOpen] = useState(false);
   const [captions, setCaptions] = useState<readonly VoiceCaptionLine[]>([]);
 
@@ -512,11 +514,26 @@ export function VoiceModeSurface({
         onExit={exit}
       />
 
+      <input
+        ref={attachmentInputRef}
+        type="file"
+        accept={VOICE_ATTACHMENT_ACCEPT}
+        className="hidden"
+        data-testid="voice-attachment-input"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) session.shareAttachment(file);
+        }}
+      />
       <VoiceChatDock
         open={dockOpen}
         triggerRef={dockTriggerRef}
         onClose={() => setDockOpen(false)}
         onNewChat={onNewChat}
+        onAddFiles={() => attachmentInputRef.current?.click()}
         onOpenLibrary={onOpenLibrary}
         onOpenConnectors={onOpenConnectors}
       />

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import { LibraryBig, Plug, SquarePen } from '@agiworkforce/icons';
+import { LibraryBig, Paperclip, Plug, SquarePen } from '@agiworkforce/icons';
 import { useMenuKeyboard } from '@agiworkforce/ui';
 
 import { AnchoredComposerMenu } from '../Composer/AnchoredComposerMenu';
@@ -10,6 +10,7 @@ import { AnchoredComposerMenu } from '../Composer/AnchoredComposerMenu';
 const LABEL = {
   panel: 'In this chat',
   newChat: 'New chat',
+  addFiles: 'Add photos & files',
   library: 'Open from Library',
   connectors: 'Connectors',
 } as const;
@@ -25,6 +26,7 @@ export interface VoiceChatDockProps {
   triggerRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onNewChat: () => void;
+  onAddFiles: () => void;
   onOpenLibrary: () => void;
   onOpenConnectors: () => void;
 }
@@ -34,6 +36,7 @@ export function VoiceChatDock({
   triggerRef,
   onClose,
   onNewChat,
+  onAddFiles,
   onOpenLibrary,
   onOpenConnectors,
 }: VoiceChatDockProps) {
@@ -76,6 +79,10 @@ export function VoiceChatDock({
         <button type="button" role="menuitem" onClick={run(onNewChat)} className={ITEM_CLASS}>
           <SquarePen className="h-4 w-4 shrink-0" aria-hidden="true" />
           {LABEL.newChat}
+        </button>
+        <button type="button" role="menuitem" onClick={run(onAddFiles)} className={ITEM_CLASS}>
+          <Paperclip className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {LABEL.addFiles}
         </button>
         <button type="button" role="menuitem" onClick={run(onOpenLibrary)} className={ITEM_CLASS}>
           <LibraryBig className="h-4 w-4 shrink-0" aria-hidden="true" />

@@ -737,6 +737,38 @@ describe('LiveVoiceSession', () => {
     ]);
   });
 
+  it('hands a shared photo to the backend as a Responses input and tells the live model quietly', async () => {
+    const { session } = await startSession();
+    expect(
+      await session.shareAttachment(
+        new File([new Uint8Array(4)], 'menu.png', { type: 'image/png' }),
+        async () => 'data:image/jpeg;base64,abc',
+      ),
+    ).toBe('unavailable');
+
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    const outcome = await session.shareAttachment(
+      new File([new Uint8Array(4)], 'menu.png', { type: 'image/png' }),
+      async () => 'data:image/jpeg;base64,abc',
+    );
+
+    expect(outcome).toBe('shared');
+    const [item, create, note] = peer.channel.sent.slice(-3);
+    expect(item).toMatchObject({
+      type: 'response.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text' },
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,abc', detail: 'auto' },
+        ],
+      },
+    });
+    expect(create).toMatchObject({ type: 'response.create' });
+    expect(note).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+  });
+
   it('stays quiet about work that finishes quickly', async () => {
     vi.useFakeTimers();
     try {

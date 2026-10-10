@@ -32,6 +32,11 @@ import {
 import { getCsrfToken } from '@/lib/client/csrf';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
+import {
+  DEFAULT_DATA_CHANNEL_MESSAGE_BYTES,
+  prepareVoiceAttachment,
+  type ImageDownscaler,
+} from '@features/chat/lib/voice-attachments';
 
 export const LIVE_SESSION_ENDPOINT = '/api/voice/live/sessions';
 const EVENTS_CHANNEL = 'oai-events';
@@ -68,6 +73,9 @@ export const LIVE_SESSION_MESSAGE = {
     'Voice ran out of included minutes on this plan, so the session ended. Nothing was lost from the conversation.',
   providerError: 'The voice service could not do that. You can keep talking or ask again.',
 } as const;
+
+export type VoiceAttachmentOutcome =
+  'shared' | 'too_large' | 'unsupported' | 'unreadable' | 'busy' | 'unavailable';
 
 export interface LiveVoiceProviderError {
   code: string | null;
@@ -569,6 +577,43 @@ export class LiveVoiceSession {
 
   private appendInstruction(content: string): void {
     this.send({ type: 'session.instructions.append', delegation_id: null, content });
+  }
+
+  /**
+   * Hands a photo or PDF to the delegated backend, the only part of the
+   * session that can see one, as a Responses input item; the live model is
+   * told quietly that it arrived so it can refer the user's questions to it.
+   */
+  async shareAttachment(file: File, downscale?: ImageDownscaler): Promise<VoiceAttachmentOutcome> {
+    if (!this.started || this.disposed || this.channel.readyState !== 'open') return 'unavailable';
+    if (this.toolBridge.busy) return 'busy';
+    const advertised = this.peer.sctp?.maxMessageSize;
+    const maxBytes =
+      typeof advertised === 'number' && Number.isFinite(advertised) && advertised > 0
+        ? Math.min(advertised, DEFAULT_DATA_CHANNEL_MESSAGE_BYTES)
+        : DEFAULT_DATA_CHANNEL_MESSAGE_BYTES;
+    const prepared = await prepareVoiceAttachment(file, maxBytes, downscale);
+    if (!prepared.ok) return prepared.reason;
+    const noun = prepared.kind === 'image' ? 'a photo' : 'a file';
+    this.send({
+      type: 'response.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: `The user shared ${noun} named "${prepared.name}" during the voice conversation. Look at it and answer what they ask about it.`,
+          },
+          prepared.content,
+        ],
+      },
+    });
+    this.send({ type: 'response.create' });
+    this.appendThinking(
+      `The user just shared ${noun} named "${prepared.name}". The backend can see it; send questions about it there.`,
+    );
+    return 'shared';
   }
 
   decideToolApproval(callId: string, decision: LiveVoiceToolDecision): Promise<void> {

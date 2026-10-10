@@ -27,6 +27,7 @@ import {
   LiveVoiceSession,
   LiveVoiceSessionError,
   isUsageLimitError,
+  type VoiceAttachmentOutcome,
   readLiveSessionError,
   type LiveSessionClosed,
   type LiveTranscriptTurn,
@@ -96,6 +97,7 @@ export interface VoiceSessionController {
   submitTyped: (text: string) => void;
   retry: () => void;
   resumePlayback: () => void;
+  shareAttachment: (file: File) => void;
 }
 
 interface TranscriptSink {
@@ -315,6 +317,25 @@ function requestBlockExtension(session: LiveVoiceSession, block: number): Promis
     }));
 }
 
+function showVoiceNotice(message: string): void {
+  useVoiceSessionStore.getState().setProviderNotice(message);
+  if (controller.providerNoticeTimer !== null) window.clearTimeout(controller.providerNoticeTimer);
+  controller.providerNoticeTimer = window.setTimeout(() => {
+    controller.providerNoticeTimer = null;
+    useVoiceSessionStore.getState().setProviderNotice(null);
+  }, PROVIDER_NOTICE_MS);
+}
+
+export const VOICE_ATTACHMENT_MESSAGE: Readonly<Record<VoiceAttachmentOutcome, string>> = {
+  shared: 'Shared with the assistant. Ask about it.',
+  too_large:
+    'That file is too large to share during a voice conversation. Attach it to a typed message instead.',
+  unsupported: 'Voice can look at photos and PDFs.',
+  unreadable: 'That file could not be read.',
+  busy: 'Wait for the current action to finish, then share it.',
+  unavailable: 'Start talking first, then share it.',
+};
+
 function endSessionAtLimit(notice: string, usageLimited: boolean): void {
   endLiveVoiceSession('usage_limit');
   const store = useVoiceSessionStore.getState();
@@ -486,14 +507,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           },
           onProviderError: () => {
             reportClientFailure({ failure: 'voice_provider_error', detail: 'rejected' });
-            store.setProviderNotice(LIVE_SESSION_MESSAGE.providerError);
-            if (controller.providerNoticeTimer !== null) {
-              window.clearTimeout(controller.providerNoticeTimer);
-            }
-            controller.providerNoticeTimer = window.setTimeout(() => {
-              controller.providerNoticeTimer = null;
-              useVoiceSessionStore.getState().setProviderNotice(null);
-            }, PROVIDER_NOTICE_MS);
+            showVoiceNotice(LIVE_SESSION_MESSAGE.providerError);
           },
           onSources: (sources) => store.setSources(sources),
           onPlaybackBlocked: () => {
@@ -726,6 +740,17 @@ export function useVoiceSession({
     controller.session?.cancelBackendWork();
   }, []);
 
+  const shareAttachment = useCallback((file: File) => {
+    const session = controller.session;
+    if (!session) {
+      showVoiceNotice(VOICE_ATTACHMENT_MESSAGE.unavailable);
+      return;
+    }
+    void session.shareAttachment(file).then((outcome) => {
+      showVoiceNotice(VOICE_ATTACHMENT_MESSAGE[outcome]);
+    });
+  }, []);
+
   const resumePlayback = useCallback(() => {
     const session = controller.session;
     if (!session) return;
@@ -783,5 +808,6 @@ export function useVoiceSession({
     submitTyped,
     retry,
     resumePlayback,
+    shareAttachment,
   };
 }
