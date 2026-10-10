@@ -8,10 +8,11 @@ import { getKeyValueRateLimiter } from '@/lib/server/key-value';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sharedKeyValueStore } from '@/lib/server/shared-key-value-store';
 
-import type {
-  FreeModelPromotion,
-  FreeModelPromotionCredential,
-  FreeModelPromotionReservation,
+import {
+  loadFreeModelPromotionConfig,
+  type FreeModelPromotion,
+  type FreeModelPromotionCredential,
+  type FreeModelPromotionReservation,
 } from './free-model-promotion';
 
 /**
@@ -28,6 +29,7 @@ import type {
 
 const KEY_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 const MICROUSD_PER_CENT = 10_000;
+const MILLISECONDS_PER_HOUR = 3_600_000;
 
 export interface FreeModelPromotionLedger {
   store: KeyValueStore;
@@ -46,6 +48,10 @@ function credentialSpendKey(promotionId: string, credentialId: string): string {
 
 function credentialEndedKey(promotionId: string, credentialId: string): string {
   return `free-model-promotion:${promotionId}:credential:${credentialId}:ended`;
+}
+
+function searchKey(promotionId: string, userId: string): string {
+  return `free-model-promotion:${promotionId}:searches:${userId}`;
 }
 
 function messageNamespace(promotionId: string): string {
@@ -300,5 +306,53 @@ export async function freeModelPromotionHasCapacity(
       '[free-model-promotion] capacity could not be read',
     );
     return false;
+  }
+}
+
+/**
+ * Whether this account may still run provider searches on the promotion in
+ * its rolling window. Unreadable reads as no: a search is money, and the turn
+ * still answers without it.
+ */
+export async function freeModelPromotionSearchesLeft(
+  promotion: Pick<FreeModelPromotion, 'promotionId' | 'perUserWebSearches'>,
+  userId: string,
+  nowMs: number = Date.now(),
+  store: KeyValueStore | null = sharedKeyValueStore(process.env.NODE_ENV),
+): Promise<boolean> {
+  if (!store || promotion.perUserWebSearches.limit === 0) return false;
+  const key = searchKey(promotion.promotionId, userId);
+  try {
+    await store.sortedRemoveByScore(key, 0, nowMs - promotion.perUserWebSearches.windowMs);
+    return (await store.sortedSize(key)) < promotion.perUserWebSearches.limit;
+  } catch (error) {
+    logger.warn(
+      { error, promotionId: promotion.promotionId },
+      '[free-model-promotion] search allowance could not be read',
+    );
+    return false;
+  }
+}
+
+export async function recordFreeModelPromotionSearches(
+  input: { promotionId: string; userId: string; requestId: string; searches: number },
+  windowMs: number = loadFreeModelPromotionConfig().perUserWebSearches.windowHours *
+    MILLISECONDS_PER_HOUR,
+  store: KeyValueStore | null = sharedKeyValueStore(process.env.NODE_ENV),
+  nowMs: number = Date.now(),
+): Promise<void> {
+  const searches = Math.max(0, Math.trunc(input.searches));
+  if (!store || searches === 0) return;
+  const key = searchKey(input.promotionId, input.userId);
+  try {
+    for (let index = 0; index < searches; index += 1) {
+      await store.sortedAdd(key, { score: nowMs, member: `${input.requestId}:${index}` });
+    }
+    await store.expire(key, Math.ceil(windowMs / 1_000) + KEY_RETENTION_SECONDS);
+  } catch (error) {
+    logger.warn(
+      { error, promotionId: input.promotionId, searches },
+      '[free-model-promotion] searches were not recorded',
+    );
   }
 }

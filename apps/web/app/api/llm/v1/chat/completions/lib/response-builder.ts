@@ -241,7 +241,13 @@ export async function buildNonStreamResponse(
       cost: {
         tokenMicrousd: tokenProviderCostMicrousd,
         toolMicrousd: serverTools.providerMicrousd,
+        ...(serverTools.providerMicrousd > 0
+          ? { serverToolMicrousd: serverTools.providerMicrousd }
+          : {}),
       },
+      ...(llmResponse.webSearchRequests
+        ? { webSearchRequests: llmResponse.webSearchRequests }
+        : {}),
       usage: {
         promptTokens: llmResponse.promptTokens,
         completionTokens: llmResponse.completionTokens,

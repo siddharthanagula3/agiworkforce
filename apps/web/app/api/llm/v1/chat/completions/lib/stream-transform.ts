@@ -216,7 +216,13 @@ async function settleStreamBilling(input: {
       usage: freeTokenUsage,
       cost:
         billedOutcome === 'failed'
-          ? { tokenMicrousd: 0, toolMicrousd: 0 }
+          ? {
+              tokenMicrousd: 0,
+              toolMicrousd: 0,
+              ...(serverTools.providerMicrousd > 0
+                ? { serverToolMicrousd: serverTools.providerMicrousd }
+                : {}),
+            }
           : {
               tokenMicrousd: LLMCostCalculator.calculateCostMicrousd(
                 provider,
@@ -226,7 +232,11 @@ async function settleStreamBilling(input: {
                 buildServingRouteId(provider, model),
               ),
               toolMicrousd: serverTools.providerMicrousd,
+              ...(serverTools.providerMicrousd > 0
+                ? { serverToolMicrousd: serverTools.providerMicrousd }
+                : {}),
             },
+      ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
     });
     return;
   }
