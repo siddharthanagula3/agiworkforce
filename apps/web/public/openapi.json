@@ -1334,7 +1334,7 @@
         "properties": {
           "ceilingSeconds": {
             "type": "integer",
-            "description": "Seconds of conversation the plan's remaining voice minutes cover before the session must be extended."
+            "description": "Seconds the reserved blocks cover before the session must be extended by its next one-minute block."
           }
         }
       },
@@ -1398,7 +1398,7 @@
         "properties": {
           "billedSeconds": {
             "type": "integer",
-            "description": "Seconds of voice minutes the session used."
+            "description": "Seconds the session was billed for, from the server's own record."
           }
         }
       },
@@ -2767,7 +2767,7 @@
     "/voice/live/sessions": {
       "post": {
         "summary": "Open a live voice session",
-        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the plan's backend slot: `voice_live_backend` on paid plans and `voice_live_backend_free` on Free. The session is metered in the plan's monthly voice minutes, not the shared usage windows: it starts only while at least a minute is left and runs in blocks the remaining minutes cover. Close the session to record the minutes it used.",
+        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the plan's backend slot: `voice_live_backend` on paid plans and `voice_live_backend_free` on Free. The session draws on the plan's shared usage budget, the same windows chat uses, one minute at a time: each block is reserved at the live model's per-minute rate plus a backend allowance, and the session settles at what it actually used. Close the session to settle it.",
         "tags": ["Voice"],
         "security": [
           {

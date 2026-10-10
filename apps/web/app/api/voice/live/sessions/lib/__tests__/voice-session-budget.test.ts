@@ -1,117 +1,221 @@
-import { describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
-import { getTierPolicy } from '@agiworkforce/types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/rolling-usage');
+type ScanModule1 = typeof import('@/lib/server/spendable-credits');
+type ScanModule2 = typeof import('@/lib/services/credit-service');
+type ScanModule3 = typeof import('@/lib/server/managed-usage-policy');
 
 vi.mock('server-only', () => ({}));
 
-import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
-import { LIVE_SESSION_CEILING_SECONDS } from '@/lib/voice/live-voice-billing';
+const mocks = vi.hoisted(() => ({
+  rollingUsage: vi.fn(),
+  balance: vi.fn(),
+  spendable: vi.fn(),
+  sessionCap: vi.fn(),
+  weeklyCap: vi.fn(),
+  monthlyBudget: vi.fn(),
+}));
+
+vi.mock('@/lib/server/managed-usage-policy', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule3>()),
+  getPlanSessionUsageCapMicrousd: mocks.sessionCap,
+  getPlanWeeklyUsageCapMicrousd: mocks.weeklyCap,
+  getPlanUsageBudgetMicrousd: mocks.monthlyBudget,
+}));
+
+vi.mock('@/lib/server/rolling-usage', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule0>()),
+  getRollingUsage: (...args: unknown[]) => mocks.rollingUsage(...args),
+}));
+vi.mock('@/lib/server/spendable-credits', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule1>()),
+  getSpendableCredits: (...args: unknown[]) => mocks.spendable(...args),
+}));
+vi.mock('@/lib/services/credit-service', async (importOriginal) => {
+  const actual = await importOriginal<ScanModule2>();
+  return {
+    ...actual,
+    CreditService: {
+      ...actual.CreditService,
+      getBalance: (...args: unknown[]) => mocks.balance(...args),
+    },
+  };
+});
 
 import {
-  planIncludesVoice,
-  planVoiceMinutesBlock,
-  VOICE_MINUTES_EXHAUSTED_CODE,
-  voiceMinutesExhaustedMessage,
-  voiceUsageErrorResponse,
+  getPlanSessionUsageCapMicrousd,
+  getPlanUsageBudgetMicrousd,
+  getPlanWeeklyUsageCapMicrousd,
+} from '@/lib/server/managed-usage-policy';
+
+import {
+  assessVoiceBudget,
+  readVoiceReservation,
+  voiceReservationIdentity,
 } from '../voice-session-budget';
 
-const RESET_AT = '2026-11-01T00:00:00.000Z';
+const FIVE_HOUR_OLDEST = '2026-09-27T10:00:00.000Z';
+const WEEKLY_OLDEST = '2026-09-24T10:00:00.000Z';
+const PERIOD_END = '2026-10-15T00:00:00.000Z';
+const BLOCK = 60_000;
+const db = { query: vi.fn() } as never;
 
-function dbWithConsumedSeconds(seconds: number) {
-  const queries: string[] = [];
-  const db = {
-    query: vi.fn(async (sql: string) => {
-      queries.push(sql);
-      if (sql.includes('as reset_at')) {
-        return [{ period_start: '2026-10-01T00:00:00.000Z', reset_at: RESET_AT }];
-      }
-      return [{ consumed: seconds }];
-    }),
-  };
-  return { db: db as never, queries };
+/**
+ * Fixture budgets, not the plan table: the per-tier numbers wait on the
+ * owner's unit economics, so these only exercise the mechanism.
+ */
+const FIXTURE_BUDGETS: Record<string, { session: number; weekly: number; monthly: number }> = {
+  free: { session: 300_000, weekly: 1_000_000, monthly: 2_000_000 },
+  pro: { session: 5_000_000, weekly: 25_000_000, monthly: 100_000_000 },
+};
+
+function fixtureCaps(): void {
+  mocks.sessionCap.mockImplementation(({ tier }: { tier: string }) =>
+    tier === 'max' ? null : (FIXTURE_BUDGETS[tier]?.session ?? 0),
+  );
+  mocks.weeklyCap.mockImplementation(({ tier }: { tier: string }) =>
+    tier === 'max' ? null : (FIXTURE_BUDGETS[tier]?.weekly ?? 0),
+  );
+  mocks.monthlyBudget.mockImplementation(({ tier }: { tier: string }) =>
+    tier === 'max' ? 1_000_000_000_000 : (FIXTURE_BUDGETS[tier]?.monthly ?? 0),
+  );
 }
 
-const request = () => new NextRequest('http://localhost/api/voice/live/sessions');
-
-describe('planVoiceMinutesBlock', () => {
-  it('starts a Free session on its voice minutes with no managed budget at all', async () => {
-    expect(getTierPolicy('free').voiceMinutesPerMonth).toBe(30);
-    const { db, queries } = dbWithConsumedSeconds(0);
-
-    const seconds = await planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'free' });
-
-    expect(seconds).toBe(LIVE_SESSION_CEILING_SECONDS);
-    expect(queries.some((sql) => sql.includes('credit_transactions'))).toBe(false);
-    expect(queries.some((sql) => sql.includes('reserve_managed_usage'))).toBe(false);
+function assess(tier: string) {
+  return assessVoiceBudget({
+    db,
+    userId: 'user-1',
+    planTier: tier,
+    catalogVersion: null,
+    blockMicrousd: BLOCK,
   });
+}
 
-  it('holds the block to the minutes that are left', async () => {
-    const { db } = dbWithConsumedSeconds(27 * 60);
-
-    expect(await planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'free' })).toBe(3 * 60);
+beforeEach(() => {
+  vi.clearAllMocks();
+  fixtureCaps();
+  mocks.rollingUsage.mockImplementation(async (_db: unknown, _user: string, hours: number) =>
+    hours === 5
+      ? { usedMicrousd: 0, oldestAt: FIVE_HOUR_OLDEST }
+      : { usedMicrousd: 0, oldestAt: WEEKLY_OLDEST },
+  );
+  mocks.balance.mockResolvedValue({
+    credits_remaining_microusd: 1_000_000,
+    daily_remaining_microusd: null,
+    period_end: PERIOD_END,
   });
-
-  it('refuses with the reset instant once under a minute is left', async () => {
-    const { db } = dbWithConsumedSeconds(30 * 60);
-
-    await expect(
-      planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'free' }),
-    ).rejects.toMatchObject({
-      status: 429,
-      code: VOICE_MINUTES_EXHAUSTED_CODE,
-      limitContext: { resetsAt: RESET_AT },
-    });
-  });
-
-  it('gives Max a whole block without reading any usage, because its minutes are unlimited', async () => {
-    expect(getTierPolicy('max').voiceMinutesPerMonth).toBeNull();
-    const { db, queries } = dbWithConsumedSeconds(1_000_000);
-
-    expect(await planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'max' })).toBe(
-      LIVE_SESSION_CEILING_SECONDS,
-    );
-    expect(queries).toHaveLength(0);
-  });
-
-  it('gives Pro the minutes its plan declares', async () => {
-    expect(getTierPolicy('pro').voiceMinutesPerMonth).toBe(300);
-    const { db } = dbWithConsumedSeconds(299 * 60 + 1);
-
-    await expect(
-      planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'pro' }),
-    ).rejects.toMatchObject({ code: VOICE_MINUTES_EXHAUSTED_CODE });
+  mocks.spendable.mockResolvedValue({
+    availableMicrousd: 0,
+    availableCents: 0,
+    overageEnabled: false,
   });
 });
 
-describe('planIncludesVoice', () => {
-  it('includes voice on every plan that declares minutes or unlimited minutes', () => {
-    for (const tier of ['free', 'basic', 'pro', 'team', 'max', 'enterprise']) {
-      expect(planIncludesVoice(tier)).toBe(true);
+describe('assessVoiceBudget', () => {
+  it('lets a plan with a nonzero budget fund a block, Free included', async () => {
+    expect((await assess('free')).planFundsBlock).toBe(true);
+    expect((await assess('pro')).planFundsBlock).toBe(true);
+    expect((await assess('max')).planFundsBlock).toBe(true);
+    expect(getPlanSessionUsageCapMicrousd).toBe(mocks.sessionCap);
+    expect(getPlanWeeklyUsageCapMicrousd).toBe(mocks.weeklyCap);
+    expect(getPlanUsageBudgetMicrousd).toBe(mocks.monthlyBudget);
+  });
+
+  it('reports that a plan with no budget cannot fund a block, unless overage covers it', async () => {
+    expect((await assess('team_premium')).planFundsBlock).toBe(false);
+    mocks.spendable.mockResolvedValue({
+      availableMicrousd: BLOCK,
+      availableCents: 6,
+      overageEnabled: true,
+    });
+    expect((await assess('team_premium')).planFundsBlock).toBe(true);
+  });
+
+  it('names when each window that could refuse the next block resets', async () => {
+    expect((await assess('pro')).resetsAt).toEqual({
+      rolling_five_hour_limit_reached: '2026-09-27T15:00:00.000Z',
+      rolling_weekly_limit_reached: '2026-10-01T10:00:00.000Z',
+      insufficient_credits: PERIOD_END,
+    });
+  });
+});
+
+describe('voiceReservationIdentity', () => {
+  it('names a session reservation by its record so anything holding the record can settle it', () => {
+    const identity = voiceReservationIdentity('11111111-2222-4333-8444-555555555555');
+
+    expect(identity.idempotencyKey).toBe('agi.voice.live.11111111-2222-4333-8444-555555555555');
+    expect(identity.leaseToken).toBe('11111111-2222-4333-8444-555555555555');
+    expect(identity.requestHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(voiceReservationIdentity('11111111-2222-4333-8444-555555555555')).toEqual(identity);
+    expect(voiceReservationIdentity('other').requestHash).not.toBe(identity.requestHash);
+  });
+});
+
+describe('readVoiceReservation', () => {
+  function reservationDb(rows: Array<Record<string, unknown>>) {
+    const query = vi.fn(async (_sql: string, _params: unknown[]) => rows);
+    return { db: { query } as never, query };
+  }
+
+  it('reads the reserved amount and the block extension from the ledger', async () => {
+    const { db: ledger, query } = reservationDb([
+      { reserved_microusd: '500000', extension_status: 'extended', extension_microusd: '250000.7' },
+    ]);
+
+    await expect(
+      readVoiceReservation({
+        db: ledger,
+        userId: 'user-1',
+        idempotencyKey: 'agi.voice.live.test',
+        requestHash: 'hash',
+        operationKey: 'provider:2',
+      }),
+    ).resolves.toEqual({
+      reservedMicrousd: 500_000,
+      extensionStatus: 'extended',
+      extensionMicrousd: 250_000,
+    });
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('from public.managed_usage_requests request');
+    expect(sql).toContain('extension.operation_key = $4');
+    expect(params).toEqual(['user-1', 'agi.voice.live.test', 'hash', 'provider:2']);
+  });
+
+  it('asks for no extension when no block is named', async () => {
+    const { db: ledger, query } = reservationDb([
+      { reserved_microusd: 500_000, extension_status: null, extension_microusd: null },
+    ]);
+
+    await expect(
+      readVoiceReservation({
+        db: ledger,
+        userId: 'user-1',
+        idempotencyKey: 'agi.voice.live.test',
+        requestHash: 'hash',
+      }),
+    ).resolves.toEqual({
+      reservedMicrousd: 500_000,
+      extensionStatus: null,
+      extensionMicrousd: null,
+    });
+    expect((query.mock.calls[0] as [string, unknown[]])[1][3]).toBe('');
+  });
+
+  it('reports no reservation for a missing row or an unreadable amount', async () => {
+    for (const rows of [
+      [],
+      [{ reserved_microusd: null, extension_status: null, extension_microusd: null }],
+      [{ reserved_microusd: '-5', extension_status: null, extension_microusd: null }],
+      [{ reserved_microusd: 'not-a-number', extension_status: null, extension_microusd: null }],
+    ]) {
+      await expect(
+        readVoiceReservation({
+          db: reservationDb(rows).db,
+          userId: 'user-1',
+          idempotencyKey: 'agi.voice.live.test',
+          requestHash: 'hash',
+        }),
+      ).resolves.toBeNull();
     }
-  });
-});
-
-describe('the voice minutes refusal', () => {
-  it('names the reset date and offers text', () => {
-    expect(voiceMinutesExhaustedMessage(RESET_AT)).toBe(
-      "You've used this month's voice minutes. They reset on November 1. Continue in text, or upgrade for more voice minutes.",
-    );
-  });
-
-  it('carries the reset instant and the plain sentence in the response body', async () => {
-    const refusal = new ManagedUsageRequestError('generic', 429, VOICE_MINUTES_EXHAUSTED_CODE);
-    refusal.limitContext = { resetsAt: RESET_AT, alternativeModel: null };
-
-    const response = voiceUsageErrorResponse(request(), refusal);
-
-    expect(response.status).toBe(429);
-    const body = (await response.json()) as {
-      error: { code: string; message: string; resets_at: string };
-    };
-    expect(body.error).toMatchObject({
-      code: VOICE_MINUTES_EXHAUSTED_CODE,
-      resets_at: RESET_AT,
-      message: voiceMinutesExhaustedMessage(RESET_AT),
-    });
   });
 });

@@ -398,6 +398,33 @@ describe('UsageSection this month', () => {
   });
 });
 
+describe('UsageSection voice estimate', () => {
+  it('estimates the voice minutes the tightest window buys at the price the server quotes', async () => {
+    stubUsageApi({
+      summary: () => answer(proSummary()),
+      limits: () => answer(monthlyLimits({ voiceMinuteCredits: 13.05 })),
+      history: () => FAILED,
+    });
+    renderSection();
+
+    const row = await screen.findByTestId('usage-voice-estimate');
+    expect(row.textContent).toContain("About 1 minute of voice left at today's price");
+  });
+
+  it('says when the shared budget has no voice left, and shows nothing without a price', async () => {
+    stubUsageApi({
+      summary: () => answer(proSummary({ five_hour: creditWindow(50, 50) })),
+      limits: () => answer(monthlyLimits({ voiceMinuteCredits: 13.05 })),
+      history: () => FAILED,
+    });
+    renderSection();
+
+    expect((await screen.findByTestId('usage-voice-estimate')).textContent).toContain(
+      'No voice left until a limit above resets',
+    );
+  });
+});
+
 describe('UsageSection contract-priced plans', () => {
   it('directs Enterprise members to workspace usage without inventing a remaining percentage', async () => {
     const requested = stubUsageApi({

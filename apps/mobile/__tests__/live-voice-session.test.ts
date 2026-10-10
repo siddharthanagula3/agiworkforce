@@ -96,6 +96,7 @@ import {
   LIVE_VOICE_SESSION_PATH,
   LiveVoiceSession,
   LiveVoiceSessionError,
+  extendLiveVoiceSession,
   settleLiveVoiceSession,
   type LiveTranscriptTurn,
   type LiveVoiceSessionCallbacks,
@@ -489,5 +490,38 @@ describe('LiveVoiceSession', () => {
 
     const [, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
     expect(JSON.parse(init.body)).toMatchObject({ backend });
+  });
+
+  it('reserves the next block of a running session and reads the ceiling it covers', async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({ ceilingSeconds: 120 }) });
+
+    await expect(extendLiveVoiceSession('live_1', 2)).resolves.toEqual({
+      ok: true,
+      ceilingSeconds: 120,
+    });
+    const [path, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
+    expect(path).toBe(`${LIVE_VOICE_SESSION_PATH}/live_1/extend`);
+    expect(JSON.parse(init.body)).toEqual({ block: 2 });
+  });
+
+  it('carries the server sentence when the shared budget refuses the next block', async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        error: {
+          code: 'rolling_five_hour_limit_reached',
+          message: 'Your rolling 5-hour usage limit is reached.',
+        },
+      }),
+    });
+
+    await expect(extendLiveVoiceSession('live_1', 3)).resolves.toEqual({
+      ok: false,
+      retry: false,
+      message: 'Your rolling 5-hour usage limit is reached.',
+    });
   });
 });

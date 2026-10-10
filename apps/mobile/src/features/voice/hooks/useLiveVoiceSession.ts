@@ -46,6 +46,9 @@ export type LiveVoiceStatus = 'idle' | 'connecting' | 'live' | 'error';
 const RECONNECT_MAX_ATTEMPTS = 3;
 const RECONNECT_BASE_MS = 1_000;
 const TOOL_OUTCOME_LIMIT = 3;
+const EXTEND_LEAD_MS = 15_000;
+const EXTEND_RETRY_MS = 10_000;
+const FIRST_EXTENSION_BLOCK = 2;
 
 export interface LiveVoiceController {
   status: LiveVoiceStatus;
@@ -149,6 +152,46 @@ export function useLiveVoiceSession({
 
     const finish = (session: LiveVoiceSession, closed: LiveSessionClosed) => {
       void liveVoice?.settleLiveVoiceSession(session.sessionId, closed, session.backendUsage);
+    };
+
+    let budgetTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleBudget = (delayMs: number, run: () => void) => {
+      if (budgetTimer) clearTimeout(budgetTimer);
+      budgetTimer = setTimeout(run, Math.max(0, delayMs));
+    };
+    const trackBudget = (session: LiveVoiceSession) => {
+      const startedAt = Date.now();
+      let ceilingSeconds = session.settlement.ceilingSeconds;
+      let block = FIRST_EXTENSION_BLOCK;
+      const msLeft = () => startedAt + ceilingSeconds * 1_000 - Date.now();
+      const endAtLimit = (message: string) => {
+        if (cancelled || sessionRef.current !== session) return;
+        sessionRef.current = null;
+        void session.close().then((closed) => finish(session, closed));
+        setStatus('idle');
+        setAssistantSpeaking(false);
+        setBackendBusy(false);
+        setApprovals([]);
+        setToolActivity([]);
+        endedRef.current(message);
+      };
+      const extend = async () => {
+        if (cancelled || sessionRef.current !== session || !liveVoice) return;
+        const result = await liveVoice.extendLiveVoiceSession(session.sessionId, block);
+        if (cancelled || sessionRef.current !== session) return;
+        if (result.ok) {
+          ceilingSeconds = Math.max(ceilingSeconds, result.ceilingSeconds);
+          block += 1;
+          scheduleBudget(msLeft() - EXTEND_LEAD_MS, () => void extend());
+          return;
+        }
+        if (result.retry && msLeft() > EXTEND_RETRY_MS) {
+          scheduleBudget(EXTEND_RETRY_MS, () => void extend());
+          return;
+        }
+        scheduleBudget(msLeft(), () => endAtLimit(result.message));
+      };
+      scheduleBudget(msLeft() - EXTEND_LEAD_MS, () => void extend());
     };
 
     const run = async () => {
@@ -269,6 +312,7 @@ export function useLiveVoiceSession({
           return;
         }
         sessionRef.current = session;
+        trackBudget(session);
       },
       (startError: unknown) => {
         if (cancelled) return;
@@ -293,6 +337,7 @@ export function useLiveVoiceSession({
 
     return () => {
       cancelled = true;
+      if (budgetTimer) clearTimeout(budgetTimer);
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
       appState.remove();

@@ -9,18 +9,12 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
-import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
-import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { getModelMetadataById, getVoiceLiveBackendModel } from '@agiworkforce/types';
+import { getVoiceLiveBackendModel } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
-import {
-  LIVE_SESSION_PROVIDER_COST_SOURCE,
-  liveSessionProviderCostMicrousd,
-} from '@/lib/voice/live-voice-billing';
 import { voiceJsonError } from '../../lib/voice-session-budget';
-import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
+import { settleVoiceSession } from '../../lib/voice-session-settlement';
 import {
   closeVoiceSession,
   getVoiceSessionByProviderId,
@@ -28,9 +22,6 @@ import {
   meteredVoiceSessionSeconds,
   type VoiceSessionRecord,
 } from '../../lib/voice-session-store';
-
-const LIVE_VOICE_SESSION_COST_SOURCE = 'live_voice_session';
-const LIVE_VOICE_SESSION_OPERATION = 'voice_live_session';
 
 const CloseLiveSessionSchema = z.object({
   seconds: z
@@ -168,60 +159,26 @@ async function handleCloseLiveSession(
     );
   }
 
-  const billedSeconds = meteredVoiceSessionSeconds(closedRecord, 0, Date.now());
-  const model = closedRecord.modelId;
-  const provider = closedRecord.provider;
-  const providerCostMicrousd = liveSessionProviderCostMicrousd(billedSeconds, model);
-  if (providerCostMicrousd === null && billedSeconds > 0) {
-    logger.error(
-      { userId, sessionId, model, billedSeconds },
-      'Live voice model declares no published session rate; these minutes are recorded unpriced',
-    );
-  }
-  try {
-    await recordSettledProviderCost({
-      userId,
-      organizationId: closedRecord.organizationId,
-      provider,
-      model,
-      actualCostCents: ledgerCentsFromMicrousd(providerCostMicrousd ?? 0),
-      customerCanonicalMicrousd: 0,
-      sourceRef: `${LIVE_VOICE_SESSION_COST_SOURCE}:${sessionId}`,
-      taskOutcome: 'delivered',
-      taskRef: `voice-live:${sessionId}`,
-      surface: closedRecord.surface,
-      usage: {
-        operation: LIVE_VOICE_SESSION_OPERATION,
-        provider,
-        model,
-        providerSku: getModelMetadataById(model)?.apiModelId ?? model,
-        sessionId,
-        reportedSeconds,
-        billedSeconds,
-        reason: body.reason ?? 'close_requested',
-        costSource: LIVE_SESSION_PROVIDER_COST_SOURCE,
-      },
-    });
-  } catch (error) {
-    logger.warn({ error, userId, sessionId }, 'Live voice session cost was not recorded');
-  }
-  if (body.backend) {
-    await recordLiveVoiceBackendCost({
-      userId,
-      organizationId: closedRecord.organizationId,
-      provider,
-      sessionId,
-      surface: closedRecord.surface,
-      backendModel: await resolveSessionBackendModel(scoped.db, userId),
-      reported: body.backend,
-    });
-  }
+  const settlement = await settleVoiceSession({
+    db: scoped.db,
+    record: closedRecord,
+    backendModelId: await resolveSessionBackendModel(scoped.db, userId),
+    reason: body.reason ?? 'close_requested',
+    reportedSeconds,
+    backend: body.backend ?? null,
+  });
 
   logger.info(
-    { userId, sessionId, billedSeconds, reason: body.reason },
-    'Live voice session closed',
+    {
+      userId,
+      sessionId,
+      billedSeconds: settlement.billedSeconds,
+      actualCostMicrousd: settlement.actualCostMicrousd,
+      reason: body.reason,
+    },
+    'Live voice session settled',
   );
-  return NextResponse.json({ billedSeconds }, { headers });
+  return NextResponse.json({ billedSeconds: settlement.billedSeconds }, { headers });
 }
 
 export const POST = withErrorHandler(handleCloseLiveSession);

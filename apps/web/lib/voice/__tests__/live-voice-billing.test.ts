@@ -9,10 +9,12 @@ import {
 
 import {
   describeLiveSessionFailure,
-  LIVE_SESSION_BLOCK_MINUTES,
-  LIVE_SESSION_CEILING_SECONDS,
+  LIVE_VOICE_BLOCK_SECONDS,
+  LIVE_VOICE_LEASE_SECONDS,
   liveSessionChargeMicrousd,
   liveSessionProviderCostMicrousd,
+  liveVoiceBackendAllowanceMicrousd,
+  liveVoiceBlockChargeMicrousd,
 } from '../live-voice-billing';
 
 const LIVE_SLOT = 'voice_live';
@@ -52,8 +54,34 @@ describe('live voice session pricing', () => {
     expect(liveSessionChargeMicrousd(600, 'not-a-registered-model')).toBeNull();
   });
 
-  it('sizes a full block at the ceiling', () => {
-    expect(LIVE_SESSION_CEILING_SECONDS).toBe(LIVE_SESSION_BLOCK_MINUTES * SECONDS_PER_MINUTE);
+  it('reserves voice a minute at a time and treats a silent session as gone after ten', () => {
+    expect(LIVE_VOICE_BLOCK_SECONDS).toBe(SECONDS_PER_MINUTE);
+    expect(LIVE_VOICE_LEASE_SECONDS).toBe(10 * SECONDS_PER_MINUTE);
+  });
+});
+
+describe('the price of one voice block', () => {
+  const paidBackend = getRoutingSlotModel('voice_live_backend');
+  const freeBackend = getRoutingSlotModel('voice_live_backend_free');
+
+  it('is the live model minute plus a backend allowance at the backend model rates', () => {
+    const backend = getModelMetadataById(paidBackend)!;
+    const allowance = liveVoiceBackendAllowanceMicrousd(LIVE_VOICE_BLOCK_SECONDS, paidBackend);
+    expect(allowance).toBe(
+      Math.ceil(
+        ((6_000 * backend.inputCost + 300 * backend.outputCost) / 1_000_000) * MICROUSD_PER_USD,
+      ),
+    );
+    expect(liveVoiceBlockChargeMicrousd(liveModelId, paidBackend)).toBe(
+      chargeMicrousdForProviderCost(providerMicrousd(SECONDS_PER_MINUTE) + allowance),
+    );
+  });
+
+  it('costs less on the cheaper free backend, and cannot be priced without a session rate', () => {
+    expect(liveVoiceBlockChargeMicrousd(liveModelId, freeBackend)).toBeLessThan(
+      liveVoiceBlockChargeMicrousd(liveModelId, paidBackend)!,
+    );
+    expect(liveVoiceBlockChargeMicrousd(null, paidBackend)).toBeNull();
   });
 });
 

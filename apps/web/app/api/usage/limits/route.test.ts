@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import {
+  creditsFromMicrousd,
+  getRoutingSlotModel,
+  getVoiceLiveBackendModel,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/logger');
 type ScanModule1 = typeof import('@/lib/server/rls-db');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -60,6 +65,7 @@ import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { IpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { MfaRequiredError } from '@/lib/mfa-policy-gate';
 import { GET } from './route';
+import { liveVoiceBlockChargeMicrousd } from '@/lib/voice/live-voice-billing';
 
 const USER = 'user_2abcDEF';
 const DB = { query: vi.fn() };
@@ -87,6 +93,14 @@ beforeEach(() => {
   mocks.storage.mockResolvedValue(STORAGE);
 });
 
+function expectedVoiceMinuteCredits(planTier: string): number {
+  const microusd = liveVoiceBlockChargeMicrousd(
+    getRoutingSlotModel('voice_live'),
+    getVoiceLiveBackendModel(planTier),
+  )!;
+  return Math.ceil(creditsFromMicrousd(microusd) * 100) / 100;
+}
+
 describe('GET /api/usage/limits', () => {
   it('reports this month for the plan the account is entitled to, in units and credits', async () => {
     const response = await limits();
@@ -101,6 +115,7 @@ describe('GET /api/usage/limits', () => {
       images: IMAGES,
       responses: { limit: 3, active: 1 },
       storage: STORAGE,
+      voiceMinuteCredits: expectedVoiceMinuteCredits('pro'),
     });
     expect(mocks.plan).toHaveBeenCalledWith(DB, USER);
     expect(mocks.units).toHaveBeenCalledWith(DB, USER, 'pro');

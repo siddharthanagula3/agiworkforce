@@ -241,7 +241,6 @@ function isUsageRefusal(status: number): boolean {
 const USAGE_LIMIT_CODES = new Set([
   'usage_exhausted',
   'voice_usage_not_in_plan',
-  'voice_minutes_monthly_limit_reached',
   'rolling_five_hour_limit_reached',
   'rolling_weekly_limit_reached',
   'flagship_weekly_limit_reached',

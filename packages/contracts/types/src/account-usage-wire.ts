@@ -76,6 +76,8 @@ export interface AccountUsageLimitsResponse {
   images: MonthlyImageUsage;
   responses: ManagedTurnSlotReading | null;
   storage: AccountFileStorageMeter;
+  /** Credits a minute of voice draws from the shared budget at today's price on this plan. */
+  voiceMinuteCredits: number | null;
 }
 
 export interface ManagedUsageTurnCost {
@@ -200,7 +202,25 @@ export function parseAccountUsageLimitsResponse(value: unknown): AccountUsageLim
       usedBytes: isFiniteNumber(storage['usedBytes']) ? storage['usedBytes'] : null,
       limitBytes: isFiniteNumber(storage['limitBytes']) ? storage['limitBytes'] : null,
     },
+    voiceMinuteCredits:
+      isFiniteNumber(value['voiceMinuteCredits']) && value['voiceMinuteCredits'] > 0
+        ? value['voiceMinuteCredits']
+        : null,
   };
+}
+
+/**
+ * Whole minutes of voice the tightest remaining window buys at a price per
+ * minute, for a friendly estimate beside the shared budget. Not a promise:
+ * the real cost of each minute settles from what the session used.
+ */
+export function estimateVoiceMinutes(
+  remainingCredits: readonly number[],
+  minuteCredits: number | null,
+): number | null {
+  if (minuteCredits === null || !(minuteCredits > 0) || remainingCredits.length === 0) return null;
+  const tightest = Math.min(...remainingCredits);
+  return Number.isFinite(tightest) ? Math.max(0, Math.floor(tightest / minuteCredits)) : null;
 }
 
 export function parseManagedUsageTurnCost(value: unknown): ManagedUsageTurnCost | null {

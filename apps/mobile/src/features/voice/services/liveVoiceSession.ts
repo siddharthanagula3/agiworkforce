@@ -696,3 +696,33 @@ export async function settleLiveVoiceSession(
     return;
   }
 }
+
+export type LiveVoiceExtension =
+  { ok: true; ceilingSeconds: number } | { ok: false; retry: boolean; message: string };
+
+/**
+ * Reserves the next block of a running session against the plan's usage
+ * budget. A refusal carries the server's sentence, which names the limit that
+ * was reached and when it resets.
+ */
+export async function extendLiveVoiceSession(
+  sessionId: string,
+  block: number,
+): Promise<LiveVoiceExtension> {
+  try {
+    const response = await apiFetch(
+      `${LIVE_VOICE_SESSION_PATH}/${encodeURIComponent(sessionId)}/extend`,
+      { method: 'POST', body: JSON.stringify({ block }) },
+    );
+    if (!response.ok) {
+      const error = await readErrorMessage(response);
+      return { ok: false, retry: response.status >= 500, message: error.message };
+    }
+    const body = (await response.json()) as { ceilingSeconds?: unknown };
+    return typeof body.ceilingSeconds === 'number'
+      ? { ok: true, ceilingSeconds: body.ceilingSeconds }
+      : { ok: false, retry: true, message: LIVE_VOICE_MESSAGE.sessionEnded };
+  } catch {
+    return { ok: false, retry: true, message: LIVE_VOICE_MESSAGE.connectionDropped };
+  }
+}

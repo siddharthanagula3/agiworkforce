@@ -17,7 +17,6 @@ import { logger } from '@/lib/logger';
 import { countUserFeatureUnitsSince } from './cogs-ledger-service';
 import { resolveEntitledPlanTier } from './entitlement-resolution';
 import { ManagedUsageRequestError, UPGRADE_HREF } from './managed-usage-request-service';
-import { LIVE_SESSION_CEILING_SECONDS } from '@/lib/voice/live-voice-billing';
 
 export type FreeDailyUnit =
   'message_writes' | 'conversation_creates' | 'egress_bytes' | 'email_sends' | 'vector_queries';
@@ -68,10 +67,7 @@ const NUMERIC_JSON_TEXT = String.raw`^[0-9]+(\.[0-9]+)?$`;
 
 const SECONDS_PER_MINUTE = 60;
 const TRANSCRIPTION_OPERATION = 'transcription';
-// A live session is metered by its own record: closed sessions by the span
-// they ran, and one still open only up to a block past the last time its tab
-// renewed it, so a tab that vanished stops spending minutes within a block.
-const LIVE_VOICE_SESSION_LEASE_SECONDS = LIVE_SESSION_CEILING_SECONDS;
+const LIVE_VOICE_SESSION_OPERATION = 'voice_live_session';
 
 const BYTES_PER_GIBIBYTE = 1024 ** 3;
 const UTC_DAY_START = `date_trunc('day', now() at time zone 'utc') at time zone 'utc'`;
@@ -94,33 +90,21 @@ const CONSUMPTION_QUERIES: Readonly<Record<TierMeteredUnit, ConsumptionReader>> 
     toUnits: (raw: number) => Math.ceil(raw),
   },
   voice_minutes: {
-    sql: `select (
-              select coalesce(sum(
-                  case
-                    when usage->>'operation' = '${TRANSCRIPTION_OPERATION}'
-                         and usage->>'estimatedAudioSeconds' ~ '${NUMERIC_JSON_TEXT}'
-                    then (usage->>'estimatedAudioSeconds')::double precision
-                    else 0 end
-                ), 0)
-                from public.managed_usage_requests
-               where user_id = $1
-                 and status in ('reserved', 'provider_started', 'completed')
-                 and usage->>'operation' = '${TRANSCRIPTION_OPERATION}'
-                 and created_at >= date_trunc('month', now())
-            ) + (
-              select coalesce(sum(extract(epoch from (
-                  greatest(
-                    started_at,
-                    coalesce(
-                      closed_at,
-                      least(now(), last_seen_at + make_interval(secs => ${LIVE_VOICE_SESSION_LEASE_SECONDS}))
-                    )
-                  ) - started_at
-                ))), 0)
-                from public.voice_sessions
-               where user_id = $1
-                 and started_at >= date_trunc('month', now())
-            ) as consumed`,
+    sql: `select coalesce(sum(
+              case
+                when usage->>'operation' = '${TRANSCRIPTION_OPERATION}'
+                     and usage->>'estimatedAudioSeconds' ~ '${NUMERIC_JSON_TEXT}'
+                then (usage->>'estimatedAudioSeconds')::double precision
+                when usage->>'operation' = '${LIVE_VOICE_SESSION_OPERATION}'
+                     and usage->>'billedSeconds' ~ '${NUMERIC_JSON_TEXT}'
+                then (usage->>'billedSeconds')::double precision
+                else 0 end
+            ), 0) as consumed
+            from public.managed_usage_requests
+           where user_id = $1
+             and status in ('reserved', 'provider_started', 'completed')
+             and usage->>'operation' in ('${TRANSCRIPTION_OPERATION}', '${LIVE_VOICE_SESSION_OPERATION}')
+             and created_at >= date_trunc('month', now())`,
     toUnits: (raw: number) => Math.ceil(raw / SECONDS_PER_MINUTE),
   },
   computer_use_requests: {

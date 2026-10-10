@@ -14,6 +14,24 @@ import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { readTierUnitUsage } from '@/lib/services/tier-unit-quota-service';
 import { readMonthlyImageUsage } from '@/lib/services/account-usage-history-service';
+import {
+  creditsFromMicrousd,
+  getRoutingSlotModel,
+  getVoiceLiveBackendModel,
+} from '@agiworkforce/types';
+import { liveVoiceBlockChargeMicrousd } from '@/lib/voice/live-voice-billing';
+
+const CREDIT_PRECISION = 100;
+
+function voiceMinuteCredits(planTier: string): number | null {
+  const microusd = liveVoiceBlockChargeMicrousd(
+    getRoutingSlotModel('voice_live'),
+    getVoiceLiveBackendModel(planTier),
+  );
+  return microusd === null
+    ? null
+    : Math.ceil(creditsFromMicrousd(microusd) * CREDIT_PRECISION) / CREDIT_PRECISION;
+}
 
 export const runtime = 'nodejs';
 
@@ -60,6 +78,7 @@ async function handler(request: NextRequest) {
       images,
       responses,
       storage,
+      voiceMinuteCredits: voiceMinuteCredits(planTier),
     };
     return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
