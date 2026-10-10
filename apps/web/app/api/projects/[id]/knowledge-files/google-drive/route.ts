@@ -2,7 +2,10 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  GOOGLE_DRIVE_KNOWLEDGE_IMPORT_MAX_FILES,
+  GoogleDriveKnowledgeImportRequestSchema,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import {
   admitAttachmentUpload,
@@ -32,22 +35,6 @@ import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-obj
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-const MAX_DRIVE_FILES_PER_REQUEST = 10;
-
-const ImportSchema = z
-  .object({
-    fileIds: z
-      .array(
-        z
-          .string()
-          .trim()
-          .regex(/^[A-Za-z0-9_-]{10,200}$/),
-      )
-      .min(1)
-      .max(MAX_DRIVE_FILES_PER_REQUEST),
-  })
-  .strict();
 
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -84,10 +71,10 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
   } catch {
     throw createError.validation('Invalid request body');
   }
-  const parsed = ImportSchema.safeParse(rawBody);
+  const parsed = GoogleDriveKnowledgeImportRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation(
-      `Choose between 1 and ${MAX_DRIVE_FILES_PER_REQUEST} Google Drive files to add.`,
+      `Choose between 1 and ${GOOGLE_DRIVE_KNOWLEDGE_IMPORT_MAX_FILES} Google Drive files to add.`,
     );
   }
 
