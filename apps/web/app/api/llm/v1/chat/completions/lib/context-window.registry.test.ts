@@ -17,7 +17,10 @@ import {
 } from './context-window';
 
 interface RegistryView {
-  routes: Record<string, { modelKey: string; harnessId: string }>;
+  routes: Record<
+    string,
+    { modelKey: string; harnessId: string; availability: string; selectable: boolean }
+  >;
   capabilities: Record<string, { textOutput?: boolean | null }>;
 }
 
@@ -28,6 +31,7 @@ function servedTextModels(): string[] {
   const keys = new Set<string>();
   for (const route of Object.values(registry.routes)) {
     if (route.harnessId.endsWith('/media')) continue;
+    if (!route.selectable || route.availability !== 'live') continue;
     if (registry.capabilities[route.modelKey]?.textOutput !== true) continue;
     keys.add(route.modelKey);
   }
