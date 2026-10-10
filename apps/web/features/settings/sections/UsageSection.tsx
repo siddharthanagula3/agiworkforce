@@ -822,7 +822,7 @@ export function UsageSection() {
   const contractPriced = usage ? isContractPricedPlan(usage.plan_tier) : false;
   const showFlagship = credits ? credits.flagship_weekly !== null : true;
   const limits = useUsageResource(
-    usage !== null && !contractPriced ? '/api/usage/limits' : null,
+    usage !== null && !contractPriced && !isFreePlan ? '/api/usage/limits' : null,
     parseAccountUsageLimitsResponse,
     LIMITS_FAILURE,
   );
@@ -881,13 +881,17 @@ export function UsageSection() {
       <section aria-labelledby="usage-limits-heading" style={CARD}>
         <div style={CARD_HEADER}>
           <h2 id="usage-limits-heading" style={CARD_TITLE}>
-            Plan usage limits
+            {isFreePlan ? 'Upgrade for higher capacity' : 'Plan usage limits'}
           </h2>
-          {planAllowanceLine && <p style={CARD_NOTE}>{planAllowanceLine}</p>}
+          {!isFreePlan && planAllowanceLine && <p style={CARD_NOTE}>{planAllowanceLine}</p>}
         </div>
 
         <div style={CARD_BODY}>
-          {contractPriced ? (
+          {isFreePlan ? (
+            <SettingsPageLink href="/pricing" className={`${PRIMARY_BUTTON_CLASS} self-start`}>
+              Upgrade
+            </SettingsPageLink>
+          ) : contractPriced ? (
             <div className="space-y-3 text-sm text-[var(--text-2)]">
               <p>Your usage allowances and billing are set by your workspace contract.</p>
               <SettingsPageLink
@@ -950,43 +954,40 @@ export function UsageSection() {
                 minuteCredits={limits.data?.voiceMinuteCredits ?? null}
               />
               <RunningResponsesRow reading={limits.data?.responses ?? null} />
-              {isFreePlan && (
-                <SettingsPageLink href="/pricing" className={`${PRIMARY_BUTTON_CLASS} self-start`}>
-                  Upgrade
-                </SettingsPageLink>
-              )}
             </>
           )}
         </div>
 
-        <div
-          style={{
-            ...ROW,
-            alignItems: 'center',
-            padding: 'var(--space-3) var(--space-5)',
-            borderTop: '1px solid var(--settings-border)',
-          }}
-        >
-          <span style={DETAIL}>Last updated: {lastUpdatedLabel}</span>
-          <button
-            type="button"
-            onClick={() => {
-              void refresh();
-              limits.reload();
+        {!isFreePlan && (
+          <div
+            style={{
+              ...ROW,
+              alignItems: 'center',
+              padding: 'var(--space-3) var(--space-5)',
+              borderTop: '1px solid var(--settings-border)',
             }}
-            disabled={loading}
-            aria-label="Refresh usage data"
-            className={QUIET_BUTTON_CLASS}
           >
-            <RefreshCw size={12} aria-hidden="true" />
-            Refresh
-          </button>
-        </div>
+            <span style={DETAIL}>Last updated: {lastUpdatedLabel}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void refresh();
+                limits.reload();
+              }}
+              disabled={loading}
+              aria-label="Refresh usage data"
+              className={QUIET_BUTTON_CLASS}
+            >
+              <RefreshCw size={12} aria-hidden="true" />
+              Refresh
+            </button>
+          </div>
+        )}
       </section>
 
-      {credits && !contractPriced && <CreditBalancesCard credits={credits} />}
+      {credits && !contractPriced && !isFreePlan && <CreditBalancesCard credits={credits} />}
 
-      <MonthlyAllowancesCard resource={limits} />
+      {!isFreePlan && <MonthlyAllowancesCard resource={limits} />}
 
       <UsageHistorySection enabled={usage !== null && !contractPriced && !isFreePlan} />
     </div>

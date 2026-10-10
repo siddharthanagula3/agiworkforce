@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
@@ -169,20 +169,29 @@ beforeEach(() => {
 });
 
 describe('UsageSection', () => {
-  it('meters a free account in credits like every other plan, beside an upgrade link', async () => {
-    stubUsageApi({ summary: () => answer(freeSummary()), limits: () => answer(QUIET_MONTH) });
+  it('shows a free account an upgrade prompt and no usage meters', async () => {
+    const requested = stubUsageApi({
+      summary: () => answer(freeSummary()),
+      limits: () => answer(monthlyLimits({ voiceMinuteCredits: 13.05 })),
+    });
     renderSection();
 
     expect(
-      await screen.findByText('Free · 20 credits/month · 15 credits/week · 2 credits per 5 hours'),
+      await screen.findByRole('heading', { name: 'Upgrade for higher capacity' }),
     ).toBeTruthy();
-    expect(screen.getAllByText(/Used 1\.2 of 2 credits · 0\.8 left/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Used 6 of 15 credits · 9 left/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Used 10 of 20 credits · 10 left/).length).toBeGreaterThan(0);
-    expect(barFills()).toEqual(['60', '40', '50']);
-    expect(screen.queryByText(managedUsageBucketLabel('weeklyFlagship'))).toBeNull();
     expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', '/pricing');
-    expect(screen.queryByText(/free models/i)).toBeNull();
+    expect(screen.queryAllByTestId('progress')).toHaveLength(0);
+    expect(screen.queryByText('Plan usage limits')).toBeNull();
+    expect(screen.queryByText(/credits\/month/)).toBeNull();
+    expect(screen.queryByText(/Used \d/)).toBeNull();
+    expect(screen.queryByText(managedUsageBucketLabel('session'))).toBeNull();
+    expect(screen.queryByText(managedUsageBucketLabel('weekly'))).toBeNull();
+    expect(screen.queryByText(managedUsageBucketLabel('period'))).toBeNull();
+    expect(screen.queryByTestId('usage-voice-estimate')).toBeNull();
+    expect(screen.queryByText('Responses running now')).toBeNull();
+    expect(screen.queryByText('Credit balances')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh usage data' })).toBeNull();
+    expect(requested).not.toContain('/api/usage/limits');
   });
 
   it('reports a reading that never loaded instead of inventing one', async () => {
@@ -242,7 +251,7 @@ describe('UsageSection', () => {
   it('drops the plan chip, already shown on Billing', async () => {
     stubUsageApi({ summary: () => answer(freeSummary()), limits: () => answer(QUIET_MONTH) });
     renderSection();
-    await screen.findByText(managedUsageBucketLabel('session'));
+    await screen.findByRole('heading', { name: 'Upgrade for higher capacity' });
     expect(screen.queryByText('Free')).toBeNull();
     expect(screen.queryByText('Pro')).toBeNull();
   });
@@ -384,14 +393,17 @@ describe('UsageSection this month', () => {
   it('admits it could not read this month’s usage and loads it on retry', async () => {
     let limits: Answer = FAILED;
     stubUsageApi({
-      summary: () => answer(freeSummary()),
+      summary: () => answer(proSummary()),
       limits: () => limits,
+      history: () => FAILED,
     });
     renderSection();
 
-    expect(await screen.findByText('Could not load this month’s usage.')).toBeTruthy();
+    const failure = await screen.findByText('Could not load this month’s usage.');
     limits = answer(monthlyLimits());
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    fireEvent.click(
+      within(failure.closest('section') as HTMLElement).getByRole('button', { name: 'Try again' }),
+    );
 
     expect(await screen.findByText('12 of 60 minutes used')).toBeTruthy();
     expect(screen.queryByText('Could not load this month’s usage.')).toBeNull();
