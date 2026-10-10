@@ -89,7 +89,6 @@ import {
 import { environmentAvailability, modelLock } from '@features/chat/lib/model-plan-admission';
 import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
 import { freeModelPromotionPickerLabel } from '@features/chat/lib/free-model-promotion-copy';
-import { claimFreeModelPromotionDefault } from '@features/chat/lib/free-model-promotion-default';
 import { ROUTING_PROFILE_CHOICE_OPTIONS, type ModelReasoning } from '@agiworkforce/types';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFastModeAvailability } from '@/features/chat/hooks/use-fast-mode-availability';
@@ -942,7 +941,6 @@ export function ComposerFooter({
   const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
   const freePlan = isFreeBillingPlanTier(knownTier);
   freePlanRef.current = freePlan;
-  const accountId = useBillingStore((s) => s.user?.id ?? null);
   const { ready: promotionReady, promotion } = useFreeModelPromotion(freePlan);
   const promotedModelId = promotion?.modelId ?? null;
   const planResolved = knownTier !== null;
@@ -1241,28 +1239,15 @@ export function ComposerFooter({
     // changed. (coming_soon models can never be selected in the first place, but
     // this also recovers if a live model is retired.)
     if (freePlan && isAutoModeModelId(selectedModelId)) {
-      if (promotion && accountId) claimFreeModelPromotionDefault(promotion, accountId);
       setSelectedModelId(promotedModelId ?? FREE_TRIAL_MODEL);
-      return;
-    }
-    if (
-      freePlan &&
-      promotion &&
-      accountId &&
-      selectedModelId === FREE_TRIAL_MODEL &&
-      claimFreeModelPromotionDefault(promotion, accountId)
-    ) {
-      setSelectedModelId(promotion.modelId);
       return;
     }
     if (modelLock(selectedModel, tier, promotedModelId).locked) {
       setSelectedModelId(getBestAutoModeForTier(tier));
     }
   }, [
-    accountId,
     billingPolicyReady,
     freePlan,
-    promotion,
     promotedModelId,
     promotionReady,
     selectedModel,

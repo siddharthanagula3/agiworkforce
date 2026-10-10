@@ -288,12 +288,12 @@ function stubFetch() {
   );
 }
 
-async function sentModelFor(selected: string): Promise<unknown> {
-  useModelStore.getState().setSelectedModelId(selected);
+async function sentModelAfterSelecting(selected: string): Promise<unknown> {
   render(<WebChatPage />);
   await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitFor(() => expect(useModelStore.getState().selectedModelId).toBe(PROMOTED_MODEL));
+  act(() => {
+    useModelStore.getState().setSelectedModelId(selected);
   });
   act(() => {
     mocks.composerOnSend!('hello', undefined, undefined, { projectId: null });
@@ -335,16 +335,17 @@ describe('a Free account on the chat page while the free model promotion runs', 
     });
   });
 
-  it('sends the promoted model the account selected instead of downgrading it', async () => {
+  it('opens a new chat on the promoted model and sends it instead of downgrading it', async () => {
     expect(PROMOTED_MODEL).toBeDefined();
+    useModelStore.getState().setSelectedModelId(FREE_TRIAL_MODEL);
 
-    expect(await sentModelFor(PROMOTED_MODEL!)).toBe(PROMOTED_MODEL);
+    expect(await sentModelAfterSelecting(PROMOTED_MODEL!)).toBe(PROMOTED_MODEL);
     expect(useModelStore.getState().selectedModelId).toBe(PROMOTED_MODEL);
   });
 
   it('still sends a paid model on the Free model', async () => {
     expect(PAID_MODEL).toBeDefined();
 
-    expect(await sentModelFor(PAID_MODEL!)).toBe(FREE_TRIAL_MODEL);
+    expect(await sentModelAfterSelecting(PAID_MODEL!)).toBe(FREE_TRIAL_MODEL);
   });
 });

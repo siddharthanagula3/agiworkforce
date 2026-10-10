@@ -131,7 +131,6 @@ describe('ComposerFooter · free model promotion', () => {
   beforeEach(() => {
     sel.id = 'fixture-free-router';
     billing.tier = 'free';
-    window.localStorage.clear();
     vi.stubGlobal('fetch', (url: string) =>
       Promise.resolve(
         url === FREE_MODEL_PROMOTION_PATH
@@ -145,7 +144,8 @@ describe('ComposerFooter · free model promotion', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('makes the promoted model the Free default once the offer has been read', async () => {
+  it('resolves a Free account on Auto to the promoted model once the offer has been read', async () => {
+    sel.id = 'auto';
     render(<ComposerFooter />);
 
     await waitFor(() => expect(sel.id).toBe('fixture-promoted'));
@@ -162,20 +162,5 @@ describe('ComposerFooter · free model promotion', () => {
     fireEvent.click(row);
 
     expect(sel.id).toBe('fixture-promoted');
-  });
-
-  it('leaves the account on the plan model it moved back to', async () => {
-    window.localStorage.setItem(
-      `agi.free-model-promotion.default.fixture-promoted.${ENDS_AT}`,
-      'account-1',
-    );
-
-    render(<ComposerFooter />);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /, change model$/ })).toBeInTheDocument(),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(sel.id).toBe('fixture-free-router');
   });
 });
