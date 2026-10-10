@@ -27,6 +27,8 @@ export async function failCloudAgentWorkflow(
   captureWorkerFailure(error, { worker: CLOUD_AGENT_WORKER_NAME, jobId: input.runId });
   const failure = upstreamFailureCopy(error, input.processed.provider, {
     requestedModel: input.processed.requestedModel,
+    isolatedCredential:
+      input.billing.kind === 'free_trial' && input.billing.promotion?.isolated === true,
   });
   const db = getNeonDb();
   const snapshot = await getCloudAgentRun(db, {

@@ -1,20 +1,76 @@
 import 'server-only';
 
+import { classifyError } from '@agiworkforce/provider-runtime';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { captureModelFailure } from '@/lib/observability/error-capture';
 import { withSpan, type ActiveSpan } from '@/lib/observability/span';
+import {
+  freeModelPromotionCredentialApiKey,
+  readFreeModelPromotion,
+  type FreeModelPromotionReservation,
+} from '@/lib/server/free-model-promotion';
+import { endFreeModelPromotionCredential } from '@/lib/server/free-model-promotion-ledger';
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
+import { toUpstreamError } from './adapter-errors';
 import { computeAnthropicCacheConfig } from './canonical-request';
 import type { ProcessedRequest } from './request-processor';
 
 const MODEL_FAILURE_UNKNOWN_CODE = 'unknown';
 
+const CREDENTIAL_ENDING_CATEGORIES: ReadonlySet<string> = new Set([
+  'billing_exhausted',
+  'auth',
+  'quota_exhausted',
+]);
+
+function promotionCredentialOptions(promotion: FreeModelPromotionReservation | undefined): {
+  apiKey?: string;
+} {
+  if (!promotion?.isolated) return {};
+  const apiKey = freeModelPromotionCredentialApiKey(promotion.credentialId);
+  if (!apiKey) {
+    throw new Error('The credential this promoted turn reserved its spend on is not configured.');
+  }
+  return { apiKey };
+}
+
+function observePromotionCredential(
+  adapter: ProviderAdapter,
+  promotion: FreeModelPromotionReservation,
+): ProviderAdapter {
+  const endWhenRefused = async (category: string): Promise<void> => {
+    if (!CREDENTIAL_ENDING_CATEGORIES.has(category)) return;
+    await endFreeModelPromotionCredential(promotion, readFreeModelPromotion());
+  };
+  return {
+    ...adapter,
+    async *stream(request: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk> {
+      try {
+        for await (const chunk of adapter.stream(request, signal)) {
+          if (chunk.type === 'error') {
+            await endWhenRefused(
+              chunk.classification?.category ?? classifyError(toUpstreamError(chunk)).category,
+            );
+          }
+          yield chunk;
+        }
+      } catch (error) {
+        await endWhenRefused(classifyError(error).category);
+        throw error;
+      }
+    },
+  };
+}
+
 export function buildAnthropicAdapter(processed: ProcessedRequest): ProviderAdapter {
   const cacheConfig = computeAnthropicCacheConfig(processed);
-  return buildServerProviderAdapter('anthropic', {
+  const promotion = processed.freeTrial?.promotion;
+  const adapter = buildServerProviderAdapter('anthropic', {
     anthropicCache: cacheConfig,
+    ...promotionCredentialOptions(promotion),
   });
+  return promotion ? observePromotionCredential(adapter, promotion) : adapter;
 }
 
 export function buildGoogleAdapter(): ProviderAdapter {

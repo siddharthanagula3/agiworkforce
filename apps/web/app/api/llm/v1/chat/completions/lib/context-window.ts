@@ -29,6 +29,27 @@ export interface ContextTrimResult {
   budgetTokens: number;
 }
 
+/**
+ * A budget and a measure that replace the model's window and the shared
+ * estimator, for a turn that must stay under a ceiling of its own and cannot
+ * afford the estimator's error.
+ */
+export interface ContextSizing {
+  budgetTokens: number;
+  measure: (message: TrimmableMessage) => number;
+}
+
+function sizingFor(model: string, sizing: ContextSizing | undefined) {
+  const measure = sizing?.measure ?? ((message: TrimmableMessage) => messageTokens(message, model));
+  return {
+    measure,
+    total: (messages: readonly TrimmableMessage[]) =>
+      sizing
+        ? messages.reduce((sum, message) => sum + measure(message), 0)
+        : totalTokens(messages, model),
+  };
+}
+
 export interface ContextTrimPlan {
   budgetTokens: number;
   estimatedTokensBefore: number;
@@ -47,12 +68,16 @@ export function planContextTrim(
   messages: readonly TrimmableMessage[],
   model: string,
   maxOutputTokens: number,
+  sizing?: ContextSizing,
 ): ContextTrimPlan | null {
   const contextWindow = getModelMetadataById(model)?.contextWindow;
-  if (!contextWindow || contextWindow <= 0) return null;
+  if (!sizing && (!contextWindow || contextWindow <= 0)) return null;
 
-  const budgetTokens = contextBudgetTokens(contextWindow, maxOutputTokens);
-  const estimatedTokensBefore = totalTokens(messages, model);
+  const { measure, total } = sizingFor(model, sizing);
+  const budgetTokens = sizing
+    ? sizing.budgetTokens
+    : contextBudgetTokens(contextWindow ?? 0, maxOutputTokens);
+  const estimatedTokensBefore = total(messages);
   if (estimatedTokensBefore <= budgetTokens) return null;
 
   let lastUserIndex = -1;
@@ -84,7 +109,7 @@ export function planContextTrim(
     for (const index of group) {
       const message = messages[index];
       if (!message) continue;
-      running -= messageTokens(message, model);
+      running -= measure(message);
       droppedIndices.push(index);
     }
   }
@@ -109,7 +134,9 @@ export function applyDroppedSpanReplacement(
   plan: ContextTrimPlan,
   replacementText: string | null,
   model: string,
+  sizing?: ContextSizing,
 ): ContextTrimResult {
+  const { measure, total } = sizingFor(model, sizing);
   const dropped = new Set(plan.droppedIndices);
   const next = messages.filter((_, index) => !dropped.has(index));
 
@@ -120,7 +147,7 @@ export function applyDroppedSpanReplacement(
       while (insertAt < next.length && next[insertAt]?.role === 'system') insertAt++;
       next.splice(insertAt, 0, { role: 'system', content: replacementText });
     }
-    running = totalTokens(next, model);
+    running = total(next);
   }
 
   const truncated = new Set<number>();
@@ -135,7 +162,7 @@ export function applyDroppedSpanReplacement(
       for (let i = next.length - 1; i >= 0 && running > plan.budgetTokens; i--) {
         const message = next[i];
         if (!message || typeof message.content !== 'string') continue;
-        const currentTokens = messageTokens(message, model);
+        const currentTokens = measure(message);
         if (currentTokens <= 16) continue;
         const body = message.content.endsWith(TRUNCATED_MESSAGE_MARKER)
           ? message.content.slice(0, -TRUNCATED_MESSAGE_MARKER.length)
@@ -150,7 +177,7 @@ export function applyDroppedSpanReplacement(
         message.content = body.slice(0, keepChars) + TRUNCATED_MESSAGE_MARKER;
         truncated.add(i);
         shrankSomething = true;
-        running = totalTokens(next, model);
+        running = total(next);
       }
     }
   }
@@ -171,8 +198,9 @@ export function trimMessagesToContextWindow(
   messages: TrimmableMessage[],
   model: string,
   maxOutputTokens: number,
+  sizing?: ContextSizing,
 ): ContextTrimResult | null {
-  const plan = planContextTrim(messages, model, maxOutputTokens);
+  const plan = planContextTrim(messages, model, maxOutputTokens, sizing);
   if (!plan) return null;
 
   const result = applyDroppedSpanReplacement(
@@ -180,6 +208,7 @@ export function trimMessagesToContextWindow(
     plan,
     plan.droppedIndices.length > 0 ? DROPPED_HISTORY_MARKER : null,
     model,
+    sizing,
   );
   logger.info(
     { model, ...result },

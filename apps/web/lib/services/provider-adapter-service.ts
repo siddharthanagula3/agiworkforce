@@ -110,6 +110,8 @@ export interface ServerProviderAdapterOptions {
     Pick<ProviderAdapterConfigMap['anthropic'], 'enableCacheControl' | 'cacheRetention'>
   >;
   openRouterCacheRetention?: 'none' | 'short' | 'long';
+  /** A credential this turn already resolved, used in place of the deployment's own key. */
+  apiKey?: string;
 }
 
 export const SUPPORTED_SERVER_PROVIDER_IDS: readonly string[] = Object.keys(SERVER_PROVIDER_CONFIG);
@@ -325,7 +327,7 @@ export function buildServerProviderAdapter(
   }
   const { adapterId, envPrefix } = providerConfig;
 
-  const apiKey = resolveServerProviderApiKey(providerId);
+  const apiKey = options.apiKey ?? resolveServerProviderApiKey(providerId);
   if (!apiKey) {
     if (providerId === 'google') {
       throw new Error(

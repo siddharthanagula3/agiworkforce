@@ -212,12 +212,34 @@ const BESPOKE_ADAPTER_PROVIDERS: Record<string, AdapterProviderEntry> = {
 
 let adapterProvidersTable: Record<string, AdapterProviderEntry> | null = null;
 
-function adapterProvidersOnce(): Record<string, AdapterProviderEntry> {
-  adapterProvidersTable ??= {
-    ...protocolRouteProviders(),
-    ...gatewayRouteProviders(),
-    ...BESPOKE_ADAPTER_PROVIDERS,
+const PROMOTION_CREDENTIAL_PROVIDERS: ReadonlySet<string> = new Set(['anthropic']);
+
+function refusingForeignPromotionCredential(
+  provider: string,
+  entry: AdapterProviderEntry,
+): AdapterProviderEntry {
+  if (PROMOTION_CREDENTIAL_PROVIDERS.has(provider)) return entry;
+  return {
+    ...entry,
+    buildAdapter: (processed) => {
+      if (processed.freeTrial?.promotion?.isolated) {
+        throw new Error(
+          `Provider "${provider}" cannot carry the promotion credential this turn reserved on.`,
+        );
+      }
+      return entry.buildAdapter(processed);
+    },
   };
+}
+
+function adapterProvidersOnce(): Record<string, AdapterProviderEntry> {
+  adapterProvidersTable ??= Object.fromEntries(
+    Object.entries({
+      ...protocolRouteProviders(),
+      ...gatewayRouteProviders(),
+      ...BESPOKE_ADAPTER_PROVIDERS,
+    }).map(([provider, entry]) => [provider, refusingForeignPromotionCredential(provider, entry)]),
+  );
   return adapterProvidersTable;
 }
 

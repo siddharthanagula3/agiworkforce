@@ -121,6 +121,7 @@ import {
   TOOL_CALLING_CAPABILITY,
 } from '@/lib/services/free-lane/capability-health-service';
 import {
+  FREE_MODEL_PROMOTION_LIMIT_MESSAGE,
   FREE_USAGE_LIMIT_REACHED_MESSAGE,
   mapClassifiedUpstreamError,
   streamErrorFrame,
@@ -399,6 +400,15 @@ import {
 } from '@/lib/services/product-comparison-tool-service';
 import { executeImageChatTool, latestTurnImage } from '@/app/api/media/image/lib/image-chat-tools';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
+import {
+  FREE_MODEL_PROMOTION_LIMIT_CODE,
+  servedOnIsolatedPromotionCredential,
+} from '@/lib/server/free-model-promotion';
+import {
+  freeModelPromotionStepSizing,
+  freeModelPromotionToolResultHistoryChars,
+} from './free-model-promotion-turn';
+import { trimMessagesToContextWindow } from './context-window';
 import {
   applyFreeTrialProviderBudget,
   createFreeTrialToolSpend,
@@ -2939,7 +2949,7 @@ function recordProviderStepFailure(input: {
       errorCode: input.classified.code,
     });
     const outcomeClass = routeOutcomeClassForError(input.err, input.classified);
-    if (!outcomeClass) return;
+    if (!outcomeClass || servedOnIsolatedPromotionCredential(input.attemptProcessed)) return;
     void recordRouteOutcome(
       providerStepRouteId(input.attemptProcessed, input.attemptRequest),
       { class: outcomeClass },
@@ -4475,6 +4485,18 @@ export async function* runToolLoop(
   async function* stopAtFreeTrialLimit(
     reservation: FreeTrialReservation,
   ): AsyncGenerator<Uint8Array> {
+    if (reservation.promotion) {
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'error',
+          message: FREE_MODEL_PROMOTION_LIMIT_MESSAGE,
+          code: FREE_MODEL_PROMOTION_LIMIT_CODE,
+          retryable: false,
+        }),
+      );
+      yield* flushTerminal('error');
+      return;
+    }
     const retryAfterSeconds = freeTrialRetryAfterSeconds(
       await freeTrialResetAt(reservation.userId),
     );
@@ -5772,6 +5794,19 @@ export async function* runToolLoop(
         // The governor can empty the set mid-turn, so the choice goes with it.
         ...(stepTools && stepTools.length > 0 ? {} : { tool_choice: undefined }),
       };
+      if (processed.freeTrial?.promotion) {
+        await trimToolResultHistoryKeepingReferences(
+          messages,
+          toolResultOwner,
+          freeModelPromotionToolResultHistoryChars(),
+        );
+        trimMessagesToContextWindow(
+          messages,
+          stepRequest.model,
+          stepRequest.max_tokens,
+          freeModelPromotionStepSizing(stepRequest.tools),
+        );
+      }
       if (processed.freeTrial) {
         const spent = freeTurnCost();
         const fitted = freeTrialSpend?.exhausted()
@@ -5956,6 +5991,7 @@ export async function* runToolLoop(
             : classifyError(err);
         const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
           requestedModel: processed.requestedModel,
+          isolatedCredential: servedOnIsolatedPromotionCredential(servingProcessed),
           answerStarted: publicTextEmitted,
         });
         const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
@@ -6210,6 +6246,7 @@ export async function* runToolLoop(
           );
           const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
             requestedModel: processed.requestedModel,
+            isolatedCredential: servedOnIsolatedPromotionCredential(servingProcessed),
           });
           const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
           yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
@@ -6234,6 +6271,7 @@ export async function* runToolLoop(
           });
           const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
             requestedModel: processed.requestedModel,
+            isolatedCredential: servedOnIsolatedPromotionCredential(servingProcessed),
           });
           const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
           logger.warn(
@@ -6260,6 +6298,7 @@ export async function* runToolLoop(
           const classified = classifyEmptyTurn({ finishReason });
           const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
             requestedModel: processed.requestedModel,
+            isolatedCredential: servedOnIsolatedPromotionCredential(servingProcessed),
             answerStarted: publicTextOf(providerStep).trim().length > 0,
           });
           const streamError = streamErrorFrame(mappedUpstream, classified.retryable);

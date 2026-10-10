@@ -425,6 +425,12 @@ describe('cloud agent workflow input', () => {
       reservedMicrousd: 4_200,
       unmetered: true,
       eventBudget: { reservedMicrousd: 4_200 },
+      promotion: {
+        promotionId: 'promotion-1',
+        credentialId: 'promotion-account',
+        isolated: true,
+        reservedMicrousd: 150_000,
+      },
     };
     const processed = makeProcessed();
     delete processed.managedUsage;

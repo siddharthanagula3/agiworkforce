@@ -224,6 +224,18 @@ const FreeTrialBillingSchema = z
       .object({ reservedMicrousd: z.number().finite().nonnegative() })
       .strict()
       .optional(),
+    // Carried for the same reason, and because the durable steps build the
+    // provider adapter from it: a turn the promotion pays for must stay on the
+    // credential that reserved its spend.
+    promotion: z
+      .object({
+        promotionId: z.string().min(1),
+        credentialId: z.string().min(1),
+        isolated: z.boolean(),
+        reservedMicrousd: z.number().finite().nonnegative(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

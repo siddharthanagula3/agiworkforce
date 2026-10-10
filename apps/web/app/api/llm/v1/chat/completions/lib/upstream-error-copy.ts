@@ -77,6 +77,13 @@ export interface UpstreamErrorContext {
   requestedModel?: string | undefined;
   /** Part of the answer already reached the reader before this failure. */
   answerStarted?: boolean | undefined;
+  /**
+   * The call ran on a credential whose account carries nothing but the free
+   * model promotion. Its account running out of money or quota says nothing
+   * about the managed key, so it must not take the provider out of the ready
+   * set for paying accounts.
+   */
+  isolatedCredential?: boolean | undefined;
 }
 
 /**
@@ -102,6 +109,11 @@ export const FREE_USAGE_LIMIT_REACHED_MESSAGE =
   'You have reached the free usage limit on your account. Open Usage to see when it resets, or use your own provider key to keep going. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
 
 export { FREE_ALLOWANCE_EXHAUSTED_CODE };
+
+// A promoted turn is held under a prompt size and a cost of its own. Reaching
+// either is about this conversation's length, never the reader's Free usage.
+export const FREE_MODEL_PROMOTION_LIMIT_MESSAGE =
+  'This conversation has grown past what one free promotional message can carry. Start a new chat, or send a shorter message, to keep going.';
 
 // The free plan has one model and no Auto, so its copy names the only move left.
 const FREE_ROUTER_SHARED_CAPACITY =
@@ -446,7 +458,7 @@ function upstreamCopy(
     // 2026-09-12, when Anthropic answered every Claude route with a 400 "credit
     // balance is too low" and the catalogue kept offering Claude as selectable.
     case 'billing_exhausted':
-      markProviderDegraded(provider, classified.category);
+      if (context?.isolatedCredential !== true) markProviderDegraded(provider, classified.category);
       return {
         status: 503,
         type: 'service_unavailable',
@@ -479,7 +491,8 @@ function upstreamCopy(
       // must not take the provider out of the ready set for everyone else.
       if (
         classified.providerHint !== FREE_POOL_PROVIDER_HINT &&
-        classified.providerHint !== FREE_TIER_ONLY_PROVIDER_HINT
+        classified.providerHint !== FREE_TIER_ONLY_PROVIDER_HINT &&
+        context?.isolatedCredential !== true
       ) {
         markProviderDegraded(provider, classified.category);
       }

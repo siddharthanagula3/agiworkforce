@@ -28,7 +28,21 @@ import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { readActiveStudyInstruction } from '@/features/study/server/study-session-store';
 import { AgiWorkGoalSchema, AgiWorkSuppliedPlanSchema } from './agiwork-plan';
-import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
+import {
+  FREE_MODEL_PROMOTION_LIMIT_MESSAGE,
+  FREE_USAGE_LIMIT_REACHED_MESSAGE,
+} from './upstream-error-copy';
+import {
+  admitFreeModelPromotionTurn,
+  freeModelPromotionContextSizing,
+  type FreeModelPromotionTurn,
+} from './free-model-promotion-turn';
+import {
+  FREE_MODEL_PROMOTION_LIMIT_CODE,
+  freeModelPromotionCoversPlan,
+  namesFreeModelPromotionModel,
+  type FreeModelPromotion,
+} from '@/lib/server/free-model-promotion';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
 import { isLockedDown } from './connector-tool-permissions';
@@ -2773,6 +2787,47 @@ export function freeModelRefusedInRegion(
   );
 }
 
+/**
+ * The promoted model at its cheapest reasoning setting. Thinking is switched
+ * off where the model allows it and effort drops to the lowest level it
+ * accepts, because the promotion's credit pays for every reasoning token.
+ */
+export function applyFreeModelPromotion(
+  chatRequest: Pick<ChatCompletionRequest, 'model' | 'thinking' | 'thinking_mode' | 'effort'>,
+  promotion: Pick<FreeModelPromotion, 'modelId'>,
+): void {
+  chatRequest.model = promotion.modelId;
+  const reasoning = getModelReasoning(promotion.modelId);
+  if (reasoning.canDisableThinking === false) {
+    chatRequest.thinking = undefined;
+    chatRequest.thinking_mode = undefined;
+  } else {
+    chatRequest.thinking = { type: 'disabled' };
+    chatRequest.thinking_mode = false;
+  }
+  const [cheapest] = [...(reasoning.supportedEfforts ?? [])]
+    .map((effort) => normalizeEffort(effort))
+    .filter((effort): effort is Effort => effort !== undefined)
+    .sort((left, right) => EFFORT_ORDER.indexOf(left) - EFFORT_ORDER.indexOf(right));
+  chatRequest.effort = cheapest;
+}
+
+function freeModelPromotionLimitResponse(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message: FREE_MODEL_PROMOTION_LIMIT_MESSAGE,
+          type: 'invalid_request_error',
+          code: FREE_MODEL_PROMOTION_LIMIT_CODE,
+        },
+      },
+      { status: 413 },
+    ),
+  };
+}
+
 export function applyFreePlanDefaultModel(
   chatRequest: Pick<ChatCompletionRequest, 'model'>,
   planTier: string | null | undefined,
@@ -2808,10 +2863,32 @@ export function withoutWorkspaceDisabledDeviceCapabilities(
   };
 }
 
+/**
+ * A free model promotion holds spend from the moment it admits the turn. Any
+ * exit before the Free reservation takes that hold over returns it here, so a
+ * refused or failed turn never keeps promotion headroom it will not spend.
+ */
 export async function processRequest(
   request: NextRequest,
   auth: AuthGateSuccess,
   options: ProcessRequestOptions = {},
+): Promise<ProcessResult> {
+  const promotion: { turn: FreeModelPromotionTurn | null } = { turn: null };
+  try {
+    const result = await processAdmittedRequest(request, auth, options, promotion);
+    if (!result.ok) await promotion.turn?.hold.releaseUnlessHandedOver();
+    return result;
+  } catch (error) {
+    await promotion.turn?.hold.releaseUnlessHandedOver();
+    throw error;
+  }
+}
+
+async function processAdmittedRequest(
+  request: NextRequest,
+  auth: AuthGateSuccess,
+  options: ProcessRequestOptions,
+  promotion: { turn: FreeModelPromotionTurn | null },
 ): Promise<ProcessResult> {
   const { userId, subscription } = auth;
   const workspaceControls = options.workspaceControls ?? null;
@@ -3011,6 +3088,25 @@ export async function processRequest(
       ? autoAliasForRoutingProfile(chatRequest.routing_profile)
       : null;
   if (routingProfileAlias) chatRequest.model = routingProfileAlias;
+  promotion.turn = await timePhase(CHAT_TURN_PHASE.routeSelection, () =>
+    admitFreeModelPromotionTurn({
+      userId,
+      planTier: subscription.plan_tier,
+      surface: resolveAuthenticatedSurface(request, auth),
+      selection: chatRequest.model,
+      messages: chatRequest.messages,
+      trainingOptOut: () => trainingOptOutPromise,
+    }),
+  );
+  const promotionTurn = promotion.turn;
+  if (promotionTurn) {
+    applyFreeModelPromotion(chatRequest, promotionTurn.promotion);
+  } else if (
+    freeModelPromotionCoversPlan(subscription.plan_tier) &&
+    namesFreeModelPromotionModel(chatRequest.model)
+  ) {
+    chatRequest.model = FREE_TRIAL_MODEL;
+  }
   const freeAutoSelection =
     isFreePlanTier(subscription.plan_tier) && isAutoModeModelId(chatRequest.model);
   const freeRegionFallback = freeModelRefusedInRegion(chatRequest, subscription.plan_tier);
@@ -3027,9 +3123,12 @@ export async function processRequest(
   }
   const requestedModel = chatRequest.model;
   const adaptiveResponseBudgetEnabled =
-    isAutoModeModelId(requestedModel) || getModelRegistryFacts(requestedModel)?.isRouter === true;
+    promotionTurn !== null ||
+    isAutoModeModelId(requestedModel) ||
+    getModelRegistryFacts(requestedModel)?.isRouter === true;
   const freeTrialEnabled =
     freeRegionFallback ||
+    promotionTurn !== null ||
     isFreeTrialRequest({
       requestedModel,
       planTier: subscription.plan_tier,
@@ -4018,7 +4117,9 @@ export async function processRequest(
     baseRouteDecision.status === 'selected' && baseRouteDecision.reason === 'jurisdiction_fallback';
   const freeLane = activateFreeLane({
     configuredMode:
-      ownership.selectedRouteId || freePoolRefusedInRegion ? 'off' : resolveFreeLaneMode(),
+      ownership.selectedRouteId || freePoolRefusedInRegion || promotionTurn
+        ? 'off'
+        : resolveFreeLaneMode(),
     isFreePlan: isFreePlanTier(subscription.plan_tier),
   });
   const freeLaneMode = freeLane.mode;
@@ -5103,6 +5204,7 @@ export async function processRequest(
         (responseBudget?.outputTokenBudget ?? requestedMaxOutputTokens ?? 1024),
     );
   }
+  if (promotionTurn) maxTokens = Math.min(maxTokens, promotionTurn.promotion.outputTokenCap);
   if (responseBudget) {
     logger.info(
       {
@@ -5140,7 +5242,9 @@ export async function processRequest(
     officeRendering: e2bChatTemplate() !== null,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     codeExecutionCapable:
-      resolvedModelCaps?.codeExecution === true && nativeToolPermitted(EXECUTE_CODE_TOOL),
+      resolvedModelCaps?.codeExecution === true &&
+      nativeToolPermitted(EXECUTE_CODE_TOOL) &&
+      promotionTurn?.hold.reservation.isolated !== true,
   };
   const codeExecutionHoldMicrousd =
     chatRequest.code_execution && !cloudExecutionSwitchedOff
@@ -5733,6 +5837,9 @@ export async function processRequest(
           organizationPolicy: workspaceModelPolicy,
           noTrainingOnly: trainingOptOut,
         }),
+      ...(promotionTurn
+        ? { sizing: freeModelPromotionContextSizing(promotionTurn.promotion, resolvedTools) }
+        : {}),
     }),
   );
 
@@ -5748,6 +5855,7 @@ export async function processRequest(
         planTier: subscription.plan_tier,
       }),
       freePoolRoute: freeLanePlan !== null,
+      ...(promotionTurn ? { promotion: promotionTurn.hold.reservation } : {}),
       leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
       provider,
       model: chatRequest.model,
@@ -5761,6 +5869,7 @@ export async function processRequest(
     }
 
     freeTrial = trialReservationResult.reservation;
+    if (freeTrial.promotion) promotionTurn?.hold.handOver();
     const fitted = applyFreeTrialProviderBudget({
       reservation: freeTrial,
       provider,
@@ -5771,12 +5880,20 @@ export async function processRequest(
       await settleFreeTrialRequest({
         reservation: freeTrial,
         outcome: 'failed',
-        attempt: { outcome: 'failed', errorClass: FREE_BUDGET_REACHED_ERROR_CLASS },
+        attempt: {
+          outcome: 'failed',
+          errorClass:
+            fitted.code === FREE_MODEL_PROMOTION_LIMIT_CODE
+              ? FREE_MODEL_PROMOTION_LIMIT_CODE
+              : FREE_BUDGET_REACHED_ERROR_CLASS,
+        },
       });
-      return freeTrialBudgetReachedResponse(subscription, {
-        model: chatRequest.model,
-        resetsAt: await freeTrialResetAt(userId),
-      });
+      return fitted.code === FREE_MODEL_PROMOTION_LIMIT_CODE
+        ? freeModelPromotionLimitResponse()
+        : freeTrialBudgetReachedResponse(subscription, {
+            model: chatRequest.model,
+            resetsAt: await freeTrialResetAt(userId),
+          });
     }
     maxTokens = llmRequest.max_tokens;
   }

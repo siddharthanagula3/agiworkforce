@@ -129,3 +129,33 @@ describe('trimMessagesToContextWindow', () => {
     expect(messages.some((message) => message.content === DROPPED_HISTORY_MARKER)).toBe(true);
   });
 });
+
+describe("trimming to a sizing of the turn's own", () => {
+  const bytes = (message: TrimmableMessage) => new TextEncoder().encode(message.content).byteLength;
+
+  it('trims a wide-window model to the given budget by the given measure', () => {
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'a'.repeat(3_000) },
+      { role: 'assistant', content: 'b'.repeat(3_000) },
+      { role: 'user', content: 'latest question' },
+    ];
+
+    const result = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 1_000, {
+      budgetTokens: 2_000,
+      measure: bytes,
+    });
+
+    expect(result?.droppedMessages).toBeGreaterThan(0);
+    expect(messages.reduce((sum, message) => sum + bytes(message), 0)).toBeLessThanOrEqual(2_000);
+    expect(messages.at(-1)?.content).toBe('latest question');
+  });
+
+  it('leaves the turn alone when it already fits the sizing, whatever the model window says', () => {
+    const messages: TrimmableMessage[] = [{ role: 'user', content: 'x'.repeat(900) }];
+
+    expect(
+      planContextTrim(messages, TEST_MODEL, 100, { budgetTokens: 1_000, measure: bytes }),
+    ).toBeNull();
+  });
+});

@@ -1024,8 +1024,10 @@ const CROSS_TENANT_TABLES = new Map([
     'provider_cost_events',
     'a cost-of-goods record of what a request cost US, not what a customer was charged. Its ' +
       '`user_id` is nullable attribution that account erasure nulls while the cost row survives ' +
-      '(0127). Every read goes through the platform-wide `cogs_summary()` aggregate from a cron ' +
-      'route; no user-facing path selects from it, so there is no tenant to scope a read to.',
+      '(0127). Every read is a platform-wide aggregate: `cogs_summary()` from a cron route, and ' +
+      "the managed provider's total spend that bounds the free model promotion " +
+      '(lib/server/free-model-promotion-ledger.ts). No path lists rows back to a user, so there ' +
+      'is no tenant to scope a read to.',
   ],
   [
     'cogs_adjustments',

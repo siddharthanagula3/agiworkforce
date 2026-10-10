@@ -35,6 +35,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: vi.fn(),
   resolveProviderFromModel: vi.fn(() => 'anthropic'),
   toGenericUpstreamError: vi.fn(),
+  listAvailableManagedProviderIds: () => new Set<string>(),
 }));
 vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: (...args: unknown[]) => mocks.assertResolvedPublicHostname(...args),

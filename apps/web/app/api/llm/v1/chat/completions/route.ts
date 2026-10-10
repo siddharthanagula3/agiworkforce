@@ -150,6 +150,7 @@ import { scheduleToolShortlistShadow } from '@/lib/services/semantic-decisions/c
 import { lastUserTurnText } from './lib/tool-loop';
 import { toolShortlistShadowInput } from './lib/tool-shortlist-shadow';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import { servedOnIsolatedPromotionCredential } from '@/lib/server/free-model-promotion';
 
 /** Current Vercel Hobby maximum for the request-scoped managed agent stream. */
 export const maxDuration = 300;
@@ -1287,6 +1288,7 @@ async function dispatchChatCompletions(
             userId,
             attemptProcessed.requestId,
             'streaming',
+            { isolatedCredential: servedOnIsolatedPromotionCredential(attemptProcessed) },
           );
         }
 
@@ -1395,6 +1397,7 @@ async function dispatchChatCompletions(
           userId,
           attemptProcessed.requestId,
           'non-streaming',
+          { isolatedCredential: servedOnIsolatedPromotionCredential(attemptProcessed) },
         );
       }
 

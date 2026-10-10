@@ -51,6 +51,7 @@ import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pr
 import { createUsageAccumulator, ingestUsageChunk, type UsageAccumulator } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
+import { servedOnIsolatedPromotionCredential } from '@/lib/server/free-model-promotion';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import {
   collectGeneratedFileRefs,
@@ -925,6 +926,7 @@ function presentStreamError(
   const mapped = mapClassifiedUpstreamError(classified, processed.provider, {
     requestedModel: processed.requestedModel,
     answerStarted,
+    isolatedCredential: servedOnIsolatedPromotionCredential(processed),
   });
   logger.warn(
     {
