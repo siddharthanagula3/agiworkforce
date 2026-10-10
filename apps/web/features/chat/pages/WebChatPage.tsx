@@ -5047,8 +5047,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const regenerateModelOptions = useMemo(
-    () => selectableRegenerateModelOptions(availableModels, isWebsiteFreeTrial),
-    [availableModels, isWebsiteFreeTrial],
+    () =>
+      selectableRegenerateModelOptions(
+        availableModels,
+        isWebsiteFreeTrial,
+        freeModelPromotion?.modelId ?? null,
+      ),
+    [availableModels, freeModelPromotion?.modelId, isWebsiteFreeTrial],
   );
 
   const handleRegenerateWithModel = useCallback(

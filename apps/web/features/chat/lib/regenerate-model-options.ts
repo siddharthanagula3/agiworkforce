@@ -5,6 +5,7 @@ import { freeQuotaSelection } from './free-quota-selection';
 export function regenerateModelOptions(
   models: readonly { id: string; name: string }[],
   isFreePlan: boolean,
+  promotedModelId: string | null = null,
 ): { id: string; name: string }[] {
   return models
     .filter(
@@ -12,6 +13,7 @@ export function regenerateModelOptions(
         resolveSelectableModelId(model.id) === model.id &&
         (!isFreePlan ||
           FREE_TRIAL_MODELS.includes(model.id) ||
+          model.id === promotedModelId ||
           freeQuotaSelection(model.id)?.category === 'chat'),
     )
     .map(({ id, name }) => ({ id, name }));
