@@ -134,7 +134,7 @@ fn single_auto_computes_economy_for_a_trivial_chat_on_a_max_tier() {
 }
 
 #[test]
-fn single_auto_computes_premium_for_a_hard_coding_task_on_a_max_tier() {
+fn single_auto_computes_premium_for_a_hard_coding_task_without_a_flagship_on_a_max_tier() {
     let decision = resolve_auto_route(&request(
         "auto",
         RoutingTaskType::Coding,
@@ -146,7 +146,8 @@ fn single_auto_computes_premium_for_a_hard_coding_task_on_a_max_tier() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, slot_model("flagship_coding"));
+    assert_eq!(selected.model_key, slot_model("coding_balanced"));
+    assert_ne!(selected.model_key, slot_model("flagship_coding"));
     assert_eq!(selected.requested_profile, Some(RoutingProfile::Premium));
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Premium));
 }
@@ -221,7 +222,8 @@ fn separates_basic_from_free_and_treats_max_aliases_as_max() {
     assert_eq!(basic.effective_profile, Some(RoutingProfile::Economy));
     assert_eq!(free.effective_profile, Some(RoutingProfile::Economy));
     assert_eq!(max_plus.effective_profile, Some(RoutingProfile::Premium));
-    assert_eq!(max_plus.model_key, slot_model("flagship_coding"));
+    assert_eq!(max_plus.model_key, slot_model("coding_balanced"));
+    assert_ne!(max_plus.model_key, slot_model("flagship_coding"));
 }
 
 #[test]
@@ -274,7 +276,7 @@ fn routes_free_reasoning_to_a_zero_cost_slot() {
 }
 
 #[test]
-fn uses_premium_coding_slot_when_permitted() {
+fn auto_premium_coding_never_reaches_a_flagship_slot() {
     let decision = resolve_auto_route(&request(
         "auto-premium",
         RoutingTaskType::Coding,
@@ -286,10 +288,20 @@ fn uses_premium_coding_slot_when_permitted() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, slot_model("flagship_coding"));
+    assert_eq!(selected.model_key, slot_model("coding_balanced"));
     assert_eq!(
         selected.provider_model_id,
         managed_provider_model_id(&selected.model_key)
+    );
+    let flagships = [
+        slot_model("flagship_coding"),
+        slot_model("flagship_general"),
+    ];
+    assert!(
+        selected
+            .fallbacks
+            .iter()
+            .all(|route| !flagships.contains(&route.model_key))
     );
     let substitutes: Vec<_> = selected
         .fallbacks
@@ -298,13 +310,10 @@ fn uses_premium_coding_slot_when_permitted() {
         .collect();
     // A fallback never repeats a provider, so a preferred substitute is offered
     // only when some managed route serves it from outside the selected one.
-    let reachable_substitutes: Vec<_> = [
-        slot_model("coding_balanced"),
-        slot_model("escalation_coding"),
-    ]
-    .into_iter()
-    .filter(|model_key| has_managed_route_outside(model_key, &selected.provider))
-    .collect();
+    let reachable_substitutes: Vec<_> = [slot_model("escalation_coding")]
+        .into_iter()
+        .filter(|model_key| has_managed_route_outside(model_key, &selected.provider))
+        .collect();
     assert!(!reachable_substitutes.is_empty());
     assert_eq!(
         substitutes
@@ -355,7 +364,8 @@ fn applies_us_only_provider_overlay() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, slot_model("flagship_general"));
+    assert_eq!(selected.model_key, slot_model("workhorse_general"));
+    assert_ne!(selected.model_key, slot_model("flagship_general"));
     assert!(
         !["deepseek", "qwen", "moonshot", "zhipu", "minimax"].contains(&selected.provider.as_str())
     );
@@ -489,7 +499,8 @@ fn byok_is_not_clamped_by_managed_subscription_tiers() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, slot_model("flagship_coding"));
+    assert_eq!(selected.model_key, slot_model("coding_balanced"));
+    assert_ne!(selected.model_key, slot_model("flagship_coding"));
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Premium));
 }
 

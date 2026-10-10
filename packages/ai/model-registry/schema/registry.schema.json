@@ -1540,6 +1540,14 @@
             "$ref": "#/definitions/routingProfile"
           }
         },
+        "slotBackups": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        },
         "profileOrder": {
           "type": "array",
           "minItems": 3,

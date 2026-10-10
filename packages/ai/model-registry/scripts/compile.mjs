@@ -2175,6 +2175,16 @@ function validateAutoPolicy(autoPolicy, models, capabilities, harnessCatalog) {
       assert.ok(autoPolicy.slots[slotId], `Tier ${tier} references unknown routing slot ${slotId}`);
     }
   }
+  for (const [slotId, backups] of Object.entries(autoPolicy.slotBackups ?? {})) {
+    assert.ok(autoPolicy.slots[slotId], `Slot backups name unknown routing slot ${slotId}`);
+    for (const backupId of backups) {
+      assert.ok(
+        autoPolicy.slots[backupId],
+        `Routing slot ${slotId} names unknown backup slot ${backupId}`,
+      );
+      assert.notEqual(backupId, slotId, `Routing slot ${slotId} cannot back itself up`);
+    }
+  }
   validateAutoTaskFamilies(autoPolicy, capabilities);
 }
 
