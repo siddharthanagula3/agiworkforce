@@ -193,6 +193,33 @@ describe('VoiceModeSurface reconnect state', () => {
   });
 });
 
+describe('VoiceModeSurface orb layout', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ focusMode: false });
+  });
+
+  it('keeps the focused orb in its own slot above the error row and composer', () => {
+    useVoiceSessionStore.setState({ focusMode: true });
+    controller.current = session({
+      state: {
+        ...INITIAL_VOICE_SESSION_STATE,
+        status: VOICE_SESSION_STATUS.error,
+        error: LIVE_SESSION_MESSAGE.reconnectFailed,
+      },
+    });
+    renderSurface({ variant: VOICE_SURFACE_VARIANT.empty });
+
+    const slot = screen.getByTestId('voice-orb-slot');
+    expect(slot.className).not.toMatch(/\bfixed\b/);
+    expect(slot.className).not.toMatch(/\binset-0\b/);
+    expect(slot.contains(screen.getByTestId('voice-orb'))).toBe(true);
+    const order = (node: Node) =>
+      slot.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(order(screen.getByTestId('voice-error'))).toBeTruthy();
+    expect(order(screen.getByTestId('voice-composer'))).toBeTruthy();
+  });
+});
+
 describe('VoiceModeSurface usage limit', () => {
   afterEach(() => {
     useVoiceSessionStore.setState({ usageLimited: false });

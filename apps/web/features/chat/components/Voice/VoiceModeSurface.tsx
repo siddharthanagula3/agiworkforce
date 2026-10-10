@@ -127,6 +127,7 @@ export function VoiceModeSurface({
   const usageLimited = useVoiceSessionStore((store) => store.usageLimited);
 
   const [typed, setTyped] = useState('');
+  const dockTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [captionsOpen, setCaptionsOpen] = useState(false);
   const [captions, setCaptions] = useState<readonly VoiceCaptionLine[]>([]);
 
@@ -198,7 +199,6 @@ export function VoiceModeSurface({
       reducedMotion={session.reducedMotion}
       level={session.audioLevel}
       onClick={toggleFocusMode}
-      className={focusMode ? 'pointer-events-auto' : undefined}
     />
   );
 
@@ -284,15 +284,11 @@ export function VoiceModeSurface({
         variant === VOICE_SURFACE_VARIANT.chat && 'pb-12',
       )}
     >
-      {/* One node in both states. Moving the orb into an overlay instead
-          remounted it, and a remount restarts the grow-in, so the focus
-          toggle shrank the sphere to a pinprick before it doubled. */}
-      <div
-        className={cn(
-          'flex items-center justify-center',
-          focusMode && 'pointer-events-none fixed inset-0 z-[var(--z-overlay)]',
-        )}
-      >
+      {/* The orb keeps its own slot in the column in both states. As a
+          fixed full-viewport overlay in focus mode it was painted over the
+          notice, the error row and the composer whenever they reached the
+          middle of a short viewport. */}
+      <div data-testid="voice-orb-slot" className="flex shrink-0 items-center justify-center">
         {orb}
       </div>
 
@@ -478,6 +474,7 @@ export function VoiceModeSurface({
         captionsOpen={captionsOpen}
         deviceName={session.deviceName}
         dockOpen={dockOpen}
+        dockTriggerRef={dockTriggerRef}
         onChange={setTyped}
         onSubmit={handleSubmitTyped}
         onToggleMute={toggleMute}
@@ -488,6 +485,7 @@ export function VoiceModeSurface({
 
       <VoiceChatDock
         open={dockOpen}
+        triggerRef={dockTriggerRef}
         onClose={() => setDockOpen(false)}
         onNewChat={onNewChat}
         onOpenLibrary={onOpenLibrary}
