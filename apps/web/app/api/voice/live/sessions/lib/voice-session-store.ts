@@ -247,7 +247,9 @@ export async function touchVoiceSession(input: {
 /**
  * A session that outlived the block it could be billed for is over, whatever
  * the tab that opened it managed to report. Closing it here is what stops a
- * reconnect being handed a provider session that stopped existing hours ago.
+ * reconnect being handed a provider session that stopped existing hours ago,
+ * and it closes at the end of that block, not now, so the voice minutes it
+ * spent stop where its tab last renewed it.
  */
 export async function closeExpiredVoiceSessions(input: {
   db: VoiceSessionDb;
@@ -257,7 +259,10 @@ export async function closeExpiredVoiceSessions(input: {
 }): Promise<number> {
   const rows = await input.db.query<{ id: string }>(
     `update public.voice_sessions
-        set status = 'closed', close_reason = $3, closed_at = now(), last_seen_at = now()
+        set status = 'closed',
+            close_reason = $3,
+            closed_at = least(now(), last_seen_at + make_interval(secs => $2)),
+            last_seen_at = now()
       where user_id = $1
         and status = 'active'
         and last_seen_at <= now() - make_interval(secs => $2)

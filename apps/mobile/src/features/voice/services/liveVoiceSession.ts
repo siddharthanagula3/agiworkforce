@@ -45,11 +45,8 @@ export interface LiveTranscriptTurn {
   final: boolean;
 }
 
+/** How long the session's voice minutes cover it. */
 export interface LiveSessionSettlement {
-  idempotencyKey: string;
-  leaseToken: string;
-  requestHash: string;
-  estimatedCostCents: number;
   ceilingSeconds: number;
 }
 
@@ -683,7 +680,6 @@ export class LiveVoiceSession {
 
 export async function settleLiveVoiceSession(
   sessionId: string,
-  settlement: LiveSessionSettlement,
   closed: LiveSessionClosed,
   backend: LiveVoiceBackendUsage | null = null,
 ): Promise<void> {
@@ -693,7 +689,6 @@ export async function settleLiveVoiceSession(
       body: JSON.stringify({
         seconds: closed.seconds ?? 0,
         reason: closed.reason,
-        settlement,
         ...(backend ? { backend } : {}),
       }),
     });

@@ -10,32 +10,17 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import {
-  chargeMicrousdForProviderCost,
-  getModelMetadataById,
-  getRoutingSlotModel,
-  getVoiceLiveBackendModel,
-} from '@agiworkforce/types';
+import { getModelMetadataById, getVoiceLiveBackendModel } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
-  finalizeManagedUsageRequest,
-  markManagedUsageClientDelivered,
-} from '@/lib/services/managed-usage-request-service';
-import {
-  LIVE_SESSION_CEILING_SECONDS,
   LIVE_SESSION_PROVIDER_COST_SOURCE,
-  LIVE_VOICE_FEATURE,
-  liveSessionChargeMicrousd,
   liveSessionProviderCostMicrousd,
-  liveSessionSecondsCoveredBy,
 } from '@/lib/voice/live-voice-billing';
-import { readVoiceReservation, voiceJsonError } from '../../lib/voice-session-budget';
-import {
-  priceLiveVoiceBackend,
-  recordLiveVoiceBackendCost,
-} from '@/lib/voice/live-voice-backend-cost';
+import { voiceJsonError } from '../../lib/voice-session-budget';
+import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
 import {
   closeVoiceSession,
   getVoiceSessionByProviderId,
@@ -43,6 +28,9 @@ import {
   meteredVoiceSessionSeconds,
   type VoiceSessionRecord,
 } from '../../lib/voice-session-store';
+
+const LIVE_VOICE_SESSION_COST_SOURCE = 'live_voice_session';
+const LIVE_VOICE_SESSION_OPERATION = 'voice_live_session';
 
 const CloseLiveSessionSchema = z.object({
   seconds: z
@@ -66,11 +54,6 @@ const CloseLiveSessionSchema = z.object({
       webSearchCalls: z.number().int().min(0).optional(),
     })
     .optional(),
-  settlement: z.object({
-    idempotencyKey: z.string().min(1).max(256),
-    leaseToken: z.string().min(1).max(256),
-    requestHash: z.string().min(1).max(256),
-  }),
 });
 
 async function resolveSessionBackendModel(
@@ -120,7 +103,6 @@ async function handleCloseLiveSession(
     );
   }
 
-  const liveModel = getModelMetadataById(getRoutingSlotModel('voice_live'));
   // The canonical record is read before anything settles: a tab that dropped
   // its connection reports the last usage event it saw, which is none at all
   // when the drop came first, and that report alone billed the session at zero
@@ -131,147 +113,113 @@ async function handleCloseLiveSession(
   } catch (error) {
     logger.warn({ error, userId, sessionId }, 'Voice session store readiness could not be read');
   }
-  let record: VoiceSessionRecord | null = null;
-  if (storeReady) {
-    try {
-      record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);
-    } catch (error) {
-      logger.warn({ error, userId, sessionId }, 'Voice session record could not be read');
-      return voiceJsonError(
-        request,
-        503,
-        'voice_session_unreadable',
-        'The voice session could not be read, so it was not settled. Try again.',
-      );
-    }
-    if (!record) {
-      return voiceJsonError(
-        request,
-        404,
-        'voice_session_not_found',
-        'No voice session with this id was started.',
-      );
-    }
+  if (!storeReady) {
+    return voiceJsonError(
+      request,
+      503,
+      'voice_session_unreadable',
+      'The voice session could not be read, so it was not closed. Try again.',
+    );
+  }
+  let record: VoiceSessionRecord | null;
+  try {
+    record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);
+  } catch (error) {
+    logger.warn({ error, userId, sessionId }, 'Voice session record could not be read');
+    return voiceJsonError(
+      request,
+      503,
+      'voice_session_unreadable',
+      'The voice session could not be read, so it was not closed. Try again.',
+    );
+  }
+  if (!record) {
+    return voiceJsonError(
+      request,
+      404,
+      'voice_session_not_found',
+      'No voice session with this id was started.',
+    );
   }
 
   const reportedSeconds = Math.max(0, Math.ceil(body.seconds));
-  const meteredSeconds = record
-    ? meteredVoiceSessionSeconds(record, reportedSeconds, Date.now())
-    : reportedSeconds;
-  const model = record?.modelId ?? liveModel?.id;
-  let estimatedCostMicrousd: number | null = null;
+  let closedRecord: VoiceSessionRecord | null = null;
   try {
-    estimatedCostMicrousd =
-      (
-        await readVoiceReservation({
-          db: scoped.db,
-          userId,
-          idempotencyKey: body.settlement.idempotencyKey,
-          requestHash: body.settlement.requestHash,
-        })
-      )?.reservedMicrousd ?? null;
+    closedRecord = await closeVoiceSession({
+      db: scoped.db,
+      userId,
+      providerSessionId: sessionId,
+      reason: body.reason ?? 'close_requested',
+      ...(body.lastTurnId ? { lastTurnId: body.lastTurnId } : {}),
+    });
   } catch (error) {
-    logger.error(
-      { error, userId, sessionId },
-      'Live voice reservation could not be read; settling against one block',
+    logger.warn({ error, userId, sessionId }, 'Voice session record could not be closed');
+    return voiceJsonError(
+      request,
+      503,
+      'voice_session_unreadable',
+      'The voice session could not be closed. Try again.',
     );
   }
-  estimatedCostMicrousd ??= liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, model) ?? 0;
-  const billedSeconds = Math.min(
-    meteredSeconds,
-    liveSessionSecondsCoveredBy(estimatedCostMicrousd, model),
-  );
-  const backendProvider = record?.provider ?? (liveModel ? String(liveModel.provider) : 'unknown');
-  const backendUsage = body.backend
-    ? {
-        reported: body.backend,
-        backendModel: await resolveSessionBackendModel(scoped.db, userId),
-      }
-    : null;
-  const backendCost = backendUsage
-    ? priceLiveVoiceBackend({ provider: backendProvider, ...backendUsage })
-    : null;
-  const actualCostMicrousd = Math.min(
-    (liveSessionChargeMicrousd(billedSeconds, model) ?? 0) +
-      chargeMicrousdForProviderCost(backendCost?.totalMicrousd ?? 0),
-    estimatedCostMicrousd,
-  );
+  if (!closedRecord) {
+    return NextResponse.json(
+      { billedSeconds: meteredVoiceSessionSeconds(record, 0, Date.now()) },
+      { headers },
+    );
+  }
+
+  const billedSeconds = meteredVoiceSessionSeconds(closedRecord, 0, Date.now());
+  const model = closedRecord.modelId;
+  const provider = closedRecord.provider;
   const providerCostMicrousd = liveSessionProviderCostMicrousd(billedSeconds, model);
   if (providerCostMicrousd === null && billedSeconds > 0) {
     logger.error(
       { userId, sessionId, model, billedSeconds },
-      'Live voice model declares no published session rate; these minutes settle unpriced',
+      'Live voice model declares no published session rate; these minutes are recorded unpriced',
     );
   }
-  const reservation = {
-    db: scoped.db,
-    userId,
-    idempotencyKey: body.settlement.idempotencyKey,
-    leaseToken: body.settlement.leaseToken,
-    requestHash: body.settlement.requestHash,
-    estimatedCostMicrousd,
-    estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
-    quotaFeature: LIVE_VOICE_FEATURE,
-    provider: record?.provider ?? (liveModel ? String(liveModel.provider) : undefined),
-    model,
-  };
-  await finalizeManagedUsageRequest({
-    ...reservation,
-    outcome: 'completed',
-    actualCostMicrousd,
-    ...(providerCostMicrousd === null ? {} : { providerCostMicrousd }),
-    usage: {
-      operation: 'voice_live_session',
-      provider: reservation.provider,
-      model: reservation.model,
-      providerSku: getModelMetadataById(model)?.apiModelId ?? model,
-      sessionId,
-      sessionSeconds: body.seconds,
-      reportedSeconds,
-      billedSeconds,
-      reason: body.reason ?? 'close_requested',
-      ...(backendCost ? { backendCostMicrousd: backendCost.totalMicrousd } : {}),
-      ...(providerCostMicrousd === null
-        ? {}
-        : { providerCostMicrousd, costSource: LIVE_SESSION_PROVIDER_COST_SOURCE }),
-    },
-  });
-  if (backendUsage) {
+  try {
+    await recordSettledProviderCost({
+      userId,
+      organizationId: closedRecord.organizationId,
+      provider,
+      model,
+      actualCostCents: ledgerCentsFromMicrousd(providerCostMicrousd ?? 0),
+      customerCanonicalMicrousd: 0,
+      sourceRef: `${LIVE_VOICE_SESSION_COST_SOURCE}:${sessionId}`,
+      taskOutcome: 'delivered',
+      taskRef: `voice-live:${sessionId}`,
+      surface: closedRecord.surface,
+      usage: {
+        operation: LIVE_VOICE_SESSION_OPERATION,
+        provider,
+        model,
+        providerSku: getModelMetadataById(model)?.apiModelId ?? model,
+        sessionId,
+        reportedSeconds,
+        billedSeconds,
+        reason: body.reason ?? 'close_requested',
+        costSource: LIVE_SESSION_PROVIDER_COST_SOURCE,
+      },
+    });
+  } catch (error) {
+    logger.warn({ error, userId, sessionId }, 'Live voice session cost was not recorded');
+  }
+  if (body.backend) {
     await recordLiveVoiceBackendCost({
       userId,
-      provider: reservation.provider ?? 'unknown',
+      organizationId: closedRecord.organizationId,
+      provider,
       sessionId,
-      surface: record?.surface ?? null,
-      ...backendUsage,
+      surface: closedRecord.surface,
+      backendModel: await resolveSessionBackendModel(scoped.db, userId),
+      reported: body.backend,
     });
-  }
-  try {
-    await markManagedUsageClientDelivered(reservation);
-  } catch (error) {
-    logger.warn(
-      { error, userId, idempotencyKey: reservation.idempotencyKey },
-      'Live voice delivery marker could not be persisted',
-    );
-  }
-  // The record closes after settlement: a row that still says active is a
-  // session that was never billed, which is the state worth noticing.
-  try {
-    if (storeReady) {
-      await closeVoiceSession({
-        db: scoped.db,
-        userId,
-        providerSessionId: sessionId,
-        reason: body.reason ?? 'close_requested',
-        ...(body.lastTurnId ? { lastTurnId: body.lastTurnId } : {}),
-      });
-    }
-  } catch (error) {
-    logger.warn({ error, userId, sessionId }, 'Voice session record could not be closed');
   }
 
   logger.info(
-    { userId, sessionId, billedSeconds, actualCostMicrousd, reason: body.reason },
-    'Live voice session settled',
+    { userId, sessionId, billedSeconds, reason: body.reason },
+    'Live voice session closed',
   );
   return NextResponse.json({ billedSeconds }, { headers });
 }

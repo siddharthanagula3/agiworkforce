@@ -40,13 +40,7 @@ import {
 } from '@features/chat/lib/live-voice-session';
 import { INITIAL_VOICE_SESSION_STATE, VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 
-const SETTLEMENT = {
-  idempotencyKey: 'key',
-  leaseToken: 'lease',
-  requestHash: 'hash',
-  estimatedCostCents: 50,
-  ceilingSeconds: 600,
-};
+const SETTLEMENT = { ceilingSeconds: 600 };
 
 function fakeSession() {
   return {
@@ -264,7 +258,6 @@ describe('useVoiceSession', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       seconds: 30,
       reason: 'close_requested',
-      settlement: SETTLEMENT,
     });
   });
 

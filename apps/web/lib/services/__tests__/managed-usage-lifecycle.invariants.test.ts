@@ -1749,7 +1749,8 @@ describe('a turn that delivered nothing', () => {
     expect(features.length).toBeGreaterThanOrEqual(6);
     expect(features).toContain('chat');
     expect(features).toContain('video');
-    expect(features).toContain('voice_live');
+    // Live voice is metered in its own voice minutes and reserves nothing here.
+    expect(features).not.toContain('voice_live');
   });
 
   it.each(meteredFeatures().map((feature) => [feature] as const))(

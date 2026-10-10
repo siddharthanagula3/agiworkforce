@@ -247,7 +247,6 @@ function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Pr
         body: JSON.stringify({
           seconds: closed.seconds ?? session.lastUsageSeconds ?? 0,
           reason: closed.reason,
-          settlement: session.settlement,
           ...(session.lastTurnId ? { lastTurnId: session.lastTurnId } : {}),
           ...(session.backendUsage ? { backend: session.backendUsage } : {}),
         }),
@@ -284,7 +283,7 @@ function requestBlockExtension(session: LiveVoiceSession, block: number): Promis
       fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(session.sessionId)}/extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: token },
-        body: JSON.stringify({ block, settlement: session.settlement }),
+        body: JSON.stringify({ block }),
       }),
     )
     .then(async (response): Promise<BlockExtension> => {

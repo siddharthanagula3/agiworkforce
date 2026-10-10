@@ -108,13 +108,7 @@ import {
   liveVoiceUnavailableReason,
 } from '@/src/features/voice/services/liveVoiceAvailability';
 
-const SETTLEMENT = {
-  idempotencyKey: 'key',
-  leaseToken: 'lease',
-  requestHash: 'hash',
-  estimatedCostCents: 50,
-  ceilingSeconds: 600,
-};
+const SETTLEMENT = { ceilingSeconds: 600 };
 
 function callbacks(): LiveVoiceSessionCallbacks & { turns: LiveTranscriptTurn[] } {
   const turns: LiveTranscriptTurn[] = [];
@@ -476,14 +470,13 @@ describe('LiveVoiceSession', () => {
     mockApiFetch.mockReset();
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    await settleLiveVoiceSession('live_1', SETTLEMENT, { reason: 'close_requested', seconds: 31 });
+    await settleLiveVoiceSession('live_1', { reason: 'close_requested', seconds: 31 });
 
     const [path, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
     expect(path).toBe(`${LIVE_VOICE_SESSION_PATH}/live_1/close`);
     expect(JSON.parse(init.body)).toEqual({
       seconds: 31,
       reason: 'close_requested',
-      settlement: SETTLEMENT,
     });
   });
 
@@ -492,12 +485,7 @@ describe('LiveVoiceSession', () => {
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
     const backend = { inputTokens: 900, outputTokens: 120, cachedTokens: 300, webSearchCalls: 1 };
 
-    await settleLiveVoiceSession(
-      'live_1',
-      SETTLEMENT,
-      { reason: 'close_requested', seconds: 31 },
-      backend,
-    );
+    await settleLiveVoiceSession('live_1', { reason: 'close_requested', seconds: 31 }, backend);
 
     const [, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
     expect(JSON.parse(init.body)).toMatchObject({ backend });
