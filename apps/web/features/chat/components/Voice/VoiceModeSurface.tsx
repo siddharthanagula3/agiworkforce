@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
 import { ApprovalCard, Button, Spinner } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS, type VisualFrame } from '@agiworkforce/types';
@@ -14,6 +14,8 @@ import {
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { useVisualSession } from '@/lib/visual/use-visual-session';
+import { ToolTimeline, type ToolEntry } from '../messages/ToolTimeline';
+import { SourcesControl } from '../research/ResearchPanel';
 import { VoiceCaptions } from './VoiceCaptions';
 import { VoiceChatDock } from './VoiceChatDock';
 import { VoiceComposer } from './VoiceComposer';
@@ -38,8 +40,6 @@ const LABEL = {
   stopTask: 'Stop the task',
   stopTaskHint: 'Stops the running action and keeps the call open.',
   slowTool: 'is taking longer than usual',
-  toolResults: 'What the actions returned',
-  toolFailed: 'Did not complete',
   openFile: 'Open',
   rejoinTitle: 'This chat already has an open voice session',
   rejoinBody:
@@ -53,6 +53,7 @@ const LABEL = {
 } as const;
 
 const GENERATED_FILE_PATH = /^\/api\/files\/[A-Za-z0-9_-]+(?:\?.*)?$/;
+const VOICE_SOURCES_ID = 'voice-session-sources';
 
 function isGeneratedFilePath(uri: string): boolean {
   return GENERATED_FILE_PATH.test(uri);
@@ -129,6 +130,7 @@ export function VoiceModeSurface({
   const usageLimited = useVoiceSessionStore((store) => store.usageLimited);
   const playbackBlocked = useVoiceSessionStore((store) => store.playbackBlocked);
   const providerNotice = useVoiceSessionStore((store) => store.providerNotice);
+  const sources = useVoiceSessionStore((store) => store.sources);
 
   const [typed, setTyped] = useState('');
   const dockTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -136,6 +138,19 @@ export function VoiceModeSurface({
   const [captions, setCaptions] = useState<readonly VoiceCaptionLine[]>([]);
 
   const { state, exit, toggleMute, cancelPending, submitTyped, retry } = session;
+  const toolEntries = useMemo<ToolEntry[]>(
+    () =>
+      session.toolOutcomes.map((outcome) => ({
+        id: outcome.callId,
+        toolCallId: outcome.callId,
+        name: outcome.label,
+        summary: outcome.label,
+        statusPhrase: outcome.label,
+        status: outcome.isError ? 'failed' : 'completed',
+        ...(outcome.isError ? { error: outcome.output } : { result: outcome.output }),
+      })),
+    [session.toolOutcomes],
+  );
   const { status, muted, pendingUtterance, error } = state;
   const announcement = voiceStatusAnnouncement({
     status,
@@ -388,40 +403,29 @@ export function VoiceModeSurface({
         </div>
       ) : null}
       {session.toolOutcomes.length > 0 ? (
-        <details data-testid="voice-tool-results" className="w-full max-w-md text-sm">
-          <summary className="cursor-pointer text-[var(--chat-text-secondary)]">
-            {LABEL.toolResults}
-          </summary>
-          <ul className="mt-2 flex flex-col gap-2">
-            {session.toolOutcomes.map((outcome) => (
-              <li
-                key={outcome.callId}
-                className="rounded-lg border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] p-2"
-              >
-                <p className="font-medium text-[var(--chat-text-primary)]">
-                  {outcome.label}
-                  {outcome.isError ? ` · ${LABEL.toolFailed}` : null}
-                </p>
-                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-[var(--chat-text-secondary)]">
-                  {outcome.output}
-                </pre>
-                {outcome.files
-                  .filter((file) => isGeneratedFilePath(file.uri))
-                  .map((file) => (
-                    <a
-                      key={file.uri}
-                      href={file.uri}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
-                    >
-                      {LABEL.openFile} {file.name}
-                    </a>
-                  ))}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <div data-testid="voice-tool-results" className="w-full max-w-md text-sm">
+          <ToolTimeline tools={toolEntries} />
+          {session.toolOutcomes.flatMap((outcome) =>
+            outcome.files
+              .filter((file) => isGeneratedFilePath(file.uri))
+              .map((file) => (
+                <a
+                  key={`${outcome.callId}-${file.uri}`}
+                  href={file.uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
+                >
+                  {LABEL.openFile} {file.name}
+                </a>
+              )),
+          )}
+        </div>
+      ) : null}
+      {sources.length > 0 ? (
+        <div data-testid="voice-sources" className="flex w-full max-w-md justify-end">
+          <SourcesControl messageId={VOICE_SOURCES_ID} cited={[...sources]} more={[]} />
+        </div>
       ) : null}
       {session.toolApprovals.map((approval) => (
         <ApprovalCard

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LiveVoiceBackendUsageMeter } from '../live-voice-tools';
+import { LiveVoiceBackendUsageMeter, liveVoiceSourcesOf } from '../live-voice-tools';
 
 function completed(
   id: string,
@@ -72,5 +72,43 @@ describe('LiveVoiceBackendUsageMeter', () => {
       cachedTokens: 0,
       webSearchCalls: 1,
     });
+  });
+});
+
+describe('liveVoiceSourcesOf', () => {
+  it('reads cited web pages from a finished backend message', () => {
+    expect(
+      liveVoiceSourcesOf({
+        type: 'response.output_item.done',
+        item: {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: 'It opens at nine.',
+              annotations: [
+                { type: 'url_citation', url: 'https://example.com/hours', title: 'Opening hours' },
+                { type: 'file_citation', file_id: 'file_1' },
+                { type: 'url_citation', url: 'javascript:alert(1)', title: 'Not a page' },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toEqual([{ url: 'https://example.com/hours', title: 'Opening hours' }]);
+  });
+
+  it('reads the sources a web search call lists, and nothing from other events', () => {
+    expect(
+      liveVoiceSourcesOf({
+        type: 'response.output_item.done',
+        item: {
+          type: 'web_search_call',
+          id: 'ws_1',
+          action: { type: 'search', sources: [{ type: 'url', url: 'https://news.example.org/a' }] },
+        },
+      }),
+    ).toEqual([{ url: 'https://news.example.org/a', title: 'https://news.example.org/a' }]);
+    expect(liveVoiceSourcesOf({ type: 'response.completed' })).toEqual([]);
   });
 });

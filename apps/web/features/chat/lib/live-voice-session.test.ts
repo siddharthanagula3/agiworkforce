@@ -708,6 +708,35 @@ describe('LiveVoiceSession', () => {
     expect(onStartWorkTask).toHaveBeenCalledWith('Plan the Lisbon trip');
   });
 
+  it('reports each cited web source once as delegated answers arrive', async () => {
+    const onSources = vi.fn();
+    await startSession({ ...callbacks(), onSources });
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    const cited = (url: string) => ({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: {
+        type: 'response.output_item.done',
+        item: {
+          type: 'message',
+          content: [
+            { type: 'output_text', annotations: [{ type: 'url_citation', url, title: url }] },
+          ],
+        },
+      },
+    });
+
+    peer.channel.receive(cited('https://example.com/a'));
+    peer.channel.receive(cited('https://example.com/a'));
+    peer.channel.receive(cited('https://example.com/b'));
+
+    expect(onSources).toHaveBeenCalledTimes(2);
+    expect(onSources).toHaveBeenLastCalledWith([
+      { url: 'https://example.com/a', title: 'https://example.com/a' },
+      { url: 'https://example.com/b', title: 'https://example.com/b' },
+    ]);
+  });
+
   it('stays quiet about work that finishes quickly', async () => {
     vi.useFakeTimers();
     try {

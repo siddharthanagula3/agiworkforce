@@ -1,5 +1,6 @@
 import {
   LiveVoiceBackendUsageMeter,
+  liveVoiceSourcesOf,
   LiveVoiceToolBridge,
   LiveVoiceToolCallResponseSchema,
   LIVE_VOICE_WORK_TASK_TOOL,
@@ -8,6 +9,7 @@ import {
   liveVoiceWorkTaskGoal,
   type LiveVoicePendingApproval,
   type LiveVoiceBackendUsage,
+  type LiveVoiceSource,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
@@ -172,6 +174,8 @@ export interface LiveVoiceSessionCallbacks {
   onProviderError?: (error: LiveVoiceProviderError) => void;
   /** The browser refused to start the assistant's audio without a user gesture. */
   onPlaybackBlocked?: () => void;
+  /** Every web source the delegated backend has cited so far in this session. */
+  onSources?: (sources: readonly LiveVoiceSource[]) => void;
 }
 
 export interface LiveVoiceSettings {
@@ -341,6 +345,7 @@ export class LiveVoiceSession {
   private pendingMuted: boolean | null = null;
   private inboundBytes = 0;
   private readonly backendMeter = new LiveVoiceBackendUsageMeter();
+  private readonly sources = new Map<string, LiveVoiceSource>();
   private readonly progressTimers = new Map<string, number>();
   private lastCommentaryAt = Number.NEGATIVE_INFINITY;
   private readonly notedApprovals = new Set<string>();
@@ -496,6 +501,16 @@ export class LiveVoiceSession {
 
   get backendUsage(): LiveVoiceBackendUsage | null {
     return this.backendMeter.report();
+  }
+
+  private collectSources(event: unknown): void {
+    let added = false;
+    for (const source of liveVoiceSourcesOf(event)) {
+      if (this.sources.has(source.url)) continue;
+      this.sources.set(source.url, source);
+      added = true;
+    }
+    if (added) this.callbacks.onSources?.([...this.sources.values()]);
   }
 
   startPlayback(): void {
@@ -805,6 +820,7 @@ export class LiveVoiceSession {
       case 'response.event': {
         const nested = parsed['event'] as { type?: string; item?: { type?: string } } | undefined;
         this.backendMeter.observe(nested);
+        this.collectSources(nested);
         const delegationId = parsed['delegation_id'];
         const toolId = liveVoiceFunctionCallOf(nested)?.name ?? nested?.item?.type;
         if (typeof delegationId === 'string' && toolId) this.nameDelegation(delegationId, toolId);
