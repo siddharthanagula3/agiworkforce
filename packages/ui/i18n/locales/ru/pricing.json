@@ -219,6 +219,8 @@
   "compareRowManagedUsage": "Управляемое использование",
   "compareRowContextWindow": "Контекстное окно",
   "compareRowKnowledgeStorage": "Хранилище знаний",
+  "compareRowMonthlyDownloads": "Загрузки файлов в месяц",
+  "compareRowAttachmentSize": "Максимальный размер загружаемого файла",
   "compareRowCustomMcp": "Собственные MCP-серверы",
   "compareRowTrainsOnContent": "Обучение на вашем контенте",
   "compareModelsFree": "Бесплатные модели",

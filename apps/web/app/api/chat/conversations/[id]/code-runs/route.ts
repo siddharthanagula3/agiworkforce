@@ -25,6 +25,11 @@ import { resolveCloudCodeExecutionPolicy } from '@/lib/server/code-execution-pol
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
+  createManagedUsageErrorBody,
+  resolveManagedQuotaRecovery,
+  type ManagedUsageRequestError,
+} from '@/lib/services/managed-usage-request-service';
+import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeAccess,
 } from '@/lib/services/managed-compute-access';
@@ -104,9 +109,25 @@ async function handleCodeRun(request: NextRequest, context: RouteContext) {
 
   const scope = managedCloudE2BSessionScope(userId, id);
   let cause: E2BUnavailableCause | null = null;
-  const executor = await getE2BExecutor(scope, (unavailable) => {
+  let budgetRefusal: ManagedUsageRequestError | undefined;
+  const executor = await getE2BExecutor(scope, (unavailable, refusal) => {
     cause ??= unavailable;
+    budgetRefusal ??= refusal;
   });
+  if (!executor && budgetRefusal) {
+    return NextResponse.json(
+      createManagedUsageErrorBody(
+        budgetRefusal,
+        'insufficient_quota',
+        resolveManagedQuotaRecovery({
+          code: budgetRefusal.code,
+          planTier: entitlement.plan,
+          billedByStripe: Boolean(entitlement.subscription?.stripe_subscription_id),
+        }),
+      ),
+      { status: budgetRefusal.status },
+    );
+  }
   if (!executor) {
     throw createError.serviceUnavailable(codeExecutionUnavailableMessage(cause)).asUserSafe();
   }

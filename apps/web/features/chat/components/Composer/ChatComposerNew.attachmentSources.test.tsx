@@ -4,10 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { ChatComposerNew } from './ChatComposerNew';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import {
-  MAX_CHAT_ATTACHMENT_COUNT,
-  chatAttachmentAcceptAttribute,
-} from '@agiworkforce/cloud-contracts';
+import { chatAttachmentAcceptAttribute } from '@agiworkforce/cloud-contracts';
+import { getPlanMaxAttachmentsPerMessage } from '@agiworkforce/types';
+
+const PRO_ATTACHMENTS_PER_MESSAGE = getPlanMaxAttachmentsPerMessage('pro');
 import {
   PICTURE_NEEDLE,
   bytesOf,
@@ -216,20 +216,25 @@ describe('ChatComposerNew attachment sources', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     dropOnWindow(
-      Array.from({ length: MAX_CHAT_ATTACHMENT_COUNT + 2 }, (_, index) =>
+      Array.from({ length: PRO_ATTACHMENTS_PER_MESSAGE + 2 }, (_, index) =>
         onePixelPng(`page-${index}.png`),
       ),
     );
 
     expect(
       await screen.findByRole('button', {
-        name: `Remove page-${MAX_CHAT_ATTACHMENT_COUNT - 1}.png`,
+        name: `Remove page-${PRO_ATTACHMENTS_PER_MESSAGE - 1}.png`,
       }),
     ).toBeTruthy();
     expect(
-      screen.queryByRole('button', { name: `Remove page-${MAX_CHAT_ATTACHMENT_COUNT}.png` }),
+      screen.queryByRole('button', { name: `Remove page-${PRO_ATTACHMENTS_PER_MESSAGE}.png` }),
     ).toBeNull();
-    expect(await screen.findByText(/"page-11\.png" \(over the 10-file limit\)/i)).toBeTruthy();
+    expect(
+      await screen.findByText(
+        `"page-${PRO_ATTACHMENTS_PER_MESSAGE + 1}.png" (over the ${PRO_ATTACHMENTS_PER_MESSAGE}-file limit)`,
+        { exact: false },
+      ),
+    ).toBeTruthy();
   });
 
   it('attaches an image pasted into the message field', async () => {

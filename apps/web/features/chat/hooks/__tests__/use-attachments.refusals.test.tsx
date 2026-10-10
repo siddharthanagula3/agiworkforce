@@ -60,6 +60,55 @@ describe('a file the composer refuses', () => {
     expect(result.current.attachments.map((item) => item.name)).toEqual(['notes.txt']);
   });
 
+  it('sends a file over the chat limit but within the plan to a project, in plain words', () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useAttachments({
+        onError,
+        planFileLimitBytes: 250 * 1024 * 1024,
+        planLabel: 'Pro',
+      }),
+    );
+
+    act(() => {
+      result.current.addFiles([
+        file('report.pdf', 'application/pdf', MAX_CHAT_ATTACHMENT_BYTES + 1),
+      ]);
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      '"report.pdf" was not attached. Files over 12 MB go into a project, where AGI reads and searches them.',
+    );
+    expect(result.current.refused).toEqual([{ filename: 'report.pdf', reason: 'too_large' }]);
+  });
+
+  it('names the plan limit for a file larger than the plan allows', () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useAttachments({ onError, planFileLimitBytes: 25 * 1024 * 1024, planLabel: 'Free' }),
+    );
+
+    act(() => {
+      result.current.addFiles([file('video.png', 'image/png', 26 * 1024 * 1024)]);
+    });
+
+    expect(onError.mock.calls[0]?.[0]).toContain(
+      'Free accounts can upload files up to 25.0 MB each.',
+    );
+  });
+
+  it('takes 20 files on a paid plan', () => {
+    const { result } = renderHook(() => useAttachments({ maxFiles: 20 }));
+
+    act(() => {
+      result.current.addFiles(
+        Array.from({ length: 20 }, (_, index) => file(`note-${index}.txt`, 'text/plain')),
+      );
+    });
+
+    expect(result.current.attachments).toHaveLength(20);
+  });
+
   it('becomes a line the outgoing turn can carry, so the model is not left guessing', () => {
     const { result } = renderHook(() => useAttachments());
 

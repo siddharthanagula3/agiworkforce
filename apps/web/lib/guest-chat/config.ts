@@ -5,6 +5,8 @@ export const GUEST_CHAT_FLAG_KEY = 'guest.chat';
 export const GUEST_CHAT_ENV_VARS = {
   deviceMessagesPerDay: 'GUEST_CHAT_DEVICE_MESSAGES_PER_DAY',
   ipMessagesPerDay: 'GUEST_CHAT_IP_MESSAGES_PER_DAY',
+  deviceSpendMicrousdPerDay: 'GUEST_CHAT_DEVICE_SPEND_MICROUSD_PER_DAY',
+  ipSpendMicrousdPerDay: 'GUEST_CHAT_IP_SPEND_MICROUSD_PER_DAY',
   globalSpendMicrousdPerDay: 'GUEST_CHAT_GLOBAL_SPEND_MICROUSD_PER_DAY',
   maxMessages: 'GUEST_CHAT_MAX_MESSAGES',
   maxMessageChars: 'GUEST_CHAT_MAX_MESSAGE_CHARS',
@@ -16,7 +18,9 @@ export const GuestChatConfigSchema = z
   .object({
     deviceMessagesPerDay: z.coerce.number().int().min(1).max(1_000).default(20),
     ipMessagesPerDay: z.coerce.number().int().min(1).max(100_000).default(100),
-    globalSpendMicrousdPerDay: z.coerce.number().int().min(0).default(20_000_000),
+    deviceSpendMicrousdPerDay: z.coerce.number().int().min(0).default(18_000),
+    ipSpendMicrousdPerDay: z.coerce.number().int().min(0).default(90_000),
+    globalSpendMicrousdPerDay: z.coerce.number().int().min(0).default(1_000_000),
     maxMessages: z.coerce.number().int().min(1).max(200).default(40),
     maxMessageChars: z.coerce.number().int().min(1).max(100_000).default(8_000),
     maxOutputTokens: z.coerce.number().int().min(64).max(32_000).default(2_048),

@@ -83,6 +83,8 @@ describe('findings are anchored to the diff before anything is posted', () => {
       planTier: 'pro',
       ownerUserId: 'user-1',
       noTrainingOnly: false,
+      billingDb: {} as never,
+      reviewRef: 'attempt-1',
       postedCommentBodies,
       callModel: async (call) => {
         calls.push(call);
@@ -125,6 +127,8 @@ describe('findings are anchored to the diff before anything is posted', () => {
       planTier: 'pro',
       ownerUserId: 'user-1',
       noTrainingOnly: false,
+      billingDb: {} as never,
+      reviewRef: 'attempt-1',
       postedCommentBodies: [],
       callModel: async () => ({ text: 'Looks good to me, LGTM!', outputTokens: 5 }),
     });
@@ -149,6 +153,8 @@ describe('a re-review does not repeat itself', () => {
       planTier: 'pro',
       ownerUserId: 'user-1',
       noTrainingOnly: false,
+      billingDb: {} as never,
+      reviewRef: 'attempt-1',
       postedCommentBodies: [alreadyPosted],
       callModel: answering([REAL_FINDING]),
     });
@@ -166,6 +172,8 @@ describe('a re-review does not repeat itself', () => {
       planTier: 'pro',
       ownerUserId: 'user-1',
       noTrainingOnly: false,
+      billingDb: {} as never,
+      reviewRef: 'attempt-1',
       postedCommentBodies: [],
       callModel: answering([REAL_FINDING, { ...REAL_FINDING, explanation: 'said again' }]),
     });
@@ -180,6 +188,8 @@ describe('a re-review does not repeat itself', () => {
       planTier: 'pro',
       ownerUserId: 'user-1',
       noTrainingOnly: false,
+      billingDb: {} as never,
+      reviewRef: 'attempt-1',
       postedCommentBodies: [],
       callModel: answering([REAL_FINDING]),
     });
@@ -197,6 +207,8 @@ describe('the review body', () => {
       planTier: 'pro',
       ownerUserId: 'user-1',
       noTrainingOnly: false,
+      billingDb: {} as never,
+      reviewRef: 'attempt-1',
       postedCommentBodies: [],
       callModel: answering([REAL_FINDING]),
     });

@@ -16,6 +16,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isSupportedChatAttachment } from '@/lib/chat-attachment-policy';
 import { uploadObjectKey } from '@/lib/server/upload-keys';
 import { checkProjectKnowledgeCapacity } from '@/lib/server/project-knowledge-files';
+import { admitAttachmentUpload } from '@/lib/server/attachment-allowance';
 import { issueResumableUploadSession, resumableUploadTarget } from './resumable-upload';
 
 async function handleCreateUpload(request: NextRequest): Promise<NextResponse> {
@@ -53,6 +54,14 @@ async function handleCreateUpload(request: NextRequest): Promise<NextResponse> {
       throw createError.capabilityUnavailable('Project sources are not available yet.');
     }
   }
+
+  await admitAttachmentUpload({
+    db,
+    userId,
+    organizationId,
+    kind: body.kind,
+    byteCount: body.byteCount,
+  });
 
   const target = resumableUploadTarget();
   const key = uploadObjectKey(body.kind, { userId, projectId, fileName: body.fileName });

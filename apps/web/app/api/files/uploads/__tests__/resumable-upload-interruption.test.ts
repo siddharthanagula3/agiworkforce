@@ -16,6 +16,12 @@ const { mockGetUserScopedDb, mockCompleteChatAttachmentUpload, store, scopedDb }
   }),
 );
 
+const mockAdmitAttachmentUpload = vi.hoisted(() => vi.fn(async (_input: unknown) => undefined));
+vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  admitAttachmentUpload: (input: unknown) => mockAdmitAttachmentUpload(input),
+}));
+
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   withRateLimit: vi.fn().mockResolvedValue(null),

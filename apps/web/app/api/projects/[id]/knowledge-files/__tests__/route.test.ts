@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 const {
   mockGetClerkAuthUser,
@@ -329,8 +330,8 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(json.error?.message ?? '').toMatch(/sourceSurface/i);
   });
 
-  it('returns 400 when byteCount exceeds MAX_ATTACHMENT_BYTES', async () => {
-    const tooBig = 25 * 1024 * 1024 + 1;
+  it('returns 400 when byteCount exceeds the largest plan upload', async () => {
+    const tooBig = MAX_PLAN_ATTACHMENT_BYTES + 1;
     const res = await POST(
       makePostRequest('proj-1', {
         fileName: 'huge.bin',
@@ -345,7 +346,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
 
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
-    expect(json.error?.message ?? '').toMatch(/larger than the 25 MiB/i);
+    expect(json.error?.message ?? '').toMatch(/larger than the 512 MiB/i);
   });
 
   it('returns 400 for a disallowed mimeType with no recognized extension', async () => {

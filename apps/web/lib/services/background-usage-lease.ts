@@ -71,8 +71,8 @@ export async function reserveBackgroundUsage(input: {
     const reservation = begun.reservation;
     return {
       providerStarted: () => Promise.resolve(),
-      completed: ({ provider, model, routeId, usage }) =>
-        settleFreeTrialRequest({
+      completed: async ({ provider, model, routeId, usage }) => {
+        await settleFreeTrialRequest({
           reservation,
           outcome: 'completed',
           provider,
@@ -88,8 +88,11 @@ export async function reserveBackgroundUsage(input: {
             ),
             toolMicrousd: 0,
           },
-        }),
-      failed: () => settleFreeTrialRequest({ reservation, outcome: 'failed' }),
+        });
+      },
+      failed: async () => {
+        await settleFreeTrialRequest({ reservation, outcome: 'failed' });
+      },
     };
   }
 

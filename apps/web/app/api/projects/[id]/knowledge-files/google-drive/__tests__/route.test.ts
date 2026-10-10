@@ -3,6 +3,17 @@ import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
+const mockAdmitAttachmentUpload = vi.hoisted(() => vi.fn(async (_input: unknown) => undefined));
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveEntitledPlanTier: vi.fn(async () => 'pro'),
+}));
+
+vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  admitAttachmentUpload: (input: unknown) => mockAdmitAttachmentUpload(input),
+}));
+
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
@@ -297,7 +308,11 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
     expect(mocks.downloadGoogleDriveFile).toHaveBeenCalledWith(
       'ya29.token',
       DRIVE_A,
-      expect.any(Number),
+      250 * 1024 * 1024,
+      'is too large. Pro accounts can upload files up to 250 MB each. Upgrade for larger files.',
+    );
+    expect(mockAdmitAttachmentUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'knowledge-file', byteCount: 3 }),
     );
     const key = mocks.putPrivateObject.mock.calls[0]?.[0].key as string;
     expect(key).toMatch(/^knowledge-files\/projects\/p-1\/\d+_abcdefghijklm\.pdf$/);

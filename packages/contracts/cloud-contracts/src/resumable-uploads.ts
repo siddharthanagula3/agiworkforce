@@ -1,4 +1,4 @@
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { z } from 'zod';
 import { MAX_CHAT_ATTACHMENT_BYTES, ManagedCloudChatAttachmentSchema } from './chat-attachments';
 import {
@@ -30,7 +30,7 @@ export type ResumableUploadKind = (typeof RESUMABLE_UPLOAD_KINDS)[number];
 export const RESUMABLE_UPLOAD_MAX_BYTES: Readonly<Record<ResumableUploadKind, number>> =
   Object.freeze({
     'chat-attachment': MAX_CHAT_ATTACHMENT_BYTES,
-    'knowledge-file': MAX_ATTACHMENT_BYTES,
+    'knowledge-file': MAX_PLAN_ATTACHMENT_BYTES,
   });
 
 export function shouldUploadInParts(byteCount: number): boolean {
@@ -64,7 +64,7 @@ export const ManagedCloudResumableUploadCreateRequestSchema = z.discriminatedUni
     kind: z.literal('chat-attachment'),
     fileName: FileNameSchema,
     mimeType: MimeTypeSchema,
-    byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
+    byteCount: z.number().int().positive().max(MAX_PLAN_ATTACHMENT_BYTES),
     checksumSha256: Sha256HexSchema,
   }),
   z.object({
@@ -72,7 +72,7 @@ export const ManagedCloudResumableUploadCreateRequestSchema = z.discriminatedUni
     projectId: z.string().min(1).max(200),
     fileName: FileNameSchema,
     mimeType: MimeTypeSchema,
-    byteCount: z.number().int().positive().max(MAX_ATTACHMENT_BYTES),
+    byteCount: z.number().int().positive().max(MAX_PLAN_ATTACHMENT_BYTES),
     checksumSha256: Sha256HexSchema,
     sourceSurface: ManagedCloudProjectKnowledgeRegisterRequestSchema.shape.sourceSurface,
   }),

@@ -87,6 +87,29 @@ describe('shared LibraryView', () => {
     expect(transport.listPage).toHaveBeenCalled();
   });
 
+  it('shows storage and this month’s downloads against the plan caps', async () => {
+    const gib = 1024 ** 3;
+    const transport = makeTransport({
+      listPage: vi.fn(async () =>
+        jsonResponse({
+          items: [ITEM],
+          has_more: false,
+          next_offset: null,
+          storage_used_bytes: 2 * gib,
+          storage_limit_bytes: 62 * gib,
+          download_used_bytes: gib,
+          download_limit_bytes: 13 * gib,
+        }),
+      ),
+    });
+    render(<LibraryView transport={transport} />);
+
+    expect((await screen.findByTestId('library-storage-used')).textContent).toContain('62');
+    expect((await screen.findByTestId('library-downloads-used')).textContent).toMatch(
+      /of 13(\.0)? GB file downloads used this month/,
+    );
+  });
+
   it('never fetches when the host reports a signed-out session', async () => {
     const transport = makeTransport({ isSignedIn: false });
     render(<LibraryView transport={transport} />);

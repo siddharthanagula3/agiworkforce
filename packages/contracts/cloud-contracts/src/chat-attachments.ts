@@ -16,6 +16,9 @@ export const MAX_CHAT_ATTACHMENT_BYTES = 12 * 1024 * 1024;
 export const MAX_CHAT_ATTACHMENT_MESSAGE_BYTES = 12 * 1024 * 1024;
 export const MAX_CHAT_ATTACHMENT_COUNT = 10;
 
+export const CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE =
+  'Files over 12 MB go into a project, where AGI reads and searches them.';
+
 const BYTES_PER_MEBIBYTE = 1024 * 1024;
 
 export function chatAttachmentSizeLabel(bytes: number): string {

@@ -3,8 +3,13 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
+import {
+  admitAttachmentUpload,
+  attachmentLimitBytes,
+  attachmentSizeRefusal,
+} from '@/lib/server/attachment-allowance';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError, isAppError } from '@/lib/errors';
@@ -139,11 +144,28 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
     );
   }
 
+  const planTier = await resolveEntitledPlanTier(db, userId, {
+    workspaceOrganizationId: organizationId,
+  });
+  const maxBytes = attachmentLimitBytes(planTier, 'knowledge-file');
+  const tooLarge = attachmentSizeRefusal(planTier, 'knowledge-file', maxBytes + 1);
   const outcomes: ImportOutcome[] = [];
   for (const fileId of parsed.data.fileIds) {
     let writtenKey: string | null = null;
     try {
-      const drive = await downloadGoogleDriveFile(access.accessToken, fileId, MAX_ATTACHMENT_BYTES);
+      const drive = await downloadGoogleDriveFile(
+        access.accessToken,
+        fileId,
+        maxBytes,
+        tooLarge ? `is too large. ${tooLarge.message}` : undefined,
+      );
+      await admitAttachmentUpload({
+        db,
+        userId,
+        organizationId,
+        kind: 'knowledge-file',
+        byteCount: drive.data.byteLength,
+      });
       const key = `knowledge-files/projects/${projectId}/${Date.now()}_${secureFilenameSegment(13)}.${extensionOf(drive.fileName)}`;
       await putPrivateObject({
         key,

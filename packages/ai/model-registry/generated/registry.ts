@@ -34,6 +34,27 @@ interface RoutePricingRecord {
   cacheReadPerMillion?: number;
   cacheWritePerMillion?: number;
   cacheWrite1hPerMillion?: number;
+  promoExpiresAt?: string;
+  postPromoPrices?: RoutePostPromoPrices;
+  inputTokenPricingTiers?: readonly RouteInputTokenPricingTier[];
+}
+
+export interface RoutePostPromoPrices {
+  input?: number;
+  output?: number;
+  cached_input?: number;
+  cached_write?: number;
+  cached_write_1h?: number;
+}
+
+export interface RouteInputTokenPricingTier {
+  thresholdTokens: number;
+  thresholdBoundary?: 'inclusive' | 'exclusive';
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
+  cacheWrite1hPerMillion?: number;
 }
 
 export interface RouteDiscountRecord {
@@ -75,6 +96,9 @@ export interface RoutePriceSheet {
   cacheReadPerMillion: number | null;
   cacheWritePerMillion: number | null;
   cacheWrite1hPerMillion: number | null;
+  promoExpiresAt: string | null;
+  postPromoPrices: RoutePostPromoPrices | null;
+  inputTokenPricingTiers: readonly RouteInputTokenPricingTier[];
   discount: RouteDiscountRecord | null;
 }
 
@@ -99,6 +123,9 @@ function toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {
     cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,
     cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,
     cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,
+    promoExpiresAt: pricing.promoExpiresAt ?? null,
+    postPromoPrices: pricing.postPromoPrices ?? null,
+    inputTokenPricingTiers: pricing.inputTokenPricingTiers ?? [],
     discount: route.discount ?? null,
   };
 }

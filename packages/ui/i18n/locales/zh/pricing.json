@@ -219,6 +219,8 @@
   "compareRowManagedUsage": "托管用量",
   "compareRowContextWindow": "上下文窗口",
   "compareRowKnowledgeStorage": "知识存储",
+  "compareRowMonthlyDownloads": "每月文件下载量",
+  "compareRowAttachmentSize": "单个文件上传上限",
   "compareRowCustomMcp": "自定义 MCP 服务器",
   "compareRowTrainsOnContent": "使用你的内容训练",
   "compareModelsFree": "免费模型",

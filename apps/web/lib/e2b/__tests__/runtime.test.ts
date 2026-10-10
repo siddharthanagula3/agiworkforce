@@ -34,8 +34,9 @@ const COMPUTE_RESERVATION = {
   provider: 'e2b',
   model: 'e2b',
 };
-const reserveSandboxComputeInterval = vi.fn(async (_input: unknown) => ({
+const reserveSandboxComputeInterval = vi.fn(async (input: unknown) => ({
   outcome: 'reserved' as const,
+  ttlMs: (input as { ttlMs: number }).ttlMs,
   reservation: COMPUTE_RESERVATION,
 }));
 const releaseSandboxComputeReservation = vi.fn(async (_input: unknown) => {});
@@ -1138,6 +1139,64 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     await getE2BExecutor(scope('conv-ttl', 'user-ttl', 'max'));
     const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
     expect(opts.timeoutMs).toBe(30 * 60_000);
+  });
+
+  it('gives a Free sandbox only the lifetime its window funded, and says so on the first run', async () => {
+    const funded = 3 * 60_000;
+    reserveSandboxComputeInterval.mockResolvedValueOnce({
+      outcome: 'reserved',
+      ttlMs: funded,
+      reservation: COMPUTE_RESERVATION,
+    });
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-funded', 'user-funded', 'free'));
+
+    const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
+    expect(opts.timeoutMs).toBe(funded);
+    const first = await executor!.runCode({ language: 'python', code: 'x = 1' });
+    const second = await executor!.runCode({ language: 'python', code: 'x = 2' });
+    expect(first.output.startsWith('This run can last about 3 minutes on Free.')).toBe(true);
+    expect(second.output).not.toContain('on Free.');
+  });
+
+  it('resumes an active sandbox only for what its hold still funds', async () => {
+    const conversation = scope('conv-resume-cap', 'user-resume-cap');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-resume-cap',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    });
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor(conversation);
+
+    const opts = (connect.mock.calls[0] as unknown[])[1] as { timeoutMs: number };
+    expect(opts.timeoutMs).toBeLessThanOrEqual(240_000);
+    expect(opts.timeoutMs).toBeGreaterThan(230_000);
+    expect(reserveSandboxComputeInterval).not.toHaveBeenCalled();
+  });
+
+  it('settles a resumed interval whose hold funds less than a minimum run and admits it again', async () => {
+    const conversation = scope('conv-resume-spent', 'user-resume-spent');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-resume-spent',
+      contexts: {},
+      activeSinceMs: Date.now() - 290_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    });
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor(conversation);
+
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-resume-spent', reason: 'pause' }),
+    );
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
   });
 
   it('does not run the quota check for ephemeral (no-scope) callers', async () => {

@@ -219,6 +219,8 @@
   "compareRowManagedUsage": "Managed usage",
   "compareRowContextWindow": "Context window",
   "compareRowKnowledgeStorage": "Knowledge storage",
+  "compareRowMonthlyDownloads": "File downloads a month",
+  "compareRowAttachmentSize": "Largest file upload",
   "compareRowCustomMcp": "Custom MCP servers",
   "compareRowTrainsOnContent": "Trains on your content",
   "compareModelsFree": "Free models",
