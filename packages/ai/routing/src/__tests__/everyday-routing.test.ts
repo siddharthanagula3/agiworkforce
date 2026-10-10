@@ -193,6 +193,19 @@ describe('input-length pricing tiers', () => {
     }
   });
 
+  it('stays on the everyday model when its warm cache keeps it cheaper past the threshold', () => {
+    const cold = resolveAutoRoute(webAuto({ subscriptionTier: 'pro' }));
+    if (cold.status !== 'selected') throw new Error('expected a selected route');
+    const warm = resolveAutoRoute(
+      webAuto({
+        subscriptionTier: 'pro',
+        estimatedInputTokens: threshold + 1,
+        preferredRouteId: cold.routeId,
+      }),
+    );
+    expect(warm).toMatchObject({ status: 'selected', modelKey: EVERYDAY_MODEL });
+  });
+
   it('leaves a task whose slot declares no backup on its own model', () => {
     const decision = resolveAutoRoute(
       webAuto({ subscriptionTier: 'pro', taskType: 'coding', estimatedInputTokens: threshold + 1 }),
