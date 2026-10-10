@@ -150,14 +150,22 @@ describe('LiveVoiceSession', () => {
     vi.unstubAllGlobals();
   });
 
-  async function startSession(cb = callbacks()) {
+  async function startSession(cb = callbacks(), reasoning?: 'instant' | 'thinking') {
     const session = await LiveVoiceSession.start({
       voice: 'marin',
       conversationId: null,
+      ...(reasoning ? { reasoning } : {}),
       callbacks: cb,
     });
     return { session, cb };
   }
+
+  it('asks the server for the reasoning level the user chose', async () => {
+    await startSession(callbacks(), 'thinking');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ reasoning: 'thinking' });
+  });
 
   it('posts the offer to the app server, applies the answer and reports session.started', async () => {
     const { session, cb } = await startSession();

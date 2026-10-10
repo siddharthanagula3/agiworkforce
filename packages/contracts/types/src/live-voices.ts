@@ -38,3 +38,19 @@ export function liveVoicePaceInstruction(pace: number): string | null {
   if (!Number.isFinite(pace) || pace === LIVE_VOICE_NATURAL_PACE) return null;
   return `Speak at about ${pace} times your natural speaking pace.`;
 }
+
+export const LIVE_VOICE_REASONING = {
+  instant: 'instant',
+  thinking: 'thinking',
+} as const;
+
+export type LiveVoiceReasoning = (typeof LIVE_VOICE_REASONING)[keyof typeof LIVE_VOICE_REASONING];
+
+export const LIVE_VOICE_REASONING_LEVELS: readonly LiveVoiceReasoning[] = [
+  LIVE_VOICE_REASONING.instant,
+  LIVE_VOICE_REASONING.thinking,
+];
+
+export function isLiveVoiceReasoning(value: unknown): value is LiveVoiceReasoning {
+  return LIVE_VOICE_REASONING_LEVELS.includes(value as LiveVoiceReasoning);
+}

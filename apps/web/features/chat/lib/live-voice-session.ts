@@ -25,6 +25,7 @@ import { formatUsageResetIn } from '@agiworkforce/types';
 import {
   liveVoiceLanguageInstruction,
   liveVoicePaceInstruction,
+  type LiveVoiceReasoning,
 } from '@agiworkforce/types/live-voices';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
@@ -167,6 +168,7 @@ export interface LiveVoiceSessionOptions {
   conversationId: string | null;
   language?: string | null;
   pace?: number;
+  reasoning?: LiveVoiceReasoning;
   callbacks: LiveVoiceSessionCallbacks;
 }
 
@@ -429,6 +431,7 @@ export class LiveVoiceSession {
           conversationId: options.conversationId,
           language: options.language ?? null,
           ...(options.pace === undefined ? {} : { pace: options.pace }),
+          ...(options.reasoning ? { reasoning: options.reasoning } : {}),
           surface: isDesktopHost() ? 'desktop' : 'web',
           ...(options.callbacks.onStartWorkTask
             ? { clientHandoffs: [LIVE_VOICE_WORK_TASK_TOOL] }
