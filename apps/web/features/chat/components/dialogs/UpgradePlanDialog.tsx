@@ -33,6 +33,7 @@ import {
   CHECKOUT_ENABLED,
   checkoutUnavailableInRegionNotice,
   localizedFreePrice,
+  localizedIncludedTax,
   localizedPricePerMonth,
   planCheckoutReady,
   teamBillingInterval,
@@ -50,6 +51,7 @@ import {
   pricingUsageExplainer,
   teamPlanFeatures,
   teamSeatRows,
+  withIncludedTax,
   type BusinessPlanCard,
   type PlanCard,
   type PricingT,
@@ -133,7 +135,11 @@ function buildPlanCard(
       id: plan,
       name,
       price: null,
-      priceSub: t('perSeatPricingSub'),
+      priceSub: withIncludedTax(
+        t('perSeatPricingSub'),
+        localizedIncludedTax(plans, plan, interval),
+        t,
+      ),
       billing: interval === 'yearly' ? t('billedYearly') : t('billedMonthly'),
       seats: teamSeatRows(t, plans, interval, undefined),
       body: planTierBody(plan, t),
@@ -147,7 +153,9 @@ function buildPlanCard(
     price: isFreeBillingPlanTier(plan)
       ? localizedFreePrice(plans, undefined)
       : localizedPricePerMonth(plans, plan, 'monthly', undefined),
-    priceSub: t('perMonth'),
+    priceSub: isFreeBillingPlanTier(plan)
+      ? t('perMonth')
+      : withIncludedTax(t('perMonth'), localizedIncludedTax(plans, plan, 'monthly'), t),
     billing: null,
     seats: [],
     body: planTierBody(plan, t),

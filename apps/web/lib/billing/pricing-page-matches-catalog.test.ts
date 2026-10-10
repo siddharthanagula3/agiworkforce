@@ -82,7 +82,7 @@ describe('the published pricing page cannot state a price the catalog does not',
       for (const plan of listPlansForProduct(tier)) {
         const expected =
           plan.currency === 'inr'
-            ? Math.round((getPlanPriceInr(tier) ?? 0) * 100)
+            ? Math.round((getPlanPriceInr(tier, plan.interval) ?? 0) * 100)
             : getPublishedPlanPriceCents(tier, plan.interval);
         expect(plan.priceMinorUnits, `${tier} ${plan.interval} ${plan.currency}`).toBe(expected);
       }

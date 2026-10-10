@@ -110,10 +110,13 @@ describe('health-aware slot walk', () => {
   });
 
   it('walks to another slot when no provider serving the preferred model is live', () => {
-    const healthy = selected(managedAuto());
+    const singleModelBand = { taskType: 'coding', selection: 'auto-economy' } as const;
+    const healthy = selected(managedAuto(singleModelBand));
     const serving = providersServing(healthy.modelKey);
     expect(serving).toContain(healthy.provider);
-    const moved = selected(managedAuto({ runtimeState: parkedProviders(serving) }));
+    const moved = selected(
+      managedAuto({ ...singleModelBand, runtimeState: parkedProviders(serving) }),
+    );
     expect(moved.modelKey).not.toBe(healthy.modelKey);
     expect(serving).not.toContain(moved.provider);
     expect(moved.reason).toBe('health_fallback');

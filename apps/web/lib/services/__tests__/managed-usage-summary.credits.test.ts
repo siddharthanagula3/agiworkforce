@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
+import {
+  MANAGED_USAGE_LIMITS,
+  MICROUSD_PER_CREDIT,
+  getEffectivePlanCreditAllowance,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/bonus-credit-service');
+type PricingModule = typeof import('@/lib/pricing');
+
+const INR_BASIC_PRICE_ID = 'price_fixture_basic_monthly_inr';
 
 const {
   mockGetBalance,
@@ -41,6 +48,22 @@ vi.mock('@/lib/server/rolling-usage', () => ({
 vi.mock('@/lib/services/free-trial-service', () => ({
   getFreeTrialPublicUsage: mockGetFreeTrialPublicUsage,
 }));
+
+vi.mock('@/lib/pricing', async (importOriginal) => {
+  const actual = await importOriginal<PricingModule>();
+  return {
+    ...actual,
+    getPricePointForPriceId: (priceId: string) =>
+      priceId === INR_BASIC_PRICE_ID
+        ? {
+            plan: 'basic',
+            interval: 'monthly',
+            currency: 'inr',
+            envVar: 'STRIPE_PRICE_BASIC_MONTHLY_INR',
+          }
+        : actual.getPricePointForPriceId(priceId),
+  };
+});
 
 vi.mock('@/lib/services/bonus-credit-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
@@ -111,6 +134,50 @@ describe('managed usage summary, stated in credits', () => {
       next_expiry_at: '2026-12-01T00:00:00.000Z',
     });
     expect(summary.usage_allocation).toBe('provisioned');
+  });
+
+  it('states an India web Basic subscriber in the budget their rupee price pays for', async () => {
+    mockResolveEffectiveSubscription.mockResolvedValue({
+      ...subscription('basic'),
+      stripe_price_id: INR_BASIC_PRICE_ID,
+    });
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: credits(100),
+      credits_used_microusd: 0,
+      credits_remaining_microusd: credits(100),
+      period_start: null,
+      period_end: null,
+    });
+
+    const summary = await getManagedUsageSummary(db, 'user-1');
+    const effective = getEffectivePlanCreditAllowance('basic', null, {
+      channel: 'web',
+      currency: 'inr',
+    });
+
+    expect(effective.monthly).toBeLessThan(MANAGED_USAGE_LIMITS.basic.monthlyCredits);
+    expect(summary.credits?.monthly.allowance).toBe(effective.monthly);
+    expect(summary.credits?.weekly.allowance).toBe(effective.weekly);
+    expect(summary.credits?.five_hour.allowance).toBe(effective.fiveHour);
+  });
+
+  it('states a subscriber with no known region in the US budget', async () => {
+    mockResolveEffectiveSubscription.mockResolvedValue({
+      ...subscription('basic'),
+      stripe_price_id: 'price_fixture_unregistered',
+    });
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: credits(400),
+      credits_used_microusd: 0,
+      credits_remaining_microusd: credits(400),
+      period_start: null,
+      period_end: null,
+    });
+
+    const summary = await getManagedUsageSummary(db, 'user-1');
+
+    expect(summary.credits?.monthly.allowance).toBe(MANAGED_USAGE_LIMITS.basic.monthlyCredits);
+    expect(summary.credits?.five_hour.allowance).toBe(MANAGED_USAGE_LIMITS.basic.fiveHourCredits);
   });
 
   it('states the Free windows in credits, measured on the Free ledger', async () => {

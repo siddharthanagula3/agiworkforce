@@ -98,10 +98,12 @@ import {
   formatLocalizedAmount,
   formatPlanAmount,
   localizedFreePrice,
+  localizedIncludedTax,
   localizedPricePerMonth,
   planCheckoutReady,
   teamBillingInterval,
   teamYearlyCheckoutReady,
+  type LocalizedPricedPlan,
 } from '@features/billing/lib/localized-pricing';
 import {
   enterprisePlanFeatures,
@@ -112,6 +114,7 @@ import {
   pricingUsageExplainer,
   teamPlanFeatures,
   teamSeatRows,
+  withIncludedTax,
   usageComparisonCopy,
 } from '@features/billing/lib/plan-card-copy';
 import { formatBillingDate } from '@features/billing/lib/billing-format';
@@ -654,15 +657,21 @@ export default function PricingPage() {
   const comparedPlanIds = COMPARED_PLANS[audience].filter((plan) =>
     isPlanSelectableOnSurface(plan, 'web'),
   );
-  const perMonthPrice = (price: string) => `${price}${t('perMonth')}`;
+  const priceSub = (
+    plan: LocalizedPricedPlan,
+    interval: BillingInterval,
+    base: string = t('perMonth'),
+  ) => withIncludedTax(base, localizedIncludedTax(localizedPlans, plan, interval), t);
+  const perMonthPrice = (price: string, plan?: LocalizedPricedPlan) =>
+    `${price}${plan ? priceSub(plan, 'monthly') : t('perMonth')}`;
   const comparedPlanPrices: Record<ComparedPlan, Pick<PlanComparisonPlan, 'price' | 'billing'>> = {
     free: { price: perMonthPrice(freePrice) },
-    basic: { price: perMonthPrice(basicPrice) },
-    pro: { price: perMonthPrice(proPrice) },
-    max: { price: perMonthPrice(maxPrice) },
-    max_15x: { price: perMonthPrice(max15xPrice) },
+    basic: { price: perMonthPrice(basicPrice, 'basic') },
+    pro: { price: perMonthPrice(proPrice, 'pro') },
+    max: { price: perMonthPrice(maxPrice, 'max') },
+    max_15x: { price: perMonthPrice(max15xPrice, 'max_15x') },
     team: {
-      price: `${teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice} ${t('perSeatPricingSub')}`,
+      price: `${teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice} ${priceSub('team', teamInterval, t('perSeatPricingSub'))}`,
       billing: teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly'),
     },
     team_premium: {
@@ -896,7 +905,13 @@ export default function PricingPage() {
                     <h4 className="agi-tier-seat-name">{row.name}</h4>
                     <p className="agi-tier-seat-price">
                       <span className="agi-tier-seat-price-num">{row.price}</span>{' '}
-                      <span className="agi-tier-price-sub">{t('perSeatPricingSub')}</span>
+                      <span className="agi-tier-price-sub">
+                        {priceSub(
+                          row.type === 'premium' ? 'team_premium' : 'team',
+                          teamInterval,
+                          t('perSeatPricingSub'),
+                        )}
+                      </span>
                     </p>
                     <p className="agi-tier-seat-detail">{row.description}</p>
                     {row.alternate ? (
@@ -1095,7 +1110,7 @@ export default function PricingPage() {
                 <h3 className="agi-tier-name">{basic.label}</h3>
                 <div className="agi-tier-price">
                   <span className="agi-tier-price-num">{basicPrice}</span>
-                  <span className="agi-tier-price-sub">{t('perMonth')}</span>
+                  <span className="agi-tier-price-sub">{priceSub('basic', 'monthly')}</span>
                 </div>
                 <p className="agi-tier-body">{planTierBody('basic', t)}</p>
                 <ul className="agi-tier-features">
@@ -1117,7 +1132,7 @@ export default function PricingPage() {
               <h3 className="agi-tier-name">{pro.label}</h3>
               <div className="agi-tier-price">
                 <span className="agi-tier-price-num">{proPrice}</span>
-                <span className="agi-tier-price-sub">{t('perMonth')}</span>
+                <span className="agi-tier-price-sub">{priceSub('pro', 'monthly')}</span>
               </div>
               <p className="agi-tier-body">{planTierBody('pro', t)}</p>
               <ul className="agi-tier-features">
@@ -1170,7 +1185,7 @@ export default function PricingPage() {
                 <span className="agi-tier-price-num">
                   {maxVariant === 'max' ? maxPrice : max15xPrice}
                 </span>
-                <span className="agi-tier-price-sub">{t('perMonth')}</span>
+                <span className="agi-tier-price-sub">{priceSub(maxVariant, 'monthly')}</span>
               </div>
               <p className="agi-tier-body">{planTierBody(maxVariant, t)}</p>
               <ul className="agi-tier-features">

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { normalizeBillingPlanTier } from '@agiworkforce/types';
+import { normalizeBillingPlanTier, type RevenueContext } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
@@ -55,6 +55,7 @@ export interface SeatMemberLedgerProvisioning {
   periodStart: Date;
   periodEnd: Date;
   catalogVersion?: number | null;
+  revenueContext?: RevenueContext | null;
 }
 
 export async function provisionSeatMemberCreditAccounts(
@@ -80,7 +81,11 @@ export async function provisionSeatMemberCreditAccounts(
     if (!isSeatBearingBillingPlan(orgTier)) continue;
     const seatTier = seatHolderPlanTier(orgTier, row, input.periodEnd);
     const budgetCents = getPlanUsageBudgetCents(
-      { tier: seatTier, catalogVersion: input.catalogVersion },
+      {
+        tier: seatTier,
+        catalogVersion: input.catalogVersion,
+        revenueContext: input.revenueContext ?? null,
+      },
       'monthly',
     );
     if (budgetCents <= 0) continue;

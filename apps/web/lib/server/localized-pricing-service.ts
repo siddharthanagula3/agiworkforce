@@ -14,6 +14,7 @@ import {
   type LocalizedPlanPrice,
   type StripePriceLike,
 } from '@/lib/regional-pricing';
+import { priceTaxBehaviorForCurrency } from '@/lib/billing/tax-policy';
 
 export interface LocalizedPriceEntry extends LocalizedPlanPrice {
   checkoutReady: boolean;
@@ -59,6 +60,7 @@ async function retrieveStripePrice(priceId: string): Promise<StripePriceLike | n
   const normalized: StripePriceLike = {
     currency: price.currency,
     unit_amount: price.unit_amount,
+    tax_behavior: price.tax_behavior,
     currency_options: price.currency_options,
   };
   priceCache.set(priceId, { expiresAt: Date.now() + PRICE_CACHE_TTL_MS, price: normalized });
@@ -72,6 +74,24 @@ function stripeAmountForCurrency(price: StripePriceLike | null, currency: string
   }
   const optionAmount = price?.currency_options?.[normalized]?.unit_amount;
   return typeof optionAmount === 'number' ? optionAmount : null;
+}
+
+/**
+ * A Stripe Price's tax behaviour is fixed once set, so a Price created as
+ * exclusive would add GST on top of an INR price the page shows as including
+ * it. Checkout opens only for a Price whose behaviour matches the catalogue.
+ */
+export function stripePriceMatchesTaxBehavior(
+  price: StripePriceLike | null,
+  currency: string,
+): boolean {
+  const normalized = currency.toLowerCase();
+  const behavior =
+    price?.currency.toLowerCase() === normalized
+      ? price.tax_behavior
+      : price?.currency_options?.[normalized]?.tax_behavior;
+  const expected = priceTaxBehaviorForCurrency(normalized);
+  return expected === 'inclusive' ? behavior === 'inclusive' : behavior !== 'inclusive';
 }
 
 export async function getLocalizedPricingCatalog(
@@ -105,7 +125,8 @@ export async function getLocalizedPricingCatalog(
             checkoutReady:
               Boolean(priceId) &&
               configuredAmount !== null &&
-              configuredAmount === localized.amountMinor,
+              configuredAmount === localized.amountMinor &&
+              stripePriceMatchesTaxBehavior(stripePrice, localized.currency),
           };
         }),
       );
@@ -144,6 +165,13 @@ export async function getPriceSelectionForCurrency(
       `[localized-pricing] Stripe price ${priceId} charges ${configuredAmount ?? 'nothing'} ` +
         `${localized.currency} for ${plan} ${interval} but the published price is ` +
         `${localized.amountMinor}; checkout stays closed until the Stripe catalog matches.`,
+    );
+    return null;
+  }
+  if (!stripePriceMatchesTaxBehavior(stripePrice, localized.currency)) {
+    console.warn(
+      `[localized-pricing] Stripe price ${priceId} is not ${priceTaxBehaviorForCurrency(localized.currency)} ` +
+        `of tax for ${localized.currency}; checkout stays closed until a matching Price is configured.`,
     );
     return null;
   }

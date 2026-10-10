@@ -42,7 +42,7 @@ export type RouteDependentCapability = RouteDependentCapabilityName;
 export type ModelCapabilityName = RegistryCapabilityName;
 
 interface RegistryModel {
-  identity: { key: string; provider: string; providerModelId: string };
+  identity: { key: string; provider: string; providerModelId: string; developer?: string | null };
   lifecycle: { availability: string; deprecated: boolean; deprecationDate?: string | null };
   /**
    * Regions this model may be processed in, projected from its serving
@@ -137,6 +137,8 @@ interface AutoPolicy {
   };
   tasks: Record<RoutingTaskType, AutoTaskPolicy>;
   slots: Record<string, AutoSlotPolicy>;
+  slotBackups?: Record<string, readonly string[]>;
+  jurisdictionFallbackSlots?: Record<string, readonly string[]>;
   taskFamilies?: Record<string, TaskFamilyPolicyEntry>;
 }
 
@@ -154,6 +156,7 @@ export interface RoutingRegistryView {
   capabilities: Record<string, RegistryCapabilities>;
   limits: Record<string, { contextTokens?: number }>;
   governance?: Record<string, { residencyRegions?: readonly string[] | null }>;
+  developers?: Record<string, { jurisdiction?: string | null }>;
   policies: { auto: AutoPolicy };
 }
 
@@ -226,6 +229,13 @@ export interface AutoRoutingRequest {
    * several hosts at the same price.
    */
   excludedRouteHosts?: ReadonlySet<string>;
+  /**
+   * Countries a model's developer may be headquartered in, when the request's
+   * data region checks it. Absent means the region checks nothing. Applies to a
+   * model the user names too, which is then refused as not available in the
+   * region rather than served or silently swapped.
+   */
+  allowedDeveloperJurisdictions?: ReadonlySet<string>;
   retiredModelKeys?: ReadonlySet<string>;
   /**
    * The residency region this request must be processed in, such as `us`.
@@ -433,6 +443,8 @@ export interface SelectedAutoRoute {
     | 'capability_fallback'
     | 'task_family_pareto'
     | 'health_fallback'
+    | 'price_tier_backup'
+    | 'jurisdiction_fallback'
     | 'canary';
   taskFamilyDecision?: TaskFamilyStageDecision;
   /**
@@ -466,6 +478,7 @@ export interface UnavailableAutoRoute {
     | 'explicit_route_ineligible'
     | 'mandatory_capability_unavailable'
     | 'trust_mode_not_permitted'
+    | 'model_not_available_in_region'
     | 'no_eligible_route';
   requestedSelection: string;
   requestedProfile: RoutingProfile | null;
@@ -1307,10 +1320,26 @@ function slotRouteCost(
   return { routeId: chosen.routeId, cents };
 }
 
+/** The country the company that built `modelKey` is headquartered in, from the catalog. */
+export function modelDeveloperJurisdiction(modelKey: string): string | null {
+  const developer = registry.models[modelKey]?.identity.developer;
+  return developer ? (registry.developers?.[developer]?.jurisdiction ?? null) : null;
+}
+
+export function developerJurisdictionAllowed(
+  modelKey: string,
+  allowed: ReadonlySet<string> | null | undefined,
+): boolean {
+  if (!allowed) return true;
+  const jurisdiction = modelDeveloperJurisdiction(modelKey);
+  return jurisdiction !== null && allowed.has(jurisdiction);
+}
+
 function evaluateEligibility(
   modelKey: string,
   task: AutoTaskPolicy,
   request: AutoRoutingRequest,
+  tierGranted = false,
 ): EligibilityResult {
   const reasons: string[] = [];
   const model = registry.models[modelKey];
@@ -1324,7 +1353,7 @@ function evaluateEligibility(
     reasons.push(`model ${modelKey} passed its deprecation date`);
   }
   const tier = normalizeTier(request.subscriptionTier);
-  const tierRejection = tierAdmissionRejection(modelKey, tier);
+  const tierRejection = tierGranted ? null : tierAdmissionRejection(modelKey, tier);
   if (tierRejection) reasons.push(tierRejection);
   const usOnlyPolicy = registry.policies.auto.providerPolicies.usOnly;
   if (
@@ -1339,6 +1368,11 @@ function evaluateEligibility(
   }
   if (request.noTrainingOnly && !providerKeepsInputsOutOfTraining(model.identity.provider)) {
     reasons.push(`provider ${model.identity.provider} may train on inputs`);
+  }
+  if (!developerJurisdictionAllowed(modelKey, request.allowedDeveloperJurisdictions)) {
+    reasons.push(
+      `model ${modelKey} was developed in ${modelDeveloperJurisdiction(modelKey) ?? 'no recorded country'}, which this region does not allow`,
+    );
   }
 
   const { admissible, routeReasons, hasTrustModeRoute } = admissibleModelRoutes(
@@ -1493,7 +1527,8 @@ function sameModelFallbackPlan(
 /**
  * Every slot a fallback may draw on, best first, one entry per slot.
  *
- * The request's own ordering leads, then the task's slots at every other
+ * The request's own ordering leads, each slot followed by the backups the
+ * policy declares for it, then the task's slots at every other
  * profile in the policy's profile order, then the tier's fallback slot, then
  * the tier's allowed slots in their authored order, restricted to slots some
  * task policy already names. A slot no task lists is reachable only through a
@@ -1502,6 +1537,10 @@ function sameModelFallbackPlan(
  * its model still has to pass eligibility, so this only decides how far a
  * failover may walk before the request gives up, not what it may reach.
  */
+function backupSlotsOf(policy: AutoPolicy, slotIds: readonly string[]): readonly string[] {
+  return slotIds.flatMap((slotId) => policy.slotBackups?.[slotId] ?? []);
+}
+
 function fallbackCandidateSlots(
   policy: AutoPolicy,
   task: AutoTaskPolicy,
@@ -1511,7 +1550,7 @@ function fallbackCandidateSlots(
 ): readonly string[] {
   return [
     ...new Set([
-      ...orderedSlots,
+      ...orderedSlots.flatMap((slotId) => [slotId, ...backupSlotsOf(policy, [slotId])]),
       ...policy.profileOrder.flatMap((profile) => task.preferredSlots[profile] ?? []),
       fallbackSlot,
       ...tierSlotOrder.filter((slotId) => policyReachableSlots.has(slotId)),
@@ -1541,6 +1580,7 @@ function buildProviderFallbacks(
 ): AutoFallbackRoute[] {
   const seenModels = new Set([selectedModelKey]);
   const seenProviders = new Set([selectedProvider]);
+  const backupSlots = new Set(backupSlotsOf(policy, orderedSlots));
   const plan = sameModelFallbackPlan(
     selectedModelKey,
     selectedModelRoutes,
@@ -1558,6 +1598,7 @@ function buildProviderFallbacks(
     if (!allowedSlots.has(slotId)) continue;
     const modelKey = policy.slots[slotId]?.modelKey;
     if (!modelKey || seenModels.has(modelKey)) continue;
+    if (backupSlots.has(slotId) && pricingStepsUpForPrompt(modelKey, request)) continue;
     seenModels.add(modelKey);
 
     const eligibility = evaluateEligibility(modelKey, task, request);
@@ -1582,6 +1623,53 @@ function estimatedRequestCents(modelKey: string, request: AutoRoutingRequest): n
     ? (inputTokens * pricing.inputCost + outputTokens * pricing.outputCost) / 1_000_000
     : 0;
   return usd * 100;
+}
+
+/**
+ * Whether this request's prompt is long enough to move the model onto a dearer
+ * input-length pricing tier than its base rate. Read from the catalog's tiers,
+ * so a threshold or a multiplier the provider changes is picked up there.
+ */
+function pricingStepsUpForPrompt(modelKey: string, request: AutoRoutingRequest): boolean {
+  const promptTokens = request.estimatedInputTokens;
+  if (promptTokens === undefined || promptTokens <= 0) return false;
+  const base = effectiveModelPricing(modelKey, 0);
+  const atPrompt = effectiveModelPricing(modelKey, promptTokens);
+  if (!base || !atPrompt) return false;
+  return atPrompt.inputCost > base.inputCost || atPrompt.outputCost > base.outputCost;
+}
+
+/**
+ * What one request costs on a model at the price tier its prompt length selects,
+ * counting the conversation's warm route as mostly served from cache the same
+ * way route ranking does.
+ */
+function tieredRequestCents(
+  modelKey: string,
+  routeId: string | undefined,
+  request: AutoRoutingRequest,
+): number {
+  const inputTokens = request.estimatedInputTokens ?? 0;
+  const outputTokens = request.estimatedOutputTokens ?? DEFAULT_AFFORDABILITY_OUTPUT_TOKENS;
+  const pricing = effectiveModelPricing(modelKey, inputTokens);
+  if (!pricing) return Number.POSITIVE_INFINITY;
+  const warm =
+    routeId !== undefined &&
+    request.preferredRouteId === routeId &&
+    typeof pricing.cached_input === 'number';
+  const inputRate = warm
+    ? (1 - WARM_ROUTE_CACHE_HIT_FRACTION) * pricing.inputCost +
+      WARM_ROUTE_CACHE_HIT_FRACTION * (pricing.cached_input as number)
+    : pricing.inputCost;
+  return (
+    ((inputTokens * inputRate + outputTokens * pricing.outputCost) / TOKENS_PER_PRICED_MILLION) *
+    CENTS_PER_USD
+  );
+}
+
+function fitsPrompt(modelKey: string, request: AutoRoutingRequest): boolean {
+  const promptTokens = request.estimatedInputTokens ?? 0;
+  return (registry.limits[modelKey]?.contextTokens ?? 0) >= promptTokens;
 }
 
 function isAffordable(modelKey: string, request: AutoRoutingRequest): boolean {
@@ -1743,7 +1831,9 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
 
     return {
       status: 'unavailable',
-      code: 'explicit_model_ineligible',
+      code: developerJurisdictionAllowed(requestedSelection, request.allowedDeveloperJurisdictions)
+        ? 'explicit_model_ineligible'
+        : 'model_not_available_in_region',
       requestedSelection,
       requestedProfile: null,
       effectiveProfile: null,
@@ -1890,6 +1980,36 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     return selectSlot(slot.canary.modelKey, eligibility, 'canary', slotId);
   };
 
+  /**
+   * A slot whose model would bill this prompt at a dearer input-length tier
+   * hands the request to its first declared backup that stays at its base rate
+   * for a prompt this long and costs less for it, warm cache included. The
+   * slot's own model stays at the head of the fallbacks, so an outage on the
+   * backup still lands on it.
+   */
+  const priceTierBackup = (
+    slotId: string,
+    modelKey: string,
+    primary: EligibilityResult,
+  ): SelectedAutoRoute | undefined => {
+    if (!pricingStepsUpForPrompt(modelKey, request)) return undefined;
+    const primaryCents = tieredRequestCents(modelKey, primary.routeId, request);
+    for (const backupId of policy.slotBackups?.[slotId] ?? []) {
+      if (!allowedSlots.has(backupId)) continue;
+      const backupModelKey = policy.slots[backupId]?.modelKey;
+      if (!backupModelKey || backupModelKey === modelKey) continue;
+      if (pricingStepsUpForPrompt(backupModelKey, request)) continue;
+      if (!fitsPrompt(backupModelKey, request)) continue;
+      const eligibility = evaluateEligibility(backupModelKey, task, request);
+      if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) continue;
+      if (!isAffordable(backupModelKey, request)) continue;
+      if (tieredRequestCents(backupModelKey, eligibility.routeId, request) >= primaryCents)
+        continue;
+      return selectSlot(backupModelKey, eligibility, 'price_tier_backup', backupId);
+    }
+    return undefined;
+  };
+
   for (const slotId of orderedSlots) {
     if (!allowedSlots.has(slotId)) {
       reasons.push(`routing slot ${slotId} is not allowed for tier ${tier}`);
@@ -1913,7 +2033,10 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         parked.push({ modelKey, eligibility, reason });
         continue;
       }
-      return selectSlot(modelKey, eligibility, reason, slotId);
+      return (
+        priceTierBackup(slotId, modelKey, eligibility) ??
+        selectSlot(modelKey, eligibility, reason, slotId)
+      );
     }
     reasons.push(...eligibility.reasons);
   }
@@ -1928,7 +2051,10 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         if (!isDispatchableNow(eligibility.rankedRoutes[0])) {
           parked.push({ modelKey: fallbackModelKey, eligibility, reason: 'fallback_slot' });
         } else {
-          return selectSlot(fallbackModelKey, eligibility, 'fallback_slot', fallbackSlot);
+          return (
+            priceTierBackup(fallbackSlot, fallbackModelKey, eligibility) ??
+            selectSlot(fallbackModelKey, eligibility, 'fallback_slot', fallbackSlot)
+          );
         }
       } else {
         reasons.push(...eligibility.reasons);
@@ -1939,6 +2065,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   const parkedPick = parked[0];
   if (parkedPick) {
     const considered = new Set(parked.map((entry) => entry.modelKey));
+    const backupSlots = new Set(backupSlotsOf(policy, orderedSlots));
     for (const slotId of fallbackCandidateSlots(
       policy,
       task,
@@ -1949,6 +2076,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       if (!allowedSlots.has(slotId)) continue;
       const modelKey = policy.slots[slotId]?.modelKey;
       if (!modelKey || considered.has(modelKey)) continue;
+      if (backupSlots.has(slotId) && pricingStepsUpForPrompt(modelKey, request)) continue;
       considered.add(modelKey);
       const eligibility = evaluateEligibility(modelKey, task, request);
       if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) continue;
@@ -1957,6 +2085,26 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     }
     return selectSlot(parkedPick.modelKey, parkedPick.eligibility, parkedPick.reason);
   }
+
+  /**
+   * A tier whose every slot carries a model the region's developer rule refuses
+   * is not stranded: the policy names, per tier, a slot it may use only then.
+   * The grant is that narrow on purpose. It never applies while the region
+   * checks nothing, and it never widens what the tier may name explicitly.
+   */
+  if (request.allowedDeveloperJurisdictions) {
+    for (const slotId of policy.jurisdictionFallbackSlots?.[tier] ?? []) {
+      const modelKey = policy.slots[slotId]?.modelKey;
+      if (!modelKey) continue;
+      const eligibility = evaluateEligibility(modelKey, task, request, true);
+      if (!eligibility.route) {
+        reasons.push(...eligibility.reasons);
+        continue;
+      }
+      return selectSlot(modelKey, eligibility, 'jurisdiction_fallback', slotId);
+    }
+  }
+
   return {
     status: 'unavailable',
     code: 'no_eligible_route',

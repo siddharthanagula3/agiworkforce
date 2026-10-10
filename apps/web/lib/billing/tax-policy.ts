@@ -1,16 +1,20 @@
 import type Stripe from 'stripe';
+import { billingCurrencyTerms, type PriceTaxBehavior } from '@agiworkforce/types';
 
 /**
  * The ONE place that decides how AGI Workforce charges tax.
  *
  * ## Policy
  *
- * Prices in `packages/contracts/types` and on `/pricing` are **tax-exclusive**:
- * they are the net amount, and sales tax / VAT / GST is added on top at
- * checkout. `/terms` §10 states exactly that ("Prices exclude taxes unless
- * stated otherwise; you are responsible for applicable sales, use, VAT, GST and
- * similar taxes, excluding taxes on our income"), so the product only tells the
- * truth if a tax line is actually calculated on the Checkout Session.
+ * Whether a price includes tax is a property of the currency it is sold in,
+ * recorded in `BILLING_CURRENCY_TERMS` in `packages/contracts/types`. USD prices
+ * are **tax-exclusive**: they are the net amount, and sales tax / VAT is added on
+ * top at checkout. INR prices are **tax-inclusive**: the published amount already
+ * contains India's GST, and Stripe Tax carves the GST out of it. `/terms` §10
+ * ("Prices exclude taxes unless stated otherwise") holds only because the INR
+ * prices say so where they are shown. A Stripe Price's `tax_behavior` cannot be
+ * changed after it is created, so checkout refuses a Price whose behaviour
+ * disagrees with its currency (`lib/server/localized-pricing-service.ts`).
  *
  * ## Supported jurisdictions
  *
@@ -64,7 +68,7 @@ import type Stripe from 'stripe';
  */
 export const CHECKOUT_TAX_POLICY = {
   engine: 'stripe-tax',
-  priceMode: 'exclusive',
+  defaultPriceMode: 'exclusive' satisfies PriceTaxBehavior,
   collectsBusinessTaxIds: true,
   requiresFullBillingAddress: true,
   persistsTaxIdentifiers: false,
@@ -120,10 +124,14 @@ export function buildPaymentIntentTaxCalculationParams(options: {
       {
         amount: options.amountMinor,
         reference: options.reference,
-        tax_behavior: CHECKOUT_TAX_POLICY.priceMode,
+        tax_behavior: priceTaxBehaviorForCurrency(options.currency),
       },
     ],
   };
+}
+
+export function priceTaxBehaviorForCurrency(currency: string): PriceTaxBehavior {
+  return billingCurrencyTerms(currency)?.taxBehavior ?? CHECKOUT_TAX_POLICY.defaultPriceMode;
 }
 
 export interface SessionTaxOutcome {

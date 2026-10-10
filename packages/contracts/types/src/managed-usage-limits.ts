@@ -89,6 +89,7 @@ export const MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION: Readonly<
 > = Object.freeze({
   1: MANAGED_USAGE_LIMITS,
   2: MANAGED_USAGE_LIMITS,
+  3: MANAGED_USAGE_LIMITS,
   [BILLING_PLAN_CATALOG_VERSION]: MANAGED_USAGE_LIMITS,
 });
 
@@ -254,7 +255,13 @@ function buildPlanCreditAllowance(
   tier: BillingPlanTier,
   limits: ManagedUsageLimitTable = MANAGED_USAGE_LIMITS,
 ): PlanCreditAllowance {
-  const limit = limits[tier];
+  return planCreditAllowanceFromLimit(tier, limits[tier]);
+}
+
+export function planCreditAllowanceFromLimit(
+  tier: BillingPlanTier,
+  limit: ManagedUsageLimit,
+): PlanCreditAllowance {
   if (limit.unlimited) {
     return {
       monthly: Infinity,

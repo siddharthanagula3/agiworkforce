@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CREDITS_PER_CENT, getEffectivePlanCreditAllowance } from '@agiworkforce/types';
 
 const mockGetOrCreateAccount = vi.fn();
 const mockResetForPeriod = vi.fn();
@@ -68,7 +69,7 @@ describe('SubscriptionService managed usage periods', () => {
       1,
     );
     expect(scopedQuery).toHaveBeenCalledWith(
-      'select plan_catalog_version from subscriptions where id = $1 and user_id = $2 limit 1',
+      expect.stringContaining('select plan_catalog_version, stripe_price_id'),
       ['subscription-1', 'user-1'],
     );
   });
@@ -80,7 +81,7 @@ describe('SubscriptionService managed usage periods', () => {
       'pro',
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
-      { db: scopedDb, catalogVersion: 1 },
+      { db: scopedDb, catalogVersion: 1, revenueContext: null },
     );
 
     expect(scopedQuery).not.toHaveBeenCalled();
@@ -90,6 +91,31 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
       1_000,
+      scopedDb,
+      1,
+    );
+  });
+
+  it('allocates a rupee subscriber the budget their price pays for, in ledger cents', async () => {
+    const revenueContext = { channel: 'web', currency: 'inr' } as const;
+    await SubscriptionService.allocateCreditsForPeriod(
+      'user-1',
+      'subscription-1',
+      'pro',
+      new Date('2026-07-18T12:00:00.000Z'),
+      new Date('2026-08-18T12:00:00.000Z'),
+      { db: scopedDb, catalogVersion: 1, revenueContext },
+    );
+
+    const expectedCents =
+      getEffectivePlanCreditAllowance('pro', 1, revenueContext).monthly / CREDITS_PER_CENT;
+    expect(expectedCents).toBeLessThan(1_000);
+    expect(mockGetOrCreateAccount).toHaveBeenCalledWith(
+      'user-1',
+      'subscription-1',
+      new Date('2026-07-18T12:00:00.000Z'),
+      new Date('2026-08-18T12:00:00.000Z'),
+      expectedCents,
       scopedDb,
       1,
     );

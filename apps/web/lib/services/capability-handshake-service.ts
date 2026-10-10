@@ -63,6 +63,7 @@ import {
   type EffectiveCapabilityDocument,
   type ModelCapabilities,
   type PlatformCapability,
+  type RevenueContext,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
 import type { EffectiveCapabilityDocumentWire } from '@agiworkforce/cloud-contracts';
@@ -184,12 +185,13 @@ export const NO_CAPABILITY_LIMIT_RESETS: CapabilityLimitResets = {
 function buildLimits(
   tier: string | null | undefined,
   catalogVersion: number | null,
+  revenueContext: RevenueContext | null,
   resets: CapabilityLimitResets,
 ): CapabilityLimit[] {
   const policy = getTierPolicy(tier);
   const tierSource = `tier:${policy.tier}`;
   const usageSource = `managed-usage-caps:${policy.tier}`;
-  const allowance = { tier: policy.tier, catalogVersion };
+  const allowance = { tier: policy.tier, catalogVersion, revenueContext };
   const uncapped = isPlanUsageUncapped(allowance);
   const limits: CapabilityLimit[] = [
     {
@@ -301,6 +303,7 @@ export interface BuildMeCapabilityHandshakeInput {
   userId: string;
   tier: string | null | undefined;
   catalogVersion?: number | null;
+  revenueContext?: RevenueContext | null;
   surface: SyncedAppSurface;
   cloudExecutionDeploymentEnabled: boolean;
   /** Capabilities an operator has switched off, from the kill-switch gate. */
@@ -331,6 +334,7 @@ export function buildMeCapabilityHandshake(
   const limits = buildLimits(
     input.tier,
     input.catalogVersion ?? null,
+    input.revenueContext ?? null,
     input.resets ?? NO_CAPABILITY_LIMIT_RESETS,
   );
   return buildEffectiveCapabilityDocument({

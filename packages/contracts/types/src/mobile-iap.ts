@@ -1,5 +1,6 @@
 import { getPlanPriceUsd, type SelfServeIndividualPlanTier } from './billing-catalog';
 import { topUpUnitsForUsd } from './billing-topups';
+import { EEA_COUNTRY_CODES } from './country-groups';
 
 export type MobileIapPlatform = 'ios' | 'android';
 export type MobileIapProductKind = 'subscription' | 'top_up';
@@ -151,14 +152,40 @@ export interface MobileIapVerifyResponse {
 
 export const BASIS_POINTS_PER_WHOLE = 10_000;
 
+export interface MobileIapOneTimeMarketRate {
+  countries: ReadonlySet<string>;
+  basisPoints: number;
+  basis: string;
+}
+
 export interface MobileIapStoreCommission {
   subscriptionFirstYearBasisPoints: number;
   subscriptionAfterFirstYearBasisPoints: number;
   oneTimeBasisPoints: number;
+  oneTimeMarkets: readonly MobileIapOneTimeMarketRate[];
   source: string;
   verifiedOn: string;
 }
 
+const GOOGLE_PLAY_FEE_ROLLOUT_COUNTRIES: ReadonlySet<string> = new Set([
+  ...EEA_COUNTRY_CODES,
+  'GB',
+  'US',
+]);
+
+/**
+ * What each store keeps of a sale. Neither Apple's Small Business Program nor
+ * Google Play's 15% service-fee tier is recorded as enrolled, so the standard
+ * rates apply; `oneTimeBasisPoints` is the rate wherever no market row matches,
+ * including a purchase whose country is unknown.
+ *
+ * Google Play, read 2026-10-10: from 2026-06-30 in the EEA, UK and US an
+ * auto-renewing subscription is a 10% service fee plus a 5% billing fee, and any
+ * other in-app purchase on an install made since then is 20% plus 5%. This app
+ * was not on Google Play before that date, so every install is a new install.
+ * Elsewhere a subscription is 15% and any other purchase is 30% outside the 15%
+ * tier.
+ */
 export const MOBILE_IAP_STORE_COMMISSION: Readonly<
   Record<MobileIapPlatform, MobileIapStoreCommission>
 > = Object.freeze({
@@ -166,15 +193,23 @@ export const MOBILE_IAP_STORE_COMMISSION: Readonly<
     subscriptionFirstYearBasisPoints: 3_000,
     subscriptionAfterFirstYearBasisPoints: 1_500,
     oneTimeBasisPoints: 3_000,
+    oneTimeMarkets: [],
     source: 'https://developer.apple.com/app-store/subscriptions/',
     verifiedOn: '2026-09-27',
   },
   android: {
     subscriptionFirstYearBasisPoints: 1_500,
     subscriptionAfterFirstYearBasisPoints: 1_500,
-    oneTimeBasisPoints: 1_500,
+    oneTimeBasisPoints: 3_000,
+    oneTimeMarkets: [
+      {
+        countries: GOOGLE_PLAY_FEE_ROLLOUT_COUNTRIES,
+        basisPoints: 2_500,
+        basis: '20% service fee plus 5% billing fee on installs made since the 2026-06-30 rollout',
+      },
+    ],
     source: 'https://support.google.com/googleplay/android-developer/answer/112622',
-    verifiedOn: '2026-09-27',
+    verifiedOn: '2026-10-10',
   },
 });
 
@@ -182,9 +217,16 @@ export function mobileIapStoreCommissionBasisPoints(input: {
   platform: MobileIapPlatform;
   kind: MobileIapProductKind;
   afterFirstYear: boolean;
+  purchaseCountry?: string | null;
 }): number {
   const commission = MOBILE_IAP_STORE_COMMISSION[input.platform];
-  if (input.kind === 'top_up') return commission.oneTimeBasisPoints;
+  if (input.kind === 'top_up') {
+    const country = input.purchaseCountry?.trim().toUpperCase();
+    const market = country
+      ? commission.oneTimeMarkets.find((entry) => entry.countries.has(country))
+      : undefined;
+    return market?.basisPoints ?? commission.oneTimeBasisPoints;
+  }
   return input.afterFirstYear
     ? commission.subscriptionAfterFirstYearBasisPoints
     : commission.subscriptionFirstYearBasisPoints;

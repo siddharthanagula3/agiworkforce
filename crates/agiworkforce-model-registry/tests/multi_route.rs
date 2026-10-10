@@ -151,10 +151,17 @@ fn a_trust_mode_an_additional_harness_cannot_serve_never_sees_that_route() {
 #[test]
 fn same_model_routes_come_before_any_model_substitution() {
     let mut profiles_with_own_model_fallbacks = 0;
-    for selection in ["auto-economy", "auto-balanced", "auto-premium"] {
+    for (selection, task_type) in ["auto-economy", "auto-balanced", "auto-premium"]
+        .into_iter()
+        .flat_map(|selection| {
+            [RoutingTaskType::Coding, RoutingTaskType::Reasoning]
+                .into_iter()
+                .map(move |task_type| (selection, task_type))
+        })
+    {
         let decision = resolve_auto_route(&AutoRoutingRequest {
             selection: Some(selection),
-            task_type: RoutingTaskType::Coding,
+            task_type,
             subscription_tier: Some("max"),
             trust_mode: TrustMode::Byok,
             ..AutoRoutingRequest::default()
@@ -181,7 +188,7 @@ fn same_model_routes_come_before_any_model_substitution() {
     }
     assert!(
         profiles_with_own_model_fallbacks > 0,
-        "no coding profile selects a model with a second route, so the ordering went untested"
+        "no coding or reasoning profile selects a model with a second route, so the ordering went untested"
     );
 }
 
