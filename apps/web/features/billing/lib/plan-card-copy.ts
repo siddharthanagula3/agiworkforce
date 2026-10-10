@@ -29,6 +29,10 @@ import { pricingSurfaceStatus } from '@/features/marketing/components/pricing/de
 
 export type PricingT = TFunction<'pricing'>;
 
+export function withIncludedTax(base: string, tax: string | null, t: PricingT): string {
+  return tax ? `${base} · ${t('taxIncluded', { tax })}` : base;
+}
+
 export const INDIVIDUAL_PLAN_CARDS = [
   'free',
   ...SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,

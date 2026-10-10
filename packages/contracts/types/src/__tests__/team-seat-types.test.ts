@@ -195,9 +195,9 @@ describe('a Premium seat is a seat, not a plan', () => {
 });
 
 describe('catalogue version', () => {
-  it('moves on for the new seat type and keeps the allowances of earlier catalogues', () => {
-    expect(BILLING_PLAN_CATALOG_VERSION).toBe(3);
-    for (const version of [1, 2, BILLING_PLAN_CATALOG_VERSION]) {
+  it('moves on for each reprice and keeps the allowances of earlier catalogues', () => {
+    expect(BILLING_PLAN_CATALOG_VERSION).toBe(4);
+    for (const version of [1, 2, 3, BILLING_PLAN_CATALOG_VERSION]) {
       expect(resolvePlanCatalogVersion(version)).toBe(version);
       expect(MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION[version]?.team).toEqual(
         MANAGED_USAGE_LIMITS.team,

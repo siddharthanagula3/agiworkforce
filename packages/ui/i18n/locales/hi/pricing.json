@@ -8,6 +8,7 @@
   "monthly": "मासिक",
   "yearly": "वार्षिक",
   "perMonth": "/माह",
+  "taxIncluded": "{{tax}} सहित",
   "perYear": "/वर्ष",
   "currentPlan": "वर्तमान योजना",
   "upgrade": "अपग्रेड",

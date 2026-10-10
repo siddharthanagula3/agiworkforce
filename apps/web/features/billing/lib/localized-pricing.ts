@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   BILLING_PLAN_PRICING,
+  billingCurrencyTerms,
   currencyMinorUnitDigits,
   getPlanPriceUsd,
   type BillingInterval,
@@ -90,6 +91,17 @@ export function localizedPricePerMonth(
     locale,
     interval === 'yearly' ? 12 : 1,
   );
+}
+
+/** The tax a localized price already includes, such as GST, or null when tax is added at checkout. */
+export function localizedIncludedTax(
+  plans: LocalizedPlanPrices | undefined,
+  plan: LocalizedPricedPlan,
+  interval: BillingInterval,
+): string | null {
+  const entry = localizedPriceEntry(plans, plan, interval);
+  if (!entry?.taxIncluded) return null;
+  return billingCurrencyTerms(entry.currency)?.includedTax?.label ?? null;
 }
 
 export function localizedFreePrice(

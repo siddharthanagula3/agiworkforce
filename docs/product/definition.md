@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-08
+Last updated: 2026-10-10
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -288,13 +288,19 @@ Billing plan lock (founder decision, 2026-07-18):
 | Basic      | $7/month; India ₹399/month       | Base paid usage                     | 5         | 5          | No                         | No               | No               | No              |
 | Pro        | $20/month; India ₹1,999/month    | 5x Basic                            | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | No              |
 | Max 5x     | $100/month; India ₹9,999/month   | 5x Pro                              | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | No               | No              |
-| Max 20x    | $200/month; India ₹24,999/month  | 20x Pro per session, 10x Pro weekly | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
+| Max 20x    | $200/month; India ₹19,999/month  | 20x Pro per session, 10x Pro weekly | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
 | Team       | $25/seat/month or $240/seat/year | Same as Pro per seat                | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | Yes             |
 | Enterprise | Contract                         | Contract                            | Contract  | Contract   | Contract                   | Yes              | Yes              | Yes             |
 
 Basic, Pro, Max 5x and Max 20x are billed monthly only; Team is billed monthly
 or yearly (founder decision 2026-09-27, D-2026-09-27-01 in
 `docs/decisions/2026-09-27-founder-decisions.md`).
+
+India prices include 18% GST (owner decision 2026-10-10): Basic ₹399, Pro ₹1,999,
+Max 5x ₹9,999 and Max 20x ₹19,999 a month; a Team seat is ₹2,499 a month or
+₹23,988 a year (₹1,999 a month). Every other price excludes tax, which is added at
+checkout. `BILLING_CURRENCY_TERMS` in `packages/contracts/types/src/billing-catalog.ts`
+records which currencies include tax.
 
 Team sells two seat types on one subscription (founder decision 2026-10-08). The
 Team row above is the Standard seat. A Premium seat is $125/seat/month or

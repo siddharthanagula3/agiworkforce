@@ -48,22 +48,30 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   registerPrice(mapping, basicMonthlyInr, { tier: 'basic', interval: 'monthly' });
 
   const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
+  const proMonthlyInr = process.env['STRIPE_PRICE_PRO_MONTHLY_INR'];
   const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
   registerPrice(mapping, proMonthly, { tier: 'pro', interval: 'monthly' });
+  registerPrice(mapping, proMonthlyInr, { tier: 'pro', interval: 'monthly' });
   registerPrice(mapping, proYearly, { tier: 'pro', interval: 'yearly' });
 
   const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
+  const maxMonthlyInr = process.env['STRIPE_PRICE_MAX_MONTHLY_INR'];
   registerPrice(mapping, maxMonthly, { tier: 'max', interval: 'monthly' });
+  registerPrice(mapping, maxMonthlyInr, { tier: 'max', interval: 'monthly' });
 
   const max15xMonthly = process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
+  const max15xMonthlyInr = process.env['STRIPE_PRICE_MAX_15X_MONTHLY_INR'];
   registerPrice(mapping, max15xMonthly, { tier: 'max_15x', interval: 'monthly' });
+  registerPrice(mapping, max15xMonthlyInr, { tier: 'max_15x', interval: 'monthly' });
 
   const teamMonthlyUsd = process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'];
   const teamMonthlyInr = process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'];
   registerPrice(mapping, teamMonthlyUsd, { tier: 'team', interval: 'monthly' });
   registerPrice(mapping, teamMonthlyInr, { tier: 'team', interval: 'monthly' });
   const teamYearlyUsd = process.env['STRIPE_PRICE_TEAM_YEARLY_USD'];
+  const teamYearlyInr = process.env['STRIPE_PRICE_TEAM_YEARLY_INR'];
   registerPrice(mapping, teamYearlyUsd, { tier: 'team', interval: 'yearly' });
+  registerPrice(mapping, teamYearlyInr, { tier: 'team', interval: 'yearly' });
 
   const teamPremiumMonthlyUsd = process.env['STRIPE_PRICE_TEAM_PREMIUM_MONTHLY_USD'];
   const teamPremiumYearlyUsd = process.env['STRIPE_PRICE_TEAM_PREMIUM_YEARLY_USD'];

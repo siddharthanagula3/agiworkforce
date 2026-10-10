@@ -140,6 +140,7 @@ export interface BillingPlanPricing {
   monthlyPriceUsd?: number;
   yearlyPriceUsd?: number;
   monthlyPriceInr?: number;
+  yearlyPriceInr?: number;
   perSeat?: boolean;
   contractPriced?: true;
   trialDays?: number;
@@ -199,14 +200,15 @@ export const BILLING_PLAN_PRICING = {
     id: 'max_15x',
     label: 'Max 20x',
     monthlyPriceUsd: 200,
-    monthlyPriceInr: 24999,
+    monthlyPriceInr: 19999,
   },
   team: {
     id: 'team',
     label: 'Team',
     monthlyPriceUsd: 25,
     yearlyPriceUsd: 240,
-    monthlyPriceInr: 1999,
+    monthlyPriceInr: 2499,
+    yearlyPriceInr: 23988,
     perSeat: true,
   },
   team_premium: {
@@ -918,7 +920,79 @@ export function getPublishedPlanPricePerMonthUsd(
   return interval === 'yearly' ? Math.round(cents / 12) / 100 : cents / 100;
 }
 
-export function getPlanPriceInr(plan: string | null | undefined): number | null {
+export function getPlanPriceInr(
+  plan: string | null | undefined,
+  interval: BillingInterval = 'monthly',
+): number | null {
   const pricing = getBillingPlanPricing(plan);
-  return typeof pricing.monthlyPriceInr === 'number' ? pricing.monthlyPriceInr : null;
+  const amount = interval === 'yearly' ? pricing.yearlyPriceInr : pricing.monthlyPriceInr;
+  return typeof amount === 'number' ? amount : null;
+}
+
+export const BILLING_CURRENCIES = ['usd', 'inr'] as const;
+
+export type BillingCurrency = (typeof BILLING_CURRENCIES)[number];
+
+export type PriceTaxBehavior = 'inclusive' | 'exclusive';
+
+export interface BillingCurrencyTerms {
+  taxBehavior: PriceTaxBehavior;
+  includedTax: { label: string; rate: number; source: string; decidedOn: string } | null;
+  usdPerUnit: { rate: number; source: string; observedOn: string };
+  typicalCardOrigin: 'domestic' | 'international';
+}
+
+const ECB_REFERENCE_RATES = Object.freeze({
+  source: 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml',
+  observedOn: '2026-10-09',
+  usdPerEur: 1.1206,
+  inrPerEur: 108.3965,
+});
+
+/**
+ * How each sold currency is priced. INR prices include India's 18% GST, the way
+ * ChatGPT, Google AI and Cursor price in India; every other price is net of tax,
+ * which Stripe Tax adds at checkout. The USD rate turns a local price into the
+ * revenue a budget is sized against and is a dated reference, not a live quote.
+ */
+export const BILLING_CURRENCY_TERMS: Readonly<Record<BillingCurrency, BillingCurrencyTerms>> =
+  Object.freeze({
+    usd: {
+      taxBehavior: 'exclusive',
+      includedTax: null,
+      usdPerUnit: { rate: 1, source: 'identity', observedOn: ECB_REFERENCE_RATES.observedOn },
+      typicalCardOrigin: 'domestic',
+    },
+    inr: {
+      taxBehavior: 'inclusive',
+      includedTax: {
+        label: 'GST',
+        rate: 0.18,
+        source: 'owner decision of 2026-10-10: INR prices include 18% GST',
+        decidedOn: '2026-10-10',
+      },
+      usdPerUnit: {
+        rate: ECB_REFERENCE_RATES.usdPerEur / ECB_REFERENCE_RATES.inrPerEur,
+        source: ECB_REFERENCE_RATES.source,
+        observedOn: ECB_REFERENCE_RATES.observedOn,
+      },
+      typicalCardOrigin: 'international',
+    },
+  });
+
+export function isBillingCurrency(value: string | null | undefined): value is BillingCurrency {
+  return (BILLING_CURRENCIES as readonly string[]).includes(value?.trim().toLowerCase() ?? '');
+}
+
+export function billingCurrencyTerms(currency: string): BillingCurrencyTerms | null {
+  const normalized = currency.trim().toLowerCase();
+  return isBillingCurrency(normalized) ? BILLING_CURRENCY_TERMS[normalized] : null;
+}
+
+export function getPlanPriceInCurrency(
+  plan: string | null | undefined,
+  interval: BillingInterval,
+  currency: BillingCurrency,
+): number | null {
+  return currency === 'inr' ? getPlanPriceInr(plan, interval) : getPlanPriceUsd(plan, interval);
 }

@@ -6,6 +6,7 @@ export const localizedPriceEntrySchema = z.object({
   amountMinor: z.number().int().nonnegative(),
   currency: z.string().regex(/^[a-z]{3}$/i),
   localized: z.boolean(),
+  taxIncluded: z.boolean().optional(),
   checkoutReady: z.boolean(),
 });
 
