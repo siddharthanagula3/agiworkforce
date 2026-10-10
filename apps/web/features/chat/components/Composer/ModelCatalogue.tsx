@@ -16,6 +16,7 @@ import {
   estimateMessageCredits,
 } from '@/lib/billing/credit-estimates';
 import { ProviderLogo } from './ProviderLogo';
+import { freeModelPromotionPickerLabel } from '@features/chat/lib/free-model-promotion-copy';
 
 const FAVOURITES_RAIL_KEY = 'favourites';
 const FAVOURITES_RAIL_LABEL = 'Favourites';
@@ -199,8 +200,12 @@ function formatMessageCredits(credits: number): string {
   );
 }
 
+function temporarilyFree(entry: ModelCatalogueEntry): boolean {
+  return entry.eventAccess || entry.promotionEndsAt !== null;
+}
+
 function freePoolCostLabel(entry: ModelCatalogueEntry): string | null {
-  return entry.freePool && !entry.eventAccess ? FREE_POOL_COST_TEXT.toLowerCase() : null;
+  return entry.freePool && !temporarilyFree(entry) ? FREE_POOL_COST_TEXT.toLowerCase() : null;
 }
 
 function PriceBandMark({ filled, scale }: { filled: number; scale: number }) {
@@ -235,11 +240,11 @@ function ModelCard({
   onBack: () => void;
 }) {
   const capabilities = CAPABILITY_CHIPS.filter((chip) => chip.matches(entry));
-  const showsCreditFigures = !entry.freePool && !entry.eventAccess;
+  const showsCreditFigures = !entry.freePool && !temporarilyFree(entry);
   const messageCredits = showsCreditFigures ? estimateMessageCredits(entry.id) : null;
   const rates = showsCreditFigures ? creditsPerMillionTokens(entry.id) : null;
   const priceFact = (published: string | null): string | null => {
-    if (entry.eventAccess) return null;
+    if (temporarilyFree(entry)) return null;
     return entry.freePool ? FREE_POOL_COST_TEXT : published;
   };
   const facts = [
@@ -452,7 +457,7 @@ export function ModelCatalogue({
       comingSoon || environment.locked || entry.temporarilyUnavailable || notOffered;
     const locked = planLocked || hardLocked;
     const pricedInCredits =
-      !entry.eventAccess && !entry.freePool && (messageCredits.get(entry.id) ?? null) !== null;
+      !temporarilyFree(entry) && !entry.freePool && (messageCredits.get(entry.id) ?? null) !== null;
     const costLabel = freePoolCostLabel(entry);
     const stageLabel = hardLocked ? null : releaseStageLabel(entry);
     return (
@@ -527,11 +532,14 @@ export function ModelCatalogue({
             {stageLabel && (
               <span className={`${TAG_CLASS} bg-muted/60 text-muted-foreground`}>{stageLabel}</span>
             )}
-            {entry.freePool && !entry.eventAccess ? (
+            {entry.freePool && !temporarilyFree(entry) ? (
               <span className={`${TAG_CLASS} border border-[var(--chat-border)] text-success-text`}>
                 {FREE_POOL_TAG_LABEL}
               </span>
-            ) : !pricedInCredits && entry.priceBand && !entry.eventAccess && !entry.freePool ? (
+            ) : !pricedInCredits &&
+              entry.priceBand &&
+              !temporarilyFree(entry) &&
+              !entry.freePool ? (
               <PriceBandMark filled={entry.priceBand.filled} scale={entry.priceBand.scale} />
             ) : null}
             {comingSoon && (
@@ -544,11 +552,13 @@ export function ModelCatalogue({
                 {ENVIRONMENT_TAG_LABEL}
               </span>
             )}
-            {entry.eventAccess && !entry.temporarilyUnavailable && (
+            {temporarilyFree(entry) && !entry.temporarilyUnavailable && (
               <span
                 className={`${TAG_CLASS} whitespace-nowrap bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
               >
-                {EVENT_TAG_LABEL}
+                {entry.promotionEndsAt && !entry.eventAccess
+                  ? freeModelPromotionPickerLabel(entry.promotionEndsAt)
+                  : EVENT_TAG_LABEL}
               </span>
             )}
             {entry.temporarilyUnavailable && (

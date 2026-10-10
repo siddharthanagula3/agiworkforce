@@ -33,6 +33,12 @@ import {
   readEventPromotion,
   type EventPromotion,
 } from '@/lib/server/event-access';
+import {
+  freeModelPromotionCoversPlan,
+  readFreeModelPromotion,
+  type FreeModelPromotion,
+} from '@/lib/server/free-model-promotion';
+import { freeModelPromotionHasCapacity } from '@/lib/server/free-model-promotion-ledger';
 import { DEFAULT_DATA_REGION, allowedDeveloperJurisdictions } from '@agiworkforce/compliance';
 import { managedCloudDataRegion } from '@/lib/server/data-region';
 
@@ -60,6 +66,7 @@ interface RouteContext {
   availabilityByProvider: Readonly<Record<string, ProviderAvailabilitySignal>>;
   poolsByRouteId: ReadonlyMap<string, FreePoolDecision>;
   eventPromotion: EventPromotion;
+  freeModelPromotion: Pick<FreeModelPromotion, 'modelId' | 'endsAtMs'> | null;
 }
 
 function freeInventoryOf(
@@ -92,7 +99,19 @@ function toCatalogueRoutes(modelId: string, context: RouteContext): ModelCatalog
   return routes;
 }
 
-async function buildRouteContext(models: readonly ModelMetadata[]): Promise<RouteContext> {
+async function offeredFreeModelPromotion(
+  planTier: string,
+  nowMs: number,
+): Promise<RouteContext['freeModelPromotion']> {
+  if (!freeModelPromotionCoversPlan(planTier)) return null;
+  const promotion = readFreeModelPromotion(nowMs);
+  return promotion && (await freeModelPromotionHasCapacity(promotion, nowMs)) ? promotion : null;
+}
+
+async function buildRouteContext(
+  models: readonly ModelMetadata[],
+  planTier: string,
+): Promise<RouteContext> {
   const nowMs = Date.now();
   const providers = new Set<string>();
   for (const model of models) {
@@ -105,6 +124,7 @@ async function buildRouteContext(models: readonly ModelMetadata[]): Promise<Rout
       freePoolDecisions(nowMs).map((decision) => [decision.entry.routeId, decision]),
     ),
     eventPromotion: readEventPromotion(nowMs),
+    freeModelPromotion: await offeredFreeModelPromotion(planTier, nowMs),
   };
 }
 
@@ -166,6 +186,8 @@ export interface ModelCatalogueEntry {
   temporarilyUnavailable: boolean;
   /** Selectable only because an event promotion is active, not by plan. */
   eventAccess: boolean;
+  /** Selectable only because the free model promotion runs, until this instant. */
+  promotionEndsAt: string | null;
   minimumPlanLabel: string | null;
   minimumPlan: UpgradeablePlanTier | null;
   availability: ModelAvailability;
@@ -221,7 +243,9 @@ function toCatalogueEntry(
     !temporarilyUnavailable &&
     eventAllowsModel(model.id, planTier, context.eventPromotion);
   const permanentlyAllowed = !announced && canAccessModelForSubscriptionTier(model.id, planTier);
-  const admitted = (permanentlyAllowed || eventAllowed) && routes.length > 0;
+  const promotionAllowed =
+    !announced && !temporarilyUnavailable && context.freeModelPromotion?.modelId === model.id;
+  const admitted = (permanentlyAllowed || eventAllowed || promotionAllowed) && routes.length > 0;
   const minimumTier = announced ? null : getMinimumRequiredTier(model.id);
   if (!announced && !admitted && !minimumTier) return null;
   return {
@@ -248,6 +272,10 @@ function toCatalogueEntry(
     // Temporary access reads differently from a plan the user bought, so the
     // picker can say "Free during event" instead of implying it is included.
     eventAccess: eventAllowed && !permanentlyAllowed,
+    promotionEndsAt:
+      promotionAllowed && !permanentlyAllowed && context.freeModelPromotion
+        ? new Date(context.freeModelPromotion.endsAtMs).toISOString()
+        : null,
     minimumPlanLabel: admitted || !minimumTier ? null : PLAN_LABEL[minimumTier],
     minimumPlan:
       admitted || !minimumTier || isFreeBillingPlanTier(minimumTier) ? null : minimumTier,
@@ -270,7 +298,7 @@ export async function buildCatalogueEntries(
   ),
 ): Promise<CatalogueEntry[]> {
   const pickerModels = listPickerChatModels(developerJurisdictions);
-  const context = await buildRouteContext(pickerModels);
+  const context = await buildRouteContext(pickerModels, planTier);
   return pickerModels
     .map((model) => toCatalogueEntry(model, planTier, context))
     .filter((entry): entry is CatalogueEntry => entry !== null);

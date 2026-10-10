@@ -87,6 +87,9 @@ import {
   splitEffortsByEntitlement,
 } from '@shared/config/llm';
 import { environmentAvailability, modelLock } from '@features/chat/lib/model-plan-admission';
+import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
+import { freeModelPromotionPickerLabel } from '@features/chat/lib/free-model-promotion-copy';
+import { claimFreeModelPromotionDefault } from '@features/chat/lib/free-model-promotion-default';
 import { ROUTING_PROFILE_CHOICE_OPTIONS, type ModelReasoning } from '@agiworkforce/types';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFastModeAvailability } from '@/features/chat/hooks/use-fast-mode-availability';
@@ -583,6 +586,7 @@ function ModelRow({
   onSelect,
   onUpgradeRequest,
   degraded,
+  promotionLabel,
 }: {
   model: AIModel;
   row?: ModelPickerRowModel;
@@ -593,6 +597,7 @@ function ModelRow({
   onSelect?: () => void;
   onUpgradeRequest?: () => void;
   degraded?: ProviderAvailability;
+  promotionLabel?: string;
 }) {
   const planLockLabel = row?.lock
     ? row.lock.kind === 'plan'
@@ -606,20 +611,21 @@ function ModelRow({
   const deprecationWarning = deprecationWarningFor(model);
   const releaseStage = isHardDisabled ? null : resolveModelReleaseStage(model.id, model.name);
   const releaseStageLabel = releaseStage ? MODEL_PICKER_RELEASE_STAGE_LABEL[releaseStage] : null;
-  const guidance = rowGuidance(model, row, degraded, deprecationWarning);
+  const guidance = promotionLabel ?? rowGuidance(model, row, degraded, deprecationWarning);
 
   const handleLockedClick = () => {
     if (isHardDisabled) return;
     onUpgradeRequest?.();
   };
 
+  const promotedAriaLabel = promotionLabel ? `${model.name} - ${promotionLabel}` : null;
   const baseAriaLabel = isComingSoon
     ? `${model.name} - ${lockReason ?? 'coming soon'} (not yet available)`
     : isEnvLocked
       ? `${model.name} - ${lockReason ?? 'environment not available'}`
       : isLocked
         ? `${model.name} - ${planLockLabel ?? 'requires upgrade'}`
-        : model.name;
+        : (promotedAriaLabel ?? model.name);
   const ariaLabel = [
     baseAriaLabel,
     releaseStageLabel,
@@ -936,6 +942,9 @@ export function ComposerFooter({
   const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
   const freePlan = isFreeBillingPlanTier(knownTier);
   freePlanRef.current = freePlan;
+  const accountId = useBillingStore((s) => s.user?.id ?? null);
+  const { ready: promotionReady, promotion } = useFreeModelPromotion(freePlan);
+  const promotedModelId = promotion?.modelId ?? null;
   const planResolved = knownTier !== null;
   const paidPlan = planResolved && !freePlan;
   const planRequestFailed = useBillingStore((s) => s.error !== null);
@@ -1104,7 +1113,7 @@ export function ComposerFooter({
   const lockOverrides = useMemo(() => {
     const overrides = new Map<string, ModelPickerLock>();
     for (const model of AVAILABLE_MODELS) {
-      const lock = modelLock(model, knownTier);
+      const lock = modelLock(model, knownTier, promotedModelId);
       if (!lock.locked) continue;
       if (lock.kind === 'coming_soon') {
         overrides.set(model.id, { kind: 'unavailable', label: COMING_SOON_LOCK_LABEL });
@@ -1116,7 +1125,7 @@ export function ComposerFooter({
       }
     }
     return overrides;
-  }, [knownTier]);
+  }, [knownTier, promotedModelId]);
 
   const shortList = useMemo(
     () =>
@@ -1133,13 +1142,20 @@ export function ComposerFooter({
         selectedModelId,
         admitsModel: (modelId) => {
           const candidate = AVAILABLE_MODELS.find((model) => model.id === modelId);
-          return candidate ? !modelLock(candidate, knownTier).locked : false;
+          return candidate ? !modelLock(candidate, knownTier, promotedModelId).locked : false;
         },
         lockOverrides,
         autoGuidance: AUTO_GUIDANCE,
         autoContinuityGuidance,
       }),
-    [conversationModelId, favouriteModelIds, lockOverrides, knownTier, selectedModelId],
+    [
+      conversationModelId,
+      favouriteModelIds,
+      lockOverrides,
+      knownTier,
+      promotedModelId,
+      selectedModelId,
+    ],
   );
 
   const searchMatches = useMemo(() => {
@@ -1154,6 +1170,7 @@ export function ComposerFooter({
   }, [searchQuery]);
 
   const freeDefaultModel = findSelectableModel(FREE_TRIAL_MODEL);
+  const promotedModel = freePlan && promotedModelId ? findSelectableModel(promotedModelId) : null;
 
   const triggerReceipt = localSelection
     ? `${localSelection.serverLabel} on this device · nothing leaves this Mac`
@@ -1163,12 +1180,15 @@ export function ComposerFooter({
 
   const renderModelRow = (model: AIModel) => {
     const row = shortList.rowsById.get(model.id);
-    const lock = modelLock(model, knownTier);
+    const lock = modelLock(model, knownTier, promotedModelId);
     return (
       <ModelRow
         key={model.id}
         model={model}
         row={row}
+        {...(promotion && model.id === promotion.modelId
+          ? { promotionLabel: freeModelPromotionPickerLabel(promotion.endsAt) }
+          : {})}
         isSelected={model.id === selectedModelId}
         isLocked={lock.locked}
         lockKind={lock.kind}
@@ -1193,8 +1213,10 @@ export function ComposerFooter({
   // A model can support provider-managed thinking without accepting a user
   // effort value. Only an explicit catalog effort ladder earns UI; never turn
   // a token-budget capability into a dead or misleading effort switch.
-  const hasEffortControl = supportsAdaptive && effortChips.length > 0;
-  const showThinkingSwitch = showsThinkingSwitch(reasoning);
+  const reasoningFixedByPromotion =
+    promotedModelId !== null && selectedModel.id === promotedModelId;
+  const hasEffortControl = supportsAdaptive && effortChips.length > 0 && !reasoningFixedByPromotion;
+  const showThinkingSwitch = showsThinkingSwitch(reasoning) && !reasoningFixedByPromotion;
   const fastTier = getModelMetadataById(selectedModel.id)?.fastTier;
   const fastModeDefinition = featureDefinition('fast_mode');
   const fastModeMaturityLabel = fastModeDefinition
@@ -1213,19 +1235,41 @@ export function ComposerFooter({
     : defaultStoreEffort(reasoning);
 
   useEffect(() => {
-    if (!billingPolicyReady) return;
+    if (!billingPolicyReady || !promotionReady) return;
     // modelLock covers tier, env AND availability gates, closing the selection-
     // reset leak where a now-invalid model could remain selected after the tier
     // changed. (coming_soon models can never be selected in the first place, but
     // this also recovers if a live model is retired.)
     if (freePlan && isAutoModeModelId(selectedModelId)) {
-      setSelectedModelId(FREE_TRIAL_MODEL);
+      if (promotion && accountId) claimFreeModelPromotionDefault(promotion, accountId);
+      setSelectedModelId(promotedModelId ?? FREE_TRIAL_MODEL);
       return;
     }
-    if (modelLock(selectedModel, tier).locked) {
+    if (
+      freePlan &&
+      promotion &&
+      accountId &&
+      selectedModelId === FREE_TRIAL_MODEL &&
+      claimFreeModelPromotionDefault(promotion, accountId)
+    ) {
+      setSelectedModelId(promotion.modelId);
+      return;
+    }
+    if (modelLock(selectedModel, tier, promotedModelId).locked) {
       setSelectedModelId(getBestAutoModeForTier(tier));
     }
-  }, [billingPolicyReady, freePlan, selectedModel, selectedModelId, setSelectedModelId, tier]);
+  }, [
+    accountId,
+    billingPolicyReady,
+    freePlan,
+    promotion,
+    promotedModelId,
+    promotionReady,
+    selectedModel,
+    selectedModelId,
+    setSelectedModelId,
+    tier,
+  ]);
 
   useEffect(() => {
     // always_on reasoners keep thinking on. If thinking is enabled but the current
@@ -1479,6 +1523,7 @@ export function ComposerFooter({
                         </>
                       ) : (
                         <>
+                          {promotedModel && renderModelRow(promotedModel)}
                           <FreeQuotaModelSection
                             sources={freeModelSources}
                             selectedId={selectedModelId}

@@ -71,6 +71,7 @@ const cloudModules = [
   'device-registry',
   'header-names',
   'free-quota',
+  'free-model-promotion',
   'account-deletion',
   'terms-acceptance',
   'device-authorization',

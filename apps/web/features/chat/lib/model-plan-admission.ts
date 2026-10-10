@@ -29,8 +29,15 @@ function isModelSelectableForTier(model: AIModel, tier: string | null): boolean 
   return isModelAllowedForTier(model.id, tier);
 }
 
-export function modelLock(model: AIModel, tier: string | null): ModelLock {
+export function modelLock(
+  model: AIModel,
+  tier: string | null,
+  promotedModelId: string | null = null,
+): ModelLock {
   if (freeQuotaSelection(model.id)) return { locked: false, kind: 'tier' };
+  if (promotedModelId !== null && model.id === promotedModelId) {
+    return { locked: false, kind: 'tier' };
+  }
   if (model.availability && model.availability !== 'live') {
     return { locked: true, kind: 'coming_soon', reason: COMING_SOON_REASON };
   }

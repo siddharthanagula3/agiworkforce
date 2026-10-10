@@ -2,6 +2,7 @@ import { evaluateModelEnvironment } from '@agiworkforce/types';
 import { getModelMetadata } from '@shared/config/llm';
 import { formatTokenCount } from '@features/code/code-surface';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
+import { freeModelPromotionPickerLabel } from '@features/chat/lib/free-model-promotion-copy';
 
 export const UNPUBLISHED_VALUE = 'Not published';
 
@@ -17,6 +18,7 @@ export function tokenCeilingLabel(tokens: number | null): string {
 
 export function accessLabel(entry: ModelCatalogueEntry, planLabel: string): string {
   if (entry.eventAccess) return 'Free during event';
+  if (entry.promotionEndsAt) return freeModelPromotionPickerLabel(entry.promotionEndsAt);
   if (entry.admitted) return planLabel ? `Included in ${planLabel}` : 'Included in your plan';
   return entry.minimumPlanLabel ? `Upgrade to use · ${entry.minimumPlanLabel}` : 'Not available';
 }
