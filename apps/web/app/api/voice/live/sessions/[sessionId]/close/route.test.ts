@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { chargeMicrousdForProviderCost, getRoutingSlotModel } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
@@ -260,6 +260,44 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     expect(mocks.priceBackend).toHaveBeenCalledWith(
       expect.objectContaining({ backendModel: getRoutingSlotModel('voice_live_backend') }),
     );
+  });
+
+  it('charges a client that claims a cheaper backend model at the plan backend rate', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/voice/live-voice-backend-cost')>(
+      '@/lib/voice/live-voice-backend-cost',
+    );
+    mocks.priceBackend.mockImplementationOnce((...args: unknown[]) =>
+      actual.priceLiveVoiceBackend(...(args as Parameters<typeof actual.priceLiveVoiceBackend>)),
+    );
+    scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
+    const tokens = { inputTokens: 20_000, outputTokens: 5_000 };
+    const cheaper = getRoutingSlotModel('voice_live_backend_free');
+    const recorded = getRoutingSlotModel('voice_live_backend');
+
+    await close({ seconds: 30, settlement: SETTLEMENT, backend: { ...tokens, model: cheaper } });
+
+    const atRecordedRate = actual.priceLiveVoiceBackend({
+      provider: 'openai',
+      backendModel: recorded,
+      reported: tokens,
+    }).totalMicrousd;
+    const atClaimedRate = actual.priceLiveVoiceBackend({
+      provider: 'openai',
+      backendModel: cheaper,
+      reported: tokens,
+    }).totalMicrousd;
+    expect(atClaimedRate).toBeLessThan(atRecordedRate);
+    const expected = charge(30) + chargeMicrousdForProviderCost(atRecordedRate);
+    expect(expected).toBeLessThan(ONE_BLOCK_MICROUSD);
+    expect(finalized()['actualCostMicrousd']).toBe(expected);
+    expect(finalized()['actualCostMicrousd']).not.toBe(
+      charge(30) + chargeMicrousdForProviderCost(atClaimedRate),
+    );
+    expect(mocks.priceBackend).toHaveBeenCalledWith({
+      provider: 'openai',
+      backendModel: recorded,
+      reported: tokens,
+    });
   });
 
   it('prices a free plan session against the backend the free plan delegated to', async () => {
