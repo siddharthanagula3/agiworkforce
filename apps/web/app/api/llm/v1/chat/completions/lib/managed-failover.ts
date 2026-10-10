@@ -68,6 +68,7 @@ import {
 import { resilienceScopeForCategory, type ResilienceScope } from '@agiworkforce/routing';
 import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import { canFailoverToOpenRouter } from '@/lib/services/aggregator-routing';
 import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
@@ -745,26 +746,69 @@ export function createFailoverPlan(
   };
 
   const promotion = processed.freeTrial?.promotion;
+  let promotionFallbackUsed = false;
+
+  /**
+   * The one move a promoted turn has: onto the Free plan's own model, which
+   * costs nothing, exactly as the turn would have been served with no
+   * promotion. Never another paid route or a retry, which would spend money
+   * the promotion did not reserve. The view stops naming the promotion
+   * credential, so the free route is built and judged as itself.
+   */
+  const promotionFallbackAttempt = (
+    category: string,
+    context: FailoverStepContext | undefined,
+  ): FailoverAttempt | null => {
+    if (!promotion || promotionFallbackUsed) return null;
+    if (category !== BILLING_EXHAUSTED_CATEGORY && isNeverRotateCategory(category)) return null;
+    if (toolStateBindsProvider(processed, context)) return null;
+    let provider: string;
+    try {
+      provider = resolveProviderFromModel(FREE_TRIAL_MODEL);
+    } catch {
+      return null;
+    }
+    if (!options.isProviderDispatchable(provider)) return null;
+    if (tier !== undefined && !canAccessModel(FREE_TRIAL_MODEL, tier)) return null;
+    if (hopMayTrain(FREE_TRIAL_MODEL, provider)) return null;
+    promotionFallbackUsed = true;
+    const view = buildFailoverAttemptView(latestView, FREE_TRIAL_MODEL, provider);
+    const attemptView: ProcessedRequest = {
+      ...view,
+      ...(view.freeTrial
+        ? { freeTrial: { ...view.freeTrial, promotion: { ...promotion, isolated: false } } }
+        : {}),
+    };
+    latestView = attemptView;
+    latestRouteId = null;
+    latestHarnessId = undefined;
+    return { model: FREE_TRIAL_MODEL, provider, processed: attemptView };
+  };
 
   return {
     next: (error: unknown, context?: FailoverStepContext): FailoverAttempt | null => {
       if (options.signal.aborted) return null;
-      // A turn the free model promotion pays for is bounded by the spend it
-      // reserved on one credential. Any other route or retry would spend money
-      // the promotion never reserved, and its failures describe that credential
-      // rather than the managed one, so they are not reported to shared health.
+      // A promoted turn is bounded by the spend it reserved on one credential,
+      // and its failures describe that credential rather than the managed one,
+      // so nothing is reported to shared health and the only move is the free
+      // route.
       if (promotion) {
+        const category = classifyError(error).category;
+        const fallback = promotionFallbackAttempt(category, context);
         logger.warn(
           {
             requestId: processed.requestId,
             provider: latestView.provider,
             model: latestView.chatRequest.model,
-            category: classifyError(error).category,
+            category,
             paidBy: promotion.credentialId,
+            fallback: fallback?.model ?? null,
           },
-          'Managed failover refused: a promoted turn stays on the credential that reserved it',
+          fallback
+            ? 'Managed failover: a promoted turn moves to the Free plan model'
+            : 'Managed failover refused: a promoted turn has no free route left',
         );
-        return null;
+        return fallback;
       }
       mustStayOnProvider = toolStateBindsProvider(processed, context);
       const classified = classifyError(error);

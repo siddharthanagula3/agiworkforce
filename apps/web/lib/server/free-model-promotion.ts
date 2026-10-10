@@ -17,6 +17,7 @@ import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter
 
 const MICROUSD_PER_USD = 1_000_000;
 const MILLISECONDS_PER_SECOND = 1_000;
+const MILLISECONDS_PER_HOUR = 60 * 60 * MILLISECONDS_PER_SECOND;
 const MESSAGE_FRAME_TOKENS = 8;
 const MANAGED_API_KEY = 'managed';
 const IMAGE_PART_TYPES: ReadonlySet<string> = new Set(['image_url', 'image', 'input_image']);
@@ -44,6 +45,10 @@ export const FreeModelPromotionConfigSchema = z
     perUserMessages: z.strictObject({
       limit: z.number().int().positive(),
       window: z.string().regex(/^\d+\s*(s|m|h|d)$/),
+    }),
+    perUserWebSearches: z.strictObject({
+      limit: z.number().int().nonnegative(),
+      windowHours: z.number().positive(),
     }),
     promptTokenCeiling: z.number().int().positive(),
     promptTokenHeadroom: z.number().int().nonnegative(),
@@ -128,6 +133,7 @@ export interface FreeModelPromotion {
   spendCeilingMicrousd: number;
   turnReserveMicrousd: number;
   perUserMessages: { limit: number; window: string };
+  perUserWebSearches: { limit: number; windowMs: number };
   promptTokenCeiling: number;
   promptBudgetTokens: number;
   latestMessageTokenLimit: number;
@@ -235,6 +241,10 @@ export function readFreeModelPromotion(
     spendCeilingMicrousd: toMicrousd(config.spendCeilingUsd),
     turnReserveMicrousd: toMicrousd(config.turnReserveUsd),
     perUserMessages: config.perUserMessages,
+    perUserWebSearches: {
+      limit: config.perUserWebSearches.limit,
+      windowMs: config.perUserWebSearches.windowHours * MILLISECONDS_PER_HOUR,
+    },
     promptTokenCeiling: config.promptTokenCeiling,
     promptBudgetTokens: config.promptTokenCeiling - config.promptTokenHeadroom,
     latestMessageTokenLimit: config.latestMessageTokenLimit,
@@ -401,18 +411,26 @@ export function fitFreeModelPromotionOutput(input: {
   return { ok: true, maxOutputTokens: low };
 }
 
-/** What a settled turn spent of the promotion: its measured usage, never less than what the caller reported. */
+/**
+ * What a settled turn spent of the promotion: its measured tokens plus the
+ * provider-billed tool charges, never less than what the caller reported.
+ */
 export function freeModelPromotionSpendMicrousd(input: {
   provider?: string;
   model?: string;
   usage?: TokenUsage;
   reportedMicrousd: number;
+  toolMicrousd?: number;
 }): number {
   const measured =
     input.provider && input.model && input.usage
       ? LLMCostCalculator.calculateCostMicrousd(input.provider, input.model, input.usage)
       : 0;
-  return Math.max(Math.max(0, input.reportedMicrousd), Number.isFinite(measured) ? measured : 0);
+  const tokens = Number.isFinite(measured) ? measured : 0;
+  return Math.max(
+    Math.max(0, input.reportedMicrousd),
+    tokens + Math.max(0, input.toolMicrousd ?? 0),
+  );
 }
 
 /** Its account carries nothing but the promotion, so its refusals say nothing about managed traffic. */

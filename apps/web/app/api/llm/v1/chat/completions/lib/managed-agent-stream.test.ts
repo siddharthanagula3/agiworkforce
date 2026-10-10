@@ -447,7 +447,9 @@ describe('managed agent stream', () => {
           model: 'claude-test',
         }),
         toolMicrousd: 2 * nativeServerToolMicrousdPerRequest('anthropic', 'web_search') + 7_000,
+        serverToolMicrousd: 2 * nativeServerToolMicrousdPerRequest('anthropic', 'web_search'),
       },
+      webSearchRequests: 2,
       usage: expect.objectContaining({
         promptTokens: 90,
         completionTokens: 30,

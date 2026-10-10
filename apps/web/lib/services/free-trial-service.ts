@@ -35,7 +35,10 @@ import {
   type FreeModelPromotionFit,
   type FreeModelPromotionReservation,
 } from '@/lib/server/free-model-promotion';
-import { settleFreeModelPromotionTurn } from '@/lib/server/free-model-promotion-ledger';
+import {
+  recordFreeModelPromotionSearches,
+  settleFreeModelPromotionTurn,
+} from '@/lib/server/free-model-promotion-ledger';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
@@ -71,7 +74,12 @@ export const FREE_BUDGET_REACHED_ERROR_CLASS = 'free_trial_token_budget_reached'
 
 const CHARGE_STEP_MICROUSD = chargeMicrousdForProviderCost(1);
 
-export type FreeTrialCost = { tokenMicrousd: number; toolMicrousd: number };
+export type FreeTrialCost = {
+  tokenMicrousd: number;
+  toolMicrousd: number;
+  /** The part of `toolMicrousd` the model provider bills on the same account as the tokens. */
+  serverToolMicrousd?: number;
+};
 
 export interface FreeTrialToolSpend {
   hold(providerMicrousd: number): boolean;
@@ -281,9 +289,14 @@ export function freeTrialSpendMicrousd(
   reservation: FreeTrialReservation,
   cost: FreeTrialCost,
 ): number {
+  const toolMicrousd = nonNegativeMicrousd(cost.toolMicrousd);
+  const promotionPaidToolMicrousd = reservation.promotion
+    ? Math.min(nonNegativeMicrousd(cost.serverToolMicrousd), toolMicrousd)
+    : 0;
   return (
     (reservation.unmetered ? 0 : nonNegativeMicrousd(cost.tokenMicrousd)) +
-    nonNegativeMicrousd(cost.toolMicrousd)
+    toolMicrousd -
+    promotionPaidToolMicrousd
   );
 }
 
@@ -298,7 +311,7 @@ export function createFreeTrialToolSpend(input: {
     headroomMicrousd() {
       const spent = input.spent();
       const committed = freeTrialSpendMicrousd(input.reservation, {
-        tokenMicrousd: spent.tokenMicrousd,
+        ...spent,
         toolMicrousd: spent.toolMicrousd + heldMicrousd,
       });
       const left = input.reservation.reservedMicrousd - chargeMicrousdForProviderCost(committed);
@@ -307,7 +320,7 @@ export function createFreeTrialToolSpend(input: {
     hold(providerMicrousd) {
       const spent = input.spent();
       const committed = freeTrialSpendMicrousd(input.reservation, {
-        tokenMicrousd: spent.tokenMicrousd,
+        ...spent,
         toolMicrousd: spent.toolMicrousd + heldMicrousd + nonNegativeMicrousd(providerMicrousd),
       });
       if (chargeMicrousdForProviderCost(committed) > input.reservation.reservedMicrousd) {
@@ -786,6 +799,8 @@ export async function settleFreeTrialRequest(params: {
   model?: string;
   usage?: TokenUsage;
   cost?: FreeTrialCost;
+  /** Provider-run searches in the turn, counted against a promoted account's search allowance. */
+  webSearchRequests?: number;
   attempt?: GenerationAttempt | null;
 }): Promise<number | null> {
   const attempt = params.attempt === undefined ? { outcome: params.outcome } : params.attempt;
@@ -801,7 +816,7 @@ export async function settleFreeTrialRequest(params: {
       )) &&
       params.reservation.promotion
     ) {
-      await settleFreeModelPromotionTurn(params.reservation.promotion, promotionSpend(params));
+      await settlePromotion(params.reservation, params);
     }
     return null;
   }
@@ -909,25 +924,44 @@ export async function settleFreeTrialRequest(params: {
     await settleEventSpend(params.reservation.eventBudget, settledCostMicrousd);
   }
   if (params.reservation.promotion && settledCostMicrousd !== null) {
-    await settleFreeModelPromotionTurn(params.reservation.promotion, promotionSpend(params));
+    await settlePromotion(params.reservation, params);
   }
   return settledCostMicrousd;
 }
 
-function promotionSpend(params: {
-  provider?: string;
-  model?: string;
-  usage?: TokenUsage;
-  cost?: FreeTrialCost;
-}): number {
-  return freeModelPromotionSpendMicrousd({
-    ...(params.provider ? { provider: params.provider } : {}),
-    ...(params.model ? { model: params.model } : {}),
-    ...(params.usage ? { usage: params.usage } : {}),
-    reportedMicrousd:
-      nonNegativeMicrousd(params.cost?.tokenMicrousd) +
-      nonNegativeMicrousd(params.cost?.toolMicrousd),
-  });
+async function settlePromotion(
+  reservation: FreeTrialReservation,
+  params: {
+    provider?: string;
+    model?: string;
+    usage?: TokenUsage;
+    cost?: FreeTrialCost;
+    webSearchRequests?: number;
+  },
+): Promise<void> {
+  if (!reservation.promotion) return;
+  const toolMicrousd =
+    params.cost?.serverToolMicrousd === undefined
+      ? nonNegativeMicrousd(params.cost?.toolMicrousd)
+      : nonNegativeMicrousd(params.cost.serverToolMicrousd);
+  await settleFreeModelPromotionTurn(
+    reservation.promotion,
+    freeModelPromotionSpendMicrousd({
+      ...(params.provider ? { provider: params.provider } : {}),
+      ...(params.model ? { model: params.model } : {}),
+      ...(params.usage ? { usage: params.usage } : {}),
+      reportedMicrousd: nonNegativeMicrousd(params.cost?.tokenMicrousd) + toolMicrousd,
+      toolMicrousd,
+    }),
+  );
+  if ((params.webSearchRequests ?? 0) > 0) {
+    await recordFreeModelPromotionSearches({
+      promotionId: reservation.promotion.promotionId,
+      userId: reservation.userId,
+      requestId: reservation.requestId,
+      searches: params.webSearchRequests ?? 0,
+    });
+  }
 }
 
 export async function releaseExpiredFreeTrialReservations(

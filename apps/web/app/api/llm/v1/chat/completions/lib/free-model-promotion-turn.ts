@@ -17,6 +17,7 @@ import {
   type PromotionSizedMessage,
 } from '@/lib/server/free-model-promotion';
 import {
+  freeModelPromotionSearchesLeft,
   reserveFreeModelPromotionTurn,
   settleFreeModelPromotionTurn,
   type FreeModelPromotionLedger,
@@ -38,6 +39,8 @@ export interface FreeModelPromotionHold {
 export interface FreeModelPromotionTurn {
   promotion: FreeModelPromotion;
   hold: FreeModelPromotionHold;
+  /** Whether the account has provider searches left on the promotion in its window. */
+  webSearchAllowed: boolean;
 }
 
 function createHold(reservation: FreeModelPromotionReservation): FreeModelPromotionHold {
@@ -115,7 +118,14 @@ export async function admitFreeModelPromotionTurn(input: {
     nowMs,
     ...(input.ledger === undefined ? {} : { ledger: input.ledger }),
   });
-  return reservation ? { promotion, hold: createHold(reservation) } : null;
+  if (!reservation) return null;
+  const webSearchAllowed = await freeModelPromotionSearchesLeft(
+    promotion,
+    input.userId,
+    nowMs,
+    ...(input.ledger ? [input.ledger.store] : []),
+  );
+  return { promotion, hold: createHold(reservation), webSearchAllowed };
 }
 
 /** Trims a promoted turn's history by the token bound, inside what its tool definitions leave of the prompt budget. */

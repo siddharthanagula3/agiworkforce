@@ -10,7 +10,13 @@ if (!PROMOTED_MODEL) throw new Error('Canonical Anthropic OpenRouter fixture is 
 type PromotionTestModule0 = typeof import('@/lib/logger');
 type PromotionTestModule1 = typeof import('@/lib/services/provider-adapter-service');
 
+const FREE_ROUTE_MODEL = vi.hoisted(() => 'fixture-free-route');
+
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/free-trial-config', () => ({
+  FREE_TRIAL_MODEL: FREE_ROUTE_MODEL,
+  FREE_TRIAL_MODELS: [FREE_ROUTE_MODEL],
+}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule0>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -18,7 +24,8 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 vi.mock('@/lib/model-tiers', () => ({ canAccessModel: () => true }));
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule1>()),
-  resolveProviderFromModel: () => 'openai',
+  resolveProviderFromModel: (model: string) =>
+    model === FREE_ROUTE_MODEL ? 'openrouter' : 'openai',
   listAvailableManagedProviderIds: () => new Set<string>(),
 }));
 vi.mock('./request-processor', async (importOriginal) => ({
@@ -107,17 +114,50 @@ afterEach(() => {
 });
 
 describe('managed failover for a turn the free model promotion pays for', () => {
-  it('never moves an unfunded promotion credential onto another paid provider, even from Auto', () => {
-    expect(plan(promotedTurn('auto')).next(unfunded())).toBeNull();
-    expect(plan(promotedTurn(PROMOTED_MODEL)).next(unfunded())).toBeNull();
+  it('moves an unfunded promotion credential onto the free route, never another paid provider', () => {
+    for (const requested of ['auto', PROMOTED_MODEL]) {
+      const attempt = plan(promotedTurn(requested)).next(unfunded());
+
+      expect(attempt?.model).toBe(FREE_ROUTE_MODEL);
+      expect(attempt?.provider).toBe('openrouter');
+      expect(attempt?.processed.freeTrial?.promotion?.isolated).toBe(false);
+    }
   });
 
-  it('never retries through OpenRouter or the fallback plan on an availability failure', () => {
+  it('falls back to the free route once on an availability failure, then stops', () => {
+    const failover = plan(promotedTurn('auto'));
+    const unavailable = () => Object.assign(new Error('upstream 503'), { status: 503 });
+
+    expect(failover.next(unavailable())?.model).toBe(FREE_ROUTE_MODEL);
+    expect(failover.next(unavailable())).toBeNull();
+  });
+
+  it('never shops a safety refusal onto the free route', () => {
     const attempt = plan(promotedTurn('auto')).next(
-      Object.assign(new Error('upstream 503'), { status: 503 }),
+      Object.assign(new Error('content was blocked by safety'), { status: 400 }),
     );
 
     expect(attempt).toBeNull();
+  });
+
+  it('stays put once a function tool call has bound the turn to its provider', () => {
+    const withTools = {
+      ...promotedTurn('auto'),
+      llmRequest: {
+        ...promotedTurn('auto').llmRequest,
+        tools: [{ type: 'function', function: { name: 'lookup', parameters: {} } }],
+      },
+    } as ProcessedRequest;
+
+    expect(
+      plan(withTools).next(Object.assign(new Error('upstream 503'), { status: 503 }), { step: 2 }),
+    ).toBeNull();
+  });
+
+  it('keeps a turn that must not train off a free route that may', () => {
+    const optedOut = { ...promotedTurn('auto'), noTrainingOnly: true } as ProcessedRequest;
+
+    expect(plan(optedOut).next(unfunded())).toBeNull();
   });
 
   it('reports nothing to shared provider health, so paying accounts keep the provider', () => {

@@ -474,16 +474,17 @@ export function observedProviderUsageLedgerMicrousd(
 export function observedTurnCost(
   usage: ObservedProviderUsage,
   pricing: ProviderUsagePricingContext,
-): { tokenMicrousd: number; toolMicrousd: number } {
+): { tokenMicrousd: number; toolMicrousd: number; serverToolMicrousd?: number } {
+  const serverToolMicrousd = priceServerToolUsage({
+    provider: pricing.provider,
+    webSearchRequests: usage.webSearchRequests,
+    webFetchRequests: usage.webFetchRequests,
+    hostedCodeExecution: usage.hostedCodeExecution,
+  }).providerMicrousd;
   return {
     tokenMicrousd: observedProviderUsageLedgerMicrousd(usage, pricing),
-    toolMicrousd:
-      priceServerToolUsage({
-        provider: pricing.provider,
-        webSearchRequests: usage.webSearchRequests,
-        webFetchRequests: usage.webFetchRequests,
-        hostedCodeExecution: usage.hostedCodeExecution,
-      }).providerMicrousd + nonNegative(usage.toolSpendMicrousd),
+    toolMicrousd: serverToolMicrousd + nonNegative(usage.toolSpendMicrousd),
+    ...(serverToolMicrousd > 0 ? { serverToolMicrousd } : {}),
   };
 }
 
