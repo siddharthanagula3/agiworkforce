@@ -1,303 +1,117 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRoutingSlotModel, MICROUSD_PER_CREDIT } from '@agiworkforce/types';
-type ScanModule0 = typeof import('@/lib/server/rolling-usage');
-type ScanModule1 = typeof import('@/lib/server/spendable-credits');
-type ScanModule2 = typeof import('@/lib/services/credit-service');
+import { describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { getTierPolicy } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
-const mocks = vi.hoisted(() => ({
-  rollingUsage: vi.fn(),
-  balance: vi.fn(),
-  spendable: vi.fn(),
-}));
-
-vi.mock('@/lib/server/rolling-usage', async (importOriginal) => ({
-  ...(await importOriginal<ScanModule0>()),
-  getRollingUsage: (...args: unknown[]) => mocks.rollingUsage(...args),
-}));
-vi.mock('@/lib/server/spendable-credits', async (importOriginal) => ({
-  ...(await importOriginal<ScanModule1>()),
-  getSpendableCredits: (...args: unknown[]) => mocks.spendable(...args),
-}));
-vi.mock('@/lib/services/credit-service', async (importOriginal) => {
-  const actual = await importOriginal<ScanModule2>();
-  return {
-    ...actual,
-    CreditService: {
-      ...actual.CreditService,
-      getBalance: (...args: unknown[]) => mocks.balance(...args),
-    },
-  };
-});
+import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
+import { LIVE_SESSION_CEILING_SECONDS } from '@/lib/voice/live-voice-billing';
 
 import {
-  getPlanSessionUsageCapMicrousd,
-  getPlanWeeklyUsageCapMicrousd,
-} from '@/lib/server/managed-usage-policy';
-import {
-  LIVE_SESSION_CEILING_SECONDS,
-  liveSessionChargeMicrousd,
-  liveSessionSecondsCoveredBy,
-} from '@/lib/voice/live-voice-billing';
+  planIncludesVoice,
+  planVoiceMinutesBlock,
+  VOICE_MINUTES_EXHAUSTED_CODE,
+  voiceMinutesExhaustedMessage,
+  voiceUsageErrorResponse,
+} from '../voice-session-budget';
 
-import { planVoiceSessionBlock, readVoiceReservation } from '../voice-session-budget';
+const RESET_AT = '2026-11-01T00:00:00.000Z';
 
-const LIVE_MODEL = getRoutingSlotModel('voice_live');
-const FULL_BLOCK_MICROUSD = liveSessionChargeMicrousd(
-  LIVE_SESSION_CEILING_SECONDS,
-  LIVE_MODEL,
-) as number;
-const FIVE_HOUR_OLDEST = '2026-09-27T10:00:00.000Z';
-const WEEKLY_OLDEST = '2026-09-24T10:00:00.000Z';
-const PERIOD_END = '2026-10-15T00:00:00.000Z';
-const db = { query: vi.fn() } as never;
-
-function capsFor(tier: string): { session: number; weekly: number } {
-  const allowance = { tier, catalogVersion: null };
-  return {
-    session: getPlanSessionUsageCapMicrousd(allowance) as number,
-    weekly: getPlanWeeklyUsageCapMicrousd(allowance) as number,
+function dbWithConsumedSeconds(seconds: number) {
+  const queries: string[] = [];
+  const db = {
+    query: vi.fn(async (sql: string) => {
+      queries.push(sql);
+      if (sql.includes('as reset_at')) {
+        return [{ period_start: '2026-10-01T00:00:00.000Z', reset_at: RESET_AT }];
+      }
+      return [{ consumed: seconds }];
+    }),
   };
+  return { db: db as never, queries };
 }
 
-function usage(input: { session: number; weekly: number }): void {
-  mocks.rollingUsage.mockImplementation(async (_db: unknown, _user: string, hours: number) =>
-    hours === 5
-      ? { usedMicrousd: input.session, oldestAt: FIVE_HOUR_OLDEST }
-      : { usedMicrousd: input.weekly, oldestAt: WEEKLY_OLDEST },
-  );
-}
+const request = () => new NextRequest('http://localhost/api/voice/live/sessions');
 
-function monthly(remainingMicrousd: number | null, dailyRemainingMicrousd?: number | null): void {
-  mocks.balance.mockResolvedValue(
-    remainingMicrousd === null
-      ? null
-      : {
-          credits_remaining_microusd: remainingMicrousd,
-          daily_remaining_microusd: dailyRemainingMicrousd ?? null,
-          period_end: PERIOD_END,
-        },
-  );
-}
+describe('planVoiceMinutesBlock', () => {
+  it('starts a Free session on its voice minutes with no managed budget at all', async () => {
+    expect(getTierPolicy('free').voiceMinutesPerMonth).toBe(30);
+    const { db, queries } = dbWithConsumedSeconds(0);
 
-function plan(tier: string) {
-  return planVoiceSessionBlock({
-    db,
-    userId: 'user-1',
-    planTier: tier,
-    catalogVersion: null,
-    modelId: LIVE_MODEL,
+    const seconds = await planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'free' });
+
+    expect(seconds).toBe(LIVE_SESSION_CEILING_SECONDS);
+    expect(queries.some((sql) => sql.includes('credit_transactions'))).toBe(false);
+    expect(queries.some((sql) => sql.includes('reserve_managed_usage'))).toBe(false);
   });
-}
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  usage({ session: 0, weekly: 0 });
-  monthly(1_000_000_000);
-  mocks.spendable.mockResolvedValue({
-    availableMicrousd: 0,
-    availableCents: 0,
-    overageEnabled: false,
+  it('holds the block to the minutes that are left', async () => {
+    const { db } = dbWithConsumedSeconds(27 * 60);
+
+    expect(await planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'free' })).toBe(3 * 60);
+  });
+
+  it('refuses with the reset instant once under a minute is left', async () => {
+    const { db } = dbWithConsumedSeconds(30 * 60);
+
+    await expect(
+      planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'free' }),
+    ).rejects.toMatchObject({
+      status: 429,
+      code: VOICE_MINUTES_EXHAUSTED_CODE,
+      limitContext: { resetsAt: RESET_AT },
+    });
+  });
+
+  it('gives Max a whole block without reading any usage, because its minutes are unlimited', async () => {
+    expect(getTierPolicy('max').voiceMinutesPerMonth).toBeNull();
+    const { db, queries } = dbWithConsumedSeconds(1_000_000);
+
+    expect(await planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'max' })).toBe(
+      LIVE_SESSION_CEILING_SECONDS,
+    );
+    expect(queries).toHaveLength(0);
+  });
+
+  it('gives Pro the minutes its plan declares', async () => {
+    expect(getTierPolicy('pro').voiceMinutesPerMonth).toBe(300);
+    const { db } = dbWithConsumedSeconds(299 * 60 + 1);
+
+    await expect(
+      planVoiceMinutesBlock({ db, userId: 'user-1', planTier: 'pro' }),
+    ).rejects.toMatchObject({ code: VOICE_MINUTES_EXHAUSTED_CODE });
   });
 });
 
-describe('planVoiceSessionBlock', () => {
-  it('holds a Pro session to what its five-hour window covers', async () => {
-    const caps = capsFor('pro');
-    expect(caps.session).toBe(50 * MICROUSD_PER_CREDIT);
-    expect(caps.session).toBeLessThan(FULL_BLOCK_MICROUSD);
-
-    const block = await plan('pro');
-
-    expect(block.blockSeconds).toBe(liveSessionSecondsCoveredBy(caps.session, LIVE_MODEL));
-    expect(block.blockSeconds).toBeLessThan(LIVE_SESSION_CEILING_SECONDS);
-  });
-
-  it('reports that the Free plan cannot fund even a one-minute session, whatever its usage', async () => {
-    expect(capsFor('free').session).toBe(0);
-
-    const block = await plan('free');
-
-    expect(block.planFundsMinimumBlock).toBe(false);
-    expect(block.blockSeconds).toBe(0);
-  });
-
-  it('lets overage fund a plan whose own allowance cannot cover a minute', async () => {
-    mocks.spendable.mockResolvedValue({
-      availableMicrousd: 1_000_000,
-      availableCents: 100,
-      overageEnabled: true,
-    });
-
-    expect((await plan('free')).planFundsMinimumBlock).toBe(true);
-  });
-
-  it('treats a used-up window on a paid plan as a limit, not a plan without voice', async () => {
-    const caps = capsFor('pro');
-    usage({ session: caps.session, weekly: caps.session });
-
-    const block = await plan('pro');
-
-    expect(block.planFundsMinimumBlock).toBe(true);
-    expect(block.blockSeconds).toBe(0);
-    expect(block.resetsAt['rolling_five_hour_limit_reached']).toBe('2026-09-27T15:00:00.000Z');
-  });
-
-  it('gives a whole block when every window has room for it', async () => {
-    const caps = capsFor('max_15x');
-    expect(caps.session).toBeGreaterThan(FULL_BLOCK_MICROUSD);
-
-    const block = await plan('max_15x');
-
-    expect(block.blockSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
-  });
-
-  it('sizes the block to the smallest remaining window', async () => {
-    const caps = capsFor('max_15x');
-    const sessionLeft = 120_000;
-    usage({ session: caps.session - sessionLeft, weekly: 0 });
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(sessionLeft, LIVE_MODEL),
-    );
-
-    const weeklyLeft = 90_000;
-    usage({ session: 0, weekly: caps.weekly - weeklyLeft });
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(weeklyLeft, LIVE_MODEL),
-    );
-
-    usage({ session: 0, weekly: 0 });
-    monthly(60_000);
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(60_000, LIVE_MODEL),
-    );
-
-    monthly(1_000_000_000, 30_000);
-    expect((await plan('max_15x')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(30_000, LIVE_MODEL),
-    );
-  });
-
-  it('gives no block when nothing is left and overage is off', async () => {
-    const caps = capsFor('pro');
-    usage({ session: caps.session, weekly: 0 });
-
-    expect((await plan('pro')).blockSeconds).toBe(0);
-
-    usage({ session: 0, weekly: 0 });
-    monthly(null);
-    expect((await plan('pro')).blockSeconds).toBe(0);
-  });
-
-  it('draws on purchased credits only when overage is enabled', async () => {
-    const caps = capsFor('pro');
-    usage({ session: caps.session, weekly: 0 });
-    mocks.spendable.mockResolvedValue({
-      availableMicrousd: 80_000,
-      availableCents: 8,
-      overageEnabled: false,
-    });
-    expect((await plan('pro')).blockSeconds).toBe(0);
-
-    mocks.spendable.mockResolvedValue({
-      availableMicrousd: 80_000,
-      availableCents: 8,
-      overageEnabled: true,
-    });
-    expect((await plan('pro')).blockSeconds).toBe(liveSessionSecondsCoveredBy(80_000, LIVE_MODEL));
-  });
-
-  it('never sizes a block past the ceiling, whatever overage is available', async () => {
-    const caps = capsFor('pro');
-    usage({ session: caps.session, weekly: 0 });
-    mocks.spendable.mockResolvedValue({
-      availableMicrousd: 100 * FULL_BLOCK_MICROUSD,
-      availableCents: 0,
-      overageEnabled: true,
-    });
-
-    expect((await plan('pro')).blockSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
-  });
-
-  it('names when each limit that could refuse the block resets', async () => {
-    const block = await plan('pro');
-
-    expect(block.resetsAt).toEqual({
-      rolling_five_hour_limit_reached: '2026-09-27T15:00:00.000Z',
-      rolling_weekly_limit_reached: '2026-10-01T10:00:00.000Z',
-      insufficient_credits: PERIOD_END,
-    });
-    expect(mocks.rollingUsage).toHaveBeenCalledWith(db, 'user-1', 5, false);
-    expect(mocks.rollingUsage).toHaveBeenCalledWith(db, 'user-1', 7 * 24, false);
-  });
-});
-
-describe('readVoiceReservation', () => {
-  function reservationDb(rows: Array<Record<string, unknown>>) {
-    const query = vi.fn(async (_sql: string, _params: unknown[]) => rows);
-    return { db: { query } as never, query };
-  }
-
-  it('reads the reserved amount and the block extension from the ledger', async () => {
-    const { db: ledger, query } = reservationDb([
-      { reserved_microusd: '500000', extension_status: 'extended', extension_microusd: '250000.7' },
-    ]);
-
-    await expect(
-      readVoiceReservation({
-        db: ledger,
-        userId: 'user-1',
-        idempotencyKey: 'agi.voice.live.test',
-        requestHash: 'hash',
-        operationKey: 'provider:2',
-      }),
-    ).resolves.toEqual({
-      reservedMicrousd: 500_000,
-      extensionStatus: 'extended',
-      extensionMicrousd: 250_000,
-    });
-    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('from public.managed_usage_requests request');
-    expect(sql).toContain('extension.operation_key = $4');
-    expect(params).toEqual(['user-1', 'agi.voice.live.test', 'hash', 'provider:2']);
-  });
-
-  it('asks for no extension when no block is named', async () => {
-    const { db: ledger, query } = reservationDb([
-      { reserved_microusd: 500_000, extension_status: null, extension_microusd: null },
-    ]);
-
-    await expect(
-      readVoiceReservation({
-        db: ledger,
-        userId: 'user-1',
-        idempotencyKey: 'agi.voice.live.test',
-        requestHash: 'hash',
-      }),
-    ).resolves.toEqual({
-      reservedMicrousd: 500_000,
-      extensionStatus: null,
-      extensionMicrousd: null,
-    });
-    expect((query.mock.calls[0] as [string, unknown[]])[1][3]).toBe('');
-  });
-
-  it('reports no reservation for a missing row or an unreadable amount', async () => {
-    for (const rows of [
-      [],
-      [{ reserved_microusd: null, extension_status: null, extension_microusd: null }],
-      [{ reserved_microusd: '-5', extension_status: null, extension_microusd: null }],
-      [{ reserved_microusd: 'not-a-number', extension_status: null, extension_microusd: null }],
-    ]) {
-      await expect(
-        readVoiceReservation({
-          db: reservationDb(rows).db,
-          userId: 'user-1',
-          idempotencyKey: 'agi.voice.live.test',
-          requestHash: 'hash',
-        }),
-      ).resolves.toBeNull();
+describe('planIncludesVoice', () => {
+  it('includes voice on every plan that declares minutes or unlimited minutes', () => {
+    for (const tier of ['free', 'basic', 'pro', 'team', 'max', 'enterprise']) {
+      expect(planIncludesVoice(tier)).toBe(true);
     }
+  });
+});
+
+describe('the voice minutes refusal', () => {
+  it('names the reset date and offers text', () => {
+    expect(voiceMinutesExhaustedMessage(RESET_AT)).toBe(
+      "You've used this month's voice minutes. They reset on November 1. Continue in text, or upgrade for more voice minutes.",
+    );
+  });
+
+  it('carries the reset instant and the plain sentence in the response body', async () => {
+    const refusal = new ManagedUsageRequestError('generic', 429, VOICE_MINUTES_EXHAUSTED_CODE);
+    refusal.limitContext = { resetsAt: RESET_AT, alternativeModel: null };
+
+    const response = voiceUsageErrorResponse(request(), refusal);
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as {
+      error: { code: string; message: string; resets_at: string };
+    };
+    expect(body.error).toMatchObject({
+      code: VOICE_MINUTES_EXHAUSTED_CODE,
+      resets_at: RESET_AT,
+      message: voiceMinutesExhaustedMessage(RESET_AT),
+    });
   });
 });

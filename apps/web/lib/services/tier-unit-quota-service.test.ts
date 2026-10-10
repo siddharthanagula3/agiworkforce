@@ -125,26 +125,23 @@ describe('voice minutes consumption', () => {
     return { decision, sql };
   }
 
-  it('counts live sessions as well as transcription', async () => {
+  it('counts live sessions from their own records and transcription from its settlements', async () => {
     const { sql } = await captureVoiceQuery(0);
 
-    expect(sql).toContain("usage->>'operation' in ('transcription', 'voice_live_session')");
-    expect(sql).toContain("usage->>'billedSeconds'");
+    expect(sql).toContain('from public.voice_sessions');
+    expect(sql).toContain("usage->>'operation' = 'transcription'");
     expect(sql).toContain("usage->>'estimatedAudioSeconds'");
+    expect(sql).not.toContain('voice_live_session');
+    expect(sql).not.toContain('credit_transactions');
   });
 
-  it('reads billed seconds from live rows and estimated audio seconds from transcription rows', async () => {
+  it('meters a closed session by its span and an open one only up to a block past its last renewal', async () => {
     const { sql } = await captureVoiceQuery(0);
-    const liveBranch = sql.slice(sql.indexOf("= 'voice_live_session'"));
-    const transcriptionBranch = sql.slice(
-      sql.indexOf("= 'transcription'"),
-      sql.indexOf("= 'voice_live_session'"),
-    );
+    const live = sql.slice(sql.indexOf('from public.voice_sessions') - 400);
 
-    expect(liveBranch).toContain("usage->>'billedSeconds'");
-    expect(liveBranch).not.toContain("usage->>'estimatedAudioSeconds'");
-    expect(transcriptionBranch).toContain("usage->>'estimatedAudioSeconds'");
-    expect(transcriptionBranch).not.toContain("usage->>'billedSeconds'");
+    expect(live).toContain('closed_at');
+    expect(live).toContain('least(now(), last_seen_at + make_interval(secs => 600))');
+    expect(live).toContain("started_at >= date_trunc('month', now())");
   });
 
   it('turns consumed seconds into whole minutes against the allowance', async () => {

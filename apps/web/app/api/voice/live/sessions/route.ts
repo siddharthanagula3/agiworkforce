@@ -26,7 +26,6 @@ import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import {
   getModelMetadataById,
   getRoutingSlotModel,
-  getTierPolicy,
   getVoiceLiveBackendModel,
   isModelLive,
   type ModelMetadata,
@@ -40,16 +39,7 @@ import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpo
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
-import {
-  ManagedUsageRequestError,
-  fingerprintManagedUsageRequest,
-  finalizeManagedUsageRequest,
-  markManagedUsageProviderStarted,
-  reserveManagedUsageRequest,
-  type ManagedUsageRequestReservation,
-} from '@/lib/services/managed-usage-request-service';
-import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
-import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
+import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeSubscriptionAccess,
@@ -73,17 +63,16 @@ import {
 import {
   describeLiveSessionFailure,
   LIVE_SESSION_CEILING_SECONDS,
-  LIVE_SESSION_MIN_BLOCK_SECONDS,
   LIVE_VOICE_FEATURE,
   liveSessionChargeMicrousd,
-  liveSessionMinutes,
 } from '@/lib/voice/live-voice-billing';
 import {
-  planVoiceSessionBlock,
+  planIncludesVoice,
+  planVoiceMinutesBlock,
   VOICE_USAGE_NOT_IN_PLAN,
+  voiceBillingUnavailable,
   voiceJsonError,
   voiceUsageErrorResponse,
-  type VoiceLimitResets,
 } from './lib/voice-session-budget';
 import {
   buildLiveVoiceBackendInstructions,
@@ -103,8 +92,6 @@ import {
   type VoiceSessionSurface,
 } from './lib/voice-session-store';
 
-const LIVE_SESSION_LEASE_SECONDS = 4 * 60 * 60;
-const VOICE_LIVE_SESSION_NAMESPACE = 'agi.voice.live';
 const SESSION_CREATE_TIMEOUT_MS = 20_000;
 const OPENAI_KEY_ENV = 'OPENAI_API_KEY';
 const MAX_SDP_LENGTH = 65_536;
@@ -228,7 +215,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       request,
       503,
       'voice_session_not_recorded',
-      'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
+      'The voice session could not be saved, so it was not started and no voice minutes were used. Try again.',
     );
   }
 
@@ -236,21 +223,6 @@ async function handleCreateLiveSession(request: NextRequest) {
   const language = body.language?.trim() ? body.language.trim() : null;
   const pace = clampVoicePace(body.pace ?? VOICE_PACE_DEFAULT);
   const surface: VoiceSessionSurface = body.surface ?? 'web';
-
-  // One offer is one session attempt: a client retrying the same POST sends the
-  // same SDP, and a user deliberately starting another session negotiates a
-  // fresh peer connection and therefore a different one. The header outranks it
-  // so a client that names its own retries is taken at its word.
-  const sessionIdentity = {
-    operation: 'voice_live_session',
-    model: liveModel.id,
-    conversationId,
-    voice,
-    language,
-    pace,
-    surface,
-    offer: body.sdp,
-  };
 
   if (liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, liveModel.id) === null) {
     logger.error(
@@ -264,12 +236,9 @@ async function handleCreateLiveSession(request: NextRequest) {
       'Live voice is unavailable right now.',
     );
   }
-  let reservation: ManagedUsageRequestReservation;
   let backendModel: ModelMetadata;
   let planTier: string | null = null;
-  let limitResets: VoiceLimitResets | undefined;
-  let ceilingSeconds = LIVE_SESSION_MIN_BLOCK_SECONDS;
-  let estimatedCostMicrousd = 0;
+  let ceilingSeconds: number;
   try {
     const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
@@ -293,12 +262,12 @@ async function handleCreateLiveSession(request: NextRequest) {
       'canUseVoice',
       'Voice',
     );
-    if (!getTierPolicy(planTier).allowVoice) {
+    if (!planIncludesVoice(planTier)) {
       return voiceJsonError(
         request,
         403,
-        'voice_not_in_plan',
-        'Voice conversations are not included in your plan.',
+        VOICE_USAGE_NOT_IN_PLAN.code,
+        VOICE_USAGE_NOT_IN_PLAN.message,
       );
     }
     const resolvedBackend = getModelMetadataById(getVoiceLiveBackendModel(planTier));
@@ -320,87 +289,16 @@ async function handleCreateLiveSession(request: NextRequest) {
     ) {
       return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
     }
-    const block = await planVoiceSessionBlock({
-      db: scoped.db,
-      userId,
-      planTier,
-      catalogVersion: entitlement.catalogVersion,
-      modelId: liveModel.id,
-    });
-    limitResets = block.resetsAt;
-    if (block.planFundsMinimumBlock === false) {
-      return voiceJsonError(
-        request,
-        402,
-        VOICE_USAGE_NOT_IN_PLAN.code,
-        VOICE_USAGE_NOT_IN_PLAN.message,
-      );
-    }
-    ceilingSeconds = Math.max(block.blockSeconds, LIVE_SESSION_MIN_BLOCK_SECONDS);
-    estimatedCostMicrousd = liveSessionChargeMicrousd(ceilingSeconds, liveModel.id) ?? 0;
-    await assertTierUnitAllowance({
-      db: scoped.db,
-      userId,
-      planTier,
-      unit: 'voice_minutes',
-      requestedUnits: liveSessionMinutes(ceilingSeconds),
-    });
-    reservation = await reserveManagedUsageRequest({
-      db: scoped.db,
-      userId,
-      idempotencyKey: managedUsageIdempotencyKey({
-        namespace: VOICE_LIVE_SESSION_NAMESPACE,
-        suppliedKey: request.headers.get('idempotency-key'),
-        identity: sessionIdentity,
-      }),
-      requestHash: fingerprintManagedUsageRequest(sessionIdentity),
-      provider,
-      model: liveModel.id,
-      estimatedCostMicrousd,
-      leaseSeconds: LIVE_SESSION_LEASE_SECONDS,
-      planTier,
-      isFlagship: false,
-      quotaFeature: LIVE_VOICE_FEATURE,
-    });
+    ceilingSeconds = await planVoiceMinutesBlock({ db: scoped.db, userId, planTier });
   } catch (error) {
     if (isAppError(error)) throw error;
-    if (error instanceof ManagedUsageRequestError) {
-      return voiceUsageErrorResponse(request, error, limitResets);
-    }
+    if (error instanceof ManagedUsageRequestError) return voiceUsageErrorResponse(request, error);
     logger.error(
-      { event: 'live_voice_reservation_failed', error, userId, model: liveModel.id },
-      'Live voice reservation failed before any provider spend',
+      { event: 'live_voice_allowance_unreadable', error, userId, model: liveModel.id },
+      'Live voice minutes could not be read before any provider spend',
     );
-    return voiceUsageErrorResponse(
-      request,
-      new ManagedUsageRequestError(
-        'Managed usage billing is temporarily unavailable.',
-        503,
-        'billing_unavailable',
-      ),
-    );
+    return voiceBillingUnavailable(request);
   }
-
-  const releaseReservation = async (reason: string): Promise<void> => {
-    try {
-      await finalizeManagedUsageRequest({
-        ...reservation,
-        outcome: 'failed',
-        actualCostMicrousd: 0,
-        usage: { operation: 'voice_live_session', provider, model: liveModel.id, reason },
-      });
-    } catch (settlementError) {
-      logger.error(
-        {
-          event: 'live_voice_refund_settlement_unrecorded',
-          error: settlementError,
-          userId,
-          idempotencyKey: reservation.idempotencyKey,
-        },
-        'Live voice failure settlement could not be persisted',
-      );
-    }
-  };
 
   const functionToolsLoad = connectorsAllowedForTurn(request, userId, {
     organizationId: scoped.organizationId,
@@ -501,7 +399,6 @@ async function handleCreateLiveSession(request: NextRequest) {
   let response: Response;
   let responseText: string;
   try {
-    await markManagedUsageProviderStarted(reservation);
     response = await requestProviderSession(functionTools);
     responseText = await response.text();
     if (response.status === 400 && functionTools.names.length > 0) {
@@ -519,7 +416,10 @@ async function handleCreateLiveSession(request: NextRequest) {
       responseText = await response.text();
     }
   } catch (error) {
-    await releaseReservation('provider_unreachable');
+    logger.warn(
+      { event: 'live_voice_provider_unreachable', error, userId },
+      'Live voice provider could not be reached',
+    );
     throw error;
   }
   const offeredToolIds = [...hostedToolIds, ...functionTools.names];
@@ -535,7 +435,6 @@ async function handleCreateLiveSession(request: NextRequest) {
       },
       'Live voice session creation failed',
     );
-    await releaseReservation('provider_failed');
     const failure = describeLiveSessionFailure(response.status, upstreamCode);
     return voiceJsonError(request, failure.status, failure.code, failure.message, {
       upstreamStatus: response.status,
@@ -552,7 +451,6 @@ async function handleCreateLiveSession(request: NextRequest) {
   const sessionId = created.session?.id;
   const answer = created.transport?.sdp;
   if (!sessionId || !answer) {
-    await releaseReservation('provider_malformed');
     return voiceJsonError(
       request,
       502,
@@ -595,12 +493,11 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
   if (!record) {
-    await releaseReservation('voice_session_not_recorded');
     return voiceJsonError(
       request,
       503,
       'voice_session_not_recorded',
-      'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
+      'The voice session could not be saved, so it was not started and no voice minutes were used. Try again.',
     );
   }
   const voiceSessionId = record.id;
@@ -612,7 +509,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       model: liveModel.id,
       sessionId,
       voiceSessionId,
-      estimatedCostMicrousd,
+      ceilingSeconds,
       contextTurns: context.turns.length,
       contextProject: context.projectPrompt !== null,
       contextMemory: context.memoryPrompt !== null,
@@ -629,12 +526,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       voiceSessionId,
       settings: { voice, language, pace },
       tools: describeLiveVoiceTools(offeredToolIds),
-      settlement: {
-        idempotencyKey: reservation.idempotencyKey,
-        leaseToken: reservation.leaseToken,
-        requestHash: reservation.requestHash,
-        ceilingSeconds,
-      },
+      settlement: { ceilingSeconds },
     },
     { status: 201, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
   );

@@ -9,7 +9,6 @@ import {
 import { WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 type ScanModule0 = typeof import('@/lib/server/provider-training-opt-out');
 type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
-type ScanModule2 = typeof import('./lib/voice-session-budget');
 
 const LIVE_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live'))!;
 const BACKEND_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live_backend'))!;
@@ -78,10 +77,6 @@ vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   resolveEntitlementBundle: (...args: unknown[]) => mocks.entitlement(...args),
 }));
-vi.mock('./lib/voice-session-budget', async (importOriginal) => ({
-  ...(await importOriginal<ScanModule2>()),
-  planVoiceSessionBlock: (...args: unknown[]) => mocks.planBlock(...args),
-}));
 vi.mock('@/lib/services/managed-compute-access', () => ({
   evaluateManagedComputeSubscriptionAccess: vi.fn(async () => ({ allowed: true })),
   buildManagedComputeAccessGateResponse: vi.fn(() => null),
@@ -109,22 +104,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 });
 
 const { POST } = await import('./route');
-const {
-  LIVE_SESSION_BLOCK_MINUTES,
-  LIVE_SESSION_CEILING_SECONDS,
-  LIVE_SESSION_MIN_BLOCK_SECONDS,
-  liveSessionChargeMicrousd,
-} = await import('@/lib/voice/live-voice-billing');
+const { LIVE_SESSION_CEILING_SECONDS } = await import('@/lib/voice/live-voice-billing');
 const { ManagedUsageRequestError } = await import('@/lib/services/managed-usage-request-service');
-
-function charge(seconds: number): number {
-  return liveSessionChargeMicrousd(seconds, LIVE_MODEL.id) as number;
-}
-
-interface ManagedUsageReservationCall {
-  idempotencyKey: string;
-  requestHash: string;
-}
 
 async function errorCode(response: Response): Promise<string | undefined> {
   const body = (await response.json()) as { error?: { code?: string } };
@@ -133,16 +114,7 @@ async function errorCode(response: Response): Promise<string | undefined> {
 
 const OFFER = 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\n';
 const CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
-const RESERVATION = {
-  db: {},
-  userId: 'user-1',
-  idempotencyKey: 'agi.voice.live.test',
-  requestHash: 'hash',
-  leaseToken: 'lease',
-  estimatedCostMicrousd: charge(LIVE_SESSION_CEILING_SECONDS),
-  estimatedCostCents: 0,
-};
-const FIVE_HOUR_RESET = '2026-09-27T20:00:00.000Z';
+const MINUTES_RESET_AT = '2026-11-01T00:00:00.000Z';
 
 function sessionDb(overrides: { insertedId?: string | null } = {}) {
   return {
@@ -164,10 +136,14 @@ function withSessionStore(overrides: { insertedId?: string | null } = {}): void 
   });
 }
 
-function fullBlock(): void {
-  mocks.planBlock.mockResolvedValue({
-    blockSeconds: LIVE_SESSION_CEILING_SECONDS,
-    resetsAt: { rolling_five_hour_limit_reached: FIVE_HOUR_RESET },
+function minutesLeft(hardLimit: number | null, consumed: number): void {
+  mocks.assertTierUnitAllowance.mockResolvedValue({
+    unit: 'voice_minutes',
+    hardLimit,
+    softLimit: null,
+    consumed,
+    requested: 1,
+    softLimitReached: false,
   });
 }
 
@@ -186,11 +162,7 @@ describe('POST /api/voice/live/sessions', () => {
     mocks.requireEnv.mockReturnValue('sk-test-openai-key');
     withSessionStore();
     mocks.entitlement.mockResolvedValue({ plan: 'pro', catalogVersion: null, subscription: null });
-    fullBlock();
-    mocks.assertTierUnitAllowance.mockResolvedValue(undefined);
-    mocks.reserve.mockResolvedValue(RESERVATION);
-    mocks.finalize.mockResolvedValue({});
-    mocks.providerStarted.mockResolvedValue(undefined);
+    minutesLeft(300, 0);
     mocks.keepsOutOfTraining.mockReturnValue(null);
   });
 
@@ -209,20 +181,16 @@ describe('POST /api/voice/live/sessions', () => {
     const body = (await response.json()) as {
       sessionId: string;
       sdp: string;
-      settlement: { idempotencyKey: string; ceilingSeconds: number };
+      settlement: Record<string, unknown>;
     };
     expect(body.sessionId).toBe('live_1');
     expect(body.sdp).toBe('answer');
-    expect(body.settlement.idempotencyKey).toBe(RESERVATION.idempotencyKey);
-    expect(body.settlement.ceilingSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
-    expect(mocks.reserve).toHaveBeenCalledWith(
-      expect.objectContaining({
-        estimatedCostMicrousd: charge(LIVE_SESSION_CEILING_SECONDS),
-        planTier: 'pro',
-        isFlagship: false,
-        quotaFeature: 'voice_live',
-      }),
+    expect(body.settlement).toEqual({ ceilingSeconds: LIVE_SESSION_CEILING_SECONDS });
+    expect(mocks.assertTierUnitAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', planTier: 'pro', unit: 'voice_minutes' }),
     );
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.finalize).not.toHaveBeenCalled();
 
     const [url, init] = mocks.fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/live/sessions');
@@ -253,30 +221,47 @@ describe('POST /api/voice/live/sessions', () => {
     expect(sent.session.delegation.responses.tools.length).toBeGreaterThan(0);
     expect(sent.transport).toEqual({ type: 'webrtc', sdp: OFFER });
     expect(mocks.assertTierUnitAllowance).toHaveBeenCalledWith(
-      expect.objectContaining({
-        unit: 'voice_minutes',
-        requestedUnits: LIVE_SESSION_BLOCK_MINUTES,
-      }),
+      expect.objectContaining({ unit: 'voice_minutes', requestedUnits: 1 }),
     );
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
 
-  it('refuses a plan that cannot fund a minute with a plain message, not a rolling-limit one', async () => {
+  it('starts a Free session on voice minutes alone, with no managed budget and no spend window', async () => {
     mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
-    mocks.planBlock.mockResolvedValue({
-      blockSeconds: 0,
-      resetsAt: {},
-      planFundsMinimumBlock: false,
-    });
+    minutesLeft(30, 0);
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_f' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
+    );
 
     const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
 
-    expect(response.status).toBe(402);
-    const body = (await response.json()) as { error: { code: string; message: string } };
-    expect(body.error.code).toBe('voice_usage_not_in_plan');
-    expect(body.error.message).not.toMatch(/5-hour/);
-    expect(body.error.message).toMatch(/continue in text/);
+    expect(response.status).toBe(201);
     expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.finalize).not.toHaveBeenCalled();
+  });
+
+  it('refuses at zero minutes with the reset date and a way back to text', async () => {
+    const refusal = new ManagedUsageRequestError(
+      'used up',
+      429,
+      'voice_minutes_monthly_limit_reached',
+    );
+    refusal.limitContext = { resetsAt: MINUTES_RESET_AT, alternativeModel: null };
+    mocks.assertTierUnitAllowance.mockRejectedValue(refusal);
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as {
+      error: { code: string; message: string; resets_at: string };
+    };
+    expect(body.error.code).toBe('voice_minutes_monthly_limit_reached');
+    expect(body.error.resets_at).toBe(MINUTES_RESET_AT);
+    expect(body.error.message).toContain('They reset on November 1.');
+    expect(body.error.message).toContain('Continue in text');
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
@@ -393,14 +378,12 @@ describe('POST /api/voice/live/sessions', () => {
     expect(response.status).toBe(503);
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe('voice_session_not_recorded');
-    expect(body.error.message).toContain('nothing was charged');
-    expect(mocks.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
-    );
+    expect(body.error.message).toContain('no voice minutes were used');
+    expect(mocks.finalize).not.toHaveBeenCalled();
   });
 
-  it('sizes the block to what the plan windows still cover', async () => {
-    mocks.planBlock.mockResolvedValue({ blockSeconds: 240, resetsAt: {} });
+  it('sizes the first block to the voice minutes the plan has left', async () => {
+    minutesLeft(300, 296);
     mocks.fetch.mockResolvedValue(
       new Response(
         JSON.stringify({ session: { id: 'live_4' }, transport: { type: 'webrtc', sdp: 'answer' } }),
@@ -413,52 +396,27 @@ describe('POST /api/voice/live/sessions', () => {
     expect(response.status).toBe(201);
     const body = (await response.json()) as { settlement: { ceilingSeconds: number } };
     expect(body.settlement.ceilingSeconds).toBe(240);
-    expect(mocks.reserve).toHaveBeenCalledWith(
-      expect.objectContaining({ estimatedCostMicrousd: charge(240) }),
-    );
-    expect(mocks.assertTierUnitAllowance).toHaveBeenCalledWith(
-      expect.objectContaining({ unit: 'voice_minutes', requestedUnits: 4 }),
-    );
-    expect(mocks.planBlock).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', planTier: 'pro', modelId: LIVE_MODEL.id }),
-    );
   });
 
-  it('asks the ledger for at least a minute, so an empty window is refused by the ledger', async () => {
-    mocks.planBlock.mockResolvedValue({
-      blockSeconds: 0,
-      resetsAt: { rolling_five_hour_limit_reached: FIVE_HOUR_RESET },
-    });
-    mocks.reserve.mockRejectedValue(
-      new ManagedUsageRequestError('limit', 429, 'rolling_five_hour_limit_reached'),
+  it('gives an unlimited plan a whole block', async () => {
+    mocks.entitlement.mockResolvedValue({ plan: 'max', catalogVersion: null, subscription: null });
+    minutesLeft(null, 0);
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_m' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
     );
 
-    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+    const body = (await (
+      await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }))
+    ).json()) as { settlement: { ceilingSeconds: number } };
 
-    expect(mocks.reserve).toHaveBeenCalledWith(
-      expect.objectContaining({ estimatedCostMicrousd: charge(LIVE_SESSION_MIN_BLOCK_SECONDS) }),
-    );
-    expect(response.status).toBe(429);
-    const body = (await response.json()) as { error: { code: string; resets_at?: string } };
-    expect(body.error.code).toBe('rolling_five_hour_limit_reached');
-    expect(body.error.resets_at).toBe(FIVE_HOUR_RESET);
-    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(body.settlement.ceilingSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
   });
 
-  it('refuses a session past its voice minute allowance before any hold', async () => {
-    mocks.assertTierUnitAllowance.mockRejectedValue(
-      new ManagedUsageRequestError('minutes', 402, 'voice_minutes_exhausted'),
-    );
-
-    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
-
-    expect(response.status).toBe(402);
-    expect(mocks.reserve).not.toHaveBeenCalled();
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
-
-  it('answers 503 billing_unavailable when the reservation fails for another reason', async () => {
-    mocks.reserve.mockRejectedValue(new Error('ledger unreachable'));
+  it('answers 503 billing_unavailable when the voice minutes cannot be read', async () => {
+    mocks.assertTierUnitAllowance.mockRejectedValue(new Error('database unreachable'));
 
     const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
 
@@ -514,7 +472,7 @@ describe('POST /api/voice/live/sessions', () => {
       const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
 
       expect(response.status).not.toBe(403);
-      expect(mocks.reserve).toHaveBeenCalled();
+      expect(mocks.assertTierUnitAllowance).toHaveBeenCalled();
     });
   });
 
@@ -555,7 +513,7 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it('surfaces a provider access refusal and releases the reservation', async () => {
+  it('surfaces a provider access refusal and opens no voice session record', async () => {
     mocks.fetch.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -577,9 +535,7 @@ describe('POST /api/voice/live/sessions', () => {
     expect(body.error.code).toBe('live_voice_access_denied');
     expect(body.error.upstreamCode).toBe('model_not_found');
     expect(body.error.upstreamStatus).toBe(404);
-    expect(mocks.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
-    );
+    expect(mocks.finalize).not.toHaveBeenCalled();
   });
 
   it('carries the conversation the call continues into both instruction slots', async () => {
@@ -663,158 +619,5 @@ describe('POST /api/voice/live/sessions', () => {
     const response = await POST(request({ voice: 'marin', conversationId: CONVERSATION_ID }));
     expect(response.status).toBe(400);
     expect(mocks.reserve).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /api/voice/live/sessions replayed', () => {
-  const SECOND_OFFER = 'v=0\r\no=- 2 1 IN IP4 127.0.0.1\r\n';
-  let ledger: Map<string, { requestHash: string; settled: boolean }>;
-
-  function requestWithKey(body: unknown, idempotencyKey?: string): NextRequest {
-    return new NextRequest('http://localhost/api/voice/live/sessions', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
-      },
-      body: JSON.stringify({ conversationId: CONVERSATION_ID, ...(body as object) }),
-    });
-  }
-
-  function sessionAccepted(id: string): Response {
-    return new Response(
-      JSON.stringify({ session: { id }, transport: { type: 'webrtc', sdp: 'answer' } }),
-      { status: 201 },
-    );
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    ledger = new Map();
-    vi.stubGlobal('fetch', mocks.fetch);
-    mocks.requireEnv.mockReturnValue('sk-test-openai-key');
-    withSessionStore();
-    mocks.entitlement.mockResolvedValue({ plan: 'pro', catalogVersion: null, subscription: null });
-    fullBlock();
-    mocks.assertTierUnitAllowance.mockResolvedValue(undefined);
-    mocks.providerStarted.mockResolvedValue(undefined);
-    mocks.fetch.mockImplementation(async () => sessionAccepted(`live_${ledger.size}`));
-
-    // What the ledger does with a key it has already seen: a different request
-    // body is a conflict, a live hold is in progress, and a hold that reached a
-    // terminal state is a replay. None of them opens a second hold.
-    mocks.reserve.mockImplementation(async (input: ManagedUsageReservationCall) => {
-      const held = ledger.get(input.idempotencyKey);
-      if (held) {
-        if (held.requestHash !== input.requestHash) {
-          throw new ManagedUsageRequestError('different body', 409, 'idempotency_conflict');
-        }
-        throw new ManagedUsageRequestError(
-          'already held',
-          409,
-          held.settled ? 'idempotency_replay' : 'idempotency_in_progress',
-        );
-      }
-      ledger.set(input.idempotencyKey, { requestHash: input.requestHash, settled: false });
-      return {
-        ...RESERVATION,
-        idempotencyKey: input.idempotencyKey,
-        requestHash: input.requestHash,
-      };
-    });
-    mocks.finalize.mockImplementation(async (input: ManagedUsageReservationCall) => {
-      const held = ledger.get(input.idempotencyKey);
-      if (held) held.settled = true;
-      return {};
-    });
-  });
-
-  it('holds one live session once when the same offer is sent twice', async () => {
-    const first = await POST(
-      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
-    );
-    const second = await POST(
-      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
-    );
-
-    expect(first.status).toBe(201);
-    expect(second.status).toBe(409);
-    expect(await errorCode(second)).toBe('idempotency_in_progress');
-    expect(ledger.size).toBe(1);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('derives the same key from the same offer and a different key from a new one', async () => {
-    await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
-    await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
-    const keys = mocks.reserve.mock.calls.map(
-      (call) => (call[0] as ManagedUsageReservationCall).idempotencyKey,
-    );
-
-    expect(keys[0]).toBe(keys[1]);
-    expect(keys[0]).toMatch(/^agi\.voice\.live\.[0-9a-f]{48}$/);
-  });
-
-  it('opens a second hold for a session the user deliberately starts', async () => {
-    const first = await POST(
-      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
-    );
-    const second = await POST(
-      request({ sdp: SECOND_OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
-    );
-
-    expect(first.status).toBe(201);
-    expect(second.status).toBe(201);
-    expect(ledger.size).toBe(2);
-    expect(mocks.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('refuses a retry of an attempt that already settled rather than charging again', async () => {
-    mocks.fetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: { code: 'server_error' } }), { status: 500 }),
-    );
-    const failed = await POST(
-      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
-    );
-
-    expect(failed.status).not.toBe(201);
-    expect(mocks.finalize).toHaveBeenCalledTimes(1);
-
-    const retry = await POST(
-      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
-    );
-
-    expect(retry.status).toBe(409);
-    expect(await errorCode(retry)).toBe('idempotency_replay');
-    expect(ledger.size).toBe(1);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('takes the client at its word when it supplies its own key', async () => {
-    const first = await POST(requestWithKey({ sdp: OFFER }, 'client-key-0001'));
-    const second = await POST(requestWithKey({ sdp: SECOND_OFFER }, 'client-key-0001'));
-
-    expect(first.status).toBe(201);
-    expect(second.status).toBe(409);
-    expect(await errorCode(second)).toBe('idempotency_conflict');
-    expect(ledger.size).toBe(1);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('gives two client keys two holds for the same offer', async () => {
-    await POST(requestWithKey({ sdp: OFFER }, 'client-key-0001'));
-    await POST(requestWithKey({ sdp: OFFER }, 'client-key-0002'));
-
-    expect(ledger.size).toBe(2);
-    expect(mocks.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('refuses a malformed client key before any hold is opened', async () => {
-    const response = await POST(requestWithKey({ sdp: OFFER }, 'short'));
-
-    expect(response.status).toBe(400);
-    expect(await errorCode(response)).toBe('invalid_idempotency_key');
-    expect(ledger.size).toBe(0);
-    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

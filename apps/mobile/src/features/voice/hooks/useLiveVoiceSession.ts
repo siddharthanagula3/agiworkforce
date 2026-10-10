@@ -148,12 +148,7 @@ export function useLiveVoiceSession({
     setToolActivity([]);
 
     const finish = (session: LiveVoiceSession, closed: LiveSessionClosed) => {
-      void liveVoice?.settleLiveVoiceSession(
-        session.sessionId,
-        session.settlement,
-        closed,
-        session.backendUsage,
-      );
+      void liveVoice?.settleLiveVoiceSession(session.sessionId, closed, session.backendUsage);
     };
 
     const run = async () => {

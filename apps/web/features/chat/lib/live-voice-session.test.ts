@@ -101,13 +101,7 @@ describe('LiveVoiceSession', () => {
           JSON.stringify({
             sessionId: 'live_1',
             sdp: 'answer-sdp',
-            settlement: {
-              idempotencyKey: 'key',
-              leaseToken: 'lease',
-              requestHash: 'hash',
-              estimatedCostCents: 50,
-              ceilingSeconds: 600,
-            },
+            settlement: { ceilingSeconds: 600 },
             tools: [
               {
                 id: 'web_search',
@@ -501,12 +495,7 @@ describe('LiveVoiceSession', () => {
           sessionId: 'live_1',
           sdp: 'answer-sdp',
           settings: { voice: 'marin', language: null, pace: 1 },
-          settlement: {
-            idempotencyKey: 'key',
-            leaseToken: 'lease',
-            requestHash: 'hash',
-            ceilingSeconds: 600,
-          },
+          settlement: { ceilingSeconds: 600 },
         }),
         { status: 201 },
       ),
