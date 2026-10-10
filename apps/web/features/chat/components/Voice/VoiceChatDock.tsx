@@ -5,6 +5,8 @@ import type { RefObject } from 'react';
 import { LibraryBig, Plug, SquarePen } from '@agiworkforce/icons';
 import { useMenuKeyboard } from '@agiworkforce/ui';
 
+import { AnchoredComposerMenu } from '../Composer/AnchoredComposerMenu';
+
 const LABEL = {
   panel: 'In this chat',
   newChat: 'New chat',
@@ -15,9 +17,12 @@ const LABEL = {
 const ITEM_CLASS =
   'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
+const PANEL_CLASS =
+  'w-[290px] rounded-2xl border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-2 shadow-[var(--chat-shadow-lg)] backdrop-blur-none';
+
 export interface VoiceChatDockProps {
   open: boolean;
-  triggerRef?: RefObject<HTMLElement | null>;
+  triggerRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onNewChat: () => void;
   onOpenLibrary: () => void;
@@ -33,7 +38,7 @@ export function VoiceChatDock({
   onOpenConnectors,
 }: VoiceChatDockProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  useMenuKeyboard({ open, onClose, panelRef, ...(triggerRef ? { triggerRef } : {}) });
+  useMenuKeyboard({ open, onClose, panelRef, triggerRef });
 
   useEffect(() => {
     if (!open) return undefined;
@@ -41,7 +46,7 @@ export function VoiceChatDock({
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (panelRef.current?.contains(target)) return;
-      if (triggerRef?.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
       onClose();
     };
     document.addEventListener('pointerdown', onPointerDown);
@@ -56,31 +61,36 @@ export function VoiceChatDock({
     [onClose],
   );
 
-  if (!open) return null;
-
   return (
-    <div
-      ref={panelRef}
-      role="menu"
-      aria-label={LABEL.panel}
-      data-testid="voice-chat-dock"
-      className="fixed end-4 top-16 z-[var(--z-popover)] w-[290px] rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-2 shadow-[var(--chat-shadow-lg)]"
+    <AnchoredComposerMenu
+      anchorRef={triggerRef}
+      open={open}
+      label={LABEL.panel}
+      autoFocusFirstItem={false}
+      className={PANEL_CLASS}
     >
-      <p className="px-3 pb-1 pt-2 text-xs font-medium text-[var(--chat-text-muted)]">
-        {LABEL.panel}
-      </p>
-      <button type="button" role="menuitem" onClick={run(onNewChat)} className={ITEM_CLASS}>
-        <SquarePen className="h-4 w-4 shrink-0" aria-hidden="true" />
-        {LABEL.newChat}
-      </button>
-      <button type="button" role="menuitem" onClick={run(onOpenLibrary)} className={ITEM_CLASS}>
-        <LibraryBig className="h-4 w-4 shrink-0" aria-hidden="true" />
-        {LABEL.library}
-      </button>
-      <button type="button" role="menuitem" onClick={run(onOpenConnectors)} className={ITEM_CLASS}>
-        <Plug className="h-4 w-4 shrink-0" aria-hidden="true" />
-        {LABEL.connectors}
-      </button>
-    </div>
+      <div ref={panelRef} role="menu" aria-label={LABEL.panel} data-testid="voice-chat-dock">
+        <p className="px-3 pb-1 pt-2 text-xs font-medium text-[var(--chat-text-muted)]">
+          {LABEL.panel}
+        </p>
+        <button type="button" role="menuitem" onClick={run(onNewChat)} className={ITEM_CLASS}>
+          <SquarePen className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {LABEL.newChat}
+        </button>
+        <button type="button" role="menuitem" onClick={run(onOpenLibrary)} className={ITEM_CLASS}>
+          <LibraryBig className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {LABEL.library}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={run(onOpenConnectors)}
+          className={ITEM_CLASS}
+        >
+          <Plug className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {LABEL.connectors}
+        </button>
+      </div>
+    </AnchoredComposerMenu>
   );
 }
