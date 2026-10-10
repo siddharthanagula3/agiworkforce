@@ -33,6 +33,7 @@ import {
   type LiveVoiceToolActivity,
   type LiveVoiceToolOutcome,
 } from '@features/chat/lib/live-voice-session';
+import type { LiveVoiceReasoning } from '@features/chat/lib/live-voices';
 
 const MESSAGE = {
   sendFailed: 'That turn could not be sent. Try again.',
@@ -421,11 +422,12 @@ interface LiveVoiceStartSettings {
   voice: string;
   language: string | null;
   pace: number;
+  reasoning: LiveVoiceReasoning;
 }
 
 function currentVoiceSettings(): LiveVoiceStartSettings {
-  const { voice, language, pace } = useVoiceSessionStore.getState();
-  return { voice, language: language || null, pace };
+  const { voice, language, pace, reasoning } = useVoiceSessionStore.getState();
+  return { voice, language: language || null, pace, reasoning };
 }
 
 function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVoiceSession> {
@@ -440,6 +442,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
         conversationId: conversationId ?? controller.sink?.conversationId ?? null,
         language: settings.language,
         pace: settings.pace,
+        reasoning: settings.reasoning,
         callbacks: {
           onStarted: () => store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true }),
           onSpeaking: (speaking) =>

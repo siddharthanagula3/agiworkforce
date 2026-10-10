@@ -48,7 +48,13 @@ import {
   LIVE_VOICE_BACKEND_INSTRUCTIONS,
   LIVE_VOICE_INSTRUCTIONS,
 } from '@/lib/voice/live-voice-prompts';
-import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
+import {
+  isLiveVoice,
+  LIVE_DEFAULT_VOICE,
+  LIVE_VOICE_REASONING_LEVELS,
+  type LiveVoiceReasoning,
+} from '@features/chat/lib/live-voices';
+import { resolveLiveVoiceReasoning } from '@/lib/voice/live-voice-reasoning';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import {
   describeDelegationTools,
@@ -96,12 +102,32 @@ const SESSION_CREATE_TIMEOUT_MS = 20_000;
 const OPENAI_KEY_ENV = 'OPENAI_API_KEY';
 const MAX_SDP_LENGTH = 65_536;
 
+/**
+ * The commands the browser may send on the session's data channel. GPT-Live
+ * allows every client event unless the session says otherwise, and the
+ * browser is untrusted: session.update would let it swap the backend model,
+ * its tools or its reasoning effort, which are chosen here by plan.
+ */
+const FRONTEND_CLIENT_EVENTS = [
+  'session.input_audio.mute',
+  'session.input_audio.unmute',
+  'session.instructions.append',
+  'session.thinking.append',
+  'session.commentary.append',
+  'response.item.create',
+  'response.create',
+  'session.close',
+] as const;
+
 const CreateLiveSessionSchema = z.object({
   sdp: z.string().min(1).max(MAX_SDP_LENGTH),
   voice: z.string().min(1).max(64).nullable().optional(),
   conversationId: z.string().min(1).max(128).nullable().optional(),
   language: z.string().min(2).max(32).nullable().optional(),
   pace: z.number().min(VOICE_PACE_MIN).max(VOICE_PACE_MAX).optional(),
+  reasoning: z
+    .enum(LIVE_VOICE_REASONING_LEVELS as [LiveVoiceReasoning, ...LiveVoiceReasoning[]])
+    .optional(),
   surface: z.enum(['web', 'mobile', 'desktop']).optional(),
   clientHandoffs: z
     .array(z.enum(LIVE_VOICE_CLIENT_HANDOFFS))
@@ -239,6 +265,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   let backendModel: ModelMetadata;
   let planTier: string | null = null;
   let ceilingSeconds: number;
+  let reasoning: ReturnType<typeof resolveLiveVoiceReasoning>;
   try {
     const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
@@ -289,6 +316,11 @@ async function handleCreateLiveSession(request: NextRequest) {
     ) {
       return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
     }
+    reasoning = resolveLiveVoiceReasoning({
+      backendModelId: backendModel.id,
+      requested: body.reasoning,
+      planTier,
+    });
     ceilingSeconds = await planVoiceMinutesBlock({ db: scoped.db, userId, planTier });
   } catch (error) {
     if (isAppError(error)) throw error;
@@ -387,8 +419,10 @@ async function handleCreateLiveSession(request: NextRequest) {
               ),
               tools: [...delegation.tools, ...offered.tools],
               tool_choice: 'auto',
+              ...(reasoning.effort ? { reasoning: { effort: reasoning.effort } } : {}),
             },
           },
+          client: { data_channel: { allowed_client_events: [...FRONTEND_CLIENT_EVENTS] } },
         },
         transport: { type: 'webrtc', sdp: body.sdp },
       }),
@@ -524,7 +558,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       sessionId,
       sdp: answer,
       voiceSessionId,
-      settings: { voice, language, pace },
+      settings: { voice, language, pace, reasoning: reasoning.level },
       tools: describeLiveVoiceTools(offeredToolIds),
       settlement: { ceilingSeconds },
     },

@@ -226,6 +226,61 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
 
+  it('sets the backend reasoning by plan and keeps session.update off the browser data channel', async () => {
+    mocks.fetch.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            session: { id: 'live_r' },
+            transport: { type: 'webrtc', sdp: 'answer' },
+          }),
+          { status: 201 },
+        ),
+    );
+
+    const paid = await POST(
+      request({ sdp: OFFER, conversationId: CONVERSATION_ID, reasoning: 'thinking' }),
+    );
+    expect(((await paid.json()) as { settings: { reasoning: string } }).settings.reasoning).toBe(
+      'thinking',
+    );
+    mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
+    minutesLeft(30, 0);
+    const free = await POST(
+      request({ sdp: OFFER, conversationId: CONVERSATION_ID, reasoning: 'thinking' }),
+    );
+    expect(((await free.json()) as { settings: { reasoning: string } }).settings.reasoning).toBe(
+      'instant',
+    );
+
+    const sent = mocks.fetch.mock.calls.map(
+      (call) =>
+        JSON.parse(String((call as [string, RequestInit])[1].body)) as {
+          session: {
+            delegation: { responses: { reasoning?: { effort: string } } };
+            client: { data_channel: { allowed_client_events: string[] } };
+          };
+        },
+    );
+    const [paidEffort, freeEffort] = sent.map(
+      (body) => body.session.delegation.responses.reasoning?.effort,
+    );
+    expect(paidEffort).toBeDefined();
+    expect(freeEffort).toBeDefined();
+    expect(paidEffort).not.toBe(freeEffort);
+    for (const body of sent) {
+      const allowed = body.session.client.data_channel.allowed_client_events;
+      expect(allowed).not.toContain('session.update');
+      expect(allowed).toEqual(
+        expect.arrayContaining([
+          'session.close',
+          'response.item.create',
+          'session.commentary.append',
+        ]),
+      );
+    }
+  });
+
   it('starts a Free session on voice minutes alone, with no managed budget and no spend window', async () => {
     mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
     minutesLeft(30, 0);
@@ -324,7 +379,12 @@ describe('POST /api/voice/live/sessions', () => {
     const body = (await response.json()) as {
       settings: { voice: string; language: string | null; pace: number };
     };
-    expect(body.settings).toEqual({ voice: 'quartz', language: 'es', pace: 1.25 });
+    expect(body.settings).toEqual({
+      voice: 'quartz',
+      language: 'es',
+      pace: 1.25,
+      reasoning: 'instant',
+    });
 
     const sent = JSON.parse(
       String((mocks.fetch.mock.calls[0] as [string, RequestInit])[1].body),
