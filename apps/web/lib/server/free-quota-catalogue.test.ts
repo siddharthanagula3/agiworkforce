@@ -420,6 +420,32 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     ).toBe(true);
   });
 
+  it('stops offering the allocations that end on 2026-10-21 from the first moment of that day', async () => {
+    const endingKeys = inventory.entries
+      .filter((entry) => entry.expiresOn === '2026-10-21')
+      .map((entry) => entry.offeringKey);
+    expect(endingKeys).toHaveLength(244);
+    const lastMinute = Date.UTC(2026, 9, 20, 23, 59);
+    const firstMoment = Date.UTC(2026, 9, 21);
+
+    const before = await statuses(
+      context({
+        store: await attested(createMemoryKeyValueStore(), { checkedAtMs: lastMinute - 60_000 }),
+        nowMs: lastMinute,
+      }),
+    );
+    const after = await statuses(
+      context({
+        store: await attested(createMemoryKeyValueStore(), { checkedAtMs: firstMoment - 60_000 }),
+        nowMs: firstMoment,
+      }),
+    );
+
+    const stillLive = endingKeys.filter((key) => before.get(key)?.status !== 'expired');
+    expect(stillLive.length).toBeGreaterThan(endingKeys.length / 2);
+    expect(endingKeys.every((key) => after.get(key)?.status === 'expired')).toBe(true);
+  });
+
   it('expires snapshot allocations even when their captured status was active', async () => {
     const result = await statuses(
       context({
