@@ -40,6 +40,7 @@ function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntr
     admitted: true,
     temporarilyUnavailable: false,
     eventAccess: false,
+    promotionEndsAt: null,
     minimumPlanLabel: null,
     availability: 'live',
     requiresEnvironment: null,
@@ -148,6 +149,13 @@ describe('model catalogue - event access reads as temporary', () => {
   it('says nothing about an event for a model included in the plan', () => {
     renderCatalogue([entry()]);
 
+    expect(screen.queryByText(/free during event/i)).toBeNull();
+  });
+
+  it('badges the free model promotion with its end date rather than as an event', () => {
+    renderCatalogue([entry({ promotionEndsAt: '2026-10-24T23:59:59.000Z' })]);
+
+    expect(screen.getByText('Free until Oct 24')).toBeTruthy();
     expect(screen.queryByText(/free during event/i)).toBeNull();
   });
 

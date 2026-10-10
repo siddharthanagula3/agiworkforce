@@ -330,6 +330,7 @@ import type { Conversation, Message, MessageMetadata } from '@shared/stores/web-
 import type { ChatSession } from '@shared/types';
 import { describeModelSubstitution, type ModelSubstitution } from '@shared/stores/model-store';
 import { FreePlanTrainingNotice } from '../components/FreePlanTrainingNotice';
+import { FreeModelPromotionNotice } from '../components/FreeModelPromotionNotice';
 import { MicrophonePrivacyNotice } from '../components/MicrophonePrivacyNotice';
 import { UnavailableModelNotice } from '../components/UnavailableModelNotice';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
@@ -6473,6 +6474,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />
+                    <FreeModelPromotionNotice />
                     <MicrophonePrivacyNotice />
                     <AgiWorkAutonomyNotice
                       active={composerToggles?.workMode === AGI_WORK_MODE}
@@ -6605,6 +6607,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />
+                    <FreeModelPromotionNotice />
                     <MicrophonePrivacyNotice />
                     <AgiWorkAutonomyNotice
                       active={composerToggles?.workMode === AGI_WORK_MODE}

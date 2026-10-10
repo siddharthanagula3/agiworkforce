@@ -23,6 +23,7 @@ function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntr
     admitted: true,
     temporarilyUnavailable: false,
     eventAccess: false,
+    promotionEndsAt: null,
     minimumPlanLabel: null,
     availability: 'live',
     requiresEnvironment: null,

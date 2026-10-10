@@ -66,6 +66,7 @@ export * from './plugin-packages';
 export * from './device-registry';
 export * from './header-names';
 export * from './free-quota';
+export * from './free-model-promotion';
 export * from './account-deletion';
 export * from './terms-acceptance';
 export * from './device-authorization';
