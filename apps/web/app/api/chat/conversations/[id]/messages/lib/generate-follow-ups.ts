@@ -1,18 +1,22 @@
 import 'server-only';
 
-import { randomUUID } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { resolveAutoRoute } from '@agiworkforce/routing';
+import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
-import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import {
+  reserveBackgroundUsage,
+  type BackgroundUsageLease,
+} from '@/lib/services/background-usage-lease';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { fingerprintManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { logger } from '@/lib/logger';
 import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
@@ -20,6 +24,9 @@ import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-serv
 
 export const FOLLOW_UP_SUGGESTIONS_METADATA_KEY = 'followUpSuggestions';
 export const FOLLOW_UP_SUGGESTION_COUNT = 3;
+export const FOLLOW_UP_QUOTA_FEATURE = 'follow_up_suggestions';
+
+const FOLLOW_UP_LEASE_SECONDS = 60;
 
 const MAX_OUTPUT_TOKENS = 160;
 const MAX_ANSWER_CHARS = 6_000;
@@ -142,18 +149,71 @@ export async function generateFollowUpSuggestions(
     stream: false,
   });
 
+  const sourceContent = chatRequest.messages
+    .map((message) =>
+      typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+    )
+    .join('\n');
+  const planTier = await resolveEntitledPlanTier(input.db, input.userId).catch(() =>
+    normalizeBillingPlanTier(null),
+  );
+  let lease: BackgroundUsageLease;
+  try {
+    lease = await reserveBackgroundUsage({
+      db: input.db,
+      userId: input.userId,
+      organizationId: input.organizationId,
+      planTier,
+      idempotencyKey: `follow-ups:${input.messageId}`,
+      requestHash: fingerprintManagedUsageRequest({
+        kind: FOLLOW_UP_QUOTA_FEATURE,
+        messageId: input.messageId,
+        provider: route.provider,
+        model: route.modelKey,
+      }),
+      provider: route.provider,
+      model: route.modelKey,
+      routeId: route.routeId,
+      estimatedPromptTokens: estimateTokens(sourceContent, route.modelKey),
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      leaseSeconds: FOLLOW_UP_LEASE_SECONDS,
+      quotaFeature: FOLLOW_UP_QUOTA_FEATURE,
+    });
+  } catch (error) {
+    logger.warn(
+      { error, messageId: input.messageId },
+      '[follow-ups] usage reservation refused; no suggestions are generated',
+    );
+    return [];
+  }
+
   const controller = new AbortController();
   const abort = () => controller.abort();
   input.signal?.addEventListener('abort', abort, { once: true });
   if (input.signal?.aborted) controller.abort();
   let response;
   try {
+    await lease.providerStarted();
     response = await drainToLlmResponse(
       buildServerProviderAdapter(dispatchProvider).stream(chatRequest, controller.signal),
       route.modelKey,
       (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
       resolveWireMode(dispatchProvider),
     );
+  } catch (error) {
+    await lease
+      .failed({
+        type: FOLLOW_UP_QUOTA_FEATURE,
+        conversationId: input.conversationId,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+      .catch((releaseError: unknown) => {
+        logger.error(
+          { releaseError, messageId: input.messageId },
+          '[follow-ups] reservation release failed',
+        );
+      });
+    throw error;
   } finally {
     input.signal?.removeEventListener('abort', abort);
   }
@@ -166,24 +226,12 @@ export async function generateFollowUpSuggestions(
     cacheCreationInputTokens: response.cacheCreationInputTokens,
     cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
   };
-  await recordSettledProviderCost({
-    userId: input.userId,
-    organizationId: input.organizationId,
+  await lease.completed({
     provider: route.provider,
     model: route.modelKey,
     routeId: route.routeId,
-    actualCostCents: LLMCostCalculator.calculateCost(
-      route.provider,
-      route.modelKey,
-      usage,
-      undefined,
-      route.routeId,
-    ),
-    customerCanonicalMicrousd: 0,
-    sourceRef: `follow-ups:${input.messageId}:${randomUUID()}`,
-    taskOutcome: 'delivered',
-    surface: 'web',
-    usage: { ...usage, type: 'follow_up_suggestions', conversationId: input.conversationId },
+    usage,
+    record: { ...usage, type: FOLLOW_UP_QUOTA_FEATURE, conversationId: input.conversationId },
   });
 
   return sanitizeFollowUpSuggestions(response.content);

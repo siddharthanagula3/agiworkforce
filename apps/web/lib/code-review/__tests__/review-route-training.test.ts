@@ -9,6 +9,17 @@ type LoggerModule = typeof import('@/lib/logger');
 const mocks = vi.hoisted(() => ({
   buildAdapter: vi.fn(),
   drain: vi.fn(),
+  reserve: vi.fn(),
+  lease: {
+    providerStarted: vi.fn(async () => {}),
+    completed: vi.fn(async (_input: unknown) => {}),
+    failed: vi.fn(async (_record: unknown) => {}),
+  },
+}));
+
+vi.mock('@/lib/services/background-usage-lease', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  reserveBackgroundUsage: (input: unknown) => mocks.reserve(input),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -62,13 +73,52 @@ function review(noTrainingOnly: boolean, preferredModel: string | null = null, p
     preferredModel,
     ownerUserId: 'user-1',
     noTrainingOnly,
+    billingDb: {} as never,
+    reviewRef: 'attempt-1',
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.reserve.mockResolvedValue(mocks.lease);
   mocks.buildAdapter.mockReturnValue({ stream: vi.fn(() => (async function* () {})()) });
   mocks.drain.mockResolvedValue({ content: '{"findings":[]}', completionTokens: 1 });
+});
+
+describe('automated code review is charged to the installing account', () => {
+  it('reserves each model call against the owner’s budget and settles it', async () => {
+    const outcome = await review(false);
+
+    expect(outcome.status).toBe('no-findings');
+    expect(mocks.reserve).toHaveBeenCalledTimes(mocks.drain.mock.calls.length);
+    expect(mocks.reserve.mock.calls[0]?.[0]).toMatchObject({
+      userId: 'user-1',
+      planTier: 'pro',
+      idempotencyKey: 'code-review:attempt-1:0:correctness',
+      quotaFeature: 'code_review',
+    });
+    expect(mocks.lease.providerStarted).toHaveBeenCalledTimes(mocks.drain.mock.calls.length);
+    expect(mocks.lease.completed).toHaveBeenCalledTimes(mocks.drain.mock.calls.length);
+  });
+
+  it('stops before any provider call when the budget refuses one', async () => {
+    mocks.reserve.mockRejectedValueOnce(new Error('budget reached'));
+
+    const outcome = await review(false);
+
+    expect(outcome).toMatchObject({ status: 'unavailable', reason: 'usage-budget' });
+    expect(mocks.drain).not.toHaveBeenCalled();
+  });
+
+  it('releases the hold when the provider call fails', async () => {
+    mocks.drain.mockRejectedValueOnce(new Error('upstream'));
+
+    const outcome = await review(false);
+
+    expect(outcome).toMatchObject({ status: 'unavailable', reason: 'provider-error' });
+    expect(mocks.lease.failed).toHaveBeenCalledTimes(1);
+    expect(mocks.lease.completed).not.toHaveBeenCalled();
+  });
 });
 
 describe('automated code review honours the provider-training opt-out', () => {
