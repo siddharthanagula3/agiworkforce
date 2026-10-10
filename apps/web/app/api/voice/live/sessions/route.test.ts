@@ -261,6 +261,25 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
 
+  it('refuses a plan that cannot fund a minute with a plain message, not a rolling-limit one', async () => {
+    mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
+    mocks.planBlock.mockResolvedValue({
+      blockSeconds: 0,
+      resetsAt: {},
+      planFundsMinimumBlock: false,
+    });
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(402);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('voice_usage_not_in_plan');
+    expect(body.error.message).not.toMatch(/5-hour/);
+    expect(body.error.message).toMatch(/continue in text/);
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
   it('delegates a free plan session to the free backend slot rather than the paid one', async () => {
     mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
     mocks.fetch.mockResolvedValue(

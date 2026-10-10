@@ -13,6 +13,7 @@ import {
   isVoiceSessionActive,
   voiceSessionReducer,
   VOICE_SESSION_EVENT,
+  VOICE_SESSION_STATUS,
   type VoiceSessionEvent,
   type VoiceSessionState,
 } from '@agiworkforce/unified-chat';
@@ -55,6 +56,8 @@ interface VoiceSessionStoreState {
   toolOutcomes: readonly LiveVoiceToolOutcome[];
   paused: boolean;
   rejoinOffer: VoiceRejoinOffer | null;
+  /** The error on screen is a usage limit, which retrying cannot clear. */
+  usageLimited: boolean;
 }
 
 export interface VoiceRejoinOffer {
@@ -75,6 +78,7 @@ interface VoiceSessionStoreActions {
   addToolOutcome: (outcome: LiveVoiceToolOutcome) => void;
   setPaused: (paused: boolean) => void;
   setRejoinOffer: (offer: VoiceRejoinOffer | null) => void;
+  setUsageLimited: (usageLimited: boolean) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -108,6 +112,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       toolOutcomes: [],
       paused: false,
       rejoinOffer: null,
+      usageLimited: false,
 
       resetOnLogout: () =>
         set({
@@ -123,16 +128,20 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           toolOutcomes: [],
           paused: false,
           rejoinOffer: null,
+          usageLimited: false,
         }),
 
       dispatch: (event) => {
         const session = voiceSessionReducer(get().session, event);
         if (session === get().session) return;
+        const usageLimited =
+          session.status === VOICE_SESSION_STATUS.error ? get().usageLimited : false;
         set(
           isVoiceSessionActive(session.status)
-            ? { session }
+            ? { session, usageLimited }
             : {
                 session,
+                usageLimited,
                 backendBusy: false,
                 toolActivity: [],
                 toolApprovals: [],
@@ -149,6 +158,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setToolApprovals: (toolApprovals) => set({ toolApprovals }),
       setPaused: (paused) => set({ paused }),
       setRejoinOffer: (rejoinOffer) => set({ rejoinOffer }),
+      setUsageLimited: (usageLimited) => set({ usageLimited }),
       addToolOutcome: (outcome) =>
         set((state) => ({
           toolOutcomes: [

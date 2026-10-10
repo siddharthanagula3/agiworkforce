@@ -80,6 +80,7 @@ import {
 } from '@/lib/voice/live-voice-billing';
 import {
   planVoiceSessionBlock,
+  VOICE_USAGE_NOT_IN_PLAN,
   voiceJsonError,
   voiceUsageErrorResponse,
   type VoiceLimitResets,
@@ -327,6 +328,14 @@ async function handleCreateLiveSession(request: NextRequest) {
       modelId: liveModel.id,
     });
     limitResets = block.resetsAt;
+    if (block.planFundsMinimumBlock === false) {
+      return voiceJsonError(
+        request,
+        402,
+        VOICE_USAGE_NOT_IN_PLAN.code,
+        VOICE_USAGE_NOT_IN_PLAN.message,
+      );
+    }
     ceilingSeconds = Math.max(block.blockSeconds, LIVE_SESSION_MIN_BLOCK_SECONDS);
     estimatedCostMicrousd = liveSessionChargeMicrousd(ceilingSeconds, liveModel.id) ?? 0;
     await assertTierUnitAllowance({

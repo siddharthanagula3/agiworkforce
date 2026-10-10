@@ -276,6 +276,30 @@ describe('useVoiceSession', () => {
     await waitFor(() => expect(live.start).toHaveBeenCalledTimes(2));
   });
 
+  it('marks a refused start as a usage limit, and a permission failure as not one', async () => {
+    live.start.mockRejectedValueOnce(
+      new LiveVoiceSessionError(
+        'Your rolling 5-hour usage limit is reached.',
+        'rolling_five_hour_limit_reached',
+      ),
+    );
+    const { result } = mount();
+    await act(async () => {
+      result.current.enter();
+    });
+    await waitFor(() => expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.error));
+    expect(useVoiceSessionStore.getState().usageLimited).toBe(true);
+
+    live.start.mockRejectedValueOnce(
+      new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.microphoneDenied, 'microphone_denied'),
+    );
+    await act(async () => {
+      result.current.retry();
+    });
+    await waitFor(() => expect(live.start).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(useVoiceSessionStore.getState().usageLimited).toBe(false));
+  });
+
   describe('leaving the page', () => {
     it('ends the call when the surface unmounts without announcing a navigation', async () => {
       const { result, unmount } = mount();

@@ -114,6 +114,36 @@ describe('planVoiceSessionBlock', () => {
     expect(block.blockSeconds).toBeLessThan(LIVE_SESSION_CEILING_SECONDS);
   });
 
+  it('reports that the Free plan cannot fund even a one-minute session, whatever its usage', async () => {
+    expect(capsFor('free').session).toBe(0);
+
+    const block = await plan('free');
+
+    expect(block.planFundsMinimumBlock).toBe(false);
+    expect(block.blockSeconds).toBe(0);
+  });
+
+  it('lets overage fund a plan whose own allowance cannot cover a minute', async () => {
+    mocks.spendable.mockResolvedValue({
+      availableMicrousd: 1_000_000,
+      availableCents: 100,
+      overageEnabled: true,
+    });
+
+    expect((await plan('free')).planFundsMinimumBlock).toBe(true);
+  });
+
+  it('treats a used-up window on a paid plan as a limit, not a plan without voice', async () => {
+    const caps = capsFor('pro');
+    usage({ session: caps.session, weekly: caps.session });
+
+    const block = await plan('pro');
+
+    expect(block.planFundsMinimumBlock).toBe(true);
+    expect(block.blockSeconds).toBe(0);
+    expect(block.resetsAt['rolling_five_hour_limit_reached']).toBe('2026-09-27T15:00:00.000Z');
+  });
+
   it('gives a whole block when every window has room for it', async () => {
     const caps = capsFor('max_15x');
     expect(caps.session).toBeGreaterThan(FULL_BLOCK_MICROUSD);

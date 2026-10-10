@@ -195,6 +195,22 @@ function isUsageRefusal(status: number): boolean {
   return status === 402 || status === 429;
 }
 
+const USAGE_LIMIT_CODES = new Set([
+  'usage_exhausted',
+  'voice_usage_not_in_plan',
+  'voice_not_in_plan',
+  'rolling_five_hour_limit_reached',
+  'rolling_weekly_limit_reached',
+  'flagship_weekly_limit_reached',
+  'insufficient_credits',
+  'extra_usage_required',
+  'organization_spend_cap_reached',
+]);
+
+export function isUsageLimitError(error: unknown): boolean {
+  return error instanceof LiveVoiceSessionError && USAGE_LIMIT_CODES.has(error.code);
+}
+
 const LIMIT_REACHED: Readonly<Record<string, string>> = {
   rolling_five_hour_limit_reached: '5-hour limit reached',
   rolling_weekly_limit_reached: 'Weekly limit reached',
