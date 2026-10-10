@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sparkles, X as XIcon } from 'lucide-react';
+import { Info, X as XIcon } from 'lucide-react';
 
 import {
   getModelMetadataById,
@@ -51,7 +51,7 @@ export function FreeModelPromotionNotice() {
       data-testid="free-model-promotion-notice"
       className="mb-2 flex items-center gap-2 rounded-lg border border-[var(--chat-border-subtle)] bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-[13px] leading-5 text-[var(--chat-text-secondary)]"
     >
-      <Sparkles className="h-4 w-4 shrink-0 text-[var(--chat-text-muted)]" aria-hidden="true" />
+      <Info className="h-4 w-4 shrink-0 text-[var(--chat-text-muted)]" aria-hidden="true" />
       <p className="min-w-0 flex-1">
         <span className="font-medium text-[var(--chat-text-primary)]">
           {freeModelPromotionHeadline(modelName, promotion.endsAt)}

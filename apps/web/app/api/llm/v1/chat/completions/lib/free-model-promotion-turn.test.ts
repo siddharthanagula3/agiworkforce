@@ -9,7 +9,7 @@ import { getDefaultModelFor, type ModelMetadata } from '@agiworkforce/types';
 type PromotionTestModule0 = typeof import('@/lib/logger');
 type PromotionTestModule1 = typeof import('@agiworkforce/types');
 type PromotionTestModule2 = typeof import('@/lib/services/provider-adapter-service');
-type PromotionTestModule3 = typeof import('@/lib/server/free-quota-catalogue');
+type PromotionTestModule3 = typeof import('@/lib/server/shared-key-value-store');
 type PromotionTestModule4 = typeof import('@/lib/server/neon-db');
 
 vi.mock('server-only', () => ({}));
@@ -56,9 +56,9 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule2>()),
   listAvailableManagedProviderIds: () => new Set(['anthropic']),
 }));
-vi.mock('@/lib/server/free-quota-catalogue', async (importOriginal) => ({
+vi.mock('@/lib/server/shared-key-value-store', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule3>()),
-  sharedFreeQuotaStore: () => shared.store,
+  sharedKeyValueStore: () => shared.store,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule4>()),

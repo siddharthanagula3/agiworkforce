@@ -4,9 +4,9 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { KeyValueStore, RateLimiter } from '@agiworkforce/key-value';
 
 import { logger } from '@/lib/logger';
-import { sharedFreeQuotaStore } from '@/lib/server/free-quota-catalogue';
 import { getKeyValueRateLimiter } from '@/lib/server/key-value';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { sharedKeyValueStore } from '@/lib/server/shared-key-value-store';
 
 import type {
   FreeModelPromotion,
@@ -96,7 +96,7 @@ export async function readManagedProviderSpendSince(
 }
 
 export function resolveFreeModelPromotionLedger(): FreeModelPromotionLedger | null {
-  const store = sharedFreeQuotaStore(process.env.NODE_ENV);
+  const store = sharedKeyValueStore(process.env.NODE_ENV);
   const limiter = store ? getKeyValueRateLimiter() : null;
   if (!store || !limiter) return null;
   return {
@@ -215,10 +215,19 @@ export async function reserveFreeModelPromotionTurn(input: {
 export async function settleFreeModelPromotionTurn(
   reservation: FreeModelPromotionReservation,
   actualMicrousd: number,
-  store: KeyValueStore | null = sharedFreeQuotaStore(process.env.NODE_ENV),
+  store: KeyValueStore | null = sharedKeyValueStore(process.env.NODE_ENV),
 ): Promise<void> {
   const actual = Number.isFinite(actualMicrousd) ? Math.max(0, Math.ceil(actualMicrousd)) : 0;
   const delta = actual - reservation.reservedMicrousd;
+  logger.info(
+    {
+      promotionId: reservation.promotionId,
+      paidBy: reservation.credentialId,
+      reservedMicrousd: reservation.reservedMicrousd,
+      spentMicrousd: actual,
+    },
+    '[free-model-promotion] turn settled',
+  );
   if (delta === 0 || !store) return;
   try {
     await store.increment(spendKey(reservation.promotionId), delta);
@@ -242,7 +251,7 @@ export async function settleFreeModelPromotionTurn(
 export async function endFreeModelPromotionCredential(
   reservation: Pick<FreeModelPromotionReservation, 'promotionId' | 'credentialId'>,
   promotion: Pick<FreeModelPromotion, 'endsAtMs'> | null,
-  store: KeyValueStore | null = sharedFreeQuotaStore(process.env.NODE_ENV),
+  store: KeyValueStore | null = sharedKeyValueStore(process.env.NODE_ENV),
   nowMs: number = Date.now(),
 ): Promise<void> {
   if (!store) return;
