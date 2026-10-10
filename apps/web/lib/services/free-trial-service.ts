@@ -56,12 +56,16 @@ type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
 
 export const FREE_BUDGET_REACHED_ERROR_CLASS = 'free_trial_token_budget_reached';
 
+const CHARGE_STEP_MICROUSD = chargeMicrousdForProviderCost(1);
+
 export type FreeTrialCost = { tokenMicrousd: number; toolMicrousd: number };
 
 export interface FreeTrialToolSpend {
   hold(providerMicrousd: number): boolean;
   settle(heldMicrousd: number, spentMicrousd: number): void;
   exhausted(): boolean;
+  /** The most provider cost one more `hold` can still take. */
+  headroomMicrousd(): number;
 }
 
 type FreeTrialUsageSnapshotRow = {
@@ -267,6 +271,15 @@ export function createFreeTrialToolSpend(input: {
   let heldMicrousd = 0;
   let exhausted = false;
   return {
+    headroomMicrousd() {
+      const spent = input.spent();
+      const committed = freeTrialSpendMicrousd(input.reservation, {
+        tokenMicrousd: spent.tokenMicrousd,
+        toolMicrousd: spent.toolMicrousd + heldMicrousd,
+      });
+      const left = input.reservation.reservedMicrousd - chargeMicrousdForProviderCost(committed);
+      return Math.max(0, Math.floor(left / CHARGE_STEP_MICROUSD) * CHARGE_STEP_MICROUSD);
+    },
     hold(providerMicrousd) {
       const spent = input.spent();
       const committed = freeTrialSpendMicrousd(input.reservation, {
@@ -299,6 +312,7 @@ export function scopeFreeTrialToolSpend(
       parent.settle(heldMicrousd, spent);
     },
     exhausted: () => parent.exhausted(),
+    headroomMicrousd: () => parent.headroomMicrousd(),
     spentMicrousd: () => spentMicrousd,
   };
 }
@@ -540,6 +554,8 @@ export async function beginFreeTrialRequest(params: {
   eventPromoted?: boolean;
   freePoolRoute?: boolean;
   estimatedMicrousd?: number;
+  /** Below the estimate, the least that is still worth holding: the window's remainder is held instead when it covers this. */
+  minimumMicrousd?: number;
   leaseSeconds: number;
   provider: string;
   model: string;
@@ -588,10 +604,16 @@ export async function beginFreeTrialRequest(params: {
     if (!snapshot) throw new Error('Free-tier usage snapshot unavailable');
 
     const remainingMicrousd = remainingFromSnapshot(snapshot);
-    const reserveMicrousd =
+    const requestedMicrousd =
       params.estimatedMicrousd === undefined
         ? remainingMicrousd
         : Math.max(1, chargeMicrousdForProviderCost(params.estimatedMicrousd));
+    const reserveMicrousd =
+      params.minimumMicrousd !== undefined &&
+      requestedMicrousd > remainingMicrousd &&
+      remainingMicrousd >= Math.max(1, chargeMicrousdForProviderCost(params.minimumMicrousd))
+        ? remainingMicrousd
+        : requestedMicrousd;
     if (remainingMicrousd === 0 || reserveMicrousd > remainingMicrousd) {
       if (params.freePoolRoute !== true) {
         return { ok: false, code: 'budget_reached', resetAt: bindingResetAt(snapshot) };

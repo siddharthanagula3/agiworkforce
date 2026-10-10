@@ -3,6 +3,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import {
+  SANDBOX_MINIMUM_FUNDED_RUN_MS,
   MICROUSD_PER_CENT,
   SANDBOX_COMPUTE_RATE_ENV,
   chargeMicrousdForProviderCost,
@@ -140,7 +141,7 @@ const FREE_WINDOWS_REFUSAL_MESSAGE =
   'Your Free usage cannot cover sandbox time right now. It refills as earlier usage leaves the window, or upgrade for a higher limit.';
 
 export type SandboxComputeReservationOutcome =
-  | { outcome: 'reserved'; reservation: SandboxComputeReservationRecord }
+  | { outcome: 'reserved'; reservation: SandboxComputeReservationRecord; ttlMs: number }
   | { outcome: 'refused'; error: ManagedUsageRequestError };
 
 export interface SandboxComputeReservationInput {
@@ -170,6 +171,7 @@ async function holdFreeWindows(input: {
   userId: string;
   requestId: string;
   providerEstimateMicrousd: number;
+  minimumMicrousd: number;
   leaseSeconds: number;
   model: string;
   conversationId?: string | undefined;
@@ -181,6 +183,7 @@ async function holdFreeWindows(input: {
       userId: input.userId,
       requestId: input.requestId,
       estimatedMicrousd: input.providerEstimateMicrousd,
+      minimumMicrousd: input.minimumMicrousd,
       leaseSeconds: input.leaseSeconds,
       provider: E2B_COMPUTE_PROVIDER_ID,
       model: input.model,
@@ -188,11 +191,15 @@ async function holdFreeWindows(input: {
     });
     return begun.ok ? begun.reservation : null;
   }
-  if (!turn.spend.hold(input.providerEstimateMicrousd)) return null;
+  const funded = Math.min(
+    chargeMicrousdForProviderCost(input.providerEstimateMicrousd),
+    turn.spend.headroomMicrousd(),
+  );
+  if (funded < input.minimumMicrousd || !turn.spend.hold(funded)) return null;
   const moved = await transferFreeTrialHold({
     parent: turn.reservation,
     requestId: input.requestId,
-    reservedMicrousd: chargeMicrousdForProviderCost(input.providerEstimateMicrousd),
+    reservedMicrousd: funded,
     leaseSeconds: input.leaseSeconds,
     provider: E2B_COMPUTE_PROVIDER_ID,
     model: input.model,
@@ -204,7 +211,7 @@ async function holdFreeWindows(input: {
     );
     return null;
   });
-  if (!moved) turn.spend.settle(input.providerEstimateMicrousd, 0);
+  if (!moved) turn.spend.settle(funded, 0);
   return moved;
 }
 
@@ -223,9 +230,11 @@ function reservationFailure(error: unknown): ManagedUsageRequestError {
 }
 
 /**
- * Holds the whole admitted lifetime before provisioning, against the plan's
- * one usage budget at the rate-card price: managed credits on paid tiers, the
- * Free usage windows on Free. Unreserved compute is always refused.
+ * Holds the admitted lifetime before provisioning, against the plan's one
+ * usage budget at the rate-card price: managed credits on paid tiers, the Free
+ * usage windows on Free. A Free sandbox lives only as long as its window can
+ * fund, never under the minimum run; the returned ttlMs is that lifetime.
+ * Unreserved compute is always refused.
  */
 export async function reserveSandboxComputeInterval(
   input: SandboxComputeReservationInput,
@@ -244,16 +253,41 @@ export async function reserveSandboxComputeInterval(
   try {
     if (isFreeBillingPlanTier(input.planTier)) {
       const requestId = `agi.e2b.free.${randomUUID()}`;
+      const microusdPerSecond = Math.max(0, input.microusdPerSecond);
+      const minimumSeconds = Math.min(
+        ttlSeconds,
+        Math.ceil(SANDBOX_MINIMUM_FUNDED_RUN_MS / MILLISECONDS_PER_SECOND),
+      );
       const held = await holdFreeWindows({
         userId: input.userId,
         requestId,
         providerEstimateMicrousd,
+        minimumMicrousd: chargeMicrousdForProviderCost(
+          Math.ceil(minimumSeconds * microusdPerSecond),
+        ),
         leaseSeconds: ttlSeconds + RESERVATION_LEASE_SLACK_SECONDS,
         model,
         conversationId: input.conversationId,
         freeTurnHold: input.freeTurnHold,
       });
-      if (!held) {
+      const fundedSeconds = held
+        ? Math.min(
+            ttlSeconds,
+            microusdPerSecond > 0
+              ? Math.floor(held.reservedMicrousd / microusdPerSecond)
+              : ttlSeconds,
+          )
+        : 0;
+      if (!held || fundedSeconds < minimumSeconds) {
+        if (held) {
+          await settleFreeTrialRequest({
+            reservation: held,
+            outcome: 'failed',
+            provider: E2B_COMPUTE_PROVIDER_ID,
+            model,
+            cost: { tokenMicrousd: 0, toolMicrousd: 0 },
+          });
+        }
         throw new ManagedUsageRequestError(
           FREE_WINDOWS_REFUSAL_MESSAGE,
           429,
@@ -262,6 +296,7 @@ export async function reserveSandboxComputeInterval(
       }
       return {
         outcome: 'reserved',
+        ttlMs: fundedSeconds * MILLISECONDS_PER_SECOND,
         reservation: {
           fundingSource: 'free-windows',
           idempotencyKey: held.requestId,
@@ -288,6 +323,7 @@ export async function reserveSandboxComputeInterval(
     });
     return {
       outcome: 'reserved',
+      ttlMs: input.ttlMs,
       reservation: {
         idempotencyKey: reservation.idempotencyKey,
         requestHash: reservation.requestHash,

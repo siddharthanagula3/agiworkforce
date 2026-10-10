@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { FEATURE_RATE_CARD, chargeMicrousdForProviderCost } from '@agiworkforce/types';
+import {
+  FEATURE_RATE_CARD,
+  SANDBOX_MINIMUM_FUNDED_RUN_MS,
+  chargeMicrousdForProviderCost,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/cogs-ledger-service');
 type ScanModule1 = typeof import('@agiworkforce/types');
 
@@ -135,6 +139,15 @@ function resetMocks(): void {
     operationResult: 'finalized',
     settlementStatus: 'succeeded',
   });
+}
+
+function turnSpend(headroomMicrousd: number) {
+  return {
+    hold: vi.fn((providerMicrousd: number) => providerMicrousd <= headroomMicrousd),
+    settle: vi.fn(),
+    exhausted: vi.fn(() => false),
+    headroomMicrousd: vi.fn(() => headroomMicrousd),
+  };
 }
 
 async function loadModule() {
@@ -525,26 +538,45 @@ describe('reserveSandboxComputeInterval', () => {
       requestId: 'turn-1',
       reservedMicrousd: 50_000,
     };
-    const spend = { hold: vi.fn(() => true), settle: vi.fn(), exhausted: vi.fn(() => false) };
+    const spend = turnSpend(50_000);
     const outcome = await mod.reserveSandboxComputeInterval({
       ...reserveInput,
       planTier: 'free',
       ttlMs: 600_000,
       freeTurnHold: { reservation: parent, spend },
     });
-    expect(outcome.outcome).toBe('reserved');
-    expect(spend.hold).toHaveBeenCalledWith(600 * DEFAULT_SHAPE_RATE);
+    expect(outcome).toMatchObject({ outcome: 'reserved', ttlMs: 600_000 });
+    const full = chargeMicrousdForProviderCost(600 * DEFAULT_SHAPE_RATE);
+    expect(spend.hold).toHaveBeenCalledWith(full);
     expect(transferFreeTrialHold).toHaveBeenCalledWith(
-      expect.objectContaining({
-        parent,
-        reservedMicrousd: chargeMicrousdForProviderCost(600 * DEFAULT_SHAPE_RATE),
-      }),
+      expect.objectContaining({ parent, reservedMicrousd: full }),
     );
     expect(beginFreeTrialRequest).not.toHaveBeenCalled();
     expect(spend.settle).not.toHaveBeenCalled();
   });
 
-  it('refuses when the Free turn cannot spare the lifetime, and gives back a failed move', async () => {
+  it('sizes a Free sandbox inside a turn to what the turn can still fund', async () => {
+    const mod = await loadModule();
+    const parent = {
+      kind: 'free_trial' as const,
+      userId: 'user-1',
+      requestId: 'turn-1',
+      reservedMicrousd: 10_000,
+    };
+    const spend = turnSpend(10_000);
+    const outcome = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+      freeTurnHold: { reservation: parent, spend },
+    });
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
+    expect(outcome.ttlMs).toBe(Math.floor(10_000 / DEFAULT_SHAPE_RATE) * 1_000);
+    expect(outcome.ttlMs).toBeLessThan(600_000);
+    expect(spend.hold).toHaveBeenCalledWith(10_000);
+  });
+
+  it('refuses when the Free turn cannot fund a minimum run, and gives back a failed move', async () => {
     const mod = await loadModule();
     const parent = {
       kind: 'free_trial' as const,
@@ -552,22 +584,26 @@ describe('reserveSandboxComputeInterval', () => {
       requestId: 'turn-1',
       reservedMicrousd: 1,
     };
-    const refusingSpend = {
-      hold: vi.fn(() => false),
-      settle: vi.fn(),
-      exhausted: vi.fn(() => true),
-    };
+    const short = turnSpend(
+      chargeMicrousdForProviderCost(
+        Math.ceil((SANDBOX_MINIMUM_FUNDED_RUN_MS / 1_000) * DEFAULT_SHAPE_RATE),
+      ) - chargeMicrousdForProviderCost(1),
+    );
     const refused = await mod.reserveSandboxComputeInterval({
       ...reserveInput,
       planTier: 'free',
       ttlMs: 600_000,
-      freeTurnHold: { reservation: parent, spend: refusingSpend },
+      freeTurnHold: { reservation: parent, spend: short },
     });
-    expect(refused).toMatchObject({ outcome: 'refused', error: { status: 429 } });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      error: { status: 429, code: 'free_trial_token_budget_reached' },
+    });
+    expect(short.hold).not.toHaveBeenCalled();
     expect(transferFreeTrialHold).not.toHaveBeenCalled();
 
     transferFreeTrialHold.mockResolvedValue(null);
-    const spend = { hold: vi.fn(() => true), settle: vi.fn(), exhausted: vi.fn(() => false) };
+    const spend = turnSpend(50_000);
     const unmoved = await mod.reserveSandboxComputeInterval({
       ...reserveInput,
       planTier: 'free',
@@ -575,7 +611,47 @@ describe('reserveSandboxComputeInterval', () => {
       freeTurnHold: { reservation: parent, spend },
     });
     expect(unmoved.outcome).toBe('refused');
-    expect(spend.settle).toHaveBeenCalledWith(600 * DEFAULT_SHAPE_RATE, 0);
+    expect(spend.settle).toHaveBeenCalledWith(
+      chargeMicrousdForProviderCost(600 * DEFAULT_SHAPE_RATE),
+      0,
+    );
+  });
+
+  it('sizes a Free sandbox outside a turn to what the window can fund, never under a minimum run', async () => {
+    const mod = await loadModule();
+    const minimum = chargeMicrousdForProviderCost(
+      Math.ceil((SANDBOX_MINIMUM_FUNDED_RUN_MS / 1_000) * DEFAULT_SHAPE_RATE),
+    );
+    beginFreeTrialRequest.mockImplementationOnce(
+      async (input: { userId: string; requestId: string }) => ({
+        ok: true,
+        reservation: {
+          kind: 'free_trial',
+          userId: input.userId,
+          requestId: input.requestId,
+          reservedMicrousd: 10_000,
+        },
+      }),
+    );
+
+    const outcome = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+    });
+
+    expect(beginFreeTrialRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ minimumMicrousd: minimum }),
+    );
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
+    expect(outcome.ttlMs).toBe(Math.floor(10_000 / DEFAULT_SHAPE_RATE) * 1_000);
+  });
+
+  it('keeps a paid sandbox at its plan lifetime while the budget funds it', async () => {
+    const mod = await loadModule();
+    const outcome = await mod.reserveSandboxComputeInterval(reserveInput);
+    expect(outcome).toMatchObject({ outcome: 'reserved', ttlMs: reserveInput.ttlMs });
+    expect(beginFreeTrialRequest).not.toHaveBeenCalled();
   });
 
   it('releases a Free hold whose sandbox never ran at no charge', async () => {

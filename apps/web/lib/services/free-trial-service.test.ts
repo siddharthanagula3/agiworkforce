@@ -308,6 +308,23 @@ describe('beginFreeTrialRequest', () => {
     expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
   });
 
+  it('holds what the window has left when that still covers the minimum asked for', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET - 2_000, weekly: 8_000, monthly: 8_000 });
+
+    await expect(
+      beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 3_000, minimumMicrousd: 1_000 }),
+    ).resolves.toMatchObject({ ok: true, reservation: { reservedMicrousd: 2_000 } });
+  });
+
+  it('refuses when what the window has left is under the minimum asked for', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET - 2_000, weekly: 8_000, monthly: 8_000 });
+
+    await expect(
+      beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 3_000, minimumMicrousd: 2_500 }),
+    ).resolves.toMatchObject({ ok: false, code: 'budget_reached' });
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
+  });
+
   it('names the weekly reset when the week is the window that binds', async () => {
     useWindows({ fiveHour: 1, weekly: WEEKLY_BUDGET - 500, monthly: WEEKLY_BUDGET - 500 });
 
@@ -637,6 +654,20 @@ describe('Free tool spend inside a turn', () => {
     spend.settle(5_000, 5_000);
     expect(recorded).toEqual([5_000]);
     expect(spend.hold(1_000)).toBe(true);
+  });
+
+  it('reports the most one more hold can take, and that much is admitted', () => {
+    const spend = createFreeTrialToolSpend({
+      reservation: reservation({ reservedMicrousd: 10_000 }),
+      spent: () => ({ tokenMicrousd: 4_001, toolMicrousd: 0 }),
+      record: () => undefined,
+    });
+
+    const headroom = spend.headroomMicrousd();
+    expect(headroom).toBe(10_000 - chargeMicrousdForProviderCost(4_001));
+    expect(spend.hold(headroom)).toBe(true);
+    expect(spend.headroomMicrousd()).toBe(0);
+    expect(spend.hold(chargeMicrousdForProviderCost(1))).toBe(false);
   });
 
   it('leaves free-pool tokens out of what a tool call is held against', () => {
