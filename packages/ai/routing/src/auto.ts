@@ -138,6 +138,7 @@ interface AutoPolicy {
   tasks: Record<RoutingTaskType, AutoTaskPolicy>;
   slots: Record<string, AutoSlotPolicy>;
   slotBackups?: Record<string, readonly string[]>;
+  jurisdictionFallbackSlots?: Record<string, readonly string[]>;
   taskFamilies?: Record<string, TaskFamilyPolicyEntry>;
 }
 
@@ -443,6 +444,7 @@ export interface SelectedAutoRoute {
     | 'task_family_pareto'
     | 'health_fallback'
     | 'price_tier_backup'
+    | 'jurisdiction_fallback'
     | 'canary';
   taskFamilyDecision?: TaskFamilyStageDecision;
   /**
@@ -1337,6 +1339,7 @@ function evaluateEligibility(
   modelKey: string,
   task: AutoTaskPolicy,
   request: AutoRoutingRequest,
+  tierGranted = false,
 ): EligibilityResult {
   const reasons: string[] = [];
   const model = registry.models[modelKey];
@@ -1350,7 +1353,7 @@ function evaluateEligibility(
     reasons.push(`model ${modelKey} passed its deprecation date`);
   }
   const tier = normalizeTier(request.subscriptionTier);
-  const tierRejection = tierAdmissionRejection(modelKey, tier);
+  const tierRejection = tierGranted ? null : tierAdmissionRejection(modelKey, tier);
   if (tierRejection) reasons.push(tierRejection);
   const usOnlyPolicy = registry.policies.auto.providerPolicies.usOnly;
   if (
@@ -2082,6 +2085,26 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     }
     return selectSlot(parkedPick.modelKey, parkedPick.eligibility, parkedPick.reason);
   }
+
+  /**
+   * A tier whose every slot carries a model the region's developer rule refuses
+   * is not stranded: the policy names, per tier, a slot it may use only then.
+   * The grant is that narrow on purpose. It never applies while the region
+   * checks nothing, and it never widens what the tier may name explicitly.
+   */
+  if (request.allowedDeveloperJurisdictions) {
+    for (const slotId of policy.jurisdictionFallbackSlots?.[tier] ?? []) {
+      const modelKey = policy.slots[slotId]?.modelKey;
+      if (!modelKey) continue;
+      const eligibility = evaluateEligibility(modelKey, task, request, true);
+      if (!eligibility.route) {
+        reasons.push(...eligibility.reasons);
+        continue;
+      }
+      return selectSlot(modelKey, eligibility, 'jurisdiction_fallback', slotId);
+    }
+  }
+
   return {
     status: 'unavailable',
     code: 'no_eligible_route',

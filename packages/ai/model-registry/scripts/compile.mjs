@@ -2187,6 +2187,18 @@ function validateAutoPolicy(autoPolicy, models, capabilities, harnessCatalog) {
       assert.ok(autoPolicy.slots[slotId], `Tier ${tier} references unknown routing slot ${slotId}`);
     }
   }
+  for (const [tier, slots] of Object.entries(autoPolicy.jurisdictionFallbackSlots ?? {})) {
+    assert.ok(
+      autoPolicy.tierAllowedSlots[tier],
+      `Jurisdiction fallback slots name unknown tier ${tier}`,
+    );
+    for (const slotId of slots) {
+      assert.ok(
+        autoPolicy.slots[slotId],
+        `Tier ${tier} names unknown jurisdiction fallback slot ${slotId}`,
+      );
+    }
+  }
   for (const [slotId, backups] of Object.entries(autoPolicy.slotBackups ?? {})) {
     assert.ok(autoPolicy.slots[slotId], `Slot backups name unknown routing slot ${slotId}`);
     for (const backupId of backups) {

@@ -246,6 +246,9 @@
       "workhorse_general": ["reasoning_economy"],
       "coding_fast": ["reasoning_economy"]
     },
+    "jurisdictionFallbackSlots": {
+      "free": ["workhorse_general"]
+    },
     "tierMaximumProfiles": {
       "free": "economy",
       "basic": "economy",
@@ -523,8 +526,8 @@
         "requiredHarnessFeatures": [],
         "preferredSlots": {
           "economy": ["reasoning_economy", "workhorse_general"],
-          "balanced": ["reasoning_balanced", "reasoning_economy"],
-          "premium": ["reasoning_balanced", "reasoning_economy"]
+          "balanced": ["reasoning_balanced", "reasoning_economy", "general_balanced"],
+          "premium": ["reasoning_balanced", "reasoning_economy", "general_balanced"]
         },
         "benchmarkWeights": {
           "gpqa": 0.55,

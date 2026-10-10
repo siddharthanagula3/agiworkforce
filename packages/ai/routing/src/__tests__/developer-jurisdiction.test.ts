@@ -109,6 +109,37 @@ describe('developer jurisdiction switch', () => {
     expect(developerJurisdictionAllowed('not-a-model', null)).toBe(true);
   });
 
+  it('gives Free its US-developed fallback only once the region refuses the free router', () => {
+    for (const taskType of ['simple_chat', 'general', 'coding', 'reasoning'] as const) {
+      const off = resolveAutoRoute(webAuto({ subscriptionTier: 'free', taskType }));
+      expect(off).toMatchObject({ status: 'selected' });
+      if (off.status === 'selected') expect(off.reason).not.toBe('jurisdiction_fallback');
+      const on = resolveAutoRoute(
+        webAuto({ subscriptionTier: 'free', taskType, allowedDeveloperJurisdictions: US_ONLY }),
+      );
+      expect(on, taskType).toMatchObject({
+        status: 'selected',
+        modelKey: getRoutingSlotModel('workhorse_general'),
+        reason: 'jurisdiction_fallback',
+      });
+    }
+  });
+
+  it('keeps Qwen first for reasoning and steps to the balanced OpenAI model under US-only', () => {
+    for (const subscriptionTier of ['pro', 'max'] as const) {
+      const off = resolveAutoRoute(webAuto({ subscriptionTier, taskType: 'reasoning' }));
+      expect(off).toMatchObject({ modelKey: getRoutingSlotModel('reasoning_balanced') });
+      const on = resolveAutoRoute(
+        webAuto({
+          subscriptionTier,
+          taskType: 'reasoning',
+          allowedDeveloperJurisdictions: US_ONLY,
+        }),
+      );
+      expect(on).toMatchObject({ modelKey: getRoutingSlotModel('general_balanced') });
+    }
+  });
+
   it('hides non-US models from the picker once US-only is on', () => {
     const all = listPickerChatModels();
     const usOnly = listPickerChatModels(US_ONLY);

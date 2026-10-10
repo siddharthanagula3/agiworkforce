@@ -307,9 +307,9 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: FAST_MODEL_ID,
+      modelKey: getRoutingSlotModel('general_balanced'),
     });
-    expect(FLAGSHIP_MODEL_IDS).not.toContain(FAST_MODEL_ID);
+    expect(FLAGSHIP_MODEL_IDS).not.toContain(getRoutingSlotModel('general_balanced'));
     expect(US_ONLY_EXCLUDED_PROVIDERS).not.toContain(
       result.status === 'selected' ? result.provider : '',
     );
