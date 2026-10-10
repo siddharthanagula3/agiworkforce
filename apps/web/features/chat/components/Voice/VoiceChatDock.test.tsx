@@ -39,6 +39,7 @@ function Harness({ initiallyOpen = true }: { initiallyOpen?: boolean }) {
         triggerRef={triggerRef}
         onClose={() => setOpen(false)}
         onNewChat={vi.fn()}
+        onAddFiles={vi.fn()}
         onOpenLibrary={vi.fn()}
         onOpenConnectors={vi.fn()}
       />
