@@ -19,7 +19,8 @@ vi.mock('@/lib/logger', () => ({ logger }));
 const beginFreeTrialRequest = vi.hoisted(() => vi.fn());
 const settleFreeTrialRequest = vi.hoisted(() => vi.fn());
 const transferFreeTrialHold = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/services/free-trial-service', () => ({
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   FREE_BUDGET_REACHED_ERROR_CLASS: 'free_trial_token_budget_reached',
   beginFreeTrialRequest,
   settleFreeTrialRequest,
