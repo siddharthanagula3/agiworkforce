@@ -302,6 +302,15 @@ Max 5x ₹9,999 and Max 20x ₹19,999 a month; a Team seat is ₹2,499 a month o
 checkout. `BILLING_CURRENCY_TERMS` in `packages/contracts/types/src/billing-catalog.ts`
 records which currencies include tax.
 
+Usage budgets follow revenue (owner decision 2026-10-10). A subscriber's 5-hour,
+weekly and monthly credits are the plan's base budget in
+`packages/contracts/types/src/managed-usage-limits.ts` times what that subscriber's
+channel and currency pay, after included tax, card fees and store commission,
+against the US web price of the same plan (`packages/contracts/types/src/billing-revenue.ts`).
+The channel and currency come from the subscription's Stripe price or store id; a
+subscriber whose channel or currency is unknown gets the US budget. A yearly Team
+seat gets the same budget as a monthly seat in its currency.
+
 Team sells two seat types on one subscription (founder decision 2026-10-08). The
 Team row above is the Standard seat. A Premium seat is $125/seat/month or
 $1,200/seat/year in US dollars only, carries the Max 5x usage, projects, custom

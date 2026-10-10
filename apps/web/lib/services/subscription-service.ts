@@ -5,6 +5,7 @@ import {
   BILLING_PLAN_CATALOG_VERSION,
   isFreeBillingPlanTier,
   resolvePlanCatalogVersion,
+  type RevenueContext,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -25,6 +26,10 @@ import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
 import { resolveOwnerSeatPlanTier } from '@/lib/services/team-seat-entitlement';
 import { primarySeatLineItem } from '@/lib/billing/team-seat-items';
+import {
+  revenueContextOfSubscription,
+  type SubscriptionRevenueSource,
+} from '@/lib/billing/revenue-context';
 
 export interface SubscriptionInfo {
   id: string;
@@ -51,18 +56,25 @@ interface CreditAllocationOptions {
   db: DatabaseAdapter;
   stripePriceId?: string | null;
   catalogVersion?: number | null;
+  revenueContext?: RevenueContext | null;
 }
 
-async function readSubscriptionCatalogVersion(
+interface SubscriptionAllowanceRow extends SubscriptionRevenueSource {
+  plan_catalog_version: number | null;
+}
+
+async function readSubscriptionAllowanceRow(
   db: DatabaseAdapter,
   userId: string,
   subscriptionId: string,
-): Promise<number | null> {
-  const [row] = await db.query<{ plan_catalog_version: number | null }>(
-    'select plan_catalog_version from subscriptions where id = $1 and user_id = $2 limit 1',
+): Promise<SubscriptionAllowanceRow | null> {
+  const [row] = await db.query<SubscriptionAllowanceRow>(
+    `select plan_catalog_version, stripe_price_id, apple_original_transaction_id,
+            google_purchase_token
+       from subscriptions where id = $1 and user_id = $2 limit 1`,
     [subscriptionId, userId],
   );
-  return row?.plan_catalog_version ?? null;
+  return row ?? null;
 }
 
 async function resolveAllowance(
@@ -72,16 +84,48 @@ async function resolveAllowance(
   periodEnd: Date,
   options: CreditAllocationOptions,
 ): Promise<VersionedPlanTier> {
+  const known = options.catalogVersion !== undefined && options.revenueContext !== undefined;
+  const row = known ? null : await readSubscriptionAllowanceRow(options.db, userId, subscriptionId);
   return {
     tier: await resolveOwnerSeatPlanTier(options.db, userId, planTier, null, periodEnd),
     catalogVersion:
       options.catalogVersion !== undefined
         ? options.catalogVersion
-        : await readSubscriptionCatalogVersion(options.db, userId, subscriptionId),
+        : (row?.plan_catalog_version ?? null),
+    revenueContext:
+      options.revenueContext !== undefined
+        ? options.revenueContext
+        : revenueContextOfSubscription(row),
   };
 }
 
 export class SubscriptionService {
+  /**
+   * The catalog version and revenue context of the open credit period. The period
+   * points at the subscription that funds it, which for a seat member is the
+   * organization owner's row, so this answers for members as well as owners.
+   */
+  static async readOpenCreditPeriodAllowance(
+    db: DatabaseAdapter,
+    userId: string,
+  ): Promise<{ catalogVersion: number | null; revenueContext: RevenueContext | null }> {
+    const [row] = await db.query<SubscriptionAllowanceRow>(
+      `select credits.plan_catalog_version, subs.stripe_price_id,
+              subs.apple_original_transaction_id, subs.google_purchase_token
+         from public.token_credits credits
+         left join public.subscriptions subs on subs.id = credits.subscription_id
+        where credits.user_id = $1
+          and credits.period_end > now()
+        order by credits.period_end desc
+        limit 1`,
+      [userId],
+    );
+    return {
+      catalogVersion: row?.plan_catalog_version ?? null,
+      revenueContext: revenueContextOfSubscription(row),
+    };
+  }
+
   static async getSubscription(
     db: DatabaseAdapter,
     userId: string,
@@ -239,12 +283,15 @@ export class SubscriptionService {
     db: DatabaseAdapter,
     catalogVersions: { previous?: number | null; next?: number | null } = {},
   ): Promise<string> {
+    const revenueContext = revenueContextOfSubscription(
+      await readSubscriptionAllowanceRow(db, userId, subscriptionId),
+    );
     const previousBudgetCents = getPlanUsageBudgetCents(
-      { tier: previousPlanTier, catalogVersion: catalogVersions.previous },
+      { tier: previousPlanTier, catalogVersion: catalogVersions.previous, revenueContext },
       'monthly',
     );
     const nextBudgetCents = getPlanUsageBudgetCents(
-      { tier: nextPlanTier, catalogVersion: catalogVersions.next },
+      { tier: nextPlanTier, catalogVersion: catalogVersions.next, revenueContext },
       'monthly',
     );
     if (previousBudgetCents <= 0 || nextBudgetCents < previousBudgetCents) {

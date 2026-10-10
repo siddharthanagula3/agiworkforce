@@ -97,7 +97,11 @@ async function handleGetBalance(request: NextRequest) {
   // A Free caller gets the percentage, the reset and whether anything is left.
   const planAllowance = isFreePlan
     ? null
-    : resolvePlanCreditAllowance(entitlement.plan, entitlement.catalogVersion);
+    : resolvePlanCreditAllowance(
+        entitlement.plan,
+        entitlement.catalogVersion,
+        entitlement.revenueContext,
+      );
   const monthlyCredits = planAllowance
     ? creditWindow(planAllowance.monthly, creditsFromCents(used), resetAt)
     : null;

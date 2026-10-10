@@ -19,7 +19,11 @@ import {
 import { toUserMessage } from '@/lib/user-error-message';
 import type { DowngradeBlock, PlanChangeState } from '../lib/billing-account-types';
 import { formatBillingDate, formatRecurringMoney } from '../lib/billing-format';
-import { summarizePlanChange, type PlanValueChange } from '../lib/plan-display';
+import {
+  summarizePlanChange,
+  webRevenueContextOfPrice,
+  type PlanValueChange,
+} from '../lib/plan-display';
 import { fetchPlanChangeState, scheduleDowngrade } from '../services/billing-account';
 
 type LoadState =
@@ -112,7 +116,15 @@ export function DowngradeReviewDialog({
   const currentLabel = state ? getBillingPlanPricing(state.plan).label : '';
   const targetLabel = target ? getBillingPlanPricing(target.plan).label : '';
   const effectiveOn = formatBillingDate(state?.periodEnd);
-  const summary = state && target ? summarizePlanChange(state.plan, target.plan) : null;
+  const summary =
+    state && target
+      ? summarizePlanChange(
+          state.plan,
+          target.plan,
+          undefined,
+          webRevenueContextOfPrice(state.price),
+        )
+      : null;
   const scheduled = state?.scheduledChange ?? null;
   const grandfatheredNotice =
     state?.price?.interval === 'yearly' ? grandfatheredYearlyBillingNotice(state.plan) : null;

@@ -4,11 +4,13 @@ import {
   CREDITS_PER_CENT,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   MICROUSD_PER_CREDIT,
+  effectiveManagedUsageLimit,
   isFreeBillingPlanTier,
   managedUsageLimitsForCatalogVersion,
   type BillingInterval,
   type BillingPlanTier,
   type ManagedUsageLimit,
+  type RevenueContext,
 } from '@agiworkforce/types';
 
 export type ManagedUsageCapCents = number | null;
@@ -30,6 +32,7 @@ export function toPublicUsagePercentage(used: number, limit: number): number {
 export interface VersionedPlanTier {
   tier: string | null | undefined;
   catalogVersion: number | null | undefined;
+  revenueContext?: RevenueContext | null;
 }
 
 export type PlanAllowanceSubject = string | null | undefined | VersionedPlanTier;
@@ -42,12 +45,14 @@ function subjectTier(plan: PlanAllowanceSubject): string | null {
 function getLimit(plan: PlanAllowanceSubject): ManagedUsageLimit | null {
   const tier = subjectTier(plan);
   if (!tier) return null;
-  const limits = managedUsageLimitsForCatalogVersion(
-    typeof plan === 'object' && plan !== null ? plan.catalogVersion : null,
+  const versioned = typeof plan === 'object' && plan !== null ? plan : null;
+  const limits = managedUsageLimitsForCatalogVersion(versioned?.catalogVersion ?? null);
+  if (!Object.prototype.hasOwnProperty.call(limits, tier)) return null;
+  return effectiveManagedUsageLimit(
+    tier as BillingPlanTier,
+    versioned?.catalogVersion ?? null,
+    versioned?.revenueContext ?? null,
   );
-  return Object.prototype.hasOwnProperty.call(limits, tier)
-    ? limits[tier as BillingPlanTier]
-    : null;
 }
 
 function isFreeSubject(plan: PlanAllowanceSubject): boolean {

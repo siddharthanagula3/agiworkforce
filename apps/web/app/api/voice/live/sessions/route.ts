@@ -316,6 +316,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       userId,
       planTier,
       catalogVersion: entitlement.catalogVersion,
+      revenueContext: entitlement.revenueContext,
       modelId: liveModel.id,
     });
     limitResets = block.resetsAt;

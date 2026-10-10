@@ -101,6 +101,7 @@ export async function recordMobileIapStoreCommission(
     storeTransactionId: string;
     originalTransactionId: string | null;
     purchasedAt: Date;
+    purchaseCountry?: string | null;
   },
 ): Promise<void> {
   const afterFirstYear =
@@ -109,6 +110,7 @@ export async function recordMobileIapStoreCommission(
     platform: input.platform,
     kind: input.product.kind,
     afterFirstYear,
+    purchaseCountry: input.purchaseCountry ?? null,
   });
   const priceCents = intendedAmountCents(input.product);
   await recordCogsAdjustment(
@@ -149,6 +151,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
       storeTransactionId: input.verified.storeTransactionId,
       originalTransactionId: input.verified.originalTransactionId,
       purchasedAt: input.verified.purchasedAt,
+      purchaseCountry: input.verified.purchaseCountry ?? null,
     });
   } catch (error) {
     logger.error(

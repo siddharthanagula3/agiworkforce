@@ -6,6 +6,7 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
 import {
   isSeatBearingBillingPlan,
   provisionSeatMemberCreditAccounts,
@@ -111,6 +112,7 @@ export async function GET(request: NextRequest) {
               periodStart: new Date(subscription.current_period_start),
               periodEnd: new Date(subscription.current_period_end),
               catalogVersion: subscription.plan_catalog_version ?? null,
+              revenueContext: revenueContextOfSubscription(subscription),
             });
           }
         } catch (error) {

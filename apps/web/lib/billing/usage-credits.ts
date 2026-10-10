@@ -2,10 +2,11 @@ import 'server-only';
 
 import {
   PLAN_CREDIT_ALLOWANCES,
-  getPlanCreditAllowance,
+  getEffectivePlanCreditAllowance,
   type BillingPlanTier,
   type ManagedUsageCreditWindow,
   type PlanCreditAllowance,
+  type RevenueContext,
 } from '@agiworkforce/types';
 
 /**
@@ -17,10 +18,11 @@ import {
 export function resolvePlanCreditAllowance(
   plan: string | null | undefined,
   catalogVersion?: number | null,
+  revenueContext?: RevenueContext | null,
 ): PlanCreditAllowance | null {
   const tier = plan?.trim().toLowerCase() as BillingPlanTier | undefined;
   if (!tier || !Object.prototype.hasOwnProperty.call(PLAN_CREDIT_ALLOWANCES, tier)) return null;
-  const allowance = getPlanCreditAllowance(tier, catalogVersion);
+  const allowance = getEffectivePlanCreditAllowance(tier, catalogVersion, revenueContext);
   if (allowance.unlimited || allowance.monthly <= 0) return null;
   return allowance;
 }
