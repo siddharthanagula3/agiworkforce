@@ -14,7 +14,7 @@ import { getVoiceLiveBackendModel } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { voiceJsonError } from '../../lib/voice-session-budget';
-import { settleVoiceSession } from '../../lib/voice-session-settlement';
+import { settleVoiceSession } from '@/app/api/voice/live/sessions/lib/voice-session-settlement';
 import {
   closeVoiceSession,
   getVoiceSessionByProviderId,
