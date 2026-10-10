@@ -13,6 +13,10 @@ import {
   type ManagedMemoryContextDb,
 } from '@/lib/services/managed-memory-context-service';
 import { loadProjectContext, renderProjectContext } from '@/lib/services/project-context-service';
+import {
+  liveVoiceLanguageInstruction,
+  liveVoicePaceInstruction,
+} from '@agiworkforce/types/live-voices';
 
 export const MAX_TRANSCRIPT_TURNS = 24;
 export const MAX_TRANSCRIPT_CHARS = 6_000;
@@ -309,21 +313,20 @@ function compose(sections: readonly (string | null)[], maxChars: number): string
  * knowledge-file passages stay with the delegated turn that can cite them.
  */
 export function formatLiveVoiceLanguage(language: string | null): string | null {
-  return language
-    ? `Speak and transcribe in ${language}. Keep to it even when the user's audio is ambiguous.`
-    : null;
+  return language ? liveVoiceLanguageInstruction(language) : null;
 }
 
 export function buildLiveVoiceInstructions(
   base: string,
   bundle: LiveVoiceContextBundle,
-  options: { language?: string | null; toolNotice?: string | null } = {},
+  options: { language?: string | null; pace?: number; toolNotice?: string | null } = {},
 ): string {
   return compose(
     [
       base,
       options.toolNotice ?? null,
       formatLiveVoiceLanguage(options.language ?? null),
+      options.pace === undefined ? null : liveVoicePaceInstruction(options.pace),
       bundle.personalizationPrompt,
       bundle.memoryPrompt,
       bundle.projectBrief,
