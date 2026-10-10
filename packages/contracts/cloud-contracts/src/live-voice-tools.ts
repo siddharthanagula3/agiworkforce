@@ -220,3 +220,82 @@ export class LiveVoiceToolBridge {
     this.options.onApprovalsChanged(this.approvals());
   }
 }
+
+export interface LiveVoiceBackendUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  webSearchCalls: number;
+}
+
+const BACKEND_USAGE_EVENTS = new Set([
+  'response.completed',
+  'response.failed',
+  'response.incomplete',
+]);
+const OUTPUT_ITEM_DONE = 'response.output_item.done';
+const WEB_SEARCH_CALL_ITEM = 'web_search_call';
+
+function tokenCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/**
+ * What a Responses-delegated GPT-Live backend spent, read from the nested
+ * events the session forwards in `response.event`. OpenAI's cost guide says to
+ * count each backend response's `usage` once by response id, and the lifecycle
+ * snapshots clear `output`, so web searches are counted from their output-item
+ * events. No server-readable per-session source carries this usage.
+ */
+export class LiveVoiceBackendUsageMeter {
+  private readonly responses = new Map<
+    string,
+    { inputTokens: number; outputTokens: number; cachedTokens: number }
+  >();
+  private readonly searches = new Set<string>();
+
+  observe(event: unknown): void {
+    if (!event || typeof event !== 'object') return;
+    const nested = event as Record<string, unknown>;
+    const type = nested['type'];
+    if (type === OUTPUT_ITEM_DONE) {
+      const item = nested['item'] as { id?: unknown; type?: unknown } | undefined;
+      if (item?.type === WEB_SEARCH_CALL_ITEM && typeof item.id === 'string') {
+        this.searches.add(item.id);
+      }
+      return;
+    }
+    if (typeof type !== 'string' || !BACKEND_USAGE_EVENTS.has(type)) return;
+    const response = nested['response'] as { id?: unknown; usage?: unknown } | undefined;
+    const usage = response?.usage as
+      | {
+          input_tokens?: unknown;
+          output_tokens?: unknown;
+          input_tokens_details?: { cached_tokens?: unknown } | null;
+        }
+      | undefined;
+    if (typeof response?.id !== 'string' || !usage) return;
+    const inputTokens = tokenCount(usage.input_tokens);
+    this.responses.set(response.id, {
+      inputTokens,
+      outputTokens: tokenCount(usage.output_tokens),
+      cachedTokens: Math.min(tokenCount(usage.input_tokens_details?.cached_tokens), inputTokens),
+    });
+  }
+
+  report(): LiveVoiceBackendUsage | null {
+    const usage: LiveVoiceBackendUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: 0,
+      webSearchCalls: this.searches.size,
+    };
+    for (const response of this.responses.values()) {
+      usage.inputTokens += response.inputTokens;
+      usage.outputTokens += response.outputTokens;
+      usage.cachedTokens += response.cachedTokens;
+    }
+    const empty = usage.inputTokens === 0 && usage.outputTokens === 0 && usage.webSearchCalls === 0;
+    return empty ? null : usage;
+  }
+}

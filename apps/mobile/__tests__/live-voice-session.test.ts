@@ -231,6 +231,72 @@ describe('LiveVoiceSession', () => {
     expect(cb.onBackendBusy).toHaveBeenLastCalledWith(false);
   });
 
+  it('totals the delegated backend usage once per response for the close', async () => {
+    const { session } = await startSession();
+    mockState.peer.channel.receive({ type: 'session.started' });
+    const completed = {
+      type: 'response.event',
+      delegation_id: 'del_1',
+      event: {
+        type: 'response.completed',
+        response: {
+          id: 'resp_1',
+          usage: {
+            input_tokens: 900,
+            output_tokens: 120,
+            input_tokens_details: { cached_tokens: 300 },
+          },
+        },
+      },
+    };
+    mockState.peer.channel.receive(completed);
+    mockState.peer.channel.receive(completed);
+    mockState.peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'del_1',
+      event: { type: 'response.output_item.done', item: { id: 'ws_1', type: 'web_search_call' } },
+    });
+
+    expect(session.backendUsage).toEqual({
+      inputTokens: 900,
+      outputTokens: 120,
+      cachedTokens: 300,
+      webSearchCalls: 1,
+    });
+  });
+
+  it('reports a provider error during the call without ending it', async () => {
+    const cb = { ...callbacks(), onProviderError: jest.fn() };
+    await startSession(cb);
+    mockState.peer.channel.receive({ type: 'session.started' });
+
+    mockState.peer.channel.receive({
+      type: 'error',
+      error: { type: 'invalid_request_error', code: 'moderation_blocked', message: 'Blocked.' },
+    });
+
+    expect(cb.onProviderError).toHaveBeenCalledTimes(1);
+    expect(cb.onError).not.toHaveBeenCalled();
+  });
+
+  it('stops a running task with an instruction, never the undefined delegation cancel', async () => {
+    const { session } = await startSession();
+    mockState.peer.channel.receive({ type: 'session.started' });
+    mockState.peer.channel.receive({
+      type: 'session.delegation.created',
+      delegation: { id: 'del_1' },
+    });
+
+    session.cancelBackendWork();
+
+    const types = mockState.peer.channel.sent.map((event) => event['type']);
+    expect(types).not.toContain('session.delegation.cancel');
+    expect(mockState.peer.channel.sent.at(-1)).toMatchObject({
+      type: 'session.instructions.append',
+      delegation_id: null,
+    });
+  });
+
   it('names the running tool, flags a slow one and reports what it returned', async () => {
     mockApiFetch.mockResolvedValueOnce({
       ok: true,
@@ -419,5 +485,21 @@ describe('LiveVoiceSession', () => {
       reason: 'close_requested',
       settlement: SETTLEMENT,
     });
+  });
+
+  it('sends the delegated backend usage with the close when the session collected any', async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const backend = { inputTokens: 900, outputTokens: 120, cachedTokens: 300, webSearchCalls: 1 };
+
+    await settleLiveVoiceSession(
+      'live_1',
+      SETTLEMENT,
+      { reason: 'close_requested', seconds: 31 },
+      backend,
+    );
+
+    const [, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
+    expect(JSON.parse(init.body)).toMatchObject({ backend });
   });
 });

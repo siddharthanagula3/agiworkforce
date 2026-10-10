@@ -8,6 +8,7 @@ export const LIVE_VOICE_MESSAGE = {
   connectionDropped: 'The live voice connection dropped.',
   sessionEnded: 'The live voice session ended.',
   sessionRejected: 'The live voice session could not be started.',
+  providerError: 'The voice service could not do that. You can keep talking or ask again.',
 } as const;
 
 export const LIVE_VOICE_LOCAL_MODE_REASON =

@@ -220,6 +220,40 @@ describe('VoiceModeSurface orb layout', () => {
   });
 });
 
+describe('VoiceModeSurface call notices', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ playbackBlocked: false, providerNotice: null });
+  });
+
+  it('offers a tap to hear the assistant when the browser blocked its audio', async () => {
+    const resumePlayback = vi.fn();
+    useVoiceSessionStore.setState({ playbackBlocked: true });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening },
+      resumePlayback,
+    });
+    renderSurface();
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Tap to hear the assistant' }).click();
+    });
+    expect(resumePlayback).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a provider error as a plain notice while the call keeps running', () => {
+    useVoiceSessionStore.setState({ providerNotice: LIVE_SESSION_MESSAGE.providerError });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening },
+    });
+    renderSurface();
+
+    expect(screen.getByTestId('voice-provider-notice').textContent).toBe(
+      LIVE_SESSION_MESSAGE.providerError,
+    );
+    expect(screen.queryByTestId('voice-error')).toBeNull();
+  });
+});
+
 describe('VoiceModeSurface usage limit', () => {
   afterEach(() => {
     useVoiceSessionStore.setState({ usageLimited: false });

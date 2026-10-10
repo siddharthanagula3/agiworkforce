@@ -536,6 +536,102 @@ describe('LiveVoiceSession', () => {
     expect(peer.channel.sent).toHaveLength(1);
   });
 
+  it('totals the delegated backend usage once per response, with web search calls', async () => {
+    const { session } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    expect(session.backendUsage).toBeNull();
+
+    const completed = (id: string, input: number, output: number, cached: number) => ({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: {
+        type: 'response.completed',
+        response: {
+          id,
+          output: [],
+          usage: {
+            input_tokens: input,
+            output_tokens: output,
+            input_tokens_details: { cached_tokens: cached },
+          },
+        },
+      },
+    });
+    peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: { type: 'response.output_item.done', item: { id: 'ws_1', type: 'web_search_call' } },
+    });
+    peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: { type: 'response.output_item.done', item: { id: 'ws_1', type: 'web_search_call' } },
+    });
+    peer.channel.receive(completed('resp_1', 1_000, 200, 400));
+    peer.channel.receive(completed('resp_1', 1_000, 200, 400));
+    peer.channel.receive(completed('resp_2', 300, 50, 9_999));
+    peer.channel.receive({
+      type: 'response.event',
+      event: { type: 'response.completed', response: { id: 'resp_3' } },
+    });
+
+    expect(session.backendUsage).toEqual({
+      inputTokens: 1_300,
+      outputTokens: 250,
+      cachedTokens: 700,
+      webSearchCalls: 1,
+    });
+  });
+
+  it('reports a provider error during the call without ending it', async () => {
+    const cb = callbacks();
+    const onProviderError = vi.fn();
+    const { session } = await startSession({ ...cb, onProviderError });
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+
+    peer.channel.receive({
+      type: 'error',
+      event_id: 'evt_err',
+      error: { type: 'invalid_request_error', code: 'moderation_blocked', message: 'Blocked.' },
+    });
+
+    expect(onProviderError).toHaveBeenCalledWith({
+      code: 'moderation_blocked',
+      message: 'Blocked.',
+    });
+    expect(cb.onError).not.toHaveBeenCalled();
+    expect(peer.closed).toBe(false);
+    session.dispose();
+  });
+
+  it('tells the host when the browser blocks the assistant audio, and plays on a later tap', async () => {
+    const blocked = Object.assign(new Error('blocked'), { name: 'NotAllowedError' });
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockRejectedValueOnce(blocked)
+      .mockResolvedValue(undefined);
+    vi.stubGlobal(
+      'MediaStream',
+      class {
+        addTrack() {}
+        getAudioTracks() {
+          return [fakeTrack()];
+        }
+        getTracks() {
+          return [];
+        }
+      },
+    );
+    const cb = callbacks();
+    const onPlaybackBlocked = vi.fn();
+    const { session } = await startSession({ ...cb, onPlaybackBlocked });
+
+    await vi.waitFor(() => expect(onPlaybackBlocked).toHaveBeenCalledTimes(1));
+    await expect(session.resumePlayback()).resolves.toBe(true);
+    expect(play).toHaveBeenCalledTimes(2);
+    play.mockRestore();
+  });
+
   it('reports a spoken success claim with no tool result behind it', async () => {
     vi.useFakeTimers();
     try {

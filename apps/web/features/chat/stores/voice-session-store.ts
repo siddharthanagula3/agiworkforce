@@ -58,6 +58,10 @@ interface VoiceSessionStoreState {
   rejoinOffer: VoiceRejoinOffer | null;
   /** The error on screen is a usage limit, which retrying cannot clear. */
   usageLimited: boolean;
+  /** The browser blocked the assistant's audio until the user taps. */
+  playbackBlocked: boolean;
+  /** A provider error during a running call, shown without ending it. */
+  providerNotice: string | null;
 }
 
 export interface VoiceRejoinOffer {
@@ -79,6 +83,8 @@ interface VoiceSessionStoreActions {
   setPaused: (paused: boolean) => void;
   setRejoinOffer: (offer: VoiceRejoinOffer | null) => void;
   setUsageLimited: (usageLimited: boolean) => void;
+  setPlaybackBlocked: (playbackBlocked: boolean) => void;
+  setProviderNotice: (providerNotice: string | null) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -113,6 +119,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       paused: false,
       rejoinOffer: null,
       usageLimited: false,
+      playbackBlocked: false,
+      providerNotice: null,
 
       resetOnLogout: () =>
         set({
@@ -129,6 +137,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           paused: false,
           rejoinOffer: null,
           usageLimited: false,
+          playbackBlocked: false,
+          providerNotice: null,
         }),
 
       dispatch: (event) => {
@@ -142,6 +152,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
             : {
                 session,
                 usageLimited,
+                playbackBlocked: false,
+                providerNotice: null,
                 backendBusy: false,
                 toolActivity: [],
                 toolApprovals: [],
@@ -159,6 +171,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setPaused: (paused) => set({ paused }),
       setRejoinOffer: (rejoinOffer) => set({ rejoinOffer }),
       setUsageLimited: (usageLimited) => set({ usageLimited }),
+      setPlaybackBlocked: (playbackBlocked) => set({ playbackBlocked }),
+      setProviderNotice: (providerNotice) => set({ providerNotice }),
       addToolOutcome: (outcome) =>
         set((state) => ({
           toolOutcomes: [
