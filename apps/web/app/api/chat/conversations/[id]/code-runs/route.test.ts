@@ -279,6 +279,41 @@ describe('POST /api/chat/conversations/[id]/code-runs', () => {
     expect(mocks.runCode).not.toHaveBeenCalled();
   });
 
+  it('answers a budget refusal with its own status, code and the upgrade path', async () => {
+    const { ManagedUsageRequestError } =
+      await import('@/lib/services/managed-usage-request-service');
+    mocks.getExecutor.mockImplementationOnce(
+      async (
+        _scope: unknown,
+        onUnavailable: (
+          cause: string,
+          refusal?: InstanceType<typeof ManagedUsageRequestError>,
+        ) => void,
+      ) => {
+        onUnavailable(
+          'over-quota',
+          new ManagedUsageRequestError(
+            'Your Free usage cannot cover sandbox time right now.',
+            429,
+            'free_trial_token_budget_reached',
+          ),
+        );
+        return null;
+      },
+    );
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as {
+      error: { code: string; type: string; recovery?: { action: string; href: string } };
+    };
+    expect(body.error.code).toBe('free_trial_token_budget_reached');
+    expect(body.error.type).toBe('insufficient_quota');
+    expect(body.error.recovery).toEqual({ action: 'upgrade', href: '/pricing' });
+    expect(mocks.runCode).not.toHaveBeenCalled();
+  });
+
   it('refuses when the deployment does not run code', async () => {
     mocks.e2bEnabled.mockReturnValueOnce(false);
 

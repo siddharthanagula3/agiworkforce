@@ -565,8 +565,6 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
 });
 
-export const FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD = 1_000_000;
-
 export const FREE_DAILY_CAPS = Object.freeze({
   messageWrites: 1_000,
   conversationCreates: 100,

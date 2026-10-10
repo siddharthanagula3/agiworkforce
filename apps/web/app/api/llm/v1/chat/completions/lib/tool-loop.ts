@@ -4152,7 +4152,12 @@ export async function* runToolLoop(
   const conversationId = processed.conversationId;
   const e2bSessionScope =
     conversationId && options.userId
-      ? managedCloudE2BSessionScope(options.userId, conversationId)
+      ? {
+          ...managedCloudE2BSessionScope(options.userId, conversationId),
+          ...(processed.freeTrial && freeTrialSpend
+            ? { freeTurnHold: { reservation: processed.freeTrial, spend: freeTrialSpend } }
+            : {}),
+        }
       : undefined;
   let e2bExecutor: E2BExecutor | null = null;
   let e2bUnavailableCause: E2BUnavailableCause | null = null;

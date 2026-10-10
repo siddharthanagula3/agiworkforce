@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  FEATURE_RATE_CARD,
-  FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD,
-  chargeMicrousdForProviderCost,
-} from '@agiworkforce/types';
+import { FEATURE_RATE_CARD, chargeMicrousdForProviderCost } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/cogs-ledger-service');
 type ScanModule1 = typeof import('@agiworkforce/types');
 
@@ -16,9 +12,15 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
 const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
 vi.mock('@/lib/logger', () => ({ logger }));
 
-const quotaValues = vi.hoisted(() => new Map<string, number | boolean>());
-const quotaStore = vi.hoisted(() => ({ set: vi.fn(), increment: vi.fn() }));
-vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => quotaStore }));
+const beginFreeTrialRequest = vi.hoisted(() => vi.fn());
+const settleFreeTrialRequest = vi.hoisted(() => vi.fn());
+const transferFreeTrialHold = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/free-trial-service', () => ({
+  FREE_BUDGET_REACHED_ERROR_CLASS: 'free_trial_token_budget_reached',
+  beginFreeTrialRequest,
+  settleFreeTrialRequest,
+  transferFreeTrialHold,
+}));
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
@@ -84,21 +86,35 @@ function resetMocks(): void {
   logger.warn.mockClear();
   logger.error.mockClear();
   logger.info.mockClear();
-  quotaValues.clear();
-  quotaStore.set.mockReset();
-  quotaStore.set.mockImplementation(
-    async (key: string, value: number | boolean, options?: { onlyIfAbsent?: boolean }) => {
-      if (options?.onlyIfAbsent && quotaValues.has(key)) return false;
-      quotaValues.set(key, value);
-      return true;
-    },
+  beginFreeTrialRequest.mockReset();
+  beginFreeTrialRequest.mockImplementation(
+    async (input: { userId: string; requestId: string; estimatedMicrousd: number }) => ({
+      ok: true,
+      reservation: {
+        kind: 'free_trial',
+        userId: input.userId,
+        requestId: input.requestId,
+        reservedMicrousd: chargeMicrousdForProviderCost(input.estimatedMicrousd),
+      },
+    }),
   );
-  quotaStore.increment.mockReset();
-  quotaStore.increment.mockImplementation(async (key: string, amount: number) => {
-    const next = Number(quotaValues.get(key) ?? 0) + amount;
-    quotaValues.set(key, next);
-    return next;
-  });
+  settleFreeTrialRequest.mockReset();
+  settleFreeTrialRequest.mockImplementation(
+    async (input: { cost: { toolMicrousd: number }; reservation: { reservedMicrousd: number } }) =>
+      Math.min(
+        input.reservation.reservedMicrousd,
+        chargeMicrousdForProviderCost(input.cost.toolMicrousd),
+      ),
+  );
+  transferFreeTrialHold.mockReset();
+  transferFreeTrialHold.mockImplementation(
+    async (input: { parent: { userId: string }; requestId: string; reservedMicrousd: number }) => ({
+      kind: 'free_trial',
+      userId: input.parent.userId,
+      requestId: input.requestId,
+      reservedMicrousd: input.reservedMicrousd,
+    }),
+  );
   recordSettledProviderCost.mockReset();
   recordSettledProviderCost.mockResolvedValue(undefined);
   markManagedUsageProviderStarted.mockReset();
@@ -458,7 +474,7 @@ describe('reserveSandboxComputeInterval', () => {
     );
   });
 
-  it('reserves Free sandbox compute against platform allowance without paid managed usage', async () => {
+  it('reserves Free sandbox compute against the Free usage windows at the rate-card price', async () => {
     const mod = await loadModule();
     const outcome = await mod.reserveSandboxComputeInterval({
       ...reserveInput,
@@ -467,30 +483,102 @@ describe('reserveSandboxComputeInterval', () => {
     });
     expect(outcome.outcome).toBe('reserved');
     if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
-    expect(outcome.reservation.fundingSource).toBe('platform-free');
-    expect(outcome.reservation.estimatedCostMicrousd).toBe(600 * DEFAULT_SHAPE_RATE);
+    expect(outcome.reservation.fundingSource).toBe('free-windows');
+    expect(outcome.reservation.estimatedCostMicrousd).toBe(
+      chargeMicrousdForProviderCost(600 * DEFAULT_SHAPE_RATE),
+    );
+    expect(beginFreeTrialRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        requestId: outcome.reservation.idempotencyKey,
+        estimatedMicrousd: 600 * DEFAULT_SHAPE_RATE,
+        provider: 'e2b',
+        model: 'tpl-1',
+      }),
+    );
+    const leaseSeconds = (beginFreeTrialRequest.mock.calls[0]?.[0] as { leaseSeconds: number })
+      .leaseSeconds;
+    expect(leaseSeconds).toBeGreaterThan(600);
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
   });
 
-  it('refuses Free compute after its daily platform allowance is exhausted', async () => {
+  it('refuses Free compute the Free usage windows cannot fund, with the upgrade code', async () => {
     const mod = await loadModule();
-    const perHold = 600 * DEFAULT_SHAPE_RATE;
-    const fits = Math.floor(FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD / perHold);
-    const outcomes = await Promise.all(
-      Array.from({ length: fits + 1 }, () =>
-        mod.reserveSandboxComputeInterval({ ...reserveInput, planTier: 'free', ttlMs: 600_000 }),
-      ),
-    );
-    expect(outcomes.filter((outcome) => outcome.outcome === 'reserved')).toHaveLength(fits);
-    const refusal = outcomes.find((outcome) => outcome.outcome === 'refused');
-    expect(refusal).toMatchObject({
+    beginFreeTrialRequest.mockResolvedValue({ ok: false, code: 'budget_reached', resetAt: null });
+    const outcome = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+    });
+    expect(outcome).toMatchObject({
       outcome: 'refused',
-      error: { status: 429, code: 'free_sandbox_allowance_exhausted' },
+      error: { status: 429, code: 'free_trial_token_budget_reached' },
     });
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
   });
 
-  it('returns a Free platform hold when provisioning fails, once only', async () => {
+  it('takes a sandbox started inside a Free turn out of that turn’s window hold', async () => {
+    const mod = await loadModule();
+    const parent = {
+      kind: 'free_trial' as const,
+      userId: 'user-1',
+      requestId: 'turn-1',
+      reservedMicrousd: 50_000,
+    };
+    const spend = { hold: vi.fn(() => true), settle: vi.fn(), exhausted: vi.fn(() => false) };
+    const outcome = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+      freeTurnHold: { reservation: parent, spend },
+    });
+    expect(outcome.outcome).toBe('reserved');
+    expect(spend.hold).toHaveBeenCalledWith(600 * DEFAULT_SHAPE_RATE);
+    expect(transferFreeTrialHold).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parent,
+        reservedMicrousd: chargeMicrousdForProviderCost(600 * DEFAULT_SHAPE_RATE),
+      }),
+    );
+    expect(beginFreeTrialRequest).not.toHaveBeenCalled();
+    expect(spend.settle).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the Free turn cannot spare the lifetime, and gives back a failed move', async () => {
+    const mod = await loadModule();
+    const parent = {
+      kind: 'free_trial' as const,
+      userId: 'user-1',
+      requestId: 'turn-1',
+      reservedMicrousd: 1,
+    };
+    const refusingSpend = {
+      hold: vi.fn(() => false),
+      settle: vi.fn(),
+      exhausted: vi.fn(() => true),
+    };
+    const refused = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+      freeTurnHold: { reservation: parent, spend: refusingSpend },
+    });
+    expect(refused).toMatchObject({ outcome: 'refused', error: { status: 429 } });
+    expect(transferFreeTrialHold).not.toHaveBeenCalled();
+
+    transferFreeTrialHold.mockResolvedValue(null);
+    const spend = { hold: vi.fn(() => true), settle: vi.fn(), exhausted: vi.fn(() => false) };
+    const unmoved = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+      freeTurnHold: { reservation: parent, spend },
+    });
+    expect(unmoved.outcome).toBe('refused');
+    expect(spend.settle).toHaveBeenCalledWith(600 * DEFAULT_SHAPE_RATE, 0);
+  });
+
+  it('releases a Free hold whose sandbox never ran at no charge', async () => {
     const mod = await loadModule();
     const outcome = await mod.reserveSandboxComputeInterval({
       ...reserveInput,
@@ -498,16 +586,23 @@ describe('reserveSandboxComputeInterval', () => {
       ttlMs: 600_000,
     });
     if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
-    const reservation = outcome.reservation;
-    await mod.releaseSandboxComputeReservation({ userId: 'user-1', reservation, reason: 'failed' });
-    await mod.releaseSandboxComputeReservation({ userId: 'user-1', reservation, reason: 'failed' });
-    if (reservation.fundingSource !== 'platform-free') throw new Error('expected Free funding');
-    expect(quotaValues.get(reservation.quotaKey)).toBe(0);
+    await mod.releaseSandboxComputeReservation({
+      userId: 'user-1',
+      reservation: outcome.reservation,
+      reason: 'failed',
+    });
+    expect(settleFreeTrialRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'failed',
+        cost: { tokenMicrousd: 0, toolMicrousd: 0 },
+        reservation: expect.objectContaining({ requestId: outcome.reservation.idempotencyKey }),
+      }),
+    );
     expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
   });
 });
 
-describe('platform-funded Free sandbox settlement', () => {
+describe('Free sandbox settlement draws the Free usage windows', () => {
   beforeEach(() => {
     clearScopedEnv();
     resetMocks();
@@ -517,7 +612,7 @@ describe('platform-funded Free sandbox settlement', () => {
     vi.unstubAllEnvs();
   });
 
-  it('refunds unused reserved lifetime and records platform COGS without charging the user', async () => {
+  it('charges the metered seconds to the Free windows and records them as customer usage', async () => {
     const mod = await loadModule();
     const outcome = await mod.reserveSandboxComputeInterval({
       userId: 'user-1',
@@ -527,31 +622,34 @@ describe('platform-funded Free sandbox settlement', () => {
     });
     if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
     const reservation = outcome.reservation;
-    await expect(mod.meterSandboxComputeInterval(interval({ reservation }))).resolves.toBe(
-      MINUTE_AT_DEFAULT_SHAPE,
+    const charged = chargeMicrousdForProviderCost(MINUTE_AT_DEFAULT_SHAPE);
+    await expect(mod.meterSandboxComputeInterval(interval({ reservation }))).resolves.toBe(charged);
+    expect(settleFreeTrialRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'completed',
+        provider: 'e2b',
+        cost: { tokenMicrousd: 0, toolMicrousd: MINUTE_AT_DEFAULT_SHAPE },
+        reservation: expect.objectContaining({
+          requestId: reservation.idempotencyKey,
+          reservedMicrousd: reservation.estimatedCostMicrousd,
+        }),
+      }),
     );
-    if (reservation.fundingSource !== 'platform-free') throw new Error('expected Free funding');
-    expect(quotaValues.get(reservation.quotaKey)).toBe(MINUTE_AT_DEFAULT_SHAPE);
     expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
     expect(recordSettledProviderCost).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'e2b',
-        customerCanonicalMicrousd: 0,
+        customerCanonicalMicrousd: charged,
         providerEstimatedCostMicrousd: MINUTE_AT_DEFAULT_SHAPE,
         sourceRef: reservation.idempotencyKey,
-        usage: expect.objectContaining({
-          operation: 'e2b_sandbox_compute',
-          funding_source: 'platform-free',
-        }),
+        usage: expect.objectContaining({ funding_source: 'free-windows' }),
       }),
     );
     expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
 
-    await expect(mod.meterSandboxComputeInterval(interval({ reservation }))).resolves.toBe(
-      MINUTE_AT_DEFAULT_SHAPE,
-    );
+    settleFreeTrialRequest.mockResolvedValue(null);
+    await mod.meterSandboxComputeInterval(interval({ reservation }));
     expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
-    expect(quotaValues.get(reservation.quotaKey)).toBe(MINUTE_AT_DEFAULT_SHAPE);
   });
 });
 

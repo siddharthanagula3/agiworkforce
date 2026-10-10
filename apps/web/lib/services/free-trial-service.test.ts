@@ -56,6 +56,7 @@ import {
   releaseExpiredFreeTrialReservations,
   scopeFreeTrialToolSpend,
   settleFreeTrialRequest,
+  transferFreeTrialHold,
   type FreeTrialReservation,
 } from './free-trial-service';
 import { LLMCostCalculator } from './llm-cost-calculator';
@@ -562,11 +563,61 @@ describe('settleFreeTrialRequest', () => {
         reservation: reservation({ requestId: 'request-log', reservedMicrousd: 5_000 }),
         outcome: 'failed',
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1', requestId: 'request-log' }),
       'Free-tier usage settlement failed',
     );
+  });
+});
+
+describe('transferFreeTrialHold', () => {
+  const parent: FreeTrialReservation = {
+    kind: 'free_trial',
+    userId: 'user-1',
+    requestId: 'turn-1',
+    reservedMicrousd: 10_000,
+  };
+  const TRANSFER = {
+    parent,
+    requestId: 'agi.e2b.free.sandbox-1',
+    reservedMicrousd: 4_000,
+    leaseSeconds: 1_500,
+    provider: 'e2b',
+    model: 'tpl-1',
+  };
+
+  it('moves the amount out of the turn hold onto a reservation of its own', async () => {
+    const moved = await transferFreeTrialHold(TRANSFER);
+
+    expect(moved).toEqual({
+      kind: 'free_trial',
+      userId: 'user-1',
+      requestId: 'agi.e2b.free.sandbox-1',
+      reservedMicrousd: 4_000,
+    });
+    const [shrink] = executed('set reserved_microusd = reserved_microusd - $3');
+    expect(shrink?.[1]).toEqual(['user-1', 'turn-1', 4_000]);
+    expect(shrink?.[0]).toContain('reserved_microusd >= $3');
+    const [insert] = executed('insert into public.free_daily_usage_reservations');
+    expect(insert?.[1]).toEqual([
+      'user-1',
+      'agi.e2b.free.sandbox-1',
+      4_000,
+      1_500,
+      'e2b',
+      'tpl-1',
+      null,
+    ]);
+  });
+
+  it('moves nothing when the turn hold cannot spare the amount', async () => {
+    tx.execute.mockImplementation(async (sql: string) =>
+      sql.includes('reserved_microusd - $3') ? 0 : 1,
+    );
+
+    await expect(transferFreeTrialHold(TRANSFER)).resolves.toBeNull();
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
   });
 });
 

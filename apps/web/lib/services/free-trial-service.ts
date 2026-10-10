@@ -644,6 +644,57 @@ export async function beginFreeTrialRequest(params: {
   return { ok: true, reservation: { ...userReservation.reservation, eventBudget } };
 }
 
+/**
+ * Moves part of a turn's Free-window hold onto a reservation of its own, for
+ * spend that outlives the turn (a sandbox runs until its lifetime ends). A turn
+ * holds the whole remaining window, so a separate reservation made during it
+ * would find nothing left; the moved amount leaves the turn's hold instead.
+ */
+export async function transferFreeTrialHold(params: {
+  parent: FreeTrialReservation;
+  requestId: string;
+  reservedMicrousd: number;
+  leaseSeconds: number;
+  provider: string;
+  model: string;
+  conversationId?: string;
+}): Promise<FreeTrialReservation | null> {
+  const amount = Math.max(1, Math.ceil(params.reservedMicrousd));
+  const userId = params.parent.userId;
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  return db.transaction(async (tx): Promise<FreeTrialReservation | null> => {
+    const [lockedUsage] = await tx.query<{ user_id: string }>(
+      `select user_id
+       from public.website_auto_economy_trial_usage
+       where user_id = $1
+       for update`,
+      [userId],
+    );
+    if (!lockedUsage) return null;
+    const moved = await tx.execute(
+      `update public.free_daily_usage_reservations
+          set reserved_microusd = reserved_microusd - $3
+        where user_id = $1 and request_id = $2
+          and settled_at is null and reserved_microusd >= $3`,
+      [userId, params.parent.requestId, amount],
+    );
+    if (moved !== 1) return null;
+    await insertFreeReservation(
+      tx,
+      {
+        userId,
+        requestId: params.requestId,
+        leaseSeconds: params.leaseSeconds,
+        provider: params.provider,
+        model: params.model,
+        ...(params.conversationId ? { conversationId: params.conversationId } : {}),
+      },
+      amount,
+    );
+    return { kind: 'free_trial', userId, requestId: params.requestId, reservedMicrousd: amount };
+  });
+}
+
 async function settleUnmeteredFreeTurn(
   reservation: FreeTrialReservation,
   outcome: FreeTrialSettlementOutcome,
@@ -682,13 +733,13 @@ export async function settleFreeTrialRequest(params: {
   usage?: TokenUsage;
   cost?: FreeTrialCost;
   attempt?: GenerationAttempt | null;
-}): Promise<void> {
+}): Promise<number | null> {
   const attempt = params.attempt === undefined ? { outcome: params.outcome } : params.attempt;
   const attemptOutcome = attempt?.outcome ?? null;
   const errorClass = attempt ? attemptErrorClass(attempt) : null;
   if (params.reservation.reservedMicrousd <= 0) {
     await settleUnmeteredFreeTurn(params.reservation, params.outcome, attemptOutcome, errorClass);
-    return;
+    return null;
   }
 
   const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
@@ -793,6 +844,7 @@ export async function settleFreeTrialRequest(params: {
   if (params.reservation.eventBudget && settledCostMicrousd !== null) {
     await settleEventSpend(params.reservation.eventBudget, settledCostMicrousd);
   }
+  return settledCostMicrousd;
 }
 
 export async function releaseExpiredFreeTrialReservations(
