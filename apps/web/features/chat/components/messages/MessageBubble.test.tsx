@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import { AVAILABLE_MODELS } from '@shared/stores/model-store';
+import { regenerateModelOptions } from '@features/chat/lib/regenerate-model-options';
 import {
   getModelMetadataById,
   getModels,
@@ -1175,6 +1178,46 @@ describe('MessageBubble', () => {
       await user.click(screen.getByRole('button', { name: 'Regenerate response' }));
       await user.click(screen.getByRole('menuitem', { name: 'Try again' }));
       expect(onRegenerate).toHaveBeenCalledWith('msg-9');
+    });
+    it('offers and marks the promoted model for a Free reply while the promotion runs, and not after', async () => {
+      const user = userEvent.setup();
+      const promoted = AVAILABLE_MODELS.find(
+        (model) => model.providerKey === 'anthropic' && !FREE_TRIAL_MODELS.includes(model.id),
+      )!;
+      const free = AVAILABLE_MODELS.find((model) => FREE_TRIAL_MODELS.includes(model.id))!;
+      const onRegenerateWithModel = vi.fn();
+      const reply = makeMessage({
+        id: 'msg-promo',
+        role: 'assistant',
+        content: 'Reply',
+        model: promoted.id,
+      });
+      const { rerender } = render(
+        <MessageBubble
+          message={reply}
+          onRegenerate={vi.fn()}
+          onRegenerateWithModel={onRegenerateWithModel}
+          regenerateModelOptions={regenerateModelOptions([free, promoted], true, promoted.id)}
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Regenerate response' }));
+      const promotedItem = screen.getByRole('menuitem', { name: promoted.name });
+      expect(promotedItem.querySelector('svg')).not.toBeNull();
+      await user.click(promotedItem);
+      expect(onRegenerateWithModel).toHaveBeenCalledWith('msg-promo', promoted.id);
+
+      rerender(
+        <MessageBubble
+          message={reply}
+          onRegenerate={vi.fn()}
+          onRegenerateWithModel={onRegenerateWithModel}
+          regenerateModelOptions={regenerateModelOptions([free, promoted], true, null)}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Regenerate response' }));
+      expect(screen.queryByRole('menuitem', { name: promoted.name })).toBeNull();
+      expect(screen.getByRole('menuitem', { name: free.name })).toBeTruthy();
     });
   });
 
