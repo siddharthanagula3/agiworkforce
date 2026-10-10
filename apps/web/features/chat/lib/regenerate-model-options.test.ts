@@ -13,7 +13,8 @@ const freeChatOffering = Object.entries(getProviderOfferings()).find(
   ([id]) => freeQuotaSelection(id)?.category === 'chat',
 );
 const freeMediaOffering = Object.entries(getProviderOfferings()).find(
-  ([id]) => freeQuotaSelection(id)?.category === 'image' || freeQuotaSelection(id)?.category === 'video',
+  ([id]) =>
+    freeQuotaSelection(id)?.category === 'image' || freeQuotaSelection(id)?.category === 'video',
 );
 
 describe('regeneration model options', () => {
@@ -48,8 +49,27 @@ describe('regeneration model options', () => {
       true,
     );
 
-    expect(options).toEqual([
-      { id: freeChatOffering![0], name: freeChatOffering![1].displayName },
+    expect(options).toEqual([{ id: freeChatOffering![0], name: freeChatOffering![1].displayName }]);
+  });
+
+  it('offers the promoted model to Free accounts while the promotion runs, and no other paid model', () => {
+    const promoted = AVAILABLE_MODELS.find(
+      (model) =>
+        model.id !== paidModel?.id &&
+        !FREE_TRIAL_MODELS.includes(model.id) &&
+        !freeQuotaSelection(model.id) &&
+        model.providerKey !== 'managed_cloud',
+    );
+    expect(promoted).toBeDefined();
+
+    expect(regenerateModelOptions([freeModel!, promoted!, paidModel!], true, promoted!.id)).toEqual(
+      [
+        { id: freeModel!.id, name: freeModel!.name },
+        { id: promoted!.id, name: promoted!.name },
+      ],
+    );
+    expect(regenerateModelOptions([freeModel!, promoted!, paidModel!], true, null)).toEqual([
+      { id: freeModel!.id, name: freeModel!.name },
     ]);
   });
 });
