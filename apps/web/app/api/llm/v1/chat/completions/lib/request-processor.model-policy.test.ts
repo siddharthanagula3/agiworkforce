@@ -206,7 +206,11 @@ describe('workspace model policy is re-checked on every model this request can r
     if (!governed.ok) return;
     expect(governed.fallbackModels).not.toContain(blocked);
     const survivors = plan.filter((model) => model !== blocked);
-    expect((governed.fallbackModels ?? []).slice(0, survivors.length)).toEqual(survivors);
+    const governedPlan = governed.fallbackModels ?? [];
+    expect(governedPlan[0]).toBe(survivors[0]);
+    expect(governedPlan.filter((model) => survivors.includes(model))).toEqual(
+      survivors.filter((model) => governedPlan.includes(model)),
+    );
   });
 
   it('strips every substitute model from the failover plan when the workspace allows only the primary', async () => {

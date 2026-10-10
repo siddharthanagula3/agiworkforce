@@ -93,9 +93,8 @@ export function expectedUnitAmount(
   const pricing = getBillingPlanPricing(tier);
   const normalized = currency.toLowerCase();
   if (normalized === 'inr') {
-    return interval === 'monthly' && typeof pricing.monthlyPriceInr === 'number'
-      ? pricing.monthlyPriceInr * CENTS_PER_UNIT
-      : null;
+    const listedInr = interval === 'yearly' ? pricing.yearlyPriceInr : pricing.monthlyPriceInr;
+    return typeof listedInr === 'number' ? listedInr * CENTS_PER_UNIT : null;
   }
   if (normalized !== 'usd') return null;
   const listed = interval === 'yearly' ? pricing.yearlyPriceUsd : pricing.monthlyPriceUsd;

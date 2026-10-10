@@ -8,6 +8,7 @@
   "monthly": "월간",
   "yearly": "연간",
   "perMonth": "/월",
+  "taxIncluded": "{{tax}} 포함",
   "perYear": "/년",
   "currentPlan": "현재 플랜",
   "upgrade": "업그레이드",

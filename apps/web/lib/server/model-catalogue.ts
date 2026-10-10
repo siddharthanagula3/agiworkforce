@@ -33,6 +33,8 @@ import {
   readEventPromotion,
   type EventPromotion,
 } from '@/lib/server/event-access';
+import { DEFAULT_DATA_REGION, allowedDeveloperJurisdictions } from '@agiworkforce/compliance';
+import { managedCloudDataRegion } from '@/lib/server/data-region';
 
 export const ANONYMOUS_PLAN_TIER = normalizeBillingPlanTier(null);
 
@@ -261,8 +263,13 @@ function toCatalogueEntry(
  * of this, so a test asserting here is asserting the real decision rather than
  * what survives redaction.
  */
-export async function buildCatalogueEntries(planTier: string): Promise<CatalogueEntry[]> {
-  const pickerModels = listPickerChatModels();
+export async function buildCatalogueEntries(
+  planTier: string,
+  developerJurisdictions: ReadonlySet<string> | null = allowedDeveloperJurisdictions(
+    managedCloudDataRegion() ?? DEFAULT_DATA_REGION,
+  ),
+): Promise<CatalogueEntry[]> {
+  const pickerModels = listPickerChatModels(developerJurisdictions);
   const context = await buildRouteContext(pickerModels);
   return pickerModels
     .map((model) => toCatalogueEntry(model, planTier, context))

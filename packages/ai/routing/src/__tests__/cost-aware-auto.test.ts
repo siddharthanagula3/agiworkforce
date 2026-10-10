@@ -84,7 +84,7 @@ function slotBand(taskType: string, slotId: string): RoutingProfile | null {
 describe('cost-aware Auto · floor first, then price', () => {
   it('picks the cheapest floor-passing slot for a general chat turn on pro', () => {
     const decision = resolveAutoRoute({
-      selection: 'auto',
+      selection: 'auto-balanced',
       taskType: 'general',
       subscriptionTier: 'pro',
       taskFamily: 'general_chat',
@@ -205,7 +205,7 @@ describe('cost-aware Auto · flag, continuity and explicit selection', () => {
   it('restores the authored order under the kill switch', () => {
     const original = process.env[TASK_FAMILY_STAGE_ENV];
     const request = {
-      selection: 'auto',
+      selection: 'auto-balanced',
       taskType: 'general',
       subscriptionTier: 'pro',
       taskFamily: 'general_chat',
@@ -256,7 +256,7 @@ describe('cost-aware Auto · flag, continuity and explicit selection', () => {
     expect(ratio).toBeGreaterThan(CONTINUITY_RATIO);
 
     const base = {
-      selection: 'auto',
+      selection: 'auto-balanced',
       taskType: 'general',
       subscriptionTier: 'pro',
       taskFamily: 'general_chat',

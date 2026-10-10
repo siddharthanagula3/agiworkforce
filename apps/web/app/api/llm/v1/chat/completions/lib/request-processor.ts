@@ -19,7 +19,9 @@ import {
 } from '@agiworkforce/types';
 import {
   DATA_REGIONS,
+  DEFAULT_DATA_REGION,
   NON_US_VENDOR_TRANSPORTS,
+  allowedDeveloperJurisdictions,
   excludedTransportsFor,
 } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
@@ -239,6 +241,7 @@ import {
   observedRouteHealthFromSnapshots,
   planResponseBudget,
   buildRoutingDecisionTrace,
+  developerJurisdictionAllowed,
   modelsPastDeprecationDate,
   resolveAutoRoute,
   speedFirstSlots,
@@ -298,7 +301,7 @@ import type { AuthGateSuccess } from './auth-gate';
 import { resolveAuthenticatedSurface } from './request-surface';
 import { resolveChatWorkload } from '@/lib/billing/usage-attribution';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
-import { readOrganizationRegion } from '@/lib/server/data-region';
+import { managedCloudDataRegion, readOrganizationRegion } from '@/lib/server/data-region';
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
@@ -2071,6 +2074,8 @@ const UPGRADE_IS_INVITE_GATED =
 const AUTO_ROUTE_UNAVAILABLE_MESSAGE = `Auto could not find a model for this request on your plan. Choose a model from the picker. ${UPGRADE_IS_INVITE_GATED}`;
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
+const MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE =
+  'This model is not available in your region. Choose Auto or another model.';
 
 /**
  * Transports managed routing will not dispatch through.
@@ -2167,6 +2172,9 @@ export function buildWebCloudAutoRoutingRequest(
   noTrainingOnly?: boolean,
 ): AutoRoutingRequest {
   const gatewayFlagHarnessIds = admittedHarnessIds();
+  const developerJurisdictions = allowedDeveloperJurisdictions(
+    residencyRegion ?? rollout?.region ?? DEFAULT_DATA_REGION,
+  );
   return {
     selection: model,
     taskType,
@@ -2210,6 +2218,7 @@ export function buildWebCloudAutoRoutingRequest(
     ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
     ...(residencyRegion ? { residencyRegion } : {}),
     excludedRouteHosts: EXCLUDED_ROUTE_HOSTS,
+    ...(developerJurisdictions ? { allowedDeveloperJurisdictions: developerJurisdictions } : {}),
     ...(rollout
       ? {
           requestId: rollout.requestId,
@@ -2746,6 +2755,24 @@ async function modelMayTrainRefusal(
 
 // The free plan has no Auto. A client that still sends it is served the plan's
 // own model rather than refused, and the resolver never sees a priced route.
+/**
+ * Whether a Free Auto turn has to leave the free model, because this region's
+ * developer rule refuses it. The turn then stays on Auto so the resolver can use
+ * the one slot the policy grants Free for exactly this case, metered against
+ * Free's own budget. While the region checks nothing this is always false.
+ */
+export function freeModelRefusedInRegion(
+  chatRequest: Pick<ChatCompletionRequest, 'model'>,
+  planTier: string | null | undefined,
+  region: string | null = managedCloudDataRegion(),
+): boolean {
+  if (!isFreePlanTier(planTier) || !isAutoModeModelId(chatRequest.model)) return false;
+  return !developerJurisdictionAllowed(
+    getDefaultModelFor(planTier, 'chat'),
+    allowedDeveloperJurisdictions(region ?? DEFAULT_DATA_REGION),
+  );
+}
+
 export function applyFreePlanDefaultModel(
   chatRequest: Pick<ChatCompletionRequest, 'model'>,
   planTier: string | null | undefined,
@@ -2986,9 +3013,11 @@ export async function processRequest(
   if (routingProfileAlias) chatRequest.model = routingProfileAlias;
   const freeAutoSelection =
     isFreePlanTier(subscription.plan_tier) && isAutoModeModelId(chatRequest.model);
-  applyFreePlanDefaultModel(chatRequest, subscription.plan_tier);
+  const freeRegionFallback = freeModelRefusedInRegion(chatRequest, subscription.plan_tier);
+  if (!freeRegionFallback) applyFreePlanDefaultModel(chatRequest, subscription.plan_tier);
   if (
     freeAutoSelection &&
+    !freeRegionFallback &&
     !modelKeepsInputsOutOfTraining(chatRequest.model) &&
     (await trainingOptOutPromise)
   ) {
@@ -2999,10 +3028,12 @@ export async function processRequest(
   const requestedModel = chatRequest.model;
   const adaptiveResponseBudgetEnabled =
     isAutoModeModelId(requestedModel) || getModelRegistryFacts(requestedModel)?.isRouter === true;
-  const freeTrialEnabled = isFreeTrialRequest({
-    requestedModel,
-    planTier: subscription.plan_tier,
-  });
+  const freeTrialEnabled =
+    freeRegionFallback ||
+    isFreeTrialRequest({
+      requestedModel,
+      planTier: subscription.plan_tier,
+    });
 
   let creditBalancePromise: ReturnType<typeof CreditService.getBalance> | null =
     freeTrialEnabled || isFreePlanTier(subscription.plan_tier)
@@ -3983,8 +4014,11 @@ export async function processRequest(
   // admission for the economy alias and ranks what that admits. Paid tiers never
   // enter it: `tierAllowedSlots` is what keeps free capacity off paid traffic and
   // paid traffic off free pools, and it is applied per tier inside the resolver.
+  const freePoolRefusedInRegion =
+    baseRouteDecision.status === 'selected' && baseRouteDecision.reason === 'jurisdiction_fallback';
   const freeLane = activateFreeLane({
-    configuredMode: ownership.selectedRouteId ? 'off' : resolveFreeLaneMode(),
+    configuredMode:
+      ownership.selectedRouteId || freePoolRefusedInRegion ? 'off' : resolveFreeLaneMode(),
     isFreePlan: isFreePlanTier(subscription.plan_tier),
   });
   const freeLaneMode = freeLane.mode;
@@ -4117,6 +4151,21 @@ export async function processRequest(
       return isAutoModeModelId(requestedModel)
         ? noTrainingModelUnavailable(await googleUserDataPromise)
         : modelMayTrainRefusal(healthSpacePromise, googleUserDataPromise);
+    }
+    if (routeDecision.code === 'model_not_available_in_region') {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE,
+              type: 'invalid_request_error',
+              code: 'model_not_available_in_region',
+            },
+          },
+          { status: 403 },
+        ),
+      };
     }
     logger.warn(
       {

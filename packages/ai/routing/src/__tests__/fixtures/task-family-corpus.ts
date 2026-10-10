@@ -72,9 +72,9 @@ const BASELINE_ROUTES = {
   workhorseBalanced: `${getRoutingSlotModel('workhorse_general')}@balanced`,
   workhorseEconomy: `${getRoutingSlotModel('workhorse_general')}@economy`,
   generalBalanced: `${getRoutingSlotModel('general_balanced')}@balanced`,
-  generalPremium: `${getRoutingSlotModel('flagship_general')}@premium`,
+  generalPremium: `${getRoutingSlotModel('general_balanced')}@premium`,
   codingBalanced: `${getRoutingSlotModel('coding_balanced')}@balanced`,
-  codingPremium: `${getRoutingSlotModel('flagship_coding')}@premium`,
+  codingPremium: `${getRoutingSlotModel('coding_balanced')}@premium`,
   multimodalBalanced: `${getRoutingSlotModel('multimodal_balanced')}@balanced`,
   longContextBalanced: `${getRoutingSlotModel('long_context_balanced')}@balanced`,
   reasoningEconomy: `${getRoutingSlotModel('reasoning_economy')}@economy`,
@@ -339,7 +339,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webFetch: true, messageCharCount: 90 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'web_fetch grounds the answer without changing the canonical task type.',
   },
   {
@@ -348,7 +348,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, webFetch: true, workMode: 'chat' },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Both grounding toggles collapse to one family.',
   },
   {
@@ -375,7 +375,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webFetch: true, declaredToolCount: 4 },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Server-owned grounding outranks a caller tool surface.',
   },
 
@@ -586,7 +586,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { declaredToolCount: 1, messageCharCount: 150 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'A single caller-declared tool.',
   },
   {
@@ -659,7 +659,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, workMode: 'chat', priorTurnCount: 2 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Extended thinking can narrow a plain general request.',
   },
   {
@@ -751,7 +751,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 80 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Exactly at the simple-chat boundary, which is exclusive.',
   },
   {
@@ -760,7 +760,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 900, priorTurnCount: 6 },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'A long plain turn with no tools and no attachments.',
   },
   {
@@ -769,7 +769,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 400, workMode: 'chat' },
     taskType: 'creative_writing',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Prose intent is a CONTENT signal; only the canonical classifier sees it.',
   },
   {
@@ -787,7 +787,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 130, attachments: [], declaredToolCount: 0 },
     taskType: 'creative_writing',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Empty collections are not signals.',
   },
   {
@@ -806,7 +806,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: {},
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'No signals at all.',
   },
   {
@@ -815,7 +815,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { priorTurnCount: 3 },
     taskType: 'general',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'A turn count is not decisive on its own.',
   },
   {
@@ -833,7 +833,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 8_000, priorTurnCount: 2 },
     taskType: 'general',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.generalBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Under the long-context threshold with no length signal for the residual.',
   },
   {
@@ -851,7 +851,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { attachments: [], webSearch: false, officeCreation: false },
     taskType: 'creative_writing',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.codingBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
     note: 'Negative signals plus an empty attachment array still cannot decide.',
   },
 ];

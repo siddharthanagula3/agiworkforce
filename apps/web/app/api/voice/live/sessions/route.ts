@@ -340,6 +340,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       userId,
       planTier,
       catalogVersion: entitlement.catalogVersion,
+      revenueContext: entitlement.revenueContext,
       blockMicrousd,
     });
     limitResets = budget.resetsAt;

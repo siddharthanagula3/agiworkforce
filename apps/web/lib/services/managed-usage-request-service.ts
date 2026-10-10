@@ -13,7 +13,9 @@ import {
   getPlanFlagshipWeeklyUsageCapMicrousd,
   getPlanSessionUsageCapMicrousd,
   getPlanWeeklyUsageCapMicrousd,
+  type VersionedPlanTier,
 } from '@/lib/server/managed-usage-policy';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { logger } from '@/lib/logger';
 import {
   getOrganizationMonthToDateSpendCents,
@@ -534,24 +536,19 @@ async function planLimitRefusal(
  * reservation functions read it under the per-user lock (0347), so concurrent
  * reservations never spend the same headroom twice.
  */
-async function resolveReservationCatalogVersion(
+async function resolveReservationAllowance(
   db: DatabaseAdapter,
   userId: string,
-): Promise<number | null> {
+  planTier: string,
+): Promise<VersionedPlanTier> {
   try {
-    const rows = await db.query<{ plan_catalog_version: number | null }>(
-      `select credits.plan_catalog_version
-         from public.token_credits credits
-        where credits.user_id = $1
-          and credits.period_end > now()
-        order by credits.period_end desc
-        limit 1`,
-      [userId],
-    );
-    return rows[0]?.plan_catalog_version ?? null;
+    return {
+      tier: planTier,
+      ...(await SubscriptionService.readOpenCreditPeriodAllowance(db, userId)),
+    };
   } catch (error) {
     logger.warn({ error, userId }, 'Plan catalog lookup failed; using the current catalog');
-    return null;
+    return { tier: planTier, catalogVersion: null, revenueContext: null };
   }
 }
 
@@ -670,8 +667,7 @@ export async function reserveManagedUsageRequest(
 
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
-  const catalogVersion = await resolveReservationCatalogVersion(input.db, input.userId);
-  const allowance = { tier: input.planTier, catalogVersion };
+  const allowance = await resolveReservationAllowance(input.db, input.userId, input.planTier);
   const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
   const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
@@ -781,8 +777,11 @@ export async function reserveManagedUsageProviderStep(
   }
 
   const reservation = input.reservation;
-  const catalogVersion = await resolveReservationCatalogVersion(reservation.db, reservation.userId);
-  const allowance = { tier: input.planTier, catalogVersion };
+  const allowance = await resolveReservationAllowance(
+    reservation.db,
+    reservation.userId,
+    input.planTier,
+  );
   const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
   const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);

@@ -12557,57 +12557,57 @@
     }
   },
   "developers": {
-    "aion-labs": { "label": "AionLabs" },
-    "amazon": { "label": "Amazon" },
-    "anthracite-org": { "label": "anthracite-org" },
-    "anthropic": { "label": "Anthropic" },
-    "arcee-ai": { "label": "Arcee AI" },
-    "baidu": { "label": "Baidu" },
-    "bytedance": { "label": "ByteDance" },
-    "bytedance-seed": { "label": "ByteDance Seed" },
-    "cognitivecomputations": { "label": "Venice" },
-    "cohere": { "label": "Cohere" },
-    "deepseek": { "label": "DeepSeek" },
-    "dots-studio": { "label": "Dots Studio" },
-    "google": { "label": "Google" },
-    "gryphe": { "label": "gryphe" },
-    "ibm-granite": { "label": "IBM" },
-    "inception": { "label": "Inception" },
-    "inclusionai": { "label": "inclusionAI" },
-    "kwaipilot": { "label": "Kwaipilot" },
-    "liquid": { "label": "LiquidAI" },
-    "mancer": { "label": "Mancer" },
-    "meituan": { "label": "Meituan" },
-    "meta": { "label": "Meta" },
-    "microsoft": { "label": "Microsoft" },
-    "minimax": { "label": "MiniMax" },
-    "mistral": { "label": "Mistral AI" },
-    "moonshot": { "label": "Moonshot AI" },
-    "morph": { "label": "Morph" },
-    "nex-agi": { "label": "Nex AGI" },
-    "nousresearch": { "label": "Nous" },
-    "nvidia": { "label": "NVIDIA" },
-    "openai": { "label": "OpenAI" },
-    "openrouter": { "label": "OpenRouter" },
-    "perceptron": { "label": "Perceptron" },
-    "perplexity": { "label": "Perplexity" },
-    "poolside": { "label": "Poolside" },
-    "qwen": { "label": "Qwen" },
-    "rekaai": { "label": "rekaai" },
-    "relace": { "label": "Relace" },
-    "runway": { "label": "Runway" },
-    "sakana": { "label": "Sakana" },
-    "sao10k": { "label": "Sao10K" },
-    "stepfun": { "label": "StepFun" },
-    "tencent": { "label": "Tencent" },
-    "thedrummer": { "label": "TheDrummer" },
-    "thinkingmachines": { "label": "Thinking Machines" },
-    "undi95": { "label": "undi95" },
-    "upstage": { "label": "Upstage" },
-    "writer": { "label": "Writer" },
-    "xai": { "label": "xAI" },
-    "xiaomi": { "label": "Xiaomi" },
-    "zhipu": { "label": "Z.AI" }
+    "aion-labs": { "label": "AionLabs", "jurisdiction": null },
+    "amazon": { "label": "Amazon", "jurisdiction": "US" },
+    "anthracite-org": { "label": "anthracite-org", "jurisdiction": null },
+    "anthropic": { "label": "Anthropic", "jurisdiction": "US" },
+    "arcee-ai": { "label": "Arcee AI", "jurisdiction": null },
+    "baidu": { "label": "Baidu", "jurisdiction": null },
+    "bytedance": { "label": "ByteDance", "jurisdiction": null },
+    "bytedance-seed": { "label": "ByteDance Seed", "jurisdiction": null },
+    "cognitivecomputations": { "label": "Venice", "jurisdiction": null },
+    "cohere": { "label": "Cohere", "jurisdiction": "CA" },
+    "deepseek": { "label": "DeepSeek", "jurisdiction": "CN" },
+    "dots-studio": { "label": "Dots Studio", "jurisdiction": null },
+    "google": { "label": "Google", "jurisdiction": "US" },
+    "gryphe": { "label": "gryphe", "jurisdiction": null },
+    "ibm-granite": { "label": "IBM", "jurisdiction": null },
+    "inception": { "label": "Inception", "jurisdiction": null },
+    "inclusionai": { "label": "inclusionAI", "jurisdiction": null },
+    "kwaipilot": { "label": "Kwaipilot", "jurisdiction": null },
+    "liquid": { "label": "LiquidAI", "jurisdiction": null },
+    "mancer": { "label": "Mancer", "jurisdiction": null },
+    "meituan": { "label": "Meituan", "jurisdiction": null },
+    "meta": { "label": "Meta", "jurisdiction": "US" },
+    "microsoft": { "label": "Microsoft", "jurisdiction": "US" },
+    "minimax": { "label": "MiniMax", "jurisdiction": "CN" },
+    "mistral": { "label": "Mistral AI", "jurisdiction": "FR" },
+    "moonshot": { "label": "Moonshot AI", "jurisdiction": "CN" },
+    "morph": { "label": "Morph", "jurisdiction": null },
+    "nex-agi": { "label": "Nex AGI", "jurisdiction": null },
+    "nousresearch": { "label": "Nous", "jurisdiction": null },
+    "nvidia": { "label": "NVIDIA", "jurisdiction": "US" },
+    "openai": { "label": "OpenAI", "jurisdiction": "US" },
+    "openrouter": { "label": "OpenRouter", "jurisdiction": null },
+    "perceptron": { "label": "Perceptron", "jurisdiction": null },
+    "perplexity": { "label": "Perplexity", "jurisdiction": "US" },
+    "poolside": { "label": "Poolside", "jurisdiction": null },
+    "qwen": { "label": "Qwen", "jurisdiction": "CN" },
+    "rekaai": { "label": "rekaai", "jurisdiction": null },
+    "relace": { "label": "Relace", "jurisdiction": null },
+    "runway": { "label": "Runway", "jurisdiction": "US" },
+    "sakana": { "label": "Sakana", "jurisdiction": null },
+    "sao10k": { "label": "Sao10K", "jurisdiction": null },
+    "stepfun": { "label": "StepFun", "jurisdiction": null },
+    "tencent": { "label": "Tencent", "jurisdiction": null },
+    "thedrummer": { "label": "TheDrummer", "jurisdiction": null },
+    "thinkingmachines": { "label": "Thinking Machines", "jurisdiction": null },
+    "undi95": { "label": "undi95", "jurisdiction": null },
+    "upstage": { "label": "Upstage", "jurisdiction": null },
+    "writer": { "label": "Writer", "jurisdiction": null },
+    "xai": { "label": "xAI", "jurisdiction": "US" },
+    "xiaomi": { "label": "Xiaomi", "jurisdiction": null },
+    "zhipu": { "label": "Z.AI", "jurisdiction": "CN" }
   },
   "providerModelKeys": {
     "openai": [
@@ -40372,11 +40372,19 @@
       "profileOrder": ["economy", "balanced", "premium"],
       "autoProfileByTask": {
         "simple_chat": "economy",
+        "general": "economy",
+        "creative_writing": "economy",
         "coding": "premium",
         "reasoning": "premium",
         "agentic": "premium",
+        "long_context": "balanced",
         "computer-use": "premium"
       },
+      "slotBackups": {
+        "workhorse_general": ["reasoning_economy"],
+        "coding_fast": ["reasoning_economy"]
+      },
+      "jurisdictionFallbackSlots": { "free": ["workhorse_general"] },
       "tierMaximumProfiles": {
         "free": "economy",
         "basic": "economy",
@@ -40387,7 +40395,13 @@
       },
       "tierAllowedSlots": {
         "free": ["free_workhorse", "free_workhorse_fast", "router_zero_cost"],
-        "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "router_zero_cost"],
+        "basic": [
+          "workhorse_general",
+          "reasoning_economy",
+          "coding_fast",
+          "vision_fast",
+          "router_zero_cost"
+        ],
         "pro": [
           "workhorse_general",
           "general_balanced",
@@ -40402,6 +40416,7 @@
           "search_premium",
           "computer_use_balanced",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ],
         "max": [
@@ -40422,6 +40437,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ],
         "enterprise": [
@@ -40442,6 +40458,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ],
         "byok": [
@@ -40462,6 +40479,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ]
       },
@@ -40593,9 +40611,9 @@
           "requiredCapabilities": ["textInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["general_balanced", "workhorse_general"],
-            "premium": ["general_balanced", "flagship_general", "workhorse_general"]
+            "premium": ["general_balanced", "workhorse_general"]
           },
           "benchmarkWeights": { "mmlu": 1 }
         },
@@ -40603,9 +40621,9 @@
           "requiredCapabilities": ["textInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["general_balanced", "workhorse_general"],
-            "premium": ["flagship_general", "general_balanced", "workhorse_general"]
+            "premium": ["general_balanced", "workhorse_general"]
           },
           "benchmarkWeights": { "mmlu": 1 }
         },
@@ -40615,7 +40633,7 @@
           "preferredSlots": {
             "economy": ["coding_fast", "workhorse_general"],
             "balanced": ["coding_balanced", "escalation_coding", "workhorse_general"],
-            "premium": ["flagship_coding", "coding_balanced", "escalation_coding"]
+            "premium": ["coding_balanced", "escalation_coding"]
           },
           "benchmarkWeights": { "swebench": 0.7, "humaneval": 0.3 }
         },
@@ -40624,8 +40642,8 @@
           "requiredHarnessFeatures": [],
           "preferredSlots": {
             "economy": ["reasoning_economy", "workhorse_general"],
-            "balanced": ["reasoning_balanced", "reasoning_economy"],
-            "premium": ["reasoning_balanced", "flagship_general", "reasoning_economy"]
+            "balanced": ["reasoning_balanced", "reasoning_economy", "general_balanced"],
+            "premium": ["reasoning_balanced", "reasoning_economy", "general_balanced"]
           },
           "benchmarkWeights": { "gpqa": 0.55, "aime": 0.45 }
         },
@@ -40633,9 +40651,9 @@
           "requiredCapabilities": ["textInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["creative_balanced", "general_balanced"],
-            "premium": ["creative_premium", "creative_balanced"]
+            "premium": ["creative_balanced"]
           },
           "benchmarkWeights": {}
         },
@@ -40643,7 +40661,7 @@
           "requiredCapabilities": ["textInput", "imageInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["multimodal_balanced", "workhorse_general"],
             "premium": ["multimodal_balanced", "workhorse_general"]
           },
@@ -40654,9 +40672,9 @@
           "requiredHarnessFeatures": [],
           "minimumContextTokens": 50000,
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["long_context_balanced", "workhorse_general"],
-            "premium": ["long_context_balanced", "flagship_general", "workhorse_general"]
+            "premium": ["long_context_balanced", "workhorse_general"]
           },
           "benchmarkWeights": {}
         },
@@ -40676,7 +40694,7 @@
           "preferredSlots": {
             "economy": ["coding_fast", "workhorse_general"],
             "balanced": ["general_balanced", "coding_balanced"],
-            "premium": ["flagship_general", "flagship_coding"]
+            "premium": ["general_balanced", "coding_balanced"]
           },
           "benchmarkWeights": { "swebench": 0.5, "mmlu": 0.5 }
         },
@@ -40686,7 +40704,7 @@
           "preferredSlots": {
             "economy": ["computer_use_balanced"],
             "balanced": ["computer_use_balanced"],
-            "premium": ["computer_use_premium", "computer_use_balanced"]
+            "premium": ["computer_use_balanced"]
           },
           "benchmarkWeights": { "osWorldVerified": 1 }
         },
@@ -40718,12 +40736,12 @@
           "description": "Shared router zero cost route. Model and provider are selected by the canonical registry."
         },
         "general_fast": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "General Fast",
           "description": "Shared general fast route. Model and provider are selected by the canonical registry."
         },
         "workhorse_general": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "Workhorse General",
           "description": "Shared workhorse general route. Model and provider are selected by the canonical registry."
         },
@@ -40743,7 +40761,7 @@
           "description": "Shared flagship general route. Model and provider are selected by the canonical registry."
         },
         "coding_fast": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "Coding Fast",
           "description": "Shared coding fast route. Model and provider are selected by the canonical registry."
         },
@@ -40823,7 +40841,7 @@
           "description": "Shared long context balanced route. Model and provider are selected by the canonical registry."
         },
         "search_fast": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "Search Fast",
           "description": "Shared search fast route. Model and provider are selected by the canonical registry."
         },

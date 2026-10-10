@@ -420,6 +420,8 @@ struct AutoPolicy {
     continuity: ContinuityPolicy,
     tasks: HashMap<String, AutoTaskPolicy>,
     slots: AutoSlots,
+    #[serde(default)]
+    slot_backups: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1144,7 +1146,8 @@ fn selected_decision(
 const MAX_FALLBACK_ROUTES: usize = 4;
 
 /// Every slot a fallback may draw on, best first, one entry per slot: the
-/// request's own ordering, then the task's slots at every other profile in
+/// request's own ordering, each slot followed by the backups the policy
+/// declares for it, then the task's slots at every other profile in
 /// policy order, then the policy fallback slot, then the tier's allowed slots
 /// in their authored order restricted to slots some task policy names. A slot
 /// no task lists is reachable only through a caller preference, and a failover
@@ -1183,8 +1186,17 @@ fn fallback_candidate_slots<'a>(
         .collect::<HashSet<_>>();
     let mut seen = HashSet::new();
     let mut ordered = Vec::new();
-    let ladder = preferred_slots
-        .iter()
+    let preferred_with_backups = preferred_slots.iter().flat_map(|slot_id| {
+        std::iter::once(slot_id).chain(
+            policy
+                .slot_backups
+                .get(slot_id)
+                .map(Vec::as_slice)
+                .unwrap_or_default()
+                .iter(),
+        )
+    });
+    let ladder = preferred_with_backups
         .chain(policy.profile_order.iter().flat_map(|profile| {
             task.preferred_slots
                 .get(profile.as_key())

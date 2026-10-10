@@ -8,6 +8,7 @@
   "monthly": "Ежемесячно",
   "yearly": "Ежегодно",
   "perMonth": "/мес.",
+  "taxIncluded": "включая {{tax}}",
   "perYear": "/год",
   "currentPlan": "Текущий план",
   "upgrade": "Обновить",

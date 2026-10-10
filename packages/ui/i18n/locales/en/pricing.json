@@ -8,6 +8,7 @@
   "monthly": "Monthly",
   "yearly": "Yearly",
   "perMonth": "/month",
+  "taxIncluded": "incl. {{tax}}",
   "perYear": "/year",
   "currentPlan": "Current Plan",
   "upgrade": "Upgrade",

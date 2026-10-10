@@ -8,6 +8,7 @@
   "monthly": "شهري",
   "yearly": "سنوي",
   "perMonth": "/شهر",
+  "taxIncluded": "شامل {{tax}}",
   "perYear": "/سنة",
   "currentPlan": "الخطة الحالية",
   "upgrade": "ترقية",

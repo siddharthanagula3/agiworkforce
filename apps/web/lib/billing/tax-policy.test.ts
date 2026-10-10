@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { CHECKOUT_TAX_POLICY, buildCheckoutTaxParams, describeSessionTax } from './tax-policy';
+import { BILLING_CURRENCY_TERMS } from '@agiworkforce/types';
+
+import {
+  CHECKOUT_TAX_POLICY,
+  buildCheckoutTaxParams,
+  buildPaymentIntentTaxCalculationParams,
+  describeSessionTax,
+  priceTaxBehaviorForCurrency,
+} from './tax-policy';
 
 describe('buildCheckoutTaxParams', () => {
   it('asks Stripe Tax to calculate tax and to collect a business tax id', () => {
@@ -27,9 +35,34 @@ describe('buildCheckoutTaxParams', () => {
     expect(buildCheckoutTaxParams({ hasExistingCustomer: false }).customer_update).toBeUndefined();
   });
 
-  it('keeps prices tax-exclusive, which is what /terms tells the customer', () => {
-    expect(CHECKOUT_TAX_POLICY.priceMode).toBe('exclusive');
+  it('keeps USD prices tax-exclusive, which is what /terms tells the customer', () => {
+    expect(priceTaxBehaviorForCurrency('usd')).toBe('exclusive');
+    expect(priceTaxBehaviorForCurrency('USD')).toBe('exclusive');
     expect(CHECKOUT_TAX_POLICY.persistsTaxIdentifiers).toBe(false);
+  });
+
+  it('prices INR with GST included, as the catalog records', () => {
+    expect(BILLING_CURRENCY_TERMS.inr.includedTax?.label).toBe('GST');
+    expect(priceTaxBehaviorForCurrency('inr')).toBe('inclusive');
+  });
+
+  it('falls back to exclusive for a currency the catalog does not sell', () => {
+    expect(priceTaxBehaviorForCurrency('eur')).toBe(CHECKOUT_TAX_POLICY.defaultPriceMode);
+  });
+});
+
+describe('buildPaymentIntentTaxCalculationParams', () => {
+  it.each([
+    ['inr', 'inclusive'],
+    ['usd', 'exclusive'],
+  ] as const)('marks a %s line item %s', (currency, behavior) => {
+    const params = buildPaymentIntentTaxCalculationParams({
+      customerId: 'cus_1',
+      currency,
+      amountMinor: 39_900,
+      reference: 'ref',
+    });
+    expect(params.line_items[0]?.tax_behavior).toBe(behavior);
   });
 });
 

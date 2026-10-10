@@ -4,6 +4,8 @@ const AUTO_ROUTE_REASON_PHRASES: ReadonlyMap<string, string> = new Map([
   ['task_family_pareto', 'the best balance of quality and cost for this kind of request'],
   ['fallback_slot', 'the models Auto prefers for this request were not available'],
   ['health_fallback', 'the model Auto would normally use was having trouble'],
+  ['price_tier_backup', 'this conversation is long enough that another model costs less to run'],
+  ['jurisdiction_fallback', 'the free models are not available in your region'],
   ['canary', 'Auto is trying a newer model on some requests'],
   ['capability_fallback', 'the model you picked cannot handle this request'],
 ]);

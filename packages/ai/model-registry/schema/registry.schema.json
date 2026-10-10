@@ -43,14 +43,18 @@
     },
     "developers": {
       "type": "object",
-      "description": "Every developer id referenced by a model identity, with its display label.",
+      "description": "Every developer id referenced by a model identity, with its display label and the country the developing company is headquartered in.",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["label"],
+        "required": ["label", "jurisdiction"],
         "properties": {
           "label": {
             "$ref": "#/definitions/nonEmptyString"
+          },
+          "jurisdiction": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Z]{2}$"
           }
         }
       }
@@ -1538,6 +1542,22 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/routingProfile"
+          }
+        },
+        "jurisdictionFallbackSlots": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        },
+        "slotBackups": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
           }
         },
         "profileOrder": {

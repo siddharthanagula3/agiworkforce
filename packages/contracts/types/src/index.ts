@@ -110,6 +110,8 @@ export * from './money-format';
 export * from './managed-usage-limits';
 export * from './rate-card';
 export * from './mobile-iap';
+export * from './billing-revenue';
+export * from './country-groups';
 export * from './url';
 export * from './usage-vocabulary';
 export * from './quick-start-intents';
