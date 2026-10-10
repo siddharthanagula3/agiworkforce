@@ -51,6 +51,7 @@ const SAFE_PLAN_LABELS: Readonly<Record<string, string>> = Object.freeze({
   max: BILLING_PLAN_PRICING.max.label,
   max_15x: BILLING_PLAN_PRICING.max_15x.label,
   team: BILLING_PLAN_PRICING.team.label,
+  team_premium: BILLING_PLAN_PRICING.team_premium.label,
   enterprise: BILLING_PLAN_PRICING.enterprise.label,
 });
 

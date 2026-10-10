@@ -118,9 +118,19 @@ describe('Premium seat entitlement', () => {
     ]);
   });
 
-  it('carries the Max 5x product limits, not a copy of them', () => {
-    expect(getBillingPlanProductLimits(PREMIUM)).toBe(getBillingPlanProductLimits('max'));
-    expect(getBillingPlanProductLimits(STANDARD)).not.toEqual(getBillingPlanProductLimits('max'));
+  it('carries the Max 5x product limits, with storage and downloads its own price funds', () => {
+    const premium = getBillingPlanProductLimits(PREMIUM);
+    const max = getBillingPlanProductLimits('max');
+    const { knowledgeStorageBytes, monthlyDownloadBytes, ...shared } = premium!;
+    const {
+      knowledgeStorageBytes: maxStorage,
+      monthlyDownloadBytes: maxDownloads,
+      ...maxShared
+    } = max!;
+    expect(shared).toEqual(maxShared);
+    expect(knowledgeStorageBytes).toBeGreaterThan(maxStorage as number);
+    expect(monthlyDownloadBytes).toBeGreaterThan(maxDownloads as number);
+    expect(getBillingPlanProductLimits(STANDARD)).not.toEqual(max);
   });
 
   it('opens the models a Max 5x subscriber can use', () => {

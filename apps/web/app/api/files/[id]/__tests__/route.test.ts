@@ -41,12 +41,12 @@ vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMedia: vi.fn(),
 }));
 
-const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
-  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+const { mockAssertDownloadAllowance } = vi.hoisted(() => ({
+  mockAssertDownloadAllowance: vi.fn(async (_input: unknown) => undefined),
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+  assertDownloadAllowance: mockAssertDownloadAllowance,
 }));
 
 import { GET } from '../route';
@@ -154,10 +154,10 @@ describe('GET /api/files/[id]', () => {
     const servedHash = createHash('sha256').update(served).digest('hex');
     expect(servedHash).toBe(storedHash);
     expect(mockGetObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf');
-    expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+    expect(mockAssertDownloadAllowance).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-owner',
-        requested: { egress_bytes: stored.byteLength },
+        bytes: stored.byteLength,
       }),
     );
   });
@@ -168,7 +168,7 @@ describe('GET /api/files/[id]', () => {
       makeAsset({ byteSize: stored.byteLength }),
     );
     mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
-    mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
+    mockAssertDownloadAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
 
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
 
@@ -334,16 +334,33 @@ describe('GET /api/files/[id]', () => {
       start: 2,
       end: 5,
     });
-    expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
-      expect.objectContaining({ requested: { egress_bytes: 4 } }),
+    expect(mockAssertDownloadAllowance).toHaveBeenCalledWith(expect.objectContaining({ bytes: 4 }));
+  });
+
+  it('answers 429 with the upgrade path once a paid plan’s monthly downloads are used up', async () => {
+    const { PlanDownloadLimitError } = await import('@/lib/services/tier-unit-quota-service');
+    const stored = Buffer.from('%PDF-1.7\n%%EOF', 'utf8');
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ byteSize: stored.byteLength }),
     );
+    mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
+    mockAssertDownloadAllowance.mockRejectedValueOnce(
+      new PlanDownloadLimitError('Pro includes 2.7 GB of file downloads a month.', '2026-11-01'),
+    );
+
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(429);
+    await expect(res.json()).resolves.toMatchObject({
+      error: { message: 'Pro includes 2.7 GB of file downloads a month.' },
+    });
   });
 
   it('checks the Free daily download cap before streaming any video bytes', async () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({ kind: 'video', mimeType: 'video/mp4', byteSize: 100 }),
     );
-    mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
+    mockAssertDownloadAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
 
     const res = await GET(makeRequest(ASSET_ID, '', { Range: 'bytes=2-5' }), makeContext(ASSET_ID));
 

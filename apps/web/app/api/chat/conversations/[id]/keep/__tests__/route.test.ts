@@ -56,6 +56,10 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', () => ({
   FreeDailyLimitError: class FreeDailyLimitError extends Error {},
+  PlanDownloadLimitError: class PlanDownloadLimitError extends Error {},
+  MONTHLY_DOWNLOAD_LIMIT_CODE: 'monthly_download_limit_reached',
+  assertDownloadAllowance: vi.fn(),
+  readDownloadUsage: vi.fn(),
   assertTierUnitAllowance: vi.fn(),
   freeDailyLimitError: vi.fn(),
   getTierUnitAllowance: vi.fn(),
