@@ -302,15 +302,14 @@ describe('POST /api/voice/live/sessions', () => {
     ) as {
       session: {
         instructions: string;
-        audio: {
-          output: { voice: string; speed: number };
-          input: { transcription: { language: string } };
-        };
+        audio: Record<string, unknown>;
       };
     };
-    expect(sent.session.audio.output.speed).toBe(1.25);
-    expect(sent.session.audio.input.transcription.language).toBe('es');
-    expect(sent.session.instructions).toContain('es');
+    expect(sent.session.audio).toEqual({ output: { voice: 'quartz' } });
+    expect(sent.session.instructions).toContain('Speak and transcribe in es.');
+    expect(sent.session.instructions).toContain(
+      'Speak at about 1.25 times your natural speaking pace.',
+    );
 
     const insert = rows.find(([sql]) => sql.includes('insert into public.voice_sessions'));
     expect(insert?.[1]).toEqual(

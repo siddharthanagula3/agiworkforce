@@ -457,12 +457,10 @@ async function handleCreateLiveSession(request: NextRequest) {
           model: liveModel.apiModelId ?? liveModel.id,
           instructions: buildLiveVoiceInstructions(LIVE_VOICE_INSTRUCTIONS, context, {
             language,
+            pace,
             toolNotice,
           }),
-          audio: {
-            output: { voice, speed: pace },
-            ...(language ? { input: { transcription: { language } } } : {}),
-          },
+          audio: { output: { voice } },
           delegation: {
             type: 'responses',
             responses: {
