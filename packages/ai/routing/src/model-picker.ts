@@ -18,7 +18,11 @@ import {
   type ModelCapabilities,
   type ModelMetadata,
 } from '@agiworkforce/types';
-import { listProfileModelOrder, resolveTierMaximumProfile } from './auto';
+import {
+  developerJurisdictionAllowed,
+  listProfileModelOrder,
+  resolveTierMaximumProfile,
+} from './auto';
 
 export const MODEL_PICKER_PRICE_BAND_SCALE = MODEL_PRICE_BAND_SCALE;
 export const MODEL_PICKER_RECOMMENDED_LIMIT = 4;
@@ -121,8 +125,14 @@ export interface ModelPickerShortListInput {
   autoContinuityGuidance: (displayName: string) => string;
 }
 
-export function listPickerChatModels(): readonly ModelMetadata[] {
-  return listChatModels().filter((model) => isCurrentModel(model));
+export function listPickerChatModels(
+  allowedDeveloperJurisdictions: ReadonlySet<string> | null = null,
+): readonly ModelMetadata[] {
+  return listChatModels().filter(
+    (model) =>
+      isCurrentModel(model) &&
+      developerJurisdictionAllowed(model.id, allowedDeveloperJurisdictions),
+  );
 }
 
 export function getModelPriceBand(modelId: string): ModelPickerPriceBand | null {

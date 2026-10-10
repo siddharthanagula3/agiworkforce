@@ -54,7 +54,9 @@ export type {
 export {
   canaryBucket,
   canaryRoutingEnabled,
+  developerJurisdictionAllowed,
   listProfileModelOrder,
+  modelDeveloperJurisdiction,
   modelsPastDeprecationDate,
   observedHealthRankingEnabled,
   observedRouteHealthFromSnapshots,

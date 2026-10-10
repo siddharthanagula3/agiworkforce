@@ -196,6 +196,7 @@ export type DeveloperId = keyof ModelRegistry['developers'];
 
 interface DeveloperRecord {
   label: string;
+  jurisdiction: string | null;
 }
 
 const developerRecords = registry.developers as unknown as Readonly<
@@ -204,6 +205,10 @@ const developerRecords = registry.developers as unknown as Readonly<
 
 export function getDeveloperLabel(developerId: string): string | null {
   return developerRecords[developerId]?.label ?? null;
+}
+
+export function getDeveloperJurisdiction(developerId: string): string | null {
+  return developerRecords[developerId]?.jurisdiction ?? null;
 }
 
 export function listDevelopers(): readonly { id: string; label: string }[] {

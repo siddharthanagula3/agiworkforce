@@ -42,7 +42,7 @@ export type RouteDependentCapability = RouteDependentCapabilityName;
 export type ModelCapabilityName = RegistryCapabilityName;
 
 interface RegistryModel {
-  identity: { key: string; provider: string; providerModelId: string };
+  identity: { key: string; provider: string; providerModelId: string; developer?: string | null };
   lifecycle: { availability: string; deprecated: boolean; deprecationDate?: string | null };
   /**
    * Regions this model may be processed in, projected from its serving
@@ -155,6 +155,7 @@ export interface RoutingRegistryView {
   capabilities: Record<string, RegistryCapabilities>;
   limits: Record<string, { contextTokens?: number }>;
   governance?: Record<string, { residencyRegions?: readonly string[] | null }>;
+  developers?: Record<string, { jurisdiction?: string | null }>;
   policies: { auto: AutoPolicy };
 }
 
@@ -227,6 +228,13 @@ export interface AutoRoutingRequest {
    * several hosts at the same price.
    */
   excludedRouteHosts?: ReadonlySet<string>;
+  /**
+   * Countries a model's developer may be headquartered in, when the request's
+   * data region checks it. Absent means the region checks nothing. Applies to a
+   * model the user names too, which is then refused as not available in the
+   * region rather than served or silently swapped.
+   */
+  allowedDeveloperJurisdictions?: ReadonlySet<string>;
   retiredModelKeys?: ReadonlySet<string>;
   /**
    * The residency region this request must be processed in, such as `us`.
@@ -468,6 +476,7 @@ export interface UnavailableAutoRoute {
     | 'explicit_route_ineligible'
     | 'mandatory_capability_unavailable'
     | 'trust_mode_not_permitted'
+    | 'model_not_available_in_region'
     | 'no_eligible_route';
   requestedSelection: string;
   requestedProfile: RoutingProfile | null;
@@ -1309,6 +1318,21 @@ function slotRouteCost(
   return { routeId: chosen.routeId, cents };
 }
 
+/** The country the company that built `modelKey` is headquartered in, from the catalog. */
+export function modelDeveloperJurisdiction(modelKey: string): string | null {
+  const developer = registry.models[modelKey]?.identity.developer;
+  return developer ? (registry.developers?.[developer]?.jurisdiction ?? null) : null;
+}
+
+export function developerJurisdictionAllowed(
+  modelKey: string,
+  allowed: ReadonlySet<string> | null | undefined,
+): boolean {
+  if (!allowed) return true;
+  const jurisdiction = modelDeveloperJurisdiction(modelKey);
+  return jurisdiction !== null && allowed.has(jurisdiction);
+}
+
 function evaluateEligibility(
   modelKey: string,
   task: AutoTaskPolicy,
@@ -1341,6 +1365,11 @@ function evaluateEligibility(
   }
   if (request.noTrainingOnly && !providerKeepsInputsOutOfTraining(model.identity.provider)) {
     reasons.push(`provider ${model.identity.provider} may train on inputs`);
+  }
+  if (!developerJurisdictionAllowed(modelKey, request.allowedDeveloperJurisdictions)) {
+    reasons.push(
+      `model ${modelKey} was developed in ${modelDeveloperJurisdiction(modelKey) ?? 'no recorded country'}, which this region does not allow`,
+    );
   }
 
   const { admissible, routeReasons, hasTrustModeRoute } = admissibleModelRoutes(
@@ -1771,7 +1800,9 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
 
     return {
       status: 'unavailable',
-      code: 'explicit_model_ineligible',
+      code: developerJurisdictionAllowed(requestedSelection, request.allowedDeveloperJurisdictions)
+        ? 'explicit_model_ineligible'
+        : 'model_not_available_in_region',
       requestedSelection,
       requestedProfile: null,
       effectiveProfile: null,

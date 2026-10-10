@@ -18,7 +18,9 @@ import {
 } from '@agiworkforce/types';
 import {
   DATA_REGIONS,
+  DEFAULT_DATA_REGION,
   NON_US_VENDOR_TRANSPORTS,
+  allowedDeveloperJurisdictions,
   excludedTransportsFor,
 } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
@@ -2070,6 +2072,8 @@ const UPGRADE_IS_INVITE_GATED =
 const AUTO_ROUTE_UNAVAILABLE_MESSAGE = `Auto could not find a model for this request on your plan. Choose a model from the picker. ${UPGRADE_IS_INVITE_GATED}`;
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
+const MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE =
+  'This model is not available in your region. Choose Auto or another model.';
 
 /**
  * Transports managed routing will not dispatch through.
@@ -2166,6 +2170,9 @@ export function buildWebCloudAutoRoutingRequest(
   noTrainingOnly?: boolean,
 ): AutoRoutingRequest {
   const gatewayFlagHarnessIds = admittedHarnessIds();
+  const developerJurisdictions = allowedDeveloperJurisdictions(
+    residencyRegion ?? rollout?.region ?? DEFAULT_DATA_REGION,
+  );
   return {
     selection: model,
     taskType,
@@ -2209,6 +2216,7 @@ export function buildWebCloudAutoRoutingRequest(
     ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
     ...(residencyRegion ? { residencyRegion } : {}),
     excludedRouteHosts: EXCLUDED_ROUTE_HOSTS,
+    ...(developerJurisdictions ? { allowedDeveloperJurisdictions: developerJurisdictions } : {}),
     ...(rollout
       ? {
           requestId: rollout.requestId,
@@ -4113,6 +4121,21 @@ export async function processRequest(
       return isAutoModeModelId(requestedModel)
         ? noTrainingModelUnavailable(await googleUserDataPromise)
         : modelMayTrainRefusal(healthSpacePromise, googleUserDataPromise);
+    }
+    if (routeDecision.code === 'model_not_available_in_region') {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE,
+              type: 'invalid_request_error',
+              code: 'model_not_available_in_region',
+            },
+          },
+          { status: 403 },
+        ),
+      };
     }
     logger.warn(
       {
