@@ -6,7 +6,8 @@ import {
   formatCredits,
   getBillingPlanPricing,
   getBillingPlanProductLimits,
-  getPlanCreditAllowance,
+  getEffectivePlanCreditAllowance,
+  isBillingCurrency,
   getPlanPriceUsd,
   managedUsageComparisonLabel,
   managedUsageComparisonLines,
@@ -16,6 +17,7 @@ import {
   type BillingPlanPricing,
   type BillingPlanProductLimits,
   type BillingPlanTier,
+  type RevenueContext,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { formatUsdAmount } from './billing-format';
@@ -42,8 +44,23 @@ export interface PlanCreditWindows {
   monthly: number;
 }
 
-export function planCreditWindows(plan: string | null | undefined): PlanCreditWindows | null {
-  const allowance = getPlanCreditAllowance(normalizeBillingPlanTier(plan));
+/** The channel and currency a web subscriber pays in, from the price Stripe bills them. */
+export function webRevenueContextOfPrice(
+  price: { currency: string } | null | undefined,
+): RevenueContext | null {
+  const currency = price?.currency.trim().toLowerCase();
+  return currency && isBillingCurrency(currency) ? { channel: 'web', currency } : null;
+}
+
+export function planCreditWindows(
+  plan: string | null | undefined,
+  revenueContext: RevenueContext | null = null,
+): PlanCreditWindows | null {
+  const allowance = getEffectivePlanCreditAllowance(
+    normalizeBillingPlanTier(plan),
+    null,
+    revenueContext,
+  );
   if (allowance.unlimited || allowance.monthly <= 0) return null;
   return { fiveHour: allowance.fiveHour, weekly: allowance.weekly, monthly: allowance.monthly };
 }
@@ -157,9 +174,10 @@ export function summarizePlanChange(
   from: BillingPlanTier,
   to: BillingPlanTier,
   release: ProductReleaseState = CURRENT_RELEASE_STATE,
+  revenueContext: RevenueContext | null = null,
 ): PlanChangeSummary {
-  const fromWindows = planCreditWindows(from);
-  const toWindows = planCreditWindows(to);
+  const fromWindows = planCreditWindows(from, revenueContext);
+  const toWindows = planCreditWindows(to, revenueContext);
   const credits: PlanValueChange[] =
     fromWindows && toWindows
       ? [

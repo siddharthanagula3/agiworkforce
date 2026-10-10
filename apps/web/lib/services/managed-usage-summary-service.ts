@@ -34,6 +34,7 @@ import {
 import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
+import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
 
 export interface AccountUsageCredits extends ManagedUsageCredits {
   bonus: ManagedUsageBonusCredits | null;
@@ -79,9 +80,14 @@ export async function getManagedUsageSummary(
     freeUsage?.usagePercentage ?? toPublicUsagePercentage(creditsUsed, creditsAllocated);
   const usageResetAt = freeUsage?.resetAt ?? toIsoTimestamp(periodEnd);
 
-  const sessionCapMicrousd = getPlanSessionUsageBudgetMicrousd(planTier);
-  const weeklyCapMicrousd = getPlanWeeklyUsagePaidBudgetMicrousd(planTier);
-  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageBudgetMicrousd(planTier);
+  const allowanceSubject = {
+    tier: planTier,
+    catalogVersion: subscription?.plan_catalog_version ?? null,
+    revenueContext: revenueContextOfSubscription(subscription),
+  };
+  const sessionCapMicrousd = getPlanSessionUsageBudgetMicrousd(allowanceSubject);
+  const weeklyCapMicrousd = getPlanWeeklyUsagePaidBudgetMicrousd(allowanceSubject);
+  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageBudgetMicrousd(allowanceSubject);
 
   const [session, weekly, flagshipWeekly] =
     !isFreePlan && (sessionCapMicrousd > 0 || weeklyCapMicrousd > 0)
@@ -113,7 +119,11 @@ export async function getManagedUsageSummary(
     ROLLING_WEEKLY_WINDOW_HOURS,
   );
 
-  const planAllowance = resolvePlanCreditAllowance(planTier);
+  const planAllowance = resolvePlanCreditAllowance(
+    planTier,
+    allowanceSubject.catalogVersion,
+    allowanceSubject.revenueContext,
+  );
   const credits: AccountUsageCredits | null = planAllowance
     ? {
         monthly: creditWindow(

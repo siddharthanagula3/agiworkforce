@@ -286,6 +286,7 @@ async function handleGetMe(request: NextRequest) {
       userId,
       tier: effectiveTier,
       catalogVersion: entitlement.catalogVersion,
+      revenueContext: entitlement.revenueContext,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
       closedCapabilities: platformCapabilitiesOf([

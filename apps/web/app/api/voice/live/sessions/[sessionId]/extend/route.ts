@@ -165,6 +165,7 @@ async function handleExtendLiveSession(
       userId,
       planTier,
       catalogVersion: entitlement.catalogVersion,
+      revenueContext: entitlement.revenueContext,
       modelId,
     });
     resetsAt = block.resetsAt;

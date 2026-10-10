@@ -1,35 +1,6 @@
-export const EEA_COUNTRY_CODES = new Set([
-  'AT',
-  'BE',
-  'BG',
-  'HR',
-  'CY',
-  'CZ',
-  'DK',
-  'EE',
-  'FI',
-  'FR',
-  'DE',
-  'GR',
-  'HU',
-  'IE',
-  'IT',
-  'LV',
-  'LT',
-  'LU',
-  'MT',
-  'NL',
-  'PL',
-  'PT',
-  'RO',
-  'SK',
-  'SI',
-  'ES',
-  'SE',
-  'IS',
-  'LI',
-  'NO',
-]);
+import { EEA_COUNTRY_CODES } from '@agiworkforce/types/country-groups';
+
+export { EEA_COUNTRY_CODES };
 
 export const SERVER_TO_SERVER_ROUTES = [
   /^\/api\/webhooks\/[\w-]+$/u,

@@ -10,7 +10,9 @@ import {
   normalizeBillingPlanTier,
   type BillingPlanTier,
   type CapabilityDenialReason,
+  type RevenueContext,
 } from '@agiworkforce/types';
+import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
 import { logger } from '@/lib/logger';
 import { recordCapabilityDenial } from '@/lib/observability/denials';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -170,7 +172,11 @@ export async function ensureSeatMemberCreditAccount(
 ): Promise<void> {
   if (!subscription.seat_source) return;
   const budgetCents = getPlanUsageBudgetCents(
-    { tier: subscription.plan_tier, catalogVersion: subscription.plan_catalog_version },
+    {
+      tier: subscription.plan_tier,
+      catalogVersion: subscription.plan_catalog_version,
+      revenueContext: revenueContextOfSubscription(subscription),
+    },
     'monthly',
   );
   if (budgetCents <= 0) return;
@@ -212,6 +218,7 @@ export interface EntitlementBundle {
   userId: string;
   plan: BillingPlanTier;
   catalogVersion: number | null;
+  revenueContext: RevenueContext | null;
   status: string | null;
   entitled: boolean;
   source: EntitlementSource;
@@ -264,6 +271,7 @@ function buildBundle(
       userId,
       plan: normalizeBillingPlanTier('free'),
       catalogVersion: null,
+      revenueContext: null,
       status: null,
       entitled: false,
       source: 'none',
@@ -283,6 +291,7 @@ function buildBundle(
     userId,
     plan: held?.effective ?? normalizeBillingPlanTier('free'),
     catalogVersion: held?.soldUnderCatalogVersion ?? null,
+    revenueContext: entitled ? revenueContextOfSubscription(subscription) : null,
     status: subscription.status,
     entitled,
     source,

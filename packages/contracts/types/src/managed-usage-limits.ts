@@ -255,7 +255,13 @@ function buildPlanCreditAllowance(
   tier: BillingPlanTier,
   limits: ManagedUsageLimitTable = MANAGED_USAGE_LIMITS,
 ): PlanCreditAllowance {
-  const limit = limits[tier];
+  return planCreditAllowanceFromLimit(tier, limits[tier]);
+}
+
+export function planCreditAllowanceFromLimit(
+  tier: BillingPlanTier,
+  limit: ManagedUsageLimit,
+): PlanCreditAllowance {
   if (limit.unlimited) {
     return {
       monthly: Infinity,

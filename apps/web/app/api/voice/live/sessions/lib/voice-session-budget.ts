@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { RevenueContext } from '@agiworkforce/types';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import {
   ROLLING_SESSION_WINDOW_HOURS,
@@ -56,9 +57,14 @@ export async function planVoiceSessionBlock(input: {
   userId: string;
   planTier: string;
   catalogVersion: number | null;
+  revenueContext?: RevenueContext | null;
   modelId: string;
 }): Promise<VoiceBlockPlan> {
-  const allowance = { tier: input.planTier, catalogVersion: input.catalogVersion };
+  const allowance = {
+    tier: input.planTier,
+    catalogVersion: input.catalogVersion,
+    revenueContext: input.revenueContext ?? null,
+  };
   const sessionCap = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCap = getPlanWeeklyUsageCapMicrousd(allowance);
   const [session, weekly, balance, spendable] = await Promise.all([
