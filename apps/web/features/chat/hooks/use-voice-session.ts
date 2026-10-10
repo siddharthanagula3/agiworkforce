@@ -588,8 +588,8 @@ export function useVoiceSession({
     );
   }, []);
 
-  // A voice, language or pace change while the session is up re-negotiates it,
-  // so a language switch lands without dropping the utterance in flight.
+  // A language or pace change reaches the running session without dropping the
+  // utterance in flight; a voice change takes effect on the next session.
   useEffect(() => {
     if (!isVoiceSessionActive(status) || status === VOICE_SESSION_STATUS.entering) return undefined;
     void controller.session?.updateSettings({ voice, language: language || null, pace });

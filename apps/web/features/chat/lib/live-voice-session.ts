@@ -20,6 +20,10 @@ export interface LiveVoiceToolOutcome {
   files: readonly LiveVoiceToolFile[];
 }
 import { formatUsageResetIn } from '@agiworkforce/types';
+import {
+  liveVoiceLanguageInstruction,
+  liveVoicePaceInstruction,
+} from '@agiworkforce/types/live-voices';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
@@ -40,6 +44,10 @@ const OVERLAP_GRACE_MS = 800;
 const ASSISTANT_TRANSCRIPT_IDLE_MS = 2_500;
 const CLIENT_EVENT_PREFIX = 'agi';
 const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
+const NATURAL_PACE = 1;
+const INBOUND_STAT_TYPES = new Set(['candidate-pair', 'inbound-rtp']);
+const TASK_STOPPED_INSTRUCTION =
+  'The user stopped the task that was running. Do not report its result, and tell the user it was stopped only if they ask.';
 
 export const LIVE_SESSION_MESSAGE = {
   microphoneDenied: 'Microphone access was denied. Allow the microphone to use voice mode.',
@@ -284,6 +292,9 @@ export class LiveVoiceSession {
   private usageSeconds: number | null = null;
   private lastDeliveredTurnId: string | null = null;
   private pendingMuted: boolean | null = null;
+  private inboundBytes = 0;
+  private appliedLanguage: string | null;
+  private appliedPace: number;
 
   private constructor(
     microphone: MediaStream,
@@ -300,6 +311,8 @@ export class LiveVoiceSession {
     this.sessionId = created.sessionId;
     this.settlement = created.settlement;
     this.callbacks = callbacks;
+    this.appliedLanguage = created.settings?.language ?? null;
+    this.appliedPace = created.settings?.pace ?? NATURAL_PACE;
     for (const tool of created.tools ?? []) this.toolDescriptors.set(tool.id, tool);
     this.toolBridge = new LiveVoiceToolBridge({
       callTool: (request) => this.callTool(request),
@@ -420,31 +433,37 @@ export class LiveVoiceSession {
   }
 
   /**
-   * A mid-session change: the provider is re-negotiated over the open data
-   * channel so the current utterance keeps its connection, and the record is
-   * updated so a reconnect or a second device reads the same settings.
+   * GPT-Live fixes the voice at startup and accepts session.update only for
+   * the Responses backend, so a voice change waits for the next session.
+   * Language and pace are steered through an appended instruction, the
+   * documented way to change behaviour mid-session, and only when they changed.
    */
   async updateSettings(settings: LiveVoiceSettings): Promise<void> {
-    const audio: Record<string, unknown> = {};
-    const output: Record<string, unknown> = {};
-    if (settings.voice) output['voice'] = settings.voice;
-    if (settings.pace !== undefined) output['speed'] = settings.pace;
-    if (Object.keys(output).length > 0) audio['output'] = output;
-    if (settings.language !== undefined) {
-      audio['input'] = { transcription: { language: settings.language } };
-    }
-    if (Object.keys(audio).length > 0) this.send({ type: 'session.update', session: { audio } });
-
     const body: Record<string, unknown> = {};
-    if (settings.voice) body['voice'] = settings.voice;
-    if (settings.language !== undefined) body['language'] = settings.language;
-    if (settings.pace !== undefined) body['pace'] = settings.pace;
-    if (Object.keys(body).length === 0) return;
+    const instructions: string[] = [];
+    if (settings.language !== undefined && settings.language !== this.appliedLanguage) {
+      this.appliedLanguage = settings.language;
+      body['language'] = settings.language;
+      instructions.push(liveVoiceLanguageInstruction(settings.language));
+    }
+    if (settings.pace !== undefined && settings.pace !== this.appliedPace) {
+      this.appliedPace = settings.pace;
+      body['pace'] = settings.pace;
+      instructions.push(
+        liveVoicePaceInstruction(settings.pace) ?? 'Speak at your natural speaking pace.',
+      );
+    }
+    if (instructions.length === 0) return;
+    this.appendInstruction(instructions.join(' '));
     await fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(this.sessionId)}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: await getCsrfToken() },
       body: JSON.stringify(body),
     }).catch(() => undefined);
+  }
+
+  private appendInstruction(content: string): void {
+    this.send({ type: 'session.instructions.append', delegation_id: null, content });
   }
 
   decideToolApproval(callId: string, decision: LiveVoiceToolDecision): Promise<void> {
@@ -490,8 +509,8 @@ export class LiveVoiceSession {
 
   async close(): Promise<LiveSessionClosed> {
     if (this.disposed) return { reason: 'disposed', seconds: this.usageSeconds };
-    this.cancelBackendWork();
     this.closing = true;
+    this.cancelBackendWork();
     this.microphone.getTracks().forEach((track) => track.stop());
     this.audio.pause();
     let closed: LiveSessionClosed = { reason: 'close_requested', seconds: this.usageSeconds };
@@ -557,14 +576,42 @@ export class LiveVoiceSession {
 
   /**
    * A peer stuck in 'connected' with nothing arriving is the drop the connection
-   * state never reports, so liveness is any inbound event or inbound audio.
+   * state never reports, so liveness is any inbound event, inbound audio, or
+   * bytes the transport received. GPT-Live defines no ping event to ask for one.
    */
   private startKeepalive(): void {
     this.keepaliveTimer = window.setInterval(() => {
       if (this.closing || this.disposed) return;
-      this.send({ type: 'session.ping' });
-      if (this.started && Date.now() - this.lastInboundAt > KEEPALIVE_TIMEOUT_MS) this.fail(true);
+      void this.readInboundBytes().then((bytes) => {
+        if (this.closing || this.disposed) return;
+        if (bytes > this.inboundBytes) {
+          this.inboundBytes = bytes;
+          this.lastInboundAt = Date.now();
+        }
+        if (this.started && Date.now() - this.lastInboundAt > KEEPALIVE_TIMEOUT_MS) {
+          this.fail(true);
+        }
+      });
     }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  private async readInboundBytes(): Promise<number> {
+    try {
+      const report = await this.peer.getStats();
+      let total = 0;
+      report.forEach((stat: { type?: string; bytesReceived?: number }) => {
+        if (
+          stat.type &&
+          INBOUND_STAT_TYPES.has(stat.type) &&
+          typeof stat.bytesReceived === 'number'
+        ) {
+          total += stat.bytesReceived;
+        }
+      });
+      return total;
+    } catch {
+      return this.inboundBytes;
+    }
   }
 
   private fail(recoverable = false): void {
@@ -772,15 +819,18 @@ export class LiveVoiceSession {
   }
 
   /**
-   * An explicit cancel for the delegated turn. Tearing the peer down on our
-   * side leaves the provider running the tool it was asked for, and billing it.
+   * GPT-Live has no command that cancels a Responses delegation; only
+   * session.close cancels queued backend work. Function tools this app runs
+   * are cancelled here, and the live model is told the task was stopped so it
+   * does not speak a result the user no longer wants.
    */
   cancelBackendWork(): void {
+    const hadWork = this.pendingDelegations.size > 0 || this.toolBridge.busy;
     for (const delegationId of [...this.pendingDelegations.keys()]) {
-      this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
       this.endDelegation(delegationId, false);
     }
     this.toolBridge.cancel();
+    if (hadWork && !this.closing) this.appendInstruction(TASK_STOPPED_INSTRUCTION);
     this.publishToolActivity();
   }
 

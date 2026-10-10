@@ -33,6 +33,13 @@ class FakePeer extends EventTarget {
   localDescription = { sdp: 'offer-sdp' };
   remote: RTCSessionDescriptionInit | null = null;
   closed = false;
+  bytesReceived = 0;
+  async getStats() {
+    return new Map([
+      ['pair', { type: 'candidate-pair', bytesReceived: this.bytesReceived }],
+      ['outbound', { type: 'outbound-rtp', bytesSent: 999 }],
+    ]);
+  }
   readonly channel = new FakeChannel();
   createDataChannel(label: string) {
     expect(label).toBe('oai-events');
@@ -328,21 +335,19 @@ describe('LiveVoiceSession', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('pings on the keepalive interval and keeps a session that answers alive', async () => {
+  it('keeps a quiet session alive while its transport still receives bytes, without a ping event', async () => {
     vi.useFakeTimers();
     try {
       const { cb } = await startSession();
       peer.channel.receive({ type: 'session.started', event_id: 'e1' });
 
-      await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS);
-      expect(peer.channel.sent.at(-1)).toMatchObject({ type: 'session.ping' });
-
       for (let elapsed = 0; elapsed < KEEPALIVE_TIMEOUT_MS * 2; elapsed += KEEPALIVE_INTERVAL_MS) {
+        peer.bytesReceived += 1_000;
         await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS);
-        peer.channel.receive({ type: 'session.usage.updated', usage: { seconds: 1 } });
       }
       expect(cb.onError).not.toHaveBeenCalled();
       expect(cb.onConnectionLost).not.toHaveBeenCalled();
+      expect(peer.channel.sent.map((event) => event['type'])).not.toContain('session.ping');
     } finally {
       vi.useRealTimers();
     }
@@ -462,11 +467,73 @@ describe('LiveVoiceSession', () => {
     });
 
     const closing = session.close();
-    expect(peer.channel.sent).toContainEqual(
-      expect.objectContaining({ type: 'session.delegation.cancel', delegation_id: 'd1' }),
-    );
+    const sent = peer.channel.sent.map((event) => event['type']);
+    expect(sent).toContain('session.close');
+    expect(sent).not.toContain('session.delegation.cancel');
     peer.channel.receive({ type: 'session.closed', reason: 'close_requested' });
     await closing;
+  });
+
+  it('stops a running task with a documented instruction instead of an undefined cancel event', async () => {
+    const { cb, session } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    peer.channel.receive({
+      type: 'session.delegation.created',
+      delegation: { id: 'd1', tool: 'web_search' },
+    });
+
+    session.cancelBackendWork();
+
+    expect(peer.channel.sent.at(-1)).toMatchObject({
+      type: 'session.instructions.append',
+      delegation_id: null,
+    });
+    expect(peer.channel.sent.map((event) => event['type'])).not.toContain(
+      'session.delegation.cancel',
+    );
+    expect(cb.onBackendBusy).toHaveBeenLastCalledWith(false);
+  });
+
+  it('never sends session.update for voice settings and appends instructions only for a real change', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          sessionId: 'live_1',
+          sdp: 'answer-sdp',
+          settings: { voice: 'marin', language: null, pace: 1 },
+          settlement: {
+            idempotencyKey: 'key',
+            leaseToken: 'lease',
+            requestHash: 'hash',
+            ceilingSeconds: 600,
+          },
+        }),
+        { status: 201 },
+      ),
+    );
+    const { session } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    fetchMock.mockClear();
+
+    await session.updateSettings({ voice: 'quartz', language: null, pace: 1 });
+    expect(peer.channel.sent.map((event) => event['type'])).not.toContain('session.update');
+    expect(peer.channel.sent).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await session.updateSettings({ voice: 'quartz', language: 'es', pace: 1.5 });
+    expect(peer.channel.sent).toEqual([
+      expect.objectContaining({
+        type: 'session.instructions.append',
+        delegation_id: null,
+        content:
+          "Speak and transcribe in es. Keep to it even when the user's audio is ambiguous. Speak at about 1.5 times your natural speaking pace.",
+      }),
+    ]);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ language: 'es', pace: 1.5 });
+
+    await session.updateSettings({ voice: 'quartz', language: 'es', pace: 1.5 });
+    expect(peer.channel.sent).toHaveLength(1);
   });
 
   it('reports a spoken success claim with no tool result behind it', async () => {
