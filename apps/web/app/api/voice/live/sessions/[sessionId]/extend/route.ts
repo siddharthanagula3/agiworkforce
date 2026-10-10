@@ -2,7 +2,7 @@ import 'server-only';
 
 export const runtime = 'nodejs';
 
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getVoiceLiveBackendModel } from '@agiworkforce/types';
 import {
   GOOGLE_USER_DATA_VOICE_MESSAGE,
   storedConversationCarriesGoogleUserData,
@@ -103,10 +103,27 @@ async function handleExtendLiveSession(
   if (!record || record.status !== 'active') {
     return voiceJsonError(request, 409, 'voice_session_closed', 'This voice session has ended.');
   }
+  let entitlement: Awaited<ReturnType<typeof resolveEntitlementBundle>>;
+  try {
+    entitlement = await resolveEntitlementBundle(scoped.db, userId);
+  } catch (error) {
+    logger.error(
+      { event: 'live_voice_extension_failed', error, userId, sessionId },
+      'Live voice plan could not be read before extending the block',
+    );
+    return voiceUsageErrorResponse(
+      request,
+      new ManagedUsageRequestError(
+        'Managed usage billing is temporarily unavailable.',
+        503,
+        'billing_unavailable',
+      ),
+    );
+  }
   if (
     !(
       modelKeepsInputsOutOfTraining(record.modelId) &&
-      modelKeepsInputsOutOfTraining(getRoutingSlotModel('voice_live_backend'))
+      modelKeepsInputsOutOfTraining(getVoiceLiveBackendModel(entitlement.plan))
     ) &&
     (await storedConversationCarriesGoogleUserData(
       scoped.db,
@@ -158,7 +175,6 @@ async function handleExtendLiveSession(
     }
     if (state.extensionStatus === 'extended') return covered(state.reservedMicrousd);
 
-    const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const planTier = entitlement.plan;
     const block = await planVoiceSessionBlock({
       db: scoped.db,

@@ -2795,7 +2795,7 @@
     "/voice/live/sessions": {
       "post": {
         "summary": "Open a live voice session",
-        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the `voice_live_backend` slot. The session is reserved for a fixed block of minutes before any provider spend, and that reservation is released if the provider never answers. Close the session to settle it.",
+        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the plan's backend slot: `voice_live_backend` on paid plans and `voice_live_backend_free` on Free. The session is reserved for a fixed block of minutes before any provider spend, and that reservation is released if the provider never answers. Close the session to settle it.",
         "tags": ["Voice"],
         "security": [
           {

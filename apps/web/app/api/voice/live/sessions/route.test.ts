@@ -261,6 +261,31 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
 
+  it('delegates a free plan session to the free backend slot rather than the paid one', async () => {
+    mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          session: { id: 'live_free' },
+          transport: { type: 'webrtc', sdp: 'answer' },
+        }),
+        { status: 201 },
+      ),
+    );
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(201);
+    const freeBackend = getModelMetadataById(getRoutingSlotModel('voice_live_backend_free'))!;
+    const sent = JSON.parse(
+      String((mocks.fetch.mock.calls[0] as [string, RequestInit])[1].body),
+    ) as { session: { delegation: { responses: { model: string } } } };
+    expect(sent.session.delegation.responses.model).toBe(freeBackend.apiModelId ?? freeBackend.id);
+    expect(sent.session.delegation.responses.model).not.toBe(
+      BACKEND_MODEL.apiModelId ?? BACKEND_MODEL.id,
+    );
+  });
+
   it('applies the requested pace and language and records the session against the conversation', async () => {
     mocks.fetch.mockResolvedValue(
       new Response(

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { canUseBillingPlanCapability } from '../billing-catalog';
 import {
   TIER_POLICIES,
+  getModelMetadataById,
+  getRoutingSlotModel,
   getTierPolicy,
+  getVoiceLiveBackendModel,
   type TierCapBehavior,
   type TierPolicy,
 } from '../model-catalog';
@@ -21,7 +24,7 @@ describe('TIER_POLICIES, Free chat tier', () => {
       'workhorse_general',
       'voice_transcription',
       'voice_live',
-      'voice_live_backend',
+      'voice_live_backend_free',
       'voice_rewrite',
       'voice_speech',
     ]);
@@ -40,6 +43,20 @@ describe('TIER_POLICIES, Free chat tier', () => {
     expect(policy.allowComputerUse).toBe(false);
     expect(policy.allowManualSelection).toBe(false);
     expect(policy.manualModelSelection).toBe(false);
+  });
+
+  it('delegates free live voice to the cheaper backend and paid plans to the balanced one', () => {
+    const free = getModelMetadataById(getVoiceLiveBackendModel('free'));
+    const paid = getModelMetadataById(getVoiceLiveBackendModel('pro'));
+    expect(getVoiceLiveBackendModel('free')).toBe(getRoutingSlotModel('voice_live_backend_free'));
+    expect(getVoiceLiveBackendModel('basic')).toBe(getRoutingSlotModel('voice_live_backend'));
+    expect(getVoiceLiveBackendModel('pro')).toBe(getRoutingSlotModel('voice_live_backend'));
+    expect(getVoiceLiveBackendModel('max')).toBe(getRoutingSlotModel('voice_live_backend'));
+    expect(getVoiceLiveBackendModel('enterprise')).toBe(getRoutingSlotModel('voice_live_backend'));
+    expect(free?.provider).toBe('openai');
+    expect(free?.endpoints).toContain('v1/responses');
+    expect(free!.inputCost).toBeLessThan(paid!.inputCost);
+    expect(free!.outputCost).toBeLessThan(paid!.outputCost);
   });
 
   it('allows voice while keeping Deep Research paid', () => {
@@ -223,7 +240,7 @@ describe('getTierPolicy, public getter', () => {
         'workhorse_general',
         'voice_transcription',
         'voice_live',
-        'voice_live_backend',
+        'voice_live_backend_free',
         'voice_rewrite',
         'voice_speech',
       ],
@@ -249,7 +266,7 @@ describe('getTierPolicy, public getter', () => {
         'workhorse_general',
         'voice_transcription',
         'voice_live',
-        'voice_live_backend',
+        'voice_live_backend_free',
         'voice_rewrite',
         'voice_speech',
       ],

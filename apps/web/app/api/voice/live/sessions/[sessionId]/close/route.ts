@@ -15,8 +15,10 @@ import {
   chargeMicrousdForProviderCost,
   getModelMetadataById,
   getRoutingSlotModel,
+  getVoiceLiveBackendModel,
 } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   finalizeManagedUsageRequest,
   markManagedUsageClientDelivered,
@@ -71,6 +73,21 @@ const CloseLiveSessionSchema = z.object({
     requestHash: z.string().min(1).max(256),
   }),
 });
+
+async function resolveSessionBackendModel(
+  db: Parameters<typeof resolveEntitlementBundle>[0],
+  userId: string,
+): Promise<string> {
+  try {
+    return getVoiceLiveBackendModel((await resolveEntitlementBundle(db, userId)).plan);
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      'Live voice plan could not be read at close; the backend is priced at the free-tier model',
+    );
+    return getVoiceLiveBackendModel(null);
+  }
+}
 
 async function handleCloseLiveSession(
   request: NextRequest,
@@ -166,10 +183,11 @@ async function handleCloseLiveSession(
     liveSessionSecondsCoveredBy(estimatedCostMicrousd, model),
   );
   const backendProvider = record?.provider ?? (liveModel ? String(liveModel.provider) : 'unknown');
+  const backendModel = body.backend ? await resolveSessionBackendModel(scoped.db, userId) : null;
   const backendCost = body.backend
     ? priceLiveVoiceBackend({
         provider: backendProvider,
-        backendModel: getRoutingSlotModel('voice_live_backend'),
+        backendModel,
         reported: body.backend,
       })
     : null;
@@ -224,7 +242,7 @@ async function handleCloseLiveSession(
       provider: reservation.provider ?? 'unknown',
       sessionId,
       surface: record?.surface ?? null,
-      backendModel: getRoutingSlotModel('voice_live_backend'),
+      backendModel,
       reported: body.backend,
     });
   }

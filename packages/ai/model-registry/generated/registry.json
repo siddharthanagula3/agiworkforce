@@ -40882,6 +40882,11 @@
           "label": "Voice Live Backend",
           "description": "Shared voice live backend route. Model and provider are selected by the canonical registry."
         },
+        "voice_live_backend_free": {
+          "modelKey": "gpt-6-luna",
+          "label": "Voice Live Backend Free",
+          "description": "Shared voice live backend free route. Model and provider are selected by the canonical registry."
+        },
         "voice_rewrite": {
           "modelKey": "gemini-3.5-flash-lite",
           "label": "Voice Rewrite",

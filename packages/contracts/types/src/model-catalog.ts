@@ -1229,7 +1229,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'workhorse_general',
       'voice_transcription',
       'voice_live',
-      'voice_live_backend',
+      'voice_live_backend_free',
       'voice_rewrite',
       'voice_speech',
     ],
@@ -1753,6 +1753,25 @@ export function getRoutingSlotDefinition(slot: RoutingSlot): RoutingSlotDefiniti
 
 export function getRoutingSlotModel(slot: RoutingSlot): string {
   return getRoutingSlotDefinition(slot).modelId;
+}
+
+const VOICE_LIVE_BACKEND_SLOTS: readonly RoutingSlot[] = Object.freeze([
+  'voice_live_backend',
+  'voice_live_backend_free',
+]);
+
+/**
+ * The Responses model a live voice session delegates to, chosen by plan: the
+ * free tier's policy carries the cheaper backend slot and paid tiers the
+ * balanced one, so a plan never reaches a backend its policy does not list.
+ */
+export function getVoiceLiveBackendModel(tier: string | null | undefined): string {
+  const allowed = getTierPolicy(tier).allowedSlots;
+  const slot = VOICE_LIVE_BACKEND_SLOTS.find((candidate) => allowed.includes(candidate));
+  if (!slot) {
+    throw new Error(`No live voice backend slot is allowed for tier ${String(tier)}`);
+  }
+  return getRoutingSlotModel(slot);
 }
 
 export type ModelFamilySlot = keyof typeof modelRegistry.families;

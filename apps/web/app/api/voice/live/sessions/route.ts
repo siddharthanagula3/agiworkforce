@@ -27,7 +27,9 @@ import {
   getModelMetadataById,
   getRoutingSlotModel,
   getTierPolicy,
+  getVoiceLiveBackendModel,
   isModelLive,
+  type ModelMetadata,
 } from '@agiworkforce/types';
 import {
   GOOGLE_USER_DATA_VOICE_MESSAGE,
@@ -138,9 +140,8 @@ async function handleCreateLiveSession(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
 
   const liveModel = getModelMetadataById(getRoutingSlotModel('voice_live'));
-  const backendModel = getModelMetadataById(getRoutingSlotModel('voice_live_backend'));
-  if (!liveModel || !isModelLive(liveModel) || !backendModel || !isModelLive(backendModel)) {
-    throw new Error('The voice_live routing slots do not resolve to live models');
+  if (!liveModel || !isModelLive(liveModel)) {
+    throw new Error('The voice_live routing slot does not resolve to a live model');
   }
   const provider = String(liveModel.provider);
   if (!isManagedProviderId(provider)) {
@@ -212,19 +213,6 @@ async function handleCreateLiveSession(request: NextRequest) {
       'Live voice needs a conversation to record the session in.',
     );
   }
-  if (
-    !(
-      modelKeepsInputsOutOfTraining(liveModel.id) && modelKeepsInputsOutOfTraining(backendModel.id)
-    ) &&
-    (await storedConversationCarriesGoogleUserData(
-      scoped.db,
-      userId,
-      scoped.organizationId,
-      conversationId,
-    ))
-  ) {
-    return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
-  }
   let storeReady = false;
   try {
     storeReady = await isVoiceSessionStoreReady(scoped.db);
@@ -276,6 +264,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
   let reservation: ManagedUsageRequestReservation;
+  let backendModel: ModelMetadata;
   let planTier: string | null = null;
   let limitResets: VoiceLimitResets | undefined;
   let ceilingSeconds = LIVE_SESSION_MIN_BLOCK_SECONDS;
@@ -310,6 +299,25 @@ async function handleCreateLiveSession(request: NextRequest) {
         'voice_not_in_plan',
         'Voice conversations are not included in your plan.',
       );
+    }
+    const resolvedBackend = getModelMetadataById(getVoiceLiveBackendModel(planTier));
+    if (!resolvedBackend || !isModelLive(resolvedBackend)) {
+      throw new Error(`The live voice backend for plan ${planTier} is not a live model`);
+    }
+    backendModel = resolvedBackend;
+    if (
+      !(
+        modelKeepsInputsOutOfTraining(liveModel.id) &&
+        modelKeepsInputsOutOfTraining(backendModel.id)
+      ) &&
+      (await storedConversationCarriesGoogleUserData(
+        scoped.db,
+        userId,
+        scoped.organizationId,
+        conversationId,
+      ))
+    ) {
+      return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
     }
     const block = await planVoiceSessionBlock({
       db: scoped.db,

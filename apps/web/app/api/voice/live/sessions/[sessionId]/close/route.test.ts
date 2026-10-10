@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   backendCost: vi.fn(),
   priceBackend: vi.fn((..._args: unknown[]) => ({ totalMicrousd: 0 })),
   userScopedDb: vi.fn(),
+  plan: vi.fn(async () => 'pro'),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -27,6 +28,9 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
+}));
+vi.mock('@/lib/services/entitlement-resolution', () => ({
+  resolveEntitlementBundle: vi.fn(async () => ({ plan: await mocks.plan() })),
 }));
 vi.mock('@/lib/voice/live-voice-backend-cost', () => ({
   recordLiveVoiceBackendCost: (...args: unknown[]) => mocks.backendCost(...args),
@@ -252,6 +256,24 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
       expect.objectContaining({ userId: 'user-1', sessionId: SESSION_ID, reported: backend }),
     );
     expect(finalized()['actualCostMicrousd']).toBe(charge(30) + 32_000);
+    expect(mocks.priceBackend).toHaveBeenCalledWith(
+      expect.objectContaining({ backendModel: getRoutingSlotModel('voice_live_backend') }),
+    );
+  });
+
+  it('prices a free plan session against the backend the free plan delegated to', async () => {
+    scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
+    mocks.plan.mockResolvedValueOnce('free');
+    const backend = { inputTokens: 1_000, outputTokens: 200 };
+
+    await close({ seconds: 30, settlement: SETTLEMENT, backend });
+
+    expect(mocks.priceBackend).toHaveBeenCalledWith(
+      expect.objectContaining({ backendModel: getRoutingSlotModel('voice_live_backend_free') }),
+    );
+    expect(mocks.backendCost).toHaveBeenCalledWith(
+      expect.objectContaining({ backendModel: getRoutingSlotModel('voice_live_backend_free') }),
+    );
   });
 
   it('settles nothing for a session id the server never started', async () => {
