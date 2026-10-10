@@ -14,6 +14,7 @@ import type {
   LiveVoiceToolOutcome,
 } from '@features/chat/lib/live-voice-session';
 import type { LiveVoicePendingApproval } from '@agiworkforce/cloud-contracts';
+import type { ResearchSource } from '@features/chat/stores/research-panel-store';
 import {
   INITIAL_VOICE_SESSION_STATE,
   isVoiceSessionActive,
@@ -69,6 +70,8 @@ interface VoiceSessionStoreState {
   playbackBlocked: boolean;
   /** A provider error during a running call, shown without ending it. */
   providerNotice: string | null;
+  /** Web sources the voice backend cited in this session. */
+  sources: readonly ResearchSource[];
 }
 
 export interface VoiceRejoinOffer {
@@ -92,6 +95,7 @@ interface VoiceSessionStoreActions {
   setUsageLimited: (usageLimited: boolean) => void;
   setPlaybackBlocked: (playbackBlocked: boolean) => void;
   setProviderNotice: (providerNotice: string | null) => void;
+  setSources: (sources: readonly ResearchSource[]) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -130,6 +134,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       usageLimited: false,
       playbackBlocked: false,
       providerNotice: null,
+      sources: [],
 
       resetOnLogout: () =>
         set({
@@ -149,6 +154,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           usageLimited: false,
           playbackBlocked: false,
           providerNotice: null,
+          sources: [],
         }),
 
       dispatch: (event) => {
@@ -164,6 +170,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
                 usageLimited,
                 playbackBlocked: false,
                 providerNotice: null,
+                sources: [],
                 backendBusy: false,
                 toolActivity: [],
                 toolApprovals: [],
@@ -183,6 +190,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setUsageLimited: (usageLimited) => set({ usageLimited }),
       setPlaybackBlocked: (playbackBlocked) => set({ playbackBlocked }),
       setProviderNotice: (providerNotice) => set({ providerNotice }),
+      setSources: (sources) => set({ sources }),
       addToolOutcome: (outcome) =>
         set((state) => ({
           toolOutcomes: [

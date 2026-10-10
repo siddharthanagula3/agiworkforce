@@ -254,6 +254,39 @@ describe('VoiceModeSurface call notices', () => {
   });
 });
 
+describe('VoiceModeSurface cards', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ sources: [] });
+  });
+
+  it('shows cited sources with the chat sources control and tool results with the chat timeline', async () => {
+    useVoiceSessionStore.setState({
+      sources: [{ url: 'https://example.com/hours', title: 'Opening hours' }],
+    });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening },
+      toolOutcomes: [
+        {
+          callId: 'call_1',
+          label: 'Checking your calendar',
+          output: 'Two meetings today',
+          isError: false,
+          files: [],
+        },
+      ],
+    });
+    renderSurface();
+
+    expect(screen.getByTestId('voice-sources').textContent).toContain('Sources');
+    const results = screen.getByTestId('voice-tool-results');
+    expect(results.textContent).toContain('Tool run complete');
+    await act(async () => {
+      (results.querySelector('button') as HTMLButtonElement).click();
+    });
+    expect(results.textContent).toContain('Checking your calendar');
+  });
+});
+
 describe('VoiceModeSurface usage limit', () => {
   afterEach(() => {
     useVoiceSessionStore.setState({ usageLimited: false });

@@ -299,3 +299,60 @@ export class LiveVoiceBackendUsageMeter {
     return empty ? null : usage;
   }
 }
+
+export interface LiveVoiceSource {
+  url: string;
+  title: string;
+}
+
+const URL_CITATION = 'url_citation';
+const MESSAGE_ITEM = 'message';
+
+function httpUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The web sources a delegated backend answer rests on, read from a finished
+ * output item: url_citation annotations on its message text, and the sources
+ * a web_search_call lists when the backend returns them.
+ */
+export function liveVoiceSourcesOf(event: unknown): LiveVoiceSource[] {
+  if (!event || typeof event !== 'object') return [];
+  const nested = event as Record<string, unknown>;
+  if (nested['type'] !== OUTPUT_ITEM_DONE) return [];
+  const item = nested['item'] as Record<string, unknown> | undefined;
+  const sources: LiveVoiceSource[] = [];
+  if (item?.['type'] === MESSAGE_ITEM && Array.isArray(item['content'])) {
+    for (const part of item['content'] as Array<Record<string, unknown>>) {
+      if (!Array.isArray(part?.['annotations'])) continue;
+      for (const annotation of part['annotations'] as Array<Record<string, unknown>>) {
+        const url = annotation?.['type'] === URL_CITATION ? httpUrl(annotation['url']) : null;
+        if (url) {
+          sources.push({
+            url,
+            title: typeof annotation['title'] === 'string' ? annotation['title'] : url,
+          });
+        }
+      }
+    }
+  }
+  if (item?.['type'] === WEB_SEARCH_CALL_ITEM) {
+    const action = item['action'] as { sources?: unknown } | undefined;
+    if (Array.isArray(action?.sources)) {
+      for (const source of action.sources as Array<Record<string, unknown>>) {
+        const url = httpUrl(source?.['url']);
+        if (url) {
+          sources.push({ url, title: typeof source['title'] === 'string' ? source['title'] : url });
+        }
+      }
+    }
+  }
+  return sources;
+}

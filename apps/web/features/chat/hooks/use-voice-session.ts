@@ -495,6 +495,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
               useVoiceSessionStore.getState().setProviderNotice(null);
             }, PROVIDER_NOTICE_MS);
           },
+          onSources: (sources) => store.setSources(sources),
           onPlaybackBlocked: () => {
             reportClientFailure({ failure: 'voice_audio_blocked', detail: 'permission_denied' });
             store.setPlaybackBlocked(true);
