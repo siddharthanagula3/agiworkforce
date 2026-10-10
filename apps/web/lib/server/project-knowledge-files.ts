@@ -20,6 +20,7 @@ import {
 } from '@/lib/server/project-knowledge-object-storage';
 import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
+import { attachmentSizeRefusal } from '@/lib/server/attachment-allowance';
 import type { ManagedCloudProjectKnowledgeRegisterRequest } from '@agiworkforce/cloud-contracts';
 import type { ExternalResourceReferenceInput } from '@agiworkforce/types';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
@@ -291,6 +292,8 @@ export async function checkProjectKnowledgeCapacity(
 
   const storageScope = { db, userId, organizationId };
   const allowance = await resolveFileStorageAllowance(storageScope);
+  const sizeRefusal = attachmentSizeRefusal(allowance.planTier, 'knowledge-file', body.byteCount);
+  if (sizeRefusal) throw sizeRefusal;
   await assertFileStorageAvailable(storageScope, body.byteCount, allowance);
   return { status: 'ready', planTier: allowance.planTier };
 }

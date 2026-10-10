@@ -220,6 +220,7 @@
   "compareRowContextWindow": "コンテキストウィンドウ",
   "compareRowKnowledgeStorage": "ナレッジストレージ",
   "compareRowMonthlyDownloads": "月あたりのファイルダウンロード",
+  "compareRowAttachmentSize": "アップロードできる最大ファイル",
   "compareRowCustomMcp": "カスタム MCP サーバー",
   "compareRowTrainsOnContent": "お客様のコンテンツでの学習",
   "compareModelsFree": "無料モデル",

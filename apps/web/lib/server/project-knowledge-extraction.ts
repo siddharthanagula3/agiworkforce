@@ -2,7 +2,7 @@ import 'server-only';
 
 import {
   isTextAttachmentMeta,
-  MAX_ATTACHMENT_BYTES,
+  MAX_PLAN_ATTACHMENT_BYTES,
   MAX_FILE_TEXT_CHARS,
 } from '@agiworkforce/types';
 import { matchDenylistedUpload } from '@/lib/moderation';
@@ -296,7 +296,7 @@ export async function extractProjectKnowledgeFile(
   if (
     !Number.isSafeInteger(input.byteCount) ||
     input.byteCount <= 0 ||
-    input.byteCount > MAX_ATTACHMENT_BYTES
+    input.byteCount > MAX_PLAN_ATTACHMENT_BYTES
   ) {
     throw new ProjectKnowledgeExtractionError(
       'byte_count_mismatch',

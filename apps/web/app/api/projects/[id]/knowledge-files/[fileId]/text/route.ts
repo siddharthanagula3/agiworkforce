@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import type { FileTextPreview } from '@agiworkforce/cloud-contracts';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -36,7 +36,7 @@ async function handleGetKnowledgeFileText(
   if (!kind) throw createError.notFound('This file has no text preview');
   const objectKey = objectKeyFromStorageUri(file.storageUri);
   if (!objectKey) throw createError.notFound('Knowledge file not found');
-  const object = await getProjectKnowledgeObject(objectKey, MAX_ATTACHMENT_BYTES);
+  const object = await getProjectKnowledgeObject(objectKey, MAX_PLAN_ATTACHMENT_BYTES);
   if (!object) throw createError.notFound('Knowledge file not found');
 
   return NextResponse.json<FileTextPreview>(

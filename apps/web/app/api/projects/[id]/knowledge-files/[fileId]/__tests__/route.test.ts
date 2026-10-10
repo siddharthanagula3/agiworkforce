@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
 
 vi.mock('server-only', () => ({}));
@@ -183,7 +183,7 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
       expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
       expect(mocks.getProjectKnowledgeObject).toHaveBeenCalledWith(
         'k/report.pdf',
-        MAX_ATTACHMENT_BYTES,
+        MAX_PLAN_ATTACHMENT_BYTES,
       );
     });
 

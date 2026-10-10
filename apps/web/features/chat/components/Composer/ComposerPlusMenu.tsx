@@ -539,6 +539,8 @@ export interface ComposerPlusMenuProps {
    */
   attachmentsUnavailable: boolean;
   attachmentUnavailableTitle?: string;
+  /** The plan's attachment limits, shown under the attach row. */
+  attachLimitNote?: string;
 
   billingPolicyReady: boolean;
   billingPolicyError: boolean;
@@ -751,7 +753,14 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
       className={cn(ROW_CLASS, props.attachmentsUnavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
       <Paperclip className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      <span className="flex-1 text-start">{ROW_LABEL_ATTACH}</span>
+      <span className="flex min-w-0 flex-1 flex-col text-start">
+        <span className="truncate">{ROW_LABEL_ATTACH}</span>
+        {props.attachLimitNote && !props.attachmentsUnavailable && (
+          <span className="truncate text-caption text-muted-foreground">
+            {props.attachLimitNote}
+          </span>
+        )}
+      </span>
       {props.attachmentsUnavailable && (
         <RowBadge
           badge={{

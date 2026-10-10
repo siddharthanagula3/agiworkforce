@@ -11,9 +11,10 @@ import {
   assertUploadMatchesAuthorization,
   verifyProjectKnowledgeUploadAuthorization,
 } from '@/lib/server/project-knowledge-object-storage';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
-const KNOWLEDGE_FILE_SIZE_LIMIT_MESSAGE = 'Project sources are limited to 25 MiB.';
+const KNOWLEDGE_FILE_SIZE_LIMIT_MESSAGE =
+  'This file is larger than the upload it was authorized for.';
 
 /**
  * The destination comes from the authorization this route verifies, never from
@@ -41,7 +42,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
 
   const contentLengthHeader = request.headers.get('content-length');
   const declaredLength = contentLengthHeader ? Number(contentLengthHeader) : undefined;
-  if (declaredLength !== undefined && declaredLength > MAX_ATTACHMENT_BYTES) {
+  if (declaredLength !== undefined && declaredLength > MAX_PLAN_ATTACHMENT_BYTES) {
     throw createError.validation(KNOWLEDGE_FILE_SIZE_LIMIT_MESSAGE);
   }
 
@@ -50,7 +51,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   if (body.byteLength === 0) {
     throw createError.validation('The uploaded file was empty.');
   }
-  if (body.byteLength > MAX_ATTACHMENT_BYTES) {
+  if (body.byteLength > MAX_PLAN_ATTACHMENT_BYTES) {
     throw createError.validation(KNOWLEDGE_FILE_SIZE_LIMIT_MESSAGE);
   }
 

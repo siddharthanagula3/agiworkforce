@@ -498,7 +498,16 @@ export interface BillingPlanProductLimits {
   maxConnectorTools: BillingPlanLimit;
   maxScheduledTasks: BillingPlanLimit;
   codeHarnessDailyCeilingCents: BillingPlanLimit;
+  maxAttachmentBytes: number;
+  maxAttachmentsPerMessage: number;
+  dailyAttachmentUploads: BillingPlanLimit;
 }
+
+const MIB = 1024 * 1024;
+
+const FREE_ATTACHMENTS_PER_MESSAGE = 10;
+
+const PAID_ATTACHMENTS_PER_MESSAGE = 20;
 
 const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   projects: 'unlimited',
@@ -511,6 +520,9 @@ const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   maxConnectorTools: 300,
   maxScheduledTasks: 10,
   codeHarnessDailyCeilingCents: 2500,
+  maxAttachmentBytes: 512 * MIB,
+  maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+  dailyAttachmentUploads: 'unlimited',
 };
 
 export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
@@ -527,6 +539,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
+    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   byok: {
     projects: 'unlimited',
@@ -539,6 +554,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
+    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   free: {
     projects: 1,
@@ -551,6 +569,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 25,
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
+    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 5,
   },
   basic: {
     projects: 5,
@@ -563,6 +584,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 50,
     maxScheduledTasks: 2,
     codeHarnessDailyCeilingCents: 100,
+    maxAttachmentBytes: 100 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   pro: {
     projects: 25,
@@ -575,6 +599,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
+    maxAttachmentBytes: 250 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   max: MAX_PLAN_PRODUCT_LIMITS,
   max_15x: {
@@ -588,6 +615,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 500,
     maxScheduledTasks: 25,
     codeHarnessDailyCeilingCents: 7500,
+    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   team: {
     projects: 25,
@@ -600,6 +630,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
+    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
   team_premium: {
     ...MAX_PLAN_PRODUCT_LIMITS,
@@ -617,6 +650,9 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'custom',
     maxScheduledTasks: 'custom',
     codeHarnessDailyCeilingCents: 'custom',
+    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
+    dailyAttachmentUploads: 'unlimited',
   },
 });
 
@@ -633,6 +669,26 @@ export function getBillingPlanProductLimits(
 ): BillingPlanProductLimits | null {
   if (!isBillingPlanTier(plan)) return null;
   return BILLING_PLAN_PRODUCT_LIMITS[plan];
+}
+
+export const MAX_PLAN_ATTACHMENT_BYTES = Math.max(
+  ...Object.values(BILLING_PLAN_PRODUCT_LIMITS).map((limits) => limits.maxAttachmentBytes),
+);
+
+/** The largest single file a plan may upload; an unknown plan may upload nothing. */
+export function getPlanMaxAttachmentBytes(plan: string | null | undefined): number {
+  return getBillingPlanProductLimits(plan)?.maxAttachmentBytes ?? 0;
+}
+
+export function getPlanMaxAttachmentsPerMessage(plan: string | null | undefined): number {
+  return getBillingPlanProductLimits(plan)?.maxAttachmentsPerMessage ?? 0;
+}
+
+/** Uploads a plan may start in a UTC day, or null when it is not counted. */
+export function getPlanDailyAttachmentUploads(plan: string | null | undefined): number | null {
+  const limits = getBillingPlanProductLimits(plan);
+  if (!limits) return 0;
+  return toEnforceableBillingPlanLimit(limits.dailyAttachmentUploads);
 }
 
 export function toEnforceableBillingPlanLimit(limit: BillingPlanLimit | undefined): number | null {
