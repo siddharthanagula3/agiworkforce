@@ -164,9 +164,21 @@
   }
 }
 
+/* The consent banner is fixed over the bottom of the page and body padding
+   adds no scroll room under a 100%-height body, so the column itself has to
+   end above the banner or its last controls sit under it until it is answered. */
+[data-auth-shell='plain'] {
+  padding-bottom: var(--agi-consent-inset, 0px);
+}
+
+[data-auth-column] .auth-form-panel {
+  padding-bottom: calc(2rem + var(--agi-consent-inset, 0px));
+}
+
 @media (min-width: 64rem) {
   [data-auth-column] .auth-form-panel {
-    padding-block: clamp(1.5rem, 4svh, 3.5rem);
+    padding-top: clamp(1.5rem, 4svh, 3.5rem);
+    padding-bottom: calc(clamp(1.5rem, 4svh, 3.5rem) + var(--agi-consent-inset, 0px));
   }
 
   [data-auth-column] .auth-scene-panel {
