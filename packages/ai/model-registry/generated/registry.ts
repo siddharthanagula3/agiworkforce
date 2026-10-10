@@ -26,6 +26,16 @@ export type RouteCommercialStatus =
 
 export type RouteDataRetention = 'zero_retention' | 'provider_default' | 'conditional' | 'unknown';
 
+export interface RoutePricingTierRecord {
+  thresholdTokens: number;
+  thresholdBoundary?: 'inclusive' | 'exclusive';
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
+  cacheWrite1hPerMillion?: number;
+}
+
 interface RoutePricingRecord {
   currency: string;
   unit: string;
@@ -34,6 +44,7 @@ interface RoutePricingRecord {
   cacheReadPerMillion?: number;
   cacheWritePerMillion?: number;
   cacheWrite1hPerMillion?: number;
+  inputTokenPricingTiers?: readonly RoutePricingTierRecord[];
 }
 
 export interface RouteDiscountRecord {
@@ -75,6 +86,7 @@ export interface RoutePriceSheet {
   cacheReadPerMillion: number | null;
   cacheWritePerMillion: number | null;
   cacheWrite1hPerMillion: number | null;
+  inputTokenPricingTiers: readonly RoutePricingTierRecord[];
   discount: RouteDiscountRecord | null;
 }
 
@@ -99,6 +111,7 @@ function toPriceSheet(routeId: string, route: RouteRecord): RoutePriceSheet {
     cacheReadPerMillion: pricing.cacheReadPerMillion ?? null,
     cacheWritePerMillion: pricing.cacheWritePerMillion ?? null,
     cacheWrite1hPerMillion: pricing.cacheWrite1hPerMillion ?? null,
+    inputTokenPricingTiers: pricing.inputTokenPricingTiers ?? [],
     discount: route.discount ?? null,
   };
 }
