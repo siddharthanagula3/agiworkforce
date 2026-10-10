@@ -1,4 +1,5 @@
 import {
+  LiveVoiceBackendUsageMeter,
   LiveVoiceToolBridge,
   LiveVoiceToolCallResponseSchema,
   LIVE_VOICE_WORK_TASK_TOOL,
@@ -6,6 +7,7 @@ import {
   liveVoiceToolCallPath,
   liveVoiceWorkTaskGoal,
   type LiveVoicePendingApproval,
+  type LiveVoiceBackendUsage,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
@@ -61,7 +63,15 @@ export const LIVE_SESSION_MESSAGE = {
   sessionRejected: 'The voice session could not be started.',
   usageExhausted:
     'Voice ran out of included minutes on this plan, so the session ended. Nothing was lost from the conversation.',
+  providerError: 'The voice service could not do that. You can keep talking or ask again.',
 } as const;
+
+export interface LiveVoiceProviderError {
+  code: string | null;
+  message: string;
+}
+
+const PLAYBACK_BLOCKED_ERROR = 'NotAllowedError';
 
 export type LiveTranscriptRole = 'user' | 'assistant';
 
@@ -142,6 +152,10 @@ export interface LiveVoiceSessionCallbacks {
   /** A transport drop of a started session, which a host can reconnect from.
    *  Hosts without one get onError and the session stays down. */
   onConnectionLost?: (message: string) => void;
+  /** An error event from the provider during a running session; the session stays up. */
+  onProviderError?: (error: LiveVoiceProviderError) => void;
+  /** The browser refused to start the assistant's audio without a user gesture. */
+  onPlaybackBlocked?: () => void;
 }
 
 export interface LiveVoiceSettings {
@@ -309,6 +323,8 @@ export class LiveVoiceSession {
   private lastDeliveredTurnId: string | null = null;
   private pendingMuted: boolean | null = null;
   private inboundBytes = 0;
+  private readonly backendMeter = new LiveVoiceBackendUsageMeter();
+  private playbackRequested = false;
   private appliedLanguage: string | null;
   private appliedPace: number;
 
@@ -392,6 +408,7 @@ export class LiveVoiceSession {
       event.streams[0]?.getTracks().forEach((track) => remote.addTrack(track));
       if (event.streams.length === 0) remote.addTrack(event.track);
       session?.watchRemoteAudio(remote);
+      session?.startPlayback();
     });
     channel.addEventListener('message', (event) => {
       if (session) session.handleMessage(event);
@@ -425,6 +442,7 @@ export class LiveVoiceSession {
       await peer.setRemoteDescription({ type: 'answer', sdp: created.sdp });
       session = new LiveVoiceSession(microphone, peer, channel, audio, created, options.callbacks);
       session.watchRemoteAudio(remote);
+      session.startPlayback();
       session.watchConnection();
       for (const event of inbox) session.handleMessage(event);
       return session;
@@ -446,6 +464,34 @@ export class LiveVoiceSession {
 
   get lastTurnId(): string | null {
     return this.lastDeliveredTurnId;
+  }
+
+  get backendUsage(): LiveVoiceBackendUsage | null {
+    return this.backendMeter.report();
+  }
+
+  startPlayback(): void {
+    if (this.playbackRequested || this.disposed) return;
+    const stream = this.audio.srcObject as MediaStream | null;
+    if (!stream || stream.getAudioTracks().length === 0) return;
+    this.playbackRequested = true;
+    void this.playAudio().then((played) => {
+      if (!played) this.callbacks.onPlaybackBlocked?.();
+    });
+  }
+
+  /** Called from a user gesture after the browser blocked autoplay. */
+  resumePlayback(): Promise<boolean> {
+    return this.playAudio();
+  }
+
+  private async playAudio(): Promise<boolean> {
+    try {
+      await this.audio.play();
+      return true;
+    } catch (error) {
+      return !(error instanceof Error && error.name === PLAYBACK_BLOCKED_ERROR);
+    }
   }
 
   /**
@@ -725,6 +771,7 @@ export class LiveVoiceSession {
       }
       case 'response.event': {
         const nested = parsed['event'] as { type?: string; item?: { type?: string } } | undefined;
+        this.backendMeter.observe(nested);
         const delegationId = parsed['delegation_id'];
         const toolId = liveVoiceFunctionCallOf(nested)?.name ?? nested?.item?.type;
         if (typeof delegationId === 'string' && toolId) this.nameDelegation(delegationId, toolId);
@@ -741,6 +788,14 @@ export class LiveVoiceSession {
             for (const id of [...this.pendingDelegations.keys()]) this.endDelegation(id, succeeded);
           this.publishToolActivity();
         }
+        return;
+      }
+      case 'error': {
+        const error = parsed['error'] as { code?: unknown; message?: unknown } | undefined;
+        this.callbacks.onProviderError?.({
+          code: typeof error?.code === 'string' ? error.code : null,
+          message: typeof error?.message === 'string' ? error.message : '',
+        });
         return;
       }
       case 'session.usage.updated': {

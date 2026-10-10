@@ -15,6 +15,7 @@ import {
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import {
   isVoiceSessionActive,
+  reportClientFailure,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
   type VoiceOrbLevelSource,
@@ -93,6 +94,7 @@ export interface VoiceSessionController {
   cancelPending: () => void;
   submitTyped: (text: string) => void;
   retry: () => void;
+  resumePlayback: () => void;
 }
 
 interface TranscriptSink {
@@ -103,6 +105,7 @@ interface TranscriptSink {
 }
 
 const NAVIGATION_HANDOFF_MS = 5_000;
+const PROVIDER_NOTICE_MS = 8_000;
 
 export const RECONNECT_MAX_ATTEMPTS = 3;
 export const RECONNECT_BASE_MS = 1_000;
@@ -131,6 +134,7 @@ const controller = {
   stableTimer: null as number | null,
   budget: null as SessionBudget | null,
   budgetTimer: null as number | null,
+  providerNoticeTimer: null as number | null,
   paused: false,
 };
 
@@ -245,6 +249,7 @@ function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Pr
           reason: closed.reason,
           settlement: session.settlement,
           ...(session.lastTurnId ? { lastTurnId: session.lastTurnId } : {}),
+          ...(session.backendUsage ? { backend: session.backendUsage } : {}),
         }),
       }),
     )
@@ -477,6 +482,21 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
             stopVoiceReconnect();
             store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
           },
+          onProviderError: () => {
+            reportClientFailure({ failure: 'voice_provider_error', detail: 'rejected' });
+            store.setProviderNotice(LIVE_SESSION_MESSAGE.providerError);
+            if (controller.providerNoticeTimer !== null) {
+              window.clearTimeout(controller.providerNoticeTimer);
+            }
+            controller.providerNoticeTimer = window.setTimeout(() => {
+              controller.providerNoticeTimer = null;
+              useVoiceSessionStore.getState().setProviderNotice(null);
+            }, PROVIDER_NOTICE_MS);
+          },
+          onPlaybackBlocked: () => {
+            reportClientFailure({ failure: 'voice_audio_blocked', detail: 'permission_denied' });
+            store.setPlaybackBlocked(true);
+          },
           onConnectionLost: (message) => {
             const dropped = controller.session;
             clearSessionBudget();
@@ -703,6 +723,14 @@ export function useVoiceSession({
     controller.session?.cancelBackendWork();
   }, []);
 
+  const resumePlayback = useCallback(() => {
+    const session = controller.session;
+    if (!session) return;
+    void session.resumePlayback().then((played) => {
+      if (played) useVoiceSessionStore.getState().setPlaybackBlocked(false);
+    });
+  }, []);
+
   const decideToolApproval = useCallback((callId: string, decision: LiveVoiceToolDecision) => {
     void controller.session?.decideToolApproval(callId, decision);
   }, []);
@@ -751,5 +779,6 @@ export function useVoiceSession({
     cancelPending,
     submitTyped,
     retry,
+    resumePlayback,
   };
 }

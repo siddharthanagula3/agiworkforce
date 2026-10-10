@@ -6,11 +6,13 @@ import {
 } from 'react-native-webrtc';
 import {
   LIVE_VOICE_WORK_TASK_TOOL,
+  LiveVoiceBackendUsageMeter,
   LiveVoiceToolBridge,
   LiveVoiceToolCallResponseSchema,
   liveVoiceFunctionCallOf,
   liveVoiceWorkTaskGoal,
   liveVoiceToolCallPath,
+  type LiveVoiceBackendUsage,
   type LiveVoicePendingApproval,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
@@ -27,6 +29,8 @@ const EVENTS_CHANNEL = 'oai-events';
 const ICE_GATHERING_TIMEOUT_MS = 10_000;
 const CLOSE_TIMEOUT_MS = 3_000;
 const DISCONNECT_GRACE_MS = 5_000;
+const TASK_STOPPED_INSTRUCTION =
+  'The user stopped the task that was running. Do not report its result, and tell the user it was stopped only if they ask.';
 const ASSISTANT_SPEECH_HOLD_MS = 1_200;
 const CLIENT_EVENT_PREFIX = 'agi';
 const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
@@ -91,6 +95,8 @@ export interface LiveVoiceSessionCallbacks {
   onClosed: (closed: LiveSessionClosed) => void;
   onError: (message: string) => void;
   onConnectionLost?: (message: string) => void;
+  /** An error event from the provider during a running session; the session stays up. */
+  onProviderError?: () => void;
   onStartWorkTask?: (goal: string) => boolean;
 }
 
@@ -206,6 +212,7 @@ export class LiveVoiceSession {
   private readonly delegationTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly toolDescriptors = new Map<string, LiveVoiceToolDescriptor>();
   private readonly toolBridge: LiveVoiceToolBridge;
+  private readonly backendMeter = new LiveVoiceBackendUsageMeter();
   private closeResolve: (() => void) | null = null;
   private usageSeconds: number | null = null;
   private pendingMuted: boolean | null = null;
@@ -307,6 +314,10 @@ export class LiveVoiceSession {
     }
   }
 
+  get backendUsage(): LiveVoiceBackendUsage | null {
+    return this.backendMeter.report();
+  }
+
   get lastUsageSeconds(): number | null {
     return this.usageSeconds;
   }
@@ -335,11 +346,18 @@ export class LiveVoiceSession {
   }
 
   cancelBackendWork(): void {
+    const hadWork = this.pendingDelegations.size > 0 || this.toolBridge.busy;
     for (const delegationId of [...this.pendingDelegations.keys()]) {
-      this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
       this.endDelegation(delegationId);
     }
     this.toolBridge.cancel();
+    if (hadWork && !this.closing) {
+      this.send({
+        type: 'session.instructions.append',
+        delegation_id: null,
+        content: TASK_STOPPED_INSTRUCTION,
+      });
+    }
     this.publishToolActivity();
   }
 
@@ -524,6 +542,7 @@ export class LiveVoiceSession {
       }
       case 'response.event': {
         const nested = parsed['event'] as { type?: string; item?: { type?: string } } | undefined;
+        this.backendMeter.observe(nested);
         const delegationId = parsed['delegation_id'];
         const toolId = liveVoiceFunctionCallOf(nested)?.name ?? nested?.item?.type;
         if (typeof delegationId === 'string' && toolId) this.nameDelegation(delegationId, toolId);
@@ -541,6 +560,9 @@ export class LiveVoiceSession {
         }
         return;
       }
+      case 'error':
+        this.callbacks.onProviderError?.();
+        return;
       case 'session.usage.updated': {
         const usage = parsed['usage'] as { seconds?: number } | undefined;
         if (typeof usage?.seconds === 'number') {
@@ -663,6 +685,7 @@ export async function settleLiveVoiceSession(
   sessionId: string,
   settlement: LiveSessionSettlement,
   closed: LiveSessionClosed,
+  backend: LiveVoiceBackendUsage | null = null,
 ): Promise<void> {
   try {
     await apiFetch(`${LIVE_VOICE_SESSION_PATH}/${encodeURIComponent(sessionId)}/close`, {
@@ -671,6 +694,7 @@ export async function settleLiveVoiceSession(
         seconds: closed.seconds ?? 0,
         reason: closed.reason,
         settlement,
+        ...(backend ? { backend } : {}),
       }),
     });
   } catch {

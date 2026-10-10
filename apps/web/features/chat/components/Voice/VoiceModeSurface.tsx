@@ -27,6 +27,8 @@ const LABEL = {
   cancelSending: 'Do not send that',
   retry: 'Try again',
   continueInText: 'Continue in text',
+  tapToHear: 'Tap to hear the assistant',
+  audioBlocked: "Your browser paused the assistant's audio.",
   reconnecting: 'Reconnecting, attempt',
   shareCamera: 'Share your camera',
   stopCamera: 'Stop sharing your camera',
@@ -125,6 +127,8 @@ export function VoiceModeSurface({
   const voice = useVoiceSessionStore((store) => store.voice);
   const setVoice = useVoiceSessionStore((store) => store.setVoice);
   const usageLimited = useVoiceSessionStore((store) => store.usageLimited);
+  const playbackBlocked = useVoiceSessionStore((store) => store.playbackBlocked);
+  const providerNotice = useVoiceSessionStore((store) => store.providerNotice);
 
   const [typed, setTyped] = useState('');
   const dockTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -297,6 +301,27 @@ export function VoiceModeSurface({
       </p>
 
       {notice}
+      {playbackBlocked ? (
+        <div
+          role="status"
+          data-testid="voice-playback-blocked"
+          className="flex items-center gap-2 text-sm text-[var(--chat-text-secondary)]"
+        >
+          <span className="min-w-0">{LABEL.audioBlocked}</span>
+          <Button type="button" className="min-h-11" onClick={session.resumePlayback}>
+            {LABEL.tapToHear}
+          </Button>
+        </div>
+      ) : null}
+      {providerNotice && status !== VOICE_SESSION_STATUS.error ? (
+        <p
+          role="status"
+          data-testid="voice-provider-notice"
+          className="text-sm text-[var(--chat-text-secondary)]"
+        >
+          {providerNotice}
+        </p>
+      ) : null}
       {session.rejoinOffer ? (
         <div
           role="dialog"

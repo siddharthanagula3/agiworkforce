@@ -148,7 +148,12 @@ export function useLiveVoiceSession({
     setToolActivity([]);
 
     const finish = (session: LiveVoiceSession, closed: LiveSessionClosed) => {
-      void liveVoice?.settleLiveVoiceSession(session.sessionId, session.settlement, closed);
+      void liveVoice?.settleLiveVoiceSession(
+        session.sessionId,
+        session.settlement,
+        closed,
+        session.backendUsage,
+      );
     };
 
     const run = async () => {
@@ -220,6 +225,9 @@ export function useLiveVoiceSession({
             endedRef.current(
               closed.reason === 'close_requested' ? null : LIVE_VOICE_MESSAGE.sessionEnded,
             );
+          },
+          onProviderError: () => {
+            if (!cancelled) setError(LIVE_VOICE_MESSAGE.providerError);
           },
           onError: (message) => {
             sessionRef.current = null;

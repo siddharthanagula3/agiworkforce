@@ -300,6 +300,39 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     });
   });
 
+  it('charges the usage report the web client builds, tokens and searches, inside the reservation', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/voice/live-voice-backend-cost')>(
+      '@/lib/voice/live-voice-backend-cost',
+    );
+    mocks.priceBackend.mockImplementationOnce((...args: unknown[]) =>
+      actual.priceLiveVoiceBackend(...(args as Parameters<typeof actual.priceLiveVoiceBackend>)),
+    );
+    scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
+    const report = { inputTokens: 1_300, outputTokens: 250, cachedTokens: 700, webSearchCalls: 1 };
+
+    await close({ seconds: 30, settlement: SETTLEMENT, backend: report });
+
+    const backend = actual.priceLiveVoiceBackend({
+      provider: 'openai',
+      backendModel: getRoutingSlotModel('voice_live_backend'),
+      reported: report,
+    });
+    expect(backend.tokenCostMicrousd).toBeGreaterThan(0);
+    expect(backend.searchCalls).toBe(1);
+    expect(finalized()['actualCostMicrousd']).toBe(
+      Math.min(
+        charge(30) + chargeMicrousdForProviderCost(backend.totalMicrousd),
+        ONE_BLOCK_MICROUSD,
+      ),
+    );
+    expect(mocks.backendCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backendModel: getRoutingSlotModel('voice_live_backend'),
+        reported: report,
+      }),
+    );
+  });
+
   it('prices a free plan session against the backend the free plan delegated to', async () => {
     scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
     mocks.plan.mockResolvedValueOnce('free');

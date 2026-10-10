@@ -7,6 +7,8 @@ const live = vi.hoisted(() => ({
   close: vi.fn(),
   updateSettings: vi.fn(async () => undefined),
   cancelBackendWork: vi.fn(),
+  resumePlayback: vi.fn(async () => true),
+  backendUsage: null as null | Record<string, number>,
 }));
 
 vi.mock('@features/chat/lib/live-voice-session', async (importOriginal) => {
@@ -57,6 +59,10 @@ function fakeSession() {
     close: live.close,
     updateSettings: live.updateSettings,
     cancelBackendWork: live.cancelBackendWork,
+    resumePlayback: live.resumePlayback,
+    get backendUsage() {
+      return live.backendUsage;
+    },
     dispose: vi.fn(),
   };
 }
@@ -104,7 +110,10 @@ describe('useVoiceSession', () => {
       voice: 'marin',
       language: '',
       pace: 1,
+      playbackBlocked: false,
+      providerNotice: null,
     });
+    live.resumePlayback.mockClear();
     live.start.mockReset();
     live.updateSettings.mockClear();
     live.setMuted.mockReset();
@@ -257,6 +266,48 @@ describe('useVoiceSession', () => {
       reason: 'close_requested',
       settlement: SETTLEMENT,
     });
+  });
+
+  it('settles the delegated backend usage the session collected with the close', async () => {
+    live.backendUsage = {
+      inputTokens: 1_300,
+      outputTokens: 250,
+      cachedTokens: 700,
+      webSearchCalls: 1,
+    };
+    try {
+      const { result } = mount();
+      await enterAndStart(result);
+      await act(async () => {
+        result.current.exit();
+      });
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(String(init.body))).toMatchObject({
+        backend: { inputTokens: 1_300, outputTokens: 250, cachedTokens: 700, webSearchCalls: 1 },
+      });
+    } finally {
+      live.backendUsage = null;
+    }
+  });
+
+  it('shows a provider error without ending the call, and offers a tap when audio is blocked', async () => {
+    const { result } = mount();
+    await enterAndStart(result);
+
+    await act(async () => {
+      lastCallbacks().onProviderError?.({ code: 'moderation_blocked', message: 'Blocked.' });
+      lastCallbacks().onPlaybackBlocked?.();
+    });
+    expect(useVoiceSessionStore.getState().providerNotice).toBe(LIVE_SESSION_MESSAGE.providerError);
+    expect(useVoiceSessionStore.getState().playbackBlocked).toBe(true);
+    expect(result.current.state.status).not.toBe(VOICE_SESSION_STATUS.error);
+
+    await act(async () => {
+      result.current.resumePlayback();
+    });
+    await waitFor(() => expect(useVoiceSessionStore.getState().playbackBlocked).toBe(false));
+    expect(live.resumePlayback).toHaveBeenCalledTimes(1);
   });
 
   it('shows the permission failure and reconnects on retry', async () => {
