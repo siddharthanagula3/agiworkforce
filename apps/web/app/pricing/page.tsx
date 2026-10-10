@@ -751,6 +751,11 @@ export default function PricingPage() {
             formatBytes(bytes, 0),
           ),
         ),
+        comparisonRow('monthlyDownloads', t('compareRowMonthlyDownloads'), (plan) =>
+          limitCell(getBillingPlanProductLimits(plan)?.monthlyDownloadBytes, t, (bytes) =>
+            formatBytes(bytes, 1),
+          ),
+        ),
         comparisonRow(
           'customMcp',
           t('compareRowCustomMcp'),

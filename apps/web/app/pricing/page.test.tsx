@@ -701,6 +701,7 @@ describe('PricingPage', () => {
         usage: string;
         projects: string;
         storage: string;
+        downloads: string;
         customMcp: string;
         training?: string;
         proFeatures?: boolean;
@@ -720,6 +721,7 @@ describe('PricingPage', () => {
         [CAPABILITY.managed_chat]: INCLUDED,
         [CAPABILITY.projects]: facts.projects,
         compareRowKnowledgeStorage: facts.storage,
+        compareRowMonthlyDownloads: facts.downloads,
         compareRowCustomMcp: facts.customMcp,
         [CAPABILITY.skills_connectors]: INCLUDED,
         [CAPABILITY.agi_work]: included(facts.proFeatures),
@@ -738,6 +740,7 @@ describe('PricingPage', () => {
       usage: 'compareFreeUsage',
       projects: '1',
       storage: '100 MB',
+      downloads: '15.1 GB',
       customMcp: '1',
       training: 'Not by AGI. Free model providers may.',
     });
@@ -745,26 +748,30 @@ describe('PricingPage', () => {
       usage: '5x more usage per session than Free',
       projects: '5',
       storage: '1 GB',
+      downloads: '953.7 MB',
       customMcp: '5',
     });
     column('pro', {
       usage: '5x more usage than Basic',
       projects: '25',
       storage: '10 GB',
+      downloads: '2.7 GB',
       customMcp: '25',
       proFeatures: true,
     });
     column('max', {
       usage: '5x more usage than Pro',
       projects: 'unlimited',
-      storage: 'unlimited',
+      storage: '62 GB',
+      downloads: '13.3 GB',
       customMcp: 'unlimited',
       proFeatures: true,
     });
     column('max_15x', {
       usage: '20x more usage per session than Pro · 10x more weekly usage than Pro',
       projects: 'unlimited',
-      storage: 'unlimited',
+      storage: '124 GB',
+      downloads: '26.6 GB',
       customMcp: 'unlimited',
       proFeatures: true,
       video: true,
@@ -775,6 +782,7 @@ describe('PricingPage', () => {
       usage: 'Same usage as Pro for every seat',
       projects: '25',
       storage: '25 GB',
+      downloads: '3.3 GB',
       customMcp: '25',
       proFeatures: true,
       teamAdmin: true,
@@ -783,6 +791,7 @@ describe('PricingPage', () => {
       usage: 'compareEnterpriseUsage',
       projects: 'custom',
       storage: 'custom',
+      downloads: 'custom',
       customMcp: 'custom',
       proFeatures: true,
       video: true,
@@ -913,6 +922,7 @@ describe('PricingPage', () => {
       CAPABILITY.managed_chat,
       CAPABILITY.projects,
       'compareRowKnowledgeStorage',
+      'compareRowMonthlyDownloads',
       'compareRowCustomMcp',
       CAPABILITY.skills_connectors,
       CAPABILITY.agi_work,
