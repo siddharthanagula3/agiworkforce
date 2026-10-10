@@ -8,6 +8,7 @@ type ScanModule1 = typeof import('@/lib/csrf');
 type ScanModule2 = typeof import('@/lib/server/rls-db');
 type ScanModule3 = typeof import('@/lib/server/object-storage');
 type ScanModule4 = typeof import('@/lib/server/object-storage-runtime');
+type ScanModule5 = typeof import('@/lib/server/attachment-allowance');
 
 vi.mock('server-only', () => ({}));
 
@@ -46,6 +47,12 @@ vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
   isPrivateObjectStorageConfigured: () => true,
   getPresignedUploadUrl: uploads.publicBucket,
   getPresignedPrivateUploadUrl: uploads.privateBucket,
+}));
+// Which bucket an upload lands in is the subject here; the plan's size and
+// daily-count admission has its own tests in attachment-allowance.test.ts.
+vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule5>()),
+  admitAttachmentUpload: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/server/object-storage-runtime', async (importOriginal) => {
   const original = await importOriginal<ScanModule4>();

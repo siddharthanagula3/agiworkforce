@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import {
   ARTIFACT_RUNTIME_BODY_CEILING_BYTES,
   ARTIFACT_STORAGE_VALUE_LIMIT_BYTES,
@@ -20,7 +20,9 @@ function post(path: string, contentLength: number | null): Request {
 describe('payloadCeilingBytes', () => {
   it('gives every API path a ceiling, and the longest matching prefix wins', () => {
     expect(payloadCeilingBytes('/api/projects')).toBe(DEFAULT_API_PAYLOAD_CEILING_BYTES);
-    expect(payloadCeilingBytes('/api/uploads/local-project-knowledge')).toBe(MAX_ATTACHMENT_BYTES);
+    expect(payloadCeilingBytes('/api/uploads/local-project-knowledge')).toBe(
+      MAX_PLAN_ATTACHMENT_BYTES,
+    );
     expect(payloadCeilingBytes('/api/scim/v2/Users')).toBe(256 * 1024);
     expect(payloadCeilingBytes('/api/llm/v1/chat/completions')).toBe(2_000_000);
   });

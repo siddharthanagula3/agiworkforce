@@ -428,6 +428,7 @@ describe('Article 50(2), the mark survives to the download', () => {
       userId: TEST_USER.userId,
       organizationId: null,
     });
+    mockFetch.mockImplementation(async () => databaseResponse());
     storageMocks.configured.mockReturnValue(true);
     storageMocks.read.mockResolvedValue({
       data: Buffer.from(PNG_B64, 'base64'),
