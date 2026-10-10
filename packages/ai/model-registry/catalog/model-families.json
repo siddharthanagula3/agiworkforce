@@ -1049,6 +1049,86 @@
         }
       ]
     },
+    "anthropic/claude-haiku": {
+      "provider": "anthropic",
+      "canonicalFamily": "claude-haiku",
+      "tier": "fast",
+      "modelType": "chat",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^claude-haiku-(?<generation>\\d+(?:[.-]\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": 128000,
+      "active": {
+        "modelKey": "claude-haiku-5-5",
+        "generation": "5-5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-10",
+        "promotionReason": "first generation of the slot; probed and measured live on all fifteen eval suites on 2026-10-10, and the eval gate held against the baseline recorded from that run",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on anthropic",
+            "familyIdentity": "matches claude-haiku at tier fast",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "covers 7 capabilities",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.1,
+          "outputPerMillion": 0.5,
+          "cacheReadPerMillion": 0.01,
+          "cacheWritePerMillion": 0.125,
+          "cacheWrite1hPerMillion": 0.2
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": true,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": false,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-06"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
     "google/gemini-flash": {
       "provider": "google",
       "canonicalFamily": "gemini-flash",
