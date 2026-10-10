@@ -13,7 +13,7 @@ export const AUTH_PAGE_CLASS = 'relative flex min-h-svh w-full flex-col bg-surfa
 export const AUTH_SPLIT_PAGE_CLASS =
   'relative grid min-h-svh w-full grid-cols-1 grid-rows-[auto_1fr] bg-[var(--auth-scene-panel)] lg:grid-cols-[minmax(0,58fr)_minmax(30rem,42fr)] lg:grid-rows-1';
 export const AUTH_FORM_PANEL_CLASS =
-  'auth-form-panel flex flex-col rounded-t-[var(--corner-overlay)] bg-surface-elevated px-6 pt-8 pb-8 sm:px-12 lg:min-h-svh lg:rounded-none lg:rounded-tl-[var(--corner-hero)] lg:px-16';
+  'auth-form-panel flex flex-col rounded-t-[var(--corner-overlay)] bg-surface-elevated px-6 pt-8 sm:px-12 lg:min-h-svh lg:rounded-none lg:rounded-tl-[var(--corner-hero)] lg:px-16';
 export const AUTH_BRAND_CLASS =
   'auth-inline mx-auto mb-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-compact px-1 text-[1.0625rem] font-semibold tracking-[-0.01em] text-text-primary';
 export const AUTH_COLUMN_CLASS =

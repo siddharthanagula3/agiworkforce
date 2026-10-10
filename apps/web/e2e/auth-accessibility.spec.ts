@@ -54,7 +54,38 @@ async function shortStandaloneTargets(page: Page): Promise<string[]> {
   }, MIN_TOUCH_TARGET_PX);
 }
 
+// A first visit raises the cookie banner on a timer and fades it in. Anything
+// measured during the fade reads its text at partial opacity, so the checks
+// wait for it to be fully up and measure it with the page rather than race it.
+async function waitForCookieBanner(page: Page): Promise<void> {
+  await expect(page.getByRole('region', { name: 'Cookie consent', exact: true })).toHaveCSS(
+    'opacity',
+    '1',
+  );
+}
+
+// Scrolled to the end, a control the banner still covers cannot be reached
+// without answering the banner first: scrolling back up only moves it lower.
+async function controlsUnderCookieBanner(page: Page): Promise<string[]> {
+  return page.getByTestId('auth-layout').evaluate((layout) => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    const covered: string[] = [];
+    for (const control of layout.querySelectorAll<HTMLElement>('button, a[href], summary, input')) {
+      if (control.closest('[aria-hidden="true"]')) continue;
+      const box = control.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!hit?.closest('[aria-label="Cookie consent"]')) continue;
+      covered.push(
+        control.getAttribute('aria-label') || control.textContent?.trim() || control.tagName,
+      );
+    }
+    return covered;
+  });
+}
+
 async function expectSeriousViolations(page: Page, label: string): Promise<void> {
+  await waitForCookieBanner(page);
   // @axe-core/playwright bundles its own Playwright types, which do not
   // structurally match this repo's. The other specs cast the same way.
   const results = await new AxeBuilder({ page: page as never })
@@ -136,6 +167,16 @@ test.describe('auth accessibility', () => {
         if (await details.count()) await details.click();
 
         expect(await shortStandaloneTargets(page)).toEqual([]);
+      });
+
+      test(`${route} keeps every control clear of the cookie banner at ${viewport.width} wide`, async ({
+        page,
+      }) => {
+        await page.setViewportSize(viewport);
+        await openAuth(page, route);
+        await waitForCookieBanner(page);
+
+        expect(await controlsUnderCookieBanner(page)).toEqual([]);
       });
     }
 
