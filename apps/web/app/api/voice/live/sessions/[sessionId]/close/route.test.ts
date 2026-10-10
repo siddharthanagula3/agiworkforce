@@ -29,7 +29,8 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
-vi.mock('@/lib/services/entitlement-resolution', () => ({
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolveEntitlementBundle: vi.fn(async () => ({ plan: await mocks.plan() })),
 }));
 vi.mock('@/lib/voice/live-voice-backend-cost', () => ({
