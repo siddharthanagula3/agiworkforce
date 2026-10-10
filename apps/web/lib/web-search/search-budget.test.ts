@@ -68,6 +68,7 @@ import {
   reserveSearchCharge,
   resolveSearchBudget,
   resolveSearchCallerKind,
+  SEARCH_RATE_CARD_FEATURES,
   searchChargeIdempotencyKey,
   settleSearchCall,
   type SearchAdmission,
@@ -170,6 +171,16 @@ describe('resolveSearchCallerKind', () => {
 });
 
 describe('free plan bound', () => {
+  it('counts only the searches it admits, so a provider-run search the model promotion pays for never spends it', async () => {
+    countUserFeatureUnitsSince.mockResolvedValue(0);
+
+    await readSearchAllowance({ userId: 'user-1', planTier: 'free', db });
+
+    const [, features] = countUserFeatureUnitsSince.mock.calls.at(-1)!;
+    expect(features).toEqual(SEARCH_RATE_CARD_FEATURES);
+    expect(SEARCH_RATE_CARD_FEATURES).not.toContain('web_search_anthropic');
+  });
+
   it('reports the remaining Free search allowance from the same rolling count as admission', async () => {
     countUserFeatureUnitsSince.mockResolvedValue(FREE_PLAN_MONTHLY_SEARCH_CALLS - 1);
     await expect(readSearchAllowance({ userId: 'user-1', planTier: 'free', db })).resolves.toEqual({
