@@ -565,6 +565,8 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   },
 });
 
+export const SANDBOX_MINIMUM_FUNDED_RUN_MS = MINUTE_MS;
+
 export const FREE_DAILY_CAPS = Object.freeze({
   messageWrites: 1_000,
   conversationCreates: 100,

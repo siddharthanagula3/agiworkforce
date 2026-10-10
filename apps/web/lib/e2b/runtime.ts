@@ -25,6 +25,7 @@ import 'server-only';
 
 import {
   SANDBOX_COMPUTE_RATE_ENV,
+  SANDBOX_MINIMUM_FUNDED_RUN_MS,
   getPlanMaxSandboxes,
   getPlanSandboxTtlMs,
   isFreeBillingPlanTier,
@@ -49,7 +50,11 @@ import { tracedCodeAction } from '@/lib/observability/code-action-span';
 import { activeSpan } from '@/lib/observability/span';
 
 import { traceSandboxExecutor } from './tracing';
-import { codeExecutionUnavailableMessage, type E2BUnavailableCause } from './unavailability';
+import {
+  codeExecutionUnavailableMessage,
+  fundedSandboxLifetimeNotice,
+  type E2BUnavailableCause,
+} from './unavailability';
 import {
   harnessCredentialSpecs,
   harnessIsProxyCovered,
@@ -88,6 +93,7 @@ const E2B_SANDBOX_TIMEOUT_MS = 60_000;
 
 const E2B_CONVERSATION_TIMEOUT_MS = 10 * 60_000;
 const E2B_COMMAND_TIMEOUT_MS = 60_000;
+const MILLISECONDS_PER_SECOND = 1_000;
 const E2B_MAX_COMMAND_TIMEOUT_MS = CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS;
 const ALL_OUTBOUND_TRAFFIC = '0.0.0.0/0';
 const TRUSTED_CODE_HOSTS = [
@@ -766,7 +772,7 @@ export const getE2BExecutor = tracedCodeAction(
 
     type SandboxInstance = InstanceType<typeof Sandbox>;
 
-    const existingSession = scope ? await getE2BSession(scope) : null;
+    let existingSession = scope ? await getE2BSession(scope) : null;
 
     let planTier: string | null = null;
     let maxSandboxes: number | null = null;
@@ -805,9 +811,11 @@ export const getE2BExecutor = tracedCodeAction(
       }
     }
 
-    const sandboxTimeoutMs = scope
+    const plannedTimeoutMs = scope
       ? planTtlMs || E2B_CONVERSATION_TIMEOUT_MS
       : E2B_SANDBOX_TIMEOUT_MS;
+    let sandboxTimeoutMs = plannedTimeoutMs;
+    let lifetimeNotice: string | null = null;
     const metadata: Record<string, string> = {};
     if (conversationId) metadata['conversationId'] = conversationId;
     if (codeSessionId) metadata['codeSessionId'] = codeSessionId;
@@ -840,6 +848,27 @@ export const getE2BExecutor = tracedCodeAction(
     }
     const computeMicrousdPerSecond = provisioningRate > 0 ? provisioningRate : undefined;
 
+    // A reconnect restarts the provider's timeout, so a resumed interval may only
+    // run for what its hold still funds; one that funds less than a minimum run
+    // is settled here and the sandbox is admitted again below.
+    const resumed = existingSession;
+    if (scope && resumed?.activeSinceMs !== undefined && resumed.computeReservation) {
+      const rate = resumed.computeMicrousdPerSecond ?? provisioningRate;
+      const fundedMs =
+        rate > 0
+          ? Math.floor(
+              (resumed.computeReservation.estimatedCostMicrousd / rate) * MILLISECONDS_PER_SECOND,
+            )
+          : 0;
+      const leftMs = fundedMs - (Date.now() - resumed.activeSinceMs);
+      if (leftMs < SANDBOX_MINIMUM_FUNDED_RUN_MS) {
+        await closeBillableInterval(scope, resumed, 'pause');
+        existingSession = await getE2BSession(scope);
+      } else {
+        sandboxTimeoutMs = Math.min(plannedTimeoutMs, leftMs);
+      }
+    }
+
     // Each active interval is admitted before create or reconnect. Pause settles
     // that interval, so a later resume needs a new hold even for the same sandbox.
     let computeReservation: SandboxComputeReservationRecord | undefined =
@@ -855,7 +884,7 @@ export const getE2BExecutor = tracedCodeAction(
         ...(conversationId ? { conversationId } : {}),
         ...(codeSessionId ? { codeSessionId } : {}),
         microusdPerSecond: provisioningRate,
-        ttlMs: sandboxTimeoutMs,
+        ttlMs: plannedTimeoutMs,
         freeTurnHold: scope.freeTurnHold,
       });
       if (reserved.outcome === 'refused') {
@@ -871,6 +900,9 @@ export const getE2BExecutor = tracedCodeAction(
       }
       computeReservation = reserved.reservation;
       reservationAdmittedForThisAttempt = true;
+      sandboxTimeoutMs = reserved.ttlMs;
+      lifetimeNotice =
+        reserved.ttlMs < plannedTimeoutMs ? fundedSandboxLifetimeNotice(reserved.ttlMs) : null;
       return null;
     };
     const provisioningRefusal = await holdSandboxLifetime();
@@ -1356,6 +1388,18 @@ export const getE2BExecutor = tracedCodeAction(
         // compute per bare-API call, not an open-ended meter.
       },
     };
+
+    const notice = lifetimeNotice;
+    if (notice) {
+      const runCode = executor.runCode.bind(executor);
+      let noticeShown = false;
+      executor.runCode = async (input) => {
+        const result = await runCode(input);
+        if (noticeShown) return result;
+        noticeShown = true;
+        return { ...result, output: result.output ? `${notice}\n${result.output}` : notice };
+      };
+    }
 
     return traceSandboxExecutor(executor, {
       sandboxId,

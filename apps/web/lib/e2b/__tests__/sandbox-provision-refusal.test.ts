@@ -28,8 +28,9 @@ vi.mock('../gate', async (importOriginal) => ({
 }));
 
 const sandboxComputeIsPriceable = vi.fn(() => true);
-const reserveSandboxComputeInterval = vi.fn(async (_input: unknown) => ({
+const reserveSandboxComputeInterval = vi.fn(async (input: unknown) => ({
   outcome: 'reserved' as const,
+  ttlMs: (input as { ttlMs: number }).ttlMs,
   reservation: {
     idempotencyKey: 'agi.e2b.compute.res-1',
     requestHash: 'hash-1',

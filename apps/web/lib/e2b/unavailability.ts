@@ -33,6 +33,13 @@ const CAUSE_SENTENCE: Record<E2BUnavailableCause, string> = {
 
 export const GENERIC_CODE_EXECUTION_UNAVAILABLE = 'Code execution is unavailable for this request.';
 
+const MILLISECONDS_PER_MINUTE = 60_000;
+
+export function fundedSandboxLifetimeNotice(lifetimeMs: number): string {
+  const minutes = Math.max(1, Math.floor(lifetimeMs / MILLISECONDS_PER_MINUTE));
+  return `This run can last about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} on Free.`;
+}
+
 export function codeExecutionUnavailableMessage(cause: E2BUnavailableCause | null): string {
   if (!cause) return GENERIC_CODE_EXECUTION_UNAVAILABLE;
   return (
