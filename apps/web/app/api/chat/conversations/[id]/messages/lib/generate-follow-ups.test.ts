@@ -43,9 +43,20 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildProtocolRouteAdapter: vi.fn(),
 }));
 
-const recordCostMock = vi.fn(async (..._args: unknown[]) => {});
-vi.mock('@/lib/services/cogs-ledger-service', () => ({
-  recordSettledProviderCost: (...args: unknown[]) => recordCostMock(...args),
+const lease = {
+  providerStarted: vi.fn(async () => {}),
+  completed: vi.fn(async (_input: unknown) => {}),
+  failed: vi.fn(async (_record: unknown) => {}),
+};
+const reserveBackgroundUsageMock = vi.fn(async (_input: unknown) => lease);
+vi.mock('@/lib/services/background-usage-lease', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  reserveBackgroundUsage: (input: unknown) => reserveBackgroundUsageMock(input),
+}));
+
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveEntitledPlanTier: vi.fn(async () => 'free'),
 }));
 
 const { generateFollowUpSuggestions, sanitizeFollowUpSuggestions } =
@@ -77,33 +88,52 @@ beforeEach(() => {
 });
 
 describe('generateFollowUpSuggestions', () => {
-  it('records the call at the platform cost and charges the user nothing', async () => {
+  it('reserves the call against the account’s budget before the provider and settles it after', async () => {
     const suggestions = await generateFollowUpSuggestions(input());
 
-    expect(recordCostMock).toHaveBeenCalledTimes(1);
-    expect(recordCostMock.mock.calls[0]?.[0]).toMatchObject({
+    expect(reserveBackgroundUsageMock).toHaveBeenCalledTimes(1);
+    expect(reserveBackgroundUsageMock.mock.calls[0]?.[0]).toMatchObject({
       userId: 'user-1',
+      planTier: 'free',
+      idempotencyKey: 'follow-ups:message-1',
       provider: 'anthropic',
       model: 'test.model',
-      customerCanonicalMicrousd: 0,
-      taskOutcome: 'delivered',
-      usage: { type: 'follow_up_suggestions', conversationId: 'conversation-1' },
+      routeId: 'test-route',
+      maxOutputTokens: expect.any(Number),
+      quotaFeature: 'follow_up_suggestions',
     });
+    expect(lease.providerStarted).toHaveBeenCalledTimes(1);
+    expect(lease.completed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'anthropic',
+        model: 'test.model',
+        usage: expect.objectContaining({ promptTokens: 400, completionTokens: 40 }),
+      }),
+    );
     expect(suggestions).toHaveLength(3);
   });
 
-  it('records nothing when the provider call fails', async () => {
+  it('never reaches the provider when the budget refuses the call', async () => {
+    reserveBackgroundUsageMock.mockRejectedValueOnce(new Error('budget reached'));
+
+    expect(await generateFollowUpSuggestions(input())).toEqual([]);
+
+    expect(drainToLlmResponseMock).not.toHaveBeenCalled();
+  });
+
+  it('releases the hold when the provider call fails', async () => {
     drainToLlmResponseMock.mockRejectedValueOnce(new Error('upstream anthropic'));
 
     await expect(generateFollowUpSuggestions(input())).rejects.toThrow('upstream anthropic');
 
-    expect(recordCostMock).not.toHaveBeenCalled();
+    expect(lease.failed).toHaveBeenCalledTimes(1);
+    expect(lease.completed).not.toHaveBeenCalled();
   });
 
   it('never reaches the provider for an empty answer', async () => {
     expect(await generateFollowUpSuggestions(input({ answer: '  ' }))).toEqual([]);
 
-    expect(recordCostMock).not.toHaveBeenCalled();
+    expect(reserveBackgroundUsageMock).not.toHaveBeenCalled();
     expect(drainToLlmResponseMock).not.toHaveBeenCalled();
   });
 });
