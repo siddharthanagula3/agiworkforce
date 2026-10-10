@@ -1330,30 +1330,11 @@
       },
       "LiveVoiceSessionSettlement": {
         "type": "object",
-        "description": "Reservation handle for the session. Return it verbatim when closing the session; without it the reservation is only released when its lease expires.",
-        "required": [
-          "idempotencyKey",
-          "leaseToken",
-          "requestHash",
-          "estimatedCostCents",
-          "ceilingSeconds"
-        ],
+        "required": ["ceilingSeconds"],
         "properties": {
-          "idempotencyKey": {
-            "type": "string"
-          },
-          "leaseToken": {
-            "type": "string"
-          },
-          "requestHash": {
-            "type": "string"
-          },
-          "estimatedCostCents": {
-            "type": "integer"
-          },
           "ceilingSeconds": {
             "type": "integer",
-            "description": "Seconds the reservation covers. A close report is billed at this ceiling at most."
+            "description": "Seconds the reserved blocks cover before the session must be extended by its next one-minute block."
           }
         }
       },
@@ -1375,13 +1356,13 @@
       },
       "LiveVoiceSessionCloseRequest": {
         "type": "object",
-        "required": ["seconds", "settlement"],
+        "required": ["seconds"],
         "properties": {
           "seconds": {
             "type": "number",
             "minimum": 0,
             "maximum": 86400,
-            "description": "Seconds the session ran. Billed seconds are this rounded up, capped at the reserved ceiling."
+            "description": "Seconds the session ran, as the client saw them. The minutes used are measured from the server's own session record."
           },
           "reason": {
             "type": "string",
@@ -1389,12 +1370,8 @@
           },
           "backend": {
             "type": "object",
-            "description": "What the delegated backend model spent during the session. Omit it when the session delegated nothing; the session itself still settles.",
+            "description": "What the delegated backend model spent during the session, priced at the backend the server chose. Omit it when the session delegated nothing.",
             "properties": {
-              "model": {
-                "type": "string",
-                "maxLength": 128
-              },
               "inputTokens": {
                 "type": "integer",
                 "minimum": 0
@@ -1412,21 +1389,16 @@
                 "minimum": 0
               }
             }
-          },
-          "settlement": {
-            "$ref": "#/components/schemas/LiveVoiceSessionSettlement"
           }
         }
       },
       "LiveVoiceSessionClose": {
         "type": "object",
-        "required": ["billedSeconds", "actualCostCents"],
+        "required": ["billedSeconds"],
         "properties": {
           "billedSeconds": {
-            "type": "integer"
-          },
-          "actualCostCents": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Seconds the session was billed for, from the server's own record."
           }
         }
       },
@@ -2795,7 +2767,7 @@
     "/voice/live/sessions": {
       "post": {
         "summary": "Open a live voice session",
-        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the `voice_live_backend` slot. The session is reserved for a fixed block of minutes before any provider spend, and that reservation is released if the provider never answers. Close the session to settle it.",
+        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the plan's backend slot: `voice_live_backend` on paid plans and `voice_live_backend_free` on Free. The session draws on the plan's shared usage budget, the same windows chat uses, one minute at a time: each block is reserved at the live model's per-minute rate plus a backend allowance, and the session settles at what it actually used. Close the session to settle it.",
         "tags": ["Voice"],
         "security": [
           {

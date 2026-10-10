@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
 import { ApprovalCard, Button, Spinner } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS, type VisualFrame } from '@agiworkforce/types';
@@ -14,6 +14,9 @@ import {
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { useVisualSession } from '@/lib/visual/use-visual-session';
+import { VOICE_ATTACHMENT_ACCEPT } from '@features/chat/lib/voice-attachments';
+import { ToolTimeline, type ToolEntry } from '../messages/ToolTimeline';
+import { SourcesControl } from '../research/ResearchPanel';
 import { VoiceCaptions } from './VoiceCaptions';
 import { VoiceChatDock } from './VoiceChatDock';
 import { VoiceComposer } from './VoiceComposer';
@@ -26,6 +29,9 @@ const LABEL = {
   sending: 'Sending',
   cancelSending: 'Do not send that',
   retry: 'Try again',
+  continueInText: 'Continue in text',
+  tapToHear: 'Tap to hear the assistant',
+  audioBlocked: "Your browser paused the assistant's audio.",
   reconnecting: 'Reconnecting, attempt',
   shareCamera: 'Share your camera',
   stopCamera: 'Stop sharing your camera',
@@ -35,8 +41,6 @@ const LABEL = {
   stopTask: 'Stop the task',
   stopTaskHint: 'Stops the running action and keeps the call open.',
   slowTool: 'is taking longer than usual',
-  toolResults: 'What the actions returned',
-  toolFailed: 'Did not complete',
   openFile: 'Open',
   rejoinTitle: 'This chat already has an open voice session',
   rejoinBody:
@@ -50,6 +54,7 @@ const LABEL = {
 } as const;
 
 const GENERATED_FILE_PATH = /^\/api\/files\/[A-Za-z0-9_-]+(?:\?.*)?$/;
+const VOICE_SOURCES_ID = 'voice-session-sources';
 
 function isGeneratedFilePath(uri: string): boolean {
   return GENERATED_FILE_PATH.test(uri);
@@ -123,12 +128,31 @@ export function VoiceModeSurface({
   const setLanguage = useVoiceSessionStore((store) => store.setLanguage);
   const voice = useVoiceSessionStore((store) => store.voice);
   const setVoice = useVoiceSessionStore((store) => store.setVoice);
+  const usageLimited = useVoiceSessionStore((store) => store.usageLimited);
+  const playbackBlocked = useVoiceSessionStore((store) => store.playbackBlocked);
+  const providerNotice = useVoiceSessionStore((store) => store.providerNotice);
+  const sources = useVoiceSessionStore((store) => store.sources);
 
   const [typed, setTyped] = useState('');
+  const dockTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [captionsOpen, setCaptionsOpen] = useState(false);
   const [captions, setCaptions] = useState<readonly VoiceCaptionLine[]>([]);
 
   const { state, exit, toggleMute, cancelPending, submitTyped, retry } = session;
+  const toolEntries = useMemo<ToolEntry[]>(
+    () =>
+      session.toolOutcomes.map((outcome) => ({
+        id: outcome.callId,
+        toolCallId: outcome.callId,
+        name: outcome.label,
+        summary: outcome.label,
+        statusPhrase: outcome.label,
+        status: outcome.isError ? 'failed' : 'completed',
+        ...(outcome.isError ? { error: outcome.output } : { result: outcome.output }),
+      })),
+    [session.toolOutcomes],
+  );
   const { status, muted, pendingUtterance, error } = state;
   const announcement = voiceStatusAnnouncement({
     status,
@@ -196,7 +220,6 @@ export function VoiceModeSurface({
       reducedMotion={session.reducedMotion}
       level={session.audioLevel}
       onClick={toggleFocusMode}
-      className={focusMode ? 'pointer-events-auto' : undefined}
     />
   );
 
@@ -210,6 +233,22 @@ export function VoiceModeSurface({
       <span className="min-w-0">
         {LABEL.reconnecting} {session.reconnectAttempt} of {session.reconnectMaxAttempts}
       </span>
+    </div>
+  ) : status === VOICE_SESSION_STATUS.error && usageLimited ? (
+    <div
+      role="alert"
+      data-testid="voice-usage-limit"
+      className="flex items-center gap-2 text-sm text-[var(--chat-text-secondary)]"
+    >
+      <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">{error}</span>
+      <button
+        type="button"
+        onClick={exit}
+        className="min-h-6 shrink-0 rounded-full px-2 py-1 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+      >
+        {LABEL.continueInText}
+      </button>
     </div>
   ) : status === VOICE_SESSION_STATUS.error ? (
     <div
@@ -266,15 +305,11 @@ export function VoiceModeSurface({
         variant === VOICE_SURFACE_VARIANT.chat && 'pb-12',
       )}
     >
-      {/* One node in both states. Moving the orb into an overlay instead
-          remounted it, and a remount restarts the grow-in, so the focus
-          toggle shrank the sphere to a pinprick before it doubled. */}
-      <div
-        className={cn(
-          'flex items-center justify-center',
-          focusMode && 'pointer-events-none fixed inset-0 z-[var(--z-overlay)]',
-        )}
-      >
+      {/* The orb keeps its own slot in the column in both states. As a
+          fixed full-viewport overlay in focus mode it was painted over the
+          notice, the error row and the composer whenever they reached the
+          middle of a short viewport. */}
+      <div data-testid="voice-orb-slot" className="flex shrink-0 items-center justify-center">
         {orb}
       </div>
 
@@ -283,6 +318,27 @@ export function VoiceModeSurface({
       </p>
 
       {notice}
+      {playbackBlocked ? (
+        <div
+          role="status"
+          data-testid="voice-playback-blocked"
+          className="flex items-center gap-2 text-sm text-[var(--chat-text-secondary)]"
+        >
+          <span className="min-w-0">{LABEL.audioBlocked}</span>
+          <Button type="button" className="min-h-11" onClick={session.resumePlayback}>
+            {LABEL.tapToHear}
+          </Button>
+        </div>
+      ) : null}
+      {providerNotice && status !== VOICE_SESSION_STATUS.error ? (
+        <p
+          role="status"
+          data-testid="voice-provider-notice"
+          className="text-sm text-[var(--chat-text-secondary)]"
+        >
+          {providerNotice}
+        </p>
+      ) : null}
       {session.rejoinOffer ? (
         <div
           role="dialog"
@@ -349,40 +405,29 @@ export function VoiceModeSurface({
         </div>
       ) : null}
       {session.toolOutcomes.length > 0 ? (
-        <details data-testid="voice-tool-results" className="w-full max-w-md text-sm">
-          <summary className="cursor-pointer text-[var(--chat-text-secondary)]">
-            {LABEL.toolResults}
-          </summary>
-          <ul className="mt-2 flex flex-col gap-2">
-            {session.toolOutcomes.map((outcome) => (
-              <li
-                key={outcome.callId}
-                className="rounded-lg border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] p-2"
-              >
-                <p className="font-medium text-[var(--chat-text-primary)]">
-                  {outcome.label}
-                  {outcome.isError ? ` · ${LABEL.toolFailed}` : null}
-                </p>
-                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-[var(--chat-text-secondary)]">
-                  {outcome.output}
-                </pre>
-                {outcome.files
-                  .filter((file) => isGeneratedFilePath(file.uri))
-                  .map((file) => (
-                    <a
-                      key={file.uri}
-                      href={file.uri}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
-                    >
-                      {LABEL.openFile} {file.name}
-                    </a>
-                  ))}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <div data-testid="voice-tool-results" className="w-full max-w-md text-sm">
+          <ToolTimeline tools={toolEntries} />
+          {session.toolOutcomes.flatMap((outcome) =>
+            outcome.files
+              .filter((file) => isGeneratedFilePath(file.uri))
+              .map((file) => (
+                <a
+                  key={`${outcome.callId}-${file.uri}`}
+                  href={file.uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
+                >
+                  {LABEL.openFile} {file.name}
+                </a>
+              )),
+          )}
+        </div>
+      ) : null}
+      {sources.length > 0 ? (
+        <div data-testid="voice-sources" className="flex w-full max-w-md justify-end">
+          <SourcesControl messageId={VOICE_SOURCES_ID} cited={[...sources]} more={[]} />
+        </div>
       ) : null}
       {session.toolApprovals.map((approval) => (
         <ApprovalCard
@@ -460,6 +505,7 @@ export function VoiceModeSurface({
         captionsOpen={captionsOpen}
         deviceName={session.deviceName}
         dockOpen={dockOpen}
+        dockTriggerRef={dockTriggerRef}
         onChange={setTyped}
         onSubmit={handleSubmitTyped}
         onToggleMute={toggleMute}
@@ -468,10 +514,26 @@ export function VoiceModeSurface({
         onExit={exit}
       />
 
+      <input
+        ref={attachmentInputRef}
+        type="file"
+        accept={VOICE_ATTACHMENT_ACCEPT}
+        className="hidden"
+        data-testid="voice-attachment-input"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) session.shareAttachment(file);
+        }}
+      />
       <VoiceChatDock
         open={dockOpen}
+        triggerRef={dockTriggerRef}
         onClose={() => setDockOpen(false)}
         onNewChat={onNewChat}
+        onAddFiles={() => attachmentInputRef.current?.click()}
         onOpenLibrary={onOpenLibrary}
         onOpenConnectors={onOpenConnectors}
       />

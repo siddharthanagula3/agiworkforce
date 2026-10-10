@@ -9,13 +9,12 @@ import {
 
 import {
   describeLiveSessionFailure,
-  LIVE_SESSION_BLOCK_MINUTES,
-  LIVE_SESSION_CEILING_SECONDS,
-  LIVE_SESSION_MIN_BLOCK_SECONDS,
+  LIVE_VOICE_BLOCK_SECONDS,
+  LIVE_VOICE_LEASE_SECONDS,
   liveSessionChargeMicrousd,
-  liveSessionMinutes,
   liveSessionProviderCostMicrousd,
-  liveSessionSecondsCoveredBy,
+  liveVoiceBackendAllowanceMicrousd,
+  liveVoiceBlockChargeMicrousd,
 } from '../live-voice-billing';
 
 const LIVE_SLOT = 'voice_live';
@@ -55,52 +54,34 @@ describe('live voice session pricing', () => {
     expect(liveSessionChargeMicrousd(600, 'not-a-registered-model')).toBeNull();
   });
 
-  it('sizes a full block at the ceiling and never below a minute', () => {
-    expect(LIVE_SESSION_CEILING_SECONDS).toBe(LIVE_SESSION_BLOCK_MINUTES * SECONDS_PER_MINUTE);
-    expect(LIVE_SESSION_MIN_BLOCK_SECONDS).toBe(SECONDS_PER_MINUTE);
-  });
-
-  it('counts the minute allowance in whole minutes, rounded up', () => {
-    expect(liveSessionMinutes(0)).toBe(0);
-    expect(liveSessionMinutes(-30)).toBe(0);
-    expect(liveSessionMinutes(1)).toBe(1);
-    expect(liveSessionMinutes(60)).toBe(1);
-    expect(liveSessionMinutes(61)).toBe(2);
+  it('reserves voice a minute at a time and treats a silent session as gone after ten', () => {
+    expect(LIVE_VOICE_BLOCK_SECONDS).toBe(SECONDS_PER_MINUTE);
+    expect(LIVE_VOICE_LEASE_SECONDS).toBe(10 * SECONDS_PER_MINUTE);
   });
 });
 
-describe('liveSessionSecondsCoveredBy', () => {
-  const charge = (seconds: number) => liveSessionChargeMicrousd(seconds, liveModelId) as number;
+describe('the price of one voice block', () => {
+  const paidBackend = getRoutingSlotModel('voice_live_backend');
+  const freeBackend = getRoutingSlotModel('voice_live_backend_free');
 
-  it('covers every second an amount pays for and not one more', () => {
-    for (const amount of [
-      charge(1),
-      charge(1) + 1,
-      charge(59),
-      charge(SECONDS_PER_MINUTE),
-      charge(SECONDS_PER_MINUTE) - 1,
-      charge(LIVE_SESSION_CEILING_SECONDS),
-      123_457,
-    ]) {
-      const seconds = liveSessionSecondsCoveredBy(amount, liveModelId);
-      expect(seconds).toBeGreaterThan(0);
-      expect(charge(seconds)).toBeLessThanOrEqual(amount);
-      expect(charge(seconds + 1)).toBeGreaterThan(amount);
-    }
-  });
-
-  it('covers the whole ceiling with the charge for the whole ceiling', () => {
-    expect(liveSessionSecondsCoveredBy(charge(LIVE_SESSION_CEILING_SECONDS), liveModelId)).toBe(
-      LIVE_SESSION_CEILING_SECONDS,
+  it('is the live model minute plus a backend allowance at the backend model rates', () => {
+    const backend = getModelMetadataById(paidBackend)!;
+    const allowance = liveVoiceBackendAllowanceMicrousd(LIVE_VOICE_BLOCK_SECONDS, paidBackend);
+    expect(allowance).toBe(
+      Math.ceil(
+        ((6_000 * backend.inputCost + 300 * backend.outputCost) / 1_000_000) * MICROUSD_PER_USD,
+      ),
+    );
+    expect(liveVoiceBlockChargeMicrousd(liveModelId, paidBackend)).toBe(
+      chargeMicrousdForProviderCost(providerMicrousd(SECONDS_PER_MINUTE) + allowance),
     );
   });
 
-  it('covers nothing for an amount below one second, a non-positive amount, or an unpriced model', () => {
-    expect(liveSessionSecondsCoveredBy(charge(1) - 1, liveModelId)).toBe(0);
-    expect(liveSessionSecondsCoveredBy(0, liveModelId)).toBe(0);
-    expect(liveSessionSecondsCoveredBy(-5_000, liveModelId)).toBe(0);
-    expect(liveSessionSecondsCoveredBy(Number.POSITIVE_INFINITY, liveModelId)).toBe(0);
-    expect(liveSessionSecondsCoveredBy(1_000_000, null)).toBe(0);
+  it('costs less on the cheaper free backend, and cannot be priced without a session rate', () => {
+    expect(liveVoiceBlockChargeMicrousd(liveModelId, freeBackend)).toBeLessThan(
+      liveVoiceBlockChargeMicrousd(liveModelId, paidBackend)!,
+    );
+    expect(liveVoiceBlockChargeMicrousd(null, paidBackend)).toBeNull();
   });
 });
 

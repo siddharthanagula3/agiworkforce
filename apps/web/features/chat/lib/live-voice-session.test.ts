@@ -7,6 +7,8 @@ import {
   KEEPALIVE_INTERVAL_MS,
   KEEPALIVE_TIMEOUT_MS,
   LIVE_SESSION_MESSAGE,
+  SPOKEN_PROGRESS_DELAY_MS,
+  SPOKEN_PROGRESS_MIN_INTERVAL_MS,
   LiveVoiceSession,
   LiveVoiceSessionError,
   type LiveTranscriptTurn,
@@ -33,6 +35,13 @@ class FakePeer extends EventTarget {
   localDescription = { sdp: 'offer-sdp' };
   remote: RTCSessionDescriptionInit | null = null;
   closed = false;
+  bytesReceived = 0;
+  async getStats() {
+    return new Map([
+      ['pair', { type: 'candidate-pair', bytesReceived: this.bytesReceived }],
+      ['outbound', { type: 'outbound-rtp', bytesSent: 999 }],
+    ]);
+  }
   readonly channel = new FakeChannel();
   createDataChannel(label: string) {
     expect(label).toBe('oai-events');
@@ -94,13 +103,7 @@ describe('LiveVoiceSession', () => {
           JSON.stringify({
             sessionId: 'live_1',
             sdp: 'answer-sdp',
-            settlement: {
-              idempotencyKey: 'key',
-              leaseToken: 'lease',
-              requestHash: 'hash',
-              estimatedCostCents: 50,
-              ceilingSeconds: 600,
-            },
+            settlement: { ceilingSeconds: 600 },
             tools: [
               {
                 id: 'web_search',
@@ -149,14 +152,22 @@ describe('LiveVoiceSession', () => {
     vi.unstubAllGlobals();
   });
 
-  async function startSession(cb = callbacks()) {
+  async function startSession(cb = callbacks(), reasoning?: 'instant' | 'thinking') {
     const session = await LiveVoiceSession.start({
       voice: 'marin',
       conversationId: null,
+      ...(reasoning ? { reasoning } : {}),
       callbacks: cb,
     });
     return { session, cb };
   }
+
+  it('asks the server for the reasoning level the user chose', async () => {
+    await startSession(callbacks(), 'thinking');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ reasoning: 'thinking' });
+  });
 
   it('posts the offer to the app server, applies the answer and reports session.started', async () => {
     const { session, cb } = await startSession();
@@ -328,21 +339,19 @@ describe('LiveVoiceSession', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('pings on the keepalive interval and keeps a session that answers alive', async () => {
+  it('keeps a quiet session alive while its transport still receives bytes, without a ping event', async () => {
     vi.useFakeTimers();
     try {
       const { cb } = await startSession();
       peer.channel.receive({ type: 'session.started', event_id: 'e1' });
 
-      await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS);
-      expect(peer.channel.sent.at(-1)).toMatchObject({ type: 'session.ping' });
-
       for (let elapsed = 0; elapsed < KEEPALIVE_TIMEOUT_MS * 2; elapsed += KEEPALIVE_INTERVAL_MS) {
+        peer.bytesReceived += 1_000;
         await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS);
-        peer.channel.receive({ type: 'session.usage.updated', usage: { seconds: 1 } });
       }
       expect(cb.onError).not.toHaveBeenCalled();
       expect(cb.onConnectionLost).not.toHaveBeenCalled();
+      expect(peer.channel.sent.map((event) => event['type'])).not.toContain('session.ping');
     } finally {
       vi.useRealTimers();
     }
@@ -462,11 +471,326 @@ describe('LiveVoiceSession', () => {
     });
 
     const closing = session.close();
-    expect(peer.channel.sent).toContainEqual(
-      expect.objectContaining({ type: 'session.delegation.cancel', delegation_id: 'd1' }),
-    );
+    const sent = peer.channel.sent.map((event) => event['type']);
+    expect(sent).toContain('session.close');
+    expect(sent).not.toContain('session.delegation.cancel');
     peer.channel.receive({ type: 'session.closed', reason: 'close_requested' });
     await closing;
+  });
+
+  it('stops a running task with a documented instruction instead of an undefined cancel event', async () => {
+    const { cb, session } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    peer.channel.receive({
+      type: 'session.delegation.created',
+      delegation: { id: 'd1', tool: 'web_search' },
+    });
+
+    session.cancelBackendWork();
+
+    expect(peer.channel.sent.at(-1)).toMatchObject({
+      type: 'session.instructions.append',
+      delegation_id: null,
+    });
+    expect(peer.channel.sent.map((event) => event['type'])).not.toContain(
+      'session.delegation.cancel',
+    );
+    expect(cb.onBackendBusy).toHaveBeenLastCalledWith(false);
+  });
+
+  it('never sends session.update for voice settings and appends instructions only for a real change', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          sessionId: 'live_1',
+          sdp: 'answer-sdp',
+          settings: { voice: 'marin', language: null, pace: 1 },
+          settlement: { ceilingSeconds: 600 },
+        }),
+        { status: 201 },
+      ),
+    );
+    const { session } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    fetchMock.mockClear();
+
+    await session.updateSettings({ voice: 'quartz', language: null, pace: 1 });
+    expect(peer.channel.sent.map((event) => event['type'])).not.toContain('session.update');
+    expect(peer.channel.sent).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await session.updateSettings({ voice: 'quartz', language: 'es', pace: 1.5 });
+    expect(peer.channel.sent).toEqual([
+      expect.objectContaining({
+        type: 'session.instructions.append',
+        delegation_id: null,
+        content:
+          "Speak and transcribe in es. Keep to it even when the user's audio is ambiguous. Speak at about 1.5 times your natural speaking pace.",
+      }),
+    ]);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ language: 'es', pace: 1.5 });
+
+    await session.updateSettings({ voice: 'quartz', language: 'es', pace: 1.5 });
+    expect(peer.channel.sent).toHaveLength(1);
+  });
+
+  it('totals the delegated backend usage once per response, with web search calls', async () => {
+    const { session } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    expect(session.backendUsage).toBeNull();
+
+    const completed = (id: string, input: number, output: number, cached: number) => ({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: {
+        type: 'response.completed',
+        response: {
+          id,
+          output: [],
+          usage: {
+            input_tokens: input,
+            output_tokens: output,
+            input_tokens_details: { cached_tokens: cached },
+          },
+        },
+      },
+    });
+    peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: { type: 'response.output_item.done', item: { id: 'ws_1', type: 'web_search_call' } },
+    });
+    peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: { type: 'response.output_item.done', item: { id: 'ws_1', type: 'web_search_call' } },
+    });
+    peer.channel.receive(completed('resp_1', 1_000, 200, 400));
+    peer.channel.receive(completed('resp_1', 1_000, 200, 400));
+    peer.channel.receive(completed('resp_2', 300, 50, 9_999));
+    peer.channel.receive({
+      type: 'response.event',
+      event: { type: 'response.completed', response: { id: 'resp_3' } },
+    });
+
+    expect(session.backendUsage).toEqual({
+      inputTokens: 1_300,
+      outputTokens: 250,
+      cachedTokens: 700,
+      webSearchCalls: 1,
+    });
+  });
+
+  it('reports a provider error during the call without ending it', async () => {
+    const cb = callbacks();
+    const onProviderError = vi.fn();
+    const { session } = await startSession({ ...cb, onProviderError });
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+
+    peer.channel.receive({
+      type: 'error',
+      event_id: 'evt_err',
+      error: { type: 'invalid_request_error', code: 'moderation_blocked', message: 'Blocked.' },
+    });
+
+    expect(onProviderError).toHaveBeenCalledWith({
+      code: 'moderation_blocked',
+      message: 'Blocked.',
+    });
+    expect(cb.onError).not.toHaveBeenCalled();
+    expect(peer.closed).toBe(false);
+    session.dispose();
+  });
+
+  it('tells the host when the browser blocks the assistant audio, and plays on a later tap', async () => {
+    const blocked = Object.assign(new Error('blocked'), { name: 'NotAllowedError' });
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockRejectedValueOnce(blocked)
+      .mockResolvedValue(undefined);
+    vi.stubGlobal(
+      'MediaStream',
+      class {
+        addTrack() {}
+        getAudioTracks() {
+          return [fakeTrack()];
+        }
+        getTracks() {
+          return [];
+        }
+      },
+    );
+    const cb = callbacks();
+    const onPlaybackBlocked = vi.fn();
+    const { session } = await startSession({ ...cb, onPlaybackBlocked });
+
+    await vi.waitFor(() => expect(onPlaybackBlocked).toHaveBeenCalledTimes(1));
+    await expect(session.resumePlayback()).resolves.toBe(true);
+    expect(play).toHaveBeenCalledTimes(2);
+    play.mockRestore();
+  });
+
+  it('says a short status aloud when delegated work runs past a moment, and only once per interval', async () => {
+    vi.useFakeTimers();
+    try {
+      await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd1', tool: 'web_search' },
+      });
+      const commentary = () =>
+        peer.channel.sent.filter((event) => event['type'] === 'session.commentary.append');
+
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS - 1);
+      expect(commentary()).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(commentary()).toEqual([
+        expect.objectContaining({
+          delegation_id: null,
+          content: 'Still working on it: searching the web.',
+        }),
+      ]);
+
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd2', tool: 'web_search' },
+      });
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS);
+      expect(commentary()).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_MIN_INTERVAL_MS);
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd3', tool: 'web_search' },
+      });
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS);
+      expect(commentary()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves the live model a quiet note when an AGI Work hand-off starts in the chat', async () => {
+    const onStartWorkTask = vi.fn(() => true);
+    await startSession({ ...callbacks(), onStartWorkTask });
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: 'completed', output: 'Started.', isError: false }), {
+        status: 200,
+      }),
+    );
+
+    peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: {
+        type: 'response.output_item.done',
+        item: {
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'agi_work',
+          arguments: JSON.stringify({ goal: 'Plan the Lisbon trip' }),
+        },
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(peer.channel.sent).toContainEqual(
+        expect.objectContaining({
+          type: 'session.thinking.append',
+          delegation_id: null,
+          content: expect.stringContaining('Plan the Lisbon trip'),
+        }),
+      ),
+    );
+    expect(onStartWorkTask).toHaveBeenCalledWith('Plan the Lisbon trip');
+  });
+
+  it('reports each cited web source once as delegated answers arrive', async () => {
+    const onSources = vi.fn();
+    await startSession({ ...callbacks(), onSources });
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    const cited = (url: string) => ({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: {
+        type: 'response.output_item.done',
+        item: {
+          type: 'message',
+          content: [
+            { type: 'output_text', annotations: [{ type: 'url_citation', url, title: url }] },
+          ],
+        },
+      },
+    });
+
+    peer.channel.receive(cited('https://example.com/a'));
+    peer.channel.receive(cited('https://example.com/a'));
+    peer.channel.receive(cited('https://example.com/b'));
+
+    expect(onSources).toHaveBeenCalledTimes(2);
+    expect(onSources).toHaveBeenLastCalledWith([
+      { url: 'https://example.com/a', title: 'https://example.com/a' },
+      { url: 'https://example.com/b', title: 'https://example.com/b' },
+    ]);
+  });
+
+  it('hands a shared photo to the backend as a Responses input and tells the live model quietly', async () => {
+    const { session } = await startSession();
+    expect(
+      await session.shareAttachment(
+        new File([new Uint8Array(4)], 'menu.png', { type: 'image/png' }),
+        async () => 'data:image/jpeg;base64,abc',
+      ),
+    ).toBe('unavailable');
+
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    const outcome = await session.shareAttachment(
+      new File([new Uint8Array(4)], 'menu.png', { type: 'image/png' }),
+      async () => 'data:image/jpeg;base64,abc',
+    );
+
+    expect(outcome).toBe('shared');
+    const [item, create, note] = peer.channel.sent.slice(-3);
+    expect(item).toMatchObject({
+      type: 'response.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text' },
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,abc', detail: 'auto' },
+        ],
+      },
+    });
+    expect(create).toMatchObject({ type: 'response.create' });
+    expect(note).toMatchObject({ type: 'session.thinking.append', delegation_id: null });
+  });
+
+  it('stays quiet about work that finishes quickly', async () => {
+    vi.useFakeTimers();
+    try {
+      await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd1', tool: 'web_search' },
+      });
+      peer.channel.receive({
+        type: 'response.event',
+        delegation_id: 'd1',
+        event: { type: 'response.completed' },
+      });
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS * 2);
+
+      expect(peer.channel.sent.map((event) => event['type'])).not.toContain(
+        'session.commentary.append',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a spoken success claim with no tool result behind it', async () => {

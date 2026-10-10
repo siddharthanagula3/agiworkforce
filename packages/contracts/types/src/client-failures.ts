@@ -14,6 +14,8 @@ export const CLIENT_FAILURE_CLASSES = [
   'markdown_render',
   'mermaid_render',
   'stream_stall',
+  'voice_audio_blocked',
+  'voice_provider_error',
 ] as const;
 
 export type ClientFailureClass = (typeof CLIENT_FAILURE_CLASSES)[number];

@@ -1,4 +1,6 @@
 import {
+  LiveVoiceBackendUsageMeter,
+  liveVoiceSourcesOf,
   LiveVoiceToolBridge,
   LiveVoiceToolCallResponseSchema,
   LIVE_VOICE_WORK_TASK_TOOL,
@@ -6,6 +8,8 @@ import {
   liveVoiceToolCallPath,
   liveVoiceWorkTaskGoal,
   type LiveVoicePendingApproval,
+  type LiveVoiceBackendUsage,
+  type LiveVoiceSource,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
@@ -20,9 +24,19 @@ export interface LiveVoiceToolOutcome {
   files: readonly LiveVoiceToolFile[];
 }
 import { formatUsageResetIn } from '@agiworkforce/types';
+import {
+  liveVoiceLanguageInstruction,
+  liveVoicePaceInstruction,
+  type LiveVoiceReasoning,
+} from '@agiworkforce/types/live-voices';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
+import {
+  DEFAULT_DATA_CHANNEL_MESSAGE_BYTES,
+  prepareVoiceAttachment,
+  type ImageDownscaler,
+} from '@features/chat/lib/voice-attachments';
 
 export const LIVE_SESSION_ENDPOINT = '/api/voice/live/sessions';
 const EVENTS_CHANNEL = 'oai-events';
@@ -40,6 +54,10 @@ const OVERLAP_GRACE_MS = 800;
 const ASSISTANT_TRANSCRIPT_IDLE_MS = 2_500;
 const CLIENT_EVENT_PREFIX = 'agi';
 const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
+const NATURAL_PACE = 1;
+const INBOUND_STAT_TYPES = new Set(['candidate-pair', 'inbound-rtp']);
+const TASK_STOPPED_INSTRUCTION =
+  'The user stopped the task that was running. Do not report its result, and tell the user it was stopped only if they ask.';
 
 export const LIVE_SESSION_MESSAGE = {
   microphoneDenied: 'Microphone access was denied. Allow the microphone to use voice mode.',
@@ -53,7 +71,35 @@ export const LIVE_SESSION_MESSAGE = {
   sessionRejected: 'The voice session could not be started.',
   usageExhausted:
     'Voice ran out of included minutes on this plan, so the session ended. Nothing was lost from the conversation.',
+  providerError: 'The voice service could not do that. You can keep talking or ask again.',
 } as const;
+
+export type VoiceAttachmentOutcome =
+  'shared' | 'too_large' | 'unsupported' | 'unreadable' | 'busy' | 'unavailable';
+
+export interface LiveVoiceProviderError {
+  code: string | null;
+  message: string;
+}
+
+const PLAYBACK_BLOCKED_ERROR = 'NotAllowedError';
+
+export const SPOKEN_PROGRESS_DELAY_MS = 3_000;
+export const SPOKEN_PROGRESS_MIN_INTERVAL_MS = 8_000;
+const PROGRESS_NOTE_MAX_CHARS = 400;
+const GENERIC_PROGRESS_LABEL = 'Working on it';
+
+function progressNote(text: string): string {
+  return text.length > PROGRESS_NOTE_MAX_CHARS
+    ? `${text.slice(0, PROGRESS_NOTE_MAX_CHARS)}...`
+    : text;
+}
+
+function stillWorkingOn(label: string): string {
+  return label === GENERIC_PROGRESS_LABEL
+    ? 'Still working on it.'
+    : `Still working on it: ${label.charAt(0).toLowerCase()}${label.slice(1)}.`;
+}
 
 export type LiveTranscriptRole = 'user' | 'assistant';
 
@@ -64,10 +110,8 @@ export interface LiveTranscriptTurn {
   final: boolean;
 }
 
+/** How long the session's voice minutes cover it before the host must extend. */
 export interface LiveSessionSettlement {
-  idempotencyKey: string;
-  leaseToken: string;
-  requestHash: string;
   ceilingSeconds: number;
 }
 
@@ -134,6 +178,12 @@ export interface LiveVoiceSessionCallbacks {
   /** A transport drop of a started session, which a host can reconnect from.
    *  Hosts without one get onError and the session stays down. */
   onConnectionLost?: (message: string) => void;
+  /** An error event from the provider during a running session; the session stays up. */
+  onProviderError?: (error: LiveVoiceProviderError) => void;
+  /** The browser refused to start the assistant's audio without a user gesture. */
+  onPlaybackBlocked?: () => void;
+  /** Every web source the delegated backend has cited so far in this session. */
+  onSources?: (sources: readonly LiveVoiceSource[]) => void;
 }
 
 export interface LiveVoiceSettings {
@@ -147,6 +197,7 @@ export interface LiveVoiceSessionOptions {
   conversationId: string | null;
   language?: string | null;
   pace?: number;
+  reasoning?: LiveVoiceReasoning;
   callbacks: LiveVoiceSessionCallbacks;
 }
 
@@ -185,6 +236,21 @@ export class LiveVoiceSessionError extends Error {
 // 'could not be started' left the user with no idea why voice stopped.
 function isUsageRefusal(status: number): boolean {
   return status === 402 || status === 429;
+}
+
+const USAGE_LIMIT_CODES = new Set([
+  'usage_exhausted',
+  'voice_usage_not_in_plan',
+  'rolling_five_hour_limit_reached',
+  'rolling_weekly_limit_reached',
+  'flagship_weekly_limit_reached',
+  'insufficient_credits',
+  'extra_usage_required',
+  'organization_spend_cap_reached',
+]);
+
+export function isUsageLimitError(error: unknown): boolean {
+  return error instanceof LiveVoiceSessionError && USAGE_LIMIT_CODES.has(error.code);
 }
 
 const LIMIT_REACHED: Readonly<Record<string, string>> = {
@@ -284,6 +350,15 @@ export class LiveVoiceSession {
   private usageSeconds: number | null = null;
   private lastDeliveredTurnId: string | null = null;
   private pendingMuted: boolean | null = null;
+  private inboundBytes = 0;
+  private readonly backendMeter = new LiveVoiceBackendUsageMeter();
+  private readonly sources = new Map<string, LiveVoiceSource>();
+  private readonly progressTimers = new Map<string, number>();
+  private lastCommentaryAt = Number.NEGATIVE_INFINITY;
+  private readonly notedApprovals = new Set<string>();
+  private playbackRequested = false;
+  private appliedLanguage: string | null;
+  private appliedPace: number;
 
   private constructor(
     microphone: MediaStream,
@@ -300,12 +375,21 @@ export class LiveVoiceSession {
     this.sessionId = created.sessionId;
     this.settlement = created.settlement;
     this.callbacks = callbacks;
+    this.appliedLanguage = created.settings?.language ?? null;
+    this.appliedPace = created.settings?.pace ?? NATURAL_PACE;
     for (const tool of created.tools ?? []) this.toolDescriptors.set(tool.id, tool);
     this.toolBridge = new LiveVoiceToolBridge({
       callTool: (request) => this.callTool(request),
       send: (event) => this.send(event),
       onApprovalsChanged: (approvals) => {
         if (approvals.length > 0) this.holdDelegationTimers();
+        const fresh = approvals.filter((approval) => !this.notedApprovals.has(approval.callId));
+        for (const approval of fresh) this.notedApprovals.add(approval.callId);
+        if (fresh.length > 0) {
+          this.appendThinking(
+            `Waiting for the user to approve on screen: ${fresh.map((approval) => approval.summary).join('; ')}.`,
+          );
+        }
         this.callbacks.onToolApprovals?.(approvals);
         this.publishToolActivity();
       },
@@ -363,6 +447,7 @@ export class LiveVoiceSession {
       event.streams[0]?.getTracks().forEach((track) => remote.addTrack(track));
       if (event.streams.length === 0) remote.addTrack(event.track);
       session?.watchRemoteAudio(remote);
+      session?.startPlayback();
     });
     channel.addEventListener('message', (event) => {
       if (session) session.handleMessage(event);
@@ -385,6 +470,7 @@ export class LiveVoiceSession {
           conversationId: options.conversationId,
           language: options.language ?? null,
           ...(options.pace === undefined ? {} : { pace: options.pace }),
+          ...(options.reasoning ? { reasoning: options.reasoning } : {}),
           surface: isDesktopHost() ? 'desktop' : 'web',
           ...(options.callbacks.onStartWorkTask
             ? { clientHandoffs: [LIVE_VOICE_WORK_TASK_TOOL] }
@@ -396,6 +482,7 @@ export class LiveVoiceSession {
       await peer.setRemoteDescription({ type: 'answer', sdp: created.sdp });
       session = new LiveVoiceSession(microphone, peer, channel, audio, created, options.callbacks);
       session.watchRemoteAudio(remote);
+      session.startPlayback();
       session.watchConnection();
       for (const event of inbox) session.handleMessage(event);
       return session;
@@ -419,32 +506,113 @@ export class LiveVoiceSession {
     return this.lastDeliveredTurnId;
   }
 
+  get backendUsage(): LiveVoiceBackendUsage | null {
+    return this.backendMeter.report();
+  }
+
+  private collectSources(event: unknown): void {
+    let added = false;
+    for (const source of liveVoiceSourcesOf(event)) {
+      if (this.sources.has(source.url)) continue;
+      this.sources.set(source.url, source);
+      added = true;
+    }
+    if (added) this.callbacks.onSources?.([...this.sources.values()]);
+  }
+
+  startPlayback(): void {
+    if (this.playbackRequested || this.disposed) return;
+    const stream = this.audio.srcObject as MediaStream | null;
+    if (!stream || stream.getAudioTracks().length === 0) return;
+    this.playbackRequested = true;
+    void this.playAudio().then((played) => {
+      if (!played) this.callbacks.onPlaybackBlocked?.();
+    });
+  }
+
+  /** Called from a user gesture after the browser blocked autoplay. */
+  resumePlayback(): Promise<boolean> {
+    return this.playAudio();
+  }
+
+  private async playAudio(): Promise<boolean> {
+    try {
+      await this.audio.play();
+      return true;
+    } catch (error) {
+      return !(error instanceof Error && error.name === PLAYBACK_BLOCKED_ERROR);
+    }
+  }
+
   /**
-   * A mid-session change: the provider is re-negotiated over the open data
-   * channel so the current utterance keeps its connection, and the record is
-   * updated so a reconnect or a second device reads the same settings.
+   * GPT-Live fixes the voice at startup and accepts session.update only for
+   * the Responses backend, so a voice change waits for the next session.
+   * Language and pace are steered through an appended instruction, the
+   * documented way to change behaviour mid-session, and only when they changed.
    */
   async updateSettings(settings: LiveVoiceSettings): Promise<void> {
-    const audio: Record<string, unknown> = {};
-    const output: Record<string, unknown> = {};
-    if (settings.voice) output['voice'] = settings.voice;
-    if (settings.pace !== undefined) output['speed'] = settings.pace;
-    if (Object.keys(output).length > 0) audio['output'] = output;
-    if (settings.language !== undefined) {
-      audio['input'] = { transcription: { language: settings.language } };
-    }
-    if (Object.keys(audio).length > 0) this.send({ type: 'session.update', session: { audio } });
-
     const body: Record<string, unknown> = {};
-    if (settings.voice) body['voice'] = settings.voice;
-    if (settings.language !== undefined) body['language'] = settings.language;
-    if (settings.pace !== undefined) body['pace'] = settings.pace;
-    if (Object.keys(body).length === 0) return;
+    const instructions: string[] = [];
+    if (settings.language !== undefined && settings.language !== this.appliedLanguage) {
+      this.appliedLanguage = settings.language;
+      body['language'] = settings.language;
+      instructions.push(liveVoiceLanguageInstruction(settings.language));
+    }
+    if (settings.pace !== undefined && settings.pace !== this.appliedPace) {
+      this.appliedPace = settings.pace;
+      body['pace'] = settings.pace;
+      instructions.push(
+        liveVoicePaceInstruction(settings.pace) ?? 'Speak at your natural speaking pace.',
+      );
+    }
+    if (instructions.length === 0) return;
+    this.appendInstruction(instructions.join(' '));
     await fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(this.sessionId)}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: await getCsrfToken() },
       body: JSON.stringify(body),
     }).catch(() => undefined);
+  }
+
+  private appendInstruction(content: string): void {
+    this.send({ type: 'session.instructions.append', delegation_id: null, content });
+  }
+
+  /**
+   * Hands a photo or PDF to the delegated backend, the only part of the
+   * session that can see one, as a Responses input item; the live model is
+   * told quietly that it arrived so it can refer the user's questions to it.
+   */
+  async shareAttachment(file: File, downscale?: ImageDownscaler): Promise<VoiceAttachmentOutcome> {
+    if (!this.started || this.disposed || this.channel.readyState !== 'open') return 'unavailable';
+    if (this.toolBridge.busy) return 'busy';
+    const advertised = this.peer.sctp?.maxMessageSize;
+    const maxBytes =
+      typeof advertised === 'number' && Number.isFinite(advertised) && advertised > 0
+        ? Math.min(advertised, DEFAULT_DATA_CHANNEL_MESSAGE_BYTES)
+        : DEFAULT_DATA_CHANNEL_MESSAGE_BYTES;
+    const prepared = await prepareVoiceAttachment(file, maxBytes, downscale);
+    if (!prepared.ok) return prepared.reason;
+    const noun = prepared.kind === 'image' ? 'a photo' : 'a file';
+    this.send({
+      type: 'response.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: `The user shared ${noun} named "${prepared.name}" during the voice conversation. Look at it and answer what they ask about it.`,
+          },
+          prepared.content,
+        ],
+      },
+    });
+    this.send({ type: 'response.create' });
+    this.appendThinking(
+      `The user just shared ${noun} named "${prepared.name}". The backend can see it; send questions about it there.`,
+    );
+    return 'shared';
   }
 
   decideToolApproval(callId: string, decision: LiveVoiceToolDecision): Promise<void> {
@@ -467,7 +635,12 @@ export class LiveVoiceSession {
       return parsed;
     }
     const goal = liveVoiceWorkTaskGoal(request.arguments);
-    if (goal && this.callbacks.onStartWorkTask?.(goal)) return parsed;
+    if (goal && this.callbacks.onStartWorkTask?.(goal)) {
+      this.appendThinking(
+        `An AGI Work task started in the chat for: ${goal}. Its progress and result appear in the chat.`,
+      );
+      return parsed;
+    }
     return { status: 'completed', isError: true, output: WORK_TASK_NOT_STARTED };
   }
 
@@ -490,8 +663,8 @@ export class LiveVoiceSession {
 
   async close(): Promise<LiveSessionClosed> {
     if (this.disposed) return { reason: 'disposed', seconds: this.usageSeconds };
-    this.cancelBackendWork();
     this.closing = true;
+    this.cancelBackendWork();
     this.microphone.getTracks().forEach((track) => track.stop());
     this.audio.pause();
     let closed: LiveSessionClosed = { reason: 'close_requested', seconds: this.usageSeconds };
@@ -557,14 +730,42 @@ export class LiveVoiceSession {
 
   /**
    * A peer stuck in 'connected' with nothing arriving is the drop the connection
-   * state never reports, so liveness is any inbound event or inbound audio.
+   * state never reports, so liveness is any inbound event, inbound audio, or
+   * bytes the transport received. GPT-Live defines no ping event to ask for one.
    */
   private startKeepalive(): void {
     this.keepaliveTimer = window.setInterval(() => {
       if (this.closing || this.disposed) return;
-      this.send({ type: 'session.ping' });
-      if (this.started && Date.now() - this.lastInboundAt > KEEPALIVE_TIMEOUT_MS) this.fail(true);
+      void this.readInboundBytes().then((bytes) => {
+        if (this.closing || this.disposed) return;
+        if (bytes > this.inboundBytes) {
+          this.inboundBytes = bytes;
+          this.lastInboundAt = Date.now();
+        }
+        if (this.started && Date.now() - this.lastInboundAt > KEEPALIVE_TIMEOUT_MS) {
+          this.fail(true);
+        }
+      });
     }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  private async readInboundBytes(): Promise<number> {
+    try {
+      const report = await this.peer.getStats();
+      let total = 0;
+      report.forEach((stat: { type?: string; bytesReceived?: number }) => {
+        if (
+          stat.type &&
+          INBOUND_STAT_TYPES.has(stat.type) &&
+          typeof stat.bytesReceived === 'number'
+        ) {
+          total += stat.bytesReceived;
+        }
+      });
+      return total;
+    } catch {
+      return this.inboundBytes;
+    }
   }
 
   private fail(recoverable = false): void {
@@ -662,6 +863,8 @@ export class LiveVoiceSession {
       }
       case 'response.event': {
         const nested = parsed['event'] as { type?: string; item?: { type?: string } } | undefined;
+        this.backendMeter.observe(nested);
+        this.collectSources(nested);
         const delegationId = parsed['delegation_id'];
         const toolId = liveVoiceFunctionCallOf(nested)?.name ?? nested?.item?.type;
         if (typeof delegationId === 'string' && toolId) this.nameDelegation(delegationId, toolId);
@@ -678,6 +881,14 @@ export class LiveVoiceSession {
             for (const id of [...this.pendingDelegations.keys()]) this.endDelegation(id, succeeded);
           this.publishToolActivity();
         }
+        return;
+      }
+      case 'error': {
+        const error = parsed['error'] as { code?: unknown; message?: unknown } | undefined;
+        this.callbacks.onProviderError?.({
+          code: typeof error?.code === 'string' ? error.code : null,
+          message: typeof error?.message === 'string' ? error.message : '',
+        });
         return;
       }
       case 'session.usage.updated': {
@@ -721,9 +932,42 @@ export class LiveVoiceSession {
       const activity = this.pendingDelegations.get(delegationId);
       if (!activity) return;
       this.pendingDelegations.set(delegationId, { ...activity, state: 'timed_out' });
+      this.appendCommentary(`${activity.label} is taking longer than usual.`);
       this.publishToolActivity();
     }, descriptor.timeoutMs);
     this.delegationTimers.set(delegationId, timer);
+    this.progressTimers.set(
+      delegationId,
+      window.setTimeout(() => {
+        this.progressTimers.delete(delegationId);
+        const activity = this.pendingDelegations.get(delegationId);
+        if (activity?.state === 'running') this.appendCommentary(stillWorkingOn(activity.label));
+      }, SPOKEN_PROGRESS_DELAY_MS),
+    );
+  }
+
+  /**
+   * Status for the live model to say aloud while delegated work runs. It may
+   * paraphrase it; one per interval at most, so a busy turn does not chatter.
+   */
+  private appendCommentary(content: string): void {
+    const now = Date.now();
+    if (now - this.lastCommentaryAt < SPOKEN_PROGRESS_MIN_INTERVAL_MS) return;
+    this.lastCommentaryAt = now;
+    this.send({
+      type: 'session.commentary.append',
+      delegation_id: null,
+      content: progressNote(content),
+    });
+  }
+
+  /** Context the live model can use later without saying it now. */
+  private appendThinking(content: string): void {
+    this.send({
+      type: 'session.thinking.append',
+      delegation_id: null,
+      content: progressNote(content),
+    });
   }
 
   private holdDelegationTimers(): void {
@@ -750,6 +994,9 @@ export class LiveVoiceSession {
     const timer = this.delegationTimers.get(delegationId);
     if (timer !== undefined) window.clearTimeout(timer);
     this.delegationTimers.delete(delegationId);
+    const progress = this.progressTimers.get(delegationId);
+    if (progress !== undefined) window.clearTimeout(progress);
+    this.progressTimers.delete(delegationId);
     const activity = this.pendingDelegations.get(delegationId);
     this.pendingDelegations.delete(delegationId);
     if (succeeded && activity) this.completedTools.push(activity.toolId);
@@ -772,15 +1019,18 @@ export class LiveVoiceSession {
   }
 
   /**
-   * An explicit cancel for the delegated turn. Tearing the peer down on our
-   * side leaves the provider running the tool it was asked for, and billing it.
+   * GPT-Live has no command that cancels a Responses delegation; only
+   * session.close cancels queued backend work. Function tools this app runs
+   * are cancelled here, and the live model is told the task was stopped so it
+   * does not speak a result the user no longer wants.
    */
   cancelBackendWork(): void {
+    const hadWork = this.pendingDelegations.size > 0 || this.toolBridge.busy;
     for (const delegationId of [...this.pendingDelegations.keys()]) {
-      this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
       this.endDelegation(delegationId, false);
     }
     this.toolBridge.cancel();
+    if (hadWork && !this.closing) this.appendInstruction(TASK_STOPPED_INSTRUCTION);
     this.publishToolActivity();
   }
 
@@ -891,6 +1141,8 @@ export class LiveVoiceSession {
   private stopTimers(): void {
     for (const timer of this.delegationTimers.values()) window.clearTimeout(timer);
     this.delegationTimers.clear();
+    for (const timer of this.progressTimers.values()) window.clearTimeout(timer);
+    this.progressTimers.clear();
     if (this.levelTimer !== null) window.clearInterval(this.levelTimer);
     if (this.keepaliveTimer !== null) window.clearInterval(this.keepaliveTimer);
     if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);

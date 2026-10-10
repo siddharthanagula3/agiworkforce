@@ -1,3 +1,4 @@
+import { createRef } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,6 +14,7 @@ function renderComposer(overrides: Partial<Parameters<typeof VoiceComposer>[0]> 
     captionsOpen: false,
     deviceName: DEVICE,
     dockOpen: false,
+    dockTriggerRef: createRef<HTMLButtonElement>(),
     onChange: vi.fn(),
     onSubmit: vi.fn(),
     onToggleMute: vi.fn(),

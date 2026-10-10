@@ -19,7 +19,9 @@ import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-sear
  *
  * The counts are reported by the client that held the WebRTC session, so they
  * are untrusted input: they are clamped to sane bounds before being priced, and
- * a report that claims nothing writes nothing.
+ * a report that claims nothing writes nothing. The model is never taken from
+ * the report: a client naming a cheaper model would otherwise set its own rate,
+ * so the price always comes from the backend the server delegated to.
  */
 
 export const LIVE_VOICE_BACKEND_COST_SOURCE = 'live_voice_backend';
@@ -29,7 +31,6 @@ const MAX_TOKENS_PER_SESSION = 10_000_000;
 const MAX_SEARCH_CALLS_PER_SESSION = 500;
 
 export interface LiveVoiceBackendUsage {
-  model?: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
   cachedTokens?: number | null;
@@ -47,7 +48,7 @@ export interface RecordLiveVoiceBackendCostInput {
   provider: string;
   sessionId: string;
   surface?: string | null;
-  backendModel: string | null | undefined;
+  backendModel: string;
   reported: LiveVoiceBackendUsage;
 }
 
@@ -65,7 +66,7 @@ export interface LiveVoiceBackendCost {
 export function priceLiveVoiceBackend(
   input: Pick<RecordLiveVoiceBackendCostInput, 'provider' | 'backendModel' | 'reported'>,
 ): LiveVoiceBackendCost {
-  const model = input.reported.model?.trim() || input.backendModel?.trim() || null;
+  const model = input.backendModel.trim() || null;
   const promptTokens = clamp(input.reported.inputTokens, MAX_TOKENS_PER_SESSION);
   const completionTokens = clamp(input.reported.outputTokens, MAX_TOKENS_PER_SESSION);
   const cachedTokens = Math.min(

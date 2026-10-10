@@ -2,8 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { VISUAL_SOURCE_MESSAGE } from '@agiworkforce/types';
 
-import { VOICE_SESSION_STATUS, INITIAL_VOICE_SESSION_STATE } from '@agiworkforce/unified-chat';
+import {
+  VOICE_SESSION_EVENT,
+  VOICE_SESSION_STATUS,
+  INITIAL_VOICE_SESSION_STATE,
+} from '@agiworkforce/unified-chat';
 import { LIVE_SESSION_MESSAGE } from '@features/chat/lib/live-voice-session';
+import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 type ScanModule0 = typeof import('@/lib/visual/use-visual-session');
 
 const controller = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -185,6 +190,134 @@ describe('VoiceModeSurface reconnect state', () => {
       LIVE_SESSION_MESSAGE.reconnectFailed,
     );
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('VoiceModeSurface orb layout', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ focusMode: false });
+  });
+
+  it('keeps the focused orb in its own slot above the error row and composer', () => {
+    useVoiceSessionStore.setState({ focusMode: true });
+    controller.current = session({
+      state: {
+        ...INITIAL_VOICE_SESSION_STATE,
+        status: VOICE_SESSION_STATUS.error,
+        error: LIVE_SESSION_MESSAGE.reconnectFailed,
+      },
+    });
+    renderSurface({ variant: VOICE_SURFACE_VARIANT.empty });
+
+    const slot = screen.getByTestId('voice-orb-slot');
+    expect(slot.className).not.toMatch(/\bfixed\b/);
+    expect(slot.className).not.toMatch(/\binset-0\b/);
+    expect(slot.contains(screen.getByTestId('voice-orb'))).toBe(true);
+    const order = (node: Node) =>
+      slot.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(order(screen.getByTestId('voice-error'))).toBeTruthy();
+    expect(order(screen.getByTestId('voice-composer'))).toBeTruthy();
+  });
+});
+
+describe('VoiceModeSurface call notices', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ playbackBlocked: false, providerNotice: null });
+  });
+
+  it('offers a tap to hear the assistant when the browser blocked its audio', async () => {
+    const resumePlayback = vi.fn();
+    useVoiceSessionStore.setState({ playbackBlocked: true });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening },
+      resumePlayback,
+    });
+    renderSurface();
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'Tap to hear the assistant' }).click();
+    });
+    expect(resumePlayback).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a provider error as a plain notice while the call keeps running', () => {
+    useVoiceSessionStore.setState({ providerNotice: LIVE_SESSION_MESSAGE.providerError });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening },
+    });
+    renderSurface();
+
+    expect(screen.getByTestId('voice-provider-notice').textContent).toBe(
+      LIVE_SESSION_MESSAGE.providerError,
+    );
+    expect(screen.queryByTestId('voice-error')).toBeNull();
+  });
+});
+
+describe('VoiceModeSurface cards', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ sources: [] });
+  });
+
+  it('shows cited sources with the chat sources control and tool results with the chat timeline', async () => {
+    useVoiceSessionStore.setState({
+      sources: [{ url: 'https://example.com/hours', title: 'Opening hours' }],
+    });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening },
+      toolOutcomes: [
+        {
+          callId: 'call_1',
+          label: 'Checking your calendar',
+          output: 'Two meetings today',
+          isError: false,
+          files: [],
+        },
+      ],
+    });
+    renderSurface();
+
+    expect(screen.getByTestId('voice-sources').textContent).toContain('Sources');
+    const results = screen.getByTestId('voice-tool-results');
+    expect(results.textContent).toContain('Tool run complete');
+    await act(async () => {
+      (results.querySelector('button') as HTMLButtonElement).click();
+    });
+    expect(results.textContent).toContain('Checking your calendar');
+  });
+});
+
+describe('VoiceModeSurface usage limit', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ usageLimited: false });
+  });
+
+  it('presents a usage limit as a limit with a way back to text, not as a broken voice mode', async () => {
+    const exit = vi.fn();
+    const message = "Voice needs usage your plan doesn't include.";
+    useVoiceSessionStore.setState({ usageLimited: true });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.error, error: message },
+      exit,
+    });
+    renderSurface();
+
+    expect(screen.getByTestId('voice-usage-limit').textContent).toContain(message);
+    expect(screen.queryByTestId('voice-error')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Continue in text' }).click();
+    });
+    expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the usage limit once the session leaves the error state', () => {
+    useVoiceSessionStore.setState({
+      usageLimited: true,
+      session: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.error, error: 'x' },
+    });
+    useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
+    expect(useVoiceSessionStore.getState().usageLimited).toBe(false);
   });
 });
 

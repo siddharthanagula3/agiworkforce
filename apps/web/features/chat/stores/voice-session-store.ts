@@ -2,17 +2,25 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
-import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
+import {
+  isLiveVoice,
+  isLiveVoiceReasoning,
+  LIVE_DEFAULT_VOICE,
+  LIVE_VOICE_REASONING,
+  type LiveVoiceReasoning,
+} from '@features/chat/lib/live-voices';
 import type {
   LiveVoiceToolActivity,
   LiveVoiceToolOutcome,
 } from '@features/chat/lib/live-voice-session';
 import type { LiveVoicePendingApproval } from '@agiworkforce/cloud-contracts';
+import type { ResearchSource } from '@features/chat/stores/research-panel-store';
 import {
   INITIAL_VOICE_SESSION_STATE,
   isVoiceSessionActive,
   voiceSessionReducer,
   VOICE_SESSION_EVENT,
+  VOICE_SESSION_STATUS,
   type VoiceSessionEvent,
   type VoiceSessionState,
 } from '@agiworkforce/unified-chat';
@@ -46,6 +54,7 @@ interface VoiceSessionStoreState {
   settingsOpen: boolean;
   activityMessageId: string | null;
   intelligence: VoiceIntelligence;
+  reasoning: LiveVoiceReasoning;
   language: string;
   voice: string;
   pace: number;
@@ -55,6 +64,14 @@ interface VoiceSessionStoreState {
   toolOutcomes: readonly LiveVoiceToolOutcome[];
   paused: boolean;
   rejoinOffer: VoiceRejoinOffer | null;
+  /** The error on screen is a usage limit, which retrying cannot clear. */
+  usageLimited: boolean;
+  /** The browser blocked the assistant's audio until the user taps. */
+  playbackBlocked: boolean;
+  /** A provider error during a running call, shown without ending it. */
+  providerNotice: string | null;
+  /** Web sources the voice backend cited in this session. */
+  sources: readonly ResearchSource[];
 }
 
 export interface VoiceRejoinOffer {
@@ -75,11 +92,16 @@ interface VoiceSessionStoreActions {
   addToolOutcome: (outcome: LiveVoiceToolOutcome) => void;
   setPaused: (paused: boolean) => void;
   setRejoinOffer: (offer: VoiceRejoinOffer | null) => void;
+  setUsageLimited: (usageLimited: boolean) => void;
+  setPlaybackBlocked: (playbackBlocked: boolean) => void;
+  setProviderNotice: (providerNotice: string | null) => void;
+  setSources: (sources: readonly ResearchSource[]) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setActivityMessageId: (messageId: string | null) => void;
   setIntelligence: (intelligence: VoiceIntelligence) => void;
+  setReasoning: (reasoning: LiveVoiceReasoning) => void;
   setLanguage: (language: string) => void;
   setPace: (pace: number) => void;
 }
@@ -99,6 +121,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       session: INITIAL_VOICE_SESSION_STATE,
       ...PANELS_CLOSED,
       intelligence: VOICE_INTELLIGENCE.balanced,
+      reasoning: LIVE_VOICE_REASONING.instant,
       language: VOICE_LANGUAGE_AUTO,
       voice: LIVE_DEFAULT_VOICE,
       pace: VOICE_PACE_DEFAULT,
@@ -108,12 +131,17 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       toolOutcomes: [],
       paused: false,
       rejoinOffer: null,
+      usageLimited: false,
+      playbackBlocked: false,
+      providerNotice: null,
+      sources: [],
 
       resetOnLogout: () =>
         set({
           session: INITIAL_VOICE_SESSION_STATE,
           ...PANELS_CLOSED,
           intelligence: VOICE_INTELLIGENCE.balanced,
+          reasoning: LIVE_VOICE_REASONING.instant,
           language: VOICE_LANGUAGE_AUTO,
           voice: LIVE_DEFAULT_VOICE,
           pace: VOICE_PACE_DEFAULT,
@@ -123,16 +151,26 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           toolOutcomes: [],
           paused: false,
           rejoinOffer: null,
+          usageLimited: false,
+          playbackBlocked: false,
+          providerNotice: null,
+          sources: [],
         }),
 
       dispatch: (event) => {
         const session = voiceSessionReducer(get().session, event);
         if (session === get().session) return;
+        const usageLimited =
+          session.status === VOICE_SESSION_STATUS.error ? get().usageLimited : false;
         set(
           isVoiceSessionActive(session.status)
-            ? { session }
+            ? { session, usageLimited }
             : {
                 session,
+                usageLimited,
+                playbackBlocked: false,
+                providerNotice: null,
+                sources: [],
                 backendBusy: false,
                 toolActivity: [],
                 toolApprovals: [],
@@ -149,6 +187,10 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setToolApprovals: (toolApprovals) => set({ toolApprovals }),
       setPaused: (paused) => set({ paused }),
       setRejoinOffer: (rejoinOffer) => set({ rejoinOffer }),
+      setUsageLimited: (usageLimited) => set({ usageLimited }),
+      setPlaybackBlocked: (playbackBlocked) => set({ playbackBlocked }),
+      setProviderNotice: (providerNotice) => set({ providerNotice }),
+      setSources: (sources) => set({ sources }),
       addToolOutcome: (outcome) =>
         set((state) => ({
           toolOutcomes: [
@@ -164,6 +206,10 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setActivityMessageId: (activityMessageId) =>
         set(activityMessageId ? { activityMessageId, dockOpen: false } : { activityMessageId }),
       setIntelligence: (intelligence) => set({ intelligence }),
+      setReasoning: (reasoning) =>
+        set({
+          reasoning: isLiveVoiceReasoning(reasoning) ? reasoning : LIVE_VOICE_REASONING.instant,
+        }),
       setLanguage: (language) => set({ language }),
       setPace: (pace) => set({ pace: clampVoicePace(pace) }),
     }),
@@ -172,6 +218,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       version: STORE_VERSION,
       partialize: (state) => ({
         intelligence: state.intelligence,
+        reasoning: state.reasoning,
         language: state.language,
         voice: state.voice,
         pace: state.pace,

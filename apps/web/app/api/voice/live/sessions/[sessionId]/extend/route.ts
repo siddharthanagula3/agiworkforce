@@ -2,7 +2,7 @@ import 'server-only';
 
 export const runtime = 'nodejs';
 
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getVoiceLiveBackendModel } from '@agiworkforce/types';
 import {
   GOOGLE_USER_DATA_VOICE_MESSAGE,
   storedConversationCarriesGoogleUserData,
@@ -19,26 +19,21 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
-  estimateMicrousdOf,
   ManagedUsageRequestError,
   type ManagedUsageRequestReservation,
   reserveManagedUsageProviderStep,
 } from '@/lib/services/managed-usage-request-service';
-import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
-  LIVE_SESSION_MIN_BLOCK_SECONDS,
+  LIVE_VOICE_BLOCK_SECONDS,
   LIVE_VOICE_FEATURE,
-  liveSessionChargeMicrousd,
-  liveSessionMinutes,
-  liveSessionSecondsCoveredBy,
+  liveVoiceBlockChargeMicrousd,
 } from '@/lib/voice/live-voice-billing';
 import {
-  planVoiceSessionBlock,
   readVoiceReservation,
   voiceBlockOperationKey,
   voiceJsonError,
+  voiceReservationIdentity,
   voiceUsageErrorResponse,
-  type VoiceLimitResets,
 } from '../../lib/voice-session-budget';
 import {
   getVoiceSessionByProviderId,
@@ -54,13 +49,24 @@ const ExtendLiveSessionSchema = z.object({
     .number()
     .int()
     .min(INITIAL_BLOCK + 1),
-  settlement: z.object({
-    idempotencyKey: z.string().min(1).max(256),
-    leaseToken: z.string().min(1).max(256),
-    requestHash: z.string().min(1).max(256),
-  }),
 });
 
+function billingUnavailable(request: NextRequest): NextResponse {
+  return voiceUsageErrorResponse(
+    request,
+    new ManagedUsageRequestError(
+      'Managed usage billing is temporarily unavailable.',
+      503,
+      'billing_unavailable',
+    ),
+  );
+}
+
+/**
+ * Reserves the next one-minute block of a running session against the same
+ * usage budget chat draws on. A refusal names the window that refused it, and
+ * the tab ends the call when the block it already holds runs out.
+ */
 async function handleExtendLiveSession(
   request: NextRequest,
   context: { params: Promise<{ sessionId: string }> },
@@ -79,12 +85,7 @@ async function handleExtendLiveSession(
   try {
     body = ExtendLiveSessionSchema.parse(await request.json());
   } catch {
-    return voiceJsonError(
-      request,
-      400,
-      'invalid_request',
-      'A block and its settlement are required.',
-    );
+    return voiceJsonError(request, 400, 'invalid_request', 'The block to extend is required.');
   }
 
   const scoped = await getUserScopedDb(request);
@@ -103,10 +104,21 @@ async function handleExtendLiveSession(
   if (!record || record.status !== 'active') {
     return voiceJsonError(request, 409, 'voice_session_closed', 'This voice session has ended.');
   }
+  let entitlement: Awaited<ReturnType<typeof resolveEntitlementBundle>>;
+  try {
+    entitlement = await resolveEntitlementBundle(scoped.db, userId);
+  } catch (error) {
+    logger.error(
+      { event: 'live_voice_extension_failed', error, userId, sessionId },
+      'Live voice plan could not be read before extending the block',
+    );
+    return billingUnavailable(request);
+  }
+  const planTier = entitlement.plan;
+  const backendModelId = getVoiceLiveBackendModel(planTier);
   if (
     !(
-      modelKeepsInputsOutOfTraining(record.modelId) &&
-      modelKeepsInputsOutOfTraining(getRoutingSlotModel('voice_live_backend'))
+      modelKeepsInputsOutOfTraining(record.modelId) && modelKeepsInputsOutOfTraining(backendModelId)
     ) &&
     (await storedConversationCarriesGoogleUserData(
       scoped.db,
@@ -118,36 +130,28 @@ async function handleExtendLiveSession(
     return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
   }
 
-  const { settlement } = body;
-  const modelId = record.modelId;
-  const operationKey = voiceBlockOperationKey(body.block);
+  const identity = voiceReservationIdentity(record.id);
   const reservation: ManagedUsageRequestReservation = {
     db: scoped.db,
     userId,
-    idempotencyKey: settlement.idempotencyKey,
-    leaseToken: settlement.leaseToken,
-    requestHash: settlement.requestHash,
+    ...identity,
     estimatedCostMicrousd: 0,
     estimatedCostCents: 0,
     quotaFeature: LIVE_VOICE_FEATURE,
     provider: record.provider,
-    model: modelId,
+    model: record.modelId,
   };
-  const covered = (reservedMicrousd: number) =>
-    NextResponse.json(
-      { ceilingSeconds: liveSessionSecondsCoveredBy(reservedMicrousd, modelId) },
-      { headers },
-    );
+  const covered = () =>
+    NextResponse.json({ ceilingSeconds: body.block * LIVE_VOICE_BLOCK_SECONDS }, { headers });
 
-  let resetsAt: VoiceLimitResets | undefined;
   try {
-    const state = await readVoiceReservation({
-      db: scoped.db,
-      userId,
-      idempotencyKey: settlement.idempotencyKey,
-      requestHash: settlement.requestHash,
-      operationKey,
-    });
+    await touchVoiceSession({ db: scoped.db, userId, providerSessionId: sessionId }).catch(
+      (error: unknown) => {
+        logger.warn({ error, userId, sessionId }, 'Voice session could not be marked as seen');
+      },
+    );
+    const operationKey = voiceBlockOperationKey(body.block);
+    const state = await readVoiceReservation({ db: scoped.db, userId, ...identity, operationKey });
     if (!state) {
       return voiceJsonError(
         request,
@@ -156,18 +160,8 @@ async function handleExtendLiveSession(
         'This voice session has no reservation to extend.',
       );
     }
-    if (state.extensionStatus === 'extended') return covered(state.reservedMicrousd);
+    if (state.extensionStatus === 'extended') return covered();
 
-    const entitlement = await resolveEntitlementBundle(scoped.db, userId);
-    const planTier = entitlement.plan;
-    const block = await planVoiceSessionBlock({
-      db: scoped.db,
-      userId,
-      planTier,
-      catalogVersion: entitlement.catalogVersion,
-      modelId,
-    });
-    resetsAt = block.resetsAt;
     await reserveManagedUsageProviderStep({
       reservation,
       operationKey: voiceBlockOperationKey(INITIAL_BLOCK),
@@ -175,51 +169,24 @@ async function handleExtendLiveSession(
       planTier,
       isFlagship: false,
     });
-
-    let stepMicrousd = state.extensionMicrousd;
-    if (stepMicrousd === null) {
-      const blockSeconds = Math.max(block.blockSeconds, LIVE_SESSION_MIN_BLOCK_SECONDS);
-      await assertTierUnitAllowance({
-        db: scoped.db,
-        userId,
-        planTier,
-        unit: 'voice_minutes',
-        requestedUnits: liveSessionMinutes(
-          liveSessionSecondsCoveredBy(state.reservedMicrousd, modelId) + blockSeconds,
-        ),
-      });
-      stepMicrousd = liveSessionChargeMicrousd(blockSeconds, modelId) ?? 0;
-    }
-
-    const extended = await reserveManagedUsageProviderStep({
+    await reserveManagedUsageProviderStep({
       reservation,
       operationKey,
-      estimatedCostMicrousd: stepMicrousd,
+      estimatedCostMicrousd:
+        state.extensionMicrousd ??
+        liveVoiceBlockChargeMicrousd(record.modelId, backendModelId) ??
+        0,
       planTier,
       isFlagship: false,
     });
-    await touchVoiceSession({ db: scoped.db, userId, providerSessionId: sessionId }).catch(
-      (error: unknown) => {
-        logger.warn({ error, userId, sessionId }, 'Voice session could not be marked as seen');
-      },
-    );
-    return covered(estimateMicrousdOf(extended));
+    return covered();
   } catch (error) {
-    if (error instanceof ManagedUsageRequestError) {
-      return voiceUsageErrorResponse(request, error, resetsAt);
-    }
+    if (error instanceof ManagedUsageRequestError) return voiceUsageErrorResponse(request, error);
     logger.error(
       { event: 'live_voice_extension_failed', error, userId, sessionId },
       'Live voice block could not be extended',
     );
-    return voiceUsageErrorResponse(
-      request,
-      new ManagedUsageRequestError(
-        'Managed usage billing is temporarily unavailable.',
-        503,
-        'billing_unavailable',
-      ),
-    );
+    return billingUnavailable(request);
   }
 }
 

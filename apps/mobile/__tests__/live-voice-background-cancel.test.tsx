@@ -54,7 +54,7 @@ function backgroundApp() {
 function fakeSession(sessionId: string) {
   return {
     sessionId,
-    settlement: { idempotencyKey: 'k' },
+    settlement: { ceilingSeconds: 600 },
     close: mockClose,
     setMuted: jest.fn(),
   };

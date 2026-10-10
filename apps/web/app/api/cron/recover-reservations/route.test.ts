@@ -7,12 +7,14 @@ const {
   mockGetNeonDb,
   mockProcessPendingSettlements,
   mockReleaseExpiredFree,
+  mockSettleAbandonedVoice,
   mockLogger,
 } = vi.hoisted(() => ({
   mockVerifyCron: vi.fn(),
   mockGetNeonDb: vi.fn(),
   mockProcessPendingSettlements: vi.fn(),
   mockReleaseExpiredFree: vi.fn(),
+  mockSettleAbandonedVoice: vi.fn(),
   mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -32,6 +34,11 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
   releaseExpiredFreeTrialReservations: mockReleaseExpiredFree,
 }));
 
+vi.mock('@/app/api/voice/live/sessions/lib/voice-session-settlement', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  settleAbandonedVoiceSessions: mockSettleAbandonedVoice,
+}));
+
 import { GET } from './route';
 
 function cronRequest(): NextRequest {
@@ -45,6 +52,7 @@ beforeEach(() => {
   mockVerifyCron.mockReturnValue(true);
   mockGetNeonDb.mockReturnValue(SERVICE_DB);
   mockReleaseExpiredFree.mockResolvedValue({ released: 0, absorbedMicrousd: 0 });
+  mockSettleAbandonedVoice.mockResolvedValue(0);
   mockProcessPendingSettlements.mockResolvedValue({
     processed: 3,
     succeeded: 3,
@@ -63,6 +71,7 @@ describe('GET /api/cron/recover-reservations', () => {
       pending: 0,
       terminal: 0,
       free: { released: 0, absorbedMicrousd: 0 },
+      voice: 0,
     });
   });
 
@@ -137,5 +146,17 @@ describe('GET /api/cron/recover-reservations', () => {
     const response = await GET(cronRequest());
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toMatchObject({ error: expect.any(String) });
+  });
+
+  it('settles voice sessions whose tab stopped checking in, across users and as each owner', async () => {
+    mockSettleAbandonedVoice.mockResolvedValue(2);
+
+    const response = await GET(cronRequest());
+
+    expect(response.status).toBe(200);
+    expect(mockSettleAbandonedVoice).toHaveBeenCalledWith(
+      expect.objectContaining({ db: SERVICE_DB, userId: null, claimOwner: true, limit: 500 }),
+    );
+    expect(await response.json()).toMatchObject({ voice: 2 });
   });
 });

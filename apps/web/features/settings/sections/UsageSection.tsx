@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import { Progress, SegmentedControl, Spinner, translateUiPlural } from '@agiworkforce/ui';
 import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import {
+  estimateVoiceMinutes,
   formatCreditWindowUsage,
   formatCredits,
   formatPlanCreditAllowanceLine,
@@ -386,6 +387,31 @@ function AllowanceRow({ unit }: { unit: TierUnitUsage }) {
       percent={percent}
       detail={`${unit.consumed.toLocaleString()} of ${formatCount(limit, countKey, copy.one, copy.many)} used`}
     />
+  );
+}
+
+function VoiceEstimateRow({
+  credits,
+  minuteCredits,
+}: {
+  credits: AccountCredits | null;
+  minuteCredits: number | null;
+}) {
+  if (!credits) return null;
+  const minutes = estimateVoiceMinutes(
+    [credits.five_hour.remaining, credits.weekly.remaining, credits.monthly.remaining],
+    minuteCredits,
+  );
+  if (minutes === null) return null;
+  return (
+    <div style={ROW} data-testid="usage-voice-estimate">
+      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>Voice</span>
+      <span style={DETAIL}>
+        {minutes > 0
+          ? `About ${formatCount(minutes, 'counts.usageMinutes', 'minute', 'minutes')} of voice left at today's price`
+          : 'No voice left until a limit above resets'}
+      </span>
+    </div>
   );
 }
 
@@ -918,6 +944,10 @@ export function UsageSection() {
                   nowMs,
                   credits?.monthly,
                 )}
+              />
+              <VoiceEstimateRow
+                credits={credits}
+                minuteCredits={limits.data?.voiceMinuteCredits ?? null}
               />
               <RunningResponsesRow reading={limits.data?.responses ?? null} />
               {isFreePlan && (

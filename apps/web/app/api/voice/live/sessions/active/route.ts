@@ -8,9 +8,10 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { LIVE_SESSION_BLOCK_MINUTES } from '@/lib/voice/live-voice-billing';
+import { getVoiceLiveBackendModel } from '@agiworkforce/types';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
+import { settleAbandonedVoiceSessions } from '../lib/voice-session-settlement';
 import {
-  closeExpiredVoiceSessions,
   getActiveVoiceSessionForConversation,
   isVoiceSessionStoreReady,
   listVoiceSessionHistory,
@@ -42,11 +43,12 @@ async function handleReadVoiceSession(request: NextRequest) {
 
   // A tab that is closed, suspended or disconnected never posts the close, so
   // the row it left behind would stay open forever and offer itself back as a
-  // session to resume. Nothing runs longer than the block it can be billed for.
-  await closeExpiredVoiceSessions({
+  // session to resume. It is closed and settled a lease past its last check-in.
+  await settleAbandonedVoiceSessions({
     db: scoped.db,
     userId,
-    maxOpenSeconds: LIVE_SESSION_BLOCK_MINUTES * 60,
+    backendModelFor: async () =>
+      getVoiceLiveBackendModel((await resolveEntitlementBundle(scoped.db, userId)).plan),
   });
 
   const session = conversationId

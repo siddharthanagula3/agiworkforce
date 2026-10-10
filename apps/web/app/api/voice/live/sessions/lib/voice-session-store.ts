@@ -34,6 +34,8 @@ export interface VoiceSessionRecord {
 
 export interface CreateVoiceSessionInput {
   db: VoiceSessionDb;
+  /** Chosen before the session's usage is reserved, so the reservation can be named by it. */
+  id: string;
   userId: string;
   organizationId: string | null;
   conversationId: string;
@@ -117,23 +119,14 @@ function toRecord(row: VoiceSessionRow): VoiceSessionRecord {
   };
 }
 
-// A conversation carries at most one open session, so a second device starting
-// one closes the session it replaces rather than racing the partial index.
 export async function createVoiceSession(
   input: CreateVoiceSessionInput,
 ): Promise<VoiceSessionRecord | null> {
-  await closeVoiceSessionsForConversation({
-    db: input.db,
-    userId: input.userId,
-    conversationId: input.conversationId,
-    reason: 'superseded',
-  });
-
   const [row] = await input.db.query<VoiceSessionRow>(
     `insert into public.voice_sessions
-       (user_id, organization_id, conversation_id, provider, provider_session_id, model_id,
+       (id, user_id, organization_id, conversation_id, provider, provider_session_id, model_id,
         surface, voice, language, pace, active_tools)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+     values ($12, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
      on conflict (provider, provider_session_id) do nothing
      returning ${COLUMNS}`,
     [
@@ -148,6 +141,7 @@ export async function createVoiceSession(
       input.language,
       clampVoicePace(input.pace),
       JSON.stringify([...input.activeTools]),
+      input.id,
     ],
   );
   return row ? toRecord(row) : null;
@@ -247,28 +241,43 @@ export async function touchVoiceSession(input: {
 /**
  * A session that outlived the block it could be billed for is over, whatever
  * the tab that opened it managed to report. Closing it here is what stops a
- * reconnect being handed a provider session that stopped existing hours ago.
+ * reconnect being handed a provider session that stopped existing hours ago,
+ * and it closes at the end of that block, not now, so the voice minutes it
+ * spent stop where its tab last renewed it.
  */
 export async function closeExpiredVoiceSessions(input: {
   db: VoiceSessionDb;
-  userId: string;
+  /** One user's sessions, or null for every user's on a sweep. */
+  userId: string | null;
   maxOpenSeconds: number;
+  limit?: number;
   reason?: string;
-}): Promise<number> {
-  const rows = await input.db.query<{ id: string }>(
+}): Promise<VoiceSessionRecord[]> {
+  const rows = await input.db.query<VoiceSessionRow>(
     `update public.voice_sessions
-        set status = 'closed', close_reason = $3, closed_at = now(), last_seen_at = now()
-      where user_id = $1
-        and status = 'active'
-        and last_seen_at <= now() - make_interval(secs => $2)
-      returning id`,
+        set status = 'closed',
+            close_reason = $3,
+            closed_at = least(now(), last_seen_at + make_interval(secs => $2)),
+            last_seen_at = now()
+      where id in (
+        select id
+          from public.voice_sessions
+         where ($1::text is null or user_id = $1)
+           and status = 'active'
+           and last_seen_at <= now() - make_interval(secs => $2)
+         order by last_seen_at
+         limit $4
+         for update skip locked
+      )
+      returning ${COLUMNS}`,
     [
       input.userId,
       Math.max(1, Math.trunc(input.maxOpenSeconds)),
       (input.reason ?? 'expired').slice(0, 64),
+      Math.max(1, Math.trunc(input.limit ?? 100)),
     ],
   );
-  return rows.length;
+  return rows.map(toRecord);
 }
 
 /**
@@ -290,20 +299,25 @@ export function meteredVoiceSessionSeconds(
   return Math.max(elapsed, reportedSeconds);
 }
 
+/**
+ * A conversation carries at most one open session, so a second device starting
+ * one closes the session it replaces rather than racing the partial index. The
+ * closed records come back so the caller settles what they used.
+ */
 export async function closeVoiceSessionsForConversation(input: {
   db: VoiceSessionDb;
   userId: string;
   conversationId: string;
   reason: string;
-}): Promise<number> {
-  const rows = await input.db.query<{ id: string }>(
+}): Promise<VoiceSessionRecord[]> {
+  const rows = await input.db.query<VoiceSessionRow>(
     `update public.voice_sessions
         set status = 'closed', close_reason = $3, closed_at = now(), last_seen_at = now()
       where user_id = $1 and conversation_id = $2 and status = 'active'
-      returning id`,
+      returning ${COLUMNS}`,
     [input.userId, input.conversationId, input.reason.slice(0, 64)],
   );
-  return rows.length;
+  return rows.map(toRecord);
 }
 
 export async function listVoiceSessionHistory(

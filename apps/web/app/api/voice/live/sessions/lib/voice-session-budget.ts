@@ -11,6 +11,7 @@ import {
 } from '@/lib/server/capability-limit-resets';
 import {
   getPlanSessionUsageCapMicrousd,
+  getPlanUsageBudgetMicrousd,
   getPlanWeeklyUsageCapMicrousd,
 } from '@/lib/server/managed-usage-policy';
 import { getRollingUsage } from '@/lib/server/rolling-usage';
@@ -18,20 +19,28 @@ import { getSpendableCredits } from '@/lib/server/spendable-credits';
 import { CreditService } from '@/lib/services/credit-service';
 import {
   createManagedUsageErrorBody,
+  fingerprintManagedUsageRequest,
   type ManagedUsageRequestError,
 } from '@/lib/services/managed-usage-request-service';
-import {
-  LIVE_SESSION_CEILING_SECONDS,
-  liveSessionChargeMicrousd,
-  liveSessionSecondsCoveredBy,
-} from '@/lib/voice/live-voice-billing';
 
 export type VoiceLimitResets = Readonly<Record<string, string | null>>;
 
-export interface VoiceBlockPlan {
-  blockSeconds: number;
+export interface VoiceBudget {
+  /**
+   * False when the plan's own allowances, before any usage, cannot pay for a
+   * single block and no overage covers it. Waiting for a window to reset would
+   * never help, so the refusal must not say a limit was reached.
+   */
+  planFundsBlock: boolean;
+  /** When each window that could refuse the next block resets. */
   resetsAt: VoiceLimitResets;
 }
+
+export const VOICE_USAGE_NOT_IN_PLAN = {
+  code: 'voice_usage_not_in_plan',
+  message:
+    "Voice needs usage your plan doesn't include. Upgrade to talk with voice, or continue in text.",
+} as const;
 
 export interface VoiceReservationState {
   reservedMicrousd: number;
@@ -40,9 +49,33 @@ export interface VoiceReservationState {
 }
 
 export const VOICE_BLOCK_OPERATION_PREFIX = 'provider:';
+const VOICE_RESERVATION_KEY_PREFIX = 'agi.voice.live.';
+const VOICE_RESERVATION_OPERATION = 'voice_live_session';
 
 export function voiceBlockOperationKey(block: number): string {
   return `${VOICE_BLOCK_OPERATION_PREFIX}${block}`;
+}
+
+export interface VoiceReservationIdentity {
+  idempotencyKey: string;
+  requestHash: string;
+  leaseToken: string;
+}
+
+/**
+ * A session's reservation is named by its voice session record, so whatever
+ * holds the record, the route that closes it or the sweep that settles an
+ * abandoned one, can settle the reservation without the tab that opened it.
+ */
+export function voiceReservationIdentity(voiceSessionId: string): VoiceReservationIdentity {
+  return {
+    idempotencyKey: `${VOICE_RESERVATION_KEY_PREFIX}${voiceSessionId}`,
+    requestHash: fingerprintManagedUsageRequest({
+      operation: VOICE_RESERVATION_OPERATION,
+      voiceSessionId,
+    }),
+    leaseToken: voiceSessionId,
+  };
 }
 
 function amount(value: number | string | null | undefined): number | null {
@@ -51,13 +84,13 @@ function amount(value: number | string | null | undefined): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
 }
 
-export async function planVoiceSessionBlock(input: {
+export async function assessVoiceBudget(input: {
   db: DatabaseAdapter;
   userId: string;
   planTier: string;
   catalogVersion: number | null;
-  modelId: string;
-}): Promise<VoiceBlockPlan> {
+  blockMicrousd: number;
+}): Promise<VoiceBudget> {
   const allowance = { tier: input.planTier, catalogVersion: input.catalogVersion };
   const sessionCap = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCap = getPlanWeeklyUsageCapMicrousd(allowance);
@@ -67,26 +100,14 @@ export async function planVoiceSessionBlock(input: {
     CreditService.getBalance(input.db, input.userId),
     getSpendableCredits(input.db, input.userId),
   ]);
-  const monthlyRemaining =
-    balance === null
-      ? 0
-      : Math.min(
-          balance.credits_remaining_microusd,
-          balance.daily_remaining_microusd ?? Number.POSITIVE_INFINITY,
-        );
-  const planRemaining = Math.min(
-    sessionCap === null ? Number.POSITIVE_INFINITY : sessionCap - session.usedMicrousd,
-    weeklyCap === null ? Number.POSITIVE_INFINITY : weeklyCap - weekly.usedMicrousd,
-    monthlyRemaining,
-  );
   const overage = spendable.overageEnabled ? (spendable.availableMicrousd ?? 0) : 0;
-  const fullBlock = liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, input.modelId) ?? 0;
-  const budget = Math.min(Math.max(planRemaining, overage, 0), fullBlock);
+  const planAllowance = Math.min(
+    sessionCap ?? Number.POSITIVE_INFINITY,
+    weeklyCap ?? Number.POSITIVE_INFINITY,
+    getPlanUsageBudgetMicrousd(allowance),
+  );
   return {
-    blockSeconds: Math.min(
-      LIVE_SESSION_CEILING_SECONDS,
-      liveSessionSecondsCoveredBy(budget, input.modelId),
-    ),
+    planFundsBlock: planAllowance >= input.blockMicrousd || overage >= input.blockMicrousd,
     resetsAt: {
       rolling_five_hour_limit_reached: rollingResetAt(
         session.oldestAt,
