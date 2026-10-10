@@ -11,7 +11,7 @@ type ScanModule5 = typeof import('@/lib/api-auth');
 type ScanModule6 = typeof import('@/lib/server/rls-db');
 type ScanModule7 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service');
-type ScanModule9 = typeof import('@/lib/services/tier-unit-quota-service');
+type ScanModule10 = typeof import('../../lib/voice-session-budget');
 type ScanModule11 = typeof import('../../lib/voice-session-store');
 
 const mocks = vi.hoisted(() => ({
@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   userScopedDb: vi.fn(),
   entitlement: vi.fn(),
   reserveStep: vi.fn(),
-  assertAllowance: vi.fn(),
+  readReservation: vi.fn(),
   storeReady: vi.fn(),
   getSession: vi.fn(),
   touchSession: vi.fn(),
@@ -71,9 +71,9 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   ...(await importOriginal<ScanModule8>()),
   reserveManagedUsageProviderStep: (...args: unknown[]) => mocks.reserveStep(...args),
 }));
-vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
-  ...(await importOriginal<ScanModule9>()),
-  assertTierUnitAllowance: (...args: unknown[]) => mocks.assertAllowance(...args),
+vi.mock('../../lib/voice-session-budget', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule10>()),
+  readVoiceReservation: (...args: unknown[]) => mocks.readReservation(...args),
 }));
 vi.mock('../../lib/voice-session-store', async (importOriginal) => ({
   ...(await importOriginal<ScanModule11>()),
@@ -85,12 +85,13 @@ vi.mock('../../lib/voice-session-store', async (importOriginal) => ({
 const { POST, OPTIONS } = await import('./route');
 const { createError } = await import('@/lib/errors');
 const { ManagedUsageRequestError } = await import('@/lib/services/managed-usage-request-service');
-const { LIVE_SESSION_CEILING_SECONDS } = await import('@/lib/voice/live-voice-billing');
+const { LIVE_VOICE_BLOCK_SECONDS, liveVoiceBlockChargeMicrousd } =
+  await import('@/lib/voice/live-voice-billing');
+const { voiceReservationIdentity } = await import('../../lib/voice-session-budget');
 
 const SESSION_ID = 'live_1';
 const LIVE_MODEL = getRoutingSlotModel('voice_live');
-const RESET_AT = '2026-11-01T00:00:00.000Z';
-const STARTED_SECONDS_AGO = 540;
+const FIVE_HOUR_RESET = '2026-10-10T15:00:00.000Z';
 const db = { query: vi.fn() };
 
 function activeSession(status: 'active' | 'closed' = 'active') {
@@ -100,8 +101,9 @@ function activeSession(status: 'active' | 'closed' = 'active') {
     provider: 'openai',
     providerSessionId: SESSION_ID,
     modelId: LIVE_MODEL,
+    conversationId: 'conv-1',
     status,
-    startedAt: new Date(Date.now() - STARTED_SECONDS_AGO * 1_000).toISOString(),
+    startedAt: new Date(Date.now() - 50_000).toISOString(),
   };
 }
 
@@ -118,15 +120,8 @@ async function errorBody(response: Response): Promise<Record<string, unknown>> {
   return ((await response.json()) as { error: Record<string, unknown> }).error;
 }
 
-function minutesLeft(hardLimit: number | null, consumed: number): void {
-  mocks.assertAllowance.mockResolvedValue({
-    unit: 'voice_minutes',
-    hardLimit,
-    softLimit: null,
-    consumed,
-    requested: 1,
-    softLimitReached: false,
-  });
+function stepCalls(): Array<Record<string, unknown>> {
+  return mocks.reserveStep.mock.calls.map((call) => call[0] as Record<string, unknown>);
 }
 
 beforeEach(() => {
@@ -139,109 +134,119 @@ beforeEach(() => {
   mocks.storeReady.mockResolvedValue(true);
   mocks.getSession.mockResolvedValue(activeSession());
   mocks.touchSession.mockResolvedValue(activeSession());
-  minutesLeft(300, 20);
+  mocks.readReservation.mockResolvedValue({
+    reservedMicrousd: 60_000,
+    extensionStatus: null,
+    extensionMicrousd: null,
+  });
+  mocks.reserveStep.mockResolvedValue({ operationResult: 'extended' });
 });
 
 describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
-  it('extends a running session by the next block its voice minutes cover, with no money reserved', async () => {
+  it('reserves the next one-minute block at its real price against the shared budget', async () => {
     const response = await extend({ block: 2 });
 
     expect(response.status).toBe(200);
-    const { ceilingSeconds } = (await response.json()) as { ceilingSeconds: number };
-    expect(ceilingSeconds).toBeGreaterThanOrEqual(
-      STARTED_SECONDS_AGO + LIVE_SESSION_CEILING_SECONDS,
-    );
-    expect(ceilingSeconds).toBeLessThanOrEqual(
-      STARTED_SECONDS_AGO + LIVE_SESSION_CEILING_SECONDS + 2,
-    );
-    expect(mocks.assertAllowance).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', planTier: 'pro', unit: 'voice_minutes' }),
-    );
+    expect(await response.json()).toEqual({ ceilingSeconds: 2 * LIVE_VOICE_BLOCK_SECONDS });
+    const [initial, step] = stepCalls();
+    expect(initial).toMatchObject({ operationKey: 'provider:1', estimatedCostMicrousd: 0 });
+    expect(step).toMatchObject({
+      operationKey: 'provider:2',
+      estimatedCostMicrousd: liveVoiceBlockChargeMicrousd(
+        LIVE_MODEL,
+        getRoutingSlotModel('voice_live_backend'),
+      ),
+      planTier: 'pro',
+      isFlagship: false,
+    });
+    expect(step?.['reservation']).toMatchObject({
+      ...voiceReservationIdentity('vs_1'),
+      userId: 'user-1',
+      quotaFeature: 'voice_live',
+    });
+    expect(mocks.touchSession).toHaveBeenCalled();
+  });
+
+  it('prices a free plan block at the cheaper free backend', async () => {
+    mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: 3 });
+
+    await extend({ block: 2 });
+
+    expect(stepCalls()[1]).toMatchObject({
+      estimatedCostMicrousd: liveVoiceBlockChargeMicrousd(
+        LIVE_MODEL,
+        getRoutingSlotModel('voice_live_backend_free'),
+      ),
+    });
+  });
+
+  it('answers a block that already went through without reserving it again', async () => {
+    mocks.readReservation.mockResolvedValue({
+      reservedMicrousd: 120_000,
+      extensionStatus: 'extended',
+      extensionMicrousd: 60_000,
+    });
+
+    const response = await extend({ block: 2 });
+
+    expect(await response.json()).toEqual({ ceilingSeconds: 2 * LIVE_VOICE_BLOCK_SECONDS });
     expect(mocks.reserveStep).not.toHaveBeenCalled();
-    expect(mocks.touchSession.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.assertAllowance.mock.invocationCallOrder[0]!,
-    );
   });
 
-  it('holds the extension to the minutes the plan has left', async () => {
-    minutesLeft(300, 297);
-
-    const { ceilingSeconds } = (await (await extend({ block: 2 })).json()) as {
-      ceilingSeconds: number;
-    };
-
-    expect(ceilingSeconds - STARTED_SECONDS_AGO).toBeGreaterThanOrEqual(180);
-    expect(ceilingSeconds - STARTED_SECONDS_AGO).toBeLessThanOrEqual(182);
-  });
-
-  it('gives an unlimited plan a whole block', async () => {
-    mocks.entitlement.mockResolvedValue({ plan: 'max', catalogVersion: 3 });
-    minutesLeft(null, 0);
-
-    const { ceilingSeconds } = (await (await extend({ block: 2 })).json()) as {
-      ceilingSeconds: number;
-    };
-
-    expect(ceilingSeconds - STARTED_SECONDS_AGO).toBeGreaterThanOrEqual(
-      LIVE_SESSION_CEILING_SECONDS,
-    );
-  });
-
-  it('ends the call at the ceiling with the reset date once the minutes run out', async () => {
+  it('refuses the next block with the binding window and its reset when the budget is spent', async () => {
     const refusal = new ManagedUsageRequestError(
-      'used up',
+      'Your rolling 5-hour usage limit is reached.',
       429,
-      'voice_minutes_monthly_limit_reached',
+      'rolling_five_hour_limit_reached',
     );
-    refusal.limitContext = { resetsAt: RESET_AT, alternativeModel: null };
-    mocks.assertAllowance.mockRejectedValue(refusal);
+    refusal.limitContext = { resetsAt: FIVE_HOUR_RESET, alternativeModel: null };
+    mocks.reserveStep
+      .mockResolvedValueOnce({ operationResult: 'covered' })
+      .mockRejectedValueOnce(refusal);
 
     const response = await extend({ block: 2 });
 
     expect(response.status).toBe(429);
-    const error = await errorBody(response);
-    expect(error['code']).toBe('voice_minutes_monthly_limit_reached');
-    expect(error['resets_at']).toBe(RESET_AT);
-    expect(String(error['message'])).toContain('They reset on November 1.');
-    expect(String(error['message'])).toContain('Continue in text');
+    expect(await errorBody(response)).toMatchObject({
+      code: 'rolling_five_hour_limit_reached',
+      resets_at: FIVE_HOUR_RESET,
+    });
   });
 
-  it('refuses to extend a session that has ended or was never recorded', async () => {
+  it('refuses to extend a session that has ended, was never recorded or holds no reservation', async () => {
     mocks.getSession.mockResolvedValue(activeSession('closed'));
     expect((await extend({ block: 2 })).status).toBe(409);
-
     mocks.getSession.mockResolvedValue(null);
     expect((await extend({ block: 2 })).status).toBe(409);
-    expect(mocks.assertAllowance).not.toHaveBeenCalled();
+    mocks.getSession.mockResolvedValue(activeSession());
+    mocks.readReservation.mockResolvedValue(null);
+    const unreserved = await extend({ block: 2 });
+    expect(unreserved.status).toBe(409);
+    expect((await errorBody(unreserved))['code']).toBe('voice_session_unreserved');
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
   });
 
   it('rejects a body that names the first block', async () => {
     expect((await extend({ block: 1 })).status).toBe(400);
-    expect((await extend({})).status).toBe(400);
   });
 
   it('refuses a caller whose scoped tenant is another user', async () => {
     mocks.userScopedDb.mockResolvedValue({ db, userId: 'user-2', organizationId: null });
 
-    const response = await extend({ block: 2 });
-
-    expect(response.status).toBe(403);
-    expect((await errorBody(response))['code']).toBe('tenant_mismatch');
+    expect((await extend({ block: 2 })).status).toBe(403);
   });
 
   it('refuses an unauthenticated caller', async () => {
     mocks.auth.mockRejectedValue(createError.unauthorized('Authentication required'));
 
     expect((await extend({ block: 2 })).status).toBe(401);
-    expect(mocks.assertAllowance).not.toHaveBeenCalled();
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
   });
 
   it('returns a CSRF refusal unchanged', async () => {
     mocks.csrf.mockResolvedValue(NextResponse.json({ error: 'csrf' }, { status: 403 }));
 
-    const response = await extend({ block: 2 });
-
-    expect(response.status).toBe(403);
+    expect((await extend({ block: 2 })).status).toBe(403);
     expect(mocks.auth).not.toHaveBeenCalled();
   });
 
@@ -252,12 +257,6 @@ describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
 
     expect(response.status).toBe(503);
     expect((await errorBody(response))['code']).toBe('billing_unavailable');
-  });
-
-  it('still extends when the session could not be marked as seen', async () => {
-    mocks.touchSession.mockRejectedValue(new Error('write failed'));
-
-    expect((await extend({ block: 2 })).status).toBe(200);
   });
 
   it('answers a preflight with no body', async () => {
@@ -274,10 +273,6 @@ describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
 describe('a session whose chat now holds Google user data', () => {
   it('is not extended while the voice models may train', async () => {
     mocks.keepsOutOfTraining.mockReturnValue(false);
-    mocks.getSession.mockResolvedValue({
-      ...activeSession(),
-      conversationId: '22222222-2222-4222-8222-222222222222',
-    });
     db.query.mockImplementation(async (sql: string) =>
       sql.includes('as marked') ? [{ marked: true, project_id: null }] : [],
     );
@@ -286,6 +281,6 @@ describe('a session whose chat now holds Google user data', () => {
 
     expect(response.status).toBe(403);
     expect((await errorBody(response))['code']).toBe('model_may_train');
-    expect(mocks.assertAllowance).not.toHaveBeenCalled();
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
   });
 });

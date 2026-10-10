@@ -43,7 +43,7 @@ const MESSAGE = {
 
 const CSRF_HEADER = 'x-csrf-token';
 const REMOTE_CLOSE_REASONS_WITH_NOTICE = new Set(['expired', 'content', 'connection_lost']);
-const EXTEND_LEAD_MS = 60_000;
+const EXTEND_LEAD_MS = 15_000;
 const EXTEND_RETRY_MS = 10_000;
 const FIRST_EXTENSION_BLOCK = 2;
 

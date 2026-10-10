@@ -56,10 +56,11 @@ describe('clampVoicePace', () => {
 });
 
 describe('createVoiceSession', () => {
-  it('closes the conversation open session before recording the new one', async () => {
-    const { db, calls } = stubDb([[], [ROW]]);
+  it('records the session under the id its reservation was named by', async () => {
+    const { db, calls } = stubDb([[ROW]]);
     const record = await createVoiceSession({
       db,
+      id: 'vs_1',
       userId: 'user_1',
       organizationId: null,
       conversationId: 'conv_1',
@@ -73,8 +74,9 @@ describe('createVoiceSession', () => {
       activeTools: ['web_search'],
     });
 
-    expect(calls[0]?.[0]).toContain("set status = 'closed'");
-    expect(calls[1]?.[0]).toContain('insert into public.voice_sessions');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[0]).toContain('insert into public.voice_sessions');
+    expect(calls[0]?.[1]?.[11]).toBe('vs_1');
     expect(record).toMatchObject({
       id: 'vs_1',
       conversationId: 'conv_1',
@@ -85,9 +87,10 @@ describe('createVoiceSession', () => {
   });
 
   it('clamps the pace it writes rather than trusting the caller', async () => {
-    const { db, calls } = stubDb([[], [ROW]]);
+    const { db, calls } = stubDb([[ROW]]);
     await createVoiceSession({
       db,
+      id: 'vs_1',
       userId: 'user_1',
       organizationId: null,
       conversationId: 'conv_1',
@@ -100,7 +103,7 @@ describe('createVoiceSession', () => {
       pace: 99,
       activeTools: [],
     });
-    expect(calls[1]?.[1]?.[9]).toBe(4);
+    expect(calls[0]?.[1]?.[9]).toBe(4);
   });
 });
 
@@ -184,13 +187,13 @@ describe('close and history', () => {
 
 describe('closeExpiredVoiceSessions', () => {
   it('closes every session that has not been seen within the span one block covers', async () => {
-    const { db, calls } = stubDb([[{ id: 'vs_1' }, { id: 'vs_2' }]]);
+    const { db, calls } = stubDb([[ROW, { ...ROW, id: 'vs_2' }]]);
     const closed = await closeExpiredVoiceSessions({
       db,
       userId: 'user_1',
       maxOpenSeconds: 600,
     });
-    expect(closed).toBe(2);
+    expect(closed.map((record) => record.id)).toEqual(['vs_1', 'vs_2']);
     const [sql, params] = calls[0] ?? ['', []];
     expect(sql).toContain("status = 'active'");
     expect(sql).toContain('last_seen_at <= now() - make_interval');
@@ -199,6 +202,15 @@ describe('closeExpiredVoiceSessions', () => {
     expect(params[0]).toBe('user_1');
     expect(params[1]).toBe(600);
     expect(params[2]).toBe('expired');
+    expect(params[3]).toBe(100);
+  });
+
+  it('sweeps every user when no user is named', async () => {
+    const { db, calls } = stubDb([[]]);
+    await closeExpiredVoiceSessions({ db, userId: null, maxOpenSeconds: 600, limit: 25 });
+    expect(calls[0]?.[0]).toContain('$1::text is null or user_id = $1');
+    expect(calls[0]?.[1]?.[0]).toBeNull();
+    expect(calls[0]?.[1]?.[3]).toBe(25);
   });
 
   it('never opens the window wider than a whole second', async () => {
