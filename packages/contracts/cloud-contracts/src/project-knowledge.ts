@@ -12,6 +12,25 @@ export function managedCloudProjectKnowledgeFilePath(projectId: string, fileId: 
 
 export const PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION = 2;
 
+export const GOOGLE_DRIVE_KNOWLEDGE_IMPORT_MAX_FILES = 10;
+
+export const GoogleDriveKnowledgeImportRequestSchema = z
+  .object({
+    fileIds: z
+      .array(
+        z
+          .string()
+          .trim()
+          .regex(/^[A-Za-z0-9_-]{10,200}$/),
+      )
+      .min(1)
+      .max(GOOGLE_DRIVE_KNOWLEDGE_IMPORT_MAX_FILES),
+  })
+  .strict();
+export type GoogleDriveKnowledgeImportRequest = z.infer<
+  typeof GoogleDriveKnowledgeImportRequestSchema
+>;
+
 /**
  * `checksumSha256` is what the upload is authorized against, not metadata. The
  * server binds it into the upload authorization and refuses any body that
