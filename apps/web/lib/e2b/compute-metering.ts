@@ -3,7 +3,6 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import {
-  FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD,
   MICROUSD_PER_CENT,
   SANDBOX_COMPUTE_RATE_ENV,
   chargeMicrousdForProviderCost,
@@ -16,8 +15,15 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { getKeyValueStore } from '@/lib/server/key-value';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import {
+  FREE_BUDGET_REACHED_ERROR_CLASS,
+  beginFreeTrialRequest,
+  settleFreeTrialRequest,
+  transferFreeTrialHold,
+  type FreeTrialReservation,
+  type FreeTrialToolSpend,
+} from '@/lib/services/free-trial-service';
 import {
   recordSettledProviderCost,
   SANDBOX_COMPUTE_OPERATION,
@@ -117,11 +123,21 @@ interface SandboxComputeReservationBase {
   model: string;
 }
 
-export type SandboxComputeReservationRecord = SandboxComputeReservationBase &
-  (
-    | { fundingSource?: 'managed' }
-    | { fundingSource: 'platform-free'; quotaKey: string; settlementKey: string }
-  );
+export type SandboxComputeReservationRecord = SandboxComputeReservationBase & {
+  fundingSource?: 'managed' | 'free-windows';
+};
+
+/**
+ * A Free chat turn holds its account's whole remaining Free window, so a
+ * sandbox it starts takes its lifetime out of that hold.
+ */
+export interface FreeTurnSandboxHold {
+  reservation: FreeTrialReservation;
+  spend: FreeTrialToolSpend;
+}
+
+const FREE_WINDOWS_REFUSAL_MESSAGE =
+  'Your Free usage cannot cover sandbox time right now. It refills as earlier usage leaves the window, or upgrade for a higher limit.';
 
 export type SandboxComputeReservationOutcome =
   | { outcome: 'reserved'; reservation: SandboxComputeReservationRecord }
@@ -135,6 +151,61 @@ export interface SandboxComputeReservationInput {
   codeSessionId?: string | undefined;
   microusdPerSecond: number;
   ttlMs: number;
+  freeTurnHold?: FreeTurnSandboxHold | undefined;
+}
+
+function freeWindowsReservation(
+  userId: string,
+  record: SandboxComputeReservationRecord,
+): FreeTrialReservation {
+  return {
+    kind: 'free_trial',
+    userId,
+    requestId: record.idempotencyKey,
+    reservedMicrousd: record.estimatedCostMicrousd,
+  };
+}
+
+async function holdFreeWindows(input: {
+  userId: string;
+  requestId: string;
+  providerEstimateMicrousd: number;
+  leaseSeconds: number;
+  model: string;
+  conversationId?: string | undefined;
+  freeTurnHold?: FreeTurnSandboxHold | undefined;
+}): Promise<FreeTrialReservation | null> {
+  const turn = input.freeTurnHold;
+  if (!turn) {
+    const begun = await beginFreeTrialRequest({
+      userId: input.userId,
+      requestId: input.requestId,
+      estimatedMicrousd: input.providerEstimateMicrousd,
+      leaseSeconds: input.leaseSeconds,
+      provider: E2B_COMPUTE_PROVIDER_ID,
+      model: input.model,
+      ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+    });
+    return begun.ok ? begun.reservation : null;
+  }
+  if (!turn.spend.hold(input.providerEstimateMicrousd)) return null;
+  const moved = await transferFreeTrialHold({
+    parent: turn.reservation,
+    requestId: input.requestId,
+    reservedMicrousd: chargeMicrousdForProviderCost(input.providerEstimateMicrousd),
+    leaseSeconds: input.leaseSeconds,
+    provider: E2B_COMPUTE_PROVIDER_ID,
+    model: input.model,
+    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+  }).catch((error: unknown) => {
+    logger.error(
+      { error, userId: input.userId },
+      '[e2b] the Free turn hold could not be moved onto the sandbox',
+    );
+    return null;
+  });
+  if (!moved) turn.spend.settle(input.providerEstimateMicrousd, 0);
+  return moved;
 }
 
 function sandboxScopedDb(userId: string): DatabaseAdapter {
@@ -152,63 +223,53 @@ function reservationFailure(error: unknown): ManagedUsageRequestError {
 }
 
 /**
- * Holds the whole admitted lifetime before provisioning: against managed
- * credits on paid tiers, or against the platform-funded allowance on Free.
- * Unreserved compute is always refused.
+ * Holds the whole admitted lifetime before provisioning, against the plan's
+ * one usage budget at the rate-card price: managed credits on paid tiers, the
+ * Free usage windows on Free. Unreserved compute is always refused.
  */
 export async function reserveSandboxComputeInterval(
   input: SandboxComputeReservationInput,
 ): Promise<SandboxComputeReservationOutcome> {
   const ttlSeconds = Math.max(1, Math.ceil(input.ttlMs / MILLISECONDS_PER_SECOND));
   const providerEstimateMicrousd = Math.ceil(ttlSeconds * Math.max(0, input.microusdPerSecond));
-  const free = isFreeBillingPlanTier(input.planTier);
-  const estimatedCostMicrousd = free
-    ? providerEstimateMicrousd
-    : chargeMicrousdForProviderCost(providerEstimateMicrousd);
+  const estimatedCostMicrousd = chargeMicrousdForProviderCost(providerEstimateMicrousd);
   const model = input.templateId?.trim() || E2B_COMPUTE_PROVIDER_ID;
+  const requestHash = fingerprintManagedUsageRequest({
+    operation: SANDBOX_COMPUTE_OPERATION,
+    template: model,
+    conversationId: input.conversationId ?? null,
+    codeSessionId: input.codeSessionId ?? null,
+    ttlSeconds,
+  });
   try {
-    if (free) {
-      const store = getKeyValueStore();
-      if (!store) {
+    if (isFreeBillingPlanTier(input.planTier)) {
+      const requestId = `agi.e2b.free.${randomUUID()}`;
+      const held = await holdFreeWindows({
+        userId: input.userId,
+        requestId,
+        providerEstimateMicrousd,
+        leaseSeconds: ttlSeconds + RESERVATION_LEASE_SLACK_SECONDS,
+        model,
+        conversationId: input.conversationId,
+        freeTurnHold: input.freeTurnHold,
+      });
+      if (!held) {
         throw new ManagedUsageRequestError(
-          'Free sandbox capacity is temporarily unavailable.',
-          503,
-          'sandbox_quota_unavailable',
-        );
-      }
-      const now = new Date();
-      const day = now.toISOString().slice(0, 10);
-      const quotaKey = `agi:sandbox:free:${input.userId}:${day}`;
-      const settlementKey = `agi:sandbox:free:settled:${randomUUID()}`;
-      const retentionSeconds = 3 * 24 * 60 * 60;
-      await store.set(quotaKey, 0, { onlyIfAbsent: true, ttlSeconds: retentionSeconds });
-      const total = await store.increment(quotaKey, estimatedCostMicrousd);
-      if (total > FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD) {
-        await store.increment(quotaKey, -estimatedCostMicrousd);
-        throw new ManagedUsageRequestError(
-          'The Free sandbox allowance is used for today. Try again tomorrow.',
+          FREE_WINDOWS_REFUSAL_MESSAGE,
           429,
-          'free_sandbox_allowance_exhausted',
+          FREE_BUDGET_REACHED_ERROR_CLASS,
         );
       }
       return {
         outcome: 'reserved',
         reservation: {
-          fundingSource: 'platform-free',
-          idempotencyKey: `agi.e2b.free.${randomUUID()}`,
-          requestHash: fingerprintManagedUsageRequest({
-            operation: SANDBOX_COMPUTE_OPERATION,
-            template: model,
-            conversationId: input.conversationId ?? null,
-            codeSessionId: input.codeSessionId ?? null,
-            ttlSeconds,
-          }),
+          fundingSource: 'free-windows',
+          idempotencyKey: held.requestId,
+          requestHash,
           leaseToken: '',
-          estimatedCostMicrousd,
+          estimatedCostMicrousd: held.reservedMicrousd,
           provider: E2B_COMPUTE_PROVIDER_ID,
           model,
-          quotaKey,
-          settlementKey,
         },
       };
     }
@@ -216,13 +277,7 @@ export async function reserveSandboxComputeInterval(
       db: sandboxScopedDb(input.userId),
       userId: input.userId,
       idempotencyKey: `agi.e2b.compute.${randomUUID()}`,
-      requestHash: fingerprintManagedUsageRequest({
-        operation: SANDBOX_COMPUTE_OPERATION,
-        template: model,
-        conversationId: input.conversationId ?? null,
-        codeSessionId: input.codeSessionId ?? null,
-        ttlSeconds,
-      }),
+      requestHash,
       provider: E2B_COMPUTE_PROVIDER_ID,
       model,
       estimatedCostMicrousd,
@@ -262,7 +317,7 @@ export async function markSandboxComputeStarted(input: {
   userId: string;
   reservation: SandboxComputeReservationRecord;
 }): Promise<void> {
-  if (input.reservation.fundingSource === 'platform-free') return;
+  if (input.reservation.fundingSource === 'free-windows') return;
   await markManagedUsageProviderStarted({
     db: sandboxScopedDb(input.userId),
     userId: input.userId,
@@ -286,16 +341,14 @@ export async function releaseSandboxComputeReservation(input: {
   reason: string;
 }): Promise<void> {
   try {
-    if (input.reservation.fundingSource === 'platform-free') {
-      const store = getKeyValueStore();
-      if (!store) throw new Error('Free sandbox quota store unavailable');
-      const firstSettlement = await store.set(input.reservation.settlementKey, true, {
-        onlyIfAbsent: true,
-        ttlSeconds: 3 * 24 * 60 * 60,
+    if (input.reservation.fundingSource === 'free-windows') {
+      await settleFreeTrialRequest({
+        reservation: freeWindowsReservation(input.userId, input.reservation),
+        outcome: 'failed',
+        provider: input.reservation.provider,
+        model: input.reservation.model,
+        cost: { tokenMicrousd: 0, toolMicrousd: 0 },
       });
-      if (firstSettlement) {
-        await store.increment(input.reservation.quotaKey, -input.reservation.estimatedCostMicrousd);
-      }
       return;
     }
     await finalizeManagedUsageRequest({
@@ -406,39 +459,36 @@ export async function meterSandboxComputeInterval(
   // released nothing beyond the reservation, so charging past it would bill
   // credit that was never reserved.
   const costMicrousd = Math.min(
-    reservation.fundingSource === 'platform-free'
-      ? metered
-      : chargeMicrousdForProviderCost(metered),
+    chargeMicrousdForProviderCost(metered),
     reservation.estimatedCostMicrousd,
   );
   try {
-    if (reservation.fundingSource === 'platform-free') {
-      const store = getKeyValueStore();
-      if (!store) throw new Error('Free sandbox quota store unavailable');
-      const firstSettlement = await store.set(reservation.settlementKey, true, {
-        onlyIfAbsent: true,
-        ttlSeconds: 3 * 24 * 60 * 60,
+    if (reservation.fundingSource === 'free-windows') {
+      const settled = await settleFreeTrialRequest({
+        reservation: freeWindowsReservation(interval.userId, reservation),
+        outcome: 'completed',
+        provider: reservation.provider,
+        model: reservation.model,
+        cost: { tokenMicrousd: 0, toolMicrousd: metered },
       });
-      if (!firstSettlement) return costMicrousd;
-      const refundMicrousd = reservation.estimatedCostMicrousd - costMicrousd;
-      if (refundMicrousd > 0) await store.increment(reservation.quotaKey, -refundMicrousd);
+      if (settled === null) return costMicrousd;
       await recordSettledProviderCost({
         userId: interval.userId,
         provider: E2B_COMPUTE_PROVIDER_ID,
         model: reservation.model,
         actualCostCents: ledgerCentsFromMicrousd(metered),
         providerEstimatedCostMicrousd: metered,
-        customerCanonicalMicrousd: 0,
+        customerCanonicalMicrousd: settled,
         sourceRef: reservation.idempotencyKey,
         usage: {
           operation: SANDBOX_COMPUTE_OPERATION,
           sandboxMinutes: elapsedMs / MILLISECONDS_PER_MINUTE,
           sandbox_id: interval.sandboxId,
           close_reason: interval.reason,
-          funding_source: 'platform-free',
+          funding_source: 'free-windows',
         },
       });
-      return costMicrousd;
+      return settled;
     }
     // Metering runs from sandbox teardown and from the reclaim sweep, neither of
     // which carries a request connection, so the scope comes from the interval's

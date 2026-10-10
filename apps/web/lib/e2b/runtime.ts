@@ -63,6 +63,7 @@ import { egressNeedsProxy } from './network-policy';
 import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
 import { invalidateCachedProviderProxyAccess } from './provider-proxy-access-cache';
 import { mintProviderProxyToken } from './provider-proxy-token';
+import type { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import {
   getSandboxComputeMicrousdPerSecond,
   markSandboxComputeStarted,
@@ -732,14 +733,15 @@ export const getE2BExecutor = tracedCodeAction(
   'sandbox_provision',
   async function getE2BExecutor(
     scope?: E2BSessionScope,
-    onUnavailable?: (cause: E2BUnavailableCause) => void,
+    onUnavailable?: (cause: E2BUnavailableCause, refusal?: ManagedUsageRequestError) => void,
   ): Promise<E2BExecutor | null> {
     // The span is held rather than looked up: a refusal decided inside a nested
     // span would otherwise settle that one and leave this one ok.
     const provisionSpan = activeSpan();
+    let budgetRefusal: ManagedUsageRequestError | undefined;
     const refuse = (cause: E2BUnavailableCause): void => {
       provisionSpan?.refuse(cause, codeExecutionUnavailableMessage(cause));
-      onUnavailable?.(cause);
+      onUnavailable?.(cause, budgetRefusal);
     };
     const unavailable = (cause: E2BUnavailableCause): null => {
       refuse(cause);
@@ -854,17 +856,18 @@ export const getE2BExecutor = tracedCodeAction(
         ...(codeSessionId ? { codeSessionId } : {}),
         microusdPerSecond: provisioningRate,
         ttlMs: sandboxTimeoutMs,
+        freeTurnHold: scope.freeTurnHold,
       });
       if (reserved.outcome === 'refused') {
         logger.warn(
           { ...scopeLog(scope), code: reserved.error.code, status: reserved.error.status },
           '[e2b] refusing to provision: sandbox compute could not be reserved (fail-closed)',
         );
-        return reserved.error.code === 'free_sandbox_allowance_exhausted'
-          ? 'free-allowance-exhausted'
-          : reserved.error.status === 402 || reserved.error.status === 429
-            ? 'over-quota'
-            : 'no-capacity';
+        if (reserved.error.status === 402 || reserved.error.status === 429) {
+          budgetRefusal = reserved.error;
+          return 'over-quota';
+        }
+        return 'no-capacity';
       }
       computeReservation = reserved.reservation;
       reservationAdmittedForThisAttempt = true;
