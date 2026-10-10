@@ -74,6 +74,23 @@ export interface LiveVoiceProviderError {
 
 const PLAYBACK_BLOCKED_ERROR = 'NotAllowedError';
 
+export const SPOKEN_PROGRESS_DELAY_MS = 3_000;
+export const SPOKEN_PROGRESS_MIN_INTERVAL_MS = 8_000;
+const PROGRESS_NOTE_MAX_CHARS = 400;
+const GENERIC_PROGRESS_LABEL = 'Working on it';
+
+function progressNote(text: string): string {
+  return text.length > PROGRESS_NOTE_MAX_CHARS
+    ? `${text.slice(0, PROGRESS_NOTE_MAX_CHARS)}...`
+    : text;
+}
+
+function stillWorkingOn(label: string): string {
+  return label === GENERIC_PROGRESS_LABEL
+    ? 'Still working on it.'
+    : `Still working on it: ${label.charAt(0).toLowerCase()}${label.slice(1)}.`;
+}
+
 export type LiveTranscriptRole = 'user' | 'assistant';
 
 export interface LiveTranscriptTurn {
@@ -324,6 +341,9 @@ export class LiveVoiceSession {
   private pendingMuted: boolean | null = null;
   private inboundBytes = 0;
   private readonly backendMeter = new LiveVoiceBackendUsageMeter();
+  private readonly progressTimers = new Map<string, number>();
+  private lastCommentaryAt = Number.NEGATIVE_INFINITY;
+  private readonly notedApprovals = new Set<string>();
   private playbackRequested = false;
   private appliedLanguage: string | null;
   private appliedPace: number;
@@ -351,6 +371,13 @@ export class LiveVoiceSession {
       send: (event) => this.send(event),
       onApprovalsChanged: (approvals) => {
         if (approvals.length > 0) this.holdDelegationTimers();
+        const fresh = approvals.filter((approval) => !this.notedApprovals.has(approval.callId));
+        for (const approval of fresh) this.notedApprovals.add(approval.callId);
+        if (fresh.length > 0) {
+          this.appendThinking(
+            `Waiting for the user to approve on screen: ${fresh.map((approval) => approval.summary).join('; ')}.`,
+          );
+        }
         this.callbacks.onToolApprovals?.(approvals);
         this.publishToolActivity();
       },
@@ -549,7 +576,12 @@ export class LiveVoiceSession {
       return parsed;
     }
     const goal = liveVoiceWorkTaskGoal(request.arguments);
-    if (goal && this.callbacks.onStartWorkTask?.(goal)) return parsed;
+    if (goal && this.callbacks.onStartWorkTask?.(goal)) {
+      this.appendThinking(
+        `An AGI Work task started in the chat for: ${goal}. Its progress and result appear in the chat.`,
+      );
+      return parsed;
+    }
     return { status: 'completed', isError: true, output: WORK_TASK_NOT_STARTED };
   }
 
@@ -840,9 +872,42 @@ export class LiveVoiceSession {
       const activity = this.pendingDelegations.get(delegationId);
       if (!activity) return;
       this.pendingDelegations.set(delegationId, { ...activity, state: 'timed_out' });
+      this.appendCommentary(`${activity.label} is taking longer than usual.`);
       this.publishToolActivity();
     }, descriptor.timeoutMs);
     this.delegationTimers.set(delegationId, timer);
+    this.progressTimers.set(
+      delegationId,
+      window.setTimeout(() => {
+        this.progressTimers.delete(delegationId);
+        const activity = this.pendingDelegations.get(delegationId);
+        if (activity?.state === 'running') this.appendCommentary(stillWorkingOn(activity.label));
+      }, SPOKEN_PROGRESS_DELAY_MS),
+    );
+  }
+
+  /**
+   * Status for the live model to say aloud while delegated work runs. It may
+   * paraphrase it; one per interval at most, so a busy turn does not chatter.
+   */
+  private appendCommentary(content: string): void {
+    const now = Date.now();
+    if (now - this.lastCommentaryAt < SPOKEN_PROGRESS_MIN_INTERVAL_MS) return;
+    this.lastCommentaryAt = now;
+    this.send({
+      type: 'session.commentary.append',
+      delegation_id: null,
+      content: progressNote(content),
+    });
+  }
+
+  /** Context the live model can use later without saying it now. */
+  private appendThinking(content: string): void {
+    this.send({
+      type: 'session.thinking.append',
+      delegation_id: null,
+      content: progressNote(content),
+    });
   }
 
   private holdDelegationTimers(): void {
@@ -869,6 +934,9 @@ export class LiveVoiceSession {
     const timer = this.delegationTimers.get(delegationId);
     if (timer !== undefined) window.clearTimeout(timer);
     this.delegationTimers.delete(delegationId);
+    const progress = this.progressTimers.get(delegationId);
+    if (progress !== undefined) window.clearTimeout(progress);
+    this.progressTimers.delete(delegationId);
     const activity = this.pendingDelegations.get(delegationId);
     this.pendingDelegations.delete(delegationId);
     if (succeeded && activity) this.completedTools.push(activity.toolId);
@@ -1013,6 +1081,8 @@ export class LiveVoiceSession {
   private stopTimers(): void {
     for (const timer of this.delegationTimers.values()) window.clearTimeout(timer);
     this.delegationTimers.clear();
+    for (const timer of this.progressTimers.values()) window.clearTimeout(timer);
+    this.progressTimers.clear();
     if (this.levelTimer !== null) window.clearInterval(this.levelTimer);
     if (this.keepaliveTimer !== null) window.clearInterval(this.keepaliveTimer);
     if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);

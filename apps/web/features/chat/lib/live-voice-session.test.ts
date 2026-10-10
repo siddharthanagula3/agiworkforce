@@ -7,6 +7,8 @@ import {
   KEEPALIVE_INTERVAL_MS,
   KEEPALIVE_TIMEOUT_MS,
   LIVE_SESSION_MESSAGE,
+  SPOKEN_PROGRESS_DELAY_MS,
+  SPOKEN_PROGRESS_MIN_INTERVAL_MS,
   LiveVoiceSession,
   LiveVoiceSessionError,
   type LiveTranscriptTurn,
@@ -627,6 +629,107 @@ describe('LiveVoiceSession', () => {
     await expect(session.resumePlayback()).resolves.toBe(true);
     expect(play).toHaveBeenCalledTimes(2);
     play.mockRestore();
+  });
+
+  it('says a short status aloud when delegated work runs past a moment, and only once per interval', async () => {
+    vi.useFakeTimers();
+    try {
+      await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd1', tool: 'web_search' },
+      });
+      const commentary = () =>
+        peer.channel.sent.filter((event) => event['type'] === 'session.commentary.append');
+
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS - 1);
+      expect(commentary()).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(commentary()).toEqual([
+        expect.objectContaining({
+          delegation_id: null,
+          content: 'Still working on it: searching the web.',
+        }),
+      ]);
+
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd2', tool: 'web_search' },
+      });
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS);
+      expect(commentary()).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_MIN_INTERVAL_MS);
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd3', tool: 'web_search' },
+      });
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS);
+      expect(commentary()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves the live model a quiet note when an AGI Work hand-off starts in the chat', async () => {
+    const onStartWorkTask = vi.fn(() => true);
+    await startSession({ ...callbacks(), onStartWorkTask });
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: 'completed', output: 'Started.', isError: false }), {
+        status: 200,
+      }),
+    );
+
+    peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: {
+        type: 'response.output_item.done',
+        item: {
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'agi_work',
+          arguments: JSON.stringify({ goal: 'Plan the Lisbon trip' }),
+        },
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(peer.channel.sent).toContainEqual(
+        expect.objectContaining({
+          type: 'session.thinking.append',
+          delegation_id: null,
+          content: expect.stringContaining('Plan the Lisbon trip'),
+        }),
+      ),
+    );
+    expect(onStartWorkTask).toHaveBeenCalledWith('Plan the Lisbon trip');
+  });
+
+  it('stays quiet about work that finishes quickly', async () => {
+    vi.useFakeTimers();
+    try {
+      await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd1', tool: 'web_search' },
+      });
+      peer.channel.receive({
+        type: 'response.event',
+        delegation_id: 'd1',
+        event: { type: 'response.completed' },
+      });
+      await vi.advanceTimersByTimeAsync(SPOKEN_PROGRESS_DELAY_MS * 2);
+
+      expect(peer.channel.sent.map((event) => event['type'])).not.toContain(
+        'session.commentary.append',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a spoken success claim with no tool result behind it', async () => {
