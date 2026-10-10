@@ -2,8 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { VISUAL_SOURCE_MESSAGE } from '@agiworkforce/types';
 
-import { VOICE_SESSION_STATUS, INITIAL_VOICE_SESSION_STATE } from '@agiworkforce/unified-chat';
+import {
+  VOICE_SESSION_EVENT,
+  VOICE_SESSION_STATUS,
+  INITIAL_VOICE_SESSION_STATE,
+} from '@agiworkforce/unified-chat';
 import { LIVE_SESSION_MESSAGE } from '@features/chat/lib/live-voice-session';
+import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 type ScanModule0 = typeof import('@/lib/visual/use-visual-session');
 
 const controller = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -185,6 +190,40 @@ describe('VoiceModeSurface reconnect state', () => {
       LIVE_SESSION_MESSAGE.reconnectFailed,
     );
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('VoiceModeSurface usage limit', () => {
+  afterEach(() => {
+    useVoiceSessionStore.setState({ usageLimited: false });
+  });
+
+  it('presents a usage limit as a limit with a way back to text, not as a broken voice mode', async () => {
+    const exit = vi.fn();
+    const message = "Voice needs usage your plan doesn't include.";
+    useVoiceSessionStore.setState({ usageLimited: true });
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.error, error: message },
+      exit,
+    });
+    renderSurface();
+
+    expect(screen.getByTestId('voice-usage-limit').textContent).toContain(message);
+    expect(screen.queryByTestId('voice-error')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Continue in text' }).click();
+    });
+    expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the usage limit once the session leaves the error state', () => {
+    useVoiceSessionStore.setState({
+      usageLimited: true,
+      session: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.error, error: 'x' },
+    });
+    useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
+    expect(useVoiceSessionStore.getState().usageLimited).toBe(false);
   });
 });
 

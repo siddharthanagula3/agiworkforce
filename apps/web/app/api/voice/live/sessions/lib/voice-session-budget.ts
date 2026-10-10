@@ -11,6 +11,7 @@ import {
 } from '@/lib/server/capability-limit-resets';
 import {
   getPlanSessionUsageCapMicrousd,
+  getPlanUsageBudgetMicrousd,
   getPlanWeeklyUsageCapMicrousd,
 } from '@/lib/server/managed-usage-policy';
 import { getRollingUsage } from '@/lib/server/rolling-usage';
@@ -22,6 +23,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import {
   LIVE_SESSION_CEILING_SECONDS,
+  LIVE_SESSION_MIN_BLOCK_SECONDS,
   liveSessionChargeMicrousd,
   liveSessionSecondsCoveredBy,
 } from '@/lib/voice/live-voice-billing';
@@ -31,7 +33,19 @@ export type VoiceLimitResets = Readonly<Record<string, string | null>>;
 export interface VoiceBlockPlan {
   blockSeconds: number;
   resetsAt: VoiceLimitResets;
+  /**
+   * False when the plan's own allowances, before any usage, cannot pay for the
+   * shortest session and no overage covers it. Waiting for a window to reset
+   * would never help, so the refusal must not say a limit was reached.
+   */
+  planFundsMinimumBlock: boolean;
 }
+
+export const VOICE_USAGE_NOT_IN_PLAN = {
+  code: 'voice_usage_not_in_plan',
+  message:
+    "Voice needs usage your plan doesn't include. Upgrade to talk with voice, or continue in text.",
+} as const;
 
 export interface VoiceReservationState {
   reservedMicrousd: number;
@@ -81,8 +95,16 @@ export async function planVoiceSessionBlock(input: {
   );
   const overage = spendable.overageEnabled ? (spendable.availableMicrousd ?? 0) : 0;
   const fullBlock = liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, input.modelId) ?? 0;
+  const minimumBlock =
+    liveSessionChargeMicrousd(LIVE_SESSION_MIN_BLOCK_SECONDS, input.modelId) ?? 0;
+  const planAllowance = Math.min(
+    sessionCap ?? Number.POSITIVE_INFINITY,
+    weeklyCap ?? Number.POSITIVE_INFINITY,
+    getPlanUsageBudgetMicrousd(allowance),
+  );
   const budget = Math.min(Math.max(planRemaining, overage, 0), fullBlock);
   return {
+    planFundsMinimumBlock: planAllowance >= minimumBlock || overage >= minimumBlock,
     blockSeconds: Math.min(
       LIVE_SESSION_CEILING_SECONDS,
       liveSessionSecondsCoveredBy(budget, input.modelId),

@@ -26,6 +26,7 @@ const LABEL = {
   sending: 'Sending',
   cancelSending: 'Do not send that',
   retry: 'Try again',
+  continueInText: 'Continue in text',
   reconnecting: 'Reconnecting, attempt',
   shareCamera: 'Share your camera',
   stopCamera: 'Stop sharing your camera',
@@ -123,6 +124,7 @@ export function VoiceModeSurface({
   const setLanguage = useVoiceSessionStore((store) => store.setLanguage);
   const voice = useVoiceSessionStore((store) => store.voice);
   const setVoice = useVoiceSessionStore((store) => store.setVoice);
+  const usageLimited = useVoiceSessionStore((store) => store.usageLimited);
 
   const [typed, setTyped] = useState('');
   const [captionsOpen, setCaptionsOpen] = useState(false);
@@ -210,6 +212,22 @@ export function VoiceModeSurface({
       <span className="min-w-0">
         {LABEL.reconnecting} {session.reconnectAttempt} of {session.reconnectMaxAttempts}
       </span>
+    </div>
+  ) : status === VOICE_SESSION_STATUS.error && usageLimited ? (
+    <div
+      role="alert"
+      data-testid="voice-usage-limit"
+      className="flex items-center gap-2 text-sm text-[var(--chat-text-secondary)]"
+    >
+      <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">{error}</span>
+      <button
+        type="button"
+        onClick={exit}
+        className="min-h-6 shrink-0 rounded-full px-2 py-1 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+      >
+        {LABEL.continueInText}
+      </button>
     </div>
   ) : status === VOICE_SESSION_STATUS.error ? (
     <div

@@ -25,6 +25,7 @@ import {
   LIVE_SESSION_MESSAGE,
   LiveVoiceSession,
   LiveVoiceSessionError,
+  isUsageLimitError,
   readLiveSessionError,
   type LiveSessionClosed,
   type LiveTranscriptTurn,
@@ -51,7 +52,8 @@ interface SessionBudget {
 }
 
 type BlockExtension =
-  { ok: true; ceilingSeconds: number } | { ok: false; retry: boolean; notice: string };
+  | { ok: true; ceilingSeconds: number }
+  | { ok: false; retry: boolean; notice: string; usageLimited: boolean };
 
 export type { LiveTranscriptTurn as VoiceTranscriptTurn };
 
@@ -283,23 +285,36 @@ function requestBlockExtension(session: LiveVoiceSession, block: number): Promis
     .then(async (response): Promise<BlockExtension> => {
       if (!response.ok) {
         const error = await readLiveSessionError(response);
-        return { ok: false, retry: response.status >= 500, notice: error.message };
+        return {
+          ok: false,
+          retry: response.status >= 500,
+          notice: error.message,
+          usageLimited: isUsageLimitError(error),
+        };
       }
       const body = (await response.json()) as { ceilingSeconds?: unknown };
       return typeof body.ceilingSeconds === 'number'
         ? { ok: true, ceilingSeconds: body.ceilingSeconds }
-        : { ok: false, retry: true, notice: LIVE_SESSION_MESSAGE.sessionEnded };
+        : {
+            ok: false,
+            retry: true,
+            notice: LIVE_SESSION_MESSAGE.sessionEnded,
+            usageLimited: false,
+          };
     })
     .catch((): BlockExtension => ({
       ok: false,
       retry: true,
       notice: LIVE_SESSION_MESSAGE.connectionDropped,
+      usageLimited: false,
     }));
 }
 
-function endSessionAtLimit(notice: string): void {
+function endSessionAtLimit(notice: string, usageLimited: boolean): void {
   endLiveVoiceSession('usage_limit');
-  useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.fail, message: notice });
+  const store = useVoiceSessionStore.getState();
+  store.setUsageLimited(usageLimited);
+  store.dispatch({ type: VOICE_SESSION_EVENT.fail, message: notice });
 }
 
 async function extendSessionBudget(budget: SessionBudget): Promise<void> {
@@ -319,7 +334,9 @@ async function extendSessionBudget(budget: SessionBudget): Promise<void> {
     });
     return;
   }
-  scheduleBudget(budget, msUntilCeiling(budget), () => endSessionAtLimit(result.notice));
+  scheduleBudget(budget, msUntilCeiling(budget), () =>
+    endSessionAtLimit(result.notice, result.usageLimited),
+  );
 }
 
 function trackSessionBudget(session: LiveVoiceSession): void {
@@ -497,11 +514,14 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           error instanceof LiveVoiceSessionError
             ? error.message
             : LIVE_SESSION_MESSAGE.connectionFailed;
+        const usageLimited = isUsageLimitError(error);
         const recoverable =
-          !(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code);
+          !usageLimited &&
+          (!(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code));
         if (!(reconnectState.active && recoverable && scheduleVoiceReconnect())) {
           stopVoiceReconnect();
         }
+        store.setUsageLimited(usageLimited);
         store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
         throw error;
       },
