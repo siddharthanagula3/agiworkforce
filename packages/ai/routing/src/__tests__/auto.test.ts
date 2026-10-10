@@ -14,7 +14,9 @@ import { resolveAutoRoute } from '../auto';
 import { modelRegistry } from '@agiworkforce/model-registry';
 
 const FAST_MODEL_ID = getRoutingSlotModel('workhorse_general');
-const CODING_PREMIUM_MODEL_ID = getRoutingSlotModel('flagship_coding');
+const FLAGSHIP_CODING_MODEL_ID = getRoutingSlotModel('flagship_coding');
+const FLAGSHIP_GENERAL_MODEL_ID = getRoutingSlotModel('flagship_general');
+const FLAGSHIP_MODEL_IDS = [FLAGSHIP_CODING_MODEL_ID, FLAGSHIP_GENERAL_MODEL_ID];
 const CODING_BALANCED_MODEL_ID = getRoutingSlotModel('coding_balanced');
 const CODING_ESCALATION_MODEL_ID = getRoutingSlotModel('escalation_coding');
 const SEARCH_PREMIUM_MODEL_ID = getRoutingSlotModel('search_premium');
@@ -71,7 +73,7 @@ describe('resolveAutoRoute', () => {
     });
   });
 
-  it('single Auto routes a hard coding task to the premium band on a max tier', () => {
+  it('single Auto steps a hard coding task up to the premium band, never a flagship, on max', () => {
     const result = resolveAutoRoute({
       selection: 'auto',
       taskType: 'coding',
@@ -81,10 +83,11 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: CODING_PREMIUM_MODEL_ID,
+      modelKey: CODING_BALANCED_MODEL_ID,
       requestedProfile: 'premium',
       effectiveProfile: 'premium',
     });
+    expect(FLAGSHIP_MODEL_IDS).not.toContain(CODING_BALANCED_MODEL_ID);
   });
 
   it('single Auto clamps its computed premium band to the free tier maximum', () => {
@@ -110,7 +113,7 @@ describe('resolveAutoRoute', () => {
   it('single Auto falls back to the static balanced band for an unmapped task', () => {
     const result = resolveAutoRoute({
       selection: 'auto',
-      taskType: 'general',
+      taskType: 'multimodal',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
     });
@@ -122,13 +125,13 @@ describe('resolveAutoRoute', () => {
     });
   });
 
-  it('affordability: skips the flagship the budget cannot cover and picks the best affordable slot', () => {
+  it('affordability: a budget that covers the balanced coding slot keeps it', () => {
     const result = resolveAutoRoute({
       selection: 'auto',
       taskType: 'coding',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
-      budgetRemainingCents: 2.0, // premium route unaffordable; balanced route fits
+      budgetRemainingCents: 2.0,
       estimatedInputTokens: 1000,
       estimatedOutputTokens: 1000,
     });
@@ -178,16 +181,15 @@ describe('resolveAutoRoute', () => {
       estimatedOutputTokens: 1000,
     });
 
-    expect(result).toMatchObject({ status: 'selected', modelKey: CODING_PREMIUM_MODEL_ID });
+    expect(result).toMatchObject({ status: 'selected', modelKey: CODING_BALANCED_MODEL_ID });
   });
 
   it('affordability: rejects a long request when only its short-context estimate fits', () => {
     const request = {
-      selection: 'auto-premium',
-      taskType: 'reasoning',
-      subscriptionTier: 'max',
+      selection: 'auto',
+      taskType: 'long_context',
+      subscriptionTier: 'pro',
       trustMode: 'managed_cloud',
-      usOnly: true,
     } as const;
     const withoutBudget = resolveAutoRoute(request);
     expect(withoutBudget.status).toBe('selected');
@@ -240,7 +242,7 @@ describe('resolveAutoRoute', () => {
     });
   });
 
-  it('uses the premium coding slot when the tier permits it', () => {
+  it('never reaches a flagship from the premium coding band, as a pick or a fallback', () => {
     const result = resolveAutoRoute({
       selection: 'auto-premium',
       taskType: 'coding',
@@ -250,19 +252,24 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: CODING_PREMIUM_MODEL_ID,
+      modelKey: CODING_BALANCED_MODEL_ID,
       effectiveProfile: 'premium',
     });
     const fallbacks = result.status === 'selected' ? result.fallbacks : [];
-    const sameModel = fallbacks.filter((entry) => entry.modelKey === CODING_PREMIUM_MODEL_ID);
-    const substitutes = fallbacks.filter((entry) => entry.modelKey !== CODING_PREMIUM_MODEL_ID);
+    expect(fallbacks.map((entry) => entry.modelKey)).not.toEqual(
+      expect.arrayContaining([FLAGSHIP_CODING_MODEL_ID]),
+    );
+    expect(fallbacks.map((entry) => entry.modelKey)).not.toEqual(
+      expect.arrayContaining([FLAGSHIP_GENERAL_MODEL_ID]),
+    );
+    const sameModel = fallbacks.filter((entry) => entry.modelKey === CODING_BALANCED_MODEL_ID);
+    const substitutes = fallbacks.filter((entry) => entry.modelKey !== CODING_BALANCED_MODEL_ID);
     expect(fallbacks.indexOf(substitutes[0]!)).toBe(sameModel.length);
     // A fallback never repeats a provider, so a preferred substitute is offered
     // only when some managed route serves it from outside the selected one.
     const selectedProvider = result.status === 'selected' ? result.provider : null;
-    const reachableSubstitutes = [CODING_BALANCED_MODEL_ID, CODING_ESCALATION_MODEL_ID].filter(
-      (modelKey) =>
-        listManagedRoutesForModel(modelKey).some((route) => route.provider !== selectedProvider),
+    const reachableSubstitutes = [CODING_ESCALATION_MODEL_ID].filter((modelKey) =>
+      listManagedRoutesForModel(modelKey).some((route) => route.provider !== selectedProvider),
     );
     expect(reachableSubstitutes.length).toBeGreaterThan(0);
     expect(
@@ -300,8 +307,9 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: OPENAI_DEFAULT_MODEL_ID,
+      modelKey: FAST_MODEL_ID,
     });
+    expect(FLAGSHIP_MODEL_IDS).not.toContain(FAST_MODEL_ID);
     expect(US_ONLY_EXCLUDED_PROVIDERS).not.toContain(
       result.status === 'selected' ? result.provider : '',
     );
@@ -550,7 +558,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: CODING_PREMIUM_MODEL_ID,
+      modelKey: CODING_BALANCED_MODEL_ID,
       effectiveProfile: 'premium',
     });
   });
@@ -566,7 +574,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: CODING_PREMIUM_MODEL_ID,
+      modelKey: CODING_BALANCED_MODEL_ID,
       harnessId: 'anthropic/messages',
     });
   });
@@ -733,7 +741,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: CODING_PREMIUM_MODEL_ID,
+      modelKey: CODING_BALANCED_MODEL_ID,
       effectiveProfile: 'premium',
     });
   });
@@ -791,7 +799,10 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
       capabilityDocument: sessionDocument(),
       capabilityRequirements: [{ capabilityId: 'canUseDeepResearch', strength: 'optional' }],
     });
-    expect(deniedOptional).toMatchObject({ status: 'selected', modelKey: CODING_PREMIUM_MODEL_ID });
+    expect(deniedOptional).toMatchObject({
+      status: 'selected',
+      modelKey: CODING_BALANCED_MODEL_ID,
+    });
 
     const optionalWithoutDocument = resolveAutoRoute({
       selection: 'auto-premium',
@@ -802,7 +813,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
     });
     expect(optionalWithoutDocument).toMatchObject({
       status: 'selected',
-      modelKey: CODING_PREMIUM_MODEL_ID,
+      modelKey: CODING_BALANCED_MODEL_ID,
     });
   });
 });
@@ -811,7 +822,7 @@ describe('resolveAutoRoute tier slot admission', () => {
   it('refuses an explicit flagship selection on tiers whose allowed slots exclude it', () => {
     for (const subscriptionTier of ['free', 'basic', 'pro'] as const) {
       const result = resolveAutoRoute({
-        selection: CODING_PREMIUM_MODEL_ID,
+        selection: FLAGSHIP_CODING_MODEL_ID,
         taskType: 'coding',
         subscriptionTier,
         trustMode: 'managed_cloud',
@@ -826,7 +837,7 @@ describe('resolveAutoRoute tier slot admission', () => {
 
   it('still admits the same explicit flagship selection on a tier that allows its slot', () => {
     const result = resolveAutoRoute({
-      selection: CODING_PREMIUM_MODEL_ID,
+      selection: FLAGSHIP_CODING_MODEL_ID,
       taskType: 'coding',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
@@ -834,7 +845,7 @@ describe('resolveAutoRoute tier slot admission', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: CODING_PREMIUM_MODEL_ID,
+      modelKey: FLAGSHIP_CODING_MODEL_ID,
       reason: 'explicit',
     });
   });
@@ -859,12 +870,12 @@ describe('resolveAutoRoute tier slot admission', () => {
       taskType: 'coding',
       subscriptionTier: 'free',
       trustMode: 'managed_cloud',
-      currentModelKey: CODING_PREMIUM_MODEL_ID,
+      currentModelKey: FLAGSHIP_CODING_MODEL_ID,
       previousTaskType: 'coding',
     });
 
     expect(result).toMatchObject({ status: 'selected' });
-    expect(result).not.toMatchObject({ modelKey: CODING_PREMIUM_MODEL_ID });
+    expect(result).not.toMatchObject({ modelKey: FLAGSHIP_CODING_MODEL_ID });
     expect(result).not.toMatchObject({ reason: 'continuity' });
   });
 });

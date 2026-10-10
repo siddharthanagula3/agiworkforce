@@ -40372,10 +40372,17 @@
       "profileOrder": ["economy", "balanced", "premium"],
       "autoProfileByTask": {
         "simple_chat": "economy",
+        "general": "economy",
+        "creative_writing": "economy",
         "coding": "premium",
         "reasoning": "premium",
         "agentic": "premium",
+        "long_context": "balanced",
         "computer-use": "premium"
+      },
+      "slotBackups": {
+        "workhorse_general": ["reasoning_economy"],
+        "coding_fast": ["reasoning_economy"]
       },
       "tierMaximumProfiles": {
         "free": "economy",
@@ -40387,7 +40394,13 @@
       },
       "tierAllowedSlots": {
         "free": ["free_workhorse", "free_workhorse_fast", "router_zero_cost"],
-        "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "router_zero_cost"],
+        "basic": [
+          "workhorse_general",
+          "reasoning_economy",
+          "coding_fast",
+          "vision_fast",
+          "router_zero_cost"
+        ],
         "pro": [
           "workhorse_general",
           "general_balanced",
@@ -40402,6 +40415,7 @@
           "search_premium",
           "computer_use_balanced",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ],
         "max": [
@@ -40422,6 +40436,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ],
         "enterprise": [
@@ -40442,6 +40457,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ],
         "byok": [
@@ -40462,6 +40478,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
+          "vision_fast",
           "router_zero_cost"
         ]
       },
@@ -40593,9 +40610,9 @@
           "requiredCapabilities": ["textInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["general_balanced", "workhorse_general"],
-            "premium": ["general_balanced", "flagship_general", "workhorse_general"]
+            "premium": ["general_balanced", "workhorse_general"]
           },
           "benchmarkWeights": { "mmlu": 1 }
         },
@@ -40603,9 +40620,9 @@
           "requiredCapabilities": ["textInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["general_balanced", "workhorse_general"],
-            "premium": ["flagship_general", "general_balanced", "workhorse_general"]
+            "premium": ["general_balanced", "workhorse_general"]
           },
           "benchmarkWeights": { "mmlu": 1 }
         },
@@ -40615,7 +40632,7 @@
           "preferredSlots": {
             "economy": ["coding_fast", "workhorse_general"],
             "balanced": ["coding_balanced", "escalation_coding", "workhorse_general"],
-            "premium": ["flagship_coding", "coding_balanced", "escalation_coding"]
+            "premium": ["coding_balanced", "escalation_coding"]
           },
           "benchmarkWeights": { "swebench": 0.7, "humaneval": 0.3 }
         },
@@ -40625,7 +40642,7 @@
           "preferredSlots": {
             "economy": ["reasoning_economy", "workhorse_general"],
             "balanced": ["reasoning_balanced", "reasoning_economy"],
-            "premium": ["reasoning_balanced", "flagship_general", "reasoning_economy"]
+            "premium": ["reasoning_balanced", "reasoning_economy"]
           },
           "benchmarkWeights": { "gpqa": 0.55, "aime": 0.45 }
         },
@@ -40633,9 +40650,9 @@
           "requiredCapabilities": ["textInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["creative_balanced", "general_balanced"],
-            "premium": ["creative_premium", "creative_balanced"]
+            "premium": ["creative_balanced"]
           },
           "benchmarkWeights": {}
         },
@@ -40643,7 +40660,7 @@
           "requiredCapabilities": ["textInput", "imageInput", "textOutput"],
           "requiredHarnessFeatures": [],
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["multimodal_balanced", "workhorse_general"],
             "premium": ["multimodal_balanced", "workhorse_general"]
           },
@@ -40654,9 +40671,9 @@
           "requiredHarnessFeatures": [],
           "minimumContextTokens": 50000,
           "preferredSlots": {
-            "economy": ["workhorse_general"],
+            "economy": ["workhorse_general", "vision_fast"],
             "balanced": ["long_context_balanced", "workhorse_general"],
-            "premium": ["long_context_balanced", "flagship_general", "workhorse_general"]
+            "premium": ["long_context_balanced", "workhorse_general"]
           },
           "benchmarkWeights": {}
         },
@@ -40676,7 +40693,7 @@
           "preferredSlots": {
             "economy": ["coding_fast", "workhorse_general"],
             "balanced": ["general_balanced", "coding_balanced"],
-            "premium": ["flagship_general", "flagship_coding"]
+            "premium": ["general_balanced", "coding_balanced"]
           },
           "benchmarkWeights": { "swebench": 0.5, "mmlu": 0.5 }
         },
@@ -40686,7 +40703,7 @@
           "preferredSlots": {
             "economy": ["computer_use_balanced"],
             "balanced": ["computer_use_balanced"],
-            "premium": ["computer_use_premium", "computer_use_balanced"]
+            "premium": ["computer_use_balanced"]
           },
           "benchmarkWeights": { "osWorldVerified": 1 }
         },
@@ -40718,12 +40735,12 @@
           "description": "Shared router zero cost route. Model and provider are selected by the canonical registry."
         },
         "general_fast": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "General Fast",
           "description": "Shared general fast route. Model and provider are selected by the canonical registry."
         },
         "workhorse_general": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "Workhorse General",
           "description": "Shared workhorse general route. Model and provider are selected by the canonical registry."
         },
@@ -40743,7 +40760,7 @@
           "description": "Shared flagship general route. Model and provider are selected by the canonical registry."
         },
         "coding_fast": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "Coding Fast",
           "description": "Shared coding fast route. Model and provider are selected by the canonical registry."
         },
@@ -40823,7 +40840,7 @@
           "description": "Shared long context balanced route. Model and provider are selected by the canonical registry."
         },
         "search_fast": {
-          "modelKey": "gemini-3.5-flash-lite",
+          "modelKey": "gpt-6-luna",
           "label": "Search Fast",
           "description": "Shared search fast route. Model and provider are selected by the canonical registry."
         },

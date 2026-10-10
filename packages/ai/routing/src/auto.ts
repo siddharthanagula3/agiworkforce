@@ -137,6 +137,7 @@ interface AutoPolicy {
   };
   tasks: Record<RoutingTaskType, AutoTaskPolicy>;
   slots: Record<string, AutoSlotPolicy>;
+  slotBackups?: Record<string, readonly string[]>;
   taskFamilies?: Record<string, TaskFamilyPolicyEntry>;
 }
 
@@ -433,6 +434,7 @@ export interface SelectedAutoRoute {
     | 'capability_fallback'
     | 'task_family_pareto'
     | 'health_fallback'
+    | 'price_tier_backup'
     | 'canary';
   taskFamilyDecision?: TaskFamilyStageDecision;
   /**
@@ -1493,7 +1495,8 @@ function sameModelFallbackPlan(
 /**
  * Every slot a fallback may draw on, best first, one entry per slot.
  *
- * The request's own ordering leads, then the task's slots at every other
+ * The request's own ordering leads, each slot followed by the backups the
+ * policy declares for it, then the task's slots at every other
  * profile in the policy's profile order, then the tier's fallback slot, then
  * the tier's allowed slots in their authored order, restricted to slots some
  * task policy already names. A slot no task lists is reachable only through a
@@ -1502,6 +1505,10 @@ function sameModelFallbackPlan(
  * its model still has to pass eligibility, so this only decides how far a
  * failover may walk before the request gives up, not what it may reach.
  */
+function backupSlotsOf(policy: AutoPolicy, slotIds: readonly string[]): readonly string[] {
+  return slotIds.flatMap((slotId) => policy.slotBackups?.[slotId] ?? []);
+}
+
 function fallbackCandidateSlots(
   policy: AutoPolicy,
   task: AutoTaskPolicy,
@@ -1511,7 +1518,7 @@ function fallbackCandidateSlots(
 ): readonly string[] {
   return [
     ...new Set([
-      ...orderedSlots,
+      ...orderedSlots.flatMap((slotId) => [slotId, ...backupSlotsOf(policy, [slotId])]),
       ...policy.profileOrder.flatMap((profile) => task.preferredSlots[profile] ?? []),
       fallbackSlot,
       ...tierSlotOrder.filter((slotId) => policyReachableSlots.has(slotId)),
@@ -1541,6 +1548,7 @@ function buildProviderFallbacks(
 ): AutoFallbackRoute[] {
   const seenModels = new Set([selectedModelKey]);
   const seenProviders = new Set([selectedProvider]);
+  const backupSlots = new Set(backupSlotsOf(policy, orderedSlots));
   const plan = sameModelFallbackPlan(
     selectedModelKey,
     selectedModelRoutes,
@@ -1558,6 +1566,7 @@ function buildProviderFallbacks(
     if (!allowedSlots.has(slotId)) continue;
     const modelKey = policy.slots[slotId]?.modelKey;
     if (!modelKey || seenModels.has(modelKey)) continue;
+    if (backupSlots.has(slotId) && pricingStepsUpForPrompt(modelKey, request)) continue;
     seenModels.add(modelKey);
 
     const eligibility = evaluateEligibility(modelKey, task, request);
@@ -1582,6 +1591,25 @@ function estimatedRequestCents(modelKey: string, request: AutoRoutingRequest): n
     ? (inputTokens * pricing.inputCost + outputTokens * pricing.outputCost) / 1_000_000
     : 0;
   return usd * 100;
+}
+
+/**
+ * Whether this request's prompt is long enough to move the model onto a dearer
+ * input-length pricing tier than its base rate. Read from the catalog's tiers,
+ * so a threshold or a multiplier the provider changes is picked up there.
+ */
+function pricingStepsUpForPrompt(modelKey: string, request: AutoRoutingRequest): boolean {
+  const promptTokens = request.estimatedInputTokens;
+  if (promptTokens === undefined || promptTokens <= 0) return false;
+  const base = effectiveModelPricing(modelKey, 0);
+  const atPrompt = effectiveModelPricing(modelKey, promptTokens);
+  if (!base || !atPrompt) return false;
+  return atPrompt.inputCost > base.inputCost || atPrompt.outputCost > base.outputCost;
+}
+
+function fitsPrompt(modelKey: string, request: AutoRoutingRequest): boolean {
+  const promptTokens = request.estimatedInputTokens ?? 0;
+  return (registry.limits[modelKey]?.contextTokens ?? 0) >= promptTokens;
 }
 
 function isAffordable(modelKey: string, request: AutoRoutingRequest): boolean {
@@ -1890,6 +1918,28 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     return selectSlot(slot.canary.modelKey, eligibility, 'canary', slotId);
   };
 
+  /**
+   * A slot whose model would bill this prompt at a dearer input-length tier
+   * hands the request to its first declared backup that stays at its base rate
+   * for a prompt this long. The slot's own model stays at the head of the
+   * fallbacks, so an outage on the backup still lands on it.
+   */
+  const priceTierBackup = (slotId: string, modelKey: string): SelectedAutoRoute | undefined => {
+    if (!pricingStepsUpForPrompt(modelKey, request)) return undefined;
+    for (const backupId of policy.slotBackups?.[slotId] ?? []) {
+      if (!allowedSlots.has(backupId)) continue;
+      const backupModelKey = policy.slots[backupId]?.modelKey;
+      if (!backupModelKey || backupModelKey === modelKey) continue;
+      if (pricingStepsUpForPrompt(backupModelKey, request)) continue;
+      if (!fitsPrompt(backupModelKey, request)) continue;
+      const eligibility = evaluateEligibility(backupModelKey, task, request);
+      if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) continue;
+      if (!isAffordable(backupModelKey, request)) continue;
+      return selectSlot(backupModelKey, eligibility, 'price_tier_backup', backupId);
+    }
+    return undefined;
+  };
+
   for (const slotId of orderedSlots) {
     if (!allowedSlots.has(slotId)) {
       reasons.push(`routing slot ${slotId} is not allowed for tier ${tier}`);
@@ -1913,7 +1963,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         parked.push({ modelKey, eligibility, reason });
         continue;
       }
-      return selectSlot(modelKey, eligibility, reason, slotId);
+      return priceTierBackup(slotId, modelKey) ?? selectSlot(modelKey, eligibility, reason, slotId);
     }
     reasons.push(...eligibility.reasons);
   }
@@ -1928,7 +1978,10 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         if (!isDispatchableNow(eligibility.rankedRoutes[0])) {
           parked.push({ modelKey: fallbackModelKey, eligibility, reason: 'fallback_slot' });
         } else {
-          return selectSlot(fallbackModelKey, eligibility, 'fallback_slot', fallbackSlot);
+          return (
+            priceTierBackup(fallbackSlot, fallbackModelKey) ??
+            selectSlot(fallbackModelKey, eligibility, 'fallback_slot', fallbackSlot)
+          );
         }
       } else {
         reasons.push(...eligibility.reasons);
@@ -1939,6 +1992,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   const parkedPick = parked[0];
   if (parkedPick) {
     const considered = new Set(parked.map((entry) => entry.modelKey));
+    const backupSlots = new Set(backupSlotsOf(policy, orderedSlots));
     for (const slotId of fallbackCandidateSlots(
       policy,
       task,
@@ -1949,6 +2003,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       if (!allowedSlots.has(slotId)) continue;
       const modelKey = policy.slots[slotId]?.modelKey;
       if (!modelKey || considered.has(modelKey)) continue;
+      if (backupSlots.has(slotId) && pricingStepsUpForPrompt(modelKey, request)) continue;
       considered.add(modelKey);
       const eligibility = evaluateEligibility(modelKey, task, request);
       if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) continue;

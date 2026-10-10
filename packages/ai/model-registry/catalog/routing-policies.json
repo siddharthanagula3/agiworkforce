@@ -234,10 +234,17 @@
     "profileOrder": ["economy", "balanced", "premium"],
     "autoProfileByTask": {
       "simple_chat": "economy",
+      "general": "economy",
+      "creative_writing": "economy",
       "coding": "premium",
       "reasoning": "premium",
       "agentic": "premium",
+      "long_context": "balanced",
       "computer-use": "premium"
+    },
+    "slotBackups": {
+      "workhorse_general": ["reasoning_economy"],
+      "coding_fast": ["reasoning_economy"]
     },
     "tierMaximumProfiles": {
       "free": "economy",
@@ -249,7 +256,13 @@
     },
     "tierAllowedSlots": {
       "free": ["free_workhorse", "free_workhorse_fast", "router_zero_cost"],
-      "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "router_zero_cost"],
+      "basic": [
+        "workhorse_general",
+        "reasoning_economy",
+        "coding_fast",
+        "vision_fast",
+        "router_zero_cost"
+      ],
       "pro": [
         "workhorse_general",
         "general_balanced",
@@ -264,6 +277,7 @@
         "search_premium",
         "computer_use_balanced",
         "image_generation",
+        "vision_fast",
         "router_zero_cost"
       ],
       "max": [
@@ -284,6 +298,7 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
+        "vision_fast",
         "router_zero_cost"
       ],
       "enterprise": [
@@ -304,6 +319,7 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
+        "vision_fast",
         "router_zero_cost"
       ],
       "byok": [
@@ -324,6 +340,7 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
+        "vision_fast",
         "router_zero_cost"
       ]
     },
@@ -468,9 +485,9 @@
         "requiredCapabilities": ["textInput", "textOutput"],
         "requiredHarnessFeatures": [],
         "preferredSlots": {
-          "economy": ["workhorse_general"],
+          "economy": ["workhorse_general", "vision_fast"],
           "balanced": ["general_balanced", "workhorse_general"],
-          "premium": ["general_balanced", "flagship_general", "workhorse_general"]
+          "premium": ["general_balanced", "workhorse_general"]
         },
         "benchmarkWeights": {
           "mmlu": 1
@@ -480,9 +497,9 @@
         "requiredCapabilities": ["textInput", "textOutput"],
         "requiredHarnessFeatures": [],
         "preferredSlots": {
-          "economy": ["workhorse_general"],
+          "economy": ["workhorse_general", "vision_fast"],
           "balanced": ["general_balanced", "workhorse_general"],
-          "premium": ["flagship_general", "general_balanced", "workhorse_general"]
+          "premium": ["general_balanced", "workhorse_general"]
         },
         "benchmarkWeights": {
           "mmlu": 1
@@ -494,7 +511,7 @@
         "preferredSlots": {
           "economy": ["coding_fast", "workhorse_general"],
           "balanced": ["coding_balanced", "escalation_coding", "workhorse_general"],
-          "premium": ["flagship_coding", "coding_balanced", "escalation_coding"]
+          "premium": ["coding_balanced", "escalation_coding"]
         },
         "benchmarkWeights": {
           "swebench": 0.7,
@@ -507,7 +524,7 @@
         "preferredSlots": {
           "economy": ["reasoning_economy", "workhorse_general"],
           "balanced": ["reasoning_balanced", "reasoning_economy"],
-          "premium": ["reasoning_balanced", "flagship_general", "reasoning_economy"]
+          "premium": ["reasoning_balanced", "reasoning_economy"]
         },
         "benchmarkWeights": {
           "gpqa": 0.55,
@@ -518,9 +535,9 @@
         "requiredCapabilities": ["textInput", "textOutput"],
         "requiredHarnessFeatures": [],
         "preferredSlots": {
-          "economy": ["workhorse_general"],
+          "economy": ["workhorse_general", "vision_fast"],
           "balanced": ["creative_balanced", "general_balanced"],
-          "premium": ["creative_premium", "creative_balanced"]
+          "premium": ["creative_balanced"]
         },
         "benchmarkWeights": {}
       },
@@ -528,7 +545,7 @@
         "requiredCapabilities": ["textInput", "imageInput", "textOutput"],
         "requiredHarnessFeatures": [],
         "preferredSlots": {
-          "economy": ["workhorse_general"],
+          "economy": ["workhorse_general", "vision_fast"],
           "balanced": ["multimodal_balanced", "workhorse_general"],
           "premium": ["multimodal_balanced", "workhorse_general"]
         },
@@ -539,9 +556,9 @@
         "requiredHarnessFeatures": [],
         "minimumContextTokens": 50000,
         "preferredSlots": {
-          "economy": ["workhorse_general"],
+          "economy": ["workhorse_general", "vision_fast"],
           "balanced": ["long_context_balanced", "workhorse_general"],
-          "premium": ["long_context_balanced", "flagship_general", "workhorse_general"]
+          "premium": ["long_context_balanced", "workhorse_general"]
         },
         "benchmarkWeights": {}
       },
@@ -561,7 +578,7 @@
         "preferredSlots": {
           "economy": ["coding_fast", "workhorse_general"],
           "balanced": ["general_balanced", "coding_balanced"],
-          "premium": ["flagship_general", "flagship_coding"]
+          "premium": ["general_balanced", "coding_balanced"]
         },
         "benchmarkWeights": {
           "swebench": 0.5,
@@ -574,7 +591,7 @@
         "preferredSlots": {
           "economy": ["computer_use_balanced"],
           "balanced": ["computer_use_balanced"],
-          "premium": ["computer_use_premium", "computer_use_balanced"]
+          "premium": ["computer_use_balanced"]
         },
         "benchmarkWeights": {
           "osWorldVerified": 1
@@ -602,10 +619,10 @@
         "modelKey": "openrouter-free"
       },
       "general_fast": {
-        "modelKey": "family:google/gemini-flash-lite"
+        "modelKey": "family:openai/gpt-fast"
       },
       "workhorse_general": {
-        "modelKey": "family:google/gemini-flash-lite"
+        "modelKey": "family:openai/gpt-fast"
       },
       "general_balanced": {
         "providerTask": {
@@ -623,7 +640,7 @@
         }
       },
       "coding_fast": {
-        "modelKey": "family:google/gemini-flash-lite"
+        "modelKey": "family:openai/gpt-fast"
       },
       "coding_premium": {
         "providerTask": {
@@ -674,7 +691,7 @@
         "modelKey": "family:google/gemini-pro"
       },
       "search_fast": {
-        "modelKey": "family:google/gemini-flash-lite"
+        "modelKey": "family:openai/gpt-fast"
       },
       "search_premium": {
         "modelKey": "family:google/gemini-flash"

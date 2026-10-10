@@ -31,7 +31,7 @@ const PROFILE_ORDER = policy.profileOrder;
 const WORKHORSE_MODEL_ID = policy.slots.workhorse_general!.modelKey;
 const CODING_ESCALATION_MODEL_ID = policy.slots.escalation_coding!.modelKey;
 const CODING_BALANCED_MODEL_ID = policy.slots.coding_balanced!.modelKey;
-const CODING_PREMIUM_MODEL_ID = policy.slots.flagship_coding!.modelKey;
+const FLAGSHIP_CODING_MODEL_ID = policy.slots.flagship_coding!.modelKey;
 
 function taskInput(
   family: TaskFamily,
@@ -273,7 +273,8 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
     const balancedBand = [CODING_BALANCED_MODEL_ID, CODING_ESCALATION_MODEL_ID].sort(
       (left, right) => fakeCents(left) - fakeCents(right),
     );
-    expect(ordering.escalationLadder).toEqual([...balancedBand, CODING_PREMIUM_MODEL_ID]);
+    expect(ordering.escalationLadder).toEqual(balancedBand);
+    expect(ordering.escalationLadder).not.toContain(FLAGSHIP_CODING_MODEL_ID);
   });
 
   it('never descends the curator band ladder for any family/task/profile (Decision #10)', () => {
@@ -455,7 +456,7 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
       subscriptionTier: 'max',
       ...managed,
     });
-    expect(off).toMatchObject({ status: 'selected', modelKey: CODING_PREMIUM_MODEL_ID });
+    expect(off).toMatchObject({ status: 'selected', modelKey: CODING_BALANCED_MODEL_ID });
     expect(on).toMatchObject({
       status: 'selected',
       modelKey: CODING_ESCALATION_MODEL_ID,
@@ -494,11 +495,11 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
       delete process.env[TASK_FAMILY_STAGE_ENV];
       expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_ESCALATION_MODEL_ID });
       process.env[TASK_FAMILY_STAGE_ENV] = '0';
-      expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_PREMIUM_MODEL_ID });
+      expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_BALANCED_MODEL_ID });
       process.env[TASK_FAMILY_STAGE_ENV] = '1';
       expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_ESCALATION_MODEL_ID });
       expect(resolveAutoRoute({ ...request, enableTaskFamilyStage: false })).toMatchObject({
-        modelKey: CODING_PREMIUM_MODEL_ID,
+        modelKey: CODING_BALANCED_MODEL_ID,
       });
     } finally {
       if (original === undefined) delete process.env[TASK_FAMILY_STAGE_ENV];
@@ -518,11 +519,7 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     expect(on.status).toBe('selected');
     const ladder =
       on.status === 'selected' ? on.taskFamilyDecision!.ordering!.escalationLadder : [];
-    expect(ladder).toEqual([
-      CODING_ESCALATION_MODEL_ID,
-      CODING_BALANCED_MODEL_ID,
-      CODING_PREMIUM_MODEL_ID,
-    ]);
+    expect(ladder).toEqual([CODING_ESCALATION_MODEL_ID, CODING_BALANCED_MODEL_ID]);
 
     const pinned = decideTaskFamilyContinuity({
       session: {
