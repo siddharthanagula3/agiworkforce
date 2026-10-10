@@ -2768,7 +2768,7 @@ const ChatComposerNewComponent = ({
         })
         .catch(() => setLocalNotice(COMPOSER_FILES_ATTACH_FAILED_COPY));
     },
-    [replaceMentionToken, attachments.length, handleFileDrop, plural],
+    [replaceMentionToken, attachmentsPerMessage, attachments.length, handleFileDrop, plural],
   );
 
   const commitActiveMention = useCallback(() => {
