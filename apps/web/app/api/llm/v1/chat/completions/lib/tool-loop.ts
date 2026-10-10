@@ -4328,7 +4328,11 @@ export async function* runToolLoop(
       if (freeSpend && decision.outcome !== 'blocked') {
         return admitOnFreeTrialWindows(freeSpend);
       }
-      if (decision.outcome === 'included') return { admission: INCLUDED_SEARCH_ADMISSION };
+      if (decision.outcome === 'free_windows') {
+        return {
+          refusal: { content: searchUnaffordableMessage(), isError: true, unavailable: true },
+        };
+      }
       if (decision.outcome === 'blocked') {
         return {
           refusal: {
@@ -4357,10 +4361,10 @@ export async function* runToolLoop(
         db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
       });
     } catch (error) {
-      logger.warn({ error }, '[tool-loop] search budget not resolved; treating call as included');
-      return freeSpend
-        ? admitOnFreeTrialWindows(freeSpend)
-        : { admission: INCLUDED_SEARCH_ADMISSION };
+      logger.warn({ error }, '[tool-loop] search budget not resolved; refusing the call');
+      return {
+        refusal: { content: searchUnaffordableMessage(), isError: true, unavailable: true },
+      };
     }
 
     if (reserved.outcome === 'refused') {
