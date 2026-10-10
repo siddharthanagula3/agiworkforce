@@ -28,7 +28,7 @@ import {
   type QuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { logger } from '@/lib/logger';
-import { getKeyValueProvider, getKeyValueStore } from '@/lib/server/key-value';
+import { sharedKeyValueStore } from '@/lib/server/shared-key-value-store';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
 import { isGeneratedMediaStorageConfigured } from '@/lib/server/media-storage';
 import freePoolsDocument from '@/config/free-pools.json';
@@ -40,8 +40,6 @@ import {
   type FreeQuotaObservation,
   type LimitedMediaOffer,
 } from './free-pools';
-
-const SHARED_STORE_PROVIDERS: ReadonlySet<string> = new Set(['upstash', 'redis']);
 
 export interface FreeQuotaContext {
   store: KeyValueStore | null;
@@ -94,16 +92,7 @@ export function freeQuotaPlanAdmission(
 }
 
 export function sharedFreeQuotaStore(nodeEnv: string | undefined): KeyValueStore | null {
-  try {
-    const store = getKeyValueStore();
-    if (!store) return null;
-    return SHARED_STORE_PROVIDERS.has(getKeyValueProvider()) || nodeEnv === 'development'
-      ? store
-      : null;
-  } catch (error) {
-    logger.error({ error }, '[free-quota] shared state store could not be resolved');
-    return null;
-  }
+  return sharedKeyValueStore(nodeEnv);
 }
 
 export function freeQuotaContextFor(request: {

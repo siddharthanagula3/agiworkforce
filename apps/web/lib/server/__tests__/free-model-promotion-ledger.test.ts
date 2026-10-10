@@ -6,7 +6,7 @@ import {
 } from '@agiworkforce/key-value';
 
 type PromotionTestModule0 = typeof import('@/lib/logger');
-type PromotionTestModule1 = typeof import('@/lib/server/free-quota-catalogue');
+type PromotionTestModule1 = typeof import('@/lib/server/shared-key-value-store');
 type PromotionTestModule2 = typeof import('@/lib/server/key-value');
 type PromotionTestModule3 = typeof import('@/lib/server/neon-db');
 
@@ -18,9 +18,9 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 
 const shared = vi.hoisted(() => ({ store: null as KeyValueStore | null }));
 
-vi.mock('@/lib/server/free-quota-catalogue', async (importOriginal) => ({
+vi.mock('@/lib/server/shared-key-value-store', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule1>()),
-  sharedFreeQuotaStore: () => shared.store,
+  sharedKeyValueStore: () => shared.store,
 }));
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule2>()),
