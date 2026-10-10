@@ -9,6 +9,7 @@ import { signIn } from './qa-capability-harness';
  * state: the orb, the error row and the composer all on screen at once, the
  * layout the orb used to cover. Conversation creation is refused so the spec
  * writes nothing to the account. It clicks only the voice entry button, the
+ * microphone note's Continue the way a user accepts it on first use, the
  * orb and the composer's + button; it never sends a message or opens a
  * menu item.
  */
@@ -49,8 +50,16 @@ async function mockVoiceEndpoints(page: Page): Promise<void> {
 
 async function enterVoiceMode(page: Page): Promise<void> {
   await page.goto('/chat');
-  await page.getByRole('button', { name: 'Start voice mode' }).first().click();
-  await expect(page.getByTestId('voice-mode-surface')).toBeVisible({ timeout: 20_000 });
+  const start = page.getByRole('button', { name: 'Start voice mode' }).first();
+  const surface = page.getByTestId('voice-mode-surface');
+  const notice = page.getByRole('note', { name: 'Where your voice goes' });
+  await start.click();
+  await expect(surface.or(notice)).toBeVisible({ timeout: 20_000 });
+  if (await notice.isVisible()) {
+    await notice.getByRole('button', { name: 'Continue' }).click();
+    if (!(await surface.isVisible())) await start.click();
+  }
+  await expect(surface).toBeVisible({ timeout: 20_000 });
 }
 
 function overlaps(
