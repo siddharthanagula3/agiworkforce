@@ -117,6 +117,7 @@ fn raw_best_model_for_provider(root: &serde_json::Value, provider: &str) -> Opti
                 .values()
                 .filter(|model| raw_model_provider(model) == Some(provider))
                 .filter(|model| !raw_model_deprecated(model))
+                .filter(|model| raw_model_servable(model))
                 .filter(|model| {
                     model
                         .get("modelType")
@@ -143,6 +144,7 @@ fn raw_first_supported_model(root: &serde_json::Value) -> Option<String> {
             models
                 .values()
                 .filter(|model| !raw_model_deprecated(model))
+                .filter(|model| raw_model_servable(model))
                 .filter(|model| {
                     model
                         .get("modelType")
@@ -179,6 +181,14 @@ fn raw_model_deprecated(model: &serde_json::Value) -> bool {
         .get("deprecated")
         .and_then(|value| value.as_bool())
         .unwrap_or(false)
+}
+
+fn raw_model_servable(model: &serde_json::Value) -> bool {
+    is_servable_availability(model.get("availability").and_then(|value| value.as_str()))
+}
+
+fn is_servable_availability(availability: Option<&str>) -> bool {
+    !matches!(availability, Some("coming_soon" | "unavailable"))
 }
 
 fn raw_quality_rank(model: &serde_json::Value) -> u8 {
@@ -345,6 +355,8 @@ struct SharedModelMetadata {
     deprecated: Option<bool>,
     #[serde(default)]
     status: Option<String>,
+    #[serde(default)]
+    availability: Option<String>,
     /// "fast" | "balanced" | "best", from models.json qualityTier field.
     #[serde(default, rename = "qualityTier")]
     quality_tier: Option<String>,
@@ -964,6 +976,7 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
         SUPPORTED_SHARED_PROVIDERS.contains(&model.provider.as_str())
             && supports_cli_model_type(&model.model_type)
             && !model.deprecated.unwrap_or(false)
+            && is_servable_availability(model.availability.as_deref())
             && model.context_window.filter(|window| *window > 0).is_none()
     }) {
         return None;
@@ -984,6 +997,7 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
         .filter(|model| SUPPORTED_SHARED_PROVIDERS.contains(&model.provider.as_str()))
         .filter(|model| supports_cli_model_type(&model.model_type))
         .filter(|model| !model.deprecated.unwrap_or(false))
+        .filter(|model| is_servable_availability(model.availability.as_deref()))
         .map(|model| {
             let api_id = model
                 .api_model_id
@@ -2368,6 +2382,37 @@ mod tests {
             !supports_cli_model_type(&media.model_type),
             "a contextless media API must be excluded instead of inheriting the CLI fallback"
         );
+    }
+
+    #[test]
+    fn unreleased_models_stay_out_of_the_catalog_and_the_default() {
+        let shared = shared_catalog().expect("the embedded shared catalog must parse");
+        let unreleased: Vec<&SharedModelMetadata> = shared
+            .models
+            .values()
+            .filter(|model| !is_servable_availability(model.availability.as_deref()))
+            .collect();
+        assert!(
+            unreleased.iter().any(|model| {
+                supports_cli_model_type(&model.model_type) && model.context_window.is_none()
+            }),
+            "canonical catalog must contain an unreleased chat entry without a context window"
+        );
+        let cat = Catalog::bundled();
+        let default_model = pick_fallback_default_model();
+        for model in unreleased {
+            let api_id = model.api_model_id.as_deref().unwrap_or(&model.id);
+            assert!(
+                cat.all().iter().all(|entry| entry.id != api_id),
+                "{} is not released and must not be selectable",
+                model.id
+            );
+            assert_ne!(
+                default_model, api_id,
+                "{} must never be the default",
+                model.id
+            );
+        }
     }
 
     #[test]
