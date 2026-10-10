@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   available: vi.fn(),
   rateLimit: vi.fn(),
-  spent: vi.fn(),
+  reserve: vi.fn(),
+  estimate: vi.fn(),
   moderate: vi.fn(),
-  record: vi.fn(),
+  settle: vi.fn(),
   human: vi.fn(),
+  store: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -48,7 +50,7 @@ vi.mock('@/lib/rate-limit', () => ({
 vi.mock('@/lib/server/key-value', () => ({
   getKeyValueProvider: vi.fn(),
   getKeyValueRateLimiter: vi.fn(() => null),
-  getKeyValueStore: () => ({ get: vi.fn(), increment: vi.fn(), expire: vi.fn() }),
+  getKeyValueStore: () => mocks.store(),
 }));
 vi.mock('@/lib/moderation', () => ({
   GENERATED_OUTPUT_REFUSAL: vi.fn(),
@@ -75,8 +77,9 @@ vi.mock('@/lib/guest-chat/guest-chat-service', () => ({
     zeroDataRetention: true,
   }),
   buildGuestChatRequest: () => ({ model: 'free/default', messages: [] }),
-  guestSpendToday: (...args: unknown[]) => mocks.spent(...args),
-  recordGuestSpend: (...args: unknown[]) => mocks.record(...args),
+  estimateGuestTurnMicrousd: (...args: unknown[]) => mocks.estimate(...args),
+  reserveGuestSpend: (...args: unknown[]) => mocks.reserve(...args),
+  settleGuestSpend: (...args: unknown[]) => mocks.settle(...args),
   streamGuestChat: () =>
     new ReadableStream<Uint8Array>({
       start(controller) {
@@ -121,7 +124,13 @@ describe(GUEST_CHAT_PATH, () => {
     vi.clearAllMocks();
     mocks.available.mockResolvedValue(true);
     mocks.rateLimit.mockResolvedValue(allowed());
-    mocks.spent.mockResolvedValue(0);
+    mocks.store.mockReturnValue({ get: vi.fn(), increment: vi.fn(), expire: vi.fn() });
+    mocks.estimate.mockReturnValue(500);
+    mocks.reserve.mockResolvedValue({
+      ok: true,
+      hold: { keys: ['guest-chat:spend:2026-09-28'], reservedMicrousd: 500 },
+    });
+    mocks.settle.mockResolvedValue(500);
     mocks.moderate.mockReturnValue({ allowed: true, action: 'allow' });
     mocks.human.mockResolvedValue(undefined);
   });
@@ -173,7 +182,56 @@ describe(GUEST_CHAT_PATH, () => {
   });
 
   it('stops every visitor once the day’s spend cap is reached', async () => {
-    mocks.spent.mockResolvedValue(GUEST_CHAT_CONFIG.globalSpendMicrousdPerDay);
+    mocks.reserve.mockResolvedValue({ ok: false, limit: 'global' });
+
+    const response = await POST(post(HELLO));
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('guest_capacity_reached');
+  });
+
+  it.each(['device', 'ip'] as const)(
+    'asks a visitor past its %s spend cap to sign in, before any model call',
+    async (limit) => {
+      mocks.reserve.mockResolvedValue({ ok: false, limit });
+
+      const response = await POST(post(HELLO));
+
+      expect(response.status).toBe(429);
+      expect((await response.json()).error).toMatchObject({
+        code: 'guest_limit_reached',
+        signInPath: '/login',
+      });
+      expect(mocks.settle).not.toHaveBeenCalled();
+    },
+  );
+
+  it('holds the turn’s most expensive outcome per device, per network and for all guests', async () => {
+    await POST(post(HELLO));
+
+    expect(mocks.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visitorId: 'anon-visitor',
+        networkId: 'ip:203.0.113.9',
+        amountMicrousd: 500,
+        config: GUEST_CHAT_CONFIG,
+      }),
+    );
+  });
+
+  it('refuses a turn it cannot price rather than running it unmetered', async () => {
+    mocks.estimate.mockImplementation(() => {
+      throw new Error('unpriced');
+    });
+
+    const response = await POST(post(HELLO));
+
+    expect(response.status).toBe(503);
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it('refuses every turn when there is no shared store to count spend in', async () => {
+    mocks.store.mockReturnValue(null);
 
     const response = await POST(post(HELLO));
 
@@ -204,5 +262,6 @@ describe(GUEST_CHAT_PATH, () => {
     expect(response.headers.get('x-guest-messages-remaining')).toBe('5');
     expect(await response.text()).toContain('data: [DONE]');
     expect(mocks.human).toHaveBeenCalled();
+    expect(mocks.reserve).toHaveBeenCalledTimes(1);
   });
 });

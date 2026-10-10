@@ -15,6 +15,8 @@ import {
   type StreamChunk,
 } from '@agiworkforce/types';
 
+import { estimateTokens } from '@agiworkforce/routing';
+
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { logger } from '@/lib/logger';
 import {
@@ -36,6 +38,7 @@ const GUEST_PLAN_TIER = 'free';
 const OPENROUTER_PROVIDERS: ReadonlySet<string> = new Set(['openrouter', 'open_router']);
 const SPEND_KEY_PREFIX = 'guest-chat:spend:';
 const SPEND_KEY_TTL_SECONDS = 2 * 24 * 60 * 60;
+const GLOBAL_SPEND_SCOPE = 'global';
 const UPSTREAM_FAILURE_MESSAGE =
   'The model could not answer just now. Try again, or sign in to use more models.';
 
@@ -164,44 +167,139 @@ export function streamGuestChat(input: {
   });
 }
 
-export function guestSpendKey(now: Date): string {
-  return `${SPEND_KEY_PREFIX}${now.toISOString().slice(0, 10)}`;
+export function guestSpendKey(now: Date, scope: string = GLOBAL_SPEND_SCOPE): string {
+  const day = now.toISOString().slice(0, 10);
+  return scope === GLOBAL_SPEND_SCOPE
+    ? `${SPEND_KEY_PREFIX}${day}`
+    : `${SPEND_KEY_PREFIX}${scope}:${day}`;
 }
 
-export async function guestSpendToday(store: KeyValueStore, now: Date): Promise<number> {
-  const value = await store.get<number | string>(guestSpendKey(now));
-  const spent = Number(value ?? 0);
-  return Number.isFinite(spent) ? spent : 0;
+export type GuestSpendLimit = 'device' | 'ip' | 'global';
+
+export interface GuestSpendHold {
+  keys: readonly string[];
+  reservedMicrousd: number;
 }
 
-export async function recordGuestSpend(
-  store: KeyValueStore,
+export type GuestSpendAdmission =
+  { ok: true; hold: GuestSpendHold } | { ok: false; limit: GuestSpendLimit };
+
+function guestTurnCostMicrousd(model: GuestChatModel, usage: GuestChatUsage, now: Date): number {
+  return LLMCostCalculator.calculateCostMicrousd(
+    model.provider,
+    model.modelKey,
+    {
+      promptTokens: usage.inputTokens,
+      completionTokens: usage.outputTokens,
+      totalTokens: usage.inputTokens + usage.outputTokens,
+    },
+    now,
+    model.routeId,
+  );
+}
+
+/**
+ * The most a turn can cost: every message it carries as input and the whole
+ * output ceiling. Throws when the model cannot be priced, so an unpriced turn
+ * is never admitted.
+ */
+export function estimateGuestTurnMicrousd(
   model: GuestChatModel,
-  usage: GuestChatUsage,
+  chatRequest: ChatRequest,
   now: Date,
-): Promise<number> {
-  let cost = 0;
+): number {
+  const text = [
+    typeof chatRequest.system === 'string'
+      ? chatRequest.system
+      : JSON.stringify(chatRequest.system),
+    ...chatRequest.messages.map((message) =>
+      typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+    ),
+  ].join('\n');
+  return guestTurnCostMicrousd(
+    model,
+    {
+      inputTokens: estimateTokens(text, model.modelKey),
+      outputTokens: chatRequest.maxOutputTokens ?? 0,
+    },
+    now,
+  );
+}
+
+/**
+ * Holds a turn's most expensive outcome against the visitor's device, its
+ * network and every guest together, before the provider is called. A turn
+ * that would take any of the three past its daily cap is refused and nothing
+ * is held.
+ */
+export async function reserveGuestSpend(input: {
+  store: KeyValueStore;
+  now: Date;
+  visitorId: string;
+  networkId: string;
+  amountMicrousd: number;
+  config: Pick<
+    GuestChatConfig,
+    'deviceSpendMicrousdPerDay' | 'ipSpendMicrousdPerDay' | 'globalSpendMicrousdPerDay'
+  >;
+}): Promise<GuestSpendAdmission> {
+  const amount = Math.max(0, Math.ceil(input.amountMicrousd));
+  const scopes: ReadonlyArray<{ limit: GuestSpendLimit; key: string; cap: number }> = [
+    {
+      limit: 'global',
+      key: guestSpendKey(input.now),
+      cap: input.config.globalSpendMicrousdPerDay,
+    },
+    {
+      limit: 'ip',
+      key: guestSpendKey(input.now, `ip:${input.networkId}`),
+      cap: input.config.ipSpendMicrousdPerDay,
+    },
+    {
+      limit: 'device',
+      key: guestSpendKey(input.now, `device:${input.visitorId}`),
+      cap: input.config.deviceSpendMicrousdPerDay,
+    },
+  ];
+  const held: string[] = [];
+  for (const scope of scopes) {
+    const total = await input.store.increment(scope.key, amount);
+    held.push(scope.key);
+    await input.store.expire(scope.key, SPEND_KEY_TTL_SECONDS);
+    if (total > scope.cap) {
+      for (const key of held) await input.store.increment(key, -amount);
+      return { ok: false, limit: scope.limit };
+    }
+  }
+  return { ok: true, hold: { keys: held, reservedMicrousd: amount } };
+}
+
+/**
+ * Replaces the held estimate with what the turn cost. A turn whose usage never
+ * arrived, or whose cost cannot be computed, keeps its whole hold: the
+ * provider may have billed it.
+ */
+export async function settleGuestSpend(input: {
+  store: KeyValueStore;
+  hold: GuestSpendHold;
+  model: GuestChatModel;
+  usage: GuestChatUsage | null;
+  now: Date;
+}): Promise<number> {
+  if (!input.usage) return input.hold.reservedMicrousd;
+  let cost: number;
   try {
-    cost = LLMCostCalculator.calculateCostMicrousd(
-      model.provider,
-      model.modelKey,
-      {
-        promptTokens: usage.inputTokens,
-        completionTokens: usage.outputTokens,
-        totalTokens: usage.inputTokens + usage.outputTokens,
-      },
-      now,
-      model.routeId,
-    );
+    cost = guestTurnCostMicrousd(input.model, input.usage, input.now);
   } catch (error) {
     logger.error(
-      { error, provider: model.provider, model: model.modelKey },
-      '[guest-chat] the turn could not be priced',
+      { error, provider: input.model.provider, model: input.model.modelKey },
+      '[guest-chat] the turn could not be priced; its whole hold stays spent',
     );
+    return input.hold.reservedMicrousd;
   }
-  if (cost <= 0) return 0;
-  const key = guestSpendKey(now);
-  await store.increment(key, cost);
-  await store.expire(key, SPEND_KEY_TTL_SECONDS);
-  return cost;
+  const delta = Math.max(0, Math.ceil(cost)) - input.hold.reservedMicrousd;
+  if (delta !== 0) {
+    for (const key of input.hold.keys) await input.store.increment(key, delta);
+  }
+  return input.hold.reservedMicrousd + delta;
 }
