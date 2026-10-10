@@ -1,5 +1,6 @@
 import 'server-only';
 import {
+  applyInputTokenPricingTiers,
   getModelMetadataById,
   getProviderCacheTokenBillingClass,
   getProviderConfig,
@@ -32,6 +33,17 @@ export interface RoutePriceSheet {
   cacheReadPerMillion: number | null;
   cacheWritePerMillion: number | null;
   cacheWrite1hPerMillion: number | null;
+  inputTokenPricingTiers?: readonly RouteInputTokenPricingTier[];
+}
+
+export interface RouteInputTokenPricingTier {
+  thresholdTokens: number;
+  thresholdBoundary?: 'inclusive' | 'exclusive';
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheReadPerMillion?: number;
+  cacheWritePerMillion?: number;
+  cacheWrite1hPerMillion?: number;
 }
 
 export interface RouteRegistryPricingLookup {
@@ -509,16 +521,38 @@ export class LLMCostCalculator {
   private static toModelPricingFromRouteSheet(
     sheet: RoutePriceSheet,
     fallbackProviderId: string | null,
+    inputTokens: number,
   ): ModelPricing | null {
     if (sheet.inputPerMillion === null || sheet.outputPerMillion === null) {
       return null;
     }
+    const tiered = applyInputTokenPricingTiers(
+      {
+        inputTokenPricingTiers: (sheet.inputTokenPricingTiers ?? []).map((tier) => ({
+          thresholdTokens: tier.thresholdTokens,
+          ...(tier.thresholdBoundary ? { thresholdBoundary: tier.thresholdBoundary } : {}),
+          inputCost: tier.inputPerMillion,
+          outputCost: tier.outputPerMillion,
+          cached_input: tier.cacheReadPerMillion,
+          cached_write: tier.cacheWritePerMillion,
+          cached_write_1h: tier.cacheWrite1hPerMillion,
+        })),
+      },
+      {
+        inputCost: sheet.inputPerMillion,
+        outputCost: sheet.outputPerMillion,
+        cached_input: sheet.cacheReadPerMillion ?? undefined,
+        cached_write: sheet.cacheWritePerMillion ?? undefined,
+        cached_write_1h: sheet.cacheWrite1hPerMillion ?? undefined,
+      },
+      inputTokens,
+    );
     return {
-      inputCostPer1MTokens: sheet.inputPerMillion,
-      outputCostPer1MTokens: sheet.outputPerMillion,
-      cachedInputCostPer1MTokens: sheet.cacheReadPerMillion ?? undefined,
-      cachedWriteCostPer1MTokens: sheet.cacheWritePerMillion ?? undefined,
-      cachedWrite1hCostPer1MTokens: sheet.cacheWrite1hPerMillion ?? undefined,
+      inputCostPer1MTokens: tiered.inputCost,
+      outputCostPer1MTokens: tiered.outputCost,
+      cachedInputCostPer1MTokens: tiered.cached_input,
+      cachedWriteCostPer1MTokens: tiered.cached_write,
+      cachedWrite1hCostPer1MTokens: tiered.cached_write_1h,
       cacheTokensDisjointFromInput: isCacheTokensDisjointFromInput(
         sheet.provider ?? fallbackProviderId,
       ),
@@ -532,11 +566,12 @@ export class LLMCostCalculator {
     routeId: string | null | undefined,
     providerId: string | null,
     modelId: string,
+    inputTokens: number,
   ): ModelPricing | null {
     const getRoutePricing = registryExport(routeRegistryLookup, 'getRoutePricing');
     const routeSheet = routeId ? getRoutePricing?.(routeId) : undefined;
     if (routeSheet) {
-      const pricing = this.toModelPricingFromRouteSheet(routeSheet, providerId);
+      const pricing = this.toModelPricingFromRouteSheet(routeSheet, providerId, inputTokens);
       if (pricing) return pricing;
     }
 
@@ -546,7 +581,7 @@ export class LLMCostCalculator {
       modelSheets?.find((sheet) => sheet.provider === providerId && sheet.isDefault) ??
       modelSheets?.find((sheet) => sheet.provider === providerId);
     if (matchedSheet) {
-      const pricing = this.toModelPricingFromRouteSheet(matchedSheet, providerId);
+      const pricing = this.toModelPricingFromRouteSheet(matchedSheet, providerId, inputTokens);
       if (pricing) return pricing;
     }
 
@@ -573,6 +608,7 @@ export class LLMCostCalculator {
         routeId,
         providerId,
         resolvedModelId,
+        inputTokens,
       );
       if (registryRoutePricing) {
         return registryRoutePricing;
