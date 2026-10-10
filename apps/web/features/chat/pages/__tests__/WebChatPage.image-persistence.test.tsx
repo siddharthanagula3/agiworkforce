@@ -250,6 +250,9 @@ vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
     resolveToolApproval: vi.fn(),
   }),
 }));
+vi.mock('../../hooks/use-free-model-promotion', () => ({
+  useFreeModelPromotion: () => ({ ready: true, promotion: null }),
+}));
 vi.mock('../../hooks/use-artifact-cloud-sync', () => ({ useArtifactCloudSync: vi.fn() }));
 vi.mock('../../hooks/use-share-conversation', () => ({
   useShareConversation: () => ({ share: vi.fn(), isSharing: false }),

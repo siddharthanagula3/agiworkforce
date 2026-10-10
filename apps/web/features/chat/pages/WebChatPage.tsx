@@ -331,6 +331,7 @@ import type { ChatSession } from '@shared/types';
 import { describeModelSubstitution, type ModelSubstitution } from '@shared/stores/model-store';
 import { FreePlanTrainingNotice } from '../components/FreePlanTrainingNotice';
 import { FreeModelPromotionNotice } from '../components/FreeModelPromotionNotice';
+import { useFreeModelPromotion } from '../hooks/use-free-model-promotion';
 import { MicrophonePrivacyNotice } from '../components/MicrophonePrivacyNotice';
 import { UnavailableModelNotice } from '../components/UnavailableModelNotice';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
@@ -1135,14 +1136,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // the Free workhorse, so the model unexpectedly changed after reload.
   const isWebsiteFreeTrial = billingPolicyReady && isFreeBillingPlanTier(subscriptionTier);
   const freeTrialModelId = getBestAutoModeForTier('free');
+  const { ready: freeModelPromotionReady, promotion: freeModelPromotion } =
+    useFreeModelPromotion(isWebsiteFreeTrial);
+  const selectableOnFree = (modelId: string): boolean =>
+    Boolean(freeQuotaSelection(modelId)) ||
+    FREE_TRIAL_MODELS.includes(modelId) ||
+    modelId === freeModelPromotion?.modelId;
   const validatedSelectedModelId = resolveSelectableModelId(selectedModelId);
   // The plan tier decides which cloud model a send may use. A model running on
   // this Mac is outside that question entirely: it spends no plan, so it is
   // resolved after the downgrade rather than through it.
   const cloudModelId =
-    isWebsiteFreeTrial &&
-    !freeQuotaSelection(validatedSelectedModelId) &&
-    !FREE_TRIAL_MODELS.includes(validatedSelectedModelId)
+    isWebsiteFreeTrial && !selectableOnFree(validatedSelectedModelId)
       ? freeTrialModelId
       : validatedSelectedModelId;
   const localModelSelection = useLocalModelSelection((state) => state.selected);
@@ -1151,16 +1156,30 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
   const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
   const isTrialExhausted =
-    isWebsiteFreeTrial && !freeQuotaSelection(activeModelId) && freeUsageLimitReached;
+    isWebsiteFreeTrial &&
+    !freeQuotaSelection(activeModelId) &&
+    activeModelId !== freeModelPromotion?.modelId &&
+    freeUsageLimitReached;
 
   useEffect(() => {
-    if (!isWebsiteFreeTrial) return;
+    if (!isWebsiteFreeTrial || !freeModelPromotionReady) return;
     // Free users may pick any model in the free tool set; only snap back to the
     // default when they're on something outside the set.
-    if (!freeQuotaSelection(selectedModelId) && !FREE_TRIAL_MODELS.includes(selectedModelId)) {
+    if (
+      !freeQuotaSelection(selectedModelId) &&
+      !FREE_TRIAL_MODELS.includes(selectedModelId) &&
+      selectedModelId !== freeModelPromotion?.modelId
+    ) {
       setSelectedModelId(freeTrialModelId);
     }
-  }, [freeTrialModelId, isWebsiteFreeTrial, selectedModelId, setSelectedModelId]);
+  }, [
+    freeModelPromotion?.modelId,
+    freeModelPromotionReady,
+    freeTrialModelId,
+    isWebsiteFreeTrial,
+    selectedModelId,
+    setSelectedModelId,
+  ]);
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
   const handleComposerPrefillConsumed = useCallback(() => setComposerPrefill(undefined), []);
