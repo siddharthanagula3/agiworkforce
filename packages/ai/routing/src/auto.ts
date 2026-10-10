@@ -1636,6 +1636,34 @@ function pricingStepsUpForPrompt(modelKey: string, request: AutoRoutingRequest):
   return atPrompt.inputCost > base.inputCost || atPrompt.outputCost > base.outputCost;
 }
 
+/**
+ * What one request costs on a model at the price tier its prompt length selects,
+ * counting the conversation's warm route as mostly served from cache the same
+ * way route ranking does.
+ */
+function tieredRequestCents(
+  modelKey: string,
+  routeId: string | undefined,
+  request: AutoRoutingRequest,
+): number {
+  const inputTokens = request.estimatedInputTokens ?? 0;
+  const outputTokens = request.estimatedOutputTokens ?? DEFAULT_AFFORDABILITY_OUTPUT_TOKENS;
+  const pricing = effectiveModelPricing(modelKey, inputTokens);
+  if (!pricing) return Number.POSITIVE_INFINITY;
+  const warm =
+    routeId !== undefined &&
+    request.preferredRouteId === routeId &&
+    typeof pricing.cached_input === 'number';
+  const inputRate = warm
+    ? (1 - WARM_ROUTE_CACHE_HIT_FRACTION) * pricing.inputCost +
+      WARM_ROUTE_CACHE_HIT_FRACTION * (pricing.cached_input as number)
+    : pricing.inputCost;
+  return (
+    ((inputTokens * inputRate + outputTokens * pricing.outputCost) / TOKENS_PER_PRICED_MILLION) *
+    CENTS_PER_USD
+  );
+}
+
 function fitsPrompt(modelKey: string, request: AutoRoutingRequest): boolean {
   const promptTokens = request.estimatedInputTokens ?? 0;
   return (registry.limits[modelKey]?.contextTokens ?? 0) >= promptTokens;
@@ -1952,11 +1980,17 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   /**
    * A slot whose model would bill this prompt at a dearer input-length tier
    * hands the request to its first declared backup that stays at its base rate
-   * for a prompt this long. The slot's own model stays at the head of the
-   * fallbacks, so an outage on the backup still lands on it.
+   * for a prompt this long and costs less for it, warm cache included. The
+   * slot's own model stays at the head of the fallbacks, so an outage on the
+   * backup still lands on it.
    */
-  const priceTierBackup = (slotId: string, modelKey: string): SelectedAutoRoute | undefined => {
+  const priceTierBackup = (
+    slotId: string,
+    modelKey: string,
+    primary: EligibilityResult,
+  ): SelectedAutoRoute | undefined => {
     if (!pricingStepsUpForPrompt(modelKey, request)) return undefined;
+    const primaryCents = tieredRequestCents(modelKey, primary.routeId, request);
     for (const backupId of policy.slotBackups?.[slotId] ?? []) {
       if (!allowedSlots.has(backupId)) continue;
       const backupModelKey = policy.slots[backupId]?.modelKey;
@@ -1966,6 +2000,8 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       const eligibility = evaluateEligibility(backupModelKey, task, request);
       if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) continue;
       if (!isAffordable(backupModelKey, request)) continue;
+      if (tieredRequestCents(backupModelKey, eligibility.routeId, request) >= primaryCents)
+        continue;
       return selectSlot(backupModelKey, eligibility, 'price_tier_backup', backupId);
     }
     return undefined;
@@ -1994,7 +2030,10 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         parked.push({ modelKey, eligibility, reason });
         continue;
       }
-      return priceTierBackup(slotId, modelKey) ?? selectSlot(modelKey, eligibility, reason, slotId);
+      return (
+        priceTierBackup(slotId, modelKey, eligibility) ??
+        selectSlot(modelKey, eligibility, reason, slotId)
+      );
     }
     reasons.push(...eligibility.reasons);
   }
@@ -2010,7 +2049,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
           parked.push({ modelKey: fallbackModelKey, eligibility, reason: 'fallback_slot' });
         } else {
           return (
-            priceTierBackup(fallbackSlot, fallbackModelKey) ??
+            priceTierBackup(fallbackSlot, fallbackModelKey, eligibility) ??
             selectSlot(fallbackModelKey, eligibility, 'fallback_slot', fallbackSlot)
           );
         }
