@@ -1018,6 +1018,15 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     description: 'the credential a container file download authenticates to Anthropic with',
   }),
+  secret('ANTHROPIC_PROMO_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'the Anthropic account that pays first for the free model promotion; ' +
+      'without it the promotion runs on the managed key alone',
+  }),
   secret('OPENAI_API_KEY', {
     type: 'string',
     owner: 'apps/web/lib/server',

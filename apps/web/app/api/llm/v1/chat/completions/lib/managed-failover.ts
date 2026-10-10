@@ -744,9 +744,28 @@ export function createFailoverPlan(
     };
   };
 
+  const promotion = processed.freeTrial?.promotion;
+
   return {
     next: (error: unknown, context?: FailoverStepContext): FailoverAttempt | null => {
       if (options.signal.aborted) return null;
+      // A turn the free model promotion pays for is bounded by the spend it
+      // reserved on one credential. Any other route or retry would spend money
+      // the promotion never reserved, and its failures describe that credential
+      // rather than the managed one, so they are not reported to shared health.
+      if (promotion) {
+        logger.warn(
+          {
+            requestId: processed.requestId,
+            provider: latestView.provider,
+            model: latestView.chatRequest.model,
+            category: classifyError(error).category,
+            paidBy: promotion.credentialId,
+          },
+          'Managed failover refused: a promoted turn stays on the credential that reserved it',
+        );
+        return null;
+      }
       mustStayOnProvider = toolStateBindsProvider(processed, context);
       const classified = classifyError(error);
       const category = classified.category;

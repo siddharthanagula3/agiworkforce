@@ -474,6 +474,7 @@ export function buildUpstreamErrorResponse(
   userId: string,
   requestId: string,
   context: 'streaming' | 'non-streaming',
+  served: { isolatedCredential?: boolean } = {},
 ): NextResponse {
   const errorMessage = error instanceof Error ? error.message : `${context} request failed`;
   const classified = classifyError(error);
@@ -504,7 +505,7 @@ export function buildUpstreamErrorResponse(
 
   try {
     const outcomeClass = routeOutcomeClassForError(error, classified);
-    if (outcomeClass) {
+    if (outcomeClass && served.isolatedCredential !== true) {
       void recordRouteOutcome(
         buildServingRouteId(provider, model),
         { class: outcomeClass },
@@ -526,7 +527,10 @@ export function buildUpstreamErrorResponse(
           code: 'insufficient_credits',
           message: 'This request could not be paid for. Top up credits and try again.',
         }
-      : mapClassifiedUpstreamError(classified, provider, { requestedModel });
+      : mapClassifiedUpstreamError(classified, provider, {
+          requestedModel,
+          isolatedCredential: served.isolatedCredential,
+        });
 
   return NextResponse.json(
     {

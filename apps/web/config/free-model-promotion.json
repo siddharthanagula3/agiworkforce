@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "promotionId": "free-model-2026-10",
+  "provider": "anthropic",
+  "modelFamilyTier": "fast",
+  "startsAt": "2026-10-10T00:00:00Z",
+  "endsAt": "2026-10-24T23:59:59Z",
+  "spendCeilingUsd": 380,
+  "turnReserveUsd": 0.15,
+  "perUserMessages": { "limit": 300, "window": "5 h" },
+  "promptTokenCeiling": 100000,
+  "promptTokenHeadroom": 12000,
+  "latestMessageTokenLimit": 40000,
+  "imagePartTokenBound": 6000,
+  "toolResultHistoryChars": 40000,
+  "managedSpendRefreshSeconds": 60,
+  "credentials": [
+    {
+      "id": "promotion-account",
+      "creditUsd": 200,
+      "apiKey": { "env": "ANTHROPIC_PROMO_API_KEY" }
+    },
+    {
+      "id": "managed-account",
+      "creditUsd": 200,
+      "apiKey": "managed"
+    }
+  ]
+}

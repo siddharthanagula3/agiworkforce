@@ -109,6 +109,17 @@ describe('mapping a thrown provider failure to copy', () => {
 
     expect(markProviderDegraded).not.toHaveBeenCalled();
   });
+
+  it('keeps the provider in service when only the promotion account ran out of money', () => {
+    vi.mocked(markProviderDegraded).mockClear();
+
+    const copy = upstreamFailureCopy(new Error(RAW_PROVIDER_BODY), PROVIDER, {
+      isolatedCredential: true,
+    });
+
+    expect(copy.code).toBe('provider_billing_exhausted');
+    expect(markProviderDegraded).not.toHaveBeenCalled();
+  });
 });
 
 describe('a provider refusal is diagnosable from the log', () => {

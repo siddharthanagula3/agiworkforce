@@ -16,6 +16,7 @@ vi.mock('@/lib/services/agent-notification-service', () => ({
 }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: vi.fn(),
+  listAvailableManagedProviderIds: () => new Set<string>(),
 }));
 
 import { startProviderStream } from '@/app/api/llm/v1/chat/completions/lib/adapter-factory';

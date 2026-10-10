@@ -29,6 +29,13 @@ import {
   type GenerationAttempt,
   type GenerationAttemptOutcome,
 } from '@/lib/services/generation-attempt';
+import {
+  fitFreeModelPromotionOutput,
+  freeModelPromotionSpendMicrousd,
+  type FreeModelPromotionFit,
+  type FreeModelPromotionReservation,
+} from '@/lib/server/free-model-promotion';
+import { settleFreeModelPromotionTurn } from '@/lib/server/free-model-promotion-ledger';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
@@ -50,6 +57,12 @@ export type FreeTrialReservation = {
    * predates the event and is not charged to it.
    */
   eventBudget?: EventBudgetReservation;
+  /**
+   * Present only for a turn the free model promotion pays for. Its token cost
+   * is the promotion's, never the account's Free windows, so the reservation
+   * is unmetered and this carries the spend the promotion holds for it.
+   */
+  promotion?: FreeModelPromotionReservation;
 };
 
 type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
@@ -160,7 +173,9 @@ const FREE_USAGE_SNAPSHOT_SQL = `
   group by account_period.period_start, account_period.period_end`;
 
 type FreeTrialBudgetResult =
-  { ok: true; maxOutputTokens: number } | { ok: false; code: 'budget_reached' };
+  | { ok: true; maxOutputTokens: number }
+  | { ok: false; code: 'budget_reached' }
+  | Extract<FreeModelPromotionFit, { ok: false }>;
 
 export function estimateConservativeFreeInputTokens(input: {
   model: string;
@@ -234,18 +249,27 @@ export function applyFreeTrialProviderBudget(input: {
   };
   priorCostMicrousd?: number;
 }): FreeTrialBudgetResult {
-  const result = fitFreeTrialOutputBudget({
-    reservation: input.reservation,
-    provider: input.provider,
-    model: input.request.model,
-    estimatedInputTokens: estimateConservativeFreeInputTokens({
-      model: input.request.model,
-      messages: input.request.messages,
-      tools: input.request.tools,
-    }),
-    requestedMaxOutputTokens: input.request.max_tokens,
-    priorCostMicrousd: input.priorCostMicrousd,
-  });
+  const result = input.reservation.promotion
+    ? fitFreeModelPromotionOutput({
+        reservation: input.reservation.promotion,
+        provider: input.provider,
+        model: input.request.model,
+        request: input.request,
+        requestedMaxOutputTokens: input.request.max_tokens,
+        priorCostMicrousd: input.priorCostMicrousd,
+      })
+    : fitFreeTrialOutputBudget({
+        reservation: input.reservation,
+        provider: input.provider,
+        model: input.request.model,
+        estimatedInputTokens: estimateConservativeFreeInputTokens({
+          model: input.request.model,
+          messages: input.request.messages,
+          tools: input.request.tools,
+        }),
+        requestedMaxOutputTokens: input.request.max_tokens,
+        priorCostMicrousd: input.priorCostMicrousd,
+      });
   if (result.ok) {
     input.request.max_tokens = result.maxOutputTokens;
     input.request.usePromptCache = false;
@@ -553,6 +577,8 @@ export async function beginFreeTrialRequest(params: {
   /** The requested model is selectable only because the event promotes it. */
   eventPromoted?: boolean;
   freePoolRoute?: boolean;
+  /** The free model promotion holds this turn's token spend, so the windows do not. */
+  promotion?: FreeModelPromotionReservation;
   estimatedMicrousd?: number;
   /** Below the estimate, the least that is still worth holding: the window's remainder is held instead when it covers this. */
   minimumMicrousd?: number;
@@ -565,7 +591,9 @@ export async function beginFreeTrialRequest(params: {
     userId: params.userId,
     organizationId: null,
   });
-  const unmetered = params.freePoolRoute === true ? { unmetered: true as const } : {};
+  const unmetered =
+    params.freePoolRoute === true || params.promotion ? { unmetered: true as const } : {};
+  const promotion = params.promotion ? { promotion: params.promotion } : {};
 
   const userReservation = await db.transaction(async (tx): Promise<ReserveResult> => {
     await tx.execute('insert into public.profiles (id) values ($1) on conflict (id) do nothing', [
@@ -615,7 +643,7 @@ export async function beginFreeTrialRequest(params: {
         ? remainingMicrousd
         : requestedMicrousd;
     if (remainingMicrousd === 0 || reserveMicrousd > remainingMicrousd) {
-      if (params.freePoolRoute !== true) {
+      if (params.freePoolRoute !== true && !params.promotion) {
         return { ok: false, code: 'budget_reached', resetAt: bindingResetAt(snapshot) };
       }
       await insertFreeReservation(tx, params, 0);
@@ -627,6 +655,7 @@ export async function beginFreeTrialRequest(params: {
           requestId: params.requestId,
           reservedMicrousd: 0,
           ...unmetered,
+          ...promotion,
         },
       };
     }
@@ -641,6 +670,7 @@ export async function beginFreeTrialRequest(params: {
         requestId: params.requestId,
         reservedMicrousd: reserveMicrousd,
         ...unmetered,
+        ...promotion,
       },
     };
   });
@@ -722,13 +752,13 @@ async function settleUnmeteredFreeTurn(
   outcome: FreeTrialSettlementOutcome,
   attemptOutcome: GenerationAttemptOutcome | null,
   errorClass: string | null,
-): Promise<void> {
+): Promise<boolean> {
   const db = createClaimedUserScopedDb(getNeonDb(), {
     userId: reservation.userId,
     organizationId: null,
   });
   try {
-    await db.execute(
+    const settled = await db.execute(
       `update public.free_daily_usage_reservations
           set actual_cost_microusd = 0,
               outcome = $3,
@@ -739,11 +769,13 @@ async function settleUnmeteredFreeTurn(
           and reserved_microusd = 0 and settled_at is null`,
       [reservation.userId, reservation.requestId, outcome, attemptOutcome, errorClass],
     );
+    return settled === 1;
   } catch (error) {
     logger.warn(
       { error, userId: reservation.userId, requestId: reservation.requestId },
       'Free-pool turn outcome could not be recorded',
     );
+    return false;
   }
 }
 
@@ -760,7 +792,17 @@ export async function settleFreeTrialRequest(params: {
   const attemptOutcome = attempt?.outcome ?? null;
   const errorClass = attempt ? attemptErrorClass(attempt) : null;
   if (params.reservation.reservedMicrousd <= 0) {
-    await settleUnmeteredFreeTurn(params.reservation, params.outcome, attemptOutcome, errorClass);
+    if (
+      (await settleUnmeteredFreeTurn(
+        params.reservation,
+        params.outcome,
+        attemptOutcome,
+        errorClass,
+      )) &&
+      params.reservation.promotion
+    ) {
+      await settleFreeModelPromotionTurn(params.reservation.promotion, promotionSpend(params));
+    }
     return null;
   }
 
@@ -866,7 +908,26 @@ export async function settleFreeTrialRequest(params: {
   if (params.reservation.eventBudget && settledCostMicrousd !== null) {
     await settleEventSpend(params.reservation.eventBudget, settledCostMicrousd);
   }
+  if (params.reservation.promotion && settledCostMicrousd !== null) {
+    await settleFreeModelPromotionTurn(params.reservation.promotion, promotionSpend(params));
+  }
   return settledCostMicrousd;
+}
+
+function promotionSpend(params: {
+  provider?: string;
+  model?: string;
+  usage?: TokenUsage;
+  cost?: FreeTrialCost;
+}): number {
+  return freeModelPromotionSpendMicrousd({
+    ...(params.provider ? { provider: params.provider } : {}),
+    ...(params.model ? { model: params.model } : {}),
+    ...(params.usage ? { usage: params.usage } : {}),
+    reportedMicrousd:
+      nonNegativeMicrousd(params.cost?.tokenMicrousd) +
+      nonNegativeMicrousd(params.cost?.toolMicrousd),
+  });
 }
 
 export async function releaseExpiredFreeTrialReservations(

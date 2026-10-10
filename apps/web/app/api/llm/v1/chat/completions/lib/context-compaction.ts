@@ -25,6 +25,7 @@ import {
   applyDroppedSpanReplacement,
   DROPPED_HISTORY_MARKER,
   planContextTrim,
+  type ContextSizing,
   type ContextTrimResult,
   type TrimmableMessage,
 } from './context-window';
@@ -357,6 +358,7 @@ export interface ContextCompactionInput {
   isTemporary: boolean;
   planTier: string;
   resolveEconomyRoute: () => AutoRouteDecision;
+  sizing?: ContextSizing;
 }
 
 /**
@@ -376,7 +378,7 @@ export interface ContextCompactionInput {
 export async function compactContextWindow(
   input: ContextCompactionInput,
 ): Promise<ContextTrimResult | null> {
-  const plan = planContextTrim(input.messages, input.model, input.maxOutputTokens);
+  const plan = planContextTrim(input.messages, input.model, input.maxOutputTokens, input.sizing);
   if (!plan) return null;
 
   const applyMechanicalTrim = () =>
@@ -385,6 +387,7 @@ export async function compactContextWindow(
       plan,
       plan.droppedIndices.length > 0 ? DROPPED_HISTORY_MARKER : null,
       input.model,
+      input.sizing,
     );
 
   if (
@@ -417,6 +420,7 @@ export async function compactContextWindow(
       plan,
       formatCompactedMarker(summary),
       input.model,
+      input.sizing,
     );
   } catch (error) {
     logger[error instanceof ManagedUsageRequestError ? 'warn' : 'error'](
