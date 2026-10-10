@@ -127,6 +127,7 @@
     "packages/contracts/types": {
       ".": "universal",
       "./capabilities": "universal",
+      "./country-groups": "universal",
       "./encryption-key": "universal",
       "./live-voices": "universal",
       "./models.json": "asset",
