@@ -1544,6 +1544,14 @@
             "$ref": "#/definitions/routingProfile"
           }
         },
+        "jurisdictionFallbackSlots": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        },
         "slotBackups": {
           "type": "object",
           "additionalProperties": {

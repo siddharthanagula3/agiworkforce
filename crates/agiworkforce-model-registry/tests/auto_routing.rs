@@ -364,7 +364,7 @@ fn applies_us_only_provider_overlay() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, slot_model("workhorse_general"));
+    assert_eq!(selected.model_key, slot_model("general_balanced"));
     assert_ne!(selected.model_key, slot_model("flagship_general"));
     assert!(
         !["deepseek", "qwen", "moonshot", "zhipu", "minimax"].contains(&selected.provider.as_str())
