@@ -171,6 +171,10 @@ export interface RouteHandlerDelegate {
  */
 export const ROUTE_HANDLER_DELEGATES: readonly RouteHandlerDelegate[] = [
   { route: 'models/free-quota/completions/route.ts', handler: 'lib/server/free-quota-turn.ts' },
+  {
+    route: 'voice/live/sessions/[sessionId]/close/route.ts',
+    handler: 'app/api/voice/live/sessions/lib/voice-session-settlement.ts',
+  },
 ];
 
 export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = [
