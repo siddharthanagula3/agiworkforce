@@ -2,6 +2,137 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "path": "baselines/anthropic__claude-haiku.json",
+      "digest": "036c97a932a41b3fae2f1c32e0cab115dd832a6be24b5ac40fab4d127cce5fb1",
+      "runId": "1e89deed-ffcc-4b23-8e70-c3c685380faf",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-10T19:45:47.378Z",
+      "familyId": "anthropic/claude-haiku",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-10T19:43:25.300Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:43:55.755Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:20.991Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:29.823Z"
+        },
+        "coding": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:42.764Z"
+        },
+        "reasoning": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:53.289Z"
+        },
+        "research": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:00.495Z"
+        },
+        "search": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:07.264Z"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:12.561Z"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:16.755Z"
+        },
+        "long-context": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:22.714Z"
+        },
+        "files": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:30.110Z"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:35.396Z"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:40.298Z"
+        },
+        "multilingual": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:47.378Z"
+        }
+      }
+    },
+    {
       "path": "baselines/deepseek__deepseek-flash.json",
       "digest": "d2d8398aca80c98daf3be9d8723219b6722d0f1f35dca49505ae5467a89e35de",
       "runId": null,
@@ -264,6 +395,14 @@
       }
     },
     {
+      "path": "recordings/claude-haiku-5-5.json",
+      "digest": "934681c622b84729d6fe8712417c0079ccc8a17f97899de3410a586611db60f3",
+      "runId": "1e89deed-ffcc-4b23-8e70-c3c685380faf",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-10"
+    },
+    {
       "path": "recordings/deepseek-flash.json",
       "digest": "de6d66944b84d3eaee6f8aba03cae29afeb099f66a46c6516244820f42c75c9d",
       "runId": "cf8adace-bccd-45a1-8685-d9871a2e3c7f",
@@ -294,6 +433,136 @@
       "modelKey": "grok-4.7",
       "routeId": "xai/grok-4.7",
       "measuredAt": "2026-10-07"
+    },
+    {
+      "path": "runs/claude-haiku-5-5.json",
+      "digest": "ba6ce06112e072c10aad3986815a8e2e72c9a8deaca3d1a859bf2692a19c6f85",
+      "runId": "1e89deed-ffcc-4b23-8e70-c3c685380faf",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-10T19:45:47.378Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-10T19:43:25.300Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:43:55.755Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:20.991Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:29.823Z"
+        },
+        "coding": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:42.764Z"
+        },
+        "reasoning": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:44:53.289Z"
+        },
+        "research": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:00.495Z"
+        },
+        "search": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:07.264Z"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:12.561Z"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:16.755Z"
+        },
+        "long-context": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:22.714Z"
+        },
+        "files": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:30.110Z"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:35.396Z"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:40.298Z"
+        },
+        "multilingual": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-10T19:45:47.378Z"
+        }
+      }
     },
     {
       "path": "runs/deepseek-flash.json",

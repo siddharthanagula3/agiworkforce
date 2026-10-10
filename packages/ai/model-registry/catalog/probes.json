@@ -221,6 +221,16 @@
       "detail": null,
       "toolOutcome": "not_honoured",
       "toolDetail": null
+    },
+    "claude-haiku-5-5": {
+      "routeId": "anthropic/claude-haiku-5-5",
+      "probedOn": "2026-10-10",
+      "outcome": "answered",
+      "ttfbMs": 714,
+      "echoedModelId": null,
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
     }
   }
 }

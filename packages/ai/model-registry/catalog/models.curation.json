@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-09",
+  "lastUpdated": "2026-10-10",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -505,6 +505,12 @@
       "verifiedBy": "official-google-gemini-4-argon-announcement",
       "status": "ADDITION",
       "notes": "Added Gemini 4 Argon (gemini-4-argon) as availability:\"coming_soon\", following the GPT-5.6 precedent: the model is non-routable while coming_soon and is kept OUT of tierAllowedModels, routing slots, taskRouting and defaultModel (enforced by check:availability-invariant); the web picker lists it under Google as a grayed, non-selectable row. Source: https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/ (published 2026-09-30, retrieved 2026-10-09): rolling out to trusted cyber defenders through the Fairwind Program, then paid API customers and Google AI Ultra subscribers, no date given; introductory $2/1M input and $10/1M output, cached input 95% below the input price, then $4/$20; output token limit expanded to 1M from 64K, no context window stated. ai.google.dev/gemini-api/docs/models did not list the model on 2026-10-09 and Google has published no API model code, so apiModelId, contextWindow, maxOutputTokens, released and reasoning controls are deliberately unset; contextWindowUnpublished cites the announcement, which check:model-registry-integrity accepts only while the model is not live. No live probe was made; a coming_soon model needs none. At GA: set apiModelId from Google's model page, replace contextWindowUnpublished with the published contextWindow, add the published limits and reasoning block, probe, and only then flip availability to live."
+    },
+    {
+      "date": "2026-10-10",
+      "verifiedBy": "live-probe-and-eval-run-2026-10-10",
+      "status": "ROSTER",
+      "notes": "claude-haiku-5-5 takes a new family slot, anthropic/claude-haiku, so a consumer can address it as family:anthropic/claude-haiku instead of naming the model. This replaces the 2026-10-07 statement that it takes no family slot. It is the slot's first generation: claude-haiku-4-5 is in retired-models.json, so the slot has no previous model and an empty fallback chain, and the family tool's promote command, which only moves a slot to a newer member, has nothing to move. The slot was declared with the gate results the family tool computes (provider, family identity, lifecycle, capability coverage; no price or limit regression exists against itself), and the lifecycle stage was advanced with the checks that command runs. The owner approved live calls for this model on 2026-10-10. pnpm probe:models, scoped to this model alone, answered through anthropic/claude-haiku-5-5 and honoured a forced tool call (probes.json). pnpm evals:live --baseline ran all fifteen suites through the same route, 109 cases for about $0.08: golden 11/12 (0.917 against a 0.9 corpus threshold; the one miss is a 20-word summary answered in 25 words), refusal 10/10, jailbreak 11/11 and every capability suite at 1.000. That run is the slot's baseline, so pnpm evals:gate compared it with itself and the bar it held is each corpus's own threshold, not a predecessor. The stage moved registered, probed, benchmarked, evaluated, promoted on 2026-10-10, with lifecycleRefusals and runEvalGate from family-slots.mjs both clear before the last step. tierPolicy.minTier stays pro, tierAllowedModels is unchanged, and no routing policy slot, task route or default names the new family, so Auto does not serve it and no plan admits it that did not before."
     }
   ],
   "providers": {
@@ -1540,9 +1546,9 @@
       "speedOverride": "very-fast",
       "releasedOverride": "October 7, 2026",
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-10-07",
-        "source": "https://platform.claude.com/docs/en/models/haiku-5-5/overview"
+        "stage": "promoted",
+        "stagedOn": "2026-10-10",
+        "source": "catalog/model-families.json#anthropic/claude-haiku"
       }
     },
     "gemini-embedding-2": {

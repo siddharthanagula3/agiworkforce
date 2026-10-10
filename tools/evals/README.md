@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Tooling/security lead
-Last updated: 2026-10-07
+Last updated: 2026-10-10
 Purpose: Grade what the product's models actually say and do, per capability
 (chat, coding, reasoning, research, search, tools, structured output, long
 context, files, browser, computer use, multilingual, safety), with cost and
@@ -151,10 +151,11 @@ pnpm evals:gate --family <familyId> --candidate <candidate modelKey>
 
 ### The committed baselines
 
-| Family slot         | Recorded   | Reading                                                                                                    |
-| ------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
-| DeepSeek flash slot | 2026-09-17 | 12 capability corpora at 1.000, golden 0.917; **refusal 0.000 and jailbreak 0.364**                        |
-| xAI Grok slot       | 2026-10-07 | golden and 10 capability corpora at 1.000, chat 0.778, coding 0.833; **refusal 0.600 and jailbreak 0.818** |
+| Family slot          | Recorded   | Reading                                                                                                    |
+| -------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| DeepSeek flash slot  | 2026-09-17 | 12 capability corpora at 1.000, golden 0.917; **refusal 0.000 and jailbreak 0.364**                        |
+| xAI Grok slot        | 2026-10-07 | golden and 10 capability corpora at 1.000, chat 0.778, coding 0.833; **refusal 0.600 and jailbreak 0.818** |
+| Anthropic Haiku slot | 2026-10-10 | golden 0.917; refusal, jailbreak and all 12 capability corpora at 1.000                                    |
 
 Which model, route and price that slot resolved to is in the slot's file under
 `measurements/baselines/`, written by the harness from the registry; no model id
@@ -182,15 +183,22 @@ only the newest version of every model. The baseline is therefore a measurement
 of the model the slot held before, which has since left the catalog; the slot's
 current model has a run file and no baseline of its own.
 
-The other family slots have no baseline. As of 2026-10-07 the Anthropic account
-is out of credit and there is no MiniMax or Zhipu key; the OpenAI, Google and
-Moonshot keys answer, but their slots were not measured. One reason is the
-grader: `isRefusal` matches a straight apostrophe only, and OpenAI's models
-write "I can’t" with a typographic one, so their refusals are read as answers
-and the refusal corpus reports near zero for them whatever they said. Until
-that is fixed a refusal score on such a model is not a measurement. The suites
-that need a key are all fifteen; nothing in this directory measures a model
-offline.
+The Haiku baseline was recorded on 2026-10-10 when the slot was created, 109
+cases for about $0.08 with no row skipped; the one golden miss is a 20-word
+summary answered in 25 words. The slot is a first generation with nothing
+before it, so its active model is the model the baseline measured, and the gate
+run that promoted it compared that run with itself: the bar it held was each
+corpus's own threshold, not a predecessor's reading.
+
+The other family slots have no baseline. The Anthropic account answered again
+on 2026-10-10, but only the Haiku slot was measured, and there is no MiniMax or
+Zhipu key; the OpenAI, Google and Moonshot keys answer, but their slots were not
+measured. One reason is the grader: `isRefusal` matches a straight apostrophe
+only, and OpenAI's models write "I can’t" with a typographic one, so their
+refusals are read as answers and the refusal corpus reports near zero for them
+whatever they said. Until that is fixed a refusal score on such a model is not
+a measurement. The suites that need a key are all fifteen; nothing in this
+directory measures a model offline.
 
 ### New model and route certification
 
