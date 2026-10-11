@@ -14,6 +14,8 @@ export interface KeyboardShortcut {
   meta?: boolean;
   shift?: boolean;
   alt?: boolean;
+  /** Whether the shortcut also runs while focus is in a text field or editor. */
+  firesInEditable?: boolean;
   action: () => void;
   description: string;
   category: 'navigation' | 'conversation' | 'message' | 'ui';
@@ -25,6 +27,7 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
   {
     ...OPEN_SEARCH_SHORTCUT,
     id: 'open-search',
+    firesInEditable: true,
     description: 'Open search',
     category: 'navigation',
   },
@@ -33,6 +36,7 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     ctrl: true,
     meta: true,
     id: 'show-shortcuts',
+    firesInEditable: true,
     description: 'Show keyboard shortcuts',
     category: 'ui',
   },
@@ -45,6 +49,7 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     meta: true,
     shift: true,
     id: 'new-conversation',
+    firesInEditable: true,
     description: 'New conversation',
     category: 'conversation',
   },
@@ -68,6 +73,7 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     meta: true,
     shift: true,
     id: 'copy-last-message',
+    firesInEditable: true,
     description: 'Copy last message',
     category: 'message',
   },
@@ -77,6 +83,7 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     meta: true,
     shift: true,
     id: 'regenerate-last-message',
+    firesInEditable: true,
     description: 'Regenerate last message',
     category: 'message',
   },
@@ -86,10 +93,42 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     meta: true,
     shift: true,
     id: 'toggle-artifacts',
+    firesInEditable: true,
     description: 'Toggle artifacts panel',
     category: 'ui',
   },
 ];
+
+const NON_TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'file',
+  'hidden',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+]);
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target instanceof HTMLInputElement) return !NON_TEXT_INPUT_TYPES.has(target.type);
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
+  return (
+    target.isContentEditable ||
+    target.closest('[contenteditable]:not([contenteditable="false"])') !== null
+  );
+}
+
+function shortcutYieldsToFocus(
+  event: KeyboardEvent,
+  doc: Pick<KeyboardShortcutDoc, 'firesInEditable'>,
+): boolean {
+  if (event.defaultPrevented) return true;
+  return !doc.firesInEditable && isEditableTarget(event.target);
+}
 
 export function findShortcutDoc(id: string): KeyboardShortcutDoc | undefined {
   return KEYBOARD_SHORTCUT_DOCS.find((doc) => doc.id === id);
@@ -135,10 +174,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     (event: KeyboardEvent) => {
       if (!enabled) return;
 
-      const target = event.target as HTMLElement;
-      const isInputField =
-        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-
       const isMac = safePlatform.isMac();
       const modifierKey = isMac ? event.metaKey : event.ctrlKey;
       // Shift makes the browser report the shifted character ('C', not 'c'), so
@@ -168,8 +203,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           const shiftOk = Boolean(doc.shift) === event.shiftKey;
           const altOk = Boolean(doc.alt) === event.altKey;
           const keyOk = doc.key.length === 1 ? key === doc.key.toLowerCase() : key === doc.key;
-          // Escape must not steal a keystroke from a field the user is typing in.
-          const contextOk = doc.key === 'Escape' ? !isInputField : true;
+          const contextOk = !shortcutYieldsToFocus(event, doc);
           return [modifierOk && shiftOk && altOk && keyOk && contextOk, handlerFor[doc.id]];
         })
         .find(([isMatch]) => isMatch);
