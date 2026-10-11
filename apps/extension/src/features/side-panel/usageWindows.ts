@@ -137,18 +137,21 @@ export function blockingUsageWindow(views: readonly UsageWindowView[]): UsageWin
 
 export function usageLimitNotice(
   view: UsageWindowView,
+  planTier: string | null,
   now: number = Date.now(),
 ): ManagedUsageWarning | null {
-  return selectUsageWarning([{ ...view.reading, percentRemaining: 0 }], now);
+  return selectUsageWarning([{ ...view.reading, percentRemaining: 0 }], now, { planTier });
 }
 
 export function usageWarning(
   views: readonly UsageWindowView[],
+  planTier: string | null,
   now: number = Date.now(),
 ): ManagedUsageWarning | null {
   return selectUsageWarning(
     views.map((view) => view.reading),
     now,
+    { planTier },
   );
 }
 
@@ -164,6 +167,7 @@ export function quotaBlockWindow(
 export function quotaWarningFromSignal(
   views: readonly UsageWindowView[],
   signal: ManagedQuotaWarningSignal,
+  planTier: string | null,
   now: number = Date.now(),
 ): ManagedUsageWarning | null {
   const bucket = WARNING_SCOPE_BUCKET[signal.scope];
@@ -179,6 +183,7 @@ export function quotaWarningFromSignal(
       },
     ],
     now,
+    { planTier },
   );
 }
 

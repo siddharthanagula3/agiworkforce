@@ -44,6 +44,14 @@ describe('UsageWarningBanner', () => {
     expect(onUpgrade).toHaveBeenCalledTimes(1);
   });
 
+  it('names the upgrade action as the host asks', () => {
+    const onUpgrade = vi.fn();
+    render(<UsageWarningBanner warning={warning} onUpgrade={onUpgrade} upgradeLabel="Upgrade" />);
+    fireEvent.click(screen.getByText('Upgrade'));
+    expect(onUpgrade).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Get more usage')).toBeNull();
+  });
+
   it('is not dismissible when the host cannot honour a dismissal', () => {
     render(<UsageWarningBanner warning={warning} />);
     expect(screen.queryByLabelText('Dismiss usage warning')).toBeNull();

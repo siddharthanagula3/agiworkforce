@@ -18,32 +18,36 @@ function inCredits(window: ManagedUsageCreditWindow | null | undefined) {
 
 export function usageWarningFromSnapshot(snapshot: UsageSnapshot): ManagedUsageWarning | null {
   const credits = snapshot.credits;
-  return selectUsageWarning([
-    {
-      bucket: 'session',
-      percentRemaining: 100 - normalizeUsagePercentage(snapshot.sessionUsagePercentage),
-      resetAt: snapshot.sessionResetAt,
-      ...inCredits(credits?.five_hour),
-    },
-    {
-      bucket: 'weekly',
-      percentRemaining: 100 - normalizeUsagePercentage(snapshot.weeklyUsagePercentage),
-      resetAt: snapshot.weeklyResetAt,
-      ...inCredits(credits?.weekly),
-    },
-    {
-      bucket: 'weeklyFlagship',
-      percentRemaining: 100 - normalizeUsagePercentage(snapshot.flagshipWeeklyUsagePercentage),
-      resetAt: snapshot.flagshipWeeklyResetAt,
-      ...inCredits(credits?.flagship_weekly),
-    },
-    {
-      bucket: 'period',
-      percentRemaining: 100 - normalizeUsagePercentage(snapshot.usagePercentage),
-      resetAt: snapshot.usageResetAt,
-      ...inCredits(credits?.monthly),
-    },
-  ]);
+  return selectUsageWarning(
+    [
+      {
+        bucket: 'session',
+        percentRemaining: 100 - normalizeUsagePercentage(snapshot.sessionUsagePercentage),
+        resetAt: snapshot.sessionResetAt,
+        ...inCredits(credits?.five_hour),
+      },
+      {
+        bucket: 'weekly',
+        percentRemaining: 100 - normalizeUsagePercentage(snapshot.weeklyUsagePercentage),
+        resetAt: snapshot.weeklyResetAt,
+        ...inCredits(credits?.weekly),
+      },
+      {
+        bucket: 'weeklyFlagship',
+        percentRemaining: 100 - normalizeUsagePercentage(snapshot.flagshipWeeklyUsagePercentage),
+        resetAt: snapshot.flagshipWeeklyResetAt,
+        ...inCredits(credits?.flagship_weekly),
+      },
+      {
+        bucket: 'period',
+        percentRemaining: 100 - normalizeUsagePercentage(snapshot.usagePercentage),
+        resetAt: snapshot.usageResetAt,
+        ...inCredits(credits?.monthly),
+      },
+    ],
+    Date.now(),
+    { planTier: snapshot.planTier },
+  );
 }
 
 export function UsageLimitBanner({

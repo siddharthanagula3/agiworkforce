@@ -1566,15 +1566,25 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    * bucket rather than the worst percentage with no name attached, which is
    * what `getWorstUsagePercent` (used by the sidebar widget) has to discard.
    */
+  const promotedModelActive =
+    freeModelPromotion !== null && activeModelId === freeModelPromotion.modelId;
   const usageWarning = useMemo(
-    () => selectUsageWarning(readManagedUsageBuckets(managedUsageSummary)),
-    [managedUsageSummary],
+    () =>
+      promotedModelActive
+        ? null
+        : selectUsageWarning(readManagedUsageBuckets(managedUsageSummary), Date.now(), {
+            planTier: managedUsageSummary?.plan_tier ?? null,
+          }),
+    [managedUsageSummary, promotedModelActive],
   );
   const [usageWarningDismissed, setUsageWarningDismissed] = useState(false);
   const liveUsageWarning = usageWarningDismissed ? null : usageWarning;
   const usageBanner = (
     <UsageWarningBanner
       warning={liveUsageWarning}
+      {...(isFreeBillingPlanTier(managedUsageSummary?.plan_tier)
+        ? { upgradeLabel: 'Upgrade' }
+        : {})}
       // CRIT-008: `/settings/usage` renders a SettingsModalRedirect that
       // replaces back to /chat, so pushing it unmounted and remounted this
       // page one tick after leaving it. Open the modal in place instead.

@@ -1,3 +1,4 @@
+import { isFreeBillingPlanTier } from './billing-catalog';
 import { formatCredits } from './credits';
 
 export type ManagedUsageBucket = 'session' | 'weekly' | 'weeklyFlagship' | 'period';
@@ -156,9 +157,19 @@ export interface ManagedUsageWarning {
   resetLabel: string | null;
 }
 
+export interface UsageWarningOptions {
+  /** The account's plan. Free is told it reached its limit, never a credit or percentage figure. */
+  planTier?: string | null;
+}
+
+export const FREE_USAGE_LIMIT_REACHED_HEADLINE = "You've reached the Free limit for now";
+
+export const FREE_USAGE_LIMIT_NEAR_HEADLINE = "You're close to the Free limit for now";
+
 export function selectUsageWarning(
   readings: readonly ManagedUsageBucketReading[],
   now: number = Date.now(),
+  options: UsageWarningOptions = {},
 ): ManagedUsageWarning | null {
   let binding: ManagedUsageBucketReading | null = null;
   let bindingRemaining = Number.POSITIVE_INFINITY;
@@ -180,7 +191,11 @@ export function selectUsageWarning(
     bucket: binding.bucket,
     severity: bindingRemaining <= USAGE_CRITICAL_REMAINING_PERCENT ? 'critical' : 'warning',
     percentRemaining: bindingRemaining,
-    headline: usageWarningHeadline(binding, bindingRemaining, used),
+    headline: isFreeBillingPlanTier(options.planTier)
+      ? bindingRemaining <= 0
+        ? FREE_USAGE_LIMIT_REACHED_HEADLINE
+        : FREE_USAGE_LIMIT_NEAR_HEADLINE
+      : usageWarningHeadline(binding, bindingRemaining, used),
     resetLabel: formatUsageResetIn(binding.resetAt, now),
   };
 }
