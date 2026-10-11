@@ -271,7 +271,7 @@ export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
 ];
 
 /** The version the chat route serves unless a variant or a rollout picks another. */
-export const CHAT_SYSTEM_PROMPT_PINNED_VERSION = 1;
+export const CHAT_SYSTEM_PROMPT_PINNED_VERSION = 6;
 
 const SECTION_SEPARATOR = '\n\n';
 const PLACEHOLDER = /\{([a-z][a-zA-Z0-9_]*)\}/gu;

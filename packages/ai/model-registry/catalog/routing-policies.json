@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 22,
+    "policyVersion": 25,
     "records": [
       {
         "version": 1,
@@ -202,6 +202,42 @@
         "channel": "internal",
         "effectiveOn": "2026-10-10",
         "reason": "chat.system@5 plus one rule in user_documents: never construct or guess a profile or page URL that did not come from a tool result or the user, which a v5 eval run showed as a made-up example link; v5 stays locked as measured. The unmerged lane/system-prompt branch holds different chat.system@5 to @7 texts that never shipped, and must renumber them if it merges. Enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 23,
+        "artifact": "prompt",
+        "id": "chat.system@6",
+        "channel": "canary",
+        "effectiveOn": "2026-10-10",
+        "reason": "three samples per arm of golden, refusal, jailbreak, chat and chat-prompt on the Haiku, Luna and Sonnet slots: chat-prompt 21 of 21 on each model against 12, 17 and 12 for chat.system@1, refusal and jailbreak no lower on any model, and every other drop on rows that also fail under chat.system@1. chat.system has no wired traffic split (the chat route passes no prompt selection), so this canary stage served no traffic; the eval run is its only evidence",
+        "quality": {
+          "gate": "tools/evals compare, chat.system@1 against chat.system@6, three samples per arm",
+          "commit": "87596db85118d1bc38f3fcc69c22ecb234e28a42",
+          "verdict": "held",
+          "measuredOn": "2026-10-10"
+        }
+      },
+      {
+        "version": 24,
+        "artifact": "prompt",
+        "id": "chat.system@6",
+        "channel": "stable",
+        "effectiveOn": "2026-10-10",
+        "reason": "the pin moves to chat.system@6 on the eval evidence of the canary record, with no canary traffic behind it because chat.system has no traffic split. The version is global: open conversations get the new text on their next turn, which is safe because client history cannot carry signed thinking and checkpoint resumes reuse stored messages",
+        "quality": {
+          "gate": "tools/evals compare, chat.system@1 against chat.system@6, three samples per arm",
+          "commit": "87596db85118d1bc38f3fcc69c22ecb234e28a42",
+          "verdict": "held",
+          "measuredOn": "2026-10-10"
+        }
+      },
+      {
+        "version": 25,
+        "artifact": "prompt",
+        "id": "chat.system@1",
+        "channel": "internal",
+        "effectiveOn": "2026-10-10",
+        "reason": "no longer served now that chat.system@6 is pinned; kept in the manifest as the version to restore, and measured in the same three-sample run"
       }
     ]
   },

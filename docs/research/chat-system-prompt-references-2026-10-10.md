@@ -4,8 +4,9 @@ Status: Dated external research
 Owner: Web lead
 Last updated: 2026-10-10
 
-Sources read on 2026-10-10 to write version 5 of the chat system prompt
-(`chat.system@5` in `apps/web/lib/prompts/chat-system-prompt.ts`). This file
+Sources read on 2026-10-10 to write versions 5 and 6 of the chat system prompt
+(`chat.system@5` and `@6` in `apps/web/lib/prompts/chat-system-prompt.ts`;
+version 6 is pinned). This file
 summarises what each source contributed and under what licence. The wording in
 the prompt is ours. Anything quoted here is a short excerpt, and anything not
 opened is marked as such.
@@ -73,6 +74,10 @@ Decisions that differ from the research proposal:
   raise over-refusal, and none of the eval rows needed it.
 - The rule that a resume belongs to the user is ours. No source states it, so
   the eval rows test it.
+- Version 6 is version 5 plus one rule in `user_documents`: never construct or
+  guess a profile or page URL that did not come from a tool result or the user,
+  not even as an example. A version 5 run offered a made-up LinkedIn address as
+  an example. Version 5 stays locked as it was measured.
 
 ## How a version reaches users
 
@@ -94,46 +99,54 @@ again.
 ## Evaluation
 
 `tools/evals/datasets/chat-prompt.json` holds seven rows built from the
-proposed cases. `pnpm evals:live --model <key> --chat-prompt-version <n>`
-renders that version in front of every row with the state the row declares, and
-writes its run report under `tools/evals/measurements/prompt-evals/runs/`.
+proposed cases. `pnpm evals:live --model <key> --chat-prompt-version <n>
+--sample <k>` renders that version in front of every row with the state the row
+declares, and writes its run report under
+`tools/evals/measurements/prompt-evals/runs/`.
 
-On 2026-10-10 the golden, refusal, jailbreak, chat and chat-prompt suites were
-run once per arm on three models, with version 1 as the baseline. Version 5 had
-two wording revisions: after the first run Haiku wrapped a "JSON only" answer
-in a code fence and Sonnet showed its working on a "number and unit only"
-answer, which led to the exact-format sentence; Sonnet's private-address
-decline ran over its word limit, which led to the "one or two alternatives,
-without a list" wording. The committed run files measure the final text.
+Single runs were too noisy to decide anything. Version 5 went through two
+wording revisions on single runs: an exact-format sentence, after a code-fenced
+"JSON only" answer and shown working on a "number and unit only" answer, and
+briefer privacy declines. The decision was then made on three samples per arm,
+version 1 against version 6, over golden, refusal, jailbreak, chat and
+chat-prompt (the unsuffixed version 1 run is its first sample).
 
-| Model (passed rows) | golden v1 / v5 | refusal | jailbreak | chat  | chat-prompt |
-| ------------------- | -------------- | ------- | --------- | ----- | ----------- |
-| Haiku               | 11 / 11        | 10 / 10 | 11 / 11   | 8 / 7 | 4 / 7 of 7  |
-| Luna                | 11 / 10        | 8 / 9   | 9 / 11    | 9 / 9 | 5 / 7 of 7  |
-| Sonnet              | 12 / 11        | 10 / 10 | 10 / 11   | 7 / 7 | 4 / 6 of 7  |
+| Model  | golden v1 / v6 | refusal | jailbreak | chat    | chat-prompt |
+| ------ | -------------- | ------- | --------- | ------- | ----------- |
+| Haiku  | 33 / 33        | 30 / 30 | 33 / 33   | 25 / 21 | 12 / 21     |
+| Luna   | 33 / 33        | 24 / 27 | 29 / 31   | 27 / 27 | 17 / 21     |
+| Sonnet | 36 / 35        | 30 / 30 | 30 / 33   | 23 / 21 | 12 / 21     |
 
-Version 5 fixes what the chat-prompt rows were written to catch. Under version 1,
-models refused to search for the resume owner's profile, wrote long answers
-about a private person's address, obeyed or echoed the instruction planted in a
-fetched page, claimed to forget with memory off, or answered about a file that
-was never attached. Under the final version 5 text, every chat-prompt row
-passed on Haiku and Luna. Sonnet missed one row: it gave a made-up profile URL
-as an example of a URL the user could choose.
+Version 6 passed every chat-prompt row on every sample. Refusal and jailbreak
+were no lower on any model, and on Sonnet jailbreak reached its threshold. Luna
+stays under the refusal and jailbreak thresholds under both versions: it
+declines, then writes a safe notice with a "Subject:" line, which the corpus
+scores as a leak.
 
-The three single-row drops in golden and chat on the final run did not repeat
-across runs. The same golden row failed on Haiku's version 1 baseline, and on
-Haiku's chat drop the answer said "is still in the future" where the check
-expects "is in the future". Luna's refusal row is a model trait, not a prompt
-effect: Luna declines and then writes a safe notice with a "Subject:" line,
-which the corpus scores as a leak, under both versions. With one sample per
-arm, the strict bar (every chat-prompt row and no suite below version 1) was
-not met, so the pin stays at version 1. Version 5 stays on internal in the
-release ledger.
+Every lower score sits on a row that also fails under version 1:
 
-Version 5 is longer: on a turn with tools it renders about 6,300 characters,
-against 1,550 for version 1. Most of the growth is the version 3 and 4 artifact
-runtime and precedence text, but about 2,700 characters are new in version 5.
-Input cost per case rose about two to three times on these short rows.
+- `golden/summary-budget`, the 20-word summary row, failed on every Haiku
+  sample in both arms.
+- `chat/ask-when-ambiguous` wants a question mark. Both versions answer "tell
+  me what to book" without one, and it failed under version 1 too.
+- `chat/says-it-does-not-know` wants a phrase such as "is in the future".
+  Version 6 writes "is still about four years away", and a version 1 re-run of
+  the row also failed with "is still in the future". Neither version named a
+  price.
+
+That met the pin rule, so version 6 is pinned. The release ledger records a
+canary and a stable stage that cite this run. The canary served no traffic,
+because the chat route has no traffic split for `chat.system`.
+
+Prompt size: on a turn with tools, version 6 renders about 7,100 characters with the memory section,
+against 1,500 for version 1. In the golden runs, input per case rose from 260
+to 1,710 tokens on the Anthropic models and from 195 to 1,219 on Luna.
+`artifact_runtime` (1,758 characters, from version 3) accounts for about 520 of
+those tokens on Anthropic models and about 370 on Luna. The assembler sends it
+on every turn. Gating it would be one turn-state flag. It cannot be keyed off
+the tool list, because artifacts are written as plain text with no tool.
+Callers would set it: the web chat route keeps it, and a Slack turn, which
+renders no artifacts, could drop it.
 
 ## Not verified
 
