@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DevicePresence } from '@agiworkforce/cloud-contracts';
 import {
   REMOTE_CODE_LIMITS,
@@ -11,9 +11,7 @@ import {
 import { Mic } from '@agiworkforce/icons';
 import { Button, Spinner, Textarea } from '@agiworkforce/ui';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
-import { MicrophonePrivacyNotice } from '@features/chat/components/MicrophonePrivacyNotice';
 import { useDictation } from '@features/chat/hooks/use-dictation';
-import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { readBrowserPairing, type BrowserPairing } from '../lib/browser-pairing';
 import {
@@ -237,13 +235,6 @@ export function RemoteComputerPage() {
     onInsert: (text) => setDraft((current) => (current ? `${current} ${text}` : text)),
     onSend: (text) => void sendTask(draft ? `${draft} ${text}` : text),
   });
-  const microphoneOwner = useId();
-  const askForMicrophone = useMicrophoneNoticeStore((state) => state.askForMicrophone);
-  const withdrawMicrophoneRequest = useMicrophoneNoticeStore((state) => state.withdraw);
-  useEffect(
-    () => () => withdrawMicrophoneRequest(microphoneOwner),
-    [withdrawMicrophoneRequest, microphoneOwner],
-  );
 
   return (
     <main
@@ -307,7 +298,6 @@ export function RemoteComputerPage() {
             onChange={(event) => setDraft(event.target.value)}
             rows={4}
           />
-          <MicrophonePrivacyNotice />
           {dictation.isActive ? (
             <DictationStrip
               status={dictation.status}
@@ -329,7 +319,7 @@ export function RemoteComputerPage() {
                 variant="outline"
                 size="icon"
                 aria-label={DICTATE_LABEL}
-                onClick={() => askForMicrophone(microphoneOwner, dictation.start)}
+                onClick={dictation.start}
               >
                 <Mic className="h-4 w-4" aria-hidden="true" />
               </Button>

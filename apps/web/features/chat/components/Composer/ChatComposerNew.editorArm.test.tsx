@@ -12,7 +12,6 @@ import {
   COMPOSER_EDITOR_MODES,
   COMPOSER_EDITOR_QUERY_PARAM,
 } from '@features/chat/lib/composer-editor-gate';
-import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 import { ChatComposerNew } from './ChatComposerNew';
 type ScanModule0 = typeof import('@features/chat/hooks/use-dictation');
@@ -313,19 +312,12 @@ describe('editor arm · external message writers', () => {
   });
 
   it('routes a dictated transcript through appendText', () => {
-    const microphone = useMicrophoneNoticeStore.getState();
-    microphone.askForMicrophone('earlier-dictation', () => undefined);
-    microphone.acknowledge();
-    try {
-      render(<ChatComposerNew onSend={vi.fn()} />);
+    render(<ChatComposerNew onSend={vi.fn()} />);
 
-      type('already typed');
-      fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
+    type('already typed');
+    fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
 
-      expect(editorHandle.appendText).toHaveBeenCalledWith(` ${TRANSCRIPT}`);
-    } finally {
-      useMicrophoneNoticeStore.setState({ request: null, acknowledgedThisSession: null });
-    }
+    expect(editorHandle.appendText).toHaveBeenCalledWith(` ${TRANSCRIPT}`);
   });
 
   it('clears the editor when the message is sent', () => {

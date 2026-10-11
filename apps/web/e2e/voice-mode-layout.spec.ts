@@ -52,13 +52,7 @@ async function enterVoiceMode(page: Page): Promise<void> {
   await page.goto('/chat');
   const start = page.getByRole('button', { name: 'Start voice mode' }).first();
   const surface = page.getByTestId('voice-mode-surface');
-  const notice = page.getByRole('note', { name: 'Where your voice goes' });
   await start.click();
-  await expect(surface.or(notice)).toBeVisible({ timeout: 20_000 });
-  if (await notice.isVisible()) {
-    await notice.getByRole('button', { name: 'Continue' }).click();
-    if (!(await surface.isVisible())) await start.click();
-  }
   await expect(surface).toBeVisible({ timeout: 20_000 });
 }
 
