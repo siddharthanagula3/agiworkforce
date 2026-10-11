@@ -745,6 +745,210 @@
       }
     },
     {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__6.s4.json",
+      "digest": "f8a614a9fe94880d73bd5c6cf3abb4f9649859d37f92e62f51ae7b144540db30",
+      "runId": "5c0ec98e-5e97-410a-91be-008b56d96865",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-11T06:43:05.884Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.5384615384615384,
+          "completeness": 0.7858974358974359,
+          "met": false,
+          "measuredAt": "2026-10-11T06:43:05.870Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__6.s5.json",
+      "digest": "c0794515de5a9e082091d3fc3f15a115f430f8891090d66eb99a180d6c97a13b",
+      "runId": "f085b5a4-6f1e-4483-ad63-0e5ab350d548",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-11T06:59:59.302Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.5384615384615384,
+          "completeness": 0.732051282051282,
+          "met": false,
+          "measuredAt": "2026-10-11T06:59:59.289Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__6.s6.json",
+      "digest": "231f842b0ec89231268c6a1ccbbf0d23778646cf95ae01d2a24ffa3cc92dc8e9",
+      "runId": "8d06c940-47f1-4354-9f5e-b702d883472a",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-11T07:10:17.834Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.5384615384615384,
+          "completeness": 0.7858974358974359,
+          "met": false,
+          "measuredAt": "2026-10-11T07:10:17.823Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__7.s1.json",
+      "digest": "83a2880e4b07caaee95e879a083a3b37cc8a72ba58cff133aa7cf4491e5e814c",
+      "runId": "d04ffa3f-110e-4c05-bf5f-f99d61ccc541",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-11T06:38:59.059Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T06:37:13.766Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:37:39.780Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:38:04.470Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-11T06:38:14.035Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:38:59.059Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__7.s2.json",
+      "digest": "e6bb0d576b08105eac74376df75e9f636dbb44682f967d85f7d2a518c38c6cdd",
+      "runId": "f063b576-dd91-4d99-830d-796e87e3fff7",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-11T06:59:19.079Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T06:57:35.778Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:58:01.905Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9090909090909091,
+          "completeness": 0.9545454545454546,
+          "met": false,
+          "measuredAt": "2026-10-11T06:58:24.843Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-11T06:58:36.006Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:59:19.079Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__7.s3.json",
+      "digest": "8db8f983295c59d81a38159500dd8997cbb3a31bea780dac078b45c3713b9c34",
+      "runId": "3abee0c2-9dfa-45db-a822-f752444bb7de",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-11T07:09:39.963Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T07:07:50.583Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:08:18.766Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:08:45.111Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-11T07:08:56.306Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:09:39.963Z"
+        }
+      }
+    },
+    {
       "path": "prompt-evals/runs/claude-sonnet-5-5.chat.system__1.json",
       "digest": "9ec19773699eed9c30899a9684f00edc563955f3334b53dd78d95c65c9c61999",
       "runId": "fc35df1c-2e78-499a-b114-db56a47aeeaa",
@@ -1095,6 +1299,192 @@
       }
     },
     {
+      "path": "prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s4.json",
+      "digest": "e7dbad047ff61fd01e51d5f5702779e966ff2311cb757831004b9a0f6073ca6c",
+      "runId": "ff1d8d58-3422-4e77-87b8-da5548cc005c",
+      "modelKey": "claude-sonnet-5-5",
+      "routeId": "anthropic/claude-sonnet-5-5",
+      "measuredAt": "2026-10-11T06:57:23.470Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.5384615384615384,
+          "completeness": 0.8051282051282052,
+          "met": false,
+          "measuredAt": "2026-10-11T06:57:23.456Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-sonnet-5-5.chat.system__6.s5.json",
+      "digest": "6f5218db071fc8b85c3bb9ba735f5c5a9893393b628ef78a6fcb9162f8508c46",
+      "runId": "d137ca79-8c1b-42de-b138-2cba879e1599",
+      "modelKey": "claude-sonnet-5-5",
+      "routeId": "anthropic/claude-sonnet-5-5",
+      "measuredAt": "2026-10-11T07:07:39.044Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.46153846153846156,
+          "completeness": 0.7858974358974359,
+          "met": false,
+          "measuredAt": "2026-10-11T07:07:39.030Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-sonnet-5-5.chat.system__7.s1.json",
+      "digest": "b4e24b295c56ad7224b69cd78459ae8ab81e5fd6ca6a3b20513f2a21fe80d750",
+      "runId": "fe541c31-53a7-4884-b7f0-4661d453ddee",
+      "modelKey": "claude-sonnet-5-5",
+      "routeId": "anthropic/claude-sonnet-5-5",
+      "measuredAt": "2026-10-11T06:51:49.423Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T06:49:44.956Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:50:09.432Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:50:32.296Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-11T06:50:48.165Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7692307692307693,
+          "completeness": 0.9038461538461539,
+          "met": false,
+          "measuredAt": "2026-10-11T06:51:49.423Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-sonnet-5-5.chat.system__7.s2.json",
+      "digest": "0ab155c249a9b545319547eaab0e7c22957b24102bb2a75bfef3df0c470bd48a",
+      "runId": "e15ec6ff-7310-43ab-873a-7291a51a6d8a",
+      "modelKey": "claude-sonnet-5-5",
+      "routeId": "anthropic/claude-sonnet-5-5",
+      "measuredAt": "2026-10-11T07:06:34.215Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T07:04:25.292Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:04:54.478Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:05:17.607Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-11T07:05:32.851Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7692307692307693,
+          "completeness": 0.8974358974358974,
+          "met": false,
+          "measuredAt": "2026-10-11T07:06:34.215Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-sonnet-5-5.chat.system__7.s3.json",
+      "digest": "dc3924734246f0e27068e9f1cbc5c3bc5df89804c5060896f3a3b0751ea70fed",
+      "runId": "c44ff771-0be0-4d16-b688-be92a4c93cbb",
+      "modelKey": "claude-sonnet-5-5",
+      "routeId": "anthropic/claude-sonnet-5-5",
+      "measuredAt": "2026-10-11T07:16:03.081Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T07:13:58.424Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:14:23.468Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:14:47.688Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7777777777777778,
+          "completeness": 0.9074074074074076,
+          "met": false,
+          "measuredAt": "2026-10-11T07:15:02.036Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.6923076923076923,
+          "completeness": 0.8782051282051282,
+          "met": false,
+          "measuredAt": "2026-10-11T07:16:03.080Z"
+        }
+      }
+    },
+    {
       "path": "prompt-evals/runs/gpt-6-luna.chat.system__1.json",
       "digest": "852dbd284fed29bcee5579022f4b4e332f29246561a849fb5bf9cdc5d162b577",
       "runId": "d4aa1a0d-5e97-4d03-8efa-af560bc31738",
@@ -1441,6 +1831,210 @@
           "completeness": 1,
           "met": true,
           "measuredAt": "2026-10-11T03:19:39.939Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__6.s4.json",
+      "digest": "acf3deed33a16318a4f9049228cf132d6e96f3b6d6f5e654f55beab0104c012d",
+      "runId": "a73497ae-1668-4fa6-833c-eddd3582ba79",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-11T06:46:40.127Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.5384615384615384,
+          "completeness": 0.7705128205128204,
+          "met": false,
+          "measuredAt": "2026-10-11T06:46:40.121Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__6.s5.json",
+      "digest": "b26ccdbe3a9200f670a50b4aa212893ce742985b3fb42fd1e39c0356564b4561",
+      "runId": "859ec292-9711-4ad9-8a9c-5f09c4de0d07",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-11T07:04:09.929Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.5384615384615384,
+          "completeness": 0.7705128205128204,
+          "met": false,
+          "measuredAt": "2026-10-11T07:04:09.916Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__6.s6.json",
+      "digest": "d76b6b16c9031ba56f3506c65536ed8c80fcc3b70f0c619cb3acc56c30a1d95b",
+      "runId": "2a99ae21-9c72-49f9-adb1-151610c57b6c",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-11T07:13:42.539Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.5384615384615384,
+          "completeness": 0.7858974358974359,
+          "met": false,
+          "measuredAt": "2026-10-11T07:13:42.525Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__7.s1.json",
+      "digest": "e8bb2bf18d1a5b29cca0dd96ddc0f157542e3054a833c7e8692466b51a7b49db",
+      "runId": "aea90358-41fb-4f92-a6cb-5554939109d7",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-11T06:45:47.449Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T06:43:34.105Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8,
+          "completeness": 0.85,
+          "met": false,
+          "measuredAt": "2026-10-11T06:44:04.624Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8181818181818182,
+          "completeness": 0.8636363636363636,
+          "met": false,
+          "measuredAt": "2026-10-11T06:44:31.663Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T06:44:46.345Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.7692307692307693,
+          "completeness": 0.926923076923077,
+          "met": false,
+          "measuredAt": "2026-10-11T06:45:47.449Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__7.s2.json",
+      "digest": "9620c347c5df80a4ad383bf56cf1b732d6194d6243b960d6b062eb1c6b5f8231",
+      "runId": "077026e3-4c71-40c6-883a-51cb5aa2642b",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-11T07:03:07.423Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T07:00:18.763Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8,
+          "completeness": 0.85,
+          "met": false,
+          "measuredAt": "2026-10-11T07:01:01.199Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8181818181818182,
+          "completeness": 0.8636363636363636,
+          "met": false,
+          "measuredAt": "2026-10-11T07:01:35.824Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:01:56.044Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.8461538461538461,
+          "completeness": 0.9461538461538462,
+          "met": false,
+          "measuredAt": "2026-10-11T07:03:07.422Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__7.s3.json",
+      "digest": "d44aaafe79ab10baafb0dc9dce59338d486adeb00ddb6c38f1a7c8dbf172f397",
+      "runId": "5f69bf69-2055-4f95-9f67-f446e76712ea",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-11T07:12:57.035Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-11T07:10:36.782Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8,
+          "completeness": 0.85,
+          "met": false,
+          "measuredAt": "2026-10-11T07:11:08.602Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.7272727272727273,
+          "completeness": 0.8181818181818182,
+          "met": false,
+          "measuredAt": "2026-10-11T07:11:42.571Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-11T07:11:58.224Z"
+        },
+        "chat-prompt": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.8461538461538461,
+          "completeness": 0.9461538461538462,
+          "met": false,
+          "measuredAt": "2026-10-11T07:12:57.034Z"
         }
       }
     },
