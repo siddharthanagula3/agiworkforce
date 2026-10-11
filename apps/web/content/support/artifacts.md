@@ -14,17 +14,18 @@ When an answer produces a document, a piece of code or a rendered page rather
 than a paragraph, it opens as an artifact in a panel beside the conversation.
 The panel can be opened and closed from the conversation, or with
 Shift+Cmd/Ctrl+A, and has a fullscreen view. The header keeps the title, a
-version stepper, Copy, Publish and the fullscreen and close buttons in view;
-everything else (download, duplicate, refresh, open in a new tab, save to a
-project or the Library) is under **More**, which works with the arrow keys and
-closes with Escape.
+version stepper, Copy, Publish and the fullscreen and close buttons in view
+(on a narrow panel Publish moves under **More**); everything else (download,
+duplicate, refresh, open in a new tab, save to a project or the Library) is
+under **More**, which works with the arrow keys and closes with Escape.
 
 ## Editing one
 
 Edits you make in the panel are saved as new versions, and earlier versions can
 be restored. **Request edits** on a rendered page lets you click an element in
 the preview and describe the change; it is sent as a normal message that names
-the element, and the reply becomes the next version. **Duplicate** makes an independent copy, confirmed with
+the element, and the reply becomes the next version. **Duplicate** makes an
+independent copy, confirmed with
 "Duplicated. Edits here no longer touch the original." **Save to project** files
 it into a project's knowledge.
 
@@ -45,7 +46,7 @@ conversation: anyone with the link, or your workspace only, and the panel
 confirms which is in force. Changing it later asks first ("Make this public
 again?", "Limit this to your workspace?").
 
-Settings holds a **Published artifacts** list with **Unpublish artifact** on
+Settings holds a **Published artifacts** list with **Unpublish** on
 each one. Unpublishing stops the link working.
 
 ## When a preview will not render
