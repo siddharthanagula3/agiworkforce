@@ -441,8 +441,13 @@ describe('a free quota model is offered only on current quota-only evidence', ()
       }),
     );
 
+    const retiredByThen = (key: string) => {
+      const retiresAt = getProviderOfferings()[key]?.retiresAt;
+      return retiresAt !== undefined && Date.parse(retiresAt) <= lastMinute;
+    };
     const stillLive = endingKeys.filter((key) => before.get(key)?.status !== 'expired');
-    expect(stillLive.length).toBeGreaterThan(endingKeys.length / 2);
+    expect(stillLive).toEqual(endingKeys.filter((key) => !retiredByThen(key)));
+    expect(stillLive.length).toBeGreaterThan(0);
     expect(endingKeys.every((key) => after.get(key)?.status === 'expired')).toBe(true);
   });
 
@@ -456,19 +461,52 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     expect([...result.values()].every((decision) => decision.status === 'expired')).toBe(true);
   });
 
-  it('publishes the issuer and one status per inventory row', async () => {
+  it('publishes the issuer and one status per inventory row whose offer has not ended', async () => {
     const decisions = await resolveFreeQuotaDecisions(
       context({ store: await attested(createMemoryKeyValueStore()) }),
       { inventory: reviewedInventory },
     );
     const catalogue = buildFreeQuotaCatalogue(decisions!);
     expect(catalogue.issuer).toBe(inventory.issuer);
-    const inventoryOrder = inventory.entries.map((entry) => entry.offeringKey);
+    const ended = decisions!.offerings
+      .filter(({ decision }) => decision.status === 'expired')
+      .map(({ entry }) => entry.offeringKey);
     const listed = catalogue.models.map((model) => model.key);
-    expect([...listed].sort()).toEqual([...inventoryOrder].sort());
-    expect(new Set(catalogue.models.map((model) => model.status))).toEqual(
-      new Set(['ready', 'expired', 'unavailable']),
+    expect(ended.length).toBeGreaterThan(0);
+    expect([...listed].sort()).toEqual(
+      inventory.entries
+        .map((entry) => entry.offeringKey)
+        .filter((key) => !ended.includes(key))
+        .sort(),
     );
+    expect(new Set(catalogue.models.map((model) => model.status))).toEqual(
+      new Set(['ready', 'unavailable']),
+    );
+  });
+
+  it('lists no model whose provider has retired it, whatever its allocation still says', async () => {
+    const afterRetirement = Date.UTC(2026, 9, 11);
+    const decisions = await resolveFreeQuotaDecisions(
+      context({
+        store: await attested(createMemoryKeyValueStore(), {
+          checkedAtMs: afterRetirement - 60_000,
+        }),
+        nowMs: afterRetirement,
+      }),
+      { inventory: reviewedInventory },
+    );
+    const { models } = buildFreeQuotaCatalogue(decisions!);
+    const retired = Object.entries(getProviderOfferings())
+      .filter(([, offering]) => {
+        return (
+          offering.retiresAt !== undefined && Date.parse(offering.retiresAt) <= afterRetirement
+        );
+      })
+      .map(([key]) => key);
+
+    expect(retired.length).toBeGreaterThan(90);
+    expect(models.filter((model) => retired.includes(model.key))).toEqual([]);
+    expect(models.some((model) => model.status === 'ready')).toBe(true);
   });
 
   it('lists the allowance that ends soonest first and keeps inventory order within a day', async () => {
