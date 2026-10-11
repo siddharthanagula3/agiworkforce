@@ -13,7 +13,7 @@ import { chatSystemPromptSection, type ChatSystemPromptSections } from './chat-s
 
 const TOOL_SECTION_PREFIX = 'tool.';
 
-const CAPABILITY_SECTION_PREFIX = 'capability.';
+const CAPABILITY_SECTION_PREFIX = 'product_capability.';
 
 const ARTIFACTS_CAPABILITY = 'artifacts';
 
