@@ -23,7 +23,7 @@ describe('useStreamingArtifactSync', () => {
     useStreamingArtifactStore.getState().clearStreamingArtifact();
   });
 
-  it('publishes the partial block, auto-opens the panel, and selects the deterministic id', () => {
+  it('publishes the partial block and selects the deterministic id without opening the panel', () => {
     const block = blockFor('Sure!\n\n```html\n<!DOCTYPE html>\n<html>');
     renderHook(() =>
       useStreamingArtifactSync({
@@ -39,11 +39,11 @@ describe('useStreamingArtifactSync', () => {
     expect(streaming?.artifactId).toBe(expectedId);
     expect(streaming?.content).toBe('<!DOCTYPE html>\n<html>');
     expect(streaming?.language).toBe('html');
-    expect(useArtifactsStore.getState().panelOpen).toBe(true);
+    expect(useArtifactsStore.getState().panelOpen).toBe(false);
     expect(useArtifactsStore.getState().selectedArtifactId).toBe(expectedId);
   });
 
-  it('updates the streamed content on subsequent chunks without re-opening a user-closed panel', () => {
+  it('updates the streamed content on subsequent chunks and leaves the panel as the reader set it', () => {
     const { rerender } = renderHook(
       ({ block }: { block: TrailingUnclosedBlock | null }) =>
         useStreamingArtifactSync({

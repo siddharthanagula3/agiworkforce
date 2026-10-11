@@ -1653,7 +1653,9 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.getByTestId('markdown-content')).not.toHaveTextContent('EXPLICIT_PREVIEW');
+      expect(await screen.findByTestId('markdown-content')).not.toHaveTextContent(
+        'EXPLICIT_PREVIEW',
+      );
       await waitFor(() =>
         expect(useArtifactsStore.getState().getMessageArtifacts('msg-marked-html')).toHaveLength(1),
       );

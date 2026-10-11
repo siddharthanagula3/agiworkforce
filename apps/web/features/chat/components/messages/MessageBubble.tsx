@@ -152,6 +152,7 @@ const StreamingMarkdownContent = dynamic(
 
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
+import { ArtifactCreatingRow } from '../artifacts/ArtifactCreatingRow';
 import {
   codeBlockEditorArtifact,
   extractArtifacts,
@@ -2536,25 +2537,14 @@ const MessageBubbleComponent = function MessageBubble({
             <InteractiveCardBlock cards={trailingInteractiveCards} assistantText={cleanedContent} />
           ) : null}
 
-          {/* Compact chip while an artifact block streams into the panel, the raw
-              fence is stripped from the body above; this is its in-transcript stand-in. */}
           {!isUser && streamingBlock && (
-            <button
-              type="button"
-              onClick={() => {
+            <ArtifactCreatingRow
+              language={streamingBlock.language}
+              content={streamingBlock.content}
+              onShow={() => {
                 useArtifactsStore.getState().setPanelOpen(true);
               }}
-              className="mt-2 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:bg-muted/70"
-              aria-label="Show artifact being written"
-            >
-              <span
-                className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary"
-                aria-hidden="true"
-              />
-              <span>
-                Writing {streamingBlock.language === 'text' ? 'artifact' : streamingBlock.language}…
-              </span>
-            </button>
+            />
           )}
 
           {(message.metadata?.sharedAttachments?.length ?? 0) > 0 && (

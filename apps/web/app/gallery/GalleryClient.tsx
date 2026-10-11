@@ -26,7 +26,7 @@ import type { Artifact } from '@/features/chat/stores/artifacts-store';
 import { useArtifactIndex } from '@/features/chat/hooks/use-artifact-index';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
 import type { ArtifactData } from '@/features/chat/components/artifacts/ArtifactPreview';
-import { TypeIcon } from '@/features/chat/components/artifacts/InlineArtifactCards';
+import { TypeIcon } from '@/features/chat/components/artifacts/artifact-labels';
 import { Eyebrow, Prose } from '@/features/marketing/components/system';
 import { useDialogKeyboard } from '@agiworkforce/ui';
 import { MermaidDiagram } from '@agiworkforce/unified-chat';
