@@ -191,10 +191,10 @@ describe('Free section in the composer', () => {
     expect(screen.queryByText(offering.providerModelId!)).not.toBeInTheDocument();
   });
 
-  it('keeps unavailable models in a collapsed group with a plain reason on each row', () => {
+  it('lists no unavailable group and renders a not-ready model nowhere in the section', () => {
     const exhausted = familyB[0]!;
     const expired = familyB[1]!;
-    const onSelect = renderSection(
+    renderSection(
       sources(
         source(
           'ready',
@@ -203,18 +203,27 @@ describe('Free section in the composer', () => {
       ),
     );
 
+    expect(screen.getByRole('button', { name: name(familyA[0]!) })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Unavailable/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: 'Unavailable free models' }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: name(exhausted) })).not.toBeInTheDocument();
-    const toggle = screen.getByRole('button', { name: /Unavailable/ });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    fireEvent.click(toggle);
+    expect(screen.queryByRole('button', { name: name(expired) })).not.toBeInTheDocument();
+  });
+
+  it('explains a selected model whose allowance is used up and keeps it unselectable', () => {
+    const exhausted = familyB[0]!;
+    const onSelect = renderSection(
+      sources(source('ready', catalogue([model(familyA[0]!), model(exhausted, 'exhausted')]))),
+      { selectedId: exhausted },
+    );
 
     const spent = screen.getByRole('button', { name: name(exhausted) });
+    expect(spent).toHaveAttribute('aria-pressed', 'true');
     expect(spent).toHaveAttribute('aria-disabled', 'true');
     expect(spent).not.toHaveAttribute('disabled');
     expect(spent).toHaveAccessibleDescription(/Free allowance used up$/);
-    expect(screen.getByRole('button', { name: name(expired) })).toHaveAccessibleDescription(
-      new RegExp(`Free offer ended ${literal(calendarDay('2026-08-22'))}$`),
-    );
 
     fireEvent.click(spent);
     expect(onSelect).not.toHaveBeenCalled();
@@ -235,24 +244,27 @@ describe('Free section in the composer', () => {
           catalogue([{ ...model(ready), expiresOn: '2026-10-21' }, model(ended, 'expired')]),
         ),
       ),
+      { selectedId: ended },
     );
-    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
 
     expect(screen.getByRole('button', { name: name(ready) })).toHaveAccessibleDescription(
       new RegExp(`expires ${literal(calendarDay('2026-10-21'))}$`),
     );
     const endedRow = screen.getByRole('button', { name: name(ended) });
+    expect(endedRow).toHaveAccessibleDescription(
+      new RegExp(`Free offer ended ${literal(calendarDay('2026-08-22'))}$`),
+    );
     fireEvent.click(endedRow);
     expect(screen.getByRole('status')).toHaveTextContent(`ended on ${calendarDay('2026-08-22')}.`);
     expect(document.body).not.toHaveTextContent(/\d{4}-\d{2}-\d{2}/);
   });
 
-  it('announces why through a live region that is on the page before the row is pressed', () => {
+  it('announces why through a live region that is on the page before the pinned row is pressed', () => {
     const unavailable = familyB[0]!;
     renderSection(
       sources(source('ready', catalogue([model(familyA[0]!), model(unavailable, 'unavailable')]))),
+      { selectedId: unavailable },
     );
-    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
     const row = screen.getByRole('button', { name: name(unavailable) });
     const region = screen.getByRole('status');
     expect(region).toBeEmptyDOMElement();
@@ -268,23 +280,21 @@ describe('Free section in the composer', () => {
     );
   });
 
-  it('replaces a wall of unavailable rows with one explanation when the whole pool is paused', () => {
+  it('renders nothing for a pool with no ready model, and says nothing about it', () => {
     renderSection(
       sources(source('ready', catalogue(chatKeys.map((key) => model(key, 'unavailable'))))),
     );
 
-    expect(
-      screen.getByText(
-        `Free models are paused right now. Keep chatting with ${FALLBACK}, or check back later.`,
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/paused/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/used up/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: `${ISSUER} free models` })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
       'Free ',
       FALLBACK,
     ]);
   });
 
-  it('names only the paused pool while another free source is still being checked', () => {
+  it('leaves a pool with no ready model out while another free source is still being checked', () => {
     renderSection(
       sources(
         source('ready', catalogue(chatKeys.map((key) => model(key, 'unavailable')))),
@@ -292,22 +302,31 @@ describe('Free section in the composer', () => {
       ),
     );
 
-    expect(screen.getByText(`${ISSUER} free models are paused right now.`)).toBeInTheDocument();
-    expect(screen.queryByText(/^Free models are paused/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Keep chatting/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/paused/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: `${ISSUER} free models` })).not.toBeInTheDocument();
     expect(screen.getByText('Checking free models…')).toBeInTheDocument();
   });
 
-  it('names only the paused pool and offers a retry when another free source failed', () => {
-    const failed = source('error');
+  it('leaves a spent pool out and shows no retry or Experiential Labs text when that source failed', () => {
     renderSection(
-      sources(source('ready', catalogue(chatKeys.map((key) => model(key, 'exhausted')))), failed),
+      sources(
+        source('ready', catalogue(chatKeys.map((key) => model(key, 'exhausted')))),
+        source('error'),
+      ),
     );
 
-    expect(screen.getByText(`${ISSUER} free allowances are used up.`)).toBeInTheDocument();
-    expect(screen.queryByText(/^Free model allowances are used up/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Keep chatting/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry Experiential Labs free models' }));
+    expect(screen.queryByText(/used up/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/paused/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: `${ISSUER} free models` })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/Experiential Labs/);
+  });
+
+  it('still offers a retry when the main free source failed', () => {
+    const failed = source('error');
+    renderSection(sources(failed));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading free models' }));
     expect(failed.retry).toHaveBeenCalledTimes(1);
   });
 
@@ -536,7 +555,7 @@ describe('Free section in the composer', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('searches every free model the section lists, not only those behind More models', () => {
+  it('searches every ready free model, not only those behind More models, and never a not-ready one', () => {
     const ended = familyB[0]!;
     renderSection(
       sources(
@@ -579,11 +598,8 @@ describe('Free section in the composer', () => {
     );
 
     fireEvent.change(search, { target: { value: name(ended) } });
-    const endedRow = within(more).getByRole('button', { name: name(ended) });
-    expect(endedRow).toHaveAttribute('aria-disabled', 'true');
-    expect(endedRow).toHaveAccessibleDescription(
-      new RegExp(`Free offer ended ${literal(calendarDay('2026-08-22'))}$`),
-    );
+    expect(within(more).queryByRole('button', { name: name(ended) })).not.toBeInTheDocument();
+    expect(within(more).getByText('No free models match.')).toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: FALLBACK } });
     expect(within(more).getByRole('button', { name: FALLBACK })).toBeInTheDocument();
@@ -731,14 +747,15 @@ describe('Free section in the composer', () => {
     expect(screen.queryByRole('combobox', { name: 'Free model category' })).not.toBeInTheDocument();
   });
 
-  it('explains an unavailable media model without suggesting the chat model', () => {
+  it('explains a selected unavailable media model without suggesting the chat model', () => {
     const [ready, unavailable] = imageKeys.filter(
       (key) => providerOfferingLabel(key)!.family === providerOfferingLabel(imageKey)!.family,
     );
     renderSection(
       sources(source('ready', catalogue([model(ready!), model(unavailable!, 'unavailable')]))),
+      { selectedId: unavailable! },
     );
-    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
+    expect(screen.queryByRole('button', { name: /Unavailable/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: name(unavailable!) }));
 
     expect(screen.getByRole('status')).toHaveTextContent(/Choose another free model\.$/);
@@ -750,14 +767,13 @@ describe('Free section in the composer', () => {
     renderSection(
       sources(
         source(
-          'ready',
+          'error',
           catalogue([...familyA.map((key) => model(key)), model(unavailable, 'unavailable')]),
         ),
-        source('error'),
       ),
+      { selectedId: unavailable },
     );
     fireEvent.click(screen.getByRole('button', { name: /More models/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
     const featured = within(screen.getByRole('group', { name: `${ISSUER} free models` }));
     const rows = [
       screen.getByRole('button', { name: 'Free' }),
@@ -765,8 +781,7 @@ describe('Free section in the composer', () => {
       within(screen.getByRole('group', { name: 'More free models' })).getAllByRole('button')[0]!,
       screen.getByRole('button', { name: name(unavailable) }),
       screen.getByRole('button', { name: /More models/ }),
-      screen.getByRole('button', { name: /Unavailable/ }),
-      screen.getByRole('button', { name: 'Retry Experiential Labs free models' }),
+      screen.getByRole('button', { name: 'Retry loading free models' }),
     ];
 
     for (const row of rows) {

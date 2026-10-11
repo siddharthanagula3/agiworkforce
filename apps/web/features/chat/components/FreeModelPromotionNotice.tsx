@@ -13,7 +13,6 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useFreeModelPromotion } from '../hooks/use-free-model-promotion';
 import {
   FREE_MODEL_PROMOTION_DISMISS_LABEL,
-  FREE_MODEL_PROMOTION_FINE_PRINT,
   FREE_MODEL_PROMOTION_NOTICE_TITLE,
   freeModelPromotionHeadline,
 } from '../lib/free-model-promotion-copy';
@@ -54,9 +53,8 @@ export function FreeModelPromotionNotice() {
       <Info className="h-4 w-4 shrink-0 text-[var(--chat-text-muted)]" aria-hidden="true" />
       <p className="min-w-0 flex-1">
         <span className="font-medium text-[var(--chat-text-primary)]">
-          {freeModelPromotionHeadline(modelName, promotion.endsAt)}
+          {freeModelPromotionHeadline(modelName)}
         </span>
-        , {FREE_MODEL_PROMOTION_FINE_PRINT}.
       </p>
       <button
         type="button"

@@ -115,11 +115,8 @@ vi.mock('zustand/middleware', async () => {
 import { ComposerFooter } from '../ComposerFooter';
 
 const ENDS_AT = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
-const ENDS_ON = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-}).format(new Date(ENDS_AT));
+const MONTH_NAME = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/;
+const ISO_DATE = /\d{4}-\d{2}-\d{2}/;
 
 const openPicker = () => {
   render(<ComposerFooter />);
@@ -151,14 +148,16 @@ describe('ComposerFooter · free model promotion', () => {
     await waitFor(() => expect(sel.id).toBe('fixture-promoted'));
   });
 
-  it('labels the promoted model with its end date and lets a Free account pick it', async () => {
+  it('labels the promoted model as free for a limited time, with no date, and lets a Free account pick it', async () => {
     sel.id = 'fixture-paid';
     const dialog = openPicker();
 
     const row = await within(dialog).findByRole('button', {
-      name: `Promoted Fixture - Free until ${ENDS_ON}`,
+      name: 'Promoted Fixture - Free for a limited time',
     });
-    expect(within(row).getByText(`Free until ${ENDS_ON}`)).toBeInTheDocument();
+    expect(within(row).getByText('Free for a limited time')).toBeInTheDocument();
+    expect(dialog.textContent).not.toMatch(MONTH_NAME);
+    expect(dialog.textContent).not.toMatch(ISO_DATE);
     fireEvent.click(row);
 
     expect(sel.id).toBe('fixture-promoted');

@@ -81,8 +81,6 @@ describe('presentFreeModels', () => {
     expect(pool!.featured).toHaveLength(2);
     expect(new Set(pool!.featured.map((entry) => entry.label.family)).size).toBe(2);
     expect(pool!.more).toHaveLength(models.length - 2);
-    expect(pool!.unavailable).toEqual([]);
-    expect(pool!.pause).toBeNull();
     for (const featured of pool!.featured) {
       const siblings = pool!.more.filter((entry) => entry.label.family === featured.label.family);
       for (const sibling of siblings) {
@@ -121,46 +119,24 @@ describe('presentFreeModels', () => {
     }
   });
 
-  it('lists unavailable models soonest-ending first as well', () => {
-    const [first, second, third] = familyA!.length >= 3 ? familyA! : [...familyA!, ...familyB!];
-    const view = presentFreeModels(
-      [
-        catalogue([
-          model(familyB![0]!),
-          { ...model(first!, 'expired'), expiresOn: '2026-10-09' },
-          { ...model(second!, 'unavailable'), expiresOn: '2026-10-21' },
-          { ...model(third!, 'exhausted'), expiresOn: '2026-12-01' },
-        ]),
-      ],
-      { category: null, selectedId: 'auto' },
-    );
-
-    expect(view.pools[0]!.unavailable.map((entry) => entry.model.expiresOn)).toEqual([
-      '2026-10-09',
-      '2026-10-21',
-      '2026-12-01',
-    ]);
-  });
-
-  it('keeps unavailable models out of the main list', () => {
+  it('leaves not-ready models out of the pool', () => {
     const ready = familyA!.map((key) => model(key));
-    const unavailable = familyB!.map((key) => model(key, 'unavailable'));
-    const [pool] = presentFreeModels([catalogue([...ready, ...unavailable])], {
+    const notReady = familyB!.map((key) => model(key, 'unavailable'));
+    const [pool] = presentFreeModels([catalogue([...ready, ...notReady])], {
       category: null,
       selectedId: 'auto',
     }).pools;
 
     expect(keysOf([...pool!.featured, ...pool!.more]).sort()).toEqual([...familyA!].sort());
-    expect(keysOf(pool!.unavailable).sort()).toEqual([...familyB!].sort());
+    expect(Object.keys(pool!).sort()).toEqual(['featured', 'issuer', 'more']);
   });
 
-  it('pauses a pool with no ready model instead of listing every model', () => {
-    const paused = presentFreeModels(
+  it('does not present a pool with no ready model in any category', () => {
+    const unavailable = presentFreeModels(
       [catalogue(servableChat.map((key) => model(key, 'unavailable')))],
       { category: null, selectedId: 'auto' },
-    ).pools[0]!;
-    expect(paused.pause).toBe('paused');
-    expect([...paused.featured, ...paused.more, ...paused.unavailable]).toEqual([]);
+    );
+    expect(unavailable.pools).toEqual([]);
 
     const spent = presentFreeModels(
       [
@@ -170,9 +146,19 @@ describe('presentFreeModels', () => {
           model(familyB![0]!, 'exhausted'),
         ]),
       ],
-      { category: null, selectedId: 'auto' },
-    ).pools[0]!;
-    expect(spent.pause).toBe('used_up');
+      { category: 'chat', selectedId: 'auto' },
+    );
+    expect(spent.pools).toEqual([]);
+    expect(spent.categories).toEqual([]);
+
+    const other = presentFreeModels(
+      [
+        catalogue([model(familyA![0]!, 'unavailable')]),
+        catalogue([model(familyB![0]!)], 'Second Fixture'),
+      ],
+      { category: 'chat', selectedId: 'auto' },
+    );
+    expect(other.pools.map((pool) => pool.issuer)).toEqual(['Second Fixture']);
   });
 
   it('pins the selected model when it would otherwise be hidden', () => {
@@ -182,14 +168,17 @@ describe('presentFreeModels', () => {
       { category: null, selectedId: selected },
     );
     expect(unavailableView.pinned?.model.key).toBe(selected);
-    expect(keysOf(unavailableView.pools[0]!.unavailable)).not.toContain(selected);
+    expect(
+      keysOf(unavailableView.pools.flatMap((pool) => [...pool.featured, ...pool.more])),
+    ).not.toContain(selected);
 
     const pausedView = presentFreeModels([catalogue([model(selected, 'exhausted')])], {
       category: null,
       selectedId: selected,
     });
     expect(pausedView.pinned?.model.key).toBe(selected);
-    expect(pausedView.pools[0]!.pause).toBe('used_up');
+    expect(pausedView.pinned?.model.status).toBe('exhausted');
+    expect(pausedView.pools).toEqual([]);
 
     const ready = catalogue(familyA!.map((key) => model(key)));
     const hidden = presentFreeModels([ready], { category: null, selectedId: 'auto' }).pools[0]!
@@ -211,11 +200,7 @@ describe('presentFreeModels', () => {
       category: null,
       selectedId: unservable,
     });
-    const listed = view.pools.flatMap((pool) => [
-      ...pool.featured,
-      ...pool.more,
-      ...pool.unavailable,
-    ]);
+    const listed = view.pools.flatMap((pool) => [...pool.featured, ...pool.more]);
     expect(keysOf(listed)).toEqual([familyA![0]]);
     expect(view.pinned).toBeNull();
   });
@@ -239,12 +224,11 @@ describe('presentFreeModels', () => {
     expect(keysOf(found!.entries.filter((entry) => entry.label.family === family))).toEqual(
       keysOf([pool!.featured[0]!, ...pool!.more.filter((entry) => entry.label.family === family)]),
     );
-    const firstUnavailable = found!.entries.findIndex((entry) => entry.model.status !== 'ready');
-    if (firstUnavailable >= 0) {
-      for (const entry of found!.entries.slice(firstUnavailable)) {
-        expect(entry.model.status).not.toBe('ready');
-      }
-    }
+    expect(found!.entries.every((entry) => entry.model.status === 'ready')).toBe(true);
+    const notReadyMatches = findFreeModels(view.pools, providerOfferingLabel(familyB![0]!)!.family);
+    expect(
+      notReadyMatches.flatMap((group) => group.entries).filter((e) => e.model.status !== 'ready'),
+    ).toEqual([]);
     expect(findFreeModels(view.pools, 'no such free model')).toEqual([]);
 
     const paused = presentFreeModels(

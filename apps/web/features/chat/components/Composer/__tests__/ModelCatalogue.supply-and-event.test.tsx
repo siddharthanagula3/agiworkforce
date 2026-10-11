@@ -152,10 +152,11 @@ describe('model catalogue - event access reads as temporary', () => {
     expect(screen.queryByText(/free during event/i)).toBeNull();
   });
 
-  it('badges the free model promotion with its end date rather than as an event', () => {
+  it('badges the free model promotion without a date rather than as an event', () => {
     renderCatalogue([entry({ promotionEndsAt: '2026-10-24T23:59:59.000Z' })]);
 
-    expect(screen.getByText('Free until Oct 24')).toBeTruthy();
+    expect(screen.getByText('Free for a limited time')).toBeTruthy();
+    expect(screen.queryByText(/Oct|2026-10-24/)).toBeNull();
     expect(screen.queryByText(/free during event/i)).toBeNull();
   });
 

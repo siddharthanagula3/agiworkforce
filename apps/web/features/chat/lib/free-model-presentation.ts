@@ -17,14 +17,10 @@ export interface FreeModelEntry {
   order: number;
 }
 
-export type FreeModelPoolPause = 'paused' | 'used_up';
-
 export interface FreeModelPool {
   issuer: string;
   featured: FreeModelEntry[];
   more: FreeModelEntry[];
-  unavailable: FreeModelEntry[];
-  pause: FreeModelPoolPause | null;
 }
 
 export interface FreeModelPresentation {
@@ -92,15 +88,11 @@ function endingSoonestOnTop(
   });
 }
 
-function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeModelPool {
+function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeModelPool | null {
   const ready = entries.filter((entry) => entry.model.status === 'ready');
-  if (ready.length === 0) {
-    const spent = entries.every((entry) => ['exhausted', 'expired'].includes(entry.model.status));
-    return { issuer, featured: [], more: [], unavailable: [], pause: spent ? 'used_up' : 'paused' };
-  }
+  if (ready.length === 0) return null;
   const families = byFamily(ready);
   const featured = families.map((family) => family[0]!);
-  const notReady = entries.filter((entry) => entry.model.status !== 'ready');
   return {
     issuer,
     featured,
@@ -108,8 +100,6 @@ function presentPool(issuer: string, entries: readonly FreeModelEntry[]): FreeMo
       families,
       ready.filter((entry) => !featured.includes(entry)),
     ),
-    unavailable: endingSoonestOnTop(byFamily(notReady), notReady),
-    pause: null,
   };
 }
 
@@ -125,7 +115,7 @@ function poolsIn(
         shown.filter((entry) => entry.issuer === issuer),
       ),
     )
-    .filter((pool) => category === 'chat' || !pool.pause);
+    .filter((pool): pool is FreeModelPool => pool !== null);
 }
 
 export function presentFreeModels(
@@ -158,7 +148,6 @@ export function presentFreeModels(
     pools: pools.map((pool) => ({
       ...pool,
       more: pool.more.filter((entry) => entry !== pinned),
-      unavailable: pool.unavailable.filter((entry) => entry !== pinned),
     })),
   };
 }
@@ -182,7 +171,6 @@ export function findFreeModels(
           head,
           ...pool.more.filter((entry) => entry.label.family === head.label.family),
         ]),
-        ...pool.unavailable,
       ].filter((entry) =>
         matchesFreeModelQuery(needle, entry.label.displayName, entry.model.providerModelId),
       ),
