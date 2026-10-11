@@ -37,6 +37,8 @@ export function cloudDispatchUnavailableMessage(route: UnavailableAutoRoute): st
       return 'This model selection is no longer available. Choose a model again to continue.';
     case 'trust_mode_not_permitted':
       return 'This request cannot run in AGI Cloud. Check the chat mode before trying again.';
+    case 'model_not_available_in_region':
+      return 'This model is not available in your region. Choose another AGI Cloud model to continue.';
     case 'unknown_task':
       return 'AGI Cloud could not route this request. Rephrase it or choose another model.';
     case 'unknown_runtime_profile':
