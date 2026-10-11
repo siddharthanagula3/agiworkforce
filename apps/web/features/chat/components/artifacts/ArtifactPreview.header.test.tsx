@@ -5,8 +5,10 @@ import type { ArtifactPickerSelection } from '@/lib/artifact-sandbox';
 import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
+type SonnerModule = typeof import('sonner');
+
 vi.mock('sonner', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('sonner')>()),
+  ...(await importOriginal<SonnerModule>()),
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
