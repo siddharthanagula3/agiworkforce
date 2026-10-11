@@ -4,6 +4,10 @@ import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 
+function openMore() {
+  fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+}
+
 const ARTIFACT_ID = 'artifact-start-work-panel';
 
 function seed() {
@@ -37,6 +41,7 @@ describe('starting Work from an artifact', () => {
     seed();
     renderPanel();
 
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-start-work'));
 
     const state = useChatStore.getState();

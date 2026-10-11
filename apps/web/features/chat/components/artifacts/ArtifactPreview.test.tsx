@@ -149,7 +149,8 @@ describe('ArtifactPreview · PDF viewer', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download file' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download file' }));
 
     await waitFor(() => expect(click).toHaveBeenCalledOnce());
     expect(fetchMock).toHaveBeenCalledWith(
@@ -264,7 +265,8 @@ describe('ArtifactPreview · generated image viewer', () => {
     const image = screen.getByRole('img', { name: 'Launch visual' }) as HTMLImageElement;
     expect(image.getAttribute('src')).toBe('/api/files/generated-image');
     expect(image.getAttribute('referrerpolicy')).toBe('no-referrer');
-    expect(screen.getByRole('button', { name: 'Download image' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Download image' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy artifact' })).toBeNull();
   });
 
