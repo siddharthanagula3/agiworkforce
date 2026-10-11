@@ -16,6 +16,11 @@
 
 const SEARCH_VERB_PHRASES: readonly string[] = [
   'search the web',
+  'search on the web',
+  'search in the web',
+  'search the internet',
+  'search on the internet',
+  'search in the internet',
   'search online',
   'search for',
   'web search',

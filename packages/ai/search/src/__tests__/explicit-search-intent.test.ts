@@ -20,6 +20,16 @@ describe('detectExplicitWebSearchIntent', () => {
     ).toBe('search_verb');
   });
 
+  it('reports the search-verb signal when the user names the web or the internet as the place to search', () => {
+    expect(
+      detectExplicitWebSearchIntent('can you search in the web and tell me his linkedin'),
+    ).toBe('search_verb');
+    expect(detectExplicitWebSearchIntent('search the internet for his company')).toBe(
+      'search_verb',
+    );
+    expect(detectExplicitWebSearchIntent('please search on the web')).toBe('search_verb');
+  });
+
   it('reports the recency signal for a question that only current data answers', () => {
     expect(detectExplicitWebSearchIntent("what is today's exchange rate")).toBe('recency');
     expect(detectExplicitWebSearchIntent('give me the latest release notes')).toBe('recency');
