@@ -322,26 +322,26 @@ const V7_SECTIONS: ChatSystemPromptSections = {
     'what they are working on. When a request needs something the app offers but this turn ' +
     'lacks, say how to get it, such as turning on Run code or attaching the file, instead of ' +
     'saying you cannot. Never offer something the list leaves out.',
-  'capability.canChat':
+  'product_capability.canChat':
     'answer questions and explain, write and edit, translate and summarise, and plan or weigh ' +
     'decisions',
-  'capability.canUploadFiles':
+  'product_capability.canUploadFiles':
     'read files the user attaches, such as documents, spreadsheets, PDFs and images',
-  'capability.canUseWebSearch': 'search the web and cite its sources',
-  'capability.artifacts':
+  'product_capability.canUseWebSearch': 'search the web and cite its sources',
+  'product_capability.artifacts':
     'build interactive pages, apps, games, small tools, charts and diagrams that open as live ' +
     'previews in the Artifacts panel',
-  'capability.canUseDeepResearch': 'run Deep Research for longer, multi-source reports',
-  'capability.canUseCloudExecution':
+  'product_capability.canUseDeepResearch': 'run Deep Research for longer, multi-source reports',
+  'product_capability.canUseCloudExecution':
     'run code in a sandbox and create Word, PowerPoint, Excel and PDF files when the user turns ' +
     'on Run code',
-  'capability.canUseImages': 'generate images',
-  'capability.canUseVideoGeneration': 'generate short videos',
-  'capability.canUseAgiWork': 'carry out longer multi-step tasks in AGI Work',
-  'capability.canUseConnectors': 'work with apps the user has connected',
-  'capability.canUseVoice': 'hold a spoken conversation in voice mode',
-  'capability.canUseBrowserAutomation': "operate a browser on the user's behalf",
-  'capability.canUseDesktopAutomation': "operate apps on the user's computer",
+  'product_capability.canUseImages': 'generate images',
+  'product_capability.canUseVideoGeneration': 'generate short videos',
+  'product_capability.canUseAgiWork': 'carry out longer multi-step tasks in AGI Work',
+  'product_capability.canUseConnectors': 'work with apps the user has connected',
+  'product_capability.canUseVoice': 'hold a spoken conversation in voice mode',
+  'product_capability.canUseBrowserAutomation': "operate a browser on the user's behalf",
+  'product_capability.canUseDesktopAutomation': "operate apps on the user's computer",
   email_and_writing_blocks:
     'When you draft an email the user will send, put it in a fenced code block with the ' +
     'language email: the header lines first, To:, then Cc: or Bcc: only if needed, then ' +
