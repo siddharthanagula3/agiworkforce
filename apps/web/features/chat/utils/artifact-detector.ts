@@ -2,6 +2,8 @@ import {
   computeDerivedArtifactId,
   deriveArtifacts,
   removeArtifactBlocks as removeArtifactBlocksShared,
+  splitProseAroundArtifacts as splitProseAroundArtifactsShared,
+  type ArtifactProseSplit,
   hasArtifacts as hasArtifactsShared,
   extractArtifactTitle,
   isRenderableArtifact,
@@ -82,6 +84,16 @@ export function removeArtifactBlocks(
   policy?: ArtifactDerivationPolicy,
 ): string {
   return removeArtifactBlocksShared(markdown, artifacts, {
+    include: artifactInclusionForPolicy(policy),
+  });
+}
+
+export function splitProseAroundArtifacts(
+  markdown: string,
+  artifacts: ReadonlyArray<Pick<ArtifactData, 'content' | 'language'>>,
+  policy?: ArtifactDerivationPolicy,
+): ArtifactProseSplit {
+  return splitProseAroundArtifactsShared(markdown, artifacts, {
     include: artifactInclusionForPolicy(policy),
   });
 }

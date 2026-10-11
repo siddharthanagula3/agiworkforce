@@ -224,7 +224,7 @@ function MarkdownDocumentPreview({
 
   return (
     <div
-      className={cn('overflow-auto bg-background px-6 py-5', className)}
+      className={cn('overflow-auto bg-background px-5 py-6 sm:px-8', className)}
       data-testid="artifact-markdown-preview"
     >
       <div className="mx-auto max-w-3xl">
@@ -235,37 +235,41 @@ function MarkdownDocumentPreview({
           {pendingChecklistSave ? 'Checklist changes save as a new version when you pause.' : ''}
         </p>
         {headings.length >= OUTLINE_MIN_HEADINGS && (
-          <nav
-            className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
-            aria-label="Document outline"
-          >
-            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <details className="group mb-5 rounded-lg border border-border/40 bg-muted/20">
+            <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
               <List className="h-3.5 w-3.5" aria-hidden="true" />
               Outline
-            </p>
-            <ol className="space-y-0.5" data-testid="artifact-document-outline">
-              {headings.map((heading) => (
-                <li
-                  key={heading.id}
-                  style={{
-                    paddingLeft: `${(heading.level - (headings[0]?.level ?? 1)) * 12}px`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      bodyRef.current?.ownerDocument
-                        .getElementById(`artifact-${heading.id}`)
-                        ?.scrollIntoView?.({ block: 'start' })
-                    }
-                    className="block w-full truncate text-start text-xs text-muted-foreground transition-colors hover:text-primary"
+              <span className="tabular-nums">{headings.length}</span>
+              <ChevronRight
+                className="ms-auto h-3.5 w-3.5 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+                aria-hidden="true"
+              />
+            </summary>
+            <nav className="px-3 pb-3" aria-label="Document outline">
+              <ol className="space-y-0.5" data-testid="artifact-document-outline">
+                {headings.map((heading) => (
+                  <li
+                    key={heading.id}
+                    style={{
+                      paddingLeft: `${(heading.level - (headings[0]?.level ?? 1)) * 12}px`,
+                    }}
                   >
-                    {heading.text}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </nav>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        bodyRef.current?.ownerDocument
+                          .getElementById(`artifact-${heading.id}`)
+                          ?.scrollIntoView?.({ block: 'start' })
+                      }
+                      className="block w-full truncate py-0.5 text-start text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {heading.text}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          </details>
         )}
         <div ref={bodyRef}>
           <MarkdownContent content={content} {...(onTaskToggle ? { onTaskToggle } : {})} />
