@@ -11,6 +11,7 @@ import {
   extractTrailingUnclosedBlock,
   artifactInclusionForPolicy,
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+  EXPLICIT_ARTIFACT_MARKER_FOR,
 } from '../artifact-derivation';
 
 const HTML = '```html\n<!DOCTYPE html><html><body><h1>Hi</h1></body></html>\n```';
@@ -333,4 +334,25 @@ describe('extractArtifactTitle, linear rewrite parity', () => {
   it('still falls back to the first meaningful line', () => {
     expect(extractArtifactTitle('\n\n# Fallback Heading\nmore')).toBe('Fallback Heading');
   });
+});
+
+describe('the explicit marker for each renderable type', () => {
+  it.each([
+    ['html', '<main>Calculator</main>'],
+    ['svg', '<svg viewBox="0 0 10 10"></svg>'],
+    ['jsx', 'function App() { return <main />; }'],
+    ['mermaid', 'graph TD; A-->B'],
+  ] as const)(
+    'makes a %s block derive under explicit-v1 when it opens the block',
+    (language, body) => {
+      const type = detectArtifactType(language, body) as keyof typeof EXPLICIT_ARTIFACT_MARKER_FOR;
+      const marker = EXPLICIT_ARTIFACT_MARKER_FOR[type];
+      const include = artifactInclusionForPolicy(EXPLICIT_ARTIFACT_DERIVATION_POLICY);
+
+      expect(deriveArtifacts(`\`\`\`${language}\n${body}\n\`\`\``, { include })).toHaveLength(0);
+      const derived = deriveArtifacts(`\`\`\`${language}\n${marker}\n${body}\n\`\`\``, { include });
+      expect(derived).toHaveLength(1);
+      expect(derived[0]!.type).toBe(type);
+    },
+  );
 });

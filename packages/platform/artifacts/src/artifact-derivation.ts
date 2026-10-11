@@ -90,12 +90,19 @@ export function isRenderableArtifact(language: string, content: string): boolean
   );
 }
 
-const EXPLICIT_ARTIFACT_MARKERS = [
+export const EXPLICIT_ARTIFACT_MARKERS = [
   '// @artifact',
   '<!-- @artifact -->',
   '# @artifact',
   '%% @artifact',
 ] as const;
+
+export const EXPLICIT_ARTIFACT_MARKER_FOR = {
+  html: EXPLICIT_ARTIFACT_MARKERS[1],
+  svg: EXPLICIT_ARTIFACT_MARKERS[1],
+  react: EXPLICIT_ARTIFACT_MARKERS[0],
+  mermaid: EXPLICIT_ARTIFACT_MARKERS[3],
+} as const;
 
 export function hasExplicitArtifactMarker(content: string): boolean {
   return EXPLICIT_ARTIFACT_MARKERS.some((marker) => content.includes(marker));
@@ -224,10 +231,7 @@ export function extractTrailingUnclosedBlock(
 }
 
 export type ArtifactInclusion =
-  | 'renderable'
-  | 'explicit-renderable'
-  | 'code'
-  | ((block: DerivedCodeBlock) => boolean);
+  'renderable' | 'explicit-renderable' | 'code' | ((block: DerivedCodeBlock) => boolean);
 
 export function artifactInclusionForPolicy(policy: unknown): ArtifactInclusion {
   return policy === EXPLICIT_ARTIFACT_DERIVATION_POLICY ? 'explicit-renderable' : 'renderable';
