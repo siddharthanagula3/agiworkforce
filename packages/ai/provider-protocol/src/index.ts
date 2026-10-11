@@ -115,6 +115,7 @@ export {
   openAIWireRequestToChatRequest,
   OpenAIWireAssembler,
   assembleOpenAIWireResponse,
+  paragraphBreakBetween,
 } from './openai-wire-compat';
 
 export { toolStatusPhrase } from './tool-status-phrases';
