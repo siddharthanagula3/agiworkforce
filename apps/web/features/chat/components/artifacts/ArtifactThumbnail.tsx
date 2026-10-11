@@ -14,7 +14,7 @@ const THUMBNAIL_SCALE = 0.4;
 function thumbnailDocument(type: ArtifactData['type'], content: string): string {
   const head = content.slice(0, THUMBNAIL_SOURCE_CHARS);
   if (type === 'html') return buildSandboxSrcDoc(head);
-  return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:8px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${head}</body></html>`;
+  return `<html><head><meta charset="UTF-8"><style>:root{color-scheme:light}body{margin:0;padding:8px;overflow:hidden;background:Canvas;color:CanvasText}*{max-width:100%}</style></head><body>${head}</body></html>`;
 }
 
 /**
@@ -48,8 +48,10 @@ export function ArtifactThumbnail({
           sandbox=""
           srcDoc={srcDoc}
           tabIndex={-1}
-          className="pointer-events-none absolute start-0 top-0 origin-top-left border-0 bg-white"
+          className="pointer-events-none absolute start-0 top-0 origin-top-left border-0"
           style={{
+            colorScheme: 'light',
+            backgroundColor: 'Canvas',
             width: `${100 / THUMBNAIL_SCALE}%`,
             height: `${100 / THUMBNAIL_SCALE}%`,
             transform: `scale(${THUMBNAIL_SCALE})`,

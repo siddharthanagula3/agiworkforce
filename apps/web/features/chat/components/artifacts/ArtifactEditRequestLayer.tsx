@@ -112,7 +112,7 @@ export function ArtifactEditRequestLayer({
             value={instruction}
             onChange={(event) => setInstruction(event.target.value)}
             placeholder={DESCRIBE_CHANGE_PLACEHOLDER}
-            className="min-h-11 min-w-0 flex-1 bg-transparent px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none sm:min-h-9"
+            className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
             autoComplete="off"
           />
           <button

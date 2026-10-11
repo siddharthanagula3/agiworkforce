@@ -5,8 +5,10 @@ import { ARTIFACT_PANEL_OVERLAY_QUERY, useArtifactsStore } from '../../stores/ar
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 
+type ArtifactPreviewModule = typeof import('./ArtifactPreview');
+
 vi.mock('./ArtifactPreview', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./ArtifactPreview')>()),
+  ...(await importOriginal<ArtifactPreviewModule>()),
   ArtifactPreview: ({ onRequestEdits }: { onRequestEdits?: (prompt: string) => boolean }) => (
     <div data-testid="artifact-preview">
       {onRequestEdits ? (
