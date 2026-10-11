@@ -35,7 +35,7 @@ small, one leak is a leak.
 
 ## Capability suites
 
-Twelve more corpora sit beside the three above, one file per suite in
+Thirteen more corpora sit beside the three above, one file per suite in
 `datasets/`, each versioned. Recorded page snapshots, screen descriptions and
 attached files live in `datasets/fixtures/`; nothing in a corpus reaches a live
 site.
@@ -54,6 +54,7 @@ site.
 | `browser`           | next action on a recorded accessibility snapshot | action plan: the right tool on the right element ref, or a final answer   |
 | `computer-use`      | next action on a recorded screen description     | action plan: click inside the target frame, type, key chord               |
 | `multilingual`      | reply or translate in another language           | deterministic language ID plus reference facts                            |
+| `chat-prompt`       | behaviour the chat system prompt asks for        | text and tool-call checks, run only under `--chat-prompt-version`         |
 
 Cost and latency are not suites of their own. They are axes every suite reports:
 per case, the provider layer's metered usage, cost (provider-reported, else
@@ -118,6 +119,33 @@ is dropped, and the case ids are listed under `withheld` so the absence is
 stated rather than silent. Replay reports them as withheld instead of failing.
 The hand-written reference recording still holds refusal answers, so replay
 keeps proving the refusal graders work.
+
+### Measuring a chat system prompt version (paid, manual)
+
+```bash
+pnpm evals:live --model <modelKey> --chat-prompt-version <n> --suites golden,refusal,jailbreak,chat,chat-prompt
+tsx tools/evals/scripts/evals.ts compare \
+  --baseline tools/evals/measurements/prompt-evals/runs/<model>.chat.system__1.json \
+  --candidate tools/evals/measurements/prompt-evals/runs/<model>.chat.system__<n>.json
+```
+
+`--chat-prompt-version` renders that version of `chat.system` in front of every
+case through `apps/web/lib/prompts/chat-system-prompt-assembly.ts`, the module
+the chat route uses. The tools a case offers stand in for the tools a turn
+attached, and a case's `memory` field stands in for the memory state the route
+knows. The clock is noon UTC on the run date. A case's own `system` text sits
+between the prompt body and the clock, where the route puts a client's system
+text. Such a run writes only its run report, under `measurements/prompt-evals/`,
+and refuses `--baseline`: family baselines stay bare-model readings. Its answers
+are not kept, because any change to the rendered prompt would make them stale
+for replay, and the open-ended answers can carry contact details the PII scan
+rejects.
+
+The `chat-prompt` corpus only means something under the product prompt, so a
+bare-model run reports it unsupported. Every row is one sample: on 2026-10-10
+the same prompt and model scored differently on rows with a tight word or
+phrase check from one run to the next, so read one run's single-row difference
+as noise until a repeat confirms it.
 
 ### Promotion gate
 
@@ -193,11 +221,10 @@ corpus's own threshold, not a predecessor's reading.
 The other family slots have no baseline. The Anthropic account answered again
 on 2026-10-10, but only the Haiku slot was measured, and there is no MiniMax or
 Zhipu key; the OpenAI, Google and Moonshot keys answer, but their slots were not
-measured. One reason is the grader: `isRefusal` matches a straight apostrophe
-only, and OpenAI's models write "I can’t" with a typographic one, so their
-refusals are read as answers and the refusal corpus reports near zero for them
-whatever they said. Until that is fixed a refusal score on such a model is not
-a measurement. The suites that need a key are all fifteen; nothing in this
+measured. Until 2026-10-10 `isRefusal` matched a straight apostrophe only, so
+a refusal written "I can’t" with a typographic one, as OpenAI's models write it,
+was read as an answer; it now folds typographic apostrophes first, and a refusal
+score recorded before that fix on such a model is not a measurement. The suites that need a key are all sixteen; nothing in this
 directory measures a model offline.
 
 ### New model and route certification
@@ -384,12 +411,13 @@ computed from them says anything about any model.
 
 - Live measurements exist only once someone runs `pnpm evals:live`; until a
   family has a committed baseline, its promotions are refused.
-- **This does not run the product's chat path.** The live runner dispatches
-  through the product's provider adapter for the route, but without the web
-  route's system prompts (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`,
-  `lib/capability-preamble.ts`) or Auto routing (`packages/ai/routing`). A score
-  therefore moves when a model, route or adapter changes, and cannot detect a
-  regression in the product's own prompts or routing.
+- **A bare-model run does not run the product's chat path.** The live runner
+  dispatches through the product's provider adapter for the route, but without
+  the web route's system prompts or Auto routing (`packages/ai/routing`), so a
+  score moves when a model, route or adapter changes. A run with
+  `--chat-prompt-version` (below) adds the chat system prompt, rendered by the
+  web app's own assembler, but still not the other system layers the route adds
+  (custom and project instructions, memories, skills) or routing.
 - Browser and computer-use rows grade the next action against a recorded
   snapshot. They measure action choice, not end-to-end task completion on a
   live page.

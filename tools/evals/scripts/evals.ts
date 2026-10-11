@@ -4,7 +4,9 @@
  *   replay                 grade committed recordings with no network (CI)
  *   live --model <key>     measure a registry model through its provider adapter (paid);
  *                          --chat-prompt-version <n> renders that product chat prompt version
- *                          in front of every case and writes under measurements/prompt-evals
+ *                          in front of every case and writes only the run report, under
+ *                          measurements/prompt-evals: its answers are never replayed, since any
+ *                          change to the rendered prompt would make them stale
  *   compare                hold one measured run against another, model or route
  *   release-evidence       the committed baselines as one dated evidence report
  *   fingerprint-reference  re-pin the hand-written reference recording to the corpora
@@ -14,7 +16,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -190,12 +192,14 @@ async function live(args: readonly string[]): Promise<void> {
   const fileName = measurementFileName(
     renderer === undefined ? subject : `${subject}.${renderer.stamp}`,
   );
-  const root = renderer === undefined ? MEASUREMENTS : PROMPT_MEASUREMENTS;
-  recordMeasurement(join(root, 'recordings', fileName), outcome.recording);
-  recordMeasurement(join(root, 'runs', fileName), outcome.report);
-  print(
-    `[evals] wrote ${relative(MEASUREMENTS, join(root, 'recordings', fileName))} and ${relative(MEASUREMENTS, join(root, 'runs', fileName))}`,
-  );
+  if (renderer === undefined) {
+    recordMeasurement(join(MEASUREMENTS, 'recordings', fileName), outcome.recording);
+    recordMeasurement(join(MEASUREMENTS, 'runs', fileName), outcome.report);
+    print(`[evals] wrote measurements/recordings/${fileName} and measurements/runs/${fileName}`);
+  } else {
+    recordMeasurement(join(PROMPT_MEASUREMENTS, 'runs', fileName), outcome.report);
+    print(`[evals] wrote measurements/prompt-evals/runs/${fileName}`);
+  }
   print(
     `[evals] run ${outcome.report.runId}: ${outcome.attempts.length} attempt(s), ${outcome.attempts.filter((attempt) => !attempt.graded).length} retried`,
   );
