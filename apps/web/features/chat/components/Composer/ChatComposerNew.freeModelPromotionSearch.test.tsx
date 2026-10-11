@@ -82,7 +82,7 @@ beforeEach(() => {
     isLoading: false,
     unauthenticated: false,
     error: null,
-    featureFlags: { generic_web_search: true },
+    featureFlags: { generic_web_search: true, advanced_model_access: false },
   });
   vi.stubGlobal(
     'fetch',
