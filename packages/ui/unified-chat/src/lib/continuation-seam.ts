@@ -14,6 +14,18 @@ function trailingFenceIsOpen(text: string): boolean {
   return open;
 }
 
+const REOPENED_FENCE = /^\s*(`{3,}|~{3,})[^\s`~][^\n]*\n/;
+
+/**
+ * Inside an open fence, a fence line carrying an info string cannot close it,
+ * so a continuation that starts with one is the model reopening the block it
+ * was already in. Kept, it closes nothing and shows as a stray fence mid-code.
+ */
+function dropReopenedFence(continuation: string): string {
+  const match = REOPENED_FENCE.exec(continuation);
+  return match ? continuation.slice(match[0].length) : continuation;
+}
+
 function inInlineCode(text: string): boolean {
   const lastLine = text.slice(text.lastIndexOf('\n') + 1);
   let ticks = 0;
@@ -54,7 +66,8 @@ export function repairContinuationSeam(seed: string, continuation: string): stri
   const deduplicated = overlap > 0 ? continuation.slice(overlap) : continuation;
   if (!deduplicated) return deduplicated;
 
-  if (trailingFenceIsOpen(seed) || inInlineCode(seed)) return deduplicated;
+  if (trailingFenceIsOpen(seed)) return dropReopenedFence(deduplicated);
+  if (inInlineCode(seed)) return deduplicated;
 
   if (!seed.endsWith('\n') && BLOCK_START.test(deduplicated)) {
     return `\n\n${deduplicated}`;

@@ -227,6 +227,32 @@ describe('CloudRuntime', () => {
       );
     });
 
+    it('marks a Continue turn as a continuation, so the server resumes it at full length', async () => {
+      const runtime = new CloudRuntime();
+      sendCloudMessage.mockResolvedValue(undefined);
+
+      await runtime.sendMessage('conv_continue', 'hello', {
+        userMessageId: '0199c1f2-0000-7000-8000-00000000cccc',
+      });
+      await runtime.sendMessage('conv_continue', 'Continue your previous response.', {
+        isContinuation: true,
+        continuationMessageId: '0199c1f2-0000-7000-8000-00000000dddd',
+        userMessageId: '0199c1f2-0000-7000-8000-00000000eeee',
+        messageHistory: [
+          { role: 'user', content: 'make a calculator' },
+          { role: 'assistant', content: '```html\n<style>' },
+          { role: 'user', content: 'Continue your previous response.' },
+        ],
+      });
+
+      expect(sendCloudMessage.mock.calls[0]?.[12]).toBe(
+        'agi.chat.desktop.send.0199c1f2-0000-7000-8000-00000000cccc',
+      );
+      expect(sendCloudMessage.mock.calls[1]?.[12]).toBe(
+        'agi.chat.desktop.continue.0199c1f2-0000-7000-8000-00000000eeee',
+      );
+    });
+
     it('dispatches image prompts to durable managed media and persists the generated file', async () => {
       const runtime = new CloudRuntime();
       const events = collectEvents(runtime);

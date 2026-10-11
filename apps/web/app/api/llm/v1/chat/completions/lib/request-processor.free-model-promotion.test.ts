@@ -350,6 +350,27 @@ describe('processRequest under the free model promotion', () => {
     }
   });
 
+  it('gives a short build request the whole promotion output cap', async () => {
+    const result = await turn('promotion-turn-11', 'auto', 'make a calculator', { stream: true });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.llmRequest.max_tokens).toBe(OUTPUT_CAP);
+    expect(result.maxTokens).toBe(OUTPUT_CAP);
+  });
+
+  it('plans no response budget for a continue turn, so the reply resumes at full length', async () => {
+    const result = await turn('agi.chat.web.continue.promotion-turn-12', 'auto', 'Continue.', {
+      stream: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.responseBudget).toBeUndefined();
+    expect(result.llmRequest.max_tokens).toBe(OUTPUT_CAP);
+    expect(JSON.stringify(result.llmRequest.messages)).not.toContain('concise');
+  });
+
   it('requires and offers provider search when the account asks to search the web in its own words', async () => {
     const result = await turn(
       'promotion-turn-10',
