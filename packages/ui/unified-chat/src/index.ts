@@ -168,6 +168,7 @@ export {
   type OpenCodeBlockInEditor,
 } from './components/markdown/codeBlockEditor';
 export { toggleMarkdownTask } from './components/markdown/taskList';
+export { richBlocksAsPlainText } from './components/markdown/richBlocks';
 export {
   StreamingMarkdownContent,
   type StreamingMarkdownContentProps,

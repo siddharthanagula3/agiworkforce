@@ -6,6 +6,7 @@ import {
   emailRecipients,
   isRichBlockLanguage,
   parseEmailBlock,
+  richBlocksAsPlainText,
 } from '../richBlocks';
 
 const COMPLETE_EMAIL = [
@@ -150,5 +151,40 @@ describe('emailMailtoLink', () => {
     });
     expect(link.bodyIncluded).toBe(false);
     expect(link.href).toBe('mailto:jane%40example.com?subject=Long');
+  });
+});
+
+describe('richBlocksAsPlainText', () => {
+  it('turns an email fence into the plain text its card copies', () => {
+    const message = `Here is the draft:\n\n\`\`\`email\n${COMPLETE_EMAIL}\n\`\`\`\n\nWant changes?`;
+    expect(richBlocksAsPlainText(message)).toBe(
+      `Here is the draft:\n\n${emailPlainText(parseEmailBlock(COMPLETE_EMAIL)!.draft)}\n\nWant changes?`,
+    );
+  });
+
+  it('keeps only the text of a writing fence, including a longer fence around code', () => {
+    const message = '````writing\n## Note\n\n```js\nrun()\n```\n````\nAfter.';
+    expect(richBlocksAsPlainText(message)).toBe('## Note\n\n```js\nrun()\n```\nAfter.');
+  });
+
+  it('leaves ordinary code fences exactly as written, even when they hold email-like text', () => {
+    const message = 'Code:\n\n```python\nprint(1)\n```\n\n~~~\nTo: a@x.com\n\nHi\n~~~';
+    expect(richBlocksAsPlainText(message)).toBe(message);
+  });
+
+  it('does not treat a fence nested in a code block as a card', () => {
+    const message = '````markdown\n```email\nTo: a@x.com\n\nHi\n```\n````';
+    expect(richBlocksAsPlainText(message)).toBe(message);
+  });
+
+  it('copies a malformed email fence as its raw text and an unclosed one to the end', () => {
+    expect(richBlocksAsPlainText('```email\nHi Jane,\n\nSee you.\n```')).toBe(
+      'Hi Jane,\n\nSee you.',
+    );
+    expect(richBlocksAsPlainText('Intro\n```writing\nDraft line')).toBe('Intro\nDraft line');
+  });
+
+  it('returns a message without fences unchanged', () => {
+    expect(richBlocksAsPlainText('Plain **markdown** answer.')).toBe('Plain **markdown** answer.');
   });
 });
