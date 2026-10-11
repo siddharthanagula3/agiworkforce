@@ -1,0 +1,127 @@
+import { chatSystemPromptSection, type ChatSystemPromptSections } from './chat-system-prompt';
+
+/**
+ * Which sections of a chat system prompt version a turn carries, decided from
+ * the turn's state alone.
+ *
+ * Kept free of imports beyond the template so the eval harness, which cannot
+ * resolve workspace packages or path aliases, renders exactly the text the chat
+ * route sends. A section a version does not hold renders empty and drops out,
+ * so earlier versions render byte for byte as they did before later sections
+ * existed.
+ */
+
+const TOOL_SECTION_PREFIX = 'tool.';
+
+const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
+
+const FILE_CREATION_TOOL_NAMES = [
+  'execute_code',
+  'write_file',
+  'create_folder',
+  'create_office_file',
+];
+
+export type ChatTurnMemory = 'on' | 'off';
+
+export interface ChatTurnState {
+  readonly toolNames: readonly string[];
+  readonly codeExecutionUnavailable?: boolean;
+  readonly researchUnavailable?: boolean;
+  readonly attachmentSandboxPaths?: readonly string[];
+  /** Absent when the caller does not know the turn's memory state. */
+  readonly memory?: ChatTurnMemory;
+}
+
+export interface ChatTurnClock {
+  readonly utc: string;
+  readonly timeZone?: string;
+  readonly localInstant?: string | null;
+}
+
+export interface AssembledChatSystemPrompt {
+  /** Identical on every turn with the same state, so it can sit in the cached prefix. */
+  readonly body: string;
+  /** Changes with the clock, so it belongs after the cache boundary. */
+  readonly time: string;
+}
+
+function describeTool(sections: ChatSystemPromptSections, name: string): string {
+  const description = chatSystemPromptSection(sections, `${TOOL_SECTION_PREFIX}${name}`);
+  return description ? `- ${name}, ${description}` : `- ${name}`;
+}
+
+export function assembleChatSystemPrompt(
+  sections: ChatSystemPromptSections,
+  state: ChatTurnState,
+  clock: ChatTurnClock,
+): AssembledChatSystemPrompt {
+  const section = (key: string, values?: Readonly<Record<string, string>>) =>
+    chatSystemPromptSection(sections, key, values);
+
+  const { toolNames } = state;
+  const hasSearch = toolNames.includes('web_search');
+  const hasFetch = toolNames.includes('web_fetch') || toolNames.includes('url_fetch');
+  const hasFileCreation = toolNames.some((name) => FILE_CREATION_TOOL_NAMES.includes(name));
+  const hasCodeExecution =
+    !state.codeExecutionUnavailable &&
+    toolNames.some((name) => CODE_EXECUTION_TOOL_NAMES.includes(name));
+  const stagedAttachmentPaths =
+    !state.codeExecutionUnavailable && toolNames.includes('execute_code')
+      ? (state.attachmentSandboxPaths ?? [])
+      : [];
+
+  const time =
+    section('time_utc', { utc: clock.utc }) +
+    (clock.localInstant
+      ? section('time_local', {
+          timeZone: clock.timeZone ?? '',
+          localInstant: clock.localInstant,
+        })
+      : '') +
+    section('time_rules');
+
+  const blocks: string[] = [
+    section('identity'),
+    section('instruction_precedence'),
+    section('untrusted_content'),
+    section('capability_honesty'),
+  ];
+
+  if (toolNames.length > 0) {
+    blocks.push(
+      [section('tools_heading'), ...toolNames.map((name) => describeTool(sections, name))].join(
+        '\n',
+      ),
+      section('tools_reality'),
+    );
+
+    blocks.push(hasSearch ? section('search') : section('search_unavailable'));
+    blocks.push(hasSearch || hasFetch ? section('citations') : section('citations_none'));
+    if (hasCodeExecution) blocks.push(section('code_execution'));
+
+    if (stagedAttachmentPaths.length > 0) {
+      blocks.push(
+        [
+          section('staged_attachments_heading'),
+          stagedAttachmentPaths.map((path) => `- ${path}`).join('\n'),
+          section('staged_attachments_rules'),
+        ].join('\n'),
+      );
+    }
+
+    if (hasFileCreation) blocks.push(section('file_creation'));
+  } else {
+    blocks.push(section('no_tools'), section('citations_none'));
+  }
+
+  blocks.push(section('user_documents'), section('people_and_privacy'), section('refusal_style'));
+  if (state.memory === 'on') blocks.push(section('memory_on'));
+  if (state.memory === 'off') blocks.push(section('memory_off'));
+  blocks.push(section('format_and_length'), section('artifact_runtime'));
+
+  if (state.codeExecutionUnavailable) blocks.push(section('code_execution_unavailable'));
+  if (state.researchUnavailable) blocks.push(section('research_unavailable'));
+
+  return { body: blocks.filter((block) => block.length > 0).join('\n\n'), time };
+}

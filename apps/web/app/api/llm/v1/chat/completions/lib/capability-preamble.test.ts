@@ -272,4 +272,63 @@ describe('capability preamble', () => {
       expect(preamble).not.toContain('already in the sandbox');
     });
   });
+
+  describe('chat system prompt version 5', () => {
+    const v5 = { promptSelection: { conversation: { 'chat.system': 5 } } };
+    const officeTool = { type: 'function', function: { name: 'create_office_file' } };
+    const searchTool = { type: 'function', function: { name: 'web_search' } };
+
+    it('tells a turn with tools but no search that search is unavailable', () => {
+      const preamble = String(buildCapabilityPreamble({ tools: [officeTool], ...v5 }));
+
+      expect(preamble).toContain('Web search is not available on this turn.');
+      expect(preamble).not.toContain('Web search is available on this turn');
+      expect(preamble).toContain('No sources were retrieved on this turn');
+      expect(preamble).toContain('do not cite privacy, safety, policy or the law');
+    });
+
+    it('never carries both search statements on a search turn', () => {
+      const preamble = String(buildCapabilityPreamble({ tools: [searchTool], ...v5 }));
+
+      expect(preamble).toContain('Web search is available on this turn');
+      expect(preamble).not.toContain('Web search is not available on this turn.');
+      expect(preamble).not.toContain('No sources were retrieved on this turn');
+      expect(preamble).toContain('[1]');
+    });
+
+    it('keeps the zero-tool notice for a turn with no tools', () => {
+      const preamble = String(buildCapabilityPreamble({ tools: [], ...v5 }));
+
+      expect(preamble).toContain('No tools are available on this turn');
+      expect(preamble).not.toContain('Web search is not available on this turn.');
+      expect(preamble).toContain('No sources were retrieved on this turn');
+    });
+
+    it('states the memory state only when the caller knows it', () => {
+      expect(buildCapabilityPreamble({ tools: [], memory: 'off', ...v5 })).toContain(
+        'Memory is off for this conversation',
+      );
+      expect(buildCapabilityPreamble({ tools: [], memory: 'on', ...v5 })).toContain(
+        'remove it with forget_memory when that tool is listed',
+      );
+      expect(buildCapabilityPreamble({ tools: [], ...v5 })).not.toMatch(/Memory is o/);
+    });
+
+    it('keeps the new sections ahead of the cache boundary', () => {
+      const [stable] = String(
+        buildCapabilityPreamble({ tools: [officeTool], memory: 'off', ...v5 }),
+      ).split(SYSTEM_PROMPT_CACHE_BOUNDARY);
+
+      expect(stable).toContain('Web search is not available on this turn.');
+      expect(stable).toContain('Memory is off for this conversation');
+    });
+
+    it('leaves version 1 untouched by the memory state and the new sections', () => {
+      const v1 = { promptSelection: { conversation: { 'chat.system': 1 } } };
+      const plain = buildCapabilityPreamble({ tools: [officeTool], ...v1 });
+
+      expect(buildCapabilityPreamble({ tools: [officeTool], memory: 'off', ...v1 })).toBe(plain);
+      expect(plain).not.toContain('Web search is not available on this turn.');
+    });
+  });
 });
