@@ -279,16 +279,7 @@ function stubFetch() {
     'fetch',
     vi.fn(async (url: string) =>
       String(url) === FREE_MODEL_PROMOTION_PATH
-        ? new Response(
-            JSON.stringify({
-              promotion: {
-                modelId: PROMOTED_MODEL,
-                endsAt: ENDS_AT,
-                webSearchAvailable: true,
-                webSearchWindowHours: 24,
-              },
-            }),
-          )
+        ? new Response(JSON.stringify({ promotion: { modelId: PROMOTED_MODEL, endsAt: ENDS_AT } }))
         : new Response(JSON.stringify({}), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
