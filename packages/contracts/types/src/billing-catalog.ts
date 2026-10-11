@@ -1,3 +1,4 @@
+import { MAX_ATTACHMENT_BYTES } from './chat';
 import { MICROUSD_PER_USD } from './credits';
 import { FEATURE_RATE_CARD } from './rate-card';
 
@@ -505,8 +506,6 @@ export interface BillingPlanProductLimits {
   dailyAttachmentUploads: BillingPlanLimit;
 }
 
-const MIB = 1024 * 1024;
-
 const FREE_ATTACHMENTS_PER_MESSAGE = 10;
 
 const PAID_ATTACHMENTS_PER_MESSAGE = 20;
@@ -522,7 +521,7 @@ const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   maxConnectorTools: 300,
   maxScheduledTasks: 10,
   codeHarnessDailyCeilingCents: 2500,
-  maxAttachmentBytes: 512 * MIB,
+  maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
   maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
   dailyAttachmentUploads: 'unlimited',
 };
@@ -541,7 +540,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
-    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
   },
@@ -556,7 +555,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
-    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
   },
@@ -571,7 +570,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 25,
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
-    maxAttachmentBytes: 25 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: FREE_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 5,
   },
@@ -586,7 +585,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 50,
     maxScheduledTasks: 2,
     codeHarnessDailyCeilingCents: 100,
-    maxAttachmentBytes: 100 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
   },
@@ -601,7 +600,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
-    maxAttachmentBytes: 250 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
   },
@@ -617,7 +616,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 500,
     maxScheduledTasks: 25,
     codeHarnessDailyCeilingCents: 7500,
-    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
   },
@@ -632,7 +631,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
-    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
   },
@@ -652,7 +651,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'custom',
     maxScheduledTasks: 'custom',
     codeHarnessDailyCeilingCents: 'custom',
-    maxAttachmentBytes: 512 * MIB,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMessage: PAID_ATTACHMENTS_PER_MESSAGE,
     dailyAttachmentUploads: 'unlimited',
   },

@@ -84,6 +84,8 @@ contract; the parts that decide an upload are:
   contents could not be checked. Remove the password and upload it again."
 - Its size limit equals the largest file the web sends for scanning
   (`MAX_ATTACHMENT_BYTES`), pinned by `services/upload-scanner/__tests__/limits.test.ts`.
+  Every plan's `maxAttachmentBytes` is `MAX_ATTACHMENT_BYTES` until large-file scanning exists, and
+  `billing-catalog.test.ts` fails a plan that exceeds it, so raise the scanner limit first.
 - `GET /health` streams the EICAR test string through clamd and fails unless
   clamd detects it, so a clamd that answers but no longer scans fails the
   check. The string is assembled at runtime, so it never sits whole in the

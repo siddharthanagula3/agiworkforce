@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_ATTACHMENT_BYTES } from '../chat';
 import {
   BILLING_PLAN_PRICING,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
@@ -20,6 +21,8 @@ import {
   getPublishedPlanPriceUsd,
   planOffersBillingInterval,
   isContractPricedPlan,
+  BILLING_PLAN_PRODUCT_LIMITS,
+  MAX_PLAN_ATTACHMENT_BYTES,
   getBillingPlanProductLimits,
   getPlanMaxConcurrentTurns,
   getPlanMaxConnectorTools,
@@ -413,6 +416,15 @@ describe('billing catalog', () => {
       }
       expect(isFreeOfChargePlanTier(null)).toBe(false);
       expect(isFreeOfChargePlanTier(undefined)).toBe(false);
+    });
+  });
+
+  describe('attachment size limits', () => {
+    it('keeps every plan within the size the upload scanner accepts', () => {
+      for (const [tier, limits] of Object.entries(BILLING_PLAN_PRODUCT_LIMITS)) {
+        expect(limits.maxAttachmentBytes, tier).toBeLessThanOrEqual(MAX_ATTACHMENT_BYTES);
+      }
+      expect(MAX_PLAN_ATTACHMENT_BYTES).toBeLessThanOrEqual(MAX_ATTACHMENT_BYTES);
     });
   });
 });
