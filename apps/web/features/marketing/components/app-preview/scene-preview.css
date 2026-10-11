@@ -472,20 +472,24 @@
   white-space: nowrap;
 }
 
+[data-design='agi'] .agi-scene-artifact-sub,
+[data-design='agi'] .agi-scene-count,
+[data-design='agi'] .agi-scene-strip-action {
+  font-size: calc(var(--u) * 12);
+}
+
 [data-design='agi'] .agi-scene-artifact-sub {
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 6);
   min-inline-size: 0;
   color: var(--chat-text-muted);
-  font-size: calc(var(--u) * 12);
 }
 
 [data-design='agi'] .agi-scene-count {
   padding: calc(var(--u) * 2) calc(var(--u) * 7);
   border-radius: var(--corner-pill);
   background: var(--chat-surface-hover);
-  font-size: calc(var(--u) * 12);
   font-weight: 500;
 }
 
@@ -495,7 +499,6 @@
   gap: calc(var(--u) * 4);
   min-block-size: calc(var(--u) * 28);
   padding-inline: calc(var(--u) * 8);
-  font-size: calc(var(--u) * 12);
   font-weight: 500;
 }
 
