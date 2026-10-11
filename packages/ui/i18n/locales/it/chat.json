@@ -497,6 +497,27 @@
     "openImage": "Apri l'immagine in una nuova scheda",
     "openImageLabel": "Apri l'immagine in una nuova scheda: {{alt}}"
   },
+  "richBlock": {
+    "email": "Email",
+    "writing": "Testo",
+    "to": "A",
+    "cc": "Cc",
+    "bcc": "Ccn",
+    "subject": "Oggetto",
+    "body": "Messaggio",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "copyEmail": "Copia email",
+    "emailCopied": "Email copiata",
+    "copyWriting": "Copia questo testo",
+    "writingCopied": "Testo copiato",
+    "copyFailed": "Copia non riuscita, appunti non disponibili",
+    "openInMail": "Apri nell’app di posta",
+    "bodyCopiedForMail": "Questo messaggio è troppo lungo per un link email, quindi è stato copiato. Incollalo nella nuova email.",
+    "expandWriting": "Apri in grande per leggere e modificare",
+    "closeWriting": "Chiudi testo ingrandito",
+    "editWriting": "Modifica testo"
+  },
   "streaming": {
     "reconnecting": "Riconnessione…",
     "stopping": "Interruzione dell'attività cloud…"

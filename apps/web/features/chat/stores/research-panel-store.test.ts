@@ -15,6 +15,7 @@ describe('research panel store (per-conversation scoping)', () => {
       cited: [],
       more: [],
       query: undefined,
+      memories: null,
       conversationId: null,
     });
   });
@@ -72,5 +73,27 @@ describe('research panel store (per-conversation scoping)', () => {
     const after = useResearchPanelStore.getState();
     expect(after.sourcesFor('conv-a').messageId).toBe('msg-1');
     expect(after.sourcesFor('conv-a').cited).toHaveLength(2);
+  });
+
+  it('keeps the memories an answer used with that conversation only', () => {
+    const memories = { count: 3, memories: [{ id: 'mem-1', excerpt: 'Prefers short replies' }] };
+    const store = useResearchPanelStore.getState();
+    store.openPanel('conv-a', 'msg-1', [], [], undefined, memories);
+
+    const after = useResearchPanelStore.getState();
+    expect(after.sourcesFor('conv-a').memories).toEqual(memories);
+    expect(after.sourcesFor('conv-b').memories).toBeNull();
+    expect(after.sourcesFor(null).memories).toBeNull();
+  });
+
+  it('drops the previous message memories when a message without any opens', () => {
+    const store = useResearchPanelStore.getState();
+    store.openPanel('conv-a', 'msg-1', [], [], undefined, {
+      count: 1,
+      memories: [{ id: 'mem-1', excerpt: 'Works in finance' }],
+    });
+    store.openPanel('conv-a', 'msg-2', SRC_B, []);
+
+    expect(useResearchPanelStore.getState().sourcesFor('conv-a').memories).toBeNull();
   });
 });
