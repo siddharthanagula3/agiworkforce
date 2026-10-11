@@ -13,10 +13,12 @@ import {
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
+import { liveVoiceOutputRef } from '@features/chat/hooks/use-voice-session';
 import { useVisualSession } from '@/lib/visual/use-visual-session';
 import { VOICE_ATTACHMENT_ACCEPT } from '@features/chat/lib/voice-attachments';
 import { ToolTimeline, type ToolEntry } from '../messages/ToolTimeline';
 import { SourcesControl } from '../research/ResearchPanel';
+import { AudioRoutePicker } from './AudioRoutePicker';
 import { VoiceCaptions } from './VoiceCaptions';
 import { VoiceChatDock } from './VoiceChatDock';
 import { VoiceComposer } from './VoiceComposer';
@@ -48,7 +50,6 @@ const LABEL = {
     'Continue with the voice, language and pace it used, or start with your current settings.',
   rejoin: 'Continue that session',
   startFresh: 'Use my settings',
-  pause: 'Pause',
   resume: 'Resume',
   pausedHint:
     'Paused. The call is closed and nothing is being used. Resume to pick up this conversation.',
@@ -223,6 +224,7 @@ export function VoiceModeSurface({
       growIn
       reducedMotion={session.reducedMotion}
       level={session.audioLevel}
+      showLabel={false}
       onClick={toggleFocusMode}
     />
   );
@@ -270,9 +272,20 @@ export function VoiceModeSurface({
       </button>
     </div>
   ) : session.paused ? (
-    <p data-testid="voice-paused-hint" className="text-sm text-[var(--chat-text-muted)]">
-      {LABEL.pausedHint}
-    </p>
+    <div
+      data-testid="voice-paused-hint"
+      className="flex items-center gap-2 text-sm text-[var(--chat-text-muted)]"
+    >
+      <span className="min-w-0">{LABEL.pausedHint}</span>
+      <button
+        type="button"
+        data-testid="voice-resume"
+        onClick={session.resume}
+        className={LIMIT_ACTION_CLASS}
+      >
+        {LABEL.resume}
+      </button>
+    </div>
   ) : muted && status === VOICE_SESSION_STATUS.muted ? (
     <p data-testid="voice-muted-hint" className="text-sm text-[var(--chat-text-muted)]">
       {session.mutedHint}
@@ -308,14 +321,6 @@ export function VoiceModeSurface({
         variant === VOICE_SURFACE_VARIANT.chat && 'pb-12',
       )}
     >
-      {/* The orb keeps its own slot in the column in both states. As a
-          fixed full-viewport overlay in focus mode it was painted over the
-          notice, the error row and the composer whenever they reached the
-          middle of a short viewport. */}
-      <div data-testid="voice-orb-slot" className="flex shrink-0 items-center justify-center">
-        {orb}
-      </div>
-
       <p className="sr-only" role="status" aria-live="polite" data-testid="voice-live-status">
         {announcement}
       </p>
@@ -428,7 +433,7 @@ export function VoiceModeSurface({
         </div>
       ) : null}
       {sources.length > 0 ? (
-        <div data-testid="voice-sources" className="flex w-full max-w-md justify-end">
+        <div data-testid="voice-sources" className="flex w-full max-w-md justify-center">
           <SourcesControl messageId={VOICE_SOURCES_ID} cited={[...sources]} more={[]} />
         </div>
       ) : null}
@@ -490,29 +495,29 @@ export function VoiceModeSurface({
         </div>
       ) : null}
 
-      {status !== VOICE_SESSION_STATUS.error ? (
-        <button
-          type="button"
-          data-testid="voice-pause-toggle"
-          aria-pressed={session.paused}
-          onClick={session.paused ? session.resume : session.pause}
-          className="min-h-11 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
-        >
-          {session.paused ? LABEL.resume : LABEL.pause}
-        </button>
-      ) : null}
+      {/* The orb keeps its own slot in the column in both states, resting on
+          the composer. As a fixed full-viewport overlay in focus mode it was
+          painted over the notice, the error row and the composer whenever they
+          reached the middle of a short viewport. The canvas reserves room for
+          the orb's glow, so the slot pulls the composer up under that margin;
+          the composer follows it and paints over the overlap, and nothing
+          above the orb is covered. */}
+      <div
+        data-testid="voice-orb-slot"
+        className="-mb-14 flex shrink-0 items-center justify-center"
+      >
+        {orb}
+      </div>
 
       <VoiceComposer
         value={typed}
         muted={muted}
-        captionsOpen={captionsOpen}
         deviceName={session.deviceName}
         dockOpen={dockOpen}
         dockTriggerRef={dockTriggerRef}
         onChange={setTyped}
         onSubmit={handleSubmitTyped}
         onToggleMute={toggleMute}
-        onToggleCaptions={() => setCaptionsOpen((open) => !open)}
         onToggleDock={() => setDockOpen(!dockOpen)}
         onExit={exit}
       />
@@ -539,6 +544,11 @@ export function VoiceModeSurface({
         onAddFiles={() => attachmentInputRef.current?.click()}
         onOpenLibrary={onOpenLibrary}
         onOpenConnectors={onOpenConnectors}
+        captionsOpen={captionsOpen}
+        onToggleCaptions={() => setCaptionsOpen((open) => !open)}
+        onPause={
+          status === VOICE_SESSION_STATUS.error || session.paused ? undefined : session.pause
+        }
       />
 
       <VoiceSettingsModal
@@ -552,6 +562,7 @@ export function VoiceModeSurface({
         onVoiceChange={setVoice}
         onIntelligenceChange={handleIntelligenceChange}
         onLanguageChange={setLanguage}
+        audioOutput={<AudioRoutePicker audioRef={liveVoiceOutputRef} className="self-start" />}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { VoiceSampleButton } from './VoiceSampleButton';
 import {
   AudioLines,
@@ -182,6 +183,8 @@ export interface VoiceSettingsModalProps {
   onVoiceChange: (uri: string) => void;
   onIntelligenceChange: (intelligence: VoiceIntelligence) => void;
   onLanguageChange: (language: string) => void;
+  /** The control that picks where the call's audio plays, when the host has one. */
+  audioOutput?: ReactNode;
 }
 
 export function VoiceSettingsModal({
@@ -195,6 +198,7 @@ export function VoiceSettingsModal({
   onVoiceChange,
   onIntelligenceChange,
   onLanguageChange,
+  audioOutput,
 }: VoiceSettingsModalProps) {
   const [openPicker, setOpenPicker] = useState<string | null>(null);
   const pace = useVoiceSessionStore((state) => state.pace);
@@ -348,6 +352,7 @@ export function VoiceSettingsModal({
             onOpenChange={(next) => setOpenPicker(next ? LABEL.pace : null)}
             onSelect={(id) => setPace(Number(id))}
           />
+          {audioOutput}
         </div>
       </DialogContent>
     </Dialog>

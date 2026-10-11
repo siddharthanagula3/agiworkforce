@@ -5,8 +5,6 @@ import type { ChangeEvent, KeyboardEvent, RefObject } from 'react';
 import { Mic, MicOff, Plus, X } from '@agiworkforce/icons';
 
 import { cn } from '@shared/lib/utils';
-import { liveVoiceOutputRef } from '@features/chat/hooks/use-voice-session';
-import { AudioRoutePicker } from './AudioRoutePicker';
 
 const LABEL = {
   group: 'Voice mode composer',
@@ -15,9 +13,6 @@ const LABEL = {
   field: 'Type a message to send as a normal turn',
   mute: 'Turn off microphone',
   unmute: 'Turn on microphone',
-  captionsOn: 'Hide captions',
-  captionsOff: 'Show captions',
-  captionsGlyph: 'CC',
   exit: 'End voice session',
 } as const;
 
@@ -33,14 +28,12 @@ const ROUND_CONTROL_CLASS =
 export interface VoiceComposerProps {
   value: string;
   muted: boolean;
-  captionsOpen: boolean;
   deviceName: string;
   dockOpen: boolean;
   dockTriggerRef: RefObject<HTMLButtonElement | null>;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onToggleMute: () => void;
-  onToggleCaptions: () => void;
   onToggleDock: () => void;
   onExit: () => void;
 }
@@ -48,14 +41,12 @@ export interface VoiceComposerProps {
 export function VoiceComposer({
   value,
   muted,
-  captionsOpen,
   deviceName,
   dockOpen,
   dockTriggerRef,
   onChange,
   onSubmit,
   onToggleMute,
-  onToggleCaptions,
   onToggleDock,
   onExit,
 }: VoiceComposerProps) {
@@ -137,25 +128,6 @@ export function VoiceComposer({
         ) : (
           <Mic className="h-4 w-4" aria-hidden="true" />
         )}
-      </button>
-
-      <AudioRoutePicker audioRef={liveVoiceOutputRef} />
-
-      <button
-        type="button"
-        onClick={onToggleCaptions}
-        aria-label={captionsOpen ? LABEL.captionsOn : LABEL.captionsOff}
-        aria-pressed={captionsOpen}
-        data-testid="voice-captions-toggle"
-        className={cn(
-          ROUND_CONTROL_CLASS,
-          'text-xs font-semibold tracking-wide',
-          captionsOpen
-            ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)]'
-            : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-        )}
-      >
-        <span aria-hidden="true">{LABEL.captionsGlyph}</span>
       </button>
 
       <button

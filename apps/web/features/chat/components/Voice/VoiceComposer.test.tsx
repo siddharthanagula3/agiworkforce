@@ -11,14 +11,12 @@ function renderComposer(overrides: Partial<Parameters<typeof VoiceComposer>[0]> 
   const props = {
     value: '',
     muted: false,
-    captionsOpen: false,
     deviceName: DEVICE,
     dockOpen: false,
     dockTriggerRef: createRef<HTMLButtonElement>(),
     onChange: vi.fn(),
     onSubmit: vi.fn(),
     onToggleMute: vi.fn(),
-    onToggleCaptions: vi.fn(),
     onToggleDock: vi.fn(),
     onExit: vi.fn(),
     ...overrides,
@@ -28,14 +26,16 @@ function renderComposer(overrides: Partial<Parameters<typeof VoiceComposer>[0]> 
 }
 
 describe('VoiceComposer', () => {
-  it('offers the five controls the voice bar carries', () => {
+  it('carries the panel, the field, the microphone and the way out, and nothing else', () => {
     renderComposer();
 
     expect(screen.getByLabelText('Open this chat panel')).toBeInTheDocument();
     expect(screen.getByTestId('voice-composer-field')).toHaveAttribute('placeholder', 'Type');
     expect(screen.getByTestId('voice-mute-toggle')).toBeInTheDocument();
-    expect(screen.getByTestId('voice-captions-toggle')).toBeInTheDocument();
     expect(screen.getByTestId('voice-exit-button')).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+    expect(screen.queryByTestId('voice-captions-toggle')).toBeNull();
+    expect(screen.queryByTestId('voice-audio-route-trigger')).toBeNull();
   });
 
   it('names the input device in the microphone tooltip', () => {
