@@ -441,6 +441,62 @@ describe('portable agent activity projection', () => {
     expect(next.startedAtMs).toBe(5_000);
   });
 
+  it('names the skill a finished load step read', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(1, {
+        type: 'tool-execution-start',
+        toolCallId: 'skill-1',
+        name: 'skill',
+        category: 'skill',
+        summary: 'Loading skill artifact-design',
+        input: { action: 'load', name: 'artifact-design' },
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, {
+        type: 'tool-execution-end',
+        toolCallId: 'skill-1',
+        name: 'skill',
+        output: { ok: true },
+        isError: false,
+      }),
+    );
+
+    expect(state.entries[0]).toMatchObject({
+      kind: 'tool',
+      status: 'completed',
+      summary: 'Loaded skill artifact-design',
+    });
+  });
+
+  it('keeps the start summary for a skill step that only listed the catalog', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(1, {
+        type: 'tool-execution-start',
+        toolCallId: 'skill-2',
+        name: 'skill',
+        category: 'skill',
+        summary: 'Reading skill',
+        input: { action: 'list' },
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, {
+        type: 'tool-execution-end',
+        toolCallId: 'skill-2',
+        name: 'skill',
+        output: { ok: true },
+        isError: false,
+      }),
+    );
+
+    expect(state.entries[0]).toMatchObject({ status: 'completed', summary: 'Reading skill' });
+  });
+
   it('closes the writing-response row when a tool call interrupts generation, in order', () => {
     let state = applyAgentActivityEvent(
       undefined,

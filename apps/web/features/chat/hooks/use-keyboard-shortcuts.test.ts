@@ -1,6 +1,9 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+
 import { KEYBOARD_SHORTCUT_DOCS, useKeyboardShortcuts } from './use-keyboard-shortcuts';
 
 afterEach(() => {
@@ -155,5 +158,102 @@ describe('useKeyboardShortcuts bindings', () => {
     press('f', { meta: true, shift: true });
 
     expect(onSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe('useKeyboardShortcuts while focus is in a field or editor', () => {
+  function pressOn(
+    target: Element,
+    key: string,
+    modifiers: { meta?: boolean; shift?: boolean } = {},
+  ): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: modifiers.shift && key.length === 1 ? key.toUpperCase() : key,
+      metaKey: modifiers.meta ?? false,
+      ctrlKey: modifiers.meta ?? false,
+      shiftKey: modifiers.shift ?? false,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(event);
+    return event;
+  }
+
+  function mount<T extends HTMLElement>(element: T): T {
+    document.body.appendChild(element);
+    return element;
+  }
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  function editables(): Element[] {
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    const line = document.createElement('span');
+    editor.appendChild(line);
+    mount(editor);
+    return [mount(textInput), mount(document.createElement('textarea')), editor, line];
+  }
+
+  it('leaves Cmd+B to every kind of editable element', () => {
+    const { handlers } = renderWithSpies();
+
+    for (const target of editables()) {
+      expect(pressOn(target, 'b', { meta: true }).defaultPrevented).toBe(false);
+    }
+
+    expect(handlers.onToggleSidebar).not.toHaveBeenCalled();
+  });
+
+  it('still toggles the sidebar from a control that takes no text', () => {
+    const { handlers } = renderWithSpies();
+    const checkbox = mount(document.createElement('input'));
+    checkbox.type = 'checkbox';
+
+    pressOn(checkbox, 'b', { meta: true });
+
+    expect(handlers.onToggleSidebar).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the shortcuts meant to work while typing', () => {
+    const { handlers } = renderWithSpies();
+
+    for (const target of editables()) pressOn(target, 'o', { meta: true, shift: true });
+
+    expect(handlers.onNewChat).toHaveBeenCalledTimes(4);
+  });
+
+  it('never runs a shortcut the focused element already handled', () => {
+    const { handlers } = renderWithSpies();
+    const editor = mount(document.createElement('div'));
+    editor.setAttribute('contenteditable', 'true');
+    editor.addEventListener('keydown', (event) => event.preventDefault());
+
+    pressOn(editor, '/', { meta: true });
+
+    expect(handlers.onShowShortcuts).not.toHaveBeenCalled();
+  });
+
+  it('keeps Cmd+B out of a CodeMirror editor', () => {
+    const { handlers } = renderWithSpies();
+    const view = new EditorView({
+      state: EditorState.create({ doc: 'const a = 1;' }),
+      parent: mount(document.createElement('div')),
+    });
+
+    pressOn(view.contentDOM, 'b', { meta: true });
+
+    expect(handlers.onToggleSidebar).not.toHaveBeenCalled();
+    view.destroy();
+  });
+
+  it('names exactly the shortcuts that yield to a focused field', () => {
+    expect(
+      KEYBOARD_SHORTCUT_DOCS.filter((doc) => !doc.firesInEditable).map((doc) => doc.id),
+    ).toEqual(['toggle-sidebar', 'focus-composer']);
   });
 });

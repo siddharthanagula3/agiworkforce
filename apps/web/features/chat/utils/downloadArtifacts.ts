@@ -139,6 +139,20 @@ export async function downloadGeneratedFile(
   triggerBrowserDownload(new Blob([bytes], { type: mimeType }), fileName);
 }
 
+export async function downloadArtifactFile(artifact: DownloadableArtifact): Promise<void> {
+  const fileName = artifactFilename(artifact);
+  if (artifact.generatedFile?.uri) {
+    await downloadGeneratedFile(
+      artifact.generatedFile.uri,
+      fileName,
+      artifact.generatedFile.mimeType ?? undefined,
+    );
+    return;
+  }
+  const { body, mimeType } = spreadsheetSafeExport(artifact.content, filenameExtension(fileName));
+  triggerBrowserDownload(new Blob([body], { type: mimeType }), fileName);
+}
+
 export async function downloadAllArtifacts(
   artifacts: readonly DownloadableArtifact[],
 ): Promise<void> {

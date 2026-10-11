@@ -152,11 +152,13 @@ const StreamingMarkdownContent = dynamic(
 
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
+import { ArtifactCreatedRow, ArtifactCreatingRow } from '../artifacts/ArtifactCreatingRow';
 import {
   codeBlockEditorArtifact,
   extractArtifacts,
   extractCodeBlocks,
   removeArtifactBlocks,
+  splitProseAroundArtifacts,
 } from '../../utils/artifact-detector';
 import {
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
@@ -667,6 +669,7 @@ interface Message {
 }
 
 const INTERRUPTED_ARTIFACT_NOTICE = 'This artifact stopped before it finished.';
+const ARTIFACT_PROSE_SLOT = '\u2063agi-artifact-slot\u2063';
 const INTERRUPTED_ARTIFACT_ACTION = 'Regenerate';
 
 export interface RegenerateModelOption {
@@ -1351,9 +1354,7 @@ const MessageBubbleComponent = function MessageBubble({
       );
       if (!artifact) return;
       addArtifactForMessage(message.id, artifact, artifactConversationId);
-      const store = useArtifactsStore.getState();
-      store.selectArtifact(artifact.id);
-      store.setPanelOpen(true);
+      useArtifactsStore.getState().openArtifactForEditing(artifact.id);
     },
     [addArtifactForMessage, artifactConversationId, message.content, message.id, messageCodeBlocks],
   );
@@ -1708,6 +1709,10 @@ const MessageBubbleComponent = function MessageBubble({
     () => artifacts.filter((artifact) => artifact.type !== 'image'),
     [artifacts],
   );
+  const createdArtifacts = useMemo(
+    () => inlineArtifacts.filter((artifact) => !artifact.generatedFile && !artifact.interrupted),
+    [inlineArtifacts],
+  );
   const hasInterruptedArtifact = useMemo(
     () => inlineArtifacts.some((artifact) => artifact.interrupted === true),
     [inlineArtifacts],
@@ -1789,17 +1794,24 @@ const MessageBubbleComponent = function MessageBubble({
       ? mediaFrameStyle(media.frame, media.aspectRatio)
       : undefined;
 
-  const { cleanedContent, canLinkNumericCitations } = useMemo(() => {
-    // While an artifact block is streaming into the panel, hide the growing
-    // raw fence from the chat body (a compact "Writing…" chip renders instead)
-    //, mirroring how completed artifact blocks are stripped below.
+  const { cleanedContent, leadProse, trailingProse, canLinkNumericCitations } = useMemo(() => {
+    // While an artifact block streams, the growing raw fence stays out of the
+    // chat body (the "Creating" row stands in for it), mirroring how completed
+    // artifact blocks are stripped below. Prose the model wrote after its last
+    // artifact is kept apart so it renders under the artifact, where it was.
     const base = streamingBlock
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
       : proseContent;
+    const split =
+      artifacts.length === 0 || streamingBlock || inlineArtifacts.length === 0
+        ? null
+        : splitProseAroundArtifacts(base, artifacts, artifactDerivationPolicy);
     const stripped =
       artifacts.length === 0
         ? base
-        : removeArtifactBlocks(base, artifacts, artifactDerivationPolicy);
+        : split?.after
+          ? `${split.before}\n\n${ARTIFACT_PROSE_SLOT}\n\n${split.after}`
+          : removeArtifactBlocks(base, artifacts, artifactDerivationPolicy);
     const reconciled = isUser
       ? { markdown: stripped, canLinkNumericCitations: true }
       : reconcileCitationMarkersFromSourceList(stripped, citationsByMarker);
@@ -1812,14 +1824,29 @@ const MessageBubbleComponent = function MessageBubble({
       : stripTrailingCitationOnlyBlock(withoutDuplicateSources);
     // AUDIT-FIX BUG-31: non-artifact languages get the same "don't hand the
     // renderer a half-open fence" treatment the artifact path already gets.
+    const closed = closeUnterminatedFence(withoutCitationTail);
+    const slotAt = closed.indexOf(ARTIFACT_PROSE_SLOT);
+    if (slotAt === -1) {
+      return {
+        cleanedContent: closed,
+        leadProse: closed,
+        trailingProse: '',
+        canLinkNumericCitations: reconciled.canLinkNumericCitations,
+      };
+    }
+    const lead = closed.slice(0, slotAt).trimEnd();
+    const trail = closed.slice(slotAt + ARTIFACT_PROSE_SLOT.length).trim();
     return {
-      cleanedContent: closeUnterminatedFence(withoutCitationTail),
+      cleanedContent: trail ? `${lead}\n\n${trail}` : lead,
+      leadProse: lead,
+      trailingProse: trail,
       canLinkNumericCitations: reconciled.canLinkNumericCitations,
     };
   }, [
     message.content,
     proseContent,
     artifacts,
+    inlineArtifacts.length,
     streamingBlock,
     artifactDerivationPolicy,
     message.metadata?.research,
@@ -2469,7 +2496,7 @@ const MessageBubbleComponent = function MessageBubble({
                 (() => {
                   const markdown = proseIsStreaming ? (
                     <StreamingMarkdownContent
-                      content={cleanedContent}
+                      content={leadProse}
                       isStreaming
                       citations={citationsByMarker}
                       trustedImageUrls={trustedImageUrls}
@@ -2478,7 +2505,7 @@ const MessageBubbleComponent = function MessageBubble({
                   ) : (
                     <CodeBlockEditorContext.Provider value={isUser ? null : openCodeBlockInEditor}>
                       <MarkdownContent
-                        content={cleanedContent}
+                        content={leadProse}
                         citations={canLinkNumericCitations ? citationsByMarker : searchSources}
                         trustedImageUrls={trustedImageUrls}
                         linkifyNumericCitations={canLinkNumericCitations}
@@ -2490,7 +2517,7 @@ const MessageBubbleComponent = function MessageBubble({
                     <StreamAnnouncer text={cleanedContent} isStreaming={proseIsStreaming}>
                       {formatCardType ? (
                         <MessageFormatCard
-                          content={cleanedContent}
+                          content={leadProse}
                           cardType={formatCardType}
                           messageId={message.id}
                         >
@@ -2536,25 +2563,18 @@ const MessageBubbleComponent = function MessageBubble({
             <InteractiveCardBlock cards={trailingInteractiveCards} assistantText={cleanedContent} />
           ) : null}
 
-          {/* Compact chip while an artifact block streams into the panel, the raw
-              fence is stripped from the body above; this is its in-transcript stand-in. */}
+          {!isUser && !streamingBlock && createdArtifacts.length > 0 && (
+            <ArtifactCreatedRow artifacts={createdArtifacts} />
+          )}
+
           {!isUser && streamingBlock && (
-            <button
-              type="button"
-              onClick={() => {
+            <ArtifactCreatingRow
+              language={streamingBlock.language}
+              content={streamingBlock.content}
+              onShow={() => {
                 useArtifactsStore.getState().setPanelOpen(true);
               }}
-              className="mt-2 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:bg-muted/70"
-              aria-label="Show artifact being written"
-            >
-              <span
-                className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary"
-                aria-hidden="true"
-              />
-              <span>
-                Writing {streamingBlock.language === 'text' ? 'artifact' : streamingBlock.language}…
-              </span>
-            </button>
+            />
           )}
 
           {(message.metadata?.sharedAttachments?.length ?? 0) > 0 && (
@@ -2763,6 +2783,33 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Inline artifact thumbnail cards · quick visual summary, click to open panel */}
           {!isUser && inlineArtifacts.length > 0 && (
             <InlineArtifactCards artifacts={inlineArtifacts} />
+          )}
+
+          {!isUser && trailingProse && (
+            <div
+              dir="auto"
+              data-testid="message-trailing-prose"
+              className="prose dark:prose-invert message-text mt-3 max-w-none break-words text-start"
+            >
+              {proseIsStreaming ? (
+                <StreamingMarkdownContent
+                  content={trailingProse}
+                  isStreaming
+                  citations={citationsByMarker}
+                  trustedImageUrls={trustedImageUrls}
+                  announce={false}
+                />
+              ) : (
+                <CodeBlockEditorContext.Provider value={openCodeBlockInEditor}>
+                  <MarkdownContent
+                    content={trailingProse}
+                    citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                    trustedImageUrls={trustedImageUrls}
+                    linkifyNumericCitations={canLinkNumericCitations}
+                  />
+                </CodeBlockEditorContext.Provider>
+              )}
+            </div>
           )}
 
           {/* A stopped turn leaves a partial artifact on the card above. The

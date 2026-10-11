@@ -17,11 +17,75 @@ export interface ArtifactRenderPayload {
 }
 
 export interface SandboxIncomingMessage {
-  type: 'sandbox-ready' | 'render-complete' | 'render-error' | 'runtime-request';
+  type:
+    | 'sandbox-ready'
+    | 'render-complete'
+    | 'render-error'
+    | 'runtime-request'
+    | 'picker-selection'
+    | 'picker-cancel';
   kind?: ArtifactKind;
   error?: string;
   id?: unknown;
   request?: unknown;
+  selection?: unknown;
+}
+
+export interface ArtifactPickerRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ArtifactPickerSelection {
+  selector: string;
+  text: string;
+  html: string;
+  rect: ArtifactPickerRect;
+}
+
+const MAX_PICKER_SELECTOR_CHARS = 500;
+const MAX_PICKER_TEXT_CHARS = 500;
+const MAX_PICKER_HTML_CHARS = 2_000;
+const MAX_PICKER_COORDINATE = 100_000;
+
+function boundedString(value: unknown, max: number): string | null {
+  return typeof value === 'string' && value.length <= max ? value : null;
+}
+
+function boundedNumber(value: unknown): number | null {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Math.abs(value) <= MAX_PICKER_COORDINATE
+    ? value
+    : null;
+}
+
+export function parsePickerSelection(value: unknown): ArtifactPickerSelection | null {
+  if (!value || typeof value !== 'object') return null;
+  const source = value as Record<string, unknown>;
+  const selector = boundedString(source['selector'], MAX_PICKER_SELECTOR_CHARS);
+  const text = boundedString(source['text'], MAX_PICKER_TEXT_CHARS);
+  const html = boundedString(source['html'], MAX_PICKER_HTML_CHARS);
+  const rect = source['rect'];
+  if (selector === null || !selector || text === null || html === null) return null;
+  if (!rect || typeof rect !== 'object') return null;
+  const box = rect as Record<string, unknown>;
+  const x = boundedNumber(box['x']);
+  const y = boundedNumber(box['y']);
+  const width = boundedNumber(box['width']);
+  const height = boundedNumber(box['height']);
+  if (x === null || y === null || width === null || height === null) return null;
+  if (width < 0 || height < 0) return null;
+  return { selector, text, html, rect: { x, y, width, height } };
+}
+
+export function postPickerModeToSandbox(iframe: HTMLIFrameElement, active: boolean): void {
+  const origin = getSandboxOrigin();
+  const target = iframe.contentWindow;
+  if (!origin || !target) return;
+  target.postMessage({ type: 'picker', active }, origin);
 }
 
 export type ArtifactRuntimeRequest =

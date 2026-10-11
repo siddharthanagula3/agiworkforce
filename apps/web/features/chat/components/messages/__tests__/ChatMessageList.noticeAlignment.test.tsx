@@ -68,6 +68,26 @@ describe('transcript notices share the message column', () => {
     expectMessageColumn(wrapperOf(/declined to finish this response/i));
   });
 
+  it('starts the pending reply in the message column as an inline status, not a full-bleed bar', () => {
+    render(
+      <ChatMessageList
+        messages={turn({}, '').slice(0, 1)}
+        isLoading
+        conversationId="conversation-1"
+      />,
+    );
+
+    const indicator = screen.getByTestId('typing-indicator');
+    expectMessageColumn(wrapperOf('Preparing'));
+    expect(indicator).toBe(wrapperOf('Preparing'));
+    for (const node of [indicator, ...indicator.querySelectorAll('*')]) {
+      expect(node.className).not.toMatch(/(^|\s)bg-/);
+    }
+    const spinner = indicator.querySelector('.animate-spin');
+    expect(spinner?.classList.contains('motion-reduce:animate-none')).toBe(true);
+    expect(spinner?.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('raises the failed-run links to a 44px target on a coarse pointer', () => {
     renderTranscript(
       turn(

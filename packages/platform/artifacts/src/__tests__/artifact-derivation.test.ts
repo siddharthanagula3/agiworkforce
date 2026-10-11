@@ -8,6 +8,7 @@ import {
   deriveArtifacts,
   hasArtifacts,
   removeArtifactBlocks,
+  splitProseAroundArtifacts,
   extractTrailingUnclosedBlock,
   artifactInclusionForPolicy,
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
@@ -333,6 +334,59 @@ describe('extractArtifactTitle, linear rewrite parity', () => {
 
   it('still falls back to the first meaningful line', () => {
     expect(extractArtifactTitle('\n\n# Fallback Heading\nmore')).toBe('Fallback Heading');
+  });
+
+  it('never names an artifact after its marker or its opening markup', () => {
+    expect(extractArtifactTitle('<!-- @artifact -->\n<!doctype html>\n<html><body>')).toBe(
+      undefined,
+    );
+    expect(extractArtifactTitle('// @artifact\n// Budget tracker\nfunction App() {}')).toBe(
+      'Budget tracker',
+    );
+    expect(extractArtifactTitle('%% @artifact\nflowchart TD')).toBe('flowchart TD');
+  });
+});
+
+describe('splitProseAroundArtifacts', () => {
+  const reply = [
+    'Lead sentence.',
+    '',
+    '```html',
+    '<!-- @artifact -->',
+    '<main>ONE</main>',
+    '```',
+    '',
+    'Between them.',
+    '',
+    '```python',
+    'print(1)',
+    '```',
+    '',
+    'After everything.',
+  ].join('\n');
+
+  it('keeps the prose after the last artifact apart and strips every artifact block', () => {
+    const artifacts = deriveArtifacts(reply, { include: 'explicit-renderable' });
+    const split = splitProseAroundArtifacts(reply, artifacts, { include: 'explicit-renderable' });
+
+    expect(split.before).toBe('Lead sentence.');
+    expect(split.after).toContain('Between them.');
+    expect(split.after).toContain('print(1)');
+    expect(split.after).toContain('After everything.');
+    expect(split.before + split.after).not.toContain('ONE');
+  });
+
+  it('puts everything before when nothing follows the artifact or there is none', () => {
+    expect(splitProseAroundArtifacts('Just text.', [])).toEqual({
+      before: 'Just text.',
+      after: '',
+    });
+    const only = 'Lead.\n\n```html\n<!-- @artifact -->\n<main>X</main>\n```';
+    const artifacts = deriveArtifacts(only, { include: 'explicit-renderable' });
+    expect(splitProseAroundArtifacts(only, artifacts, { include: 'explicit-renderable' })).toEqual({
+      before: 'Lead.',
+      after: '',
+    });
   });
 });
 

@@ -341,6 +341,61 @@ describe('GET /api/artifacts/publish', () => {
     expect(body.artifacts[0].shareUrl).toContain(`/shared-artifact/${TOKEN}`);
   });
 
+  it('carries the source conversation and live version a Sites row links to', async () => {
+    mocks.query.mockResolvedValue([
+      {
+        token: TOKEN,
+        artifact_id: 'artifact-1',
+        conversation_id: '11111111-1111-4111-8111-111111111111',
+        title: 'Dashboard',
+        kind: 'react',
+        language: null,
+        content_chars: 10,
+        version: '3',
+        visibility: 'organization',
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-02T00:00:00.000Z',
+      },
+    ]);
+
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));
+    const [entry] = (await response.json()).artifacts;
+
+    expect(entry).toMatchObject({
+      conversationId: '11111111-1111-4111-8111-111111111111',
+      version: 3,
+      visibility: 'organization',
+    });
+  });
+
+  it("scopes the list to the caller, so another user's sites never appear", async () => {
+    mocks.scopedDb.mockResolvedValue({
+      db: {
+        query: (...args: unknown[]) => mocks.query(...args),
+        execute: (...args: unknown[]) => mocks.execute(...args),
+      },
+      userId: 'user-2',
+      organizationId: null,
+    });
+    mocks.query.mockResolvedValue([]);
+
+    await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));
+
+    const [sql, params] = mocks.query.mock.calls[0]!;
+    expect(sql).toContain('where user_id = $1');
+    expect(params).toEqual(['user-2', 200]);
+  });
+
+  it('answers 401 to a signed-out caller without reading anything', async () => {
+    const { createError } = await import('@/lib/errors');
+    mocks.scopedDb.mockRejectedValue(createError.unauthorized());
+
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));
+
+    expect(response.status).toBe(401);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
   it('never returns the published bodies', async () => {
     mocks.query.mockResolvedValue([]);
     await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));

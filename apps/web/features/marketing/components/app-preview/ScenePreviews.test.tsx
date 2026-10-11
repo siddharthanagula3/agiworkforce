@@ -280,8 +280,8 @@ describe('artifact beside a chat', () => {
   it('shows the inline cards and the open panel', () => {
     expect(container.querySelector('.agi-app-side')).toBeNull();
     expect(texts(container, '.agi-scene-card-title')).toEqual(['Project notes', 'Next steps']);
-    expect(texts(container, '.agi-scene-badge')).toEqual(['HTML', 'HTML']);
-    expect(texts(container, '.agi-scene-card-sub')).toEqual(['Code · HTML', 'Code · HTML']);
+    expect(texts(container, '.agi-scene-card-sub')).toEqual(['Artifact', 'Artifact']);
+    expect(texts(container, '.agi-scene-card-open')).toEqual(['Hide', 'Open']);
     expect(text(container, '.agi-scene-ghost')).toBe('Download all');
     expect(text(container, '.agi-scene-artifacts-title')).toBe('Artifacts');
     expect(text(container, '.agi-scene-count')).toBe('2');
@@ -329,15 +329,20 @@ describe('artifact beside a chat', () => {
       'aria-label="Close artifact viewer"',
       '<div className="h-full w-full bg-white">',
     ]);
-    expectSource('apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx', [
-      "return 'HTML';",
-      "return 'Code';",
-      "html: 'HTML',",
-      '{kindLabel(artifact.type)} · {extLabel(artifact)}',
+    expectSource('apps/web/features/chat/components/artifacts/artifact-labels.tsx', [
+      "export const ARTIFACT_KIND_LABEL = 'Artifact';",
       'return <Globe className={cls} aria-hidden="true" />;',
-      'relative w-20 shrink-0',
+    ]);
+    expectSource('apps/web/features/chat/components/artifacts/ArtifactCard.tsx', [
+      "export const ARTIFACT_OPEN_ACTION = 'Open';",
+      "export const ARTIFACT_HIDE_ACTION = 'Hide';",
+      '<Download className="h-4 w-4" aria-hidden="true" />',
+      '{shownInPanel ? ARTIFACT_HIDE_ACTION : ARTIFACT_OPEN_ACTION}',
+    ]);
+    expectSource('apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx', [
+      'shownInPanel={panelOpen && selectedArtifactId === artifact.id}',
       'artifacts.length > 1',
-      'Download all',
+      "const DOWNLOAD_ALL_ACTION = 'Download all';",
     ]);
     expectSource('packages/ui/unified-chat/src/stores/uiStore.ts', [
       'export const MAX_SIDE_PANEL_WIDTH = 900;',
@@ -1030,12 +1035,7 @@ describe('artifact example follows the canonical derivation', () => {
       store.getState().upsertArtifact(artifact);
     }
     expect(texts(root, '.agi-scene-card-title')).toEqual(derived.map((artifact) => artifact.title));
-    expect(texts(root, '.agi-scene-badge')).toEqual(
-      derived.map((artifact) => artifact.type.toUpperCase()),
-    );
-    expect(texts(root, '.agi-scene-card-sub')).toEqual(
-      derived.map((artifact) => `Code · ${(artifact.language ?? '').toUpperCase()}`),
-    );
+    expect(texts(root, '.agi-scene-card-sub')).toEqual(derived.map(() => 'Artifact'));
     expect(text(root, '.agi-scene-count')).toBe(String(derived.length));
     const open = derived[0];
     if (!open) throw new Error('The example message derives no artifact');

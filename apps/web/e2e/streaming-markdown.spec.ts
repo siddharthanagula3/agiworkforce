@@ -31,7 +31,7 @@ const COMPOSER_LABEL = /message input/i;
 const STOP_BUTTON_LABEL = /stop the current response/i;
 const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const SCROLL_TO_BOTTOM_LABEL = 'Scroll to bottom';
-const STREAMING_ARTIFACT_CHIP_LABEL = 'Show artifact being written';
+const STREAMING_ARTIFACT_CHIP_LABEL = 'Show the code being written';
 const THINKING_PLACEHOLDER = 'Thinking...';
 
 const ASSISTANT_BUBBLE = '[data-role="assistant"]';
@@ -189,7 +189,7 @@ function assistantMessage(page: Page): Locator {
 }
 
 function assistantProse(page: Page): Locator {
-  return assistantMessage(page).locator(MESSAGE_TEXT);
+  return assistantMessage(page).locator(MESSAGE_TEXT).first();
 }
 
 async function dismissConsent(page: Page): Promise<void> {
@@ -600,9 +600,10 @@ test.describe('streaming markdown', () => {
     await expect(page.getByRole('button', { name: STREAMING_ARTIFACT_CHIP_LABEL })).toHaveCount(
       ZERO,
     );
-    const finalProse = await prose.innerText();
-    expect(finalProse).toContain(ARTIFACT_LEAD_SENTENCE);
-    expect(finalProse).toContain(ARTIFACT_TRAIL_SENTENCE);
+    const proseBlocks = await assistantMessage(page).locator(MESSAGE_TEXT).allInnerTexts();
+    expect(proseBlocks[0]).toContain(ARTIFACT_LEAD_SENTENCE);
+    expect(proseBlocks.at(-1)).toContain(ARTIFACT_TRAIL_SENTENCE);
+    const finalProse = proseBlocks.join('\n');
     expect(finalProse).not.toContain(ARTIFACT_BODY_MARKER);
     expect(finalProse).not.toContain(FENCE_MARKER);
   });

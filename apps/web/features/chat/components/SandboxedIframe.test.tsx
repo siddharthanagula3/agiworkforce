@@ -95,3 +95,122 @@ describe('SandboxedIframe', () => {
     expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-modals');
   });
 });
+
+describe('SandboxedIframe element picker bridge', () => {
+  const SANDBOX = 'https://sandbox.agiworkforce.com';
+  const SELECTION = {
+    selector: 'main > p',
+    text: 'Hello',
+    html: '<p>Hello</p>',
+    rect: { x: 1, y: 2, width: 3, height: 4 },
+  };
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function mountPicker(active: boolean) {
+    vi.stubEnv('NEXT_PUBLIC_SANDBOX_ORIGIN', SANDBOX);
+    const picker = {
+      active,
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+      onUnavailable: vi.fn(),
+    };
+    const view = render(
+      <SandboxedIframe
+        title="Artifact preview"
+        payload={{ type: 'render', kind: 'html', html: '<p>Hello</p>' }}
+        fallbackSrcDoc="<!doctype html><p>Fallback</p>"
+        picker={picker}
+      />,
+    );
+    const source = view.container.querySelector('iframe')?.contentWindow ?? null;
+    const post = (data: unknown, origin = SANDBOX) =>
+      window.dispatchEvent(new MessageEvent('message', { data, origin, source }));
+    return { picker, post, view };
+  }
+
+  it('forwards a selection the sandbox reports while selection mode is on', () => {
+    const { picker, post } = mountPicker(true);
+
+    post({ type: 'picker-selection', selection: SELECTION });
+
+    expect(picker.onSelect).toHaveBeenCalledWith(SELECTION);
+  });
+
+  it('ignores a selection posted by any other origin', () => {
+    const { picker, post } = mountPicker(true);
+
+    post({ type: 'picker-selection', selection: SELECTION }, 'https://evil.example');
+
+    expect(picker.onSelect).not.toHaveBeenCalled();
+  });
+
+  it('ignores a selection from a window that is not the sandbox frame', () => {
+    const { picker } = mountPicker(true);
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'picker-selection', selection: SELECTION },
+        origin: SANDBOX,
+        source: window,
+      }),
+    );
+
+    expect(picker.onSelect).not.toHaveBeenCalled();
+  });
+
+  it('ignores selections and cancels while selection mode is off', () => {
+    const { picker, post } = mountPicker(false);
+
+    post({ type: 'picker-selection', selection: SELECTION });
+    post({ type: 'picker-cancel' });
+
+    expect(picker.onSelect).not.toHaveBeenCalled();
+    expect(picker.onCancel).not.toHaveBeenCalled();
+  });
+
+  it('drops a selection whose shape is not what the sandbox sends', () => {
+    const { picker, post } = mountPicker(true);
+
+    post({ type: 'picker-selection', selection: { ...SELECTION, rect: 'big' } });
+    post({ type: 'picker-selection', selection: { ...SELECTION, selector: 'a'.repeat(900) } });
+    post({ type: 'picker-selection' });
+
+    expect(picker.onSelect).not.toHaveBeenCalled();
+  });
+
+  it('passes a cancel from the sandbox on', () => {
+    const { picker, post } = mountPicker(true);
+
+    post({ type: 'picker-cancel' });
+
+    expect(picker.onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('says selection is unavailable when the sandbox is not in use', () => {
+    vi.stubEnv('NEXT_PUBLIC_SANDBOX_ORIGIN', '');
+    const onUnavailable = vi.fn();
+
+    render(
+      <SandboxedIframe
+        title="Artifact preview"
+        payload={{ type: 'render', kind: 'html', html: '<p>Hello</p>' }}
+        fallbackSrcDoc="<!doctype html><p>Fallback</p>"
+        picker={{ active: true, onSelect: vi.fn(), onCancel: vi.fn(), onUnavailable }}
+      />,
+    );
+
+    expect(onUnavailable).toHaveBeenCalled();
+  });
+
+  it('keeps the frame sandbox attributes unchanged while selection mode is on', () => {
+    const { view } = mountPicker(true);
+
+    expect(view.container.querySelector('iframe')).toHaveAttribute(
+      'sandbox',
+      'allow-scripts allow-same-origin',
+    );
+  });
+});

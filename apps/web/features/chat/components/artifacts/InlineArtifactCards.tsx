@@ -1,32 +1,17 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useMounted } from '@shared/hooks/useMounted';
-import {
-  FileCode,
-  Code2,
-  FileSpreadsheet,
-  FileText,
-  Image as ImageIcon,
-  Globe,
-  ChevronRight,
-  Mail,
-  Presentation,
-  Shield,
-  FolderDown,
-  Download,
-} from 'lucide-react';
-import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
-import { MermaidDiagram } from '@agiworkforce/unified-chat';
+import { FolderDown } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
-import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
+import { toUserMessage } from '@/lib/user-error-message';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import type { ArtifactData } from './ArtifactPreview';
-import { toast } from 'sonner';
-import { toUserMessage } from '@/lib/user-error-message';
+import { ArtifactCard } from './ArtifactCard';
 
-const ARTIFACT_DOWNLOAD_ACTION = 'Download';
+const DOWNLOAD_ALL_ACTION = 'Download all';
+const MAX_VISIBLE = 3;
 
 interface InlineArtifactCardsProps {
   artifacts: ArtifactData[];
@@ -34,332 +19,11 @@ interface InlineArtifactCardsProps {
   className?: string;
 }
 
-function typeBadge(type: ArtifactData['type']): string {
-  switch (type) {
-    case 'html':
-      return 'HTML';
-    case 'react':
-      return 'React';
-    case 'svg':
-      return 'SVG';
-    case 'mermaid':
-      return 'Diagram';
-    case 'code':
-      return 'Code';
-    case 'document':
-      return 'Document';
-    case 'spreadsheet':
-    case 'csv':
-      return 'Spreadsheet';
-    case 'table':
-      return 'Table';
-    case 'presentation':
-      return 'Slides';
-    case 'email':
-      return 'Email';
-    case 'image':
-      return 'Image';
-    default:
-      return 'File';
-  }
-}
-
-function kindLabel(type: ArtifactData['type']): string {
-  switch (type) {
-    case 'html':
-    case 'react':
-    case 'svg':
-    case 'mermaid':
-    case 'code':
-      return 'Code';
-    case 'spreadsheet':
-    case 'csv':
-    case 'table':
-      return 'Spreadsheet';
-    case 'presentation':
-      return 'Slides';
-    case 'email':
-      return 'Email';
-    case 'image':
-      return 'Image';
-    case 'document':
-    default:
-      return 'Document';
-  }
-}
-
-function extLabel(artifact: ArtifactData): string {
-  const raw = (artifact.language || artifact.type || '').toLowerCase();
-  const map: Record<string, string> = {
-    markdown: 'MD',
-    md: 'MD',
-    javascript: 'JS',
-    typescript: 'TS',
-    python: 'PY',
-    html: 'HTML',
-    svg: 'SVG',
-    csv: 'CSV',
-    json: 'JSON',
-    document: 'DOC',
-    mermaid: 'Mermaid',
-  };
-  // A mapped label is already the exact casing meant for display - forcing
-  // it through the fallback's uppercase+slice(6) is what turned "Mermaid"
-  // into "MERMAI". Only the unmapped fallback needs that truncation guard,
-  // since it is the one case where `raw` is an arbitrary, unbounded string.
-  const mapped = map[raw];
-  if (mapped) return mapped;
-  return (raw || 'file').toUpperCase().slice(0, 6);
-}
-
-/** Icon for each artifact type. Exported for reuse in the artifact viewer header. */
-export function TypeIcon({ type, className }: { type: ArtifactData['type']; className?: string }) {
-  const cls = cn('shrink-0', className);
-  switch (type) {
-    case 'html':
-      return <Globe className={cls} aria-hidden="true" />;
-    case 'react':
-      return <Code2 className={cls} aria-hidden="true" />;
-    case 'svg':
-    case 'image':
-      return <ImageIcon className={cls} aria-hidden="true" />;
-    case 'mermaid':
-      return <FileCode className={cls} aria-hidden="true" />;
-    case 'spreadsheet':
-    case 'table':
-    case 'csv':
-      return <FileSpreadsheet className={cls} aria-hidden="true" />;
-    case 'presentation':
-      return <Presentation className={cls} aria-hidden="true" />;
-    case 'email':
-      return <Mail className={cls} aria-hidden="true" />;
-    default:
-      return <FileText className={cls} aria-hidden="true" />;
-  }
-}
-
-function badgeClass(type: ArtifactData['type']): string {
-  switch (type) {
-    case 'html':
-      return 'bg-orange-500/15 text-orange-700 dark:text-orange-300';
-    case 'react':
-      return 'bg-sky-500/15 text-sky-700 dark:text-sky-300';
-    case 'svg':
-      return 'bg-violet-500/15 text-violet-700 dark:text-violet-300';
-    case 'image':
-      return 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300';
-    case 'mermaid':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
-    case 'code':
-      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
-    default:
-      return 'bg-muted text-muted-foreground';
-  }
-}
-
-/**
- * Mermaid gets a distinct card shape instead of ArtifactFullCard's 80px side
- * thumbnail: a diagram shrunk to 32px of width and scaled back up reads as an
- * unreadable grey blob, which is what the thumbnail path produced. Claude and
- * ChatGPT both show the actual diagram at message width, so this renders the
- * real MermaidDiagram full-width under a compact title row instead of a
- * preview of it. `interactive={false}` keeps its own "Show source" toggle
- * from nesting a second button inside this card's click target - opening the
- * artifact panel (via the outer button) is the only click target here.
- */
-function MermaidFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'group w-full flex flex-col overflow-hidden rounded-xl border border-border/40',
-        'bg-muted/30 hover:bg-muted/50 transition-colors text-start',
-      )}
-      aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
-    >
-      <div className="flex items-center gap-2 min-w-0 px-3 py-2.5">
-        <TypeIcon type={artifact.type} className="h-4 w-4 text-muted-foreground" />
-        <span className="flex-1 truncate text-sm font-medium text-foreground leading-tight">
-          {artifact.title || 'Untitled'}
-        </span>
-        <span className="text-caption text-muted-foreground truncate">
-          {kindLabel(artifact.type)} · {extLabel(artifact)}
-        </span>
-        <span
-          className={cn(
-            'shrink-0 inline-block rounded-compact px-1.5 py-0.5 text-caption font-semibold uppercase leading-tight tracking-wide',
-            badgeClass(artifact.type),
-          )}
-        >
-          {typeBadge(artifact.type)}
-        </span>
-        <ChevronRight
-          className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-          aria-hidden="true"
-        />
-      </div>
-      {/* max-height + internal scroll keeps a tall diagram from growing the
-          card past the message column; width always fits since MermaidDiagram
-          scales its svg to 100% of this container. */}
-      <div
-        className="pointer-events-none max-h-[320px] overflow-y-auto border-t border-border/30 bg-background px-4 py-3"
-        aria-hidden="true"
-      >
-        <MermaidDiagram source={artifact.content} interactive={false} className="mermaid-block" />
-      </div>
-    </button>
-  );
-}
-
-function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
-  const mounted = useMounted();
-  const canRender = mounted && ['html', 'react', 'svg'].includes(artifact.type);
-  const generatedFileSummary = summarizeGeneratedFileBundle({
-    computeSession: artifact.computeSession,
-    generatedFile: artifact.generatedFile,
-    artifactManifest: artifact.artifactManifest,
-    fallbackFileName: artifact.title,
-    fallbackKind: artifact.generatedFile?.kind ?? artifact.language ?? artifact.type,
-    fallbackMimeType: artifact.generatedFile?.mimeType,
-    fallbackUri: artifact.generatedFile?.uri,
-    fallbackStatus: artifact.computeSession?.status,
-  });
-  const hasGeneratedFileManifest = Boolean(
-    artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
-  );
-
-  if (mounted && artifact.type === 'mermaid') {
-    return <MermaidFullCard artifact={artifact} onClick={onClick} />;
-  }
-
-  const downloadUri = artifact.generatedFile?.uri;
-
-  return (
-    <div className="relative w-full">
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          'group w-full flex items-stretch overflow-hidden rounded-xl border border-border/40',
-          'bg-muted/30 hover:bg-muted/50 transition-colors text-start',
-        )}
-        aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
-      >
-        {/* Preview area · 80px wide on the left */}
-        <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-e border-border/30">
-          {canRender ? (
-            <iframe
-              title={artifact.title || 'Artifact preview'}
-              // 80px static thumbnail, same reasoning as the gallery grid: no
-              // scripts to run, and running them only produced inherited-CSP
-              // violations. The interactive viewer (ArtifactPreview) keeps
-              // allow-scripts, because there the execution is the point.
-              sandbox=""
-              srcDoc={(() => {
-                if (artifact.type === 'html') {
-                  return buildSandboxSrcDoc(artifact.content.slice(0, 800));
-                }
-                const preview = artifact.content.slice(0, 800);
-                return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${preview}</body></html>`;
-              })()}
-              className="pointer-events-none h-full w-full"
-              style={{
-                width: '250%',
-                height: '250%',
-                transform: 'scale(0.4)',
-                transformOrigin: 'top left',
-              }}
-              aria-hidden="true"
-            />
-          ) : (
-            <div className="flex h-full w-full min-h-[64px] items-center justify-center">
-              <TypeIcon type={artifact.type} className="h-6 w-6 text-muted-foreground" />
-            </div>
-          )}
-          {/* Hover open indicator */}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
-            <ChevronRight
-              className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
-
-        {/* Text area · fills remaining width */}
-        <div
-          className={cn(
-            'flex flex-1 min-w-0 flex-col justify-center gap-1 px-3 py-2.5',
-            downloadUri && 'pe-28',
-          )}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex-1 truncate text-sm font-medium text-foreground leading-tight">
-              {artifact.title || 'Untitled'}
-            </span>
-            <span
-              className={cn(
-                'shrink-0 inline-block rounded-compact px-1.5 py-0.5 text-caption font-semibold uppercase leading-tight tracking-wide',
-                badgeClass(artifact.type),
-              )}
-            >
-              {typeBadge(artifact.type)}
-            </span>
-          </div>
-
-          {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel && (
-            <span className="inline-flex w-fit items-center gap-1 rounded-compact bg-muted px-1.5 py-0.5 text-caption font-semibold uppercase leading-tight text-muted-foreground">
-              <Shield className="h-2.5 w-2.5" aria-hidden="true" />
-              {generatedFileSummary.privacyShortLabel}
-            </span>
-          )}
-
-          {/* Claude-style "{Kind} · {EXT}" subtitle (e.g. "Document · MD", "Code · HTML"). */}
-          <span className="text-caption text-muted-foreground truncate">
-            {kindLabel(artifact.type)} · {extLabel(artifact)}
-          </span>
-        </div>
-      </button>
-      {downloadUri && (
-        <a
-          href={downloadUri}
-          download={artifact.title || undefined}
-          onClick={(event) => event.stopPropagation()}
-          aria-label={`${ARTIFACT_DOWNLOAD_ACTION} ${artifact.title || 'Untitled'}`}
-          className={cn(
-            'absolute bottom-2 end-2 inline-flex items-center gap-1 rounded-lg border border-border/60 bg-background px-2 py-1',
-            'text-caption font-medium text-foreground no-underline transition-colors hover:bg-muted/60',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
-          )}
-        >
-          <Download className="h-3 w-3" aria-hidden="true" />
-          {ARTIFACT_DOWNLOAD_ACTION}
-        </a>
-      )}
-    </div>
-  );
-}
-
-function OverflowRow({ count, onClick }: { count: number; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'w-full flex items-center justify-center gap-2 rounded-xl border border-border/40',
-        'bg-muted/20 hover:bg-muted/40 transition-colors py-2',
-      )}
-      aria-label={`View ${count} more artifacts`}
-    >
-      <span className="text-xs font-semibold text-muted-foreground">+{count} more</span>
-    </button>
-  );
-}
-
-const MAX_VISIBLE = 3;
-
 export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArtifactCardsProps) {
-  const { selectArtifact, setPanelOpen } = useArtifactsStore();
+  const selectArtifact = useArtifactsStore((state) => state.selectArtifact);
+  const setPanelOpen = useArtifactsStore((state) => state.setPanelOpen);
+  const panelOpen = useArtifactsStore((state) => state.panelOpen);
+  const selectedArtifactId = useArtifactsStore((state) => state.selectedArtifactId);
 
   const openArtifact = useCallback(
     (id: string) => {
@@ -370,31 +34,39 @@ export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArti
     [selectArtifact, setPanelOpen, onOpen],
   );
 
-  const openFirst = useCallback(() => {
-    const first = artifacts[0];
-    if (first) openArtifact(first.id);
-  }, [artifacts, openArtifact]);
-
   if (artifacts.length === 0) return null;
 
   const visible = artifacts.slice(0, MAX_VISIBLE);
-  const overflow = artifacts.length - MAX_VISIBLE;
+  const overflow = artifacts.length - visible.length;
+  const firstHidden = artifacts[MAX_VISIBLE];
 
   return (
-    <div className={cn('flex flex-col gap-2 mt-3', className)} role="list" aria-label="Artifacts">
+    <div className={cn('mt-3 flex flex-col gap-2', className)} role="list" aria-label="Artifacts">
       {visible.map((artifact) => (
         <div key={artifact.id} role="listitem">
-          <ArtifactFullCard artifact={artifact} onClick={() => openArtifact(artifact.id)} />
+          <ArtifactCard
+            artifact={artifact}
+            shownInPanel={panelOpen && selectedArtifactId === artifact.id}
+            onToggle={() =>
+              panelOpen && selectedArtifactId === artifact.id
+                ? setPanelOpen(false)
+                : openArtifact(artifact.id)
+            }
+          />
         </div>
       ))}
-      {overflow > 0 && (
+      {overflow > 0 && firstHidden && (
         <div role="listitem">
-          <OverflowRow count={overflow} onClick={openFirst} />
+          <button
+            type="button"
+            onClick={() => openArtifact(firstHidden.id)}
+            className="flex w-full items-center justify-center rounded-xl border border-[var(--chat-border)] py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`View ${overflow} more artifacts`}
+          >
+            +{overflow} more
+          </button>
         </div>
       )}
-      {/* Download-all: matches claude.ai's button beneath a multi-file response.
-          Reuses the shared downloadAllArtifacts helper (ponytail, same impl as
-          the artifact panel header). */}
       {artifacts.length > 1 && (
         <button
           type="button"
@@ -405,10 +77,10 @@ export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArti
               error: (error) => toUserMessage(error, 'Could not download artifacts'),
             });
           }}
-          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border/50 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--chat-border-strong)] px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <FolderDown className="h-3.5 w-3.5" aria-hidden="true" />
-          Download all
+          {DOWNLOAD_ALL_ACTION}
         </button>
       )}
     </div>

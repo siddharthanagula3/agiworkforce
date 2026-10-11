@@ -1641,6 +1641,33 @@ describe('MessageBubble', () => {
       expect(screen.queryByRole('button', { name: /open artifact/i })).toBeNull();
     });
 
+    it('shows prose written after an artifact under the artifact, not above it', async () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            id: 'msg-artifact-order',
+            role: 'assistant',
+            content:
+              'Here is your calculator.\n\n```html\n<!-- @artifact -->\n<main>CALC</main>\n```\n\nPress Esc to clear.',
+            metadata: { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY },
+          })}
+        />,
+      );
+
+      const preview = await screen.findByTestId('artifact-card');
+      const trailing = screen.getByTestId('message-trailing-prose');
+      expect(trailing).toHaveTextContent('Press Esc to clear.');
+      const lead = (await screen.findAllByTestId('markdown-content'))[0];
+      if (!lead) throw new Error('the lead prose did not render');
+      expect(lead).toHaveTextContent('Here is your calculator.');
+      expect(lead).not.toHaveTextContent('Press Esc to clear.');
+      expect(lead).not.toHaveTextContent('CALC');
+      expect(
+        preview.compareDocumentPosition(trailing) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(lead.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('promotes marked HTML while keeping its source out of the transcript', async () => {
       render(
         <MessageBubble
@@ -1653,7 +1680,9 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.getByTestId('markdown-content')).not.toHaveTextContent('EXPLICIT_PREVIEW');
+      expect(await screen.findByTestId('markdown-content')).not.toHaveTextContent(
+        'EXPLICIT_PREVIEW',
+      );
       await waitFor(() =>
         expect(useArtifactsStore.getState().getMessageArtifacts('msg-marked-html')).toHaveLength(1),
       );

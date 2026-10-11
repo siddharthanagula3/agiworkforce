@@ -350,6 +350,13 @@ function groundingSearchResultsDelta(payload: unknown): Record<string, unknown> 
   };
 }
 
+export function paragraphBreakBetween(before: string, after: string): string {
+  if (before.trim().length === 0 || after.length === 0) return '';
+  const trailing = /\n*$/.exec(before.replace(/[ \t]+$/, ''))?.[0].length ?? 0;
+  const leading = /^\n*/.exec(after)?.[0].length ?? 0;
+  return '\n'.repeat(Math.max(0, 2 - trailing - leading));
+}
+
 export interface OpenAIWireUsage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -375,6 +382,8 @@ export class OpenAIWireAssembler {
   private readonly vendorIndexById = new Map<string, number>();
   private readonly toolCalls: Array<{ id: string; name: string; args: string }> = [];
   private text = '';
+  private lastTextDelta = '';
+  private toolStepSinceText = false;
   private reasoning = '';
   private readonly thinkingBlocks: ThinkingBlock[] = [];
   private openThinkingBlock: { thinking: string; signature?: string } | null = null;
@@ -512,9 +521,15 @@ export class OpenAIWireAssembler {
 
   ingest(chunk: StreamChunk): void {
     switch (chunk.type) {
-      case 'text-delta':
-        this.text += chunk.delta;
+      case 'text-delta': {
+        const separated = this.toolStepSinceText && chunk.delta.length > 0;
+        this.lastTextDelta = separated
+          ? paragraphBreakBetween(this.text, chunk.delta) + chunk.delta
+          : chunk.delta;
+        if (separated) this.toolStepSinceText = false;
+        this.text += this.lastTextDelta;
         return;
+      }
       case 'thinking-delta': {
         this.reasoning += chunk.delta;
         const open = this.openThinkingBlock ?? { thinking: '' };
@@ -553,6 +568,9 @@ export class OpenAIWireAssembler {
       case 'tool-use-end':
         return;
       case 'server-tool-use':
+        if (this.wireMode === 'legacy-web' || this.wireMode === 'openai-passthrough') {
+          this.toolStepSinceText = this.text.trim().length > 0;
+        }
         return;
       case 'server-tool-result': {
         if (
@@ -609,7 +627,7 @@ export class OpenAIWireAssembler {
     this.ingest(chunk);
     switch (chunk.type) {
       case 'text-delta':
-        return this.chunkEnvelope({ content: chunk.delta }, null);
+        return this.chunkEnvelope({ content: this.lastTextDelta }, null);
       case 'thinking-delta':
         return this.emitReasoning
           ? this.chunkEnvelope({ reasoning_content: chunk.delta }, null)
@@ -770,7 +788,7 @@ export class OpenAIWireAssembler {
         break;
       }
       case 'text-delta':
-        out.push(this.chunkEnvelope({ content: chunk.delta }, null, chunk.logprobs ?? null));
+        out.push(this.chunkEnvelope({ content: this.lastTextDelta }, null, chunk.logprobs ?? null));
         break;
       case 'thinking-delta':
         if (inlineThinking) {

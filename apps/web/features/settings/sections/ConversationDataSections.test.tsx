@@ -5,6 +5,7 @@ import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
 import { SharedLinksSection } from './SharedLinksSection';
+type Original0 = typeof import('@features/sites/services/sites-service');
 type ScanModule0 = typeof import('@/lib/sentry-shared');
 type ScanModule1 = typeof import('@agiworkforce/ui');
 
@@ -39,9 +40,18 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.routerReplace }),
 }));
 
-vi.mock('../services/conversation-data-service', () => ({
+vi.mock('@features/sites/services/sites-service', async (importOriginal) => ({
+  ...(await importOriginal<Original0>()),
   listPublishedArtifactVersions: vi.fn(async () => []),
   republishArtifactVersion: vi.fn(async () => undefined),
+  listPublishedSites: async (...args: unknown[]) => ({
+    sites: await mocks.listPublished(...args),
+    workspace: null,
+  }),
+  unpublishArtifact: (...args: unknown[]) => mocks.unpublish(...args),
+}));
+
+vi.mock('../services/conversation-data-service', () => ({
   listArchivedConversations: (...args: unknown[]) => mocks.listArchived(...args),
   restoreArchivedConversation: (...args: unknown[]) => mocks.restoreArchived(...args),
   listDeletedConversations: (...args: unknown[]) => mocks.listDeleted(...args),
@@ -51,8 +61,6 @@ vi.mock('../services/conversation-data-service', () => ({
   fetchConversationHistoryStats: (...args: unknown[]) => mocks.historyStats(...args),
   listSharedLinks: (...args: unknown[]) => mocks.listShares(...args),
   revokeSharedLink: (...args: unknown[]) => mocks.revokeShare(...args),
-  listPublishedArtifacts: (...args: unknown[]) => mocks.listPublished(...args),
-  unpublishArtifact: (...args: unknown[]) => mocks.unpublish(...args),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({

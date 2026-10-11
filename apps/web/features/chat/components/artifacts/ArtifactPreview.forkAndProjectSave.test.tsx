@@ -3,6 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
+function openMore() {
+  fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+}
+
 const ARTIFACT_ID = 'artifact-fork-panel';
 
 function readFile(file: File): Promise<string> {
@@ -47,6 +51,7 @@ describe('duplicating an artifact from the panel', () => {
     seed();
     renderPanel();
 
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-fork'));
 
     const state = useArtifactsStore.getState();
@@ -74,7 +79,7 @@ describe('saving an artifact into a project', () => {
       projectSave: { projects: [{ id: 'proj-1', name: 'Runway model' }], onSave },
     });
 
-    fireEvent.keyDown(screen.getByTestId('artifact-save-to-project'), { key: 'Enter' });
+    openMore();
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Runway model' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -106,7 +111,7 @@ describe('saving an artifact into a project', () => {
       />,
     );
 
-    fireEvent.keyDown(screen.getByTestId('artifact-save-to-project'), { key: 'Enter' });
+    openMore();
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Runway model' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -118,6 +123,7 @@ describe('saving an artifact into a project', () => {
   it('offers nothing when the account has no projects', () => {
     seed();
     renderPanel({ projectSave: { projects: [], onSave: vi.fn() } });
+    openMore();
 
     expect(screen.queryByTestId('artifact-save-to-project')).toBeNull();
   });

@@ -377,6 +377,205 @@
           rootEl.appendChild(pre);
         }
 
+        // --------------------------------------------------------------
+        // Element picker for "Request edits". Inert until the parent sends
+        // { type: 'picker', active: true }, and switched off by the same
+        // message with active: false or by a new render. While on, it
+        // swallows the artifact's pointer and form events so a click picks
+        // an element instead of operating it, outlines what is under the
+        // pointer, and reports the clicked element to the parent as a short
+        // CSS path, its text and an outerHTML excerpt, with its box in this
+        // document's viewport. Escape asks the parent to cancel.
+        // --------------------------------------------------------------
+        const PICKER_TEXT_LIMIT = 200;
+        const PICKER_HTML_LIMIT = 600;
+        const PICKER_PATH_DEPTH = 8;
+        const PICKER_BLOCKED_EVENTS = [
+          'pointerdown',
+          'pointerup',
+          'mousedown',
+          'mouseup',
+          'dblclick',
+          'contextmenu',
+          'submit',
+          'touchstart',
+        ];
+        let picker = null;
+        let pickerWanted = false;
+
+        function pickerTarget() {
+          const frame = rootEl.querySelector('iframe.artifact-frame');
+          try {
+            if (frame && frame.contentDocument && frame.contentDocument.body) {
+              return { doc: frame.contentDocument, frame: frame, root: frame.contentDocument.body };
+            }
+          } catch (e) {
+            return null;
+          }
+          return { doc: document, frame: null, root: rootEl };
+        }
+
+        function clip(value, limit) {
+          const text = String(value || '');
+          return text.length > limit ? text.slice(0, limit - 1) + '\u2026' : text;
+        }
+
+        function cssPath(element, root) {
+          const parts = [];
+          let node = element;
+          while (node && node.nodeType === 1 && node !== root && parts.length < PICKER_PATH_DEPTH) {
+            let part = node.tagName.toLowerCase();
+            if (node.id) {
+              parts.unshift(part + '#' + node.id);
+              break;
+            }
+            const classes = Array.prototype.slice
+              .call(node.classList || [], 0, 2)
+              .filter(function (name) {
+                return /^[A-Za-z_-][\w-]*$/.test(name);
+              });
+            if (classes.length > 0) part += '.' + classes.join('.');
+            const parent = node.parentElement;
+            if (parent) {
+              const sameTag = Array.prototype.filter.call(parent.children, function (child) {
+                return child.tagName === node.tagName;
+              });
+              if (sameTag.length > 1) part += ':nth-of-type(' + (sameTag.indexOf(node) + 1) + ')';
+            }
+            parts.unshift(part);
+            node = parent;
+          }
+          return parts.join(' > ') || element.tagName.toLowerCase();
+        }
+
+        function boxOf(element, target) {
+          const rect = element.getBoundingClientRect();
+          const offset = target.frame ? target.frame.getBoundingClientRect() : { left: 0, top: 0 };
+          return {
+            x: Math.round(rect.left + offset.left),
+            y: Math.round(rect.top + offset.top),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          };
+        }
+
+        function placeOutline(outline, element, target) {
+          if (!element) {
+            outline.style.display = 'none';
+            return;
+          }
+          const box = boxOf(element, target);
+          outline.style.display = 'block';
+          outline.style.left = box.x + 'px';
+          outline.style.top = box.y + 'px';
+          outline.style.width = box.width + 'px';
+          outline.style.height = box.height + 'px';
+        }
+
+        function makeOutline(selected) {
+          const outline = document.createElement('div');
+          outline.setAttribute('aria-hidden', 'true');
+          outline.style.cssText =
+            'position:fixed;pointer-events:none;display:none;z-index:2147483647;box-sizing:border-box;border-radius:4px;' +
+            (selected
+              ? 'border:2px solid #2563eb;background:rgba(37,99,235,0.16);'
+              : 'border:2px dashed #2563eb;background:rgba(37,99,235,0.08);');
+          document.body.appendChild(outline);
+          return outline;
+        }
+
+        function pickable(element, target) {
+          return (
+            element &&
+            element.nodeType === 1 &&
+            element !== target.root &&
+            target.root.contains(element) &&
+            element.tagName !== 'HTML'
+          );
+        }
+
+        function stopPicker() {
+          if (!picker) return;
+          picker.listeners.forEach(function (entry) {
+            entry.doc.removeEventListener(entry.type, entry.handler, true);
+          });
+          picker.hover.remove();
+          picker.chosen.remove();
+          picker = null;
+        }
+
+        function startPicker() {
+          stopPicker();
+          const target = pickerTarget();
+          if (!target) return;
+          if (target.frame && target.doc.readyState !== 'complete') {
+            target.frame.addEventListener(
+              'load',
+              function () {
+                if (pickerWanted) startPicker();
+              },
+              { once: true },
+            );
+            return;
+          }
+          const state = {
+            target: target,
+            hover: makeOutline(false),
+            chosen: makeOutline(true),
+            selected: null,
+            listeners: [],
+          };
+          function listen(doc, type, handler) {
+            doc.addEventListener(type, handler, true);
+            state.listeners.push({ doc: doc, type: type, handler: handler });
+          }
+          listen(target.doc, 'mousemove', function (event) {
+            placeOutline(state.hover, pickable(event.target, target) ? event.target : null, target);
+          });
+          listen(target.doc, 'mouseleave', function () {
+            placeOutline(state.hover, null, target);
+          });
+          PICKER_BLOCKED_EVENTS.forEach(function (type) {
+            listen(target.doc, type, function (event) {
+              event.preventDefault();
+              event.stopPropagation();
+            });
+          });
+          listen(target.doc, 'click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const element = event.target;
+            if (!pickable(element, target)) return;
+            state.selected = element;
+            placeOutline(state.chosen, element, target);
+            postToParent({
+              type: 'picker-selection',
+              selection: {
+                selector: clip(cssPath(element, target.root), 300),
+                text: clip(
+                  (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim(),
+                  PICKER_TEXT_LIMIT,
+                ),
+                html: clip(element.outerHTML, PICKER_HTML_LIMIT),
+                rect: boxOf(element, target),
+              },
+            });
+          });
+          const onKey = function (event) {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            postToParent({ type: 'picker-cancel' });
+          };
+          listen(target.doc, 'keydown', onKey);
+          if (target.doc !== document) listen(document, 'keydown', onKey);
+          const reposition = function () {
+            placeOutline(state.chosen, state.selected, target);
+          };
+          listen(target.doc, 'scroll', reposition);
+          picker = state;
+        }
+
         function showRoot() {
           idleEl.hidden = true;
           rootEl.hidden = false;
@@ -592,6 +791,8 @@
           const kind = String(payload.kind || '').toLowerCase();
           rejectPendingRuntime('The app reloaded before this request finished.');
           runtimeEnabled = payload.runtime === true;
+          pickerWanted = false;
+          stopPicker();
           showRoot();
           try {
             switch (kind) {
@@ -662,6 +863,10 @@
           if (!data || typeof data !== 'object') return;
           if (data.type === 'render') {
             dispatchRender(data);
+          } else if (data.type === 'picker') {
+            pickerWanted = data.active === true;
+            if (pickerWanted) startPicker();
+            else stopPicker();
           } else if (data.type === 'runtime-response' && typeof data.id === 'string') {
             const pending = pendingRuntime.get(data.id);
             if (!pending) return;

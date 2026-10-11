@@ -15,10 +15,14 @@ const WEB_ROOT = join(__dirname, '..', '..');
 
 const THUMBNAIL_SOURCES = [
   'app/gallery/GalleryClient.tsx',
-  'features/chat/components/artifacts/InlineArtifactCards.tsx',
+  'features/chat/components/artifacts/ArtifactThumbnail.tsx',
 ];
 
 const INTERACTIVE_VIEWER = 'features/chat/components/artifacts/ArtifactPreview.tsx';
+const INLINE_CARD_SOURCES = [
+  'features/chat/components/artifacts/ArtifactCard.tsx',
+  'features/chat/components/artifacts/InlineArtifactCards.tsx',
+];
 
 function read(relative: string): string {
   return readFileSync(join(WEB_ROOT, relative), 'utf8');
@@ -33,7 +37,7 @@ describe('artifact thumbnails do not execute what they preview', () => {
 
   it('keeps the thumbnails non-interactive, which is why they need no scripts', () => {
     expect(read('app/gallery/GalleryClient.tsx')).toContain('aria-hidden');
-    expect(read('features/chat/components/artifacts/InlineArtifactCards.tsx')).toContain(
+    expect(read('features/chat/components/artifacts/ArtifactThumbnail.tsx')).toContain(
       'pointer-events-none',
     );
   });
@@ -45,5 +49,11 @@ describe('artifact thumbnails do not execute what they preview', () => {
     const viewer = read(INTERACTIVE_VIEWER);
     expect(viewer).toMatch(/allow-scripts/u);
     expect(viewer).not.toMatch(/allow-scripts allow-same-origin/u);
+  });
+
+  it.each(INLINE_CARD_SOURCES)('%s runs nothing in the message; the panel does', (relative) => {
+    const source = read(relative);
+    expect(source).not.toMatch(/<iframe\b/u);
+    expect(source).not.toMatch(/SandboxedIframe/u);
   });
 });

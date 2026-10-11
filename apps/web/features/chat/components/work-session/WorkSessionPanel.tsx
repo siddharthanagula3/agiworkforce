@@ -1,13 +1,11 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronRight,
   Circle,
   CircleAlert,
-  Download,
-  FileOutput,
   FileText,
   FolderOpen,
   Globe,
@@ -24,7 +22,6 @@ import {
   getManagedModelPresentationLabel,
 } from '@agiworkforce/unified-chat';
 import {
-  formatDeliverableTypeLine,
   isAutoModeModelId,
   runStatusLabel,
   toolCallStatusLabel,
@@ -33,7 +30,6 @@ import {
 import type { Message } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { useProjectStore } from '@features/projects';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import {
   SHEET_OVERLAY_QUERY,
@@ -41,9 +37,6 @@ import {
   useOverlayLayout,
 } from '../../hooks/use-overlay-dialog';
 import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
-import { downloadAllArtifacts, downloadGeneratedFile } from '../../utils/downloadArtifacts';
-import { toast } from 'sonner';
-import { toUserMessage } from '@/lib/user-error-message';
 import {
   PanelWindowButton,
   useDetachedWindowTitle,
@@ -52,39 +45,33 @@ import type { PanelWindowControls } from '@/features/desktop-host/lib/panel-wind
 import {
   AGI_WORK_LABEL,
   CHAT_DOCK_FALLBACK_TITLE,
-  CHAT_DOCK_FILES_EMPTY,
-  CHAT_DOCK_FILES_LABEL,
   CHAT_DOCK_PANEL_LABEL,
   TASK_DOCK_ARTIFACTS_LABEL,
-  TASK_DOCK_CONTEXT_EMPTY,
   TASK_DOCK_CONTEXT_LABEL,
-  TASK_DOCK_DOWNLOAD_ACTION,
   TASK_DOCK_FALLBACK_TITLE,
   TASK_DOCK_LABEL,
-  TASK_DOCK_OPEN_ACTION,
-  TASK_DOCK_OUTPUTS_EMPTY,
   TASK_DOCK_OUTPUTS_LABEL,
   TASK_DOCK_PANEL_LABEL,
   TASK_DOCK_PROGRESS_EMPTY,
   TASK_DOCK_PROGRESS_LABEL,
-  TASK_DOCK_SOURCES_EMPTY,
   TASK_DOCK_SOURCES_LABEL,
   TASK_DOCK_STEPS_LABEL,
 } from '../../lib/agi-work';
+import { OutputsList, useTaskDockSummary } from './OutputsList';
 import {
-  buildTaskDockSummary,
   type TaskDockContextItem,
-  type TaskDockOutput,
   type TaskDockStepStatus,
   type TaskDockSummary,
 } from './taskDockSummary';
 
 const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
 const RUN_TICK_INTERVAL_MS = 1_000;
-const BYTES_PER_KILOBYTE = 1_024;
-const BYTES_PER_MEGABYTE = 1_048_576;
-const DETAIL_SEPARATOR = ' · ';
-const ARTIFACT_OUTPUT_DETAIL = 'Artifact';
+const MAX_SOURCE_FAVICONS = 4;
+const SECTION_LABEL_CLASS = 'text-xs font-medium text-muted-foreground';
+const SECTION_SUMMARY_CLASS =
+  'flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-2.5 marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden';
+const SECTION_CHEVRON_CLASS =
+  'ms-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none';
 const CLOSE_ACTION_VERB = 'Close';
 const OPEN_ACTION_VERB = 'Open';
 const PAUSED_STATUS_LABEL = 'Paused';
@@ -170,13 +157,6 @@ function StatusIcon({ status }: { status: TaskDockStepStatus }) {
   return <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;
 }
 
-function byteLabel(byteCount: number | undefined): string | undefined {
-  if (byteCount === undefined) return undefined;
-  if (byteCount < BYTES_PER_KILOBYTE) return `${byteCount} B`;
-  if (byteCount < BYTES_PER_MEGABYTE) return `${(byteCount / BYTES_PER_KILOBYTE).toFixed(1)} KB`;
-  return `${(byteCount / BYTES_PER_MEGABYTE).toFixed(1)} MB`;
-}
-
 function formatDetailDate(value: string | undefined): string {
   if (!value) return '';
   const date = new Date(value);
@@ -199,14 +179,11 @@ function answeringModelLabels(messages: readonly Message[]): string[] {
 
 function ChatDetailsSection({ rows }: { rows: readonly ChatDetailRow[] }) {
   return (
-    <details className="group border-b border-border/20" open>
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
+    <details className="group border-t border-[var(--chat-border)]">
+      <summary className={SECTION_SUMMARY_CLASS}>
         <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <span>{CHAT_DETAILS_LABEL}</span>
-        <ChevronRight
-          className="ms-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
-          aria-hidden="true"
-        />
+        <span className={SECTION_LABEL_CLASS}>{CHAT_DETAILS_LABEL}</span>
+        <ChevronRight className={SECTION_CHEVRON_CLASS} aria-hidden="true" />
       </summary>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 px-4 pb-4 text-xs">
         {rows.map((row) => (
@@ -221,37 +198,24 @@ function ChatDetailsSection({ rows }: { rows: readonly ChatDetailRow[] }) {
 }
 
 function DockSection({
-  icon: Icon,
   label,
   count,
-  emptyCopy,
   children,
 }: {
-  icon: typeof FileOutput;
   label: string;
   count: number;
-  emptyCopy: string;
   children: React.ReactNode;
 }) {
+  const headingId = useId();
+  if (count === 0) return null;
   return (
-    <details className="group border-b border-border/20" open>
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
-        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <span>{label}</span>
-        <span className="ms-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
-          {count}
-        </span>
-        <ChevronRight
-          className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
-          aria-hidden="true"
-        />
-      </summary>
-      {count === 0 ? (
-        <p className="px-4 pb-4 text-xs text-muted-foreground">{emptyCopy}</p>
-      ) : (
-        children
-      )}
-    </details>
+    <section aria-labelledby={headingId} className="border-t border-[var(--chat-border)] px-4 py-3">
+      <h3 id={headingId} className="mb-2 flex items-center gap-2">
+        <span className={SECTION_LABEL_CLASS}>{label}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+      </h3>
+      {children}
+    </section>
   );
 }
 
@@ -284,25 +248,6 @@ function SourceFavicon({ faviconUrl, host }: { faviconUrl?: string; host: string
       className="h-4 w-4 rounded-sm"
       onError={() => setFailed(true)}
     />
-  );
-}
-
-function useTaskDockSummary(messages: Message[]): TaskDockSummary {
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const artifacts = useArtifactsStore((state) =>
-    activeConversationId ? state.getConversationArtifacts(activeConversationId) : [],
-  );
-  const projectId = useChatStore(
-    (state) =>
-      state.conversations.find((conversation) => conversation.id === state.activeConversationId)
-        ?.projectId ?? null,
-  );
-  const projectName = useProjectStore(
-    (state) => state.projects.find((project) => project.id === projectId)?.name ?? null,
-  );
-  return useMemo(
-    () => buildTaskDockSummary({ messages, artifacts, projectName }),
-    [artifacts, messages, projectName],
   );
 }
 
@@ -362,64 +307,63 @@ function TaskDockProgressSection({
     : statusLabel(summary.status);
   const planSentence = activity ? agiWorkPlanSentence(activity.entries) : undefined;
   const completed = summary.steps.filter((step) => step.status === 'completed').length;
+  const headingId = useId();
+
+  const showEmptySteps = summary.steps.length === 0 && agiWork && isRunning;
 
   return (
-    <details className="group border-b border-border/20" open>
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
-        <StatusIcon status={summary.status === 'idle' ? 'pending' : summary.status} />
-        <span>{TASK_DOCK_PROGRESS_LABEL}</span>
+    <section aria-labelledby={headingId} className="px-4 py-3">
+      <h3 id={headingId} className="mb-1.5 flex items-center gap-2">
+        <span className={SECTION_LABEL_CLASS}>{TASK_DOCK_PROGRESS_LABEL}</span>
         {summary.steps.length > 0 && (
-          <span className="ms-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
+          <span className="text-xs tabular-nums text-muted-foreground">
             {completed}/{summary.steps.length}
           </span>
         )}
-        <ChevronRight
-          className={cn(
-            'h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none',
-            summary.steps.length === 0 && 'ms-auto',
-          )}
-          aria-hidden="true"
-        />
-      </summary>
-
-      <div className="px-4 pb-4">
-        <p
-          className="min-w-0 truncate text-xs text-muted-foreground"
-          role="status"
-          aria-live="polite"
-        >
+      </h3>
+      <p className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+          <StatusIcon status={summary.status === 'idle' ? 'pending' : summary.status} />
+        </span>
+        <span className="min-w-0 truncate" role="status" aria-live="polite">
           {progressLine}
+        </span>
+      </p>
+
+      {planSentence && (
+        <p data-testid="task-dock-plan-sentence" className="mt-1.5 text-sm text-foreground">
+          {planSentence}
         </p>
+      )}
 
-        {planSentence && (
-          <p data-testid="task-dock-plan-sentence" className="mt-1 text-xs text-foreground">
-            {planSentence}
-          </p>
-        )}
-
-        {summary.steps.length > 0 ? (
-          <ol aria-label={TASK_DOCK_STEPS_LABEL} className="mt-2 space-y-2">
-            {summary.steps.map((step) => (
-              <li key={step.id} className="flex items-start gap-2">
-                <span className="mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-                  <StatusIcon status={step.status} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs leading-relaxed text-foreground">{step.label}</p>
-                  {step.detail && (
-                    <p className="mt-0.5 line-clamp-2 text-caption text-muted-foreground">
-                      {step.detail}
-                    </p>
+      {summary.steps.length > 0 && (
+        <ol aria-label={TASK_DOCK_STEPS_LABEL} className="mt-2.5 space-y-2">
+          {summary.steps.map((step) => (
+            <li key={step.id} className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                <StatusIcon status={step.status} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    'text-sm leading-5',
+                    step.status === 'completed' ? 'text-muted-foreground' : 'text-foreground',
                   )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="mt-1 text-xs text-muted-foreground">{TASK_DOCK_PROGRESS_EMPTY}</p>
-        )}
-      </div>
-    </details>
+                >
+                  {step.label}
+                </p>
+                {step.detail && (
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{step.detail}</p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+      {showEmptySteps && (
+        <p className="mt-1.5 text-xs text-muted-foreground">{TASK_DOCK_PROGRESS_EMPTY}</p>
+      )}
+    </section>
   );
 }
 
@@ -458,7 +402,6 @@ export function WorkSessionPanel({
   const summary = useTaskDockSummary(messages);
   const selectArtifact = useArtifactsStore((state) => state.selectArtifact);
   const setArtifactPanelOpen = useArtifactsStore((state) => state.setPanelOpen);
-  const knownArtifacts = useArtifactsStore((state) => state.artifacts);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const activeConversationTitle = useChatStore(
     (state) =>
@@ -508,41 +451,6 @@ export function WorkSessionPanel({
     setArtifactPanelOpen(true);
   }, [conversationArtifacts, selectArtifact, setArtifactPanelOpen]);
 
-  const openOutput = useCallback(
-    (output: TaskDockOutput) => {
-      const artifactAvailable =
-        output.artifactId && knownArtifacts.some((artifact) => artifact.id === output.artifactId);
-      if (output.artifactId && artifactAvailable) {
-        selectArtifact(output.artifactId);
-        setArtifactPanelOpen(true);
-        return;
-      }
-      if (output.uri) window.open(output.uri, '_blank', 'noopener,noreferrer');
-    },
-    [knownArtifacts, selectArtifact, setArtifactPanelOpen],
-  );
-
-  const downloadOutput = useCallback(async (output: TaskDockOutput) => {
-    try {
-      if (output.uri) {
-        await downloadGeneratedFile(output.uri, output.name, output.mimeType);
-        return;
-      }
-      if (output.artifactContent !== undefined) {
-        await downloadAllArtifacts([
-          {
-            title: output.name,
-            content: output.artifactContent,
-            language: output.artifactLanguage,
-            type: output.artifactType,
-          },
-        ]);
-      }
-    } catch (error) {
-      toast.error(toUserMessage(error, 'Could not download this output'));
-    }
-  }, []);
-
   const dockTitle = agiWork
     ? (summary.title ?? TASK_DOCK_FALLBACK_TITLE)
     : activeConversationTitle?.trim() || CHAT_DOCK_FALLBACK_TITLE;
@@ -551,6 +459,10 @@ export function WorkSessionPanel({
   if (!open) return null;
 
   const sourceCount = summary.sources.reduce((total, group) => total + group.sources.length, 0);
+  const sourceFavicons = summary.sources
+    .flatMap((group) => group.sources)
+    .filter((source, index, all) => all.findIndex((other) => other.host === source.host) === index)
+    .slice(0, MAX_SOURCE_FAVICONS);
   const panelLabel = agiWork ? TASK_DOCK_PANEL_LABEL : CHAT_DOCK_PANEL_LABEL;
   const detailRows = [
     { label: CHAT_DETAILS_CREATED_LABEL, value: formatDetailDate(conversationCreatedAt) },
@@ -562,134 +474,89 @@ export function WorkSessionPanel({
     { label: CHAT_DETAILS_MESSAGES_LABEL, value: String(messages.length) },
   ].filter((row) => row.value);
 
-  const sourcesSection = (
-    <DockSection
-      icon={Globe}
-      label={TASK_DOCK_SOURCES_LABEL}
-      count={sourceCount}
-      emptyCopy={TASK_DOCK_SOURCES_EMPTY}
-    >
-      <div className="space-y-3 px-3 pb-4">
-        {summary.sources.map((group) => (
-          <div key={group.id}>
-            <p className="truncate px-1 pb-1 text-caption text-muted-foreground">{group.label}</p>
-            <ul className="space-y-1">
-              {group.sources.map((source) => (
-                <li key={source.id}>
-                  <a
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-start gap-2 rounded-lg p-2 no-underline transition-colors hover:bg-muted/40 motion-reduce:transition-none"
-                  >
-                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
-                      <SourceFavicon
-                        {...(source.faviconUrl ? { faviconUrl: source.faviconUrl } : {})}
-                        host={source.host}
-                      />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="line-clamp-2 block text-xs font-medium leading-snug text-foreground">
-                        {source.title}
+  const sourcesSection =
+    sourceCount === 0 ? null : (
+      <details
+        className="group border-t border-[var(--chat-border)]"
+        data-testid="task-dock-sources"
+      >
+        <summary className={SECTION_SUMMARY_CLASS}>
+          <span className={SECTION_LABEL_CLASS}>{TASK_DOCK_SOURCES_LABEL}</span>
+          <span className="flex items-center -space-x-1" aria-hidden="true">
+            {sourceFavicons.map((source) => (
+              <span
+                key={source.id}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--chat-surface-elevated)] ring-2 ring-[var(--chat-surface-elevated)]"
+              >
+                <SourceFavicon
+                  {...(source.faviconUrl ? { faviconUrl: source.faviconUrl } : {})}
+                  host={source.host}
+                />
+              </span>
+            ))}
+          </span>
+          <span className="text-xs tabular-nums text-muted-foreground">{sourceCount}</span>
+          <ChevronRight className={SECTION_CHEVRON_CLASS} aria-hidden="true" />
+        </summary>
+        <div className="space-y-3 px-2 pb-3">
+          {summary.sources.map((group) => (
+            <div key={group.id}>
+              <p className="truncate px-2 pb-1 text-xs text-muted-foreground">{group.label}</p>
+              <ul className="space-y-0.5">
+                {group.sources.map((source) => (
+                  <li key={source.id}>
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 no-underline transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+                    >
+                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                        <SourceFavicon
+                          {...(source.faviconUrl ? { faviconUrl: source.faviconUrl } : {})}
+                          host={source.host}
+                        />
                       </span>
-                      <span className="block truncate text-caption text-muted-foreground">
-                        {source.host}
+                      <span className="min-w-0 flex-1">
+                        <span className="line-clamp-2 block text-sm leading-5 text-foreground">
+                          {source.title}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {source.host}
+                        </span>
                       </span>
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </DockSection>
-  );
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </details>
+    );
 
-  const filesSection = (
-    <DockSection
-      icon={FileOutput}
-      label={agiWork ? TASK_DOCK_OUTPUTS_LABEL : CHAT_DOCK_FILES_LABEL}
-      count={summary.outputs.length}
-      emptyCopy={agiWork ? TASK_DOCK_OUTPUTS_EMPTY : CHAT_DOCK_FILES_EMPTY}
-    >
-      <ul className="space-y-2 px-3 pb-4">
-        {summary.outputs.map((output) => (
-          <li key={output.id} className="rounded-lg border border-border/40 bg-muted/15 p-2.5">
-            <div className="flex items-start gap-2">
-              <FileText
-                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-foreground">{output.name}</p>
-                <p className="truncate text-caption text-muted-foreground">
-                  {output.mimeType || output.kind
-                    ? [
-                        formatDeliverableTypeLine({
-                          kind: output.kind,
-                          fileName: output.name,
-                          mimeType: output.mimeType,
-                        }),
-                        byteLabel(output.byteCount),
-                      ]
-                        .filter(Boolean)
-                        .join(DETAIL_SEPARATOR)
-                    : ARTIFACT_OUTPUT_DETAIL}
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 flex justify-end gap-1">
-              {(output.artifactId || output.uri) && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-caption"
-                  onClick={() => openOutput(output)}
-                  aria-label={`${TASK_DOCK_OPEN_ACTION} ${output.name}`}
-                >
-                  {TASK_DOCK_OPEN_ACTION}
-                </Button>
-              )}
-              {(output.uri || output.artifactContent !== undefined) && (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-7 gap-1 px-2 text-caption"
-                  onClick={() => void downloadOutput(output)}
-                  aria-label={`${TASK_DOCK_DOWNLOAD_ACTION} ${output.name}`}
-                >
-                  <Download className="h-3 w-3" aria-hidden="true" />
-                  {TASK_DOCK_DOWNLOAD_ACTION}
-                </Button>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+  const outputsSection = (
+    <DockSection label={TASK_DOCK_OUTPUTS_LABEL} count={summary.outputs.length}>
+      <OutputsList outputs={summary.outputs} />
     </DockSection>
   );
 
   const contextSection = (
-    <DockSection
-      icon={FolderOpen}
-      label={TASK_DOCK_CONTEXT_LABEL}
-      count={summary.context.length}
-      emptyCopy={TASK_DOCK_CONTEXT_EMPTY}
-    >
-      <ul className="space-y-2 px-4 pb-4">
+    <DockSection label={TASK_DOCK_CONTEXT_LABEL} count={summary.context.length}>
+      <ul className="space-y-2">
         {summary.context.map((item) => (
-          <li key={item.id} className="flex items-start gap-2">
+          <li key={item.id} className="flex items-center gap-2.5">
             <span
-              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-compact bg-muted"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--chat-surface-hover)]"
               aria-hidden="true"
             >
               <ContextMark item={item} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="break-words text-xs text-foreground">{item.label}</p>
-              {item.detail && <p className="text-caption text-muted-foreground">{item.detail}</p>}
+              <p className="truncate text-sm text-foreground" title={item.label}>
+                {item.label}
+              </p>
+              {item.detail && <p className="text-xs text-muted-foreground">{item.detail}</p>}
             </div>
           </li>
         ))}
@@ -758,10 +625,10 @@ export function WorkSessionPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
           <TaskDockProgressSection summary={summary} agiWork={agiWork} />
-          {filesSection}
+          {outputsSection}
           {contextSection}
           {sourcesSection}
-          <ChatDetailsSection rows={detailRows} />
+          {detailRows.length > 0 && <ChatDetailsSection rows={detailRows} />}
         </div>
       </aside>
     </>

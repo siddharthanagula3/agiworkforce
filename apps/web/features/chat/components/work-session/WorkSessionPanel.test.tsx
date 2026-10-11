@@ -10,6 +10,7 @@ import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 vi.mock('../../utils/downloadArtifacts', () => ({
   downloadAllArtifacts: vi.fn().mockResolvedValue(undefined),
   downloadGeneratedFile: vi.fn().mockResolvedValue(undefined),
+  downloadArtifactFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 const runId = '5c8e9b8e-cbad-4e76-87cf-e17e7d828c40';
@@ -197,6 +198,11 @@ describe('WorkSessionPanel', () => {
     expect(screen.getByText('Sources')).toBeVisible();
     expect(screen.getByText('Outputs')).toBeVisible();
     expect(screen.getByText('Context')).toBeVisible();
+    expect(screen.getByText('Pricing page')).not.toBeVisible();
+    const sources = screen.getByTestId('task-dock-sources');
+    expect(sources).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Sources'));
+    expect(sources).toHaveAttribute('open');
     expect(screen.getByText('Pricing page')).toBeVisible();
     expect(screen.getByText('report.pdf')).toBeVisible();
     expect(screen.getByText('/workspace/brief.md')).toBeVisible();
@@ -221,7 +227,7 @@ describe('WorkSessionPanel', () => {
     expect(screen.getByText('Plan the report')).toBeVisible();
   });
 
-  it('states the empty copy for a run that has produced nothing yet', () => {
+  it('shows only progress for a run that has produced nothing yet', () => {
     const idle = [
       {
         id: 'assistant-1',
@@ -245,8 +251,9 @@ describe('WorkSessionPanel', () => {
 
     render(<WorkSessionPanel messages={idle} open onClose={vi.fn()} agiWork />);
 
-    expect(screen.getByText('Files created during this session appear here')).toBeVisible();
-    expect(screen.getByText('No connectors used yet')).toBeVisible();
+    expect(screen.queryByText('Outputs')).toBeNull();
+    expect(screen.queryByText('Context')).toBeNull();
+    expect(screen.queryByText('Sources')).toBeNull();
     expect(screen.getByText(/Working for/)).toBeVisible();
     expect(screen.getByText('Steps appear here once the session plans its work')).toBeVisible();
   });

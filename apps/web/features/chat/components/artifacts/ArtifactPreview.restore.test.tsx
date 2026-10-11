@@ -4,6 +4,10 @@ import { EditorView } from '@codemirror/view';
 import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
+function openMore() {
+  fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+}
+
 const ARTIFACT_ID = 'artifact-restore-1';
 
 function seedVersions() {
@@ -55,6 +59,7 @@ describe('restoring an older artifact version', () => {
     renderPanel();
     openOlderVersion();
 
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-restore-version'));
 
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
@@ -66,6 +71,7 @@ describe('restoring an older artifact version', () => {
     seedVersions();
     renderPanel();
     openOlderVersion();
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-restore-version'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -80,6 +86,7 @@ describe('restoring an older artifact version', () => {
     seedVersions();
     renderPanel();
     openOlderVersion();
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-restore-version'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
@@ -94,6 +101,7 @@ describe('restoring an older artifact version', () => {
     renderPanel();
 
     fireEvent.click(screen.getByLabelText('Source'));
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-edit-source'));
     const host = await screen.findByTestId('artifact-source-editor');
     const editor = await waitFor(() => {
@@ -107,6 +115,7 @@ describe('restoring an older artifact version', () => {
       });
     });
     openOlderVersion();
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-restore-version'));
 
     expect(screen.getByRole('alertdialog')).toHaveTextContent(/unsaved edits are discarded/i);
