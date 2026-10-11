@@ -296,6 +296,12 @@ describe('ChatMessageList rendering', () => {
     expect(log.style.overflowX).toBe('hidden');
   });
 
+  it('ends the transcript with breathing room above the composer', () => {
+    render(<ChatMessageList messages={messages} />);
+
+    expect(screen.getByTestId('transcript-end')).toHaveClass('pb-24');
+  });
+
   it('aligns follow-up suggestions to the composer content column when enabled', () => {
     const messagesWithSuggestions = [
       messages[0]!,

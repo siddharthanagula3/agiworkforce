@@ -216,3 +216,68 @@ describe('buildAdapterStreamResponse · grounded citation URLs', () => {
     expect(persistence.patchAssistantTurnSourceUrls).not.toHaveBeenCalled();
   });
 });
+
+const PRE_TOOL = "I'll run the search now, as you asked.";
+const POST_TOOL = "You're right that artifacts exist [1].";
+
+function nativeSearchChunks(): StreamChunk[] {
+  return [
+    { type: 'text-delta', delta: PRE_TOOL },
+    { type: 'server-tool-use', toolUseId: 'srvtoolu_1', name: 'web_search' },
+    {
+      type: 'server-tool-result',
+      toolUseId: 'srvtoolu_1',
+      payload: {
+        type: 'web_search_tool_result',
+        tool_use_id: 'srvtoolu_1',
+        content: [
+          {
+            type: 'web_search_result',
+            url: 'https://example.com/artifacts',
+            title: 'Artifacts',
+            encrypted_content: 'a snippet',
+          },
+        ],
+      },
+    },
+    { type: 'text-delta', delta: POST_TOOL },
+    { type: 'usage', inputTokens: 10, outputTokens: 5 },
+    { type: 'stop', reason: 'end_turn' },
+  ] as unknown as StreamChunk[];
+}
+
+function streamedContent(output: string): string {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .map((line) => {
+      const payload = JSON.parse(line.slice('data: '.length)) as {
+        choices?: Array<{ delta?: { content?: unknown } }>;
+      };
+      const content = payload.choices?.[0]?.delta?.content;
+      return typeof content === 'string' ? content : '';
+    })
+    .join('');
+}
+
+describe('buildAdapterStreamResponse · text on both sides of a native search', () => {
+  it('streams and persists the post-search answer as its own paragraph', async () => {
+    const response = (await buildAdapterStreamResponse(
+      makeRequest() as never,
+      chunksOf(nativeSearchChunks()),
+      { ...makeProcessed(), provider: 'anthropic' } as ProcessedRequest,
+      'user-tool-step',
+      'token-tool-step',
+      1_700_000_000_000,
+      'legacy-web',
+    )) as unknown as Response;
+    const output = await readAllText(response);
+
+    expect(streamedContent(output)).toBe(`${PRE_TOOL}\n\n${POST_TOOL}`);
+    expect(persistence.persistAssistantTurn).toHaveBeenCalledOnce();
+    const [persisted] = persistence.persistAssistantTurn.mock.calls[0] as unknown as [
+      { snapshot: { content: string } },
+    ];
+    expect(persisted.snapshot.content).toBe(streamedContent(output));
+  });
+});
