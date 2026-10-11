@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { ManagedCloudPublishedArtifactListResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -198,14 +199,15 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
     throw error;
   }
 
-  return NextResponse.json({
+  const body: ManagedCloudPublishedArtifactListResponse = {
     artifacts: artifacts.map((artifact) => ({
       ...artifact,
       shareUrl: buildPublishedArtifactUrl(artifact.token),
       sandboxed: requiresSandboxedRender(artifact.kind),
     })),
     workspace: await describeWorkspaceAudience(db, organizationId),
-  });
+  };
+  return NextResponse.json(body);
 }
 
 export const POST = withCorsRoute(withErrorHandler(handlePublish));
