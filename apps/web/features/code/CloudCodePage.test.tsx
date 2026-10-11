@@ -25,7 +25,6 @@ import {
   type CloudCodeAgentTurn,
   type CloudCodeApi,
 } from '@agiworkforce/cloud-contracts';
-import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
 type ScanModule0 = typeof import('@/features/desktop-host');
 
@@ -177,6 +176,7 @@ vi.mock('@shared/stores/web-auth-store', () => {
       profile: { display_name: 'Ada Lovelace', preferred_name: 'Ada' },
     },
     subscription: { display_name: 'Pro' },
+    disabledFeatures: [],
   };
   return {
     useBillingStore: Object.assign(
@@ -405,20 +405,19 @@ describe('CloudCodePage', () => {
     expect(screen.queryByText(/Managed Code/i)).not.toBeInTheDocument();
   });
 
-  it('does not open the microphone for Code until the reader was told where the audio goes', async () => {
+  it('opens the microphone on the first press with no notice in between', async () => {
     const getUserMedia = vi.fn(() => new Promise<MediaStream>(() => undefined));
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: { getUserMedia },
     });
     window.localStorage.clear();
-    useMicrophoneNoticeStore.setState({ request: null, acknowledgedThisSession: null });
 
     render(<CloudCodePage api={createApi()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Start voice input' }));
 
-    expect(getUserMedia).not.toHaveBeenCalled();
-    expect(screen.getByRole('note', { name: 'Where your voice goes' })).toBeInTheDocument();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
   it('renders inside the shared app shell and keeps the rail destinations as links', async () => {

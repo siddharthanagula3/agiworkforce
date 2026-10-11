@@ -6,7 +6,6 @@ import React, {
   useEffect,
   useLayoutEffect,
   useCallback,
-  useId,
   useMemo,
   useSyncExternalStore,
   memo,
@@ -52,7 +51,6 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
 import { dictationSwitchedOffReason, useDictation } from '@features/chat/hooks/use-dictation';
-import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import {
   DesktopRuntimeError,
   LOCAL_ATTACHMENT_REFUSAL,
@@ -1882,21 +1880,11 @@ const ChatComposerNewComponent = ({
     onSend: handleDictationSend,
   });
 
-  const microphoneOwner = useId();
-  const askForMicrophone = useMicrophoneNoticeStore((state) => state.askForMicrophone);
-  const withdrawMicrophoneRequest = useMicrophoneNoticeStore((state) => state.withdraw);
-  const startDictation = useCallback(
-    () => askForMicrophone(microphoneOwner, dictation.start),
-    [askForMicrophone, microphoneOwner, dictation.start],
-  );
+  const startDictation = dictation.start;
   const canUseVoice = useCapability('canUseVoice');
   const enterVoiceMode = useCallback(() => {
-    if (onEnterVoiceMode) askForMicrophone(microphoneOwner, onEnterVoiceMode);
-  }, [askForMicrophone, microphoneOwner, onEnterVoiceMode]);
-  useEffect(
-    () => () => withdrawMicrophoneRequest(microphoneOwner),
-    [withdrawMicrophoneRequest, microphoneOwner],
-  );
+    onEnterVoiceMode?.();
+  }, [onEnterVoiceMode]);
 
   const desktopHost = useDesktopHost();
   const [localFolderPickerOpen, setLocalFolderPickerOpen] = useState(false);
