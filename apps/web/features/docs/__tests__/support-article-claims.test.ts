@@ -505,3 +505,38 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(article).not.toContain('selected code or current file');
   });
 });
+
+describe('artifacts help article follows the implemented publishing controls', () => {
+  const article = collapsed('content/support/artifacts.md');
+  const preview = collapsed('features/chat/components/artifacts/ArtifactPreview.tsx');
+  const panel = collapsed('features/chat/components/artifacts/ArtifactsPanel.tsx');
+  const settings = collapsed('features/settings/sections/PublishedArtifactsSection.tsx');
+
+  it('offers the two publish audiences and confirms the one now in force', () => {
+    expect(preview).toContain('<option value="public">Anyone with the link</option>');
+    expect(preview).toMatch(
+      /<option value="organization">\s*Everyone in this workspace \(\{artifactAudience\.memberCount\}\)\s*<\/option>/u,
+    );
+    expect(preview).toContain("'Only your workspace can open this now'");
+    expect(preview).toContain("'Anyone with the link can open this now'");
+    expect(panel).toContain('current: publishDetails.visibility');
+    expect(article).toContain('anyone with the link, or your workspace only');
+  });
+
+  it('asks before either audience change and applies it only on confirmation', () => {
+    expect(preview).toMatch(
+      /confirmAction\(\s*next === 'organization'\s*\? \{\s*title: 'Limit this to your workspace\?'[\s\S]*?onConfirm: apply,\s*\}\s*: \{\s*title: 'Make this public again\?'[\s\S]*?onConfirm: apply,\s*\},?\s*\);/u,
+    );
+    expect(preview).toMatch(
+      /const apply = async \(\) => \{[\s\S]*?await artifactAudience\.onChange\(next\);/u,
+    );
+    expect(article).toContain('("Make this public again?", "Limit this to your workspace?")');
+  });
+
+  it('unpublishes from the Published artifacts list and tells the owner the link no longer works', () => {
+    expect(settings).toContain('await unpublishArtifact(artifact.token);');
+    expect(settings).toContain('The link no longer works.');
+    expect(settings).toContain("{busy ? 'Unpublishing…' : 'Unpublish'}");
+    expect(article).toContain('**Published artifacts** list with **Unpublish** on each one');
+  });
+});

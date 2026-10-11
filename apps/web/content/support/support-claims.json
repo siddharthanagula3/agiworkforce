@@ -15,7 +15,7 @@
     },
     {
       "doc": "artifacts",
-      "sha256": "f027420ae888447ab12281917a6a8b31c06e4d0889a06d515a4a44b723cec64b"
+      "indexed": true
     },
     {
       "doc": "billing-and-plans",
@@ -6134,6 +6134,127 @@
           "kind": "copy",
           "file": "packages/contracts/types/src/billing-catalog.ts",
           "text": "maxScheduledTasks: 0,"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "artifacts-duplicate-and-save-to-project",
+      "doc": "artifacts",
+      "section": "Editing one",
+      "sentence": "**Duplicate** makes an independent copy, confirmed with \"Duplicated. Edits here no longer touch the original.\" **Save to project** files it into a project's knowledge.",
+      "implementation": ["apps/web/features/chat/components/artifacts/ArtifactPreview.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.forkAndProjectSave.test.tsx",
+          "name": "adds a second artifact that starts from what is on screen"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.forkAndProjectSave.test.tsx",
+          "name": "sends the artifact body under a name the source allowlist accepts"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+          "text": "Duplicated. Edits here no longer touch the original."
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "artifacts-conflict-nothing-discarded",
+      "doc": "artifacts",
+      "section": "Editing one",
+      "sentence": "Nothing is silently discarded.",
+      "implementation": ["apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.conflict.test.tsx",
+          "name": "says the push was refused and shows the version that won"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.conflict.test.tsx",
+          "name": "puts the refused edit back and clears the notice when the user keeps it"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "artifacts-publish-audience",
+      "doc": "artifacts",
+      "section": "Publishing",
+      "sentence": "The audience works like a shared conversation: anyone with the link, or your workspace only, and the panel confirms which is in force.",
+      "implementation": [
+        "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+        "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "offers the two publish audiences and confirms the one now in force"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "artifacts-audience-change-asks-first",
+      "doc": "artifacts",
+      "section": "Publishing",
+      "sentence": "Changing it later asks first (\"Make this public again?\", \"Limit this to your workspace?\").",
+      "implementation": ["apps/web/features/chat/components/artifacts/ArtifactPreview.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "asks before either audience change and applies it only on confirmation"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "artifacts-unpublish-stops-link",
+      "doc": "artifacts",
+      "section": "Publishing",
+      "sentence": "Unpublishing stops the link working.",
+      "implementation": [
+        "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+        "apps/web/lib/services/published-artifact-service.ts#unpublishArtifactRecord"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/published-artifact-service.test.ts",
+          "name": "scopes the delete to the owner and reports the row it removed"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "unpublishes from the Published artifacts list and tells the owner the link no longer works"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "artifacts-preview-unavailable-is-not-damage",
+      "doc": "artifacts",
+      "section": "When a preview will not render",
+      "sentence": "\"Inline preview unavailable\" or \"Image preview unavailable\" means the panel cannot render that content in place, not that the artifact is damaged.",
+      "implementation": ["apps/web/features/chat/components/artifacts/ArtifactPreview.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.test.tsx",
+          "name": "shows an honest fallback (no fake preview) when content is model text, not PDF bytes"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.test.tsx",
+          "name": "rejects a non-image executable URL instead of handing it to the browser"
         }
       ]
     }
