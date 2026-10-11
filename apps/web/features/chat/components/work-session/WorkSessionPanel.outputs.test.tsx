@@ -123,6 +123,7 @@ describe('WorkSessionPanel outputs rail', () => {
       title: 'Desk Calculator',
       language: 'html',
       content: '<!doctype html><title>Desk Calculator</title><main>0</main>',
+      messageId: 'assistant-calculator',
       conversationId: 'conv-outputs',
     });
 
