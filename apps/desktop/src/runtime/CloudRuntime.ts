@@ -1254,7 +1254,7 @@ export class CloudRuntime implements ChatRuntime {
         options?.codeExecution,
         createManagedChatIdempotencyKey({
           surface: 'desktop',
-          purpose: 'send',
+          purpose: isContinuation ? 'continue' : 'send',
           operationId: userMessageId,
         }),
         {

@@ -386,7 +386,7 @@ export class WebRuntime implements ChatRuntime {
         options?.codeExecution,
         createManagedChatIdempotencyKey({
           surface: 'desktop',
-          purpose: 'send',
+          purpose: isContinuation ? 'continue' : 'send',
           operationId: userMessageId,
         }),
         options?.research || options?.workMode || options?.skillName || options?.effort
