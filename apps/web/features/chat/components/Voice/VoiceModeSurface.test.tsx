@@ -311,6 +311,32 @@ describe('VoiceModeSurface usage limit', () => {
     expect(exit).toHaveBeenCalledTimes(1);
   });
 
+  it('offers Upgrade to the plans page beside the way back to text', () => {
+    useVoiceSessionStore.setState({ usageLimited: true });
+    controller.current = session({
+      state: {
+        ...INITIAL_VOICE_SESSION_STATE,
+        status: VOICE_SESSION_STATUS.error,
+        error: 'This month’s voice minutes are used up.',
+      },
+    });
+    renderSurface();
+
+    const upgrade = screen.getByTestId('voice-usage-upgrade');
+    expect(upgrade.textContent).toBe('Upgrade');
+    expect(upgrade.getAttribute('href')).toBe('/pricing');
+    expect(screen.getByRole('button', { name: 'Continue in text' })).toBeTruthy();
+  });
+
+  it('shows no Upgrade link for an error that is not a usage limit', () => {
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.error, error: 'x' },
+    });
+    renderSurface();
+
+    expect(screen.queryByTestId('voice-usage-upgrade')).toBeNull();
+  });
+
   it('forgets the usage limit once the session leaves the error state', () => {
     useVoiceSessionStore.setState({
       usageLimited: true,

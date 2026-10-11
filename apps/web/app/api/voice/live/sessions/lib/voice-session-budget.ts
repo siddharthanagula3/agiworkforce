@@ -50,6 +50,7 @@ export interface VoiceReservationState {
 }
 
 export const VOICE_BLOCK_OPERATION_PREFIX = 'provider:';
+export const VOICE_INITIAL_BLOCK = 1;
 const VOICE_RESERVATION_KEY_PREFIX = 'agi.voice.live.';
 const VOICE_RESERVATION_OPERATION = 'voice_live_session';
 

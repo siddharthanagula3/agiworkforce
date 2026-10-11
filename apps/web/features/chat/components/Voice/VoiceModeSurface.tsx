@@ -30,6 +30,7 @@ const LABEL = {
   cancelSending: 'Do not send that',
   retry: 'Try again',
   continueInText: 'Continue in text',
+  upgrade: 'Upgrade',
   tapToHear: 'Tap to hear the assistant',
   audioBlocked: "Your browser paused the assistant's audio.",
   reconnecting: 'Reconnecting, attempt',
@@ -61,6 +62,9 @@ function isGeneratedFilePath(uri: string): boolean {
 }
 
 const ESCAPE = 'Escape';
+const PLANS_PATH = '/pricing';
+const LIMIT_ACTION_CLASS =
+  'min-h-6 shrink-0 rounded-full px-2 py-1 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]';
 
 export const VOICE_SURFACE_VARIANT = {
   empty: 'empty',
@@ -242,11 +246,10 @@ export function VoiceModeSurface({
     >
       <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0">{error}</span>
-      <button
-        type="button"
-        onClick={exit}
-        className="min-h-6 shrink-0 rounded-full px-2 py-1 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
-      >
+      <a href={PLANS_PATH} className={LIMIT_ACTION_CLASS} data-testid="voice-usage-upgrade">
+        {LABEL.upgrade}
+      </a>
+      <button type="button" onClick={exit} className={LIMIT_ACTION_CLASS}>
         {LABEL.continueInText}
       </button>
     </div>

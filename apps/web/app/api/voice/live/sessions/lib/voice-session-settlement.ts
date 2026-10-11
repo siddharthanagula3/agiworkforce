@@ -6,6 +6,8 @@ import { logger } from '@/lib/logger';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { finalizeManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { settleFreeVoiceSeconds } from '@/lib/voice/free-voice-allowance';
 import {
   LIVE_SESSION_PROVIDER_COST_SOURCE,
   LIVE_VOICE_BLOCK_SECONDS,
@@ -50,6 +52,17 @@ export async function settleVoiceSession(input: {
   const { db, record } = input;
   const identity = voiceReservationIdentity(record.id);
   const model = record.modelId;
+  const span = meteredVoiceSessionSeconds(record, 0, input.nowMs ?? Date.now());
+  const allowanceSeconds = await settleFreeVoiceSeconds({
+    db,
+    userId: record.userId,
+    sessionId: record.id,
+    usedSeconds: span,
+  });
+  if (allowanceSeconds !== null) {
+    await recordFreeAllowanceSessionCost(input, span, allowanceSeconds);
+    return { billedSeconds: allowanceSeconds, actualCostMicrousd: 0 };
+  }
   const blockCharge = liveVoiceBlockChargeMicrousd(model, input.backendModelId) ?? 0;
   let reservedMicrousd = blockCharge;
   try {
@@ -70,7 +83,6 @@ export async function settleVoiceSession(input: {
   }
   const reservedBlocks =
     blockCharge > 0 ? Math.max(1, Math.floor(reservedMicrousd / blockCharge)) : 1;
-  const span = meteredVoiceSessionSeconds(record, 0, input.nowMs ?? Date.now());
   const billedSeconds = Math.min(span, reservedBlocks * LIVE_VOICE_BLOCK_SECONDS);
   const backendCost = input.backend
     ? priceLiveVoiceBackend({
@@ -127,6 +139,60 @@ export async function settleVoiceSession(input: {
     });
   }
   return { billedSeconds, actualCostMicrousd };
+}
+
+/**
+ * A session the monthly allowance paid for charges its owner nothing, and what
+ * the provider billed for it still has to reach the cost ledger.
+ */
+async function recordFreeAllowanceSessionCost(
+  input: Parameters<typeof settleVoiceSession>[0],
+  sessionSeconds: number,
+  billedSeconds: number,
+): Promise<void> {
+  const { record } = input;
+  const model = record.modelId;
+  const providerCostMicrousd = liveSessionProviderCostMicrousd(billedSeconds, model);
+  if (providerCostMicrousd !== null && billedSeconds > 0) {
+    await recordSettledProviderCost({
+      db: input.db,
+      userId: record.userId,
+      organizationId: record.organizationId,
+      provider: record.provider,
+      model,
+      actualCostCents: ledgerCentsFromMicrousd(providerCostMicrousd),
+      customerCanonicalMicrousd: 0,
+      sourceRef: `free_voice_allowance:${record.userId}:${record.id}`,
+      taskOutcome: 'delivered',
+      taskRef: record.id,
+      usage: {
+        operation: 'voice_live_session',
+        quotaFeature: LIVE_VOICE_FEATURE,
+        provider: record.provider,
+        model,
+        providerSku: getModelMetadataById(model)?.apiModelId ?? model,
+        sessionId: record.providerSessionId,
+        sessionSeconds,
+        reportedSeconds: input.reportedSeconds ?? 0,
+        billedSeconds,
+        reason: input.reason,
+        funding: 'free_voice_allowance',
+        providerCostMicrousd,
+        costSource: LIVE_SESSION_PROVIDER_COST_SOURCE,
+      },
+    });
+  }
+  if (input.backend) {
+    await recordLiveVoiceBackendCost({
+      userId: record.userId,
+      organizationId: record.organizationId,
+      provider: record.provider,
+      sessionId: record.providerSessionId,
+      surface: record.surface,
+      backendModel: input.backendModelId,
+      reported: input.backend,
+    });
+  }
 }
 
 /**

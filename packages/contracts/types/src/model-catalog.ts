@@ -1245,7 +1245,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowToolUse: true,
     allowMCP: 'one_custom_remote',
     allowVoice: true,
-    voiceMinutesPerMonth: 30,
+    voiceMinutesPerMonth: 10,
     tokenCapPerMonth: null,
     messagesPerDayCap: null,
   },

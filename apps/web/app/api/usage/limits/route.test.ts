@@ -14,6 +14,7 @@ type ScanModule4 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule5 = typeof import('@/lib/services/tier-unit-quota-service');
 type ScanModule6 = typeof import('@/lib/server/file-storage');
 type ScanModule7 = typeof import('@/lib/services/account-usage-history-service');
+type ScanModule8 = typeof import('@/lib/voice/free-voice-allowance');
 
 const mocks = vi.hoisted(() => ({
   userScopedDb: vi.fn(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   images: vi.fn(),
   slots: vi.fn(),
   storage: vi.fn(),
+  allowanceSeconds: vi.fn(),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -59,6 +61,11 @@ vi.mock('@/lib/server/file-storage', async (importOriginal) => ({
 vi.mock('@/lib/services/account-usage-history-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule7>()),
   readMonthlyImageUsage: (...args: unknown[]) => mocks.images(...args),
+}));
+
+vi.mock('@/lib/voice/free-voice-allowance', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule8>()),
+  readFreeVoiceConsumedSeconds: (...args: unknown[]) => mocks.allowanceSeconds(...args),
 }));
 
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
@@ -102,6 +109,26 @@ function expectedVoiceMinuteCredits(planTier: string): number {
 }
 
 describe('GET /api/usage/limits', () => {
+  it('reports a Free account voice minutes from its monthly allowance, not the paid ledger', async () => {
+    mocks.plan.mockResolvedValue('free');
+    mocks.allowanceSeconds.mockResolvedValue(125);
+
+    const body = (await (await limits()).json()) as { units: typeof PERIOD.units };
+
+    expect(mocks.allowanceSeconds).toHaveBeenCalledWith(DB, USER);
+    expect(body.units).toEqual([
+      { unit: 'voice_minutes', consumed: 3, hardLimit: 60, softLimit: 48 },
+      { unit: 'computer_use_requests', consumed: 3, hardLimit: null, softLimit: null },
+    ]);
+  });
+
+  it('leaves a paid plan on the ledger reading and never reads the allowance', async () => {
+    const body = (await (await limits()).json()) as { units: typeof PERIOD.units };
+
+    expect(body.units).toEqual(PERIOD.units);
+    expect(mocks.allowanceSeconds).not.toHaveBeenCalled();
+  });
+
   it('reports this month for the plan the account is entitled to, in units and credits', async () => {
     const response = await limits();
 

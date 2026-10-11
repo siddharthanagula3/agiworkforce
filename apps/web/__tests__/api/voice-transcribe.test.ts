@@ -71,7 +71,8 @@ const mockReserveManagedUsage = vi.fn();
 const mockFinalizeManagedUsage = vi.fn();
 const mockMarkProviderStarted = vi.fn();
 const mockMarkClientDelivered = vi.fn();
-vi.mock('@/lib/services/tier-unit-quota-service', () => ({
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   assertTierUnitAllowance: vi.fn(async () => ({ allowed: true })),
 }));
 

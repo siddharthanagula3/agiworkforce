@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   backendCost: vi.fn(),
   userScopedDb: vi.fn(),
   plan: vi.fn(async () => 'pro'),
+  settleFree: vi.fn(),
+  providerCost: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -38,6 +40,14 @@ vi.mock('@/lib/voice/live-voice-backend-cost', async (importOriginal) => ({
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   finalizeManagedUsageRequest: (...args: unknown[]) => mocks.finalize(...args),
+}));
+vi.mock('@/lib/voice/free-voice-allowance', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  settleFreeVoiceSeconds: (...args: unknown[]) => mocks.settleFree(...args),
+}));
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  recordSettledProviderCost: (...args: unknown[]) => mocks.providerCost(...args),
 }));
 
 const { POST } = await import('./route');
@@ -115,6 +125,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.finalize.mockResolvedValue({});
   mocks.backendCost.mockResolvedValue(undefined);
+  mocks.settleFree.mockResolvedValue(null);
+  mocks.providerCost.mockResolvedValue(undefined);
 });
 
 describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
@@ -149,12 +161,42 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     );
   });
 
-  it('prices a free plan session against the free backend', async () => {
+  it('prices a Free session that holds no allowance grant against the free backend', async () => {
     scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
     mocks.plan.mockResolvedValueOnce('free');
 
     await close({ seconds: 5, backend: { inputTokens: 1_000, outputTokens: 200 } });
 
+    expect(mocks.backendCost).toHaveBeenCalledWith(
+      expect.objectContaining({ backendModel: getRoutingSlotModel('voice_live_backend_free') }),
+    );
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles a Free allowance session at the free backend with nothing charged to the ledger', async () => {
+    scopeWith({
+      started_at: new Date(Date.now() - 45_000).toISOString(),
+      closed_at: null,
+      status: 'active',
+    });
+    mocks.plan.mockResolvedValueOnce('free');
+    mocks.settleFree.mockResolvedValue(45);
+
+    const response = await close({
+      seconds: 45,
+      backend: { inputTokens: 1_000, outputTokens: 200 },
+    });
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { billedSeconds: number }).billedSeconds).toBe(45);
+    expect(mocks.settleFree).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', sessionId: 'vs_1' }),
+    );
+    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.providerCost.mock.calls[0]![0]).toMatchObject({
+      customerCanonicalMicrousd: 0,
+      usage: expect.objectContaining({ funding: 'free_voice_allowance', billedSeconds: 45 }),
+    });
     expect(mocks.backendCost).toHaveBeenCalledWith(
       expect.objectContaining({ backendModel: getRoutingSlotModel('voice_live_backend_free') }),
     );
