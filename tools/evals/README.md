@@ -123,7 +123,7 @@ keeps proving the refusal graders work.
 ### Measuring a chat system prompt version (paid, manual)
 
 ```bash
-pnpm evals:live --model <modelKey> --chat-prompt-version <n> --suites golden,refusal,jailbreak,chat,chat-prompt
+pnpm evals:live --model <modelKey> --chat-prompt-version <n> [--sample <k>] --suites golden,refusal,jailbreak,chat,chat-prompt
 tsx tools/evals/scripts/evals.ts compare \
   --baseline tools/evals/measurements/prompt-evals/runs/<model>.chat.system__1.json \
   --candidate tools/evals/measurements/prompt-evals/runs/<model>.chat.system__<n>.json
@@ -145,7 +145,9 @@ The `chat-prompt` corpus only means something under the product prompt, so a
 bare-model run reports it unsupported. Every row is one sample: on 2026-10-10
 the same prompt and model scored differently on rows with a tight word or
 phrase check from one run to the next, so read one run's single-row difference
-as noise until a repeat confirms it.
+as noise until a repeat confirms it. `--sample <k>` writes run `k` of an arm
+as its own file (`<model>.chat.system__<n>.s<k>.json`), so repeats sit side by
+side.
 
 ### Promotion gate
 

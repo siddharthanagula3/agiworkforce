@@ -6,7 +6,8 @@
  *                          --chat-prompt-version <n> renders that product chat prompt version
  *                          in front of every case and writes only the run report, under
  *                          measurements/prompt-evals: its answers are never replayed, since any
- *                          change to the rendered prompt would make them stale
+ *                          change to the rendered prompt would make them stale; --sample <n>
+ *                          keeps repeated runs of one arm side by side
  *   compare                hold one measured run against another, model or route
  *   release-evidence       the committed baselines as one dated evidence report
  *   fingerprint-reference  re-pin the hand-written reference recording to the corpora
@@ -51,14 +52,14 @@ function argValue(args: readonly string[], flag: string): string | undefined {
   return index === -1 ? undefined : args[index + 1];
 }
 
-function chatPromptVersion(args: readonly string[]): number | undefined {
-  const raw = argValue(args, '--chat-prompt-version');
+function positiveIntegerArg(args: readonly string[], flag: string): number | undefined {
+  const raw = argValue(args, flag);
   if (raw === undefined) return undefined;
-  const version = Number.parseInt(raw, 10);
-  if (!Number.isInteger(version) || version < 1 || String(version) !== raw) {
-    throw new Error(`--chat-prompt-version takes a positive integer, not ${raw}`);
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value < 1 || String(value) !== raw) {
+    throw new Error(`${flag} takes a positive integer, not ${raw}`);
   }
-  return version;
+  return value;
 }
 
 function selectedSuites(args: readonly string[]): readonly SuiteName[] {
@@ -139,7 +140,11 @@ interface ProbeAdapters {
 async function live(args: readonly string[]): Promise<void> {
   const modelKey = argValue(args, '--model');
   if (modelKey === undefined) throw new Error('live requires --model <modelKey>');
-  const promptVersion = chatPromptVersion(args);
+  const promptVersion = positiveIntegerArg(args, '--chat-prompt-version');
+  const sample = positiveIntegerArg(args, '--sample');
+  if (sample !== undefined && promptVersion === undefined) {
+    throw new Error('--sample numbers repeated --chat-prompt-version runs of one arm');
+  }
   if (promptVersion !== undefined && args.includes('--baseline')) {
     throw new Error(
       'a family baseline measures the bare model; --chat-prompt-version runs are compared with each other, not written as baselines',
@@ -190,7 +195,9 @@ async function live(args: readonly string[]): Promise<void> {
 
   const subject = target.route.isDefault ? modelKey : target.routeId;
   const fileName = measurementFileName(
-    renderer === undefined ? subject : `${subject}.${renderer.stamp}`,
+    renderer === undefined
+      ? subject
+      : `${subject}.${renderer.stamp}${sample === undefined ? '' : `.s${sample}`}`,
   );
   if (renderer === undefined) {
     recordMeasurement(join(MEASUREMENTS, 'recordings', fileName), outcome.recording);
