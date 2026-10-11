@@ -6,10 +6,10 @@ import { buildTaskDockSummary } from './taskDockSummary';
 import {
   AGI_WORK_LABEL,
   CHAT_DOCK_FALLBACK_TITLE,
-  CHAT_DOCK_FILES_LABEL,
   TASK_DOCK_CONTEXT_LABEL,
   TASK_DOCK_FALLBACK_TITLE,
   TASK_DOCK_OUTPUTS_LABEL,
+  TASK_DOCK_PROGRESS_LABEL,
   TASK_DOCK_SOURCES_LABEL,
 } from '../../lib/agi-work';
 
@@ -82,27 +82,28 @@ describe('WorkSessionPanel header (agentic-modes-gap-04)', () => {
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(TASK_DOCK_FALLBACK_TITLE);
   });
 
-  it('keeps the work labels and all three sections in work mode', () => {
+  it('keeps the work labels and shows only the sections the run has filled', () => {
     render(<WorkSessionPanel messages={messages(true)} open onClose={vi.fn()} agiWork />);
 
     expect(screen.getByText(AGI_WORK_LABEL)).toBeTruthy();
-    expect(screen.getByText(TASK_DOCK_SOURCES_LABEL)).toBeTruthy();
-    expect(screen.getByText(TASK_DOCK_OUTPUTS_LABEL)).toBeTruthy();
-    expect(screen.getByText(TASK_DOCK_CONTEXT_LABEL)).toBeTruthy();
+    expect(screen.getByText(TASK_DOCK_PROGRESS_LABEL)).toBeTruthy();
+    expect(screen.queryByText(TASK_DOCK_SOURCES_LABEL)).toBeNull();
+    expect(screen.queryByText(TASK_DOCK_OUTPUTS_LABEL)).toBeNull();
+    expect(screen.queryByText(TASK_DOCK_CONTEXT_LABEL)).toBeNull();
   });
 });
 
 describe('WorkSessionPanel header in a plain chat', () => {
-  it('never claims to be a work session, and inspects files, context and sources', () => {
+  it('never claims to be a work session, and holds no empty sections', () => {
     render(<WorkSessionPanel messages={messages(true)} open onClose={vi.fn()} />);
 
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(CHAT_DOCK_FALLBACK_TITLE);
     expect(screen.queryByText(TASK_DOCK_FALLBACK_TITLE)).toBeNull();
     expect(screen.queryByText(AGI_WORK_LABEL)).toBeNull();
-    expect(screen.getByText(CHAT_DOCK_FILES_LABEL)).toBeTruthy();
-    expect(screen.getByText(TASK_DOCK_SOURCES_LABEL)).toBeTruthy();
+    expect(screen.getByText(TASK_DOCK_PROGRESS_LABEL)).toBeTruthy();
+    expect(screen.queryByText(TASK_DOCK_SOURCES_LABEL)).toBeNull();
     expect(screen.queryByText(TASK_DOCK_OUTPUTS_LABEL)).toBeNull();
-    expect(screen.getByText(TASK_DOCK_CONTEXT_LABEL)).toBeTruthy();
+    expect(screen.queryByText(TASK_DOCK_CONTEXT_LABEL)).toBeNull();
   });
 
   it('titles the dock with the active conversation', () => {

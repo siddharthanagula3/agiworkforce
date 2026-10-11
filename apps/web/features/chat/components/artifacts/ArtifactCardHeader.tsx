@@ -139,7 +139,10 @@ export function ArtifactCardHeader({
       <button
         type="button"
         onClick={onOpen}
-        className={cn(ARTIFACT_ICON_BUTTON_CLASS, shownInPanel && 'text-[var(--chat-text-primary)]')}
+        className={cn(
+          ARTIFACT_ICON_BUTTON_CLASS,
+          shownInPanel && 'text-[var(--chat-text-primary)]',
+        )}
         aria-label={`${ARTIFACT_OPEN_ACTION}: ${title}`}
         aria-pressed={shownInPanel}
         title={ARTIFACT_OPEN_ACTION}

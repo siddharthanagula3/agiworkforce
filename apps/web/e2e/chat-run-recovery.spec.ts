@@ -369,7 +369,7 @@ test.describe('chat run recovery', () => {
     await mock.finish();
   });
 
-  test('the dock in a plain chat is titled by the chat and holds two sections', async ({
+  test('the dock in a plain chat is titled by the chat and shows only what the chat holds', async ({
     page,
   }) => {
     const mock = await installSseChatMock(page);
@@ -387,7 +387,7 @@ test.describe('chat run recovery', () => {
         .click();
     }
     await expect(page.getByRole('complementary', { name: CHAT_DOCK_LABEL })).toBeVisible();
-    await expect(dock.getByText('In this chat', { exact: true })).toBeVisible();
+    await expect(dock.getByText('Progress', { exact: true })).toBeVisible();
     await expect(dock.getByText('Sources', { exact: true })).toBeVisible();
     await expect(page.getByText('AGI Work session')).toHaveCount(0);
     await expect(dock.getByText('Outputs', { exact: true })).toHaveCount(0);

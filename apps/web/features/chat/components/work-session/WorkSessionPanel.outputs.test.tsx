@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { Message } from '@shared/stores/web-chat-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useArtifactsStore } from '../../stores/artifacts-store';
@@ -58,14 +58,14 @@ describe('WorkSessionPanel outputs rail', () => {
     vi.setSystemTime(NOW);
   });
 
-  it('states the empty copy for every section before the run has produced anything', () => {
+  it('hides every section the run has not filled yet', () => {
     render(<WorkSessionPanel messages={run('running', [])} open onClose={vi.fn()} agiWork />);
 
     expect(screen.getByText('Progress')).toBeVisible();
     expect(screen.getByText('Steps appear here once the session plans its work')).toBeVisible();
-    expect(screen.getByText('Files created during this session appear here')).toBeVisible();
-    expect(screen.getByText('No connectors used yet')).toBeVisible();
-    expect(screen.getByText('Pages the session reads appear here as it searches.')).toBeVisible();
+    expect(screen.queryByText('Outputs')).toBeNull();
+    expect(screen.queryByText('Context')).toBeNull();
+    expect(screen.queryByText('Sources')).toBeNull();
   });
 
   it('counts the finished steps while the run is still working', () => {
@@ -84,7 +84,7 @@ describe('WorkSessionPanel outputs rail', () => {
     expect(screen.getByText('1/2')).toBeVisible();
     expect(screen.getByText('Read the brief')).toBeVisible();
     expect(screen.getByText('Draft the summary')).toBeVisible();
-    expect(screen.getByText('Files created during this session appear here')).toBeVisible();
+    expect(screen.queryByText('Outputs')).toBeNull();
   });
 
   it('lists each finished deliverable with its type line and a download control', () => {
@@ -114,5 +114,29 @@ describe('WorkSessionPanel outputs rail', () => {
     expect(screen.getByText('Document, MD · 2.0 KB')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Download brief.md' })).toBeVisible();
     expect(screen.getByText('1/1')).toBeVisible();
+  });
+
+  it('pictures an HTML artifact output with a static, script-free thumbnail', () => {
+    useArtifactsStore.getState().upsertArtifact({
+      id: 'artifact-calculator',
+      type: 'html',
+      title: 'Desk Calculator',
+      language: 'html',
+      content: '<!doctype html><title>Desk Calculator</title><main>0</main>',
+      conversationId: 'conv-outputs',
+    });
+
+    render(<WorkSessionPanel messages={run('completed', [])} open onClose={vi.fn()} agiWork />);
+
+    expect(screen.getByText('Outputs')).toBeVisible();
+    const open = screen.getByRole('button', { name: 'Open Desk Calculator' });
+    const card = open.closest('li');
+    const thumbnail = card?.querySelector('iframe');
+    expect(thumbnail?.getAttribute('sandbox')).toBe('');
+    expect(thumbnail?.className).toContain('pointer-events-none');
+
+    fireEvent.click(open);
+    expect(useArtifactsStore.getState().selectedArtifactId).toBe('artifact-calculator');
+    expect(useArtifactsStore.getState().panelOpen).toBe(true);
   });
 });

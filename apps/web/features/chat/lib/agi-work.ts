@@ -25,8 +25,6 @@ export const TASK_DOCK_FALLBACK_TITLE = `${AGI_WORK_LABEL} session`;
 
 export const TASK_DOCK_SOURCES_LABEL = 'Sources';
 
-export const TASK_DOCK_SOURCES_EMPTY = 'Pages the session reads appear here as it searches.';
-
 export const TASK_DOCK_OUTPUTS_LABEL = 'Outputs';
 
 export const TASK_DOCK_PROGRESS_LABEL = 'Progress';
@@ -43,15 +41,7 @@ export const CHAT_DOCK_PANEL_LABEL = 'Chat details';
 
 export const CHAT_DOCK_FALLBACK_TITLE = 'This chat';
 
-export const CHAT_DOCK_FILES_LABEL = 'In this chat';
-
-export const CHAT_DOCK_FILES_EMPTY = 'Files created in this chat appear here';
-
-export const TASK_DOCK_OUTPUTS_EMPTY = 'Files created during this session appear here';
-
 export const TASK_DOCK_CONTEXT_LABEL = 'Context';
-
-export const TASK_DOCK_CONTEXT_EMPTY = 'No connectors used yet';
 
 export const TASK_DOCK_STEPS_LABEL = 'session steps';
 
