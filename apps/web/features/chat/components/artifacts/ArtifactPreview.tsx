@@ -62,7 +62,7 @@ import {
   EmailArtifact,
   spreadsheetSafeExport,
 } from '@agiworkforce/unified-chat';
-import { TypeIcon } from './InlineArtifactCards';
+import { TypeIcon } from './artifact-labels';
 import { ArtifactVersionHistory } from './ArtifactVersionHistory';
 import { ArtifactChangesView } from './ArtifactChangesView';
 import { classifyArtifactDocument } from './artifact-document-classification';
@@ -75,17 +75,10 @@ import {
   DropdownMenuTrigger,
   useConfirmAction,
 } from '@agiworkforce/ui';
-import {
-  sanitizeArtifact,
-  sanitizeSVG,
-  hasXSSRisk,
-  buildSandboxSrcDoc,
-  buildArtifactCspMeta,
-  escapeForInlineScript,
-  escapeHTML,
-} from '@shared/utils/html-sanitizer';
+import { sanitizeArtifact, hasXSSRisk } from '@shared/utils/html-sanitizer';
 import { SandboxedIframe } from '../SandboxedIframe';
-import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox';
+import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
+import { buildArtifactPreviewDocument, buildArtifactRenderPayload } from './artifact-render';
 import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
 import { useArtifactsStore } from '../../stores/artifacts-store';
@@ -780,156 +773,23 @@ export function ArtifactPreview({
     return 'sanitized';
   }, [artifact.type, activeContent]);
 
-  const getPreviewHTML = useCallback((): string => {
-    const content = activeContent;
-    const renderType = artifact.type === 'document' ? 'code' : artifact.type;
+  const getPreviewHTML = useCallback(
+    (): string => buildArtifactPreviewDocument(artifact.type, activeContent),
+    [activeContent, artifact.type],
+  );
 
-    switch (renderType) {
-      case 'html':
-        // buildSandboxSrcDoc produces a complete, non-double-wrapped srcDoc.
-        // It detects whether `content` is a full document or a fragment and
-        // handles each correctly (full doc: inject CSP into existing <head>;
-        // fragment: wrap in a minimal shell). Do NOT wrap the result further.
-        // The SandboxedIframe uses sandbox="allow-scripts allow-modals" with
-        // NO allow-same-origin, so the null-origin sandbox is the security
-        // boundary and scripts execute safely.
-        return buildSandboxSrcDoc(content);
-
-      case 'react': {
-        const reactSource = escapeForInlineScript(content);
-        return `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    ${buildArtifactCspMeta()}
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="text/babel" data-presets="env,react">
-${reactSource}
-;var __AgiApp = (typeof App !== 'undefined' && App) || (typeof Component !== 'undefined' && Component);
-if (__AgiApp) {
-  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(__AgiApp));
-}
-    </script>
-  </body>
-</html>`;
-      }
-
-      case 'svg': {
-        // SVG has additional sanitization via sanitizeSVG
-        const sanitizedSVG = sanitizeSVG(content);
-        return `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
-    <style>
-      body {
-        margin: 0;
-        padding: 16px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-      }
-    </style>
-  </head>
-  <body>
-    ${sanitizedSVG}
-  </body>
-</html>`;
-      }
-
-      case 'mermaid':
-        return `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    ${buildArtifactCspMeta()}
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({ startOnLoad: true, securityLevel: 'strict' });</script>
-  </head>
-  <body>
-    <div class="mermaid">
-      ${escapeHTML(content)}
-    </div>
-  </body>
-</html>`;
-
-      default:
-        // AUDIT-FIX ART-6: the text/code fallback interpolated `content` raw
-        // into `<body>`, so any artifact that fell through here rendered (and
-        // executed) attacker-authored markup. `white-space: pre-wrap` means the
-        // escaped text displays exactly as written.
-        // AUDIT-FIX ART-14: plus the shared CSP, which this document lacked.
-        return `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    ${buildArtifactCspMeta()}
-    <style>
-      body {
-        margin: 0;
-        padding: 16px;
-        font-family: monospace;
-        white-space: pre-wrap;
-      }
-    </style>
-  </head>
-  <body>${escapeHTML(content)}</body>
-</html>`;
-    }
-  }, [activeContent, artifact.type]);
-
-  // WEB-13 / WEB-20: build the cross-origin sandbox payload from the artifact.
-  // SandboxedIframe will post this to sandbox.agiworkforce.com (if configured)
-  // or fall back to a same-origin srcDoc iframe with sandbox="allow-scripts"
-  // (no allow-same-origin).
-  //
-  // For kind=html we use buildSandboxSrcDoc to produce a complete, non-wrapped
-  // document. The null-origin sandbox (allow-scripts without allow-same-origin)
-  // is the security boundary: scripts inside it cannot access the parent's
-  // cookies, localStorage, or DOM.
+  // WEB-13 / WEB-20: SandboxedIframe posts this payload to the cross-origin
+  // sandbox (if configured) or falls back to the null-origin srcDoc above.
+  // The inline message preview builds both from the same module.
   //
   // DOMPurify has no sanitize() without a DOM, so the payload and its srcDoc
   // fallback are built only after mount. The server and the first client
   // render both show the loading state, which keeps hydration identical and
   // never hands the frame markup the sanitiser has not seen.
-  const sandboxPayload = useMemo<ArtifactRenderPayload | null>(() => {
-    if (!mounted) return null;
-    const content = activeContent;
-    const renderType = artifact.type === 'document' ? 'code' : artifact.type;
-    const kind: ArtifactKind = renderType === 'code' ? 'code' : (renderType as ArtifactKind);
-    switch (renderType) {
-      case 'html':
-        // buildSandboxSrcDoc handles full-doc vs fragment correctly and injects
-        // the CSP meta without double-wrapping. Pass the result as `html` so
-        // the cross-origin sandbox renderer can use it directly as a srcDoc.
-        return {
-          type: 'render',
-          kind: 'html',
-          html: buildSandboxSrcDoc(content),
-          runScripts: true,
-        };
-      case 'react':
-        return { type: 'render', kind: 'react', code: content };
-      case 'svg':
-        return { type: 'render', kind: 'svg', svg: sanitizeSVG(content) };
-      case 'mermaid':
-        return { type: 'render', kind: 'mermaid', code: content };
-      default:
-        return { type: 'render', kind, text: content };
-    }
-  }, [mounted, activeContent, artifact.type]);
+  const sandboxPayload = useMemo<ArtifactRenderPayload | null>(
+    () => (mounted ? buildArtifactRenderPayload(artifact.type, activeContent) : null),
+    [mounted, activeContent, artifact.type],
+  );
 
   // AUDIT-FIX ART-24: `navigator.clipboard` is undefined in insecure contexts
   // and `writeText` rejects when the permission is denied or the document is

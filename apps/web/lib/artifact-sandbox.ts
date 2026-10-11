@@ -17,11 +17,20 @@ export interface ArtifactRenderPayload {
 }
 
 export interface SandboxIncomingMessage {
-  type: 'sandbox-ready' | 'render-complete' | 'render-error' | 'runtime-request';
+  type: 'sandbox-ready' | 'render-complete' | 'render-error' | 'runtime-request' | 'content-size';
   kind?: ArtifactKind;
   error?: string;
   id?: unknown;
   request?: unknown;
+  height?: unknown;
+}
+
+const MAX_REPORTED_CONTENT_HEIGHT = 100_000;
+
+export function parseContentHeight(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value <= 0 || value > MAX_REPORTED_CONTENT_HEIGHT) return null;
+  return Math.ceil(value);
 }
 
 export type ArtifactRuntimeRequest =

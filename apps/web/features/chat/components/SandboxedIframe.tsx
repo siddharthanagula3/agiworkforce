@@ -6,6 +6,7 @@ import {
   getSandboxOrigin,
   isFromSandbox,
   parseArtifactRuntimeRequest,
+  parseContentHeight,
   parseRuntimeRequestId,
   postRenderToSandbox,
   postRuntimeResponseToSandbox,
@@ -107,6 +108,7 @@ export interface SandboxedIframeProps {
   style?: React.CSSProperties;
   refreshKey?: number;
   onRenderError?: (error: string) => void;
+  onContentHeight?: (height: number) => void;
   runtime?: ArtifactRuntimeHost;
 }
 
@@ -118,6 +120,7 @@ export function SandboxedIframe({
   style,
   refreshKey = 0,
   onRenderError,
+  onContentHeight,
   runtime,
 }: SandboxedIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -180,6 +183,9 @@ export function SandboxedIframe({
         setRenderError(message);
         console.error('[artifact-preview] render failed', message);
         onRenderError?.(ARTIFACT_RENDER_FAILURE_MESSAGE);
+      } else if (data.type === 'content-size') {
+        const height = parseContentHeight(data.height);
+        if (height !== null) onContentHeight?.(height);
       } else if (data.type === 'runtime-request') {
         const id = parseRuntimeRequestId(data.id);
         const frame = iframeRef.current;
@@ -206,7 +212,7 @@ export function SandboxedIframe({
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [sandboxOrigin, renderPayload, onRenderError, runtime]);
+  }, [sandboxOrigin, renderPayload, onRenderError, onContentHeight, runtime]);
 
   const onLoad = useCallback(() => {
     if (!sandboxOrigin || !iframeRef.current) return;

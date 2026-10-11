@@ -31,7 +31,7 @@ const COMPOSER_LABEL = /message input/i;
 const STOP_BUTTON_LABEL = /stop the current response/i;
 const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const SCROLL_TO_BOTTOM_LABEL = 'Scroll to bottom';
-const STREAMING_ARTIFACT_CHIP_LABEL = 'Show artifact being written';
+const STREAMING_ARTIFACT_CHIP_LABEL = 'Show the code being written';
 const THINKING_PLACEHOLDER = 'Thinking...';
 
 const ASSISTANT_BUBBLE = '[data-role="assistant"]';
@@ -556,7 +556,7 @@ test.describe('streaming markdown', () => {
     expect(await prose.innerText()).not.toContain(DISPLAY_MATH_DELIMITER);
   });
 
-  test('an artifact fence streams into the side panel and never into the transcript', async ({
+  test('an artifact fence streams into the panel the creating row opens and never into the transcript', async ({
     page,
   }) => {
     const mock = await openChat(page);
@@ -569,7 +569,13 @@ test.describe('streaming markdown', () => {
 
     const transcriptLeaks: string[] = [];
     const panelLengths: number[] = [];
+    const creatingRow = page.getByRole('button', { name: STREAMING_ARTIFACT_CHIP_LABEL });
+    let openedPanel = false;
     await streamAnswer(page, mock, ARTIFACT_ANSWER, async (emitted) => {
+      if (!openedPanel && emitted < ARTIFACT_CLOSE_OFFSET && (await creatingRow.count())) {
+        await creatingRow.click();
+        openedPanel = true;
+      }
       const text = await prose.innerText();
       if (
         text.includes(`${FENCE_MARKER}${ARTIFACT_LANGUAGE}`) ||

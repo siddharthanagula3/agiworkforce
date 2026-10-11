@@ -333,4 +333,14 @@ describe('extractArtifactTitle, linear rewrite parity', () => {
   it('still falls back to the first meaningful line', () => {
     expect(extractArtifactTitle('\n\n# Fallback Heading\nmore')).toBe('Fallback Heading');
   });
+
+  it('never names an artifact after its marker or its opening markup', () => {
+    expect(extractArtifactTitle('<!-- @artifact -->\n<!doctype html>\n<html><body>')).toBe(
+      undefined,
+    );
+    expect(extractArtifactTitle('// @artifact\n// Budget tracker\nfunction App() {}')).toBe(
+      'Budget tracker',
+    );
+    expect(extractArtifactTitle('%% @artifact\nflowchart TD')).toBe('flowchart TD');
+  });
 });

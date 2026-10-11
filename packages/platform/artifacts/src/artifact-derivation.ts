@@ -97,6 +97,10 @@ export const EXPLICIT_ARTIFACT_MARKERS = [
   '%% @artifact',
 ] as const;
 
+function isArtifactMarkerLine(trimmedLine: string): boolean {
+  return EXPLICIT_ARTIFACT_MARKERS.some((marker) => trimmedLine === marker);
+}
+
 export function hasExplicitArtifactMarker(content: string): boolean {
   return EXPLICIT_ARTIFACT_MARKERS.some((marker) => content.includes(marker));
 }
@@ -169,7 +173,11 @@ export function extractArtifactTitle(content: string): string | undefined {
     if (trimmed) return trimmed;
   }
 
-  const first = content.split('\n').find((l) => l.trim().length > 0) ?? '';
+  const first =
+    content.split('\n').find((line) => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 && !isArtifactMarkerLine(trimmed) && !trimmed.startsWith('<');
+    }) ?? '';
   const cleaned = first
     .replace(/^#+\s+/, '')
     .replace(/^\/\/+\s*/, '')
