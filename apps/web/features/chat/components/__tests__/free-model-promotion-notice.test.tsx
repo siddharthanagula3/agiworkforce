@@ -36,7 +36,16 @@ function signedInOn(tier: string): void {
 const fetchPromotion = vi.fn((url: string) =>
   Promise.resolve(
     url === FREE_MODEL_PROMOTION_PATH
-      ? new Response(JSON.stringify({ promotion: { modelId: PROMOTED.id, endsAt: ENDS_AT } }))
+      ? new Response(
+          JSON.stringify({
+            promotion: {
+              modelId: PROMOTED.id,
+              endsAt: ENDS_AT,
+              webSearchAvailable: true,
+              webSearchWindowHours: 24,
+            },
+          }),
+        )
       : new Response(null, { status: 404 }),
   ),
 );

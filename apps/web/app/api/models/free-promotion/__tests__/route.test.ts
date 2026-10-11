@@ -16,8 +16,13 @@ vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
   planTier: 'free',
-  promotion: null as null | { modelId: string; endsAtMs: number },
+  promotion: null as null | {
+    modelId: string;
+    endsAtMs: number;
+    perUserWebSearches: { limit: number; windowMs: number };
+  },
   capacity: true,
+  searchesLeft: true,
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
@@ -43,6 +48,7 @@ vi.mock('@/lib/server/free-model-promotion', async (importOriginal) => ({
 vi.mock('@/lib/server/free-model-promotion-ledger', async (importOriginal) => ({
   ...(await importOriginal<PromotionTestModule5>()),
   freeModelPromotionHasCapacity: vi.fn(async () => mocks.capacity),
+  freeModelPromotionSearchesLeft: vi.fn(async () => mocks.searchesLeft),
 }));
 
 import { GET } from '../route';
@@ -61,14 +67,21 @@ async function offer() {
 describe(`GET ${FREE_MODEL_PROMOTION_PATH}`, () => {
   beforeEach(() => {
     mocks.planTier = 'free';
-    mocks.promotion = { modelId: 'promoted-model', endsAtMs: ENDS_AT_MS };
+    mocks.promotion = {
+      modelId: 'promoted-model',
+      endsAtMs: ENDS_AT_MS,
+      perUserWebSearches: { limit: 30, windowMs: 24 * 3_600_000 },
+    };
     mocks.capacity = true;
+    mocks.searchesLeft = true;
   });
 
   it('offers a Free account the promoted model and its end date', async () => {
     expect(await offer()).toEqual({
       modelId: 'promoted-model',
       endsAt: new Date(ENDS_AT_MS).toISOString(),
+      webSearchAvailable: true,
+      webSearchWindowHours: 24,
     });
   });
 
@@ -88,5 +101,11 @@ describe(`GET ${FREE_MODEL_PROMOTION_PATH}`, () => {
     mocks.promotion = null;
 
     expect(await offer()).toBeNull();
+  });
+
+  it('says when the account has used its promotion web searches for the window', async () => {
+    mocks.searchesLeft = false;
+
+    expect((await offer())?.webSearchAvailable).toBe(false);
   });
 });

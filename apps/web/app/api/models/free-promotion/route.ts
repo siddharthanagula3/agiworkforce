@@ -12,13 +12,17 @@ import {
   freeModelPromotionCoversPlan,
   readFreeModelPromotion,
 } from '@/lib/server/free-model-promotion';
-import { freeModelPromotionHasCapacity } from '@/lib/server/free-model-promotion-ledger';
+import {
+  freeModelPromotionHasCapacity,
+  freeModelPromotionSearchesLeft,
+} from '@/lib/server/free-model-promotion-ledger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 
 export const runtime = 'nodejs';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
+const MILLISECONDS_PER_HOUR = 3_600_000;
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'model-catalog');
@@ -32,7 +36,12 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     promotion && (await freeModelPromotionHasCapacity(promotion, nowMs)) ? promotion : null;
   const body: FreeModelPromotionResponse = FreeModelPromotionResponseSchema.parse({
     promotion: offered
-      ? { modelId: offered.modelId, endsAt: new Date(offered.endsAtMs).toISOString() }
+      ? {
+          modelId: offered.modelId,
+          endsAt: new Date(offered.endsAtMs).toISOString(),
+          webSearchAvailable: await freeModelPromotionSearchesLeft(offered, scoped.userId, nowMs),
+          webSearchWindowHours: offered.perUserWebSearches.windowMs / MILLISECONDS_PER_HOUR,
+        }
       : null,
   });
   return NextResponse.json(body, { headers: NO_STORE });
