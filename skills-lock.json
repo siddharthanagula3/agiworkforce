@@ -114,7 +114,7 @@
       "sourceType": "first-party",
       "audience": "product",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:4e0c35ffe4260f6eff5ec9fbfc5b27aa08bf09ae9a351d394cb0e8b879172e98"
+      "computedHash": "sha256-tree-v1:a38936c5b208a2119459d436caac4653aa1827c95702b71dccd0b2bf8275c20a"
     },
     "aso": {
       "path": ".agents/skills/aso",

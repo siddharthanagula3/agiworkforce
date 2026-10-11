@@ -32,6 +32,11 @@ const MAX_ARTIFACTS_PER_PUSH = 500;
  */
 export const ARTIFACT_PANEL_OVERLAY_QUERY = '(max-width: 639px)';
 
+function isArtifactPanelOverlayViewport(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia(ARTIFACT_PANEL_OVERLAY_QUERY).matches;
+}
+
 /** @internal The shared vanilla store: the live engine for collection + UI state. */
 export const _sharedArtifactStore = createArtifactStore({
   maxArtifacts: MAX_RETAINED_ARTIFACTS,
@@ -462,6 +467,7 @@ type ArtifactsStoreReturn = {
   clearEditRequest: () => void;
   togglePanel: () => void;
   setPanelOpen: (open: boolean) => void;
+  autoOpenPanel: () => void;
   clearArtifacts: () => void;
   clearArtifactsForMessage: (messageId: string) => void;
   clearArtifactsForConversation: (conversationId: string) => void;
@@ -587,6 +593,11 @@ const actions = {
 
   setPanelOpen(open: boolean): void {
     _sharedArtifactStore.getState().setPanelOpen(open);
+  },
+
+  autoOpenPanel(): void {
+    if (isArtifactPanelOverlayViewport()) return;
+    _sharedArtifactStore.getState().setPanelOpen(true);
   },
 
   clearArtifacts(): void {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ArtifactWireDelta, ChatSyncPushResponse } from '@agiworkforce/cloud-contracts';
 import { localModelId } from '@agiworkforce/local-runtime-contract';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { useArtifactsStore } from './artifacts-store';
+import { ARTIFACT_PANEL_OVERLAY_QUERY, useArtifactsStore } from './artifacts-store';
 
 function cloudDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta {
   return {
@@ -629,6 +629,46 @@ describe('local artifact push batching', () => {
 
     expect(heldArtifactIds()).toEqual(BOTH_ARTIFACT_IDS);
     expect(browserCopyIds()).toEqual([SAVED_ARTIFACT_ID]);
+  });
+});
+
+describe('artifact panel auto-open', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  function stubViewport(overlay: boolean): void {
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: query === ARTIFACT_PANEL_OVERLAY_QUERY ? overlay : !overlay,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList) as typeof window.matchMedia;
+  }
+
+  beforeEach(() => {
+    useArtifactsStore.getState().setPanelOpen(false);
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('opens the panel on a viewport wide enough to show it beside the transcript', () => {
+    stubViewport(false);
+    useArtifactsStore.getState().autoOpenPanel();
+    expect(useArtifactsStore.getState().panelOpen).toBe(true);
+  });
+
+  it('leaves the panel closed where it would cover the whole screen', () => {
+    stubViewport(true);
+    useArtifactsStore.getState().autoOpenPanel();
+    expect(useArtifactsStore.getState().panelOpen).toBe(false);
+  });
+
+  it('still opens the panel when the reader asks for it on a phone', () => {
+    stubViewport(true);
+    useArtifactsStore.getState().setPanelOpen(true);
+    expect(useArtifactsStore.getState().panelOpen).toBe(true);
   });
 });
 

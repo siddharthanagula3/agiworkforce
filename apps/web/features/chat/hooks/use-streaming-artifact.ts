@@ -40,11 +40,13 @@ export function useStreamingArtifactSync({
   isStreaming,
   block,
 }: UseStreamingArtifactSyncParams): void {
-  const selectedForRef = useRef<string | null>(null);
+  const openedForRef = useRef<string | null>(null);
+  const autoOpenDismissedRef = useRef(false);
   const streamedRef = useRef<StreamedArtifactSnapshot | null>(null);
 
   useEffect(() => {
-    selectedForRef.current = null;
+    autoOpenDismissedRef.current = false;
+    openedForRef.current = null;
     streamedRef.current = null;
   }, [messageId]);
 
@@ -101,9 +103,14 @@ export function useStreamingArtifactSync({
       content: block.content,
     });
 
-    if (selectedForRef.current !== artifactId) {
-      selectedForRef.current = artifactId;
-      useArtifactsStore.getState().selectArtifact(artifactId);
+    if (openedForRef.current !== artifactId) {
+      const artifacts = useArtifactsStore.getState();
+      if (openedForRef.current !== null && !artifacts.panelOpen) {
+        autoOpenDismissedRef.current = true;
+      }
+      openedForRef.current = artifactId;
+      artifacts.selectArtifact(artifactId);
+      if (!autoOpenDismissedRef.current) artifacts.autoOpenPanel();
     }
   }, [messageId, conversationId, isStreaming, block]);
 

@@ -377,98 +377,6 @@
           rootEl.appendChild(pre);
         }
 
-        // --------------------------------------------------------------
-        // Content height, reported to the parent as `content-size` so a host
-        // that shows the artifact inline can size its frame to what the
-        // artifact draws. It is measured from the bottom of the rendered
-        // children, not scrollHeight: scrollHeight never drops below the
-        // frame's own height, so a host following it could only ever grow.
-        // A host that ignores the message keeps its own fixed height.
-        // --------------------------------------------------------------
-        let sizeObservers = [];
-        let sizeFrameRequest = 0;
-        let lastReportedHeight = 0;
-
-        function childrenBottom(container, view) {
-          let bottom = 0;
-          const children = container.children;
-          for (let i = 0; i < children.length; i += 1) {
-            const child = children[i];
-            const style = view.getComputedStyle(child);
-            if (style.display === 'none' || style.position === 'fixed') continue;
-            const rect = child.getBoundingClientRect();
-            bottom = Math.max(bottom, rect.bottom + (parseFloat(style.marginBottom) || 0));
-          }
-          return bottom;
-        }
-
-        function measureDocument(doc) {
-          const view = doc && doc.defaultView;
-          if (!view || !doc.body) return 0;
-          const style = view.getComputedStyle(doc.body);
-          return (
-            childrenBottom(doc.body, view) +
-            view.scrollY +
-            (parseFloat(style.paddingBottom) || 0) +
-            (parseFloat(style.borderBottomWidth) || 0) +
-            (parseFloat(style.marginBottom) || 0)
-          );
-        }
-
-        function measureRoot() {
-          return (
-            childrenBottom(rootEl, window) - rootEl.getBoundingClientRect().top + rootEl.scrollTop
-          );
-        }
-
-        function stopObservingContentSize() {
-          sizeObservers.forEach(function (observer) {
-            observer.disconnect();
-          });
-          sizeObservers = [];
-          if (sizeFrameRequest) cancelAnimationFrame(sizeFrameRequest);
-          sizeFrameRequest = 0;
-          lastReportedHeight = 0;
-        }
-
-        function scheduleContentSizeReport(measure) {
-          if (sizeFrameRequest) return;
-          sizeFrameRequest = requestAnimationFrame(function () {
-            sizeFrameRequest = 0;
-            let height = 0;
-            try {
-              height = Math.ceil(measure());
-            } catch (e) {
-              return;
-            }
-            if (!(height > 0) || Math.abs(height - lastReportedHeight) < 2) return;
-            lastReportedHeight = height;
-            postToParent({ type: 'content-size', height: height });
-          });
-        }
-
-        function observeContentSize(doc, measure) {
-          stopObservingContentSize();
-          const view = doc && doc.defaultView;
-          if (!view || !doc.body) return;
-          const report = function () {
-            scheduleContentSizeReport(measure);
-          };
-          if (typeof view.ResizeObserver === 'function') {
-            const resize = new view.ResizeObserver(report);
-            resize.observe(doc.documentElement);
-            resize.observe(doc.body);
-            sizeObservers.push(resize);
-          }
-          if (typeof view.MutationObserver === 'function') {
-            const mutation = new view.MutationObserver(report);
-            mutation.observe(doc.body, { childList: true, subtree: true, attributes: true });
-            sizeObservers.push(mutation);
-          }
-          if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(report, function () {});
-          report();
-        }
-
         function showRoot() {
           idleEl.hidden = true;
           rootEl.hidden = false;
@@ -556,7 +464,6 @@
             settled = true;
             document.removeEventListener('securitypolicyviolation', onViolation);
             renderHtmlInline(payload);
-            observeContentSize(document, measureRoot);
           }
           document.addEventListener('securitypolicyviolation', onViolation);
           frame.addEventListener('load', function () {
@@ -572,17 +479,9 @@
                 !doc ||
                 !doc.body ||
                 (doc.body.childElementCount === 0 && !(doc.body.textContent || '').trim());
-              if (empty && html.trim().length > 0) {
-                renderHtmlInline(payload);
-                observeContentSize(document, measureRoot);
-              } else {
-                observeContentSize(doc, function () {
-                  return measureDocument(frame.contentDocument);
-                });
-              }
+              if (empty && html.trim().length > 0) renderHtmlInline(payload);
             } catch (e) {
               renderHtmlInline(payload);
-              observeContentSize(document, measureRoot);
             }
           });
 
@@ -693,7 +592,6 @@
           const kind = String(payload.kind || '').toLowerCase();
           rejectPendingRuntime('The app reloaded before this request finished.');
           runtimeEnabled = payload.runtime === true;
-          stopObservingContentSize();
           showRoot();
           try {
             switch (kind) {
@@ -719,9 +617,6 @@
                 return;
             }
             postToParent({ type: 'render-complete', kind: kind });
-            if (kind !== 'html' || payload.runScripts === false) {
-              observeContentSize(document, measureRoot);
-            }
           } catch (err) {
             showError('Render error: ' + String(err && err.message ? err.message : err));
             postToParent({ type: 'render-error', error: String(err) });

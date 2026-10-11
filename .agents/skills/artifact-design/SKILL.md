@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Artifact design
 
-Use this skill before writing an app, tool, game, page or visual the user will open and use in the chat preview. The preview renders it live, inline in the message and in the Artifacts panel.
+Use this skill before writing an app, tool, game, page or visual the user will open and use in the chat. It runs live in the Artifacts panel beside the conversation.
 
 ## Format
 
@@ -18,8 +18,7 @@ Use this skill before writing an app, tool, game, page or visual the user will o
 
 ## Layout and type
 
-- Design for a frame about 720px wide that can shrink to 320px. Use a centred container with a sensible `max-width`, fluid widths, and no horizontal scrolling at any width.
-- Let the height follow the content. Do not size the outer layout with `height: 100vh` or `min-height: 100vh`; the inline preview fits its height to what you draw.
+- Design for a panel about 480 to 720px wide that can shrink to 320px on a phone. Use a centred container with a sensible `max-width`, fluid widths, and no horizontal scrolling at any width.
 - Space on a 4px grid (4, 8, 12, 16, 24, 32, 48). Use one type scale (13, 15, 17, 20, 24, 32px), 1.5 line height for body text, and at most two weights.
 - One accent colour for the primary action and the current state; neutrals for everything else. Prefer borders and subtle surface steps to heavy shadows.
 

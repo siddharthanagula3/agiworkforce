@@ -150,7 +150,6 @@ export const ARTIFACT_SCENE_MESSAGE = ARTIFACT_PAGES.map((page) =>
   ].join('\n'),
 ).join('\n\n');
 const ARTIFACT_ACTIONS: readonly LucideIcon[] = [Copy, Download, FolderPlus, Library, Maximize2, X];
-const ARTIFACT_CARD_ACTIONS: readonly LucideIcon[] = [Copy, Download, PanelRightOpen];
 
 export function ArtifactScenePreview({ className }: { className?: string }) {
   return (
@@ -176,27 +175,15 @@ export function ArtifactScenePreview({ className }: { className?: string }) {
                       className="agi-scene-card"
                       data-in-panel={shownInPanel ? 'true' : undefined}
                     >
-                      <span className="agi-scene-card-row">
-                        <span className="agi-scene-card-icon">
-                          <Globe className="agi-scene-icon" />
-                        </span>
-                        <span className="agi-scene-card-text">
-                          <span className="agi-scene-card-title">{page.title}</span>
-                          <span className="agi-scene-card-sub">HTML · Artifact</span>
-                        </span>
-                        <span className="agi-scene-card-actions">
-                          {ARTIFACT_CARD_ACTIONS.map((Icon, index) => (
-                            <Icon key={index} className="agi-scene-icon" />
-                          ))}
-                        </span>
+                      <span className="agi-scene-card-icon">
+                        <Globe className="agi-scene-icon" />
                       </span>
-                      {shownInPanel ? null : (
-                        <span className="agi-scene-card-thumb" data-page="true">
-                          <b />
-                          <i />
-                          <i />
-                        </span>
-                      )}
+                      <span className="agi-scene-card-text">
+                        <span className="agi-scene-card-title">{page.title}</span>
+                        <span className="agi-scene-card-sub">Artifact</span>
+                      </span>
+                      <Download className="agi-scene-icon agi-scene-card-download" />
+                      <span className="agi-scene-card-open">{shownInPanel ? 'Hide' : 'Open'}</span>
                     </span>
                   );
                 })}

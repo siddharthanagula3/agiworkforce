@@ -19,7 +19,10 @@ const THUMBNAIL_SOURCES = [
 ];
 
 const INTERACTIVE_VIEWER = 'features/chat/components/artifacts/ArtifactPreview.tsx';
-const INLINE_PREVIEW = 'features/chat/components/artifacts/InlineArtifactPreview.tsx';
+const INLINE_CARD_SOURCES = [
+  'features/chat/components/artifacts/ArtifactCard.tsx',
+  'features/chat/components/artifacts/InlineArtifactCards.tsx',
+];
 
 function read(relative: string): string {
   return readFileSync(join(WEB_ROOT, relative), 'utf8');
@@ -48,10 +51,9 @@ describe('artifact thumbnails do not execute what they preview', () => {
     expect(viewer).not.toMatch(/allow-scripts allow-same-origin/u);
   });
 
-  it('runs the inline message preview only through the shared sandboxed frame', () => {
-    const inline = read(INLINE_PREVIEW);
-    expect(inline).toContain('<SandboxedIframe');
-    expect(inline).not.toMatch(/<iframe\b/u);
-    expect(inline).not.toMatch(/sandbox=/u);
+  it.each(INLINE_CARD_SOURCES)('%s runs nothing in the message; the panel does', (relative) => {
+    const source = read(relative);
+    expect(source).not.toMatch(/<iframe\b/u);
+    expect(source).not.toMatch(/SandboxedIframe/u);
   });
 });
