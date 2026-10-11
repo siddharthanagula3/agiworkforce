@@ -196,11 +196,19 @@ describe('the limit that stops a send', () => {
     const [session] = usageWindowViews(
       summary({ fiveHour: creditWindow(50, 50, FIVE_HOUR_RESET) }),
     );
-    const notice = usageLimitNotice(session!, NOW);
+    const notice = usageLimitNotice(session!, 'pro', NOW);
 
     expect(notice).toMatchObject({ bucket: 'session', severity: 'critical' });
     expect(describeUsageNotice(notice!)).toBe(
       'You have used your 50 credits for this 5-hour window. Resets in 2 hours.',
+    );
+  });
+
+  it('tells a Free account it reached the Free limit, with no credit figure', () => {
+    const [session] = usageWindowViews(summary({ fiveHour: creditWindow(2, 2, FIVE_HOUR_RESET) }));
+
+    expect(describeUsageNotice(usageLimitNotice(session!, 'free', NOW)!)).toBe(
+      "You've reached the Free limit for now. Resets in 2 hours.",
     );
   });
 
@@ -218,6 +226,7 @@ describe('usage warnings before a limit', () => {
   it('warns from the credit windows once one runs low', () => {
     const warning = usageWarning(
       usageWindowViews(summary({ fiveHour: creditWindow(50, 40, FIVE_HOUR_RESET) })),
+      'pro',
       NOW,
     );
 
@@ -225,23 +234,28 @@ describe('usage warnings before a limit', () => {
     expect(describeUsageNotice(warning!)).toBe(
       'You have used 40 of your 50 credits for this 5-hour window. Resets in 2 hours.',
     );
-    expect(usageWarning(usageWindowViews(summary()), NOW)).toBeNull();
+    expect(usageWarning(usageWindowViews(summary()), 'pro', NOW)).toBeNull();
   });
 
   it('turns the gateway quota header into a warning on the window it names', () => {
     const views = usageWindowViews(summary());
 
-    const weekly = quotaWarningFromSignal(views, { scope: 'rolling_weekly', usedPercent: 92 }, NOW);
+    const weekly = quotaWarningFromSignal(
+      views,
+      { scope: 'rolling_weekly', usedPercent: 92 },
+      'pro',
+      NOW,
+    );
     expect(weekly).toMatchObject({ bucket: 'weekly', severity: 'critical' });
     expect(describeUsageNotice(weekly!)).toBe(
       'You have used 460 of your 500 credits for this week. Resets in 3 days.',
     );
 
     expect(
-      quotaWarningFromSignal(views, { scope: 'billing_period', usedPercent: 80 }, NOW),
+      quotaWarningFromSignal(views, { scope: 'billing_period', usedPercent: 80 }, 'pro', NOW),
     ).toMatchObject({ bucket: 'period', severity: 'warning' });
     expect(
-      quotaWarningFromSignal(views, { scope: 'rolling_five_hour', usedPercent: 50 }, NOW),
+      quotaWarningFromSignal(views, { scope: 'rolling_five_hour', usedPercent: 50 }, 'pro', NOW),
     ).toBeNull();
   });
 });

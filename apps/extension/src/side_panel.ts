@@ -689,7 +689,11 @@ function managedPlanTier(access: ManagedModelAccess): string {
 
 function applyStreamQuotaWarning(signal: ManagedQuotaWarningSignal): void {
   if (!managedModelAccess || managedCloudChatState !== 'ready') return;
-  const warning = quotaWarningFromSignal(usageWindowViews(managedModelAccess.usage), signal);
+  const warning = quotaWarningFromSignal(
+    usageWindowViews(managedModelAccess.usage),
+    signal,
+    managedPlanTier(managedModelAccess),
+  );
   if (!warning) return;
   renderUsageBanner({
     text: describeUsageNotice(warning),
@@ -12862,7 +12866,7 @@ function buildUI(): void {
 
     if (usage.has_usage_remaining === false && purchased?.spendable !== true) {
       const blocking = blockingUsageWindow(views);
-      const notice = blocking ? usageLimitNotice(blocking) : null;
+      const notice = blocking ? usageLimitNotice(blocking, managedPlanTier(access)) : null;
       const message = notice ? describeUsageNotice(notice) : t('spGateUsageLimit');
       const recoveryLabel = quotaRecoveryLabel(recovery);
       setQuotaNotice('', null);
@@ -12885,7 +12889,7 @@ function buildUI(): void {
     }
 
     const coveredByPurchased = usage.has_usage_remaining === false;
-    const warning = coveredByPurchased ? null : usageWarning(views);
+    const warning = coveredByPurchased ? null : usageWarning(views, managedPlanTier(access));
     const banner: UsageBanner | null = coveredByPurchased
       ? { text: t('spQuotaUsingPurchased'), severity: 'warning', recovery }
       : warning

@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   })),
   updateConversation: vi.fn(async () => true),
   toastError: vi.fn(),
+  usage: null as null | { plan_tier: string },
+  usageBuckets: [] as unknown[],
 }));
 
 vi.mock('next/navigation', () => ({
@@ -99,8 +101,8 @@ vi.mock('@/lib/hooks/useConversations', async (importOriginal) => {
 vi.mock('@/lib/hooks/useManagedUsageSummary', async (importOriginal) => ({
   ...(await importOriginal()),
   getWorstUsagePercent: () => 0,
-  readManagedUsageBuckets: () => [],
-  useManagedUsageSummary: () => ({ usage: null }),
+  readManagedUsageBuckets: () => mocks.usageBuckets,
+  useManagedUsageSummary: () => ({ usage: mocks.usage, refresh: vi.fn() }),
 }));
 
 vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
@@ -208,7 +210,18 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
   return {
     ...actual,
     LocalByokHandoffDialog: () => null,
-    UsageWarningBanner: () => null,
+    UsageWarningBanner: ({
+      warning,
+      upgradeLabel,
+    }: {
+      warning: { headline: string; resetLabel: string | null } | null;
+      upgradeLabel?: string;
+    }) =>
+      warning ? (
+        <p data-testid="usage-warning">
+          {[warning.headline, warning.resetLabel, upgradeLabel].filter(Boolean).join(' | ')}
+        </p>
+      ) : null,
   };
 });
 
@@ -341,6 +354,39 @@ describe('a Free account on the chat page while the free model promotion runs', 
 
     expect(await sentModelAfterSelecting(PROMOTED_MODEL!)).toBe(PROMOTED_MODEL);
     expect(useModelStore.getState().selectedModelId).toBe(PROMOTED_MODEL);
+  });
+
+  it('shows no Free limit banner on the promoted model, and a plain one on the Free model', async () => {
+    mocks.usage = { plan_tier: 'free' };
+    mocks.usageBuckets = [
+      {
+        bucket: 'session',
+        percentRemaining: 0,
+        resetAt: new Date(
+          Date.now() + 4 * 60 * 60 * 1_000 + 59 * 60 * 1_000 + 30_000,
+        ).toISOString(),
+        allowanceCredits: 2,
+        usedCredits: 2,
+      },
+    ];
+    try {
+      const view = render(<WebChatPage />);
+      await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+      await waitFor(() => expect(useModelStore.getState().selectedModelId).toBe(PROMOTED_MODEL));
+      expect(view.queryByTestId('usage-warning')).toBeNull();
+
+      act(() => {
+        useModelStore.getState().setSelectedModelId(FREE_TRIAL_MODEL);
+      });
+      const banner = await view.findByTestId('usage-warning');
+      expect(banner.textContent).toBe(
+        "You've reached the Free limit for now | Resets in 4 hr 59 min | Upgrade",
+      );
+      expect(banner.textContent).not.toMatch(/credit/i);
+    } finally {
+      mocks.usage = null;
+      mocks.usageBuckets = [];
+    }
   });
 
   it('still sends a paid model on the Free model', async () => {
