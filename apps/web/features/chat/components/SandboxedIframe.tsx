@@ -1,14 +1,17 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 import {
   getSandboxOrigin,
   isFromSandbox,
   parseArtifactRuntimeRequest,
+  parsePickerSelection,
   parseRuntimeRequestId,
+  postPickerModeToSandbox,
   postRenderToSandbox,
   postRuntimeResponseToSandbox,
+  type ArtifactPickerSelection,
   type ArtifactRenderPayload,
   type ArtifactRuntimeHost,
   type SandboxIncomingMessage,
@@ -99,6 +102,13 @@ export function withFallbackErrorReporter(srcDoc: string): string {
   return `${FALLBACK_ERROR_REPORTER}${srcDoc}`;
 }
 
+export interface SandboxedIframePicker {
+  active: boolean;
+  onSelect: (selection: ArtifactPickerSelection) => void;
+  onCancel: () => void;
+  onUnavailable: () => void;
+}
+
 export interface SandboxedIframeProps {
   payload: ArtifactRenderPayload;
   fallbackSrcDoc: string;
@@ -108,6 +118,7 @@ export interface SandboxedIframeProps {
   refreshKey?: number;
   onRenderError?: (error: string) => void;
   runtime?: ArtifactRuntimeHost;
+  picker?: SandboxedIframePicker;
 }
 
 export function SandboxedIframe({
@@ -119,7 +130,13 @@ export function SandboxedIframe({
   refreshKey = 0,
   onRenderError,
   runtime,
+  picker,
 }: SandboxedIframeProps) {
+  const pickerRef = useRef(picker);
+  useLayoutEffect(() => {
+    pickerRef.current = picker;
+  });
+  const pickerActive = picker?.active === true;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const sandboxOrigin = getSandboxOrigin();
   const renderPayload = useMemo<ArtifactRenderPayload>(
@@ -175,6 +192,15 @@ export function SandboxedIframe({
         } catch {
           // ignore · payload re-posts on the onLoad path below
         }
+      } else if (data.type === 'render-complete') {
+        if (pickerRef.current?.active && iframeRef.current) {
+          postPickerModeToSandbox(iframeRef.current, true);
+        }
+      } else if (data.type === 'picker-selection') {
+        const selection = parsePickerSelection(data.selection);
+        if (selection && pickerRef.current?.active) pickerRef.current.onSelect(selection);
+      } else if (data.type === 'picker-cancel') {
+        if (pickerRef.current?.active) pickerRef.current.onCancel();
       } else if (data.type === 'render-error') {
         const message = data.error ?? 'unknown render error';
         setRenderError(message);
@@ -222,6 +248,16 @@ export function SandboxedIframe({
   }, [activateFallback]);
 
   const usingFallback = !sandboxOrigin || useFallback;
+
+  useEffect(() => {
+    if (usingFallback) {
+      if (pickerActive) pickerRef.current?.onUnavailable();
+      return;
+    }
+    const frame = iframeRef.current;
+    if (!frame || !sandboxConnectedRef.current) return;
+    postPickerModeToSandbox(frame, pickerActive);
+  }, [pickerActive, usingFallback]);
   const scriptsAreDead = usingFallback && !fallbackWillRunScripts(fallbackDocument);
   useEffect(() => {
     if (!usingFallback || !onRenderError) return undefined;
