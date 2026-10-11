@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentEventSource } from '@agiworkforce/types';
+import type { AgentEventSource, ManagedMemoryCitations } from '@agiworkforce/types';
 import { create } from 'zustand';
 
 export interface ResearchSource extends AgentEventSource {
@@ -17,6 +17,7 @@ interface ResearchPanelState {
   cited: ResearchSource[];
   more: ResearchSource[];
   query?: string;
+  memories: ManagedMemoryCitations | null;
   conversationId: string | null;
 }
 
@@ -27,6 +28,7 @@ interface ResearchPanelActions {
     cited: ResearchSource[],
     more: ResearchSource[],
     query?: string,
+    memories?: ManagedMemoryCitations | null,
   ) => void;
   closePanel: () => void;
   togglePanel: () => void;
@@ -36,12 +38,14 @@ interface ResearchPanelActions {
     cited: ResearchSource[],
     more: ResearchSource[],
     query?: string,
+    memories?: ManagedMemoryCitations | null,
   ) => void;
   sourcesFor: (conversationId: string | null | undefined) => {
     messageId: string | null;
     cited: ResearchSource[];
     more: ResearchSource[];
     query?: string;
+    memories: ManagedMemoryCitations | null;
   };
 }
 
@@ -52,24 +56,28 @@ export const useResearchPanelStore = create<ResearchPanelState & ResearchPanelAc
     cited: [],
     more: [],
     query: undefined,
+    memories: null,
     conversationId: null,
 
-    openPanel: (conversationId, messageId, cited, more, query) =>
-      set({ panelOpen: true, messageId, cited, more, query, conversationId }),
+    openPanel: (conversationId, messageId, cited, more, query, memories = null) =>
+      set({ panelOpen: true, messageId, cited, more, query, memories, conversationId }),
     closePanel: () => set({ panelOpen: false }),
     togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
-    setSources: (conversationId, messageId, cited, more, query) =>
-      set((state) => (state.panelOpen ? state : { cited, more, query, conversationId, messageId })),
+    setSources: (conversationId, messageId, cited, more, query, memories = null) =>
+      set((state) =>
+        state.panelOpen ? state : { cited, more, query, memories, conversationId, messageId },
+      ),
     sourcesFor: (conversationId) => {
       const state = get();
       if (!conversationId || state.conversationId !== conversationId) {
-        return { messageId: null, cited: [], more: [], query: undefined };
+        return { messageId: null, cited: [], more: [], query: undefined, memories: null };
       }
       return {
         messageId: state.messageId,
         cited: state.cited,
         more: state.more,
         query: state.query,
+        memories: state.memories,
       };
     },
   }),
