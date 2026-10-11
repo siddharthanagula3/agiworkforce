@@ -3403,6 +3403,64 @@ describe('useChatStream', () => {
       );
     });
 
+    it('continues a reply cut inside an html block without a second fence, as a continue turn', async () => {
+      const seed = [
+        'Here is the calculator.',
+        '',
+        '```html',
+        '<style>',
+        '  body {',
+        '    color: re',
+      ].join('\n');
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            content: 'make a calculator',
+            createdAt: '2026-07-01T00:00:00.000Z',
+          },
+          {
+            id: '0190a000-0000-7000-8000-0000000000ee',
+            role: 'assistant',
+            content: seed,
+            createdAt: '2026-07-01T00:00:01.000Z',
+            model: 'test/model-1',
+            metadata: { finishReason: 'length' },
+          },
+        ],
+      });
+      mockRoutedFetch(
+        sse([
+          {
+            choices: [
+              {
+                delta: { content: '```html\nd;\n  }\n</style>\n<p>0</p>\n```' },
+                finish_reason: 'stop',
+              },
+            ],
+          },
+        ]),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('0190a000-0000-7000-8000-0000000000ee');
+      });
+
+      const continued = useChatStore
+        .getState()
+        .messages.find((m) => m.id === '0190a000-0000-7000-8000-0000000000ee');
+      expect(continued?.content).toBe(`${seed}d;\n  }\n</style>\n<p>0</p>\n\`\`\``);
+      const llmCall = vi
+        .mocked(fetch)
+        .mock.calls.find(([input]) => String(input).includes('/api/llm/'));
+      const headers = new Headers(llmCall?.[1]?.headers);
+      expect(headers.get('Idempotency-Key')).toMatch(/^agi\.chat\.web\.continue\./);
+    });
+
     it("carries the conversation's memory and connector opt-outs on Continue", async () => {
       useChatStore.setState({
         conversations: [PERSISTED_CONV],

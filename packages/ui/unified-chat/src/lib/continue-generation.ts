@@ -111,6 +111,8 @@ export function getStreamErrorNotice(
 
 export const CONTINUE_GENERATION_INSTRUCTION =
   'Continue your previous response from exactly where it left off. ' +
+  'That response is your own unfinished answer, stopped only by a length limit, so treat it ' +
+  'as correct and complete it rather than commenting on it, judging it, or starting over. ' +
   'Do not repeat any earlier content, do not restart the answer, and do not add any preamble ' +
   'or acknowledgement, output only the direct continuation. If the response was cut off ' +
   'mid-sentence, mid-word, or mid-code-block, resume at that exact point with no extra space. ' +

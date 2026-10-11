@@ -14,6 +14,7 @@ export type { RandomBytesSource } from './uuidv7';
 export {
   createManagedChatIdempotencyKey,
   isManagedChatIdempotencyKey,
+  managedChatIdempotencyPurpose,
 } from './managedChatIdempotency';
 export type {
   ManagedChatIdempotencyIdentity,

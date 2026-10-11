@@ -11,6 +11,7 @@ import type {
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
+import { managedChatIdempotencyPurpose } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   IMAGE_CARD_KIND,
   getPlanMaxAttachmentsPerMessage,
@@ -3123,9 +3124,10 @@ async function processAdmittedRequest(
   }
   const requestedModel = chatRequest.model;
   const adaptiveResponseBudgetEnabled =
-    promotionTurn !== null ||
-    isAutoModeModelId(requestedModel) ||
-    getModelRegistryFacts(requestedModel)?.isRouter === true;
+    managedChatIdempotencyPurpose(requestId) !== 'continue' &&
+    (promotionTurn !== null ||
+      isAutoModeModelId(requestedModel) ||
+      getModelRegistryFacts(requestedModel)?.isRouter === true);
   const freeTrialEnabled =
     freeRegionFallback ||
     promotionTurn !== null ||

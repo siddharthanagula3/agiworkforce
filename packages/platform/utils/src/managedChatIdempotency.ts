@@ -27,3 +27,8 @@ export function createManagedChatIdempotencyKey(identity: ManagedChatIdempotency
 export function isManagedChatIdempotencyKey(value: string): boolean {
   return KEY_PATTERN.test(value) && value.length <= 128;
 }
+
+export function managedChatIdempotencyPurpose(value: string): ManagedChatPurpose | null {
+  if (!isManagedChatIdempotencyKey(value)) return null;
+  return value.split('.')[3] as ManagedChatPurpose;
+}
