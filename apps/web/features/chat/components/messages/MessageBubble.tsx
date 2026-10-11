@@ -152,7 +152,7 @@ const StreamingMarkdownContent = dynamic(
 
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
-import { ArtifactCreatingRow } from '../artifacts/ArtifactCreatingRow';
+import { ArtifactCreatedRow, ArtifactCreatingRow } from '../artifacts/ArtifactCreatingRow';
 import {
   codeBlockEditorArtifact,
   extractArtifacts,
@@ -1709,6 +1709,10 @@ const MessageBubbleComponent = function MessageBubble({
     () => artifacts.filter((artifact) => artifact.type !== 'image'),
     [artifacts],
   );
+  const createdArtifacts = useMemo(
+    () => inlineArtifacts.filter((artifact) => !artifact.generatedFile && !artifact.interrupted),
+    [inlineArtifacts],
+  );
   const hasInterruptedArtifact = useMemo(
     () => inlineArtifacts.some((artifact) => artifact.interrupted === true),
     [inlineArtifacts],
@@ -2558,6 +2562,10 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && trailingInteractiveCards.length > 0 ? (
             <InteractiveCardBlock cards={trailingInteractiveCards} assistantText={cleanedContent} />
           ) : null}
+
+          {!isUser && !streamingBlock && createdArtifacts.length > 0 && (
+            <ArtifactCreatedRow artifacts={createdArtifacts} />
+          )}
 
           {!isUser && streamingBlock && (
             <ArtifactCreatingRow

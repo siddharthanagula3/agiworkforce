@@ -1654,7 +1654,7 @@ describe('MessageBubble', () => {
         />,
       );
 
-      const preview = await screen.findByTestId('inline-artifact-preview');
+      const preview = await screen.findByTestId('artifact-card');
       const trailing = screen.getByTestId('message-trailing-prose');
       expect(trailing).toHaveTextContent('Press Esc to clear.');
       const lead = (await screen.findAllByTestId('markdown-content'))[0];
