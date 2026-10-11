@@ -4,6 +4,7 @@ import {
   getToolSourceBadge,
   getToolDisplayLabel,
   getFileExtensionIconName,
+  skillLoadActivitySummary,
   summarizeToolTimeline,
   CATEGORY_ICON_NAME,
   TOOL_ICON_NAME,
@@ -145,5 +146,23 @@ describe('summarizeToolTimeline', () => {
 
   it('returns an empty string for an empty timeline', () => {
     expect(summarizeToolTimeline([])).toBe('');
+  });
+});
+
+describe('skillLoadActivitySummary', () => {
+  it('names the skill a load step reads, in the tense of its phase', () => {
+    const input = { action: 'load', name: 'artifact-design' };
+    expect(skillLoadActivitySummary(input, 'running')).toBe('Loading skill artifact-design');
+    expect(skillLoadActivitySummary(input, 'completed')).toBe('Loaded skill artifact-design');
+  });
+
+  it('leaves listing, file reads and malformed input to the generic phrase', () => {
+    expect(skillLoadActivitySummary({ action: 'list' }, 'running')).toBeUndefined();
+    expect(
+      skillLoadActivitySummary({ action: 'read', name: 'x', path: 'a.md' }, 'running'),
+    ).toBeUndefined();
+    expect(skillLoadActivitySummary({ action: 'load', name: '  ' }, 'completed')).toBeUndefined();
+    expect(skillLoadActivitySummary(['load'], 'running')).toBeUndefined();
+    expect(skillLoadActivitySummary(null, 'running')).toBeUndefined();
   });
 });

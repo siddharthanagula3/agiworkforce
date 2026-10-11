@@ -114,6 +114,22 @@ const TOOL_DISPLAY_LABEL: Record<string, ToolDisplayLabel> = {
   },
 };
 
+const SKILL_LOAD_ACTION = 'load';
+
+export type SkillActivityPhase = 'running' | 'completed';
+
+export function skillLoadActivitySummary(
+  input: unknown,
+  phase: SkillActivityPhase,
+): string | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const record = input as Record<string, unknown>;
+  if (record['action'] !== SKILL_LOAD_ACTION) return undefined;
+  const name = typeof record['name'] === 'string' ? record['name'].trim() : '';
+  if (!name) return undefined;
+  return phase === 'running' ? `Loading skill ${name}` : `Loaded skill ${name}`;
+}
+
 function mcpToolSuffix(name: string): string | undefined {
   const PREFIX = 'mcp__';
   if (!name.toLowerCase().startsWith(PREFIX)) return undefined;
