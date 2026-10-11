@@ -36,6 +36,7 @@ import {
   type PublishedArtifactAudience,
   type WebPublishDetails,
 } from './publishArtifactClient';
+import { usePublishedSitesStore } from '@features/sites/stores/published-sites-store';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
 import { ArtifactPrivacyNotice } from '@/features/onboarding/components/ArtifactPrivacyNotice';
@@ -263,21 +264,17 @@ export function ArtifactsPanel() {
   );
   const projects = useChatProjectStore((s) => s.projects);
   const [publishDetails, setPublishDetails] = useState<WebPublishDetails | null>(null);
+  const recordPublishedSite = usePublishedSitesStore((s) => s.record);
   const cloudPublisher = useMemo(
     () =>
       createWebCloudPublisher({
         conversationId: activeConversationId ?? null,
-        onPublished: setPublishDetails,
+        onPublished: (details, artifactId) => {
+          setPublishDetails(details);
+          recordPublishedSite(artifactId, details);
+        },
       }),
-    [activeConversationId],
-  );
-  const changeAudience = useCallback(
-    async (next: PublishedArtifactAudience) => {
-      if (!publishDetails) return;
-      const changed = await setPublishedArtifactAudience(publishDetails.shareUrl, next);
-      setPublishDetails({ ...publishDetails, ...changed });
-    },
-    [publishDetails],
+    [activeConversationId, recordPublishedSite],
   );
   const projectLink = useMemo(() => {
     const projectId = activeConversation?.projectId;
@@ -291,17 +288,6 @@ export function ArtifactsPanel() {
       onSave: (projectId, file) => uploadProjectKnowledgeFile({ projectId, file }).then(() => {}),
     }),
     [projects],
-  );
-  const artifactAudience = useMemo(
-    () =>
-      publishDetails?.workspace
-        ? {
-            current: publishDetails.visibility,
-            memberCount: publishDetails.workspace.memberCount,
-            onChange: changeAudience,
-          }
-        : undefined,
-    [publishDetails, changeAudience],
   );
   const makePublishHandler = useCallback(
     (artifact: Artifact) => (selection: ArtifactPublishSelection) =>
@@ -366,13 +352,35 @@ export function ArtifactsPanel() {
     let cancelled = false;
     void fetchArtifactPublication(selectedArtifactKey)
       .then((details) => {
-        if (!cancelled && details) setPublishDetails(details);
+        if (cancelled || !details) return;
+        setPublishDetails(details);
+        recordPublishedSite(selectedArtifactKey, details);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [selectedArtifactKey]);
+  }, [selectedArtifactKey, recordPublishedSite]);
+  const changeAudience = useCallback(
+    async (next: PublishedArtifactAudience) => {
+      if (!publishDetails) return;
+      const changed = await setPublishedArtifactAudience(publishDetails.shareUrl, next);
+      setPublishDetails({ ...publishDetails, ...changed });
+      if (selectedArtifactKey) recordPublishedSite(selectedArtifactKey, changed);
+    },
+    [publishDetails, selectedArtifactKey, recordPublishedSite],
+  );
+  const artifactAudience = useMemo(
+    () =>
+      publishDetails?.workspace
+        ? {
+            current: publishDetails.visibility,
+            memberCount: publishDetails.workspace.memberCount,
+            onChange: changeAudience,
+          }
+        : undefined,
+    [publishDetails, changeAudience],
+  );
 
   const streamingArtifact =
     streaming &&

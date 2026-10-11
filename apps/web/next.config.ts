@@ -123,6 +123,8 @@ const nextConfig: NextConfig = {
       { source: '/projects/:id', destination: '/chat/projects/:id', permanent: false },
       { source: '/library', destination: '/chat/library', permanent: false },
       { source: '/schedules', destination: '/chat/schedules', permanent: false },
+      { source: '/sites', destination: '/chat/sites', permanent: false },
+      { source: '/sites/:token', destination: '/chat/sites/:token', permanent: false },
       { source: '/customize', destination: '/chat/customize', permanent: false },
 
       { source: '/terms-of-service', destination: '/terms', permanent: true },

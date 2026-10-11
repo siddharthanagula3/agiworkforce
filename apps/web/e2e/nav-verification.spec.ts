@@ -28,6 +28,7 @@ const RAIL_DESTINATIONS = [
   { label: 'Chat', path: '/chat' },
   { label: 'Projects', path: '/chat/projects' },
   { label: 'Library', path: '/chat/library' },
+  { label: 'Sites', path: '/chat/sites' },
   { label: 'Models', path: '/models' },
   { label: 'Study', path: '/chat/study' },
 ] as const;

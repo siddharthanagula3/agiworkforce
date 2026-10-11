@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ManagedCloudPublishedArtifactVersion } from '@agiworkforce/cloud-contracts';
 import {
-  listPublishedArtifacts,
   listPublishedArtifactVersions,
+  listPublishedSites,
   republishArtifactVersion,
   unpublishArtifact,
-  type PublishedArtifactSummary,
-} from '../services/conversation-data-service';
+  type PublishedSite as PublishedArtifactSummary,
+} from '@features/sites/services/sites-service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -178,7 +178,7 @@ export function PublishedArtifactsSection() {
     setLoading(true);
     setError(null);
     try {
-      setArtifacts(await listPublishedArtifacts(signal));
+      setArtifacts((await listPublishedSites(signal)).sites);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
       setError(toUserMessage(caught, 'Failed to load published artifacts'));

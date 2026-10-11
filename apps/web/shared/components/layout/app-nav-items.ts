@@ -24,6 +24,7 @@ import {
   BookOpen,
   CalendarClock,
   FolderOpen,
+  Globe,
   LibraryBig,
   MessageSquare,
   ShieldCheck,
@@ -41,6 +42,7 @@ const CHAT_SECTION_PREFIXES = [
   '/chat/projects',
   '/chat/artifacts',
   '/chat/library',
+  '/chat/sites',
   '/chat/finance',
   '/chat/health',
   '/chat/schedules',
@@ -126,6 +128,15 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     href: '/chat/library',
     isActive: (pathname) =>
       isUnder(pathname, '/chat/library') || isUnder(pathname, '/chat/artifacts'),
+    hideable: true,
+  },
+  {
+    id: 'sites',
+    label: 'Sites',
+    labelKey: 'navSites',
+    icon: Globe,
+    href: '/chat/sites',
+    isActive: (pathname) => isUnder(pathname, '/chat/sites'),
     hideable: true,
   },
   {
