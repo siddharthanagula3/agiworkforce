@@ -4577,7 +4577,6 @@ async function processAdmittedRequest(
     chatRequest.web_search = false;
     chatRequest.web_fetch = false;
   }
-  if (promotionTurn && !promotionTurn.webSearchAllowed) chatRequest.web_search = false;
   // The paired browser on a desktop is bound by the same website rules as
   // web search and fetch, so a turn that may drive it reads them too.
   const drivesDeviceBrowser =

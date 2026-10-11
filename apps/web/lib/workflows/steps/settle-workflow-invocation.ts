@@ -192,7 +192,6 @@ async function settleBilling(
     provider,
     model,
     cost: observedTurnCost(usage, { provider, model }),
-    ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
     usage: {
       promptTokens: usage.inputTokens,
       completionTokens: usage.outputTokens,

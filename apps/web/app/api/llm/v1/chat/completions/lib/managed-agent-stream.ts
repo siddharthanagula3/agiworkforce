@@ -363,9 +363,6 @@ export function buildManagedAgentStream(
           provider: serving.provider,
           model: serving.chatRequest.model,
         }),
-        ...(input.usage.webSearchRequests
-          ? { webSearchRequests: input.usage.webSearchRequests }
-          : {}),
         usage: {
           promptTokens: inputTokens,
           completionTokens: outputTokens,

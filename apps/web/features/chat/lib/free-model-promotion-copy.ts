@@ -19,10 +19,3 @@ export function freeModelPromotionPickerLabel(endsAt: string): string {
 export function freeModelPromotionHeadline(modelName: string, endsAt: string): string {
   return `${modelName} free until ${freeModelPromotionEndsOn(endsAt)}`;
 }
-
-export function freeModelPromotionSearchSpentNotice(
-  modelName: string,
-  windowHours: number,
-): string {
-  return `Web search on ${modelName} has reached its limit for now and resets within ${windowHours} hours. You can keep chatting without it.`;
-}

@@ -33,8 +33,6 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
 
 import {
   endFreeModelPromotionCredential,
-  freeModelPromotionSearchesLeft,
-  recordFreeModelPromotionSearches,
   freeModelPromotionHasCapacity,
   readManagedProviderSpendSince,
   reserveFreeModelPromotionTurn,
@@ -56,7 +54,6 @@ function promotion(patch: Partial<FreeModelPromotion> = {}): FreeModelPromotion 
     spendCeilingMicrousd: 380 * USD,
     turnReserveMicrousd: 0.15 * USD,
     perUserMessages: { limit: 300, window: '5 h' },
-    perUserWebSearches: { limit: 30, windowMs: 24 * 60 * 60 * 1_000 },
     promptTokenCeiling: 100_000,
     promptBudgetTokens: 88_000,
     latestMessageTokenLimit: 40_000,
@@ -338,28 +335,5 @@ describe('free model promotion ledger', () => {
     } as unknown as Parameters<typeof readManagedProviderSpendSince>[4];
 
     expect(await readManagedProviderSpendSince('anthropic', 2, 60_000, NOW, db)).toBeNull();
-  });
-
-  it('allows provider searches up to the account allowance in its rolling window', async () => {
-    const capped = promotion({ perUserWebSearches: { limit: 3, windowMs: 60_000 } });
-    const record = (requestId: string, searches: number, at: number) =>
-      recordFreeModelPromotionSearches(
-        { promotionId: 'test-promotion', userId: 'u1', requestId, searches },
-        60_000,
-        store,
-        at,
-      );
-
-    expect(await freeModelPromotionSearchesLeft(capped, 'u1', NOW, store)).toBe(true);
-    await record('r1', 2, NOW);
-    expect(await freeModelPromotionSearchesLeft(capped, 'u1', NOW, store)).toBe(true);
-    await record('r2', 1, NOW + 1_000);
-    expect(await freeModelPromotionSearchesLeft(capped, 'u1', NOW + 1_000, store)).toBe(false);
-    expect(await freeModelPromotionSearchesLeft(capped, 'u2', NOW + 1_000, store)).toBe(true);
-    expect(await freeModelPromotionSearchesLeft(capped, 'u1', NOW + 60_500, store)).toBe(true);
-  });
-
-  it('offers no promotion searches when the allowance cannot be read', async () => {
-    expect(await freeModelPromotionSearchesLeft(promotion(), 'u1', NOW, null)).toBe(false);
   });
 });

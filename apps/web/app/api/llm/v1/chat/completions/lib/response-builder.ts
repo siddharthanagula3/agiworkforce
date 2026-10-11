@@ -245,9 +245,6 @@ export async function buildNonStreamResponse(
           ? { serverToolMicrousd: serverTools.providerMicrousd }
           : {}),
       },
-      ...(llmResponse.webSearchRequests
-        ? { webSearchRequests: llmResponse.webSearchRequests }
-        : {}),
       usage: {
         promptTokens: llmResponse.promptTokens,
         completionTokens: llmResponse.completionTokens,
