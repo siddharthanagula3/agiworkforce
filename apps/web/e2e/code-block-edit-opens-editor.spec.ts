@@ -32,6 +32,8 @@ const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const ASSISTANT_BUBBLE = '[data-role="assistant"]';
 const EDIT_LABEL = 'Edit this code beside the chat';
 const EDITOR_CONTENT = '[data-testid="artifact-source-editor"] .cm-content';
+const EXPANDED_SIDEBAR = '[data-sidebar-region="header"]';
+const COLLAPSED_SIDEBAR = '[data-sidebar-region="rail"]';
 
 const ORIGINAL_SOURCE = '<main>Original page</main>';
 const EDITED_SOURCE = '<main>Edited in the panel</main>';
@@ -111,6 +113,15 @@ async function serveTranscript(page: Page, conversationId: string): Promise<void
   });
 }
 
+async function sidebarToggleChord(page: Page): Promise<string> {
+  const isMac = await page.evaluate(() => {
+    const platform = (navigator as Navigator & { userAgentData?: { platform?: string } })
+      .userAgentData?.platform;
+    return platform ? platform === 'macOS' : navigator.userAgent.includes('Mac');
+  });
+  return isMac ? 'Meta+b' : 'Control+b';
+}
+
 async function previewFrameShows(page: Page, text: string): Promise<boolean> {
   for (const frame of page.frames()) {
     if (frame === page.mainFrame()) continue;
@@ -152,6 +163,22 @@ for (const layout of LAYOUTS) {
         const editor = page.locator(EDITOR_CONTENT);
         await expect(editor).toBeFocused({ timeout: LOAD_TIMEOUT_MS });
         await expect(editor).toHaveText(ORIGINAL_SOURCE);
+
+        if (layout.name === 'desktop') {
+          const toggleChord = await sidebarToggleChord(page);
+          await expect(page.locator(EXPANDED_SIDEBAR)).toBeVisible();
+          await page.keyboard.press(toggleChord);
+          await expect(page.locator(COLLAPSED_SIDEBAR)).toHaveCount(0);
+          await expect(page.locator(EXPANDED_SIDEBAR)).toBeVisible();
+          await expect(editor).toBeFocused();
+
+          await bubble.getByText('Here it is:').click();
+          await page.keyboard.press(toggleChord);
+          await expect(page.locator(COLLAPSED_SIDEBAR)).toBeVisible();
+          await page.keyboard.press(toggleChord);
+          await expect(page.locator(EXPANDED_SIDEBAR)).toBeVisible();
+          await editor.click();
+        }
 
         await page.keyboard.press('ControlOrMeta+a');
         await page.keyboard.insertText(EDITED_SOURCE);
