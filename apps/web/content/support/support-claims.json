@@ -2412,7 +2412,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/services/__tests__/team-seat-entitlement.test.ts",
-          "name": "gets the Max 5x product limits and model access"
+          "name": "gets at least the Max 5x product limits and model access"
         },
         {
           "kind": "test",

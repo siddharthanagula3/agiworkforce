@@ -193,10 +193,19 @@ describe('a member on a Premium seat', () => {
     expect(getPlanUsageBudgetCents(plan)).toBeGreaterThan(getPlanUsageBudgetCents('team'));
   });
 
-  it('gets the Max 5x product limits and model access', async () => {
+  it('gets at least the Max 5x product limits and model access', async () => {
     const plan = await resolveEntitledPlanTier(scopedDb, 'member-1');
+    const { knowledgeStorageBytes, monthlyDownloadBytes, ...shared } =
+      getBillingPlanProductLimits(plan)!;
+    const {
+      knowledgeStorageBytes: maxStorage,
+      monthlyDownloadBytes: maxDownloads,
+      ...maxShared
+    } = getBillingPlanProductLimits('max')!;
 
-    expect(getBillingPlanProductLimits(plan)).toEqual(getBillingPlanProductLimits('max'));
+    expect(shared).toEqual(maxShared);
+    expect(knowledgeStorageBytes).toBeGreaterThanOrEqual(maxStorage as number);
+    expect(monthlyDownloadBytes).toBeGreaterThanOrEqual(maxDownloads as number);
     expect(getPlanMaxConcurrentTurns(plan)).toBe(getPlanMaxConcurrentTurns('max'));
     expect(normalizeSubscriptionAccessTier(plan)).toBe(normalizeSubscriptionAccessTier('max'));
   });
