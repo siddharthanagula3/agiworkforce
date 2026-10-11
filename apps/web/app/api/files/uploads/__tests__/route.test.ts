@@ -194,7 +194,7 @@ describe('resumable upload for every upload kind', () => {
   it('answers a plan refusal with its message and opens nothing', async () => {
     const { attachmentSizeRefusal } = await import('@/lib/server/attachment-allowance');
     mockAdmitAttachmentUpload.mockRejectedValueOnce(
-      attachmentSizeRefusal('pro', 'chat-attachment', 50 * 1024 * 1024),
+      attachmentSizeRefusal('pro', 'chat-attachment', 20 * 1024 * 1024),
     );
 
     const response = await createUpload(
