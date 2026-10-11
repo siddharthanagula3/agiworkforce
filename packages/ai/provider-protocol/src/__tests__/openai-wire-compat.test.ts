@@ -4,6 +4,7 @@ import {
   OpenAIWireAssembler,
   assembleOpenAIWireResponse,
   openAIWireRequestToChatRequest,
+  paragraphBreakBetween,
 } from '../openai-wire-compat';
 
 const NOW = () => 1_750_000_000_000;
@@ -998,5 +999,146 @@ describe('openAIWireRequestToChatRequest __canonicalThinking reconstruction', ()
       { type: 'text', text: 'hi' },
       { type: 'tool_use', id: 'c1', name: 'f', input: {} },
     ]);
+  });
+});
+
+describe('OpenAIWireAssembler text around a server tool step', () => {
+  const PRE_TOOL = "I'll run the search now, as you asked.";
+  const POST_TOOL = "You're right that artifacts exist.";
+
+  function streamedContent(
+    assembler: OpenAIWireAssembler,
+    chunks: StreamChunk[],
+  ): { content: string; frames: string[] } {
+    const frames = chunks.flatMap((chunk) =>
+      assembler.sseChunks(chunk).flatMap((envelope) => {
+        const content = (envelope as { choices?: Array<{ delta?: { content?: unknown } }> })
+          .choices?.[0]?.delta?.content;
+        return typeof content === 'string' ? [content] : [];
+      }),
+    );
+    return { content: frames.join(''), frames };
+  }
+
+  function searchTurn(before: string, after: string): StreamChunk[] {
+    return [
+      { type: 'text-delta', delta: before },
+      { type: 'server-tool-use', toolUseId: 'ws_1', name: 'web_search' },
+      {
+        type: 'server-tool-result',
+        toolUseId: 'ws_1',
+        payload: { type: 'web_search_tool_result', tool_use_id: 'ws_1', content: [] },
+      },
+      { type: 'text-delta', delta: after },
+      { type: 'stop', reason: 'end_turn' },
+    ];
+  }
+
+  it.each(['legacy-web', 'openai-passthrough'] as const)(
+    'starts the post-tool text as a new paragraph on the wire and in canonical text (%s)',
+    (wireMode) => {
+      const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW, wireMode });
+      const { content } = streamedContent(assembler, searchTurn(PRE_TOOL, POST_TOOL));
+
+      expect(content).toBe(`${PRE_TOOL}\n\n${POST_TOOL}`);
+      expect(assembler.canonicalText()).toBe(content);
+    },
+  );
+
+  it('separates in the non-streaming response the same way', () => {
+    const response = assembleOpenAIWireResponse(searchTurn(PRE_TOOL, POST_TOOL), {
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    }) as { choices: Array<{ message: { content: string } }> };
+
+    expect(response.choices[0]?.message.content).toBe(`${PRE_TOOL}\n\n${POST_TOOL}`);
+  });
+
+  it('adds only the missing newlines when either side already carries one', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+    expect(streamedContent(assembler, searchTurn(`${PRE_TOOL}\n`, POST_TOOL)).content).toBe(
+      `${PRE_TOOL}\n\n${POST_TOOL}`,
+    );
+
+    const leading = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+    expect(streamedContent(leading, searchTurn(PRE_TOOL, `\n\n${POST_TOOL}`)).content).toBe(
+      `${PRE_TOOL}\n\n${POST_TOOL}`,
+    );
+  });
+
+  it('inserts the break once, before the first post-tool delta, and never inside a segment', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+    const { frames } = streamedContent(assembler, [
+      { type: 'text-delta', delta: 'Line one ' },
+      { type: 'text-delta', delta: 'continues.' },
+      { type: 'server-tool-use', toolUseId: 'ws_1', name: 'web_search' },
+      { type: 'text-delta', delta: '' },
+      { type: 'text-delta', delta: 'After' },
+      { type: 'text-delta', delta: ' the search.' },
+    ]);
+
+    expect(frames).toEqual(['Line one ', 'continues.', '', '\n\nAfter', ' the search.']);
+  });
+
+  it('leaves a tool step that opens the turn unseparated', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+    const { content } = streamedContent(assembler, searchTurn('', POST_TOOL));
+
+    expect(content).toBe(POST_TOOL);
+  });
+
+  it('does not separate consecutive text blocks that no tool step divides', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      wireMode: 'legacy-web',
+    });
+    const { content } = streamedContent(assembler, [
+      { type: 'text-delta', delta: 'Sources agree ' },
+      { type: 'citation-delta', blockIndex: 2, payload: { url: 'https://example.com/a' } },
+      { type: 'text-delta', delta: 'on this point.' },
+    ]);
+
+    expect(content).toBe('Sources agree on this point.');
+  });
+
+  it('keeps the default OpenAI-compatible wire byte-for-byte unchanged', () => {
+    const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
+    const { content } = streamedContent(assembler, searchTurn(PRE_TOOL, POST_TOOL));
+
+    expect(content).toBe(`${PRE_TOOL}${POST_TOOL}`);
+  });
+});
+
+describe('paragraphBreakBetween', () => {
+  it.each([
+    ['Before.', 'After', '\n\n'],
+    ['Before.\n', 'After', '\n'],
+    ['Before.\n\n', 'After', ''],
+    ['Before.  ', 'After', '\n\n'],
+    ['Before.', '\nAfter', '\n'],
+    ['Before.', '\n\nAfter', ''],
+    ['', 'After', ''],
+    ['  \n', 'After', ''],
+    ['Before.', '', ''],
+  ])('between %j and %j is %j', (before, after, expected) => {
+    expect(paragraphBreakBetween(before, after)).toBe(expected);
   });
 });
