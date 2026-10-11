@@ -72,7 +72,7 @@ export interface CreateWebCloudPublisherOptions {
    * surface-neutral and carries neither, so the web host learns them here
    * rather than widening a shared type for one surface.
    */
-  onPublished?: (details: WebPublishDetails) => void;
+  onPublished?: (details: WebPublishDetails, artifactId: string) => void;
 }
 
 export function createWebCloudPublisher(
@@ -109,11 +109,14 @@ export function createWebCloudPublisher(
       throw new Error('The publish endpoint returned no share URL.');
     }
 
-    options.onPublished?.({
-      shareUrl: body.shareUrl,
-      visibility: body.visibility === 'organization' ? 'organization' : 'public',
-      workspace: readWorkspace(body.workspace),
-    });
+    options.onPublished?.(
+      {
+        shareUrl: body.shareUrl,
+        visibility: body.visibility === 'organization' ? 'organization' : 'public',
+        workspace: readWorkspace(body.workspace),
+      },
+      artifact.id,
+    );
 
     return {
       shareUrl: body.shareUrl,

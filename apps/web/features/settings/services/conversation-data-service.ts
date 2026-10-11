@@ -9,12 +9,7 @@ import {
   ManagedCloudDeleteConversationResponseSchema,
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
-  managedCloudPublishedArtifactVersionPath,
-  managedCloudPublishedArtifactVersionsPath,
-  ManagedCloudPublishedArtifactVersionDetailSchema,
-  ManagedCloudPublishedArtifactVersionListResponseSchema,
   normalizeManagedCloudConversation,
-  type ManagedCloudPublishedArtifactVersion,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
@@ -199,92 +194,5 @@ export async function revokeSharedLink(token: string): Promise<void> {
   });
   if (!response.ok) {
     throw await responseError(response, 'Failed to revoke shared link');
-  }
-}
-
-const PublishedArtifactSchema = z.object({
-  token: z.string().min(1),
-  artifactId: z.string(),
-  title: z.string(),
-  kind: z.enum(['html', 'react', 'svg', 'mermaid', 'markdown', 'text', 'code']),
-  language: z.string().nullable(),
-  contentChars: z.number().int().nonnegative(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  shareUrl: z.string().url(),
-  sandboxed: z.boolean(),
-  visibility: z.enum(['public', 'organization']),
-});
-
-const PublishedArtifactListResponseSchema = z.object({
-  artifacts: z.array(PublishedArtifactSchema),
-});
-
-export type PublishedArtifactSummary = z.infer<typeof PublishedArtifactSchema>;
-
-export async function listPublishedArtifacts(
-  signal?: AbortSignal,
-): Promise<PublishedArtifactSummary[]> {
-  const response = await fetch('/api/artifacts/publish', { credentials: 'include', signal });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to load published artifacts');
-  }
-  return PublishedArtifactListResponseSchema.parse(await response.json()).artifacts;
-}
-
-export async function listPublishedArtifactVersions(
-  token: string,
-  signal?: AbortSignal,
-): Promise<ManagedCloudPublishedArtifactVersion[]> {
-  const response = await fetch(managedCloudPublishedArtifactVersionsPath(token), {
-    credentials: 'include',
-    signal,
-  });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to load the publish history');
-  }
-  return ManagedCloudPublishedArtifactVersionListResponseSchema.parse(await response.json())
-    .versions;
-}
-
-export async function republishArtifactVersion(
-  artifact: PublishedArtifactSummary,
-  version: number,
-): Promise<void> {
-  const detailResponse = await fetch(
-    managedCloudPublishedArtifactVersionPath(artifact.token, version),
-    { credentials: 'include' },
-  );
-  if (!detailResponse.ok) {
-    throw await responseError(detailResponse, 'Failed to read that published version');
-  }
-  const detail = ManagedCloudPublishedArtifactVersionDetailSchema.parse(
-    await detailResponse.json(),
-  );
-  const response = await fetch('/api/artifacts/publish', {
-    method: 'POST',
-    credentials: 'include',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      artifactId: artifact.artifactId,
-      title: detail.title,
-      kind: detail.kind,
-      ...(detail.language ? { language: detail.language } : {}),
-      content: detail.content,
-    }),
-  });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to put that version live');
-  }
-}
-
-export async function unpublishArtifact(token: string): Promise<void> {
-  const response = await fetch(`/api/artifacts/publish/${encodeURIComponent(token)}`, {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: await addCsrfHeaders(),
-  });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to unpublish artifact');
   }
 }
