@@ -19,7 +19,7 @@ import {
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
-import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import { freeQuotaCapabilityPreamble } from '@/lib/server/free-quota-turn';
 import { logger } from '@/lib/logger';
 import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
 import {
@@ -326,10 +326,7 @@ afterEach(() => {
 });
 
 function systemPromptUnits(): number {
-  const preamble = String(buildCapabilityPreamble({ tools: [] })).replace(
-    SYSTEM_PROMPT_CACHE_BOUNDARY,
-    '',
-  );
+  const preamble = String(freeQuotaCapabilityPreamble()).replace(SYSTEM_PROMPT_CACHE_BOUNDARY, '');
   return new TextEncoder().encode(JSON.stringify(preamble)).byteLength;
 }
 

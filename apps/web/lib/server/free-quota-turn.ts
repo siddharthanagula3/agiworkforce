@@ -608,6 +608,15 @@ export interface FreeAutoTurn {
   providerRequestSignal?: () => AbortSignal;
 }
 
+export function freeQuotaCapabilityPreamble(timeZone?: string | null) {
+  return buildCapabilityPreamble({
+    tools: [],
+    ...(timeZone ? { timeZone } : {}),
+    artifacts: true,
+    artifactRuntime: false,
+  });
+}
+
 export async function serveFreeQuotaTurn(
   request: NextRequest,
   scoped: UserScopedDb,
@@ -906,12 +915,7 @@ export async function serveFreeQuotaTurn(
         409,
       );
     }
-    const preamble = buildCapabilityPreamble({
-      tools: [],
-      ...(body.client_timezone ? { timeZone: body.client_timezone } : {}),
-      artifacts: true,
-      artifactRuntime: false,
-    });
+    const preamble = freeQuotaCapabilityPreamble(body.client_timezone);
     messages.unshift(
       ...freeQuotaSystemMessages({
         preamble: preamble ? stripSystemPromptCacheBoundary(preamble) : '',
