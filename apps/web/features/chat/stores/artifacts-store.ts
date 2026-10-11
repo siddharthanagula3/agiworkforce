@@ -447,6 +447,7 @@ type ArtifactsStoreReturn = {
   artifacts: Artifact[];
   selectedArtifactId: string | null;
   panelOpen: boolean;
+  editRequestedArtifactId: string | null;
   cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error';
   cloudSyncError: string | null;
   persistenceDegraded: boolean;
@@ -462,6 +463,8 @@ type ArtifactsStoreReturn = {
   upsertArtifact: (artifact: ArtifactInput) => void;
   removeArtifact: (id: string) => void;
   selectArtifact: (id: string | null) => void;
+  openArtifactForEditing: (id: string) => void;
+  clearEditRequest: () => void;
   togglePanel: () => void;
   setPanelOpen: (open: boolean) => void;
   autoOpenPanel: () => void;
@@ -574,6 +577,14 @@ const actions = {
 
   selectArtifact(id: string | null): void {
     _sharedArtifactStore.getState().selectArtifact(id);
+  },
+
+  openArtifactForEditing(id: string): void {
+    _sharedArtifactStore.getState().openArtifactForEditing(id);
+  },
+
+  clearEditRequest(): void {
+    _sharedArtifactStore.getState().clearEditRequest();
   },
 
   togglePanel(): void {
@@ -904,11 +915,13 @@ function buildStoreSlice(): ArtifactsStoreReturn {
     artifacts: sharedArtifacts,
     selectedArtifactId,
     panelOpen,
+    editRequestedArtifactId,
   } = _sharedArtifactStore.getState();
   return {
     artifacts: mergeCloudArtifacts(sharedArtifacts, _cloudArtifacts).map(toArtifact),
     selectedArtifactId,
     panelOpen,
+    editRequestedArtifactId,
     cloudSyncStatus: _cloudSyncStatus,
     cloudSyncError: _cloudSyncError,
     persistenceDegraded: _persistDegraded,

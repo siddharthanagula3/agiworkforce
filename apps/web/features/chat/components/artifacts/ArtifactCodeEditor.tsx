@@ -33,6 +33,7 @@ export interface ArtifactCodeEditorProps {
   language?: string | undefined;
   wraps?: Readonly<Record<string, CodeEditorWrap>> | undefined;
   ariaLabel: string;
+  focusRequest?: number | undefined;
 }
 
 const syntaxStyle = HighlightStyle.define([
@@ -110,6 +111,7 @@ export function ArtifactCodeEditor({
   language,
   wraps,
   ariaLabel,
+  focusRequest = 0,
 }: ArtifactCodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -149,6 +151,10 @@ export function ArtifactCodeEditor({
       viewRef.current = null;
     };
   }, [ariaLabel, wraps]);
+
+  useEffect(() => {
+    if (focusRequest > 0) viewRef.current?.focus();
+  }, [focusRequest]);
 
   useEffect(() => {
     const view = viewRef.current;

@@ -432,12 +432,15 @@ export function ArtifactPreview({
   const forkArtifact = useArtifactsStore((s) => s.forkArtifact);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
   const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
+  const editRequested = useArtifactsStore((s) => s.editRequestedArtifactId === artifact.id);
+  const clearEditRequest = useArtifactsStore((s) => s.clearEditRequest);
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
   // Manual source edit. null = not editing; a string = the unsaved draft.
   const [sourceDraft, setSourceDraft] = useState<string | null>(null);
+  const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
 
   // PDF / DOCX viewer state (Fix 39 / Fix 40)
@@ -646,6 +649,7 @@ export function ArtifactPreview({
     // An unsaved draft belongs to the revision it was opened from. Carrying it
     // across an artifact swap or a new version would overwrite other content.
     setSourceDraft(null);
+    setEditorFocusRequest(0);
     // CAP-015: a published URL belongs to one artifact id. Leaving it up after
     // a swap would offer the previous artifact's public link under this title.
     setPublishedUrl(null);
@@ -729,6 +733,18 @@ export function ArtifactPreview({
   }, [activeContent, canEditSource, draftStorageKey]);
 
   useEffect(() => {
+    if (!editRequested || variant !== 'panel') return;
+    setViewedVersionIndex(null);
+    if (!canEditSource) return;
+    setSourceDraft((current) => current ?? activeContent);
+    setDraftOrigin('editor');
+    setActiveTab('code');
+    setChangesShownFor(null);
+    setEditorFocusRequest((count) => count + 1);
+    clearEditRequest();
+  }, [activeContent, canEditSource, clearEditRequest, editRequested, variant]);
+
+  useEffect(() => {
     if (sourceDraft === null) return;
     const timer = setTimeout(() => {
       setDraftStatus(writeStoredDraft(draftStorageKey, sourceDraft) ? 'saved' : 'unsaved');
@@ -741,6 +757,7 @@ export function ArtifactPreview({
     setDraftStatus(null);
     setDraftOrigin(null);
     setSourceDraft(null);
+    setEditorFocusRequest(0);
   }, [draftStorageKey]);
 
   const saveSourceEdit = useCallback(() => {
@@ -1505,8 +1522,11 @@ if (__AgiApp) {
             a 1600px window still leaves this bar ~400px wide. The result was
             the left group overflowing its 47px box by ~198px and painting on
             top of the button row. Sizing decisions here must be container-
-            relative; see the @[...] variants below. */}
-        <div className="@container flex shrink-0 items-center justify-between border-b border-border/30 bg-card/80 px-3 py-1.5">
+            relative; see the @[...] variants below. The bar wraps: at the
+            default 400px width the right controls alone fill it, and without
+            wrapping they squeezed the left group, Preview/Source toggle
+            included, to zero width. */}
+        <div className="@container flex shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border/30 bg-card/80 px-3 py-1.5">
           {/* LEFT: toggle + type icon + title + type + version chip.
               overflow-hidden is load-bearing, not cosmetic: it is what
               guarantees this group can never paint over the controls on the
@@ -1649,7 +1669,7 @@ if (__AgiApp) {
               - binary doc (pdf/docx): Download · Refresh · Close  (no Copy, content is an opaque data URI)
               - code / markdown doc: Copy · Download · Close
               External + Fullscreen collapse on narrow (375px) widths. */}
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
             {/* Edit / Save · Cancel, only over the source view, and only for a
                 text artifact on its latest version (see canEditSource). */}
             {canEditSource &&
@@ -1662,6 +1682,7 @@ if (__AgiApp) {
                   onClick={() => {
                     setSourceDraft(activeContent);
                     setDraftOrigin('editor');
+                    setEditorFocusRequest((count) => count + 1);
                   }}
                   className="h-7 px-2"
                   aria-label="Edit artifact source"
@@ -2264,6 +2285,7 @@ if (__AgiApp) {
                 language={isMarkdownDoc ? 'markdown' : (artifact.language ?? artifact.type)}
                 wraps={artifact.type === 'document' ? MARKDOWN_SHORTCUTS : undefined}
                 ariaLabel="Artifact source"
+                focusRequest={editorFocusRequest}
               />
             ) : (
               <ScrollArea className="code-block-body h-full w-full">
