@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 21,
+    "policyVersion": 22,
     "records": [
       {
         "version": 1,
@@ -194,6 +194,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-10",
         "reason": "adds capability honesty, search unavailable, people and privacy, user documents, refusal style, untrusted content, format and length, no-source citation and memory sections to v4, with search, citation and memory text chosen by turn state; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 22,
+        "artifact": "prompt",
+        "id": "chat.system@6",
+        "channel": "internal",
+        "effectiveOn": "2026-10-10",
+        "reason": "chat.system@5 plus one rule in user_documents: never construct or guess a profile or page URL that did not come from a tool result or the user, which a v5 eval run showed as a made-up example link; v5 stays locked as measured. The unmerged lane/system-prompt branch holds different chat.system@5 to @7 texts that never shipped, and must renumber them if it merges. Enters on internal and takes no traffic until a canary advance carries an eval quality signal"
       }
     ]
   },

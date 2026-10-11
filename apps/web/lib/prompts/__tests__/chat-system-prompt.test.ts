@@ -70,4 +70,14 @@ describe('the chat system prompt template', () => {
       if (index > 0) expect(position).toBeGreaterThan(positions[index - 1]!);
     }
   });
+
+  it('makes v6 differ from v5 only by the rule against a constructed URL', () => {
+    const v5 = chatSystemPromptSections(5);
+    const v6 = chatSystemPromptSections(6);
+    const changed = Object.keys(v6).filter((key) => v6[key] !== v5[key]);
+
+    expect(changed).toEqual(['user_documents']);
+    expect(Object.keys(v6).sort()).toEqual(Object.keys(v5).sort());
+    expect(v6['user_documents']).toContain('never construct or guess a profile or page URL');
+  });
 });
