@@ -8,6 +8,7 @@ import { WorkSessionPanel } from './WorkSessionPanel';
 vi.mock('../../utils/downloadArtifacts', () => ({
   downloadAllArtifacts: vi.fn().mockResolvedValue(undefined),
   downloadGeneratedFile: vi.fn().mockResolvedValue(undefined),
+  downloadArtifactFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 const NOW = 1_700_000_000_000;

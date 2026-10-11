@@ -10,6 +10,7 @@ import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 vi.mock('../../utils/downloadArtifacts', () => ({
   downloadAllArtifacts: vi.fn().mockResolvedValue(undefined),
   downloadGeneratedFile: vi.fn().mockResolvedValue(undefined),
+  downloadArtifactFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 const runId = '5c8e9b8e-cbad-4e76-87cf-e17e7d828c40';
