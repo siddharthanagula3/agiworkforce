@@ -454,7 +454,7 @@ export const PLATFORM_EVENT_TRIGGER_RUNS_PER_DAY = 720;
 export const FREE_DAILY_CAPS = Object.freeze({
   messageWrites: 1_000,
   conversationCreates: 100,
-  egressBytes: 500 * 1024 * 1024,
+  egressBytes: 25 * 1024 * 1024,
   emailSends: 10,
   vectorQueries: 200,
 });
