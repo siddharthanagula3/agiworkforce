@@ -308,8 +308,8 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
     expect(mocks.downloadGoogleDriveFile).toHaveBeenCalledWith(
       'ya29.token',
       DRIVE_A,
-      250 * 1024 * 1024,
-      'is too large. Pro accounts can upload files up to 250 MB each. Upgrade for larger files.',
+      25 * 1024 * 1024,
+      'is too large. Pro accounts can upload files up to 25 MB each.',
     );
     expect(mockAdmitAttachmentUpload).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'knowledge-file', byteCount: 3 }),
