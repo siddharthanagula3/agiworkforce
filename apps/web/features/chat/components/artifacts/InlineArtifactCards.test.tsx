@@ -144,9 +144,9 @@ describe('InlineArtifactCards: documents and files', () => {
     const card = screen.getByTestId('artifact-file-card');
     expect(within(card).getByText('Launch brief')).toBeVisible();
     expect(within(card).getByText('Document · MD')).toBeVisible();
-    expect(within(card).getByRole('button', { name: 'Open artifact: Launch brief' })).toHaveAccessibleDescription(
-      'Document · MD',
-    );
+    expect(
+      within(card).getByRole('button', { name: 'Open artifact: Launch brief' }),
+    ).toHaveAccessibleDescription('Document · MD');
     expect(within(card).getByRole('button', { name: 'Download Launch brief' })).toBeVisible();
     expect(card.querySelector('iframe')).toBeNull();
 

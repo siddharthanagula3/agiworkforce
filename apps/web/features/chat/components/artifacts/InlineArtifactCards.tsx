@@ -29,7 +29,6 @@ import {
   artifactTypeLabel,
 } from './artifact-labels';
 
-
 const DETAIL_SEPARATOR = ' · ';
 const DOWNLOAD_ALL_ACTION = 'Download all';
 const MAX_VISIBLE = 3;
@@ -164,10 +163,14 @@ function InlineArtifact({
     return <ArtifactFileCard artifact={artifact} onOpen={onOpen} />;
   }
   if (mounted && artifact.type === 'mermaid') {
-    return <InlineMermaidArtifact artifact={artifact} onOpen={onOpen} shownInPanel={shownInPanel} />;
+    return (
+      <InlineMermaidArtifact artifact={artifact} onOpen={onOpen} shownInPanel={shownInPanel} />
+    );
   }
   if (canRenderLivePreview(artifact.type)) {
-    return <InlineArtifactPreview artifact={artifact} onOpen={onOpen} shownInPanel={shownInPanel} />;
+    return (
+      <InlineArtifactPreview artifact={artifact} onOpen={onOpen} shownInPanel={shownInPanel} />
+    );
   }
   return <ArtifactFileCard artifact={artifact} onOpen={onOpen} />;
 }

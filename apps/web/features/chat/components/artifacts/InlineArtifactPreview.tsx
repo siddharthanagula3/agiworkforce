@@ -64,7 +64,11 @@ interface InlineArtifactPreviewProps {
   shownInPanel: boolean;
 }
 
-export function InlineArtifactPreview({ artifact, onOpen, shownInPanel }: InlineArtifactPreviewProps) {
+export function InlineArtifactPreview({
+  artifact,
+  onOpen,
+  shownInPanel,
+}: InlineArtifactPreviewProps) {
   const mounted = useMounted();
   const frameRef = useRef<HTMLDivElement>(null);
   const near = useHasBeenNearViewport(frameRef, !shownInPanel);
