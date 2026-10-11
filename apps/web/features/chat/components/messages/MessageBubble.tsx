@@ -1354,9 +1354,7 @@ const MessageBubbleComponent = function MessageBubble({
       );
       if (!artifact) return;
       addArtifactForMessage(message.id, artifact, artifactConversationId);
-      const store = useArtifactsStore.getState();
-      store.selectArtifact(artifact.id);
-      store.setPanelOpen(true);
+      useArtifactsStore.getState().openArtifactForEditing(artifact.id);
     },
     [addArtifactForMessage, artifactConversationId, message.content, message.id, messageCodeBlocks],
   );
