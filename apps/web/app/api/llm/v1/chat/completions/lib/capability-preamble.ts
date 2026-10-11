@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { EXPLICIT_ARTIFACT_MARKER_FOR } from '@agiworkforce/artifacts';
 import { isValidIanaTimeZone } from '@agiworkforce/types';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
@@ -96,6 +97,13 @@ export interface CapabilityPreambleInput {
   attachmentSandboxPaths?: readonly string[];
   /** Absent when the caller does not know whether memory serves this turn. */
   memory?: ChatTurnMemory;
+  /** The surface renders fenced artifacts, so the prompt may tell the model how to write one. */
+  artifacts?: boolean;
+  /** Send the window.agi runtime text; absent means sent. */
+  artifactRuntime?: boolean;
+  artifactConnectors?: boolean;
+  /** Capability ids from the handshake for this plan and surface. */
+  productCapabilities?: readonly string[];
   /** Selects the prompt version; absent, the manifest pin serves. */
   promptSelection?: ResolvePromptOptions;
 }
@@ -163,6 +171,18 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
         ? { attachmentSandboxPaths: input.attachmentSandboxPaths }
         : {}),
       ...(input.memory ? { memory: input.memory } : {}),
+      ...(input.artifacts
+        ? {
+            artifactMarkers: {
+              html: EXPLICIT_ARTIFACT_MARKER_FOR.html,
+              react: EXPLICIT_ARTIFACT_MARKER_FOR.react,
+              mermaid: EXPLICIT_ARTIFACT_MARKER_FOR.mermaid,
+            },
+          }
+        : {}),
+      ...(input.artifactRuntime === false ? { artifactRuntime: false } : {}),
+      ...(input.artifactConnectors ? { artifactConnectors: true } : {}),
+      ...(input.productCapabilities ? { productCapabilities: input.productCapabilities } : {}),
     },
     {
       utc: now.toISOString(),

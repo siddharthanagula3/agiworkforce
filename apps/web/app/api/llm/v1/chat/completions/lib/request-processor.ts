@@ -295,6 +295,10 @@ import {
 import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
+import {
+  productArtifactConnectors,
+  productCapabilityFacts,
+} from '@/lib/prompts/product-capability-facts';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
   orderInstructionBlocks,
@@ -5685,6 +5689,12 @@ async function processAdmittedRequest(
       !conversationIsTemporary &&
       chatRequest.memory_enabled !== false &&
       chatRequest.personalization !== false;
+    const productCapabilities = productCapabilityFacts({
+      userId,
+      tier: subscription.plan_tier,
+      surface: chatSurface,
+      cloudExecutionDeploymentEnabled: e2bProvisioningReady(),
+    });
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       researchUnavailable,
@@ -5692,6 +5702,9 @@ async function processAdmittedRequest(
       codeExecutionUnavailable,
       attachmentSandboxPaths: stagedAttachmentPaths(turnAttachments),
       memory: memoryServesTurn ? 'on' : 'off',
+      artifacts: true,
+      artifactConnectors: productArtifactConnectors(subscription.plan_tier, productCapabilities),
+      productCapabilities,
     });
 
     const customInstructionsPreamble = await timePhase(

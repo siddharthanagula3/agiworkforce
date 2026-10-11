@@ -1,0 +1,32 @@
+{
+  "_comment": "Capability ids the capability handshake grants on the web surface with sandboxes deployed, as apps/web/lib/prompts/product-capability-facts.ts returns them. The chat-prompt corpus renders the product capabilities section from these; apps/web/lib/prompts/__tests__/product-capability-facts.test.ts fails when they drift from the product.",
+  "free": [
+    "canChat",
+    "canUploadFiles",
+    "canUseVoice",
+    "canUseMarketplace",
+    "canUseBilling",
+    "canUseCloudModels",
+    "canUseCloudExecution",
+    "canUseWebSearch",
+    "canUsePlugins",
+    "canUseSkills",
+    "canUseCamera"
+  ],
+  "pro": [
+    "canChat",
+    "canUseImages",
+    "canUploadFiles",
+    "canUseVoice",
+    "canUseMarketplace",
+    "canUseBilling",
+    "canUseCloudModels",
+    "canUseCloudExecution",
+    "canUseWebSearch",
+    "canUseDeepResearch",
+    "canUseAgiWork",
+    "canUsePlugins",
+    "canUseSkills",
+    "canUseCamera"
+  ]
+}

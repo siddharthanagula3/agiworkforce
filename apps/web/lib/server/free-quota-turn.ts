@@ -909,6 +909,8 @@ export async function serveFreeQuotaTurn(
     const preamble = buildCapabilityPreamble({
       tools: [],
       ...(body.client_timezone ? { timeZone: body.client_timezone } : {}),
+      artifacts: true,
+      artifactRuntime: false,
     });
     messages.unshift(
       ...freeQuotaSystemMessages({

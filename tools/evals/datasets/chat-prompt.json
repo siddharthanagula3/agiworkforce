@@ -1,17 +1,18 @@
 {
   "suite": "chat-prompt",
-  "version": 1,
+  "version": 2,
   "priority": "P1",
   "provenance": {
     "kind": "authored",
     "source": "hand-written in this repository from a reported Free-plan turn (a model asked to search the web about the user's own resume, with tools but no search attached, refused with an invented privacy reason) and from the eval cases proposed in the 2026-10-10 chat system prompt research summary",
     "authoredOn": "2026-10-10",
-    "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented."
+    "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks."
   },
   "passThreshold": 1,
   "promptId": "chat.system",
   "requiresChatPrompt": true,
   "requires": ["functionCalling"],
+  "maxOutputTokens": 3072,
   "cases": [
     {
       "id": "chat-prompt/own-resume-profile-search-off",
@@ -467,6 +468,317 @@
         {
           "kind": "excludesAll",
           "values": ["Northeast", "Southwest", "Midwest", "EMEA", "APAC", "LATAM"]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/make-a-calculator",
+      "family": "artifacts",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "make a calculator",
+      "notes": "No tools are attached. The app renders a marked artifact, so the answer is one complete calculator that derives as an artifact under the explicit policy, without claiming it cannot build or run one.",
+      "checks": [
+        {
+          "kind": "artifacts",
+          "count": 1
+        },
+        {
+          "kind": "excludesAll",
+          "values": [
+            "can't run code",
+            "cannot run code",
+            "can't build",
+            "cannot build",
+            "don't have an artifact",
+            "do not have an artifact",
+            "no artifact feature"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/show-it-in-an-artifact",
+      "family": "artifacts",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "can you show it in an artifact?",
+      "turns": [
+        {
+          "role": "user",
+          "content": "make a tip calculator"
+        },
+        {
+          "role": "assistant",
+          "content": "Here is a small tip calculator in JavaScript:\n\n```javascript\nfunction tip(bill, percent) {\n  return (bill * percent) / 100;\n}\nconsole.log(tip(50, 18));\n```"
+        }
+      ],
+      "notes": "A follow-up asking for an artifact gets one marked, renderable file, never a claim that the app has no artifacts.",
+      "checks": [
+        {
+          "kind": "artifacts",
+          "count": 1
+        },
+        {
+          "kind": "excludesAll",
+          "values": [
+            "don't have an artifact",
+            "do not have an artifact",
+            "no artifact feature",
+            "can't show",
+            "cannot show",
+            "not able to show",
+            "unable to show"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/what-can-you-do-free",
+      "family": "product-capabilities",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "what can you do?",
+      "plan": "free",
+      "tools": [
+        {
+          "name": "create_office_file",
+          "description": "Create a .docx, .pptx, .xlsx, .pdf or .csv file from the content you supply.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": ["docx", "pptx", "xlsx", "pdf", "csv"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["format", "title", "content"]
+          }
+        },
+        {
+          "name": "skill",
+          "description": "Load a skill: a packaged set of instructions for a specific kind of task.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "notes": "Free on web: the overview covers artifacts, files, web search and writing, and claims neither image generation nor connected apps, which Free does not have.",
+      "checks": [
+        {
+          "kind": "matches",
+          "pattern": "artifact|interactive|preview"
+        },
+        {
+          "kind": "matches",
+          "pattern": "file|document|spreadsheet|pdf|attach|upload"
+        },
+        {
+          "kind": "matches",
+          "pattern": "search"
+        },
+        {
+          "kind": "matches",
+          "pattern": "writ|draft|edit"
+        },
+        {
+          "kind": "excludesAll",
+          "values": [
+            "generate images",
+            "image generation",
+            "create images",
+            "connected apps",
+            "connectors",
+            "can't access files",
+            "cannot access files",
+            "can't read files",
+            "cannot read files",
+            "can't open files"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/what-can-you-do-pro",
+      "family": "product-capabilities",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "what can you do?",
+      "plan": "pro",
+      "tools": [
+        {
+          "name": "create_office_file",
+          "description": "Create a .docx, .pptx, .xlsx, .pdf or .csv file from the content you supply.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": ["docx", "pptx", "xlsx", "pdf", "csv"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["format", "title", "content"]
+          }
+        },
+        {
+          "name": "skill",
+          "description": "Load a skill: a packaged set of instructions for a specific kind of task.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "notes": "Pro on web: the overview adds image generation and Deep Research, and still claims no connected apps while connectors are unreleased.",
+      "checks": [
+        {
+          "kind": "matches",
+          "pattern": "image"
+        },
+        {
+          "kind": "matches",
+          "pattern": "research"
+        },
+        {
+          "kind": "matches",
+          "pattern": "artifact|interactive|preview"
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["connected apps", "connectors"]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/recruiter-follow-up-email",
+      "family": "rich-blocks",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Draft a follow-up email to my recruiter, Sam, about the senior data analyst role I interviewed for last Tuesday.",
+      "tools": [
+        {
+          "name": "create_office_file",
+          "description": "Create a .docx, .pptx, .xlsx, .pdf or .csv file from the content you supply.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": ["docx", "pptx", "xlsx", "pdf", "csv"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["format", "title", "content"]
+          }
+        },
+        {
+          "name": "skill",
+          "description": "Load a skill: a packaged set of instructions for a specific kind of task.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "notes": "One email block: header lines, a blank line, then the body, with no invented address.",
+      "checks": [
+        {
+          "kind": "matches",
+          "pattern": "```email\\n(?:To:[^\\n@]*)\\n(?:(?:Cc|Bcc):[^\\n@]*\\n)*Subject:[^\\n]+\\n\\n[\\s\\S]*?\\S[\\s\\S]*?\\n```"
+        },
+        {
+          "kind": "matches",
+          "pattern": "^(?![\\s\\S]*```email[\\s\\S]*```email)"
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["sam@", "recruiter@"]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/linkedin-bio-writing-block",
+      "family": "rich-blocks",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Write me a LinkedIn bio I can paste. I'm a senior data analyst in Austin with six years in logistics and retail analytics.",
+      "tools": [
+        {
+          "name": "create_office_file",
+          "description": "Create a .docx, .pptx, .xlsx, .pdf or .csv file from the content you supply.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": ["docx", "pptx", "xlsx", "pdf", "csv"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["format", "title", "content"]
+          }
+        },
+        {
+          "name": "skill",
+          "description": "Load a skill: a packaged set of instructions for a specific kind of task.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "notes": "One writing block holding only the bio; any explanation sits outside it.",
+      "checks": [
+        {
+          "kind": "matches",
+          "pattern": "(?:````|```)writing\\n[\\s\\S]*?\\S[\\s\\S]*?\\n(?:````|```)"
+        },
+        {
+          "kind": "matches",
+          "pattern": "^(?![\\s\\S]*```writing[\\s\\S]*```writing)"
         }
       ]
     }
