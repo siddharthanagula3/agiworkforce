@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import {
   getSandboxOrigin,
   isSandboxConfigured,
   isFromSandbox,
   buildSandboxIframeUrl,
+  postPickerModeToSandbox,
   postRenderToSandbox,
+  parsePickerSelection,
 } from '../artifact-sandbox';
 
 describe('getSandboxOrigin', () => {
@@ -144,5 +146,75 @@ describe('postRenderToSandbox', () => {
     expect(() =>
       postRenderToSandbox(iframe, { type: 'render', kind: 'html', html: 'x' }),
     ).not.toThrow();
+  });
+});
+
+describe('parsePickerSelection', () => {
+  const valid = {
+    selector: 'main > p',
+    text: 'Hello',
+    html: '<p>Hello</p>',
+    rect: { x: 1, y: 2, width: 30, height: 4 },
+  };
+
+  it('accepts a well formed selection', () => {
+    expect(parsePickerSelection(valid)).toEqual(valid);
+  });
+
+  it('refuses anything that is not an object or lacks a field', () => {
+    expect(parsePickerSelection(null)).toBeNull();
+    expect(parsePickerSelection('main > p')).toBeNull();
+    expect(parsePickerSelection({ ...valid, selector: '' })).toBeNull();
+    expect(parsePickerSelection({ ...valid, text: 5 })).toBeNull();
+    expect(parsePickerSelection({ ...valid, html: undefined })).toBeNull();
+    expect(parsePickerSelection({ ...valid, rect: null })).toBeNull();
+  });
+
+  it('refuses oversized strings and non finite or out of range boxes', () => {
+    expect(parsePickerSelection({ ...valid, selector: 'a'.repeat(501) })).toBeNull();
+    expect(parsePickerSelection({ ...valid, text: 'a'.repeat(501) })).toBeNull();
+    expect(parsePickerSelection({ ...valid, html: 'a'.repeat(2_001) })).toBeNull();
+    expect(parsePickerSelection({ ...valid, rect: { ...valid.rect, x: Number.NaN } })).toBeNull();
+    expect(parsePickerSelection({ ...valid, rect: { ...valid.rect, y: 1e9 } })).toBeNull();
+    expect(parsePickerSelection({ ...valid, rect: { ...valid.rect, width: -1 } })).toBeNull();
+  });
+
+  it('drops fields it does not know instead of passing them on', () => {
+    const parsed = parsePickerSelection({ ...valid, onclick: 'alert(1)' });
+
+    expect(parsed).toEqual(valid);
+    expect(parsed).not.toHaveProperty('onclick');
+  });
+});
+
+describe('postPickerModeToSandbox', () => {
+  const original = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'];
+
+  afterEach(() => {
+    if (original === undefined) delete process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'];
+    else process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'] = original;
+  });
+
+  it('posts only to the configured sandbox origin', () => {
+    process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'] = 'https://sandbox.agiworkforce.com';
+    const postMessage = vi.fn();
+    const iframe = { contentWindow: { postMessage } } as unknown as HTMLIFrameElement;
+
+    postPickerModeToSandbox(iframe, true);
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'picker', active: true },
+      'https://sandbox.agiworkforce.com',
+    );
+  });
+
+  it('posts nothing when no sandbox is configured', () => {
+    delete process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'];
+    const postMessage = vi.fn();
+    const iframe = { contentWindow: { postMessage } } as unknown as HTMLIFrameElement;
+
+    postPickerModeToSandbox(iframe, true);
+
+    expect(postMessage).not.toHaveBeenCalled();
   });
 });
