@@ -742,7 +742,7 @@ describe('PricingPage', () => {
       usage: 'compareFreeUsage',
       projects: '1',
       storage: '100 MB',
-      downloads: '15.1 GB',
+      downloads: '775 MB',
       attachment: '25 MB',
       customMcp: '1',
       training: 'Not by AGI. Free model providers may.',
