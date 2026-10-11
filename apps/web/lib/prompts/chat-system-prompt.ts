@@ -246,12 +246,28 @@ const V5_SECTIONS: ChatSystemPromptSections = {
     'off and that they can manage saved memories in Settings, under Memory.',
 };
 
+/**
+ * v6 is v5 with one more rule in user_documents: an example profile URL the
+ * model built itself reads as a real link. v5 is locked as it was measured.
+ */
+const V6_SECTIONS: ChatSystemPromptSections = {
+  ...V5_SECTIONS,
+  user_documents:
+    'A resume, CV, profile or other document the user shares as their own describes the user ' +
+    'unless they say otherwise: treat it as their material, including looking up their public ' +
+    'profiles when a tool allows. Do not guess a name or handle nobody gave you, or infer one ' +
+    'from an email address, and never construct or guess a profile or page URL that did not ' +
+    'come from a tool result or the user, not even as an example. If the user mentions a file ' +
+    'that is not attached, say so and ask for it.',
+};
+
 export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 1, sections: V1_SECTIONS },
   { version: 2, sections: V2_SECTIONS },
   { version: 3, sections: V3_SECTIONS },
   { version: 4, sections: V4_SECTIONS },
   { version: 5, sections: V5_SECTIONS },
+  { version: 6, sections: V6_SECTIONS },
 ];
 
 /** The version the chat route serves unless a variant or a rollout picks another. */
