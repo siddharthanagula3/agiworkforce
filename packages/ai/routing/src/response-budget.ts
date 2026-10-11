@@ -112,6 +112,7 @@ const MARKDOWN_DOCUMENT_PATTERNS = [/\bmarkdown document\b/iu, /\bmarkdown file\
 const PLAIN_TEXT_PATTERNS = [/\bplain text\b/iu];
 
 const DIRECT_QUESTION = /^(?:is|are|was|were|do|does|did|has|have|had|can|could|will|would)\b/iu;
+const POLITE_REQUEST = /^(?:can|could|will|would)\s+you\b/iu;
 const DIRECT_VALUE_QUESTION = /^(?:what|which) (?:model|plan|version|status|state|environment)\b/iu;
 const DIRECT_COUNT_QUESTION = /^how (?:many|much)\b/iu;
 
@@ -152,13 +153,14 @@ function deterministicDepth(message: string, taskType: RoutingTaskType): AnswerD
   if (taskType === 'simple_chat') {
     if (
       trimmed.length <= 160 &&
+      !POLITE_REQUEST.test(trimmed) &&
       (DIRECT_QUESTION.test(trimmed) ||
         DIRECT_VALUE_QUESTION.test(trimmed) ||
         DIRECT_COUNT_QUESTION.test(trimmed))
     ) {
       return 'one_sentence';
     }
-    return 'very_short';
+    return null;
   }
   if (taskType === 'research' && trimmed.length <= 160) return 'short';
   return null;
@@ -177,20 +179,29 @@ function positiveInteger(value: number | undefined): number | null {
     : null;
 }
 
+/**
+ * Only a depth the user asked for, or one the semantic assessment settled,
+ * caps the output. A depth inferred from the message's length or shape is a
+ * guess: "make a calculator" is short and needs thousands of tokens, and a
+ * reply cut at the guessed ceiling costs a continuation per cut instead.
+ */
 function outputTokenBudget(
-  depth: AnswerDepth,
+  bindingDepth: AnswerDepth | null,
   requestedMaxOutputTokens: number | undefined,
   modelMaxOutputTokens: number | undefined,
   modelMinimumOutputTokens: number | undefined,
 ): number {
   const limits = [
-    Math.max(
-      RESPONSE_OUTPUT_TOKEN_CEILINGS[depth],
-      positiveInteger(modelMinimumOutputTokens) ?? 1,
-    ),
+    bindingDepth === null
+      ? null
+      : Math.max(
+          RESPONSE_OUTPUT_TOKEN_CEILINGS[bindingDepth],
+          positiveInteger(modelMinimumOutputTokens) ?? 1,
+        ),
     positiveInteger(requestedMaxOutputTokens),
     positiveInteger(modelMaxOutputTokens),
   ].filter((value): value is number => value !== null);
+  if (limits.length === 0) return RESPONSE_OUTPUT_TOKEN_CEILINGS.comprehensive;
   return Math.max(1, Math.min(...limits));
 }
 
@@ -276,6 +287,7 @@ export function planResponseBudget(input: ResponseBudgetInput): ResponseBudgetPl
     (requestedDepth === null && (acceptedAssessment?.explanationRequired ?? false));
   const clarification = acceptedAssessment?.clarification ?? 'not_required';
   if (clarification === 'required') depth = 'very_short';
+  const depthBindsOutput = requestedDepth !== null || acceptedAssessment !== null;
 
   const source: ResponseBudgetSource =
     requestedDepth !== null || requestedFormat !== null
@@ -290,7 +302,7 @@ export function planResponseBudget(input: ResponseBudgetInput): ResponseBudgetPl
     depth,
     format,
     outputTokenBudget: outputTokenBudget(
-      depth,
+      depthBindsOutput ? depth : null,
       input.requestedMaxOutputTokens,
       input.modelMaxOutputTokens,
       input.modelMinimumOutputTokens,
