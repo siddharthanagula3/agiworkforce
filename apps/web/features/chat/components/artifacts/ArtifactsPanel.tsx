@@ -124,6 +124,7 @@ function ArtifactViewer({
   publishedLink,
   projectLink,
   projectSave,
+  onRequestEdits,
 }: {
   artifact: Artifact;
   versionHistory: SharedArtifact[];
@@ -133,6 +134,7 @@ function ArtifactViewer({
   publishedLink?: string;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
+  onRequestEdits?: (prompt: string) => boolean;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -147,6 +149,7 @@ function ArtifactViewer({
         {...(publishedLink ? { publishedLink } : {})}
         {...(projectLink ? { projectLink } : {})}
         {...(projectSave ? { projectSave } : {})}
+        {...(onRequestEdits ? { onRequestEdits } : {})}
       />
     </div>
   );
@@ -228,7 +231,11 @@ function readArtifactDeepLink(): string | null {
   }
 }
 
-export function ArtifactsPanel() {
+export function ArtifactsPanel({
+  onRequestEdits,
+}: {
+  onRequestEdits?: (prompt: string) => boolean;
+} = {}) {
   const {
     getConversationArtifacts,
     getArtifactVersions,
@@ -425,6 +432,14 @@ export function ArtifactsPanel() {
   const isModalOverlay = layout === 'mobile' && panelOpen;
   const closeModalOverlay = useCallback(() => setPanelOpen(false), [setPanelOpen]);
   useOverlayDialog(panelRef, isModalOverlay, closeModalOverlay);
+  const requestEdits = useCallback(
+    (prompt: string) => {
+      const sent = onRequestEdits?.(prompt) ?? false;
+      if (sent && isModalOverlay) setPanelOpen(false);
+      return sent;
+    },
+    [onRequestEdits, isModalOverlay, setPanelOpen],
+  );
 
   if (!panelOpen) return null;
 
@@ -624,6 +639,7 @@ export function ArtifactsPanel() {
                   {...(publishDetails ? { publishedLink: publishDetails.shareUrl } : {})}
                   {...(projectLink ? { projectLink } : {})}
                   projectSave={projectSave}
+                  {...(onRequestEdits ? { onRequestEdits: requestEdits } : {})}
                 />
               ) : (
                 <ArtifactsEmptyState />

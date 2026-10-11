@@ -36,6 +36,8 @@ import {
   List,
   Pencil,
   GitFork,
+  History,
+  MousePointerClick,
   Sparkles,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
@@ -63,6 +65,10 @@ import {
   spreadsheetSafeExport,
 } from '@agiworkforce/unified-chat';
 import { TypeIcon } from './artifact-labels';
+import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
+import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
+import { buildArtifactEditRequest } from './artifact-edit-request';
+import { artifactLineage, buildVersionTimeline, type LineageCandidate } from './artifact-lineage';
 import { ArtifactVersionHistory } from './ArtifactVersionHistory';
 import { ArtifactChangesView } from './ArtifactChangesView';
 import { classifyArtifactDocument } from './artifact-document-classification';
@@ -77,7 +83,11 @@ import {
 } from '@agiworkforce/ui';
 import { sanitizeArtifact, hasXSSRisk } from '@shared/utils/html-sanitizer';
 import { SandboxedIframe } from '../SandboxedIframe';
-import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
+import {
+  getSandboxOrigin,
+  type ArtifactPickerSelection,
+  type ArtifactRenderPayload,
+} from '@/lib/artifact-sandbox';
 import { buildArtifactPreviewDocument, buildArtifactRenderPayload } from './artifact-render';
 import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
@@ -195,6 +205,7 @@ interface ArtifactPreviewProps {
   publishedLink?: string;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
+  onRequestEdits?: (prompt: string) => boolean;
 }
 
 const OUTLINE_MIN_HEADINGS = 3;
@@ -395,6 +406,17 @@ function resolveArtifactImageSource(raw: string): string | null {
  * - Multiple export formats
  * - Responsive iframe sandbox
  */
+/**
+ * Stepping forward from one artifact into the next in its lineage has to land
+ * on that artifact's first version, but the step changes the selected
+ * artifact, which resets this component's view state. The step leaves the
+ * index here for the next artifact's reset to pick up.
+ */
+const pendingVersionIndexByArtifactId = new Map<string, number>();
+
+const REQUEST_EDITS_LABEL = 'Request edits';
+const NARROW_ONLY_ITEM_CLASS = '@[26rem]:hidden';
+
 export function ArtifactPreview({
   artifact,
   onShare,
@@ -407,6 +429,7 @@ export function ArtifactPreview({
   publishedLink,
   projectLink,
   projectSave,
+  onRequestEdits,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
@@ -438,6 +461,29 @@ export function ArtifactPreview({
   // Manual source edit. null = not editing; a string = the unsaved draft.
   const [sourceDraft, setSourceDraft] = useState<string | null>(null);
   const [editorFocusRequest, setEditorFocusRequest] = useState(0);
+  const [editRequestMode, setEditRequestMode] = useState(false);
+  const [pickerSelection, setPickerSelection] = useState<ArtifactPickerSelection | null>(null);
+  const selectArtifact = useArtifactsStore((s) => s.selectArtifact);
+  const lineageCandidates = useArtifactsStore((s) => {
+    const conversationId = s.artifacts.find((stored) => stored.id === artifact.id)?.conversationId;
+    return conversationId ? s.getConversationArtifacts(conversationId) : [];
+  });
+  const lineage = useMemo(
+    () =>
+      artifactLineage<LineageCandidate>(
+        lineageCandidates.map((candidate) => ({
+          id: candidate.id,
+          type: candidate.type,
+          title: candidate.title,
+          createdAt: candidate.createdAt,
+        })),
+        { id: artifact.id, type: artifact.type, title: artifact.title, createdAt: null },
+      ),
+    [lineageCandidates, artifact.id, artifact.type, artifact.title],
+  );
+  const lineageVersionCounts = useArtifactsStore((s) =>
+    lineage.map((member) => s.getArtifactVersions(member.id).length).join(','),
+  );
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
 
   // PDF / DOCX viewer state (Fix 39 / Fix 40)
@@ -638,7 +684,13 @@ export function ArtifactPreview({
   );
 
   useEffect(() => {
-    setViewedVersionIndex(null);
+    const pendingIndex = pendingVersionIndexByArtifactId.get(artifact.id);
+    pendingVersionIndexByArtifactId.delete(artifact.id);
+    setViewedVersionIndex(
+      pendingIndex !== undefined && pendingIndex < versionCount - 1 ? pendingIndex : null,
+    );
+    setEditRequestMode(false);
+    setPickerSelection(null);
     setRenderError(null);
     setPdfError(false);
     setImageError(false);
@@ -664,6 +716,33 @@ export function ArtifactPreview({
    * revision has to be restored before it can be edited.
    */
   const isLatestVersion = versionCount === 0 || shownVersionIndex === versionCount - 1;
+  const versionTimeline = useMemo(() => {
+    const counts = lineageVersionCounts.split(',').map((count) => Number(count) || 0);
+    return buildVersionTimeline(
+      lineage.map((member, index) => ({
+        id: member.id,
+        versionCount: member.id === artifact.id ? versionCount : (counts[index] ?? 0),
+      })),
+      artifact.id,
+      shownVersionIndex,
+    );
+  }, [lineage, lineageVersionCounts, artifact.id, versionCount, shownVersionIndex]);
+  const showVersionChip = versionCount > 0 || versionTimeline.total > 1;
+
+  const stepVersion = useCallback(
+    (step: { artifactId: string; versionIndex: number | null } | null) => {
+      if (!step) return;
+      if (step.artifactId === artifact.id) {
+        setViewedVersionIndex(step.versionIndex);
+        return;
+      }
+      if (step.versionIndex !== null) {
+        pendingVersionIndexByArtifactId.set(step.artifactId, step.versionIndex);
+      }
+      selectArtifact(step.artifactId);
+    },
+    [artifact.id, selectArtifact],
+  );
   const changesKey = `${artifact.id}:${shownVersionIndex}:${versionCount}`;
   const previousVersionContent =
     shownVersionIndex > 0 ? versionHistory?.[shownVersionIndex - 1]?.content : undefined;
@@ -1355,6 +1434,64 @@ export function ArtifactPreview({
     </div>
   );
 
+  const canRequestEdits =
+    variant === 'panel' &&
+    Boolean(onRequestEdits) &&
+    canPreview &&
+    isLatestVersion &&
+    activeTab === 'preview' &&
+    !showChanges &&
+    sourceDraft === null &&
+    !renderError &&
+    activeContent.trim().length > 0 &&
+    getSandboxOrigin() !== null;
+
+  useEffect(() => {
+    if (!canRequestEdits) {
+      setEditRequestMode(false);
+      setPickerSelection(null);
+    }
+  }, [canRequestEdits]);
+
+  const startEditRequest = useCallback(() => {
+    setPickerSelection(null);
+    setEditRequestMode((active) => !active);
+  }, []);
+
+  const cancelEditRequest = useCallback(() => {
+    setEditRequestMode(false);
+    setPickerSelection(null);
+  }, []);
+
+  const submitEditRequest = useCallback(
+    (instruction: string) => {
+      if (!pickerSelection || !onRequestEdits) return;
+      const sent = onRequestEdits(
+        buildArtifactEditRequest({
+          title: artifact.title || 'Artifact',
+          selection: pickerSelection,
+          instruction,
+        }),
+      );
+      if (sent) cancelEditRequest();
+      else toast.error('The change request was not sent. Try again.');
+    },
+    [pickerSelection, onRequestEdits, artifact.title, cancelEditRequest],
+  );
+
+  const editRequestPicker = useMemo(
+    () => ({
+      active: editRequestMode,
+      onSelect: setPickerSelection,
+      onCancel: cancelEditRequest,
+      onUnavailable: () => {
+        cancelEditRequest();
+        toast.error('Selecting content needs the sandboxed preview, which is unavailable here.');
+      },
+    }),
+    [editRequestMode, cancelEditRequest],
+  );
+
   if (variant === 'panel') {
     // Whether to show the preview content (vs source code)
     const showPreview = !showChanges && activeTab === 'preview' && hasPreviewSurface;
@@ -1365,6 +1502,196 @@ export function ArtifactPreview({
       artifact.type === 'code' || artifact.type === 'document'
         ? (artifact.language ?? artifact.type).toUpperCase()
         : artifact.type.toUpperCase();
+
+    const isBinaryDownload = isPdf || isDocx || isImage;
+    const moreMenuItems: ArtifactMenuItem[] = [];
+    if (canRequestEdits) {
+      moreMenuItems.push({
+        id: 'request-edits',
+        label: REQUEST_EDITS_LABEL,
+        icon: MousePointerClick,
+        onSelect: startEditRequest,
+        className: NARROW_ONLY_ITEM_CLASS,
+        testId: 'artifact-request-edits-menu',
+      });
+    }
+    if (publishArtifact) {
+      moreMenuItems.push({
+        id: 'publish',
+        label: isPublishing ? 'Publishing…' : 'Publish',
+        icon: Globe,
+        disabled: isPublishing,
+        onSelect: () => void handlePublish(),
+        className: NARROW_ONLY_ITEM_CLASS,
+      });
+    }
+    if (canEditSource && (!showPreview || isMarkdownDoc) && !showChanges && sourceDraft === null) {
+      moreMenuItems.push({
+        id: 'edit-source',
+        label: 'Edit source',
+        icon: Pencil,
+        onSelect: () => {
+          setSourceDraft(activeContent);
+          setDraftOrigin('editor');
+          setEditorFocusRequest((count) => count + 1);
+        },
+        ariaLabel: 'Edit artifact source',
+        testId: 'artifact-edit-source',
+      });
+    }
+    if (canShowChanges) {
+      moreMenuItems.push({
+        id: 'show-changes',
+        label: showChanges ? 'Hide changes' : 'Show changes',
+        icon: FileDiff,
+        onSelect: () => setChangesShownFor(showChanges ? null : changesKey),
+        testId: 'artifact-show-changes',
+      });
+    }
+    if (!isLatestVersion) {
+      moreMenuItems.push({
+        id: 'restore-version',
+        label: `Restore version ${shownVersionIndex + 1}`,
+        icon: History,
+        onSelect: () => requestRestore(shownVersionIndex),
+        testId: 'artifact-restore-version',
+      });
+    }
+    if (canPreview || isPdf || isImage) {
+      moreMenuItems.push({
+        id: 'refresh',
+        label: 'Refresh preview',
+        icon: RefreshCw,
+        onSelect: handleRefresh,
+      });
+    }
+    if (canPreview || isMermaid) {
+      moreMenuItems.push({
+        id: 'open-in-new-tab',
+        label: 'Open in new tab',
+        icon: ExternalLink,
+        onSelect: handleOpenInNewTab,
+      });
+    }
+    if (isBinaryDownload) {
+      moreMenuItems.push({
+        id: 'download-file',
+        label: isImage ? 'Download image' : 'Download file',
+        icon: Download,
+        group: 'Download',
+        disabled: isImage && !imageSrc,
+        onSelect: isImage
+          ? () => void handleDownloadImage()
+          : generatedFileSummary.primaryUri
+            ? () => void handleDownloadGeneratedFile()
+            : handleDownloadBinaryDoc,
+      });
+    } else {
+      const downloads: Array<{ id: string; label: string; run: () => void }> = [];
+      if (isTabular)
+        downloads.push({ id: 'csv', label: 'Download as CSV', run: handleDownloadCsv });
+      if (isMermaid && mermaidSvg) {
+        downloads.push({ id: 'svg', label: 'Download as SVG', run: handleDownloadMermaidSvg });
+      }
+      downloads.push(
+        { id: 'html', label: 'Download as HTML', run: () => handleDownload('html') },
+        {
+          id: 'source',
+          label: `Download source (.${(artifact.language || 'txt').toLowerCase()})`,
+          run: () => handleDownload('txt'),
+        },
+        { id: 'md', label: 'Download as Markdown', run: () => handleDownload('md') },
+      );
+      if (isTextDocument) {
+        downloads.push(
+          {
+            id: 'docx',
+            label: 'Download as Word (.docx)',
+            run: () => void handleExportDocument('docx'),
+          },
+          { id: 'pdf', label: 'Download as PDF', run: () => void handleExportDocument('pdf') },
+        );
+      }
+      if (hasGeneratedFileManifest && generatedFileSummary.primaryUri) {
+        downloads.push({
+          id: 'generated',
+          label: 'Download generated file',
+          run: () => void handleDownloadGeneratedFile(),
+        });
+      }
+      downloads.forEach((download) =>
+        moreMenuItems.push({
+          id: `download-${download.id}`,
+          label: download.label,
+          icon: Download,
+          group: 'Download',
+          onSelect: download.run,
+        }),
+      );
+    }
+    if (variant === 'panel' && isStoredArtifact) {
+      moreMenuItems.push(
+        {
+          id: 'duplicate',
+          label: 'Duplicate',
+          icon: GitFork,
+          group: 'Keep',
+          ariaLabel: 'Duplicate this artifact',
+          testId: 'artifact-fork',
+          onSelect: () => {
+            const forkId = forkArtifact(artifact.id, activeContent);
+            if (!forkId) {
+              toast.error('That artifact could not be duplicated');
+              return;
+            }
+            setSourceDraft(null);
+            setViewedVersionIndex(null);
+            toast.success('Duplicated. Edits here no longer touch the original.');
+          },
+        },
+        {
+          id: 'start-work',
+          label: 'Start Work',
+          icon: Sparkles,
+          group: 'Keep',
+          ariaLabel: WORK_ENTRY_POINT_LABELS.artifact,
+          testId: 'artifact-start-work',
+          onSelect: () =>
+            startWork({
+              source: {
+                entryPoint: 'artifact',
+                title: artifact.title || 'Untitled artifact',
+                reference: `artifacts/${artifact.id}`,
+              },
+            }),
+        },
+      );
+    }
+    if (!hasGeneratedFileManifest && !isImage && !isPdf && !isDocx) {
+      moreMenuItems.push({
+        id: 'save-to-library',
+        label: savingToLibrary ? 'Saving…' : 'Save to Library',
+        icon: Library,
+        group: 'Keep',
+        disabled: savingToLibrary,
+        ariaLabel: 'Save this artifact to your Library',
+        testId: 'artifact-save-to-library',
+        onSelect: () => void handleSaveToLibrary(),
+      });
+    }
+    if (projectSave && projectSave.projects.length > 0) {
+      projectSave.projects.forEach((project) =>
+        moreMenuItems.push({
+          id: `save-to-project-${project.id}`,
+          label: project.name,
+          icon: FolderPlus,
+          group: 'Save to project',
+          disabled: savingProjectId !== null,
+          testId: 'artifact-save-to-project',
+          onSelect: () => void handleSaveToProject(project),
+        }),
+      );
+    }
 
     return (
       <div
@@ -1379,23 +1706,16 @@ export function ArtifactPreview({
           className,
         )}
       >
-        {/* Single reference toolbar */}
         {/* @container: this header sizes to the ARTIFACT PANEL, not the viewport.
-            The panel is a fixed-width split pane, so viewport breakpoints (sm:)
-            told the labels below to render at a width the panel never has.
-            a 1600px window still leaves this bar ~400px wide. The result was
-            the left group overflowing its 47px box by ~198px and painting on
-            top of the button row. Sizing decisions here must be container-
-            relative; see the @[...] variants below. The bar wraps: at the
-            default 400px width the right controls alone fill it, and without
-            wrapping they squeezed the left group, Preview/Source toggle
-            included, to zero width. */}
-        <div className="@container flex shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border/30 bg-card/80 px-3 py-1.5">
-          {/* LEFT: toggle + type icon + title + type + version chip.
-              overflow-hidden is load-bearing, not cosmetic: it is what
-              guarantees this group can never paint over the controls on the
-              right, whatever the panel width or title length. */}
-          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+            The panel is a fixed-width split pane the reader can drag narrow
+            while the window stays wide, so viewport breakpoints told labels to
+            render at a width the panel never has. Only the actions that earn a
+            slot stay here (request edits, copy, publish, expand, close); the
+            rest live in the More menu, so nothing wraps, clips or hides at
+            400px or at phone width. Request edits and Publish also sit in the
+            menu below the container width where their buttons are hidden. */}
+        <div className="@container flex shrink-0 items-center gap-2 border-b border-border/30 bg-card/80 px-3 py-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {/* Eye/Code segmented toggle, for renderable artifacts (sandbox)
                 and shared-renderer types (spreadsheet/presentation/email).
                 PDF/DOCX are single-view (their "source" is an opaque data URI),
@@ -1438,125 +1758,76 @@ export function ArtifactPreview({
                 </button>
               </div>
             )}
-            {/* Type icon */}
-            <TypeIcon type={artifact.type} className="h-4 w-4 text-muted-foreground" />
-            {/* Title + muted TYPE label */}
-            {/* min-w-0 is what makes `truncate` actually engage on a flex child:
-                without it the span's min-content width wins and the text pushes
-                past the container instead of ellipsising. This is the element
-                that absorbs the shrink, everything else here is shrink-0. */}
-            <span className="min-w-0 truncate text-sm font-semibold text-foreground">
-              {artifact.title || 'Artifact'}
-            </span>
-            {/* Redundant with TypeIcon and with the artifact tab above, so it is
-                the first thing to go when the panel is narrow. */}
-            <span className="hidden shrink-0 text-sm text-muted-foreground @[26rem]:inline">
-              · {typeLabel}
-            </span>
-            {/* Version chip, visible from the first generated version so the
-                artifact panel always answers which revision is being shown.
-                Navigation remains disabled until real edit history exists. */}
-            {versionCount > 0 && (
-              <div
-                className="ms-0.5 flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
-                data-testid="artifact-version-chip"
-              >
-                <button
-                  type="button"
-                  onClick={() => setViewedVersionIndex(Math.max(0, shownVersionIndex - 1))}
-                  disabled={shownVersionIndex <= 0}
-                  className="flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
-                  aria-label="Previous version"
-                  title="Previous version"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-                <button
-                  ref={historyToggleRef}
-                  type="button"
-                  onClick={() => (historyOpen ? closeHistory() : setHistoryOpen(true))}
-                  aria-expanded={historyOpen}
-                  aria-controls={
-                    historyOpen ? `artifact-version-history-${artifact.id}` : undefined
-                  }
-                  aria-label={`Version ${shownVersionIndex + 1} of ${versionCount}. Show version history`}
-                  title="Version history"
-                  className={cn(
-                    'min-w-[2.75rem] rounded-compact text-center text-xs tabular-nums transition-colors hover:text-foreground',
-                    historyOpen ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                  data-testid="artifact-version-history-toggle"
-                >
-                  <span aria-live="polite">
-                    v{shownVersionIndex + 1}/{versionCount}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setViewedVersionIndex(Math.min(versionCount - 1, shownVersionIndex + 1))
-                  }
-                  disabled={shownVersionIndex >= versionCount - 1}
-                  className="flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
-                  aria-label="Next version"
-                  title="Next version"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-                {/*
-                  Restore. Version browsing was read-only on web: a user could
-                  page back to an earlier revision and then had no way to act on
-                  it (desktop already had rollback). Restoring APPENDS the older
-                  content as the new latest rather than rewinding, so the
-                  intervening versions survive.
-                */}
-                {shownVersionIndex < versionCount - 1 && (
-                  <button
-                    type="button"
-                    onClick={() => requestRestore(shownVersionIndex)}
-                    className="flex h-6 items-center justify-center rounded-compact px-1.5 text-caption font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={`Restore version ${shownVersionIndex + 1}`}
-                    title={`Restore v${shownVersionIndex + 1} as the latest version`}
-                    data-testid="artifact-restore-version"
+            {/* Title over a muted line holding the type and the version
+                stepper, Claude's arrangement. min-w-0 is what makes `truncate`
+                engage on a flex child. */}
+            <div className="flex min-w-0 flex-1 flex-col justify-center">
+              <span className="min-w-0 truncate text-sm font-semibold leading-5 text-foreground">
+                {artifact.title || 'Artifact'}
+              </span>
+              <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <TypeIcon type={artifact.type} className="h-3 w-3 shrink-0" />
+                <span className="truncate">{typeLabel}</span>
+                {showVersionChip && (
+                  <div
+                    className="flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
+                    data-testid="artifact-version-chip"
                   >
-                    Restore
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => stepVersion(versionTimeline.previous)}
+                      disabled={!versionTimeline.previous}
+                      className="flex h-5 w-5 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                      aria-label="Previous version"
+                      title="Previous version"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                    <button
+                      ref={historyToggleRef}
+                      type="button"
+                      onClick={() => (historyOpen ? closeHistory() : setHistoryOpen(true))}
+                      disabled={versionCount === 0}
+                      aria-expanded={historyOpen}
+                      aria-controls={
+                        historyOpen ? `artifact-version-history-${artifact.id}` : undefined
+                      }
+                      aria-label={`Version ${versionTimeline.position} of ${versionTimeline.total}. Show version history`}
+                      title="Version history"
+                      className={cn(
+                        'min-w-[2.5rem] rounded-compact text-center text-xs tabular-nums transition-colors hover:text-foreground',
+                        historyOpen ? 'text-foreground' : 'text-muted-foreground',
+                      )}
+                      data-testid="artifact-version-history-toggle"
+                    >
+                      <span aria-live="polite">
+                        v{versionTimeline.position}/{versionTimeline.total}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => stepVersion(versionTimeline.next)}
+                      disabled={!versionTimeline.next}
+                      className="flex h-5 w-5 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                      aria-label="Next version"
+                      title="Next version"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* RIGHT: controls composed per artifact type (claude.ai parity).
-              - renderable (html/react/svg): Copy · Download · Refresh · Open · Fullscreen · Close
-              - mermaid: Copy · Download (+ SVG once rendered) · Open · Fullscreen · Close (no
-                Refresh: the client-side renderer has no frame to re-mount)
-              - binary doc (pdf/docx): Download · Refresh · Close  (no Copy, content is an opaque data URI)
-              - code / markdown doc: Copy · Download · Close
-              External + Fullscreen collapse on narrow (375px) widths. */}
-          <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-            {/* Edit / Save · Cancel, only over the source view, and only for a
-                text artifact on its latest version (see canEditSource). */}
-            {canEditSource &&
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            {/* Save · Cancel stay in view while a source edit is open: the
+                reader is mid-task and both end it. Starting an edit is in the
+                More menu (see canEditSource). */}
+            {sourceDraft !== null &&
+              canEditSource &&
               (!showPreview || isMarkdownDoc) &&
-              !showChanges &&
-              (sourceDraft === null ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSourceDraft(activeContent);
-                    setDraftOrigin('editor');
-                    setEditorFocusRequest((count) => count + 1);
-                  }}
-                  className="h-7 px-2"
-                  aria-label="Edit artifact source"
-                  title="Edit"
-                  data-testid="artifact-edit-source"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  <span className="ms-1 hidden text-xs @[30rem]:inline">Edit</span>
-                </Button>
-              ) : (
+              !showChanges && (
                 <>
                   <Button
                     variant="ghost"
@@ -1571,7 +1842,10 @@ export function ArtifactPreview({
                     <span className="ms-1 hidden text-xs @[30rem]:inline">Save</span>
                   </Button>
                   {draftStatus ? (
-                    <span className="text-xs text-muted-foreground" role="status">
+                    <span
+                      className="hidden text-xs text-muted-foreground @[30rem]:inline"
+                      role="status"
+                    >
                       {draftStatus === 'saved' ? 'Draft kept on this device' : 'Draft not kept'}
                     </span>
                   ) : null}
@@ -1588,21 +1862,23 @@ export function ArtifactPreview({
                     <span className="ms-1 hidden text-xs @[30rem]:inline">Cancel</span>
                   </Button>
                 </>
-              ))}
+              )}
 
-            {canShowChanges && (
+            {canRequestEdits && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setChangesShownFor(showChanges ? null : changesKey)}
-                className={cn('h-7 px-2', showChanges && 'bg-muted text-foreground')}
-                aria-pressed={showChanges}
-                aria-label="Show changes"
-                title="Show changes"
-                data-testid="artifact-show-changes"
+                onClick={startEditRequest}
+                className={cn(
+                  'hidden h-7 px-2 @[26rem]:inline-flex',
+                  editRequestMode && 'bg-muted text-foreground',
+                )}
+                aria-pressed={editRequestMode}
+                aria-label={REQUEST_EDITS_LABEL}
+                title={REQUEST_EDITS_LABEL}
+                data-testid="artifact-request-edits"
               >
-                <FileDiff className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 hidden text-xs @[30rem]:inline">Show changes</span>
+                <MousePointerClick className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             )}
 
@@ -1630,183 +1906,6 @@ export function ArtifactPreview({
               </Button>
             )}
 
-            {/* Download, binary docs save real bytes via a plain button;
-                everything else offers the format dropdown. */}
-            {isPdf || isDocx || isImage ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={
-                  isImage
-                    ? () => void handleDownloadImage()
-                    : generatedFileSummary.primaryUri
-                      ? () => void handleDownloadGeneratedFile()
-                      : handleDownloadBinaryDoc
-                }
-                disabled={isImage && !imageSrc}
-                className="h-7 px-2"
-                aria-label={isImage ? 'Download image' : 'Download file'}
-                title="Download"
-              >
-                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2"
-                    aria-label="Download artifact"
-                    title="Download"
-                  >
-                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {isTabular && (
-                    <DropdownMenuItem onClick={handleDownloadCsv}>Download as CSV</DropdownMenuItem>
-                  )}
-                  {isMermaid && mermaidSvg && (
-                    <DropdownMenuItem onClick={handleDownloadMermaidSvg}>
-                      Download as SVG
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => handleDownload('html')}>
-                    Download as HTML
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDownload('txt')}>
-                    Download source (.{(artifact.language || 'txt').toLowerCase()})
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDownload('md')}>
-                    Download as Markdown
-                  </DropdownMenuItem>
-                  {isTextDocument && (
-                    <>
-                      <DropdownMenuItem onClick={() => void handleExportDocument('docx')}>
-                        Download as Word (.docx)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => void handleExportDocument('pdf')}>
-                        Download as PDF
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
-                    <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
-                      Download generated file
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* Fork: a separate artifact starting from what is on screen, so a
-                reader can take a document somewhere else without editing over
-                the one the answer produced. Only for an artifact the store
-                actually holds; a card rendered from a message alone has
-                nothing to fork from. */}
-            {variant === 'panel' && isStoredArtifact && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const forkId = forkArtifact(artifact.id, activeContent);
-                  if (!forkId) {
-                    toast.error('That artifact could not be duplicated');
-                    return;
-                  }
-                  setSourceDraft(null);
-                  setViewedVersionIndex(null);
-                  toast.success('Duplicated. Edits here no longer touch the original.');
-                }}
-                className="h-7 px-2"
-                aria-label="Duplicate this artifact"
-                title="Duplicate"
-                data-testid="artifact-fork"
-              >
-                <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 hidden text-xs @[30rem]:inline">Duplicate</span>
-              </Button>
-            )}
-
-            {/* Start Work: the artifact becomes the objective of a multi-step run
-                rather than something to copy into a new chat by hand. */}
-            {variant === 'panel' && isStoredArtifact && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  startWork({
-                    source: {
-                      entryPoint: 'artifact',
-                      title: artifact.title || 'Untitled artifact',
-                      reference: `artifacts/${artifact.id}`,
-                    },
-                  })
-                }
-                className="h-7 px-2"
-                aria-label={WORK_ENTRY_POINT_LABELS.artifact}
-                title="Start Work"
-                data-testid="artifact-start-work"
-              >
-                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 hidden text-xs @[30rem]:inline">Start Work</span>
-              </Button>
-            )}
-
-            {/* Save to project: the artifact becomes one of a project's sources,
-                which is a different thing from the project its conversation
-                happens to sit in (the bar below). Rendered only when the host
-                knows of at least one project to save into. */}
-            {variant === 'panel' && projectSave && projectSave.projects.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2"
-                    disabled={savingProjectId !== null}
-                    aria-label="Save this artifact to a project"
-                    title="Save to project"
-                    data-testid="artifact-save-to-project"
-                  >
-                    <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span className="ms-1 hidden text-xs @[30rem]:inline">
-                      {savingProjectId ? 'Saving…' : 'Save to project'}
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {projectSave.projects.map((project) => (
-                    <DropdownMenuItem
-                      key={project.id}
-                      onClick={() => void handleSaveToProject(project)}
-                    >
-                      {project.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {variant === 'panel' && !hasGeneratedFileManifest && !isImage && !isPdf && !isDocx && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2"
-                disabled={savingToLibrary}
-                onClick={() => void handleSaveToLibrary()}
-                aria-label="Save this artifact to your Library"
-                title="Save to Library"
-                data-testid="artifact-save-to-library"
-              >
-                <Library className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 hidden text-xs @[30rem]:inline">
-                  {savingToLibrary ? 'Saving…' : 'Save to Library'}
-                </span>
-              </Button>
-            )}
-
             {/* Publish, only rendered when a host injected a real publisher
                 (CAP-015 slice 3). No publisher, no button: offering a Publish
                 action that can only copy to the clipboard is the behaviour
@@ -1817,42 +1916,14 @@ export function ArtifactPreview({
                 size="sm"
                 onClick={() => void handlePublish()}
                 disabled={isPublishing}
-                className="h-7 px-2"
+                className="hidden h-7 px-2 @[26rem]:inline-flex"
                 aria-label="Publish artifact to a public link"
                 title="Publish"
               >
                 <Globe className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 hidden text-xs @[30rem]:inline">
+                <span className="ms-1 hidden text-xs @[34rem]:inline">
                   {isPublishing ? 'Publishing…' : 'Publish'}
                 </span>
-              </Button>
-            )}
-
-            {/* Refresh, renderable previews and PDFs (re-mounts the frame). */}
-            {(canPreview || isPdf || isImage) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefresh}
-                className="h-7 px-2"
-                aria-label="Refresh preview"
-                title="Refresh preview"
-              >
-                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-            )}
-
-            {/* Open in new tab, renderable only; hidden on narrow widths. */}
-            {(canPreview || isMermaid) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenInNewTab}
-                className="hidden h-7 px-2 @[22rem]:flex"
-                aria-label="Open in new tab"
-                title="Open in new tab"
-              >
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             )}
 
@@ -1860,12 +1931,14 @@ export function ArtifactPreview({
               variant="ghost"
               size="sm"
               onClick={handleFullscreen}
-              className={isFullscreen ? 'flex h-7 px-2' : 'hidden h-7 px-2 @[22rem]:flex'}
+              className="h-7 px-2"
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-              title="Fullscreen"
+              title={isFullscreen ? 'Exit fullscreen' : 'Expand'}
             >
               <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
+
+            <ArtifactMoreMenu items={moreMenuItems} />
 
             {/* Close, panel-only */}
             {onClose && (
@@ -2021,7 +2094,14 @@ export function ArtifactPreview({
 
         {/* Content area, fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+        <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden">
+          {editRequestMode && (
+            <ArtifactEditRequestLayer
+              selection={pickerSelection}
+              onSubmit={submitEditRequest}
+              onCancel={cancelEditRequest}
+            />
+          )}
           {showChanges && previousVersionContent !== undefined && (
             <ArtifactChangesView
               previous={previousVersionContent}
@@ -2078,6 +2158,7 @@ export function ArtifactPreview({
                   className="h-full w-full border-0"
                   refreshKey={refreshKey}
                   onRenderError={(err) => setRenderError(err)}
+                  picker={editRequestPicker}
                 />
               </div>
             ))}

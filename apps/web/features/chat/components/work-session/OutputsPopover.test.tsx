@@ -6,7 +6,8 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { downloadArtifactFile } from '../../utils/downloadArtifacts';
 import { OutputsPopoverButton } from './OutputsPopover';
 
-vi.mock('../../utils/downloadArtifacts', () => ({
+vi.mock('../../utils/downloadArtifacts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../utils/downloadArtifacts')>()),
   downloadAllArtifacts: vi.fn().mockResolvedValue(undefined),
   downloadGeneratedFile: vi.fn().mockResolvedValue(undefined),
   downloadArtifactFile: vi.fn().mockResolvedValue(undefined),
