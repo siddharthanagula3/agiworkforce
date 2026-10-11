@@ -24,7 +24,25 @@ vi.mock('../VoiceOrb', () => ({
   VoiceOrbPreview: () => null,
   VoiceOrb: () => <div data-testid="voice-orb" />,
 }));
-vi.mock('../VoiceChatDock', () => ({ VoiceChatDock: () => null }));
+vi.mock('../VoiceChatDock', () => ({
+  VoiceChatDock: ({
+    captionsOpen,
+    onToggleCaptions,
+  }: {
+    captionsOpen: boolean;
+    onToggleCaptions: () => void;
+  }) => (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={captionsOpen}
+      data-testid="voice-captions-toggle"
+      onClick={onToggleCaptions}
+    >
+      Captions
+    </button>
+  ),
+}));
 vi.mock('../VoiceSettingsModal', () => ({ VoiceSettingsModal: () => null }));
 
 import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from '../VoiceModeSurface';
@@ -180,20 +198,16 @@ describe('voice live-region announcements', () => {
 });
 
 describe('voice captions', () => {
-  it('is off until the user turns it on, and the toggle says which it is', () => {
+  it('is off until the user turns it on in the chat panel, which says which it is', () => {
     renderSurface();
     expect(screen.queryByTestId('voice-captions')).toBeNull();
 
     const toggle = screen.getByTestId('voice-captions-toggle');
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    expect(toggle.getAttribute('aria-label')).toBe('Show captions');
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
 
     fireEvent.click(toggle);
     expect(screen.getByTestId('voice-captions')).toBeTruthy();
-    expect(screen.getByTestId('voice-captions-toggle').getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByTestId('voice-captions-toggle').getAttribute('aria-label')).toBe(
-      'Hide captions',
-    );
+    expect(screen.getByTestId('voice-captions-toggle').getAttribute('aria-checked')).toBe('true');
   });
 
   it('renders each speaker and replaces a partial turn in place', () => {

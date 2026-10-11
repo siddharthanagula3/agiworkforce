@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { VISUAL_SOURCE_MESSAGE } from '@agiworkforce/types';
 
 import {
@@ -198,7 +198,7 @@ describe('VoiceModeSurface orb layout', () => {
     useVoiceSessionStore.setState({ focusMode: false });
   });
 
-  it('keeps the focused orb in its own slot above the error row and composer', () => {
+  it('keeps the focused orb in its own slot, below the error row and resting on the composer', () => {
     useVoiceSessionStore.setState({ focusMode: true });
     controller.current = session({
       state: {
@@ -213,10 +213,28 @@ describe('VoiceModeSurface orb layout', () => {
     expect(slot.className).not.toMatch(/\bfixed\b/);
     expect(slot.className).not.toMatch(/\binset-0\b/);
     expect(slot.contains(screen.getByTestId('voice-orb'))).toBe(true);
-    const order = (node: Node) =>
-      slot.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(order(screen.getByTestId('voice-error'))).toBeTruthy();
-    expect(order(screen.getByTestId('voice-composer'))).toBeTruthy();
+    const position = (node: Node) => slot.compareDocumentPosition(node);
+    expect(
+      position(screen.getByTestId('voice-error')) & Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
+    expect(
+      position(screen.getByTestId('voice-composer')) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByTestId('voice-orb-state')).toBeNull();
+  });
+});
+
+describe('VoiceModeSurface paused call', () => {
+  it('says the call is paused and resumes it from the same line', async () => {
+    const resume = vi.fn();
+    controller.current = session({ paused: true, resume });
+    renderSurface({ variant: VOICE_SURFACE_VARIANT.chat });
+
+    const hint = screen.getByTestId('voice-paused-hint');
+    expect(hint).toHaveTextContent('Paused.');
+    fireEvent.click(within(hint).getByRole('button', { name: 'Resume' }));
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('voice-pause-toggle')).toBeNull();
   });
 });
 

@@ -20,6 +20,7 @@ export interface VoiceOrbProps {
   onClick: () => void;
   className?: string;
   level?: VoiceOrbLevelSource;
+  showLabel?: boolean;
 }
 
 function orbStateFor(status: VoiceSessionStatus, backendBusy: boolean) {
@@ -37,6 +38,7 @@ export function VoiceOrb({
   onClick,
   className,
   level,
+  showLabel = true,
 }: VoiceOrbProps) {
   const orbState = orbStateFor(status, backendBusy);
   return (
@@ -48,6 +50,7 @@ export function VoiceOrb({
       reducedMotion={reducedMotion}
       onClick={onClick}
       className={className}
+      showLabel={showLabel}
       {...(level ? { level } : {})}
     />
   );

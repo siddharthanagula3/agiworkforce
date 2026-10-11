@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import { LibraryBig, Paperclip, Plug, SquarePen } from '@agiworkforce/icons';
+import {
+  Check,
+  LibraryBig,
+  MessageSquareText,
+  Paperclip,
+  Plug,
+  Square,
+  SquarePen,
+} from '@agiworkforce/icons';
 import { useMenuKeyboard } from '@agiworkforce/ui';
 
 import { AnchoredComposerMenu } from '../Composer/AnchoredComposerMenu';
@@ -13,6 +21,9 @@ const LABEL = {
   addFiles: 'Add photos & files',
   library: 'Open from Library',
   connectors: 'Connectors',
+  call: 'This call',
+  captions: 'Captions',
+  pause: 'Pause call',
 } as const;
 
 const ITEM_CLASS =
@@ -29,6 +40,10 @@ export interface VoiceChatDockProps {
   onAddFiles: () => void;
   onOpenLibrary: () => void;
   onOpenConnectors: () => void;
+  captionsOpen: boolean;
+  onToggleCaptions: () => void;
+  /** Absent once the call has ended or is already paused, when there is nothing to pause. */
+  onPause?: (() => void) | undefined;
 }
 
 export function VoiceChatDock({
@@ -39,6 +54,9 @@ export function VoiceChatDock({
   onAddFiles,
   onOpenLibrary,
   onOpenConnectors,
+  captionsOpen,
+  onToggleCaptions,
+  onPause,
 }: VoiceChatDockProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   useMenuKeyboard({ open, onClose, panelRef, triggerRef });
@@ -97,6 +115,33 @@ export function VoiceChatDock({
           <Plug className="h-4 w-4 shrink-0" aria-hidden="true" />
           {LABEL.connectors}
         </button>
+        <p className="px-3 pb-1 pt-3 text-xs font-medium text-[var(--chat-text-muted)]">
+          {LABEL.call}
+        </p>
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={captionsOpen}
+          onClick={run(onToggleCaptions)}
+          data-testid="voice-captions-toggle"
+          className={ITEM_CLASS}
+        >
+          <MessageSquareText className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{LABEL.captions}</span>
+          {captionsOpen ? <Check className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
+        </button>
+        {onPause ? (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={run(onPause)}
+            data-testid="voice-pause-toggle"
+            className={ITEM_CLASS}
+          >
+            <Square className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {LABEL.pause}
+          </button>
+        ) : null}
       </div>
     </AnchoredComposerMenu>
   );

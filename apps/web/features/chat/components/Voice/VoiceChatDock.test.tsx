@@ -18,9 +18,16 @@ const TRIGGER_RECT = {
   toJSON: () => ({}),
 };
 
-function Harness({ initiallyOpen = true }: { initiallyOpen?: boolean }) {
+function Harness({
+  initiallyOpen = true,
+  onPause,
+}: {
+  initiallyOpen?: boolean;
+  onPause?: () => void;
+}) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(initiallyOpen);
+  const [captionsOpen, setCaptionsOpen] = useState(false);
   return (
     <>
       <button
@@ -42,6 +49,9 @@ function Harness({ initiallyOpen = true }: { initiallyOpen?: boolean }) {
         onAddFiles={vi.fn()}
         onOpenLibrary={vi.fn()}
         onOpenConnectors={vi.fn()}
+        captionsOpen={captionsOpen}
+        onToggleCaptions={() => setCaptionsOpen((value) => !value)}
+        onPause={onPause}
       />
     </>
   );
@@ -76,5 +86,41 @@ describe('VoiceChatDock', () => {
     });
 
     expect(screen.queryByTestId('voice-chat-dock')).toBeNull();
+  });
+
+  it('carries the captions switch as a checkbox item that says whether captions are on', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    const captions = screen.getByRole('menuitemcheckbox', { name: 'Captions' });
+    expect(captions).toHaveAttribute('aria-checked', 'false');
+    await act(async () => {
+      await user.click(captions);
+    });
+    expect(screen.queryByTestId('voice-chat-dock')).toBeNull();
+
+    await act(async () => {
+      await user.click(screen.getByLabelText('Open this chat panel'));
+    });
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Captions' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('offers to pause the call only while there is a call to pause', async () => {
+    const user = userEvent.setup();
+    const onPause = vi.fn();
+    const { unmount } = render(<Harness onPause={onPause} />);
+
+    await act(async () => {
+      await user.click(screen.getByRole('menuitem', { name: 'Pause call' }));
+    });
+    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('voice-chat-dock')).toBeNull();
+    unmount();
+
+    render(<Harness />);
+    expect(screen.queryByRole('menuitem', { name: 'Pause call' })).toBeNull();
   });
 });
