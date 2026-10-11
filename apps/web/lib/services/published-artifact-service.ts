@@ -3,6 +3,10 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
+} from '@agiworkforce/cloud-contracts';
+import {
   UNATTENDED_RUN_DENIED_STATUSES,
   ownerMayRunUnattendedSql,
 } from '@/lib/auth/account-lifecycle';
@@ -39,7 +43,7 @@ import {
  */
 
 export const MAX_CONTENT_CHARS = 1_000_000;
-const MAX_TITLE_CHARS = 300;
+const MAX_TITLE_CHARS = MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS;
 const MAX_ARTIFACT_ID_CHARS = 200;
 const MAX_LANGUAGE_CHARS = 50;
 const MAX_LIST_LIMIT = 200;
@@ -69,7 +73,7 @@ export type PublishableKind = (typeof PUBLISHABLE_KINDS)[number];
  * page and leaves the artifact readable only to members holding the grant row
  * in `organization_shared_artifacts`.
  */
-export const PUBLISHED_ARTIFACT_VISIBILITIES = ['public', 'organization'] as const;
+export const PUBLISHED_ARTIFACT_VISIBILITIES = MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES;
 
 export type PublishedArtifactVisibility = (typeof PUBLISHED_ARTIFACT_VISIBILITIES)[number];
 
@@ -167,10 +171,12 @@ export interface PublishedArtifact {
 export interface PublishedArtifactSummary {
   token: string;
   artifactId: string;
+  conversationId: string | null;
   title: string;
   kind: PublishableKind;
   language: string | null;
   contentChars: number;
+  version: number;
   visibility: PublishedArtifactVisibility;
   createdAt: string;
   updatedAt: string;
@@ -226,13 +232,20 @@ function countOf(value: number | string | null | undefined): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
 }
 
+function toVersionNumber(value: number | string | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
 interface PublishedArtifactSummaryRow {
   token: string;
   artifact_id: string;
+  conversation_id: string | null;
   title: string;
   kind: string;
   language: string | null;
   content_chars: number | string | null;
+  version: number | string | null;
   visibility: string;
   created_at: string | Date;
   updated_at: string | Date;
@@ -243,10 +256,12 @@ function rowToSummary(row: PublishedArtifactSummaryRow): PublishedArtifactSummar
   return {
     token: row.token,
     artifactId: row.artifact_id,
+    conversationId: row.conversation_id ?? null,
     title: row.title,
     kind: rowKind(row.kind),
     language: row.language,
     contentChars: Number.isFinite(characters) && characters > 0 ? Math.floor(characters) : 0,
+    version: toVersionNumber(row.version),
     visibility: rowVisibility(row.visibility),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
@@ -331,7 +346,8 @@ export async function publishArtifactRecord(
      ) values ($1, $2, $3, $4, $5, $6, $7, $8)
      on conflict (user_id, artifact_id) do update set
        conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
-       title = excluded.title,
+       title = case when published_artifacts.title = '' then excluded.title
+                    else published_artifacts.title end,
        kind = excluded.kind,
        language = excluded.language,
        content = excluded.content,
@@ -431,6 +447,31 @@ export async function setPublishedArtifactVisibility(
   return row ? rowToPublishedArtifact(row) : null;
 }
 
+/**
+ * Rename one of the caller's own published artifacts. The name belongs to the
+ * page rather than to any one version, which is why a republish keeps it.
+ */
+export async function renamePublishedArtifact(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string; title: string },
+): Promise<PublishedArtifact | null> {
+  const userId = input.userId?.trim();
+  const token = input.token?.trim();
+  const title = input.title.trim().slice(0, MAX_TITLE_CHARS);
+  if (!userId || !token || !title || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
+
+  const rows = await db.query<PublishedArtifactRow>(
+    `update public.published_artifacts
+        set title = $3, updated_at = now()
+      where token = $1 and user_id = $2
+      returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                language, content, visibility, created_at, updated_at`,
+    [token, userId, title],
+  );
+  const row = rows[0];
+  return row ? rowToPublishedArtifact(row) : null;
+}
+
 export async function listPublishedArtifacts(
   db: DatabaseAdapter,
   input: { userId: string; limit?: number },
@@ -440,8 +481,8 @@ export async function listPublishedArtifacts(
   const limit = Math.min(MAX_LIST_LIMIT, Math.max(1, Math.floor(input.limit ?? MAX_LIST_LIMIT)));
 
   const rows = await db.query<PublishedArtifactSummaryRow>(
-    `select token, artifact_id, title, kind, language,
-            length(content) as content_chars, visibility, created_at, updated_at
+    `select token, artifact_id, conversation_id, title, kind, language,
+            length(content) as content_chars, version, visibility, created_at, updated_at
        from public.published_artifacts
       where user_id = $1
       order by created_at desc
@@ -478,11 +519,6 @@ interface PublishedVersionRow {
   language: string | null;
   content: string;
   created_at: string | Date;
-}
-
-function toVersionNumber(value: number | string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
 }
 
 /**

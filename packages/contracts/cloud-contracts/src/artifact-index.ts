@@ -49,13 +49,21 @@ export const ResourceVisibilitySchema = z
   .enum(RESOURCE_VISIBILITIES)
   .catch(DEFAULT_RESOURCE_VISIBILITY);
 
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES = ['public', 'organization'] as const;
+export type ManagedCloudPublishedArtifactVisibility =
+  (typeof MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES)[number];
+
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS = 300;
+
 export const ManagedCloudPublishedArtifactSchema = z.object({
   token: z.string().min(1),
   artifactId: z.string().min(1),
+  conversationId: z.string().nullable().default(null),
   title: z.string(),
   kind: z.string(),
   language: z.string().nullable(),
   contentChars: z.number().int().nonnegative(),
+  version: z.number().int().nonnegative().default(0),
   visibility: ResourceVisibilitySchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
@@ -64,8 +72,13 @@ export const ManagedCloudPublishedArtifactSchema = z.object({
 });
 export type ManagedCloudPublishedArtifact = z.infer<typeof ManagedCloudPublishedArtifactSchema>;
 
+export const ManagedCloudPublishedArtifactWorkspaceSchema = z.object({
+  memberCount: z.number().int().nonnegative(),
+});
+
 export const ManagedCloudPublishedArtifactListResponseSchema = z.object({
   artifacts: z.array(ManagedCloudPublishedArtifactSchema),
+  workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable().default(null),
 });
 export type ManagedCloudPublishedArtifactListResponse = z.infer<
   typeof ManagedCloudPublishedArtifactListResponseSchema
@@ -100,9 +113,90 @@ export function managedCloudArtifactIndexQueryString(
   return params.size > 0 ? `?${params.toString()}` : '';
 }
 
-export function managedCloudPublishedArtifactVersionsPath(token: string): string {
-  return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/${encodeURIComponent(token)}/versions`;
+export function managedCloudPublishedArtifactPath(token: string): string {
+  return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/${encodeURIComponent(token)}`;
 }
+
+export function managedCloudPublishedArtifactVersionsPath(token: string): string {
+  return `${managedCloudPublishedArtifactPath(token)}/versions`;
+}
+
+export function managedCloudPublishedArtifactDataPath(token: string): string {
+  return `${managedCloudPublishedArtifactPath(token)}/data`;
+}
+
+/**
+ * A change to one published artifact: who can open it, what it is called, or
+ * both. The name is the page's own setting, so a later republish from chat
+ * keeps it.
+ */
+export const ManagedCloudPublishedArtifactUpdateRequestSchema = z
+  .object({
+    visibility: z.enum(MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES).optional(),
+    title: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS)
+      .optional(),
+  })
+  .refine((body) => body.visibility !== undefined || body.title !== undefined, {
+    message: 'Name a visibility or a title to change.',
+  });
+export type ManagedCloudPublishedArtifactUpdateRequest = z.infer<
+  typeof ManagedCloudPublishedArtifactUpdateRequestSchema
+>;
+
+export const ManagedCloudPublishedArtifactUpdateResponseSchema = z.object({
+  token: z.string().min(1),
+  shareUrl: z.string().min(1),
+  title: z.string(),
+  visibility: z.enum(MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES),
+  organizationId: z.string().nullable(),
+  updatedAt: z.string().min(1),
+});
+export type ManagedCloudPublishedArtifactUpdateResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactUpdateResponseSchema
+>;
+
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_DATA_PREVIEW_CHARS = 240;
+
+export const ManagedCloudPublishedArtifactDataEntrySchema = z.object({
+  key: z.string().min(1),
+  bytes: z.number().int().nonnegative(),
+  preview: z.string(),
+  truncated: z.boolean(),
+  updatedAt: z.string().min(1),
+});
+export type ManagedCloudPublishedArtifactDataEntry = z.infer<
+  typeof ManagedCloudPublishedArtifactDataEntrySchema
+>;
+
+/**
+ * What the publisher can see of the data their page keeps. Shared values are
+ * readable by every visitor of the page already; each visitor's personal values
+ * are theirs alone, so the publisher learns only how many of their own exist.
+ */
+export const ManagedCloudPublishedArtifactDataResponseSchema = z.object({
+  supported: z.boolean(),
+  shared: z.object({
+    entries: z.array(ManagedCloudPublishedArtifactDataEntrySchema),
+    entryCount: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+    limitBytes: z.number().int().positive(),
+  }),
+  ownPersonalEntryCount: z.number().int().nonnegative(),
+});
+export type ManagedCloudPublishedArtifactDataResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactDataResponseSchema
+>;
+
+export const ManagedCloudPublishedArtifactDataClearResponseSchema = z.object({
+  cleared: z.number().int().nonnegative(),
+});
+export type ManagedCloudPublishedArtifactDataClearResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactDataClearResponseSchema
+>;
 
 export const ManagedCloudPublishedArtifactVersionSchema = z.object({
   version: z.number().int().min(1),
