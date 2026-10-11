@@ -131,6 +131,12 @@ function modifierNames(raw) {
   );
 }
 
+const WEB_FIELD_GATE_PATTERNS = [
+  /return !doc\.firesInEditable && isEditableTarget\(event\.target\);/,
+  /const contextOk = !shortcutYieldsToFocus\(event, doc\);/,
+  /modifierOk && shiftOk && altOk && keyOk && contextOk/,
+];
+
 export function readWebShortcuts(source, sharedSource = '') {
   const block = /export const KEYBOARD_SHORTCUT_DOCS[^[]*\[([\s\S]*?)\n\];/.exec(source);
   if (block === null) return [];
@@ -152,6 +158,7 @@ export function readWebShortcuts(source, sharedSource = '') {
       key: key === null ? null : key[1],
       unresolvedSpread: null,
       modifiers: modifierNames(body),
+      firesInEditable: /firesInEditable:\s*true/.test(body),
     });
   }
   return entries;
@@ -290,6 +297,7 @@ export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
   if (webShortcuts.length === 0) fail('web', `${WEB_REGISTRY_PATH} declares no shortcuts`);
   const webHandled = readWebHandledIds(webSource);
   const webChords = new Map();
+  const webYieldsToFields = WEB_FIELD_GATE_PATTERNS.every((pattern) => pattern.test(webSource));
   for (const shortcut of webShortcuts) {
     if (!webHandled.includes(shortcut.id)) {
       fail('web', `${shortcut.id} is documented as a shortcut but nothing handles it`);
@@ -320,10 +328,7 @@ export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
     if (collidesWithScreenReader(shortcut.modifiers)) {
       fail('web', `${shortcut.id} binds ${chord}, which VoiceOver claims`);
     }
-    if (
-      shortcut.modifiers.length === 0 &&
-      !new RegExp(`doc\\.key === '${shortcut.key}'`).test(webSource)
-    ) {
+    if (shortcut.modifiers.length === 0 && (shortcut.firesInEditable || !webYieldsToFields)) {
       fail(
         'web',
         `${shortcut.id} has no modifier and no context rule that keeps it out of a field`,
