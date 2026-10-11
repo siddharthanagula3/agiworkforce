@@ -37,6 +37,22 @@ describe('classifyToolLoopInputs', () => {
     });
   });
 
+  it('runs the loop for a provider-run search only when the turn requires that search', () => {
+    const providerRunSearch = [
+      { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'], max_uses: 3 },
+    ];
+
+    expect(classifyToolLoopInputs([], providerRunSearch, AUTO_APPROVE_READ_ONLY).shouldRun).toBe(
+      false,
+    );
+    const required = classifyToolLoopInputs([], providerRunSearch, AUTO_APPROVE_READ_ONLY, {
+      requiredNativeSearch: true,
+    });
+    expect(required.shouldRun).toBe(true);
+    expect(required.hasWebSearchTools).toBe(false);
+    expect(required.approvalMode).toBe('auto');
+  });
+
   it('runs the loop for a device step, which only a suspended loop can carry out', () => {
     const result = classifyToolLoopInputs(
       [],

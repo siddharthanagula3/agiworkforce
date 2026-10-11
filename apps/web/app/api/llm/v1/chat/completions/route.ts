@@ -886,6 +886,7 @@ async function dispatchChatCompletions(
       mcpTools,
       processed.llmRequest.tools,
       toolApprovalPolicy,
+      { requiredNativeSearch: processed.searchEnforcement?.mode === 'nudge' },
     );
 
     if (loopInputs.shouldRun || isAgiWorkTurn) {

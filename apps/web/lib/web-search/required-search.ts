@@ -60,12 +60,65 @@ const FRESHNESS_PATTERNS = [...FRESHNESS_PHRASES, ...VOLATILE_SUBJECTS].map(
 
 const YEAR_PATTERN = /\b(20\d{2})\b/g;
 
+/** Offices and roles whose holder changes on a date no training cutoff knows. */
+const HELD_OFFICES = [
+  'president',
+  'vice president',
+  'prime minister',
+  'chief minister',
+  'deputy prime minister',
+  'chancellor',
+  'governor',
+  'mayor',
+  'minister',
+  'secretary of state',
+  'secretary general',
+  'speaker',
+  'chief justice',
+  'attorney general',
+  'head of state',
+  'head of government',
+  'monarch',
+  'king',
+  'queen',
+  'pope',
+  'ceo',
+  'cfo',
+  'cto',
+  'chief executive',
+  'chairman',
+  'chairperson',
+  'chair',
+  'head coach',
+  'captain',
+  'world champion',
+  'champion',
+];
+
+const HELD_OFFICE_ALTERNATION = HELD_OFFICES.toSorted((a, b) => b.length - a.length)
+  .map((office) => office.replace(/ /g, '\\s+'))
+  .join('|');
+
+// "who is the president of India" asks who holds the office now; "who was"
+// asks about a settled past and stays answerable from memory.
+const OFFICE_HOLDER_PATTERNS = [
+  new RegExp(
+    `\\bwho(?:'s|\\s+is|\\s+are)\\s+(?:the\\s+)?(?:[\\p{L}'-]+\\s+){0,3}?(?:${HELD_OFFICE_ALTERNATION})s?\\b`,
+    'iu',
+  ),
+  new RegExp(
+    `\\b(?:current|incumbent|sitting|reigning|present|acting|new)\\s+(?:[\\p{L}'-]+\\s+){0,2}?(?:${HELD_OFFICE_ALTERNATION})s?\\b`,
+    'iu',
+  ),
+];
+
 // The recency keywords stay owned by `@agiworkforce/search`; this adds the
 // phrasings, volatile subjects and dates that list does not carry.
 export function detectFreshnessIntent(message: string, now: Date = new Date()): boolean {
   if (!message.trim()) return false;
   if (detectExplicitWebSearchIntent(message) === 'recency') return true;
   if (FRESHNESS_PATTERNS.some((pattern) => pattern.test(message))) return true;
+  if (OFFICE_HOLDER_PATTERNS.some((pattern) => pattern.test(message))) return true;
   const currentYear = now.getUTCFullYear();
   for (const match of message.matchAll(YEAR_PATTERN)) {
     if (Number(match[1]) >= currentYear) return true;
