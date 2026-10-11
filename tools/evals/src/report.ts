@@ -59,6 +59,8 @@ export interface RunReport {
   readonly modelKey: string | null;
   readonly routeId: string | null;
   readonly recordedOn: string | null;
+  /** The product prompt rendered in front of every case, absent for a bare-model run. */
+  readonly promptStamp?: string;
   readonly measuredAt: string;
   readonly suites: Partial<Record<SuiteName, SuiteSummary>>;
   readonly unsupportedSuites: Partial<Record<SuiteName, string>>;
@@ -76,6 +78,7 @@ export interface RunIdentity {
   readonly modelKey: string | null;
   readonly routeId: string | null;
   readonly recordedOn: string | null;
+  readonly promptStamp?: string;
 }
 
 export function summariseSuite(report: SuiteReport): SuiteSummary {
@@ -115,6 +118,6 @@ export function buildRunReport(
 }
 
 export function formatRun(identity: RunIdentity, reports: readonly SuiteReport[]): string {
-  const title = `[evals] ${identity.source} run of ${identity.modelKey ?? 'reference responses'}${identity.routeId === null ? '' : ` via ${identity.routeId}`}`;
+  const title = `[evals] ${identity.source} run of ${identity.modelKey ?? 'reference responses'}${identity.routeId === null ? '' : ` via ${identity.routeId}`}${identity.promptStamp === undefined ? '' : ` under ${identity.promptStamp}`}`;
   return [title, ...reports.map((report) => formatReport(report))].join('\n');
 }

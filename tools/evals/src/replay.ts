@@ -37,6 +37,8 @@ export interface Recording {
   readonly modelKey: string | null;
   readonly routeId: string | null;
   readonly recordedOn: string | null;
+  /** The product prompt rendered in front of every case, absent for a bare-model run. */
+  readonly promptStamp?: string;
   readonly responses: Readonly<Record<string, RecordedResponse>>;
   /**
    * Cases graded in this run whose answer was deliberately not written down.
@@ -62,6 +64,13 @@ function nullableString(value: unknown, field: string): string | null {
   if (value === null) return null;
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`recording ${field} must be a non-empty string or null`);
+  }
+  return value;
+}
+
+function promptStampOf(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('recording promptStamp must be a non-empty string when present');
   }
   return value;
 }
@@ -98,6 +107,7 @@ export function parseRecording(raw: unknown): Recording {
     modelKey: nullableString(raw['modelKey'], 'modelKey'),
     routeId: nullableString(raw['routeId'], 'routeId'),
     recordedOn: nullableString(raw['recordedOn'], 'recordedOn'),
+    ...(raw['promptStamp'] === undefined ? {} : { promptStamp: promptStampOf(raw['promptStamp']) }),
     responses: responses as unknown as Record<string, RecordedResponse>,
     withheld: withheld as readonly string[],
   };
