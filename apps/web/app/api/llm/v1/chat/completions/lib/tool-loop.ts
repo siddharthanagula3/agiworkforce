@@ -96,6 +96,7 @@ import {
   isImageChatToolName,
   isPhoneWriteStep,
   resolveMaxOutputTokens,
+  skillLoadActivitySummary,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -944,6 +945,7 @@ export function canonicalToolSummary(
   if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
 
   const phrase =
+    (category === 'skill' ? skillLoadActivitySummary(args, 'running') : undefined) ??
     (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
     toolStatusPhrase(toolName);
   return phrase ?? `Running ${humanizeIdentifier(toolName)}`;
@@ -1088,6 +1090,7 @@ export function toolStatusEvent(
   };
   if (status === 'running') {
     const phrase =
+      (toolName === SKILL_TOOL_NAME ? skillLoadActivitySummary(args, 'running') : undefined) ??
       (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
       toolStatusPhrase(toolName);
     if (phrase) statusPayload['status_phrase'] = phrase;

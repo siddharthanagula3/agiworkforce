@@ -90,7 +90,7 @@ export function isRenderableArtifact(language: string, content: string): boolean
   );
 }
 
-const EXPLICIT_ARTIFACT_MARKERS = [
+export const EXPLICIT_ARTIFACT_MARKERS = [
   '// @artifact',
   '<!-- @artifact -->',
   '# @artifact',

@@ -261,7 +261,7 @@ describe('managed Cloud Skill tool loop', () => {
     expect(toolResult?.content).not.toContain(root);
 
     expect(output).toContain('"name":"skill"');
-    expect(output).toContain('"status_phrase":"Reading skill"');
+    expect(output).toContain('"status_phrase":"Loading skill design-review"');
     expect(output).toContain('"status":"completed"');
     expect(output).toContain('I used the selected review guidance.');
 
@@ -271,7 +271,7 @@ describe('managed Cloud Skill tool loop', () => {
           type: 'tool-execution-start',
           name: 'skill',
           category: 'skill',
-          summary: 'Reading skill',
+          summary: 'Loading skill design-review',
         }),
         expect.objectContaining({
           type: 'tool-execution-end',
@@ -288,6 +288,7 @@ describe('managed Cloud Skill tool loop', () => {
 
     const output = await collect(runToolLoop(makeProcessed(root), { approvalMode: 'auto' }));
 
+    expect(output).not.toContain('Loading skill');
     expect(output).not.toContain('Reading skill');
     expect(output).not.toContain('"name":"skill"');
     expect(output).toContain('No skill was needed.');

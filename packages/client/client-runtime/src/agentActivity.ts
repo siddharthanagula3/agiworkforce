@@ -8,6 +8,7 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types';
+import { skillLoadActivitySummary } from '@agiworkforce/types';
 import { isScreenDeviceStep } from '@agiworkforce/local-runtime-contract';
 
 export type AgentActivityRunStatus =
@@ -664,7 +665,9 @@ function applyAgentEvent(
             ? (failureSummary ??
               humanizeToolFailureSummary(rawFailure, entry.input) ??
               entry.summary)
-            : entry.summary,
+            : ((entry.category === 'skill'
+                ? skillLoadActivitySummary(entry.input, 'completed')
+                : undefined) ?? entry.summary),
           unavailable,
           ...(event.isError ? { error: rawFailure ?? 'Tool execution failed' } : {}),
           elapsedMs: event.elapsedMs ?? Math.max(0, envelope.emittedAtMs - entry.startedAtMs),
