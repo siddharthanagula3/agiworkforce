@@ -275,9 +275,9 @@ describe('buildAdapterStreamResponse · text on both sides of a native search', 
 
     expect(streamedContent(output)).toBe(`${PRE_TOOL}\n\n${POST_TOOL}`);
     expect(persistence.persistAssistantTurn).toHaveBeenCalledOnce();
-    const persisted = persistence.persistAssistantTurn.mock.calls[0]?.[0] as unknown as {
-      snapshot: { content: string };
-    };
+    const [persisted] = persistence.persistAssistantTurn.mock.calls[0] as unknown as [
+      { snapshot: { content: string } },
+    ];
     expect(persisted.snapshot.content).toBe(streamedContent(output));
   });
 });
