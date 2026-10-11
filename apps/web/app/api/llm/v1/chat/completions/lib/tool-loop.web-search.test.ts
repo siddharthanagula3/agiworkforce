@@ -53,6 +53,20 @@ function agentEvents(output: string): AgentEventEnvelope[] {
     });
 }
 
+function streamedContent(output: string): string {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .map((line) => {
+      const payload = JSON.parse(line.slice('data: '.length)) as {
+        choices?: Array<{ delta?: { content?: unknown } }>;
+      };
+      const content = payload.choices?.[0]?.delta?.content;
+      return typeof content === 'string' ? content : '';
+    })
+    .join('');
+}
+
 function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const payload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + 'data: [DONE]\n\n';
@@ -264,6 +278,72 @@ describe('tool-loop web_search integration', () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it.each([
+    ["I'll run the search now, as you asked.", "You're right that artifacts exist."],
+    ["I'll run the search now, as you asked.\n", "You're right that artifacts exist."],
+    ["I'll run the search now, as you asked.", "\n\nYou're right that artifacts exist."],
+  ])(
+    'starts the answer after a search as its own paragraph (%j then %j)',
+    async (preTool, postTool) => {
+      factoryMocks.streamRequest
+        .mockResolvedValueOnce(
+          sseStream([
+            { choices: [{ delta: { content: preTool }, index: 0 }], model: 'test-model' },
+            {
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'call_web_search_pre_text',
+                        type: 'function',
+                        function: {
+                          name: 'web_search',
+                          arguments: JSON.stringify({ query: 'artifacts' }),
+                        },
+                      },
+                    ],
+                  },
+                  index: 0,
+                },
+              ],
+              model: 'test-model',
+            },
+            {
+              choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }],
+              model: 'test-model',
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(finalAnswerStream(postTool));
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => perplexitySearchResponse()),
+      );
+      vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+      try {
+        const output = await collect(
+          runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
+        );
+
+        expect(streamedContent(output)).toBe(
+          "I'll run the search now, as you asked.\n\nYou're right that artifacts exist.",
+        );
+        expect(
+          agentEvents(output)
+            .flatMap(({ event }) => (event.type === 'text-delta' ? [event.delta] : []))
+            .join(''),
+        ).toBe(streamedContent(output));
+      } finally {
+        vi.unstubAllGlobals();
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 
   it('caps a Free-tier fallback search at five results', async () => {
     factoryMocks.streamRequest

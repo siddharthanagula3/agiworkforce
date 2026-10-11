@@ -78,7 +78,7 @@ import {
   EmptyProviderResponseError,
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
-import { toolStatusPhrase } from '@agiworkforce/provider-protocol';
+import { paragraphBreakBetween, toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import type {
   AgentEventEnvelope,
   AgentEventStopReason,
@@ -1939,6 +1939,7 @@ const AGIWORK_PLAN_REVIEW_NOTE =
 const GOOGLE_GROUNDING_PROVIDER = 'google';
 
 const MAX_TOOL_ERROR_CHARS = 4_000;
+const DELIVERED_TEXT_TAIL_CHARS = 64;
 
 const SEALED_MCP_ENVELOPE_OPEN = '<mcp_tool_result untrusted="true"';
 const SEALED_MCP_ENVELOPE_CLOSE = '</mcp_tool_result>';
@@ -4004,9 +4005,30 @@ export async function* runToolLoop(
   // Whether answer text has reached the reader, which decides whether a later
   // transport failure is an interruption or a model that was never reached.
   let publicTextEmitted = false;
+  let deliveredTextTail = '';
+  let paragraphBreakPending = false;
   const nativeSourceKeys = new Set<string>();
 
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
+    if (paragraphBreakPending && entry.publicTextDelta) {
+      paragraphBreakPending = false;
+      const paragraphBreak = paragraphBreakBetween(deliveredTextTail, entry.publicTextDelta);
+      if (paragraphBreak) {
+        yield encoder.encode(
+          sseData({
+            choices: [{ index: 0, delta: { content: paragraphBreak } }],
+            model: responseModel,
+          }),
+        );
+        yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: paragraphBreak }));
+        deliveredTextTail += paragraphBreak;
+      }
+    }
+    if (entry.publicTextDelta) {
+      deliveredTextTail = (deliveredTextTail + entry.publicTextDelta).slice(
+        -DELIVERED_TEXT_TAIL_CHARS,
+      );
+    }
     yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
     if (entry.publicTextDelta) publicTextEmitted = true;
     if (entry.reasoningDelta) {
@@ -5875,6 +5897,7 @@ export async function* runToolLoop(
       let releasedProviderLines = !holdUntilSearchSeen && !holdForRequiredFreeExecution;
       try {
         const liveLines = createLiveLineQueue<CollectedProviderLine>();
+        paragraphBreakPending = step > FIRST_PROVIDER_STEP && deliveredTextTail.trim().length > 0;
         const stepPromise = runProviderStepWithFailover(step, stepRequest, (entry) =>
           liveLines.push(entry),
         );
@@ -6218,6 +6241,7 @@ export async function* runToolLoop(
       }
 
       if (publicTextTail) {
+        deliveredTextTail = (deliveredTextTail + publicTextTail).slice(-DELIVERED_TEXT_TAIL_CHARS);
         yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: publicTextTail }));
       }
 
