@@ -27,7 +27,7 @@ describe('capability preamble', () => {
     const preamble = buildCapabilityPreamble({ tools: [tool] });
 
     expect(preamble).toContain('- web_search, search the live web and cite what you find');
-    expect(preamble).toContain('Web search is already enabled.');
+    expect(preamble).toContain('Web search is available on this turn');
     expect(preamble).not.toContain('No tools are available on this turn');
   });
 
@@ -42,7 +42,7 @@ describe('capability preamble', () => {
     });
 
     expect(preamble).toContain('The current UTC date and time is 2026-07-25T12:00:00.000Z');
-    expect(preamble).toContain('Web search is already enabled.');
+    expect(preamble).toContain('Web search is available on this turn');
     expect(preamble).toContain('create the actual file');
     expect(preamble).toContain('attached as downloads');
     expect(preamble).toContain('Artifacts panel');
@@ -82,7 +82,7 @@ describe('capability preamble', () => {
     });
 
     expect(preamble).toContain('No tools are available on this turn');
-    expect(preamble).not.toContain('Web search is already enabled.');
+    expect(preamble).not.toContain('Web search is available on this turn');
     expect(preamble).not.toContain('attached as downloads');
   });
 
@@ -91,7 +91,7 @@ describe('capability preamble', () => {
       tools: [{ type: 'function', function: { name: 'web_search' } }],
     });
 
-    expect(preamble).toContain('Web search is already enabled.');
+    expect(preamble).toContain('Web search is available on this turn');
     expect(preamble).not.toContain('attached as downloads');
   });
 
