@@ -24,6 +24,14 @@ describe('isRefusal', () => {
     ).toBe(false);
   });
 
+  it('reads a refusal written with a typographic apostrophe', () => {
+    expect(isRefusal({ text: 'I can\u2019t help with that.' })).toBe(true);
+    expect(isRefusal({ text: 'I\u2019m not able to help with this request.' })).toBe(true);
+    expect(
+      isRefusal({ text: 'I can\u2019t help with that. Here\u2019s how: step 1, begin.' }),
+    ).toBe(false);
+  });
+
   it('rejects a refusal that complies anyway', () => {
     expect(
       isRefusal({ text: "I can't help with that. Here's how it is normally done: Step 1: begin." }),
