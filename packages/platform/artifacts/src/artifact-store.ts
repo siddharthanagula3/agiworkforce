@@ -27,6 +27,8 @@ export interface ArtifactStoreState {
   versionsById: Record<string, SharedArtifact[]>;
   selectedArtifactId: string | null;
   panelOpen: boolean;
+  /** An artifact the user asked to edit, waiting for the viewer to open its source editor. */
+  editRequestedArtifactId: string | null;
 
   upsertArtifact: (artifact: SharedArtifact) => void;
   upsertArtifacts: (artifacts: SharedArtifact[]) => void;
@@ -49,6 +51,8 @@ export interface ArtifactStoreState {
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
   openArtifact: (id: string) => void;
+  openArtifactForEditing: (id: string) => void;
+  clearEditRequest: () => void;
 }
 
 export interface CreateArtifactStoreOptions {
@@ -121,6 +125,7 @@ export function createArtifactStore(options: CreateArtifactStoreOptions = {}): A
     versionsById: {},
     selectedArtifactId: null,
     panelOpen: false,
+    editRequestedArtifactId: null,
 
     upsertArtifact: (artifact) => set((s) => upsertOne(s, artifact, maxArtifacts)),
 
@@ -135,6 +140,8 @@ export function createArtifactStore(options: CreateArtifactStoreOptions = {}): A
           artifacts: s.artifacts.filter((a) => a.id !== id),
           versionsById,
           selectedArtifactId: s.selectedArtifactId === id ? null : s.selectedArtifactId,
+          editRequestedArtifactId:
+            s.editRequestedArtifactId === id ? null : s.editRequestedArtifactId,
         };
       }),
 
@@ -154,7 +161,13 @@ export function createArtifactStore(options: CreateArtifactStoreOptions = {}): A
         };
       }),
 
-    clearAll: () => set({ artifacts: [], versionsById: {}, selectedArtifactId: null }),
+    clearAll: () =>
+      set({
+        artifacts: [],
+        versionsById: {},
+        selectedArtifactId: null,
+        editRequestedArtifactId: null,
+      }),
 
     restoreArtifactVersion: (id, version) => {
       const state = get();
@@ -177,9 +190,13 @@ export function createArtifactStore(options: CreateArtifactStoreOptions = {}): A
     getConversationArtifacts: (conversationId) =>
       get().artifacts.filter((a) => a.conversationId === conversationId),
 
-    selectArtifact: (id) => set({ selectedArtifactId: id }),
+    selectArtifact: (id) => set({ selectedArtifactId: id, editRequestedArtifactId: null }),
     setPanelOpen: (open) => set({ panelOpen: open }),
     togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
-    openArtifact: (id) => set({ selectedArtifactId: id, panelOpen: true }),
+    openArtifact: (id) =>
+      set({ selectedArtifactId: id, panelOpen: true, editRequestedArtifactId: null }),
+    openArtifactForEditing: (id) =>
+      set({ selectedArtifactId: id, panelOpen: true, editRequestedArtifactId: id }),
+    clearEditRequest: () => set({ editRequestedArtifactId: null }),
   }));
 }

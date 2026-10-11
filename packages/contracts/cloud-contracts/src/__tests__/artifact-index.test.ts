@@ -3,8 +3,13 @@ import {
   MANAGED_CLOUD_ARTIFACT_INDEX_PATH,
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
   ManagedCloudArtifactIndexResponseSchema,
+  ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
+  ManagedCloudPublishedArtifactUpdateRequestSchema,
   managedCloudArtifactIndexQueryString,
+  managedCloudPublishedArtifactDataPath,
+  managedCloudPublishedArtifactPath,
+  managedCloudPublishedArtifactVersionsPath,
 } from '../artifact-index';
 
 describe('artifact index contract (apps/web/app/api/artifacts/index/route.ts)', () => {
@@ -101,5 +106,68 @@ describe('published artifact contract (apps/web/app/api/artifacts/publish/route.
         ],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('published site contract (apps/web/app/api/artifacts/publish/[token]/route.ts)', () => {
+  it('reads a listing from a server that predates the Sites fields', () => {
+    const parsed = ManagedCloudPublishedArtifactListResponseSchema.parse({
+      artifacts: [
+        {
+          token: 'tok_1',
+          artifactId: 'a1',
+          title: 'Invoice page',
+          kind: 'html',
+          language: null,
+          contentChars: 42,
+          visibility: 'public',
+          createdAt: '2026-09-13T11:00:00.000Z',
+          updatedAt: '2026-09-13T11:00:00.000Z',
+          shareUrl: 'https://agiworkforce.com/shared-artifact/tok_1',
+          sandboxed: true,
+        },
+      ],
+    });
+    expect(parsed.workspace).toBeNull();
+    expect(parsed.artifacts[0]).toMatchObject({ conversationId: null, version: 0 });
+  });
+
+  it('accepts a rename, an audience change, or both, and nothing else', () => {
+    const accepts = (body: unknown) =>
+      ManagedCloudPublishedArtifactUpdateRequestSchema.safeParse(body).success;
+    expect(accepts({ title: 'Scoreboard' })).toBe(true);
+    expect(accepts({ visibility: 'organization' })).toBe(true);
+    expect(accepts({ title: 'Scoreboard', visibility: 'public' })).toBe(true);
+    expect(accepts({})).toBe(false);
+    expect(accepts({ title: '   ' })).toBe(false);
+    expect(accepts({ title: 'x'.repeat(301) })).toBe(false);
+    expect(accepts({ visibility: 'private' })).toBe(false);
+  });
+
+  it('builds every path under the one published-artifact root', () => {
+    expect(managedCloudPublishedArtifactPath('a/b')).toBe(
+      `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/a%2Fb`,
+    );
+    expect(managedCloudPublishedArtifactVersionsPath('tok')).toBe(
+      `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/tok/versions`,
+    );
+    expect(managedCloudPublishedArtifactDataPath('tok')).toBe(
+      `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/tok/data`,
+    );
+  });
+
+  it('describes owner data with shared entries and a count of personal ones', () => {
+    expect(
+      ManagedCloudPublishedArtifactDataResponseSchema.safeParse({
+        supported: true,
+        shared: {
+          entries: [{ key: 'scores', bytes: 9, preview: '[1]', truncated: false, updatedAt: 'x' }],
+          entryCount: 1,
+          totalBytes: 9,
+          limitBytes: 20971520,
+        },
+        ownPersonalEntryCount: 0,
+      }).success,
+    ).toBe(true);
   });
 });

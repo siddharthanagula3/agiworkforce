@@ -1,12 +1,20 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  ManagedCloudPublishedArtifactUpdateRequestSchema,
+  type ManagedCloudPublishedArtifactUpdateResponse,
+  type ManagedCloudPublishedArtifactVisibility,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { moderateManagedPrompt } from '@/lib/moderation';
+import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
+import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import {
   requireOrganizationPermission,
   SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
@@ -18,20 +26,17 @@ import {
   unshareArtifactFromOrganization,
 } from '@/lib/services/org-shared-artifact-service';
 import {
-  PUBLISHED_ARTIFACT_VISIBILITIES,
   PUBLISHED_TOKEN_REGEX,
   buildPublishedArtifactUrl,
+  renamePublishedArtifact,
   setPublishedArtifactVisibility,
   unpublishArtifactRecord,
+  type PublishedArtifact,
 } from '@/lib/services/published-artifact-service';
 
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ token: string }> };
-
-const VisibilitySchema = z.object({
-  visibility: z.enum(PUBLISHED_ARTIFACT_VISIBILITIES),
-});
 
 function sharingUnavailableResponse(): NextResponse {
   return NextResponse.json(
@@ -75,7 +80,65 @@ async function handleUnpublish(request: NextRequest, context: RouteContext): Pro
  * RLS-scoped adapter, so 0184's policies, not this handler, decide whether the
  * caller may touch the row at all.
  */
-async function handleSetVisibility(request: NextRequest, context: RouteContext): Promise<Response> {
+async function moveToAudience(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string; visibility: ManagedCloudPublishedArtifactVisibility },
+): Promise<{ updated: PublishedArtifact | null; organizationId: string | null }> {
+  const target = await resolveArtifactShareTarget(db, { userId: input.userId, token: input.token });
+
+  if (input.visibility === 'organization') {
+    await requireOrganizationPermission(
+      input.userId,
+      target.organizationId,
+      'content.share',
+      SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+    );
+    await shareArtifactWithOrganization(db, {
+      organizationId: target.organizationId,
+      publishedArtifactId: target.publishedArtifactId,
+      actorUserId: input.userId,
+    });
+  } else {
+    await unshareArtifactFromOrganization(db, target.organizationId, target.publishedArtifactId);
+  }
+
+  const updated = await setPublishedArtifactVisibility(db, input);
+  return {
+    updated,
+    organizationId: input.visibility === 'organization' ? target.organizationId : null,
+  };
+}
+
+async function inspectedTitle(input: {
+  db: DatabaseAdapter;
+  userId: string;
+  organizationId: string | null;
+  token: string;
+  title: string;
+}): Promise<string> {
+  const moderation = moderateManagedPrompt({
+    userId: input.userId,
+    segments: [input.title],
+    surface: 'published-artifact',
+  });
+  if (!moderation.allowed) {
+    throw createError.validation(
+      'This name cannot be used because it violates the AGI Workforce usage policy.',
+    );
+  }
+  const outbound = await inspectOutboundContent({
+    channel: 'artifact_publish',
+    value: input.title,
+    userId: input.userId,
+    organizationId: input.organizationId,
+    resourceId: input.token,
+    resolveMode: () => resolveSecretHandlingPolicy(input.db, input.userId),
+  });
+  if (outbound.action === 'blocked') throw createError.validation(outbound.message);
+  return outbound.value;
+}
+
+async function handleUpdate(request: NextRequest, context: RouteContext): Promise<Response> {
   const { token } = await context.params;
 
   if (!PUBLISHED_TOKEN_REGEX.test(token)) {
@@ -95,45 +158,44 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext):
     throw createError.validation('Request body must be JSON');
   }
 
-  const parsed = VisibilitySchema.safeParse(rawBody);
+  const parsed = ManagedCloudPublishedArtifactUpdateRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
-    throw createError.validation('Invalid artifact visibility request', parsed.error.flatten());
+    throw createError.validation('Invalid published artifact update', parsed.error.flatten());
   }
 
-  const { db, userId } = await getUserScopedDb(request);
-  const visibility = parsed.data.visibility;
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { visibility, title } = parsed.data;
 
   try {
-    const target = await resolveArtifactShareTarget(db, { userId, token });
+    const nextTitle =
+      title === undefined
+        ? undefined
+        : await inspectedTitle({ db, userId, organizationId, token, title });
 
-    if (visibility === 'organization') {
-      await requireOrganizationPermission(
-        userId,
-        target.organizationId,
-        'content.share',
-        SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
-      );
-      await shareArtifactWithOrganization(db, {
-        organizationId: target.organizationId,
-        publishedArtifactId: target.publishedArtifactId,
-        actorUserId: userId,
-      });
-    } else {
-      await unshareArtifactFromOrganization(db, target.organizationId, target.publishedArtifactId);
+    let updated: PublishedArtifact | null = null;
+    let sharedWith: string | null = null;
+    if (visibility !== undefined) {
+      const moved = await moveToAudience(db, { userId, token, visibility });
+      updated = moved.updated;
+      sharedWith = moved.organizationId;
+      if (!updated) throw createError.notFound('Published artifact not found');
     }
-
-    const updated = await setPublishedArtifactVisibility(db, { userId, token, visibility });
+    if (nextTitle !== undefined) {
+      updated = await renamePublishedArtifact(db, { userId, token, title: nextTitle });
+    }
     if (!updated) {
       throw createError.notFound('Published artifact not found');
     }
 
-    return NextResponse.json({
+    const body: ManagedCloudPublishedArtifactUpdateResponse = {
       token: updated.token,
       shareUrl: buildPublishedArtifactUrl(updated.token),
+      title: updated.title,
       visibility: updated.visibility,
-      organizationId: visibility === 'organization' ? target.organizationId : null,
+      organizationId: sharedWith,
       updatedAt: updated.updatedAt,
-    });
+    };
+    return NextResponse.json(body);
   } catch (error) {
     if (isArtifactSharingSchemaUnavailable(error)) return sharingUnavailableResponse();
     throw error;
@@ -141,4 +203,4 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext):
 }
 
 export const DELETE = withErrorHandler(handleUnpublish);
-export const PATCH = withErrorHandler(handleSetVisibility);
+export const PATCH = withErrorHandler(handleUpdate);

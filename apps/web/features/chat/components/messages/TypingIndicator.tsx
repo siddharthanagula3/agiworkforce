@@ -1,20 +1,21 @@
 import React from 'react';
+import { Spinner } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface TypingIndicatorProps {
-  agentName?: string;
   className?: string;
 }
 
 export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ className }) => {
   return (
-    <div className={cn('flex items-center gap-2 rounded-lg bg-muted/50 px-4 py-3', className)}>
-      <div className="flex items-center gap-1.5">
-        <div className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
-        <div className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
-        <div className="h-2 w-2 animate-bounce rounded-full bg-primary" />
+    <div
+      className={cn('mx-auto w-full max-w-3xl px-gutter-compact py-1.5', className)}
+      data-testid="typing-indicator"
+    >
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner size="sm" aria-hidden="true" />
+        <span>Preparing</span>
       </div>
-      <span className="text-sm text-muted-foreground">Preparing</span>
     </div>
   );
 };

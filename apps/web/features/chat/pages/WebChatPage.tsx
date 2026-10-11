@@ -263,6 +263,7 @@ import {
   WorkSessionPanel,
   WorkSessionToggleButton,
 } from '../components/work-session/WorkSessionPanel';
+import { OutputsPopoverButton } from '../components/work-session/OutputsPopover';
 import { hasWorkSession, taskDockRunKey } from '../components/work-session/taskDockSummary';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
@@ -5241,6 +5242,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleSend],
   );
 
+  const handleArtifactEditRequest = useCallback(
+    (prompt: string) => {
+      const outcome = handleSend(prompt);
+      return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
+    },
+    [handleSend],
+  );
+
   const sendResearchGuidanceAsMessage = useCallback(
     async (id: string, guidance: string): Promise<boolean> => {
       const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
@@ -6406,7 +6415,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     onToggle={() => toggleSecondaryPanel('sources')}
                   />
                 ) : null}
-                <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
+                <OutputsPopoverButton
+                  messages={displayedMessages}
+                  fallback={
+                    <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
+                  }
+                />
               </div>
             </header>
           )}
@@ -6751,7 +6765,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             />
           </PanelWindowPortal>
         )}
-        {!compact && activeSecondaryPanel === 'artifacts' && <ArtifactsPanel />}
+        {!compact && activeSecondaryPanel === 'artifacts' && (
+          <ArtifactsPanel onRequestEdits={handleArtifactEditRequest} />
+        )}
         {!compact && activeSecondaryPanel === 'sources' && conversationProject ? (
           <ProjectSourcesPanel
             projectId={conversationProject.id}

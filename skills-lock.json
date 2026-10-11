@@ -108,6 +108,14 @@
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:ece86dc2cb8a48faa6ff3206103b5981eb8118c2d1d3375786c2baae9caeb2be"
     },
+    "artifact-design": {
+      "path": ".agents/skills/artifact-design",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:a38936c5b208a2119459d436caac4653aa1827c95702b71dccd0b2bf8275c20a"
+    },
     "aso": {
       "path": ".agents/skills/aso",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/aso)",

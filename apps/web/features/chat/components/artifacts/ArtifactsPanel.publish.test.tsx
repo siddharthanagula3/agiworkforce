@@ -5,6 +5,7 @@ import { ArtifactsPanel } from './ArtifactsPanel';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
+import { usePublishedSitesStore } from '@features/sites/stores/published-sites-store';
 
 type PublishSelection = { content: string; versionIndex: number };
 let capturedPublish: ((selection: PublishSelection) => Promise<PublishResult>) | undefined;
@@ -149,6 +150,34 @@ describe('ArtifactsPanel · publish wiring', () => {
     const body = JSON.parse(String(init.body));
     expect(body.content).toBe(OLDER);
     expect(body.content).not.toBe(CONTENT);
+  });
+
+  it('records the publish where the artifact card reads its published state', async () => {
+    usePublishedSitesStore.setState({ byArtifactId: {}, status: 'ready' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json(
+          {
+            token: 'cccccccccccccccccccccccc',
+            shareUrl: 'https://agiworkforce.com/shared-artifact/cccccccccccccccccccccccc',
+            publishedAt: '2026-08-05T00:00:00.000Z',
+            visibility: 'public',
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    render(<ArtifactsPanel />);
+    await capturedPublish!({ content: CONTENT, versionIndex: 0 });
+
+    expect(usePublishedSitesStore.getState().byArtifactId[ARTIFACT_ID]).toEqual({
+      token: 'cccccccccccccccccccccccc',
+      shareUrl: 'https://agiworkforce.com/shared-artifact/cccccccccccccccccccccccc',
+      visibility: 'public',
+      sitePath: '/chat/sites/cccccccccccccccccccccccc',
+    });
   });
 
   it('surfaces the server error instead of reporting a fake success', async () => {

@@ -104,6 +104,10 @@ export const EXPLICIT_ARTIFACT_MARKER_FOR = {
   mermaid: EXPLICIT_ARTIFACT_MARKERS[3],
 } as const;
 
+function isArtifactMarkerLine(trimmedLine: string): boolean {
+  return EXPLICIT_ARTIFACT_MARKERS.some((marker) => trimmedLine === marker);
+}
+
 export function hasExplicitArtifactMarker(content: string): boolean {
   return EXPLICIT_ARTIFACT_MARKERS.some((marker) => content.includes(marker));
 }
@@ -176,7 +180,11 @@ export function extractArtifactTitle(content: string): string | undefined {
     if (trimmed) return trimmed;
   }
 
-  const first = content.split('\n').find((l) => l.trim().length > 0) ?? '';
+  const first =
+    content.split('\n').find((line) => {
+      const trimmed = line.trim();
+      return trimmed.length > 0 && !isArtifactMarkerLine(trimmed) && !trimmed.startsWith('<');
+    }) ?? '';
   const cleaned = first
     .replace(/^#+\s+/, '')
     .replace(/^\/\/+\s*/, '')
@@ -297,20 +305,58 @@ export function hasArtifacts(markdown: string, options: DeriveArtifactsOptions =
   return extractCodeBlocks(markdown).some((b) => blockIncluded(b, include, minCodeLines));
 }
 
+export interface ArtifactProseSplit {
+  before: string;
+  after: string;
+}
+
+/**
+ * The prose on either side of the last artifact block, with every artifact
+ * block removed, so a surface can show the artifact where the model put it
+ * instead of after the whole reply. `after` is empty when nothing follows.
+ */
+export function splitProseAroundArtifacts(
+  markdown: string,
+  artifacts: ReadonlyArray<Pick<SharedArtifact, 'content' | 'language'>>,
+  options: Pick<DeriveArtifactsOptions, 'include' | 'minCodeLines'> = {},
+): ArtifactProseSplit {
+  if (artifacts.length === 0) return { before: markdown.trim(), after: '' };
+  const wanted = new Set(artifacts.map((a) => normalizeWhitespace(a.content)));
+  const blocks = extractCodeBlocks(markdown);
+  let lastEnd = -1;
+  for (const block of blocks) {
+    if (
+      wanted.has(normalizeWhitespace(block.content)) ||
+      blockIncluded(block, options.include ?? 'renderable', options.minCodeLines ?? 4)
+    ) {
+      lastEnd = block.endIndex;
+    }
+  }
+  if (lastEnd === -1)
+    return { before: removeArtifactBlocks(markdown, artifacts, options), after: '' };
+  return {
+    before: removeArtifactBlocks(markdown.slice(0, lastEnd), artifacts, options),
+    after: markdown.slice(lastEnd).trim(),
+  };
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 export function removeArtifactBlocks(
   markdown: string,
   artifacts: ReadonlyArray<Pick<SharedArtifact, 'content' | 'language'>>,
   options: Pick<DeriveArtifactsOptions, 'include' | 'minCodeLines'> = {},
 ): string {
   if (artifacts.length === 0) return markdown.trim();
-  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
-  const wanted = new Set(artifacts.map((a) => norm(a.content)));
+  const wanted = new Set(artifacts.map((a) => normalizeWhitespace(a.content)));
   const blocks = extractCodeBlocks(markdown);
   let cleaned = markdown;
   for (let i = blocks.length - 1; i >= 0; i -= 1) {
     const block = blocks[i]!;
     if (
-      wanted.has(norm(block.content)) ||
+      wanted.has(normalizeWhitespace(block.content)) ||
       blockIncluded(block, options.include ?? 'renderable', options.minCodeLines ?? 4)
     ) {
       cleaned = cleaned.slice(0, block.startIndex) + cleaned.slice(block.endIndex);

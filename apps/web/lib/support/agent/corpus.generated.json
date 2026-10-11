@@ -246,14 +246,14 @@
           "ordinal": 0,
           "heading": "What an artifact is",
           "headingPath": "Artifacts: documents and code AGI writes for you › What an artifact is",
-          "text": "When an answer produces a document, a piece of code or a rendered page rather\nthan a paragraph, it opens as an artifact in a panel beside the conversation.\nThe panel can be opened and closed from the conversation, or with\nShift+Cmd/Ctrl+A, and has a fullscreen view."
+          "text": "When an answer produces a document, a piece of code or a rendered page rather\nthan a paragraph, it opens as an artifact in a panel beside the conversation.\nThe panel can be opened and closed from the conversation, or with\nShift+Cmd/Ctrl+A, and has a fullscreen view. The header keeps the title, a\nversion stepper, Copy, Publish and the fullscreen and close buttons in view;\neverything else (download, duplicate, refresh, open in a new tab, save to a\nproject or the Library) is under **More**, which works with the arrow keys and\ncloses with Escape."
         },
         {
           "id": "artifacts#1",
           "ordinal": 1,
           "heading": "Editing one",
           "headingPath": "Artifacts: documents and code AGI writes for you › Editing one",
-          "text": "Edits you make in the panel are saved as new versions, and earlier versions can\nbe restored. **Duplicate** makes an independent copy, confirmed with\n\"Duplicated. Edits here no longer touch the original.\" **Save to project** files\nit into a project's knowledge.\n\nIf someone else changed the same artifact first, the panel keeps your work and\nsays so: their version is shown and your edit is kept as the latest version.\nNothing is silently discarded."
+          "text": "Edits you make in the panel are saved as new versions, and earlier versions can\nbe restored. **Request edits** on a rendered page lets you click an element in\nthe preview and describe the change; it is sent as a normal message that names\nthe element, and the reply becomes the next version. **Duplicate** makes an independent copy, confirmed with\n\"Duplicated. Edits here no longer touch the original.\" **Save to project** files\nit into a project's knowledge.\n\nIf someone else changed the same artifact first, the panel keeps your work and\nsays so: their version is shown and your edit is kept as the latest version.\nNothing is silently discarded."
         },
         {
           "id": "artifacts#2",

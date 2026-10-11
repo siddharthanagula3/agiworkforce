@@ -4,6 +4,10 @@ import { EditorView } from '@codemirror/view';
 import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
+function openMore() {
+  fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+}
+
 const ARTIFACT_ID = 'artifact-edit-1';
 
 function seedArtifact(content = '<p>original</p>') {
@@ -58,6 +62,7 @@ describe('ArtifactPreview · manual source editing', () => {
     const view = renderPanel();
 
     fireEvent.click(screen.getByLabelText('Source'));
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-edit-source'));
 
     const editor = await sourceEditor();
@@ -78,6 +83,7 @@ describe('ArtifactPreview · manual source editing', () => {
     const view = renderPanel();
 
     fireEvent.click(screen.getByLabelText('Source'));
+    openMore();
     fireEvent.click(screen.getByTestId('artifact-edit-source'));
     replaceSource(await sourceEditor(), '<p>never saved</p>');
     fireEvent.click(screen.getByTestId('artifact-cancel-source-edit'));
@@ -98,6 +104,7 @@ describe('ArtifactPreview · manual source editing', () => {
     );
 
     fireEvent.click(screen.getByLabelText('Source'));
+    openMore();
     expect(screen.queryByTestId('artifact-edit-source')).toBeNull();
 
     view.unmount();
@@ -112,6 +119,7 @@ describe('ArtifactPreview · manual source editing', () => {
     const view = renderPanel();
 
     fireEvent.click(screen.getByLabelText('Source'));
+    openMore();
     expect(screen.getByTestId('artifact-edit-source')).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText('Previous version'));

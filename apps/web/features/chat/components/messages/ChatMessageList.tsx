@@ -1054,7 +1054,7 @@ const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
 
   if (!group) {
     return (
-      <div {...ariaAttributes} style={style} className="min-w-0 pb-2">
+      <div {...ariaAttributes} style={style} className="min-w-0 pb-24" data-testid="transcript-end">
         {footer}
       </div>
     );
