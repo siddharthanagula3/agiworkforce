@@ -282,9 +282,27 @@ test('a web chord VoiceOver claims fails', () => {
   );
 });
 
-test('a web shortcut with no modifier and no context rule fails', () => {
+test('a web shortcut with no modifier that opts into firing inside a field fails', () => {
   const root = fixture({
-    [WEB_REGISTRY_PATH]: (source) => source.replace("doc.key === 'Escape'", "doc.key === 'Enter'"),
+    [WEB_REGISTRY_PATH]: (source) =>
+      source.replace("id: 'focus-composer',", "id: 'focus-composer',\n    firesInEditable: true,"),
+  });
+  const failures = checkShortcutRegistry(root);
+  assert.ok(
+    failures.some((entry) =>
+      /focus-composer has no modifier and no context rule that keeps it out of a field/.test(entry),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('a web shortcut with no modifier fails once the handler stops yielding to fields', () => {
+  const root = fixture({
+    [WEB_REGISTRY_PATH]: (source) =>
+      source.replace(
+        'const contextOk = !shortcutYieldsToFocus(event, doc);',
+        'const contextOk = true;',
+      ),
   });
   const failures = checkShortcutRegistry(root);
   assert.ok(
