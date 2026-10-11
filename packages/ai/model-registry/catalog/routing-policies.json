@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 25,
+    "policyVersion": 26,
     "records": [
       {
         "version": 1,
@@ -238,6 +238,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-10",
         "reason": "no longer served now that chat.system@6 is pinned; kept in the manifest as the version to restore, and measured in the same three-sample run"
+      },
+      {
+        "version": 26,
+        "artifact": "prompt",
+        "id": "chat.system@7",
+        "channel": "internal",
+        "effectiveOn": "2026-10-11",
+        "reason": "chat.system@6 plus an artifacts section filled with the explicit markers from the artifacts package, a plan- and surface-aware product capabilities overview filled from the capability handshake, email and writing block rules, a no_tools and capability_honesty that no longer lead with what the turn cannot do, and an artifact runtime whose connected-apps sentence is sent only where connectors are released and the plan includes them. Enters on internal and takes no traffic until a canary advance carries an eval quality signal"
       }
     ]
   },
