@@ -12,8 +12,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-react';
-import type { ResearchReport } from '@agiworkforce/types';
+import { Brain, Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-react';
+import type { ManagedMemoryCitations, ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState, translateUiPlural } from '@agiworkforce/ui';
 import { citationPublisherDomain } from '@agiworkforce/unified-chat';
@@ -24,6 +24,7 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { ResearchReportView, type ReportArtifactInput } from './ResearchReportView';
 import { ResearchReportsGallery } from './ResearchReportsGallery';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dialog';
 import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
 import {
@@ -162,6 +163,52 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
   );
 }
 
+const MEMORY_SETTINGS_SECTION = 'memory';
+const SECTION_HEADING_CLASS =
+  'px-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground';
+
+function MemorySources({ memories }: { memories: ManagedMemoryCitations }) {
+  const { openSettings } = useSettingsModal();
+  const unlisted = memories.count - memories.memories.length;
+  return (
+    <section className="space-y-2" aria-label="Memory">
+      <h3 className={SECTION_HEADING_CLASS}>Memory · {memories.count}</h3>
+      <ul className="space-y-2">
+        {memories.memories.map((memory) => (
+          <li
+            key={memory.id}
+            className="flex items-start gap-3 rounded-lg border border-border/20 bg-muted/20 p-3"
+          >
+            <Brain className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <p className="line-clamp-3 min-w-0 flex-1 text-[13px] leading-snug text-foreground">
+              {memory.excerpt}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        {unlisted > 0 && (
+          <p className="text-caption text-muted-foreground">
+            {translateUiPlural('chat', 'counts.moreSavedMemories', unlisted, {
+              one: 'And {{count}} more',
+              other: 'And {{count}} more',
+            })}
+          </p>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={() => openSettings(MEMORY_SETTINGS_SECTION)}
+          className="ms-auto pointer-coarse:min-h-11"
+        >
+          Manage memory
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 // ============================================================================
 // Empty state
 // ============================================================================
@@ -171,7 +218,7 @@ function SourcesEmptyState() {
     <EmptyState
       icon={Search}
       title="No sources yet"
-      description="Web search sources will appear here"
+      description="Web pages and memories an answer used will appear here"
       className="flex-1"
     />
   );
@@ -315,8 +362,8 @@ export function ResearchPanel({
   const closePanel = useResearchPanelStore((s) => s.closePanel);
   const sourcesFor = useResearchPanelStore((s) => s.sourcesFor);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
-  const { cited, more, query } = sourcesFor(activeConversationId);
-  const sourceCount = cited.length + more.length;
+  const { cited, more, query, memories } = sourcesFor(activeConversationId);
+  const sourceCount = cited.length + more.length + (memories?.count ?? 0);
   const [tab, setTab] = useState<'sources' | 'report' | 'library'>('sources');
 
   // The follow-up lands in the transcript behind this panel, so the panel gets
@@ -484,11 +531,10 @@ export function ResearchPanel({
               <SourcesEmptyState />
             ) : (
               <div className="flex-1 space-y-4 overflow-y-auto p-3 [scrollbar-width:thin]">
+                {memories && <MemorySources memories={memories} />}
                 {cited.length > 0 && (
                   <div className="space-y-2">
-                    <h3 className="px-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-                      Citations
-                    </h3>
+                    <h3 className={SECTION_HEADING_CLASS}>Citations</h3>
                     {cited.map((source, index) => (
                       <SourceRow
                         key={`${source.url}-${index}`}
@@ -500,9 +546,7 @@ export function ResearchPanel({
                 )}
                 {more.length > 0 && (
                   <div className="space-y-2">
-                    <h3 className="px-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-                      More
-                    </h3>
+                    <h3 className={SECTION_HEADING_CLASS}>More</h3>
                     {more.map((source, index) => (
                       <SourceRow key={`${source.url}-${index}`} source={source} />
                     ))}
@@ -594,9 +638,10 @@ interface SourcesControlProps {
   cited: ResearchSource[];
   more: ResearchSource[];
   query?: string;
+  memories?: ManagedMemoryCitations | null;
 }
 
-export function SourcesControl({ messageId, cited, more, query }: SourcesControlProps) {
+export function SourcesControl({ messageId, cited, more, query, memories }: SourcesControlProps) {
   const openPanel = useResearchPanelStore((s) => s.openPanel);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const total = cited.length + more.length;
@@ -608,7 +653,7 @@ export function SourcesControl({ messageId, cited, more, query }: SourcesControl
   return (
     <button
       type="button"
-      onClick={() => openPanel(activeConversationId, messageId, cited, more, query)}
+      onClick={() => openPanel(activeConversationId, messageId, cited, more, query, memories)}
       className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-muted/20 py-1.5 ps-1.5 pe-3 text-[13px] text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/50 hover:text-foreground"
       aria-label={translateUiPlural('chat', 'counts.viewSources', total, {
         one: 'View {{count}} source',

@@ -497,6 +497,27 @@
     "openImage": "Abrir imagen en una pestaña nueva",
     "openImageLabel": "Abrir imagen en una pestaña nueva: {{alt}}"
   },
+  "richBlock": {
+    "email": "Correo",
+    "writing": "Texto",
+    "to": "Para",
+    "cc": "CC",
+    "bcc": "CCO",
+    "subject": "Asunto",
+    "body": "Mensaje",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "copyEmail": "Copiar correo",
+    "emailCopied": "Correo copiado",
+    "copyWriting": "Copiar este texto",
+    "writingCopied": "Texto copiado",
+    "copyFailed": "No se pudo copiar, portapapeles no disponible",
+    "openInMail": "Abrir en la app de correo",
+    "bodyCopiedForMail": "Este mensaje es demasiado largo para un enlace de correo, así que se copió. Pégalo en el nuevo correo.",
+    "expandWriting": "Abrir en grande para leer y editar",
+    "closeWriting": "Cerrar texto ampliado",
+    "editWriting": "Editar texto"
+  },
   "streaming": {
     "reconnecting": "Reconectando…",
     "stopping": "Deteniendo la tarea en la nube…"

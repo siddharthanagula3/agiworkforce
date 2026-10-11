@@ -115,7 +115,6 @@ import {
 import { TranscriptNotice } from './TranscriptNotice';
 import { StreamPhaseNotice } from './StreamPhaseNotice';
 import { CitationPastChats } from './CitationPastChats';
-import { CitationMemories } from './CitationMemories';
 import {
   AgentActivityTimeline,
   BranchNavigator,
@@ -126,6 +125,7 @@ import {
   hasStreamError,
   ProjectFileCitations,
   resolveModelEscalation,
+  richBlocksAsPlainText,
   StreamAnnouncer,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
@@ -1952,11 +1952,13 @@ const MessageBubbleComponent = function MessageBubble({
   ]);
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(message.content);
+    await navigator.clipboard.writeText(
+      isUser ? message.content : richBlocksAsPlainText(message.content),
+    );
     setCopied(true);
     toast.success('Copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
-  }, [message.content]);
+  }, [isUser, message.content]);
 
   const hasThinkingSteps =
     message.metadata?.thinkingSteps && message.metadata.thinkingSteps.length > 0;
@@ -2140,27 +2142,51 @@ const MessageBubbleComponent = function MessageBubble({
   ]);
   const showNoSearchResultsNotice = searchNotice === 'no-results';
 
+  const memoryCitations = message.metadata?.memoryCitations ?? null;
+  const hasTurnSources = !isUser && (searchSources.length > 0 || memoryCitations !== null);
   const setResearchSources = useResearchPanelStore((s) => s.setSources);
+  const openResearchPanel = useResearchPanelStore((s) => s.openPanel);
   useEffect(() => {
-    if (!isUser && searchSources.length > 0) {
+    if (hasTurnSources) {
       setResearchSources(
         artifactConversationId ?? null,
         message.id,
         citedSources,
         moreSources,
         searchQuery,
+        memoryCitations,
       );
     }
   }, [
-    isUser,
-    searchSources,
+    hasTurnSources,
     citedSources,
     moreSources,
     searchQuery,
+    memoryCitations,
     setResearchSources,
     artifactConversationId,
     message.id,
   ]);
+  const openTurnSources = useCallback(
+    () =>
+      openResearchPanel(
+        artifactConversationId ?? null,
+        message.id,
+        citedSources,
+        moreSources,
+        searchQuery,
+        memoryCitations,
+      ),
+    [
+      openResearchPanel,
+      artifactConversationId,
+      message.id,
+      citedSources,
+      moreSources,
+      searchQuery,
+      memoryCitations,
+    ],
+  );
 
   const nonInterleavedToolBlock =
     nonInterleavedTools.length > 0 ? (
@@ -3201,12 +3227,6 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {!isUser && message.metadata?.memoryCitations && (
-            <div className="mt-2">
-              <CitationMemories citations={message.metadata.memoryCitations} />
-            </div>
-          )}
-
           {!isUser && !message.isStreaming && searchSources.length > 0 && (
             <div className="mt-2 flex justify-end">
               <SourcesControl
@@ -3214,6 +3234,7 @@ const MessageBubbleComponent = function MessageBubble({
                 cited={citedSources}
                 more={moreSources}
                 query={searchQuery}
+                memories={memoryCitations}
               />
             </div>
           )}
@@ -3422,6 +3443,23 @@ const MessageBubbleComponent = function MessageBubble({
                           </Tooltip>
                         )}
                       </>
+                    )}
+
+                    {hasTurnSources && hasReadableTurn && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+                            onClick={openTurnSources}
+                            aria-label="Show sources"
+                          >
+                            <BookOpen className={ACTION_ICON_SIZE} aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Sources</TooltipContent>
+                      </Tooltip>
                     )}
 
                     {!isUser && variantPager}

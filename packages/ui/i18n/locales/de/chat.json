@@ -497,6 +497,27 @@
     "openImage": "Bild in neuem Tab öffnen",
     "openImageLabel": "Bild in neuem Tab öffnen: {{alt}}"
   },
+  "richBlock": {
+    "email": "E-Mail",
+    "writing": "Text",
+    "to": "An",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "subject": "Betreff",
+    "body": "Nachricht",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "copyEmail": "E-Mail kopieren",
+    "emailCopied": "E-Mail kopiert",
+    "copyWriting": "Diesen Text kopieren",
+    "writingCopied": "Text kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen, Zwischenablage nicht verfügbar",
+    "openInMail": "In Mail-App öffnen",
+    "bodyCopiedForMail": "Diese Nachricht ist zu lang für einen Mail-Link und wurde daher kopiert. Füge sie in die neue E-Mail ein.",
+    "expandWriting": "Groß öffnen zum Lesen und Bearbeiten",
+    "closeWriting": "Vergrößerten Text schließen",
+    "editWriting": "Text bearbeiten"
+  },
   "streaming": {
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "stopping": "Cloud-Aufgabe wird gestoppt…"

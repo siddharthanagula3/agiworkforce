@@ -497,6 +497,27 @@
     "openImage": "Open image in a new tab",
     "openImageLabel": "Open image in a new tab: {{alt}}"
   },
+  "richBlock": {
+    "email": "Email",
+    "writing": "Writing",
+    "to": "To",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "subject": "Subject",
+    "body": "Message",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyEmail": "Copy email",
+    "emailCopied": "Email copied",
+    "copyWriting": "Copy this text",
+    "writingCopied": "Text copied",
+    "copyFailed": "Copy failed, clipboard unavailable",
+    "openInMail": "Open in mail app",
+    "bodyCopiedForMail": "This message is too long for a mail link, so it was copied. Paste it into the new email.",
+    "expandWriting": "Open larger to read and edit",
+    "closeWriting": "Close expanded text",
+    "editWriting": "Edit text"
+  },
   "streaming": {
     "reconnecting": "Reconnecting…",
     "stopping": "Stopping the Cloud task…"
