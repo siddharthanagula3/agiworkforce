@@ -189,3 +189,48 @@ describe('usage copy stated in credits', () => {
     );
   });
 });
+
+describe('usage warnings on the Free plan', () => {
+  const NOW = Date.parse('2026-08-05T09:00:00.000Z');
+  const RESET = '2026-08-05T13:59:00.000Z';
+
+  it('says the Free limit is reached, with the reset, and no credit figure', () => {
+    const warning = selectUsageWarning(
+      [
+        {
+          bucket: 'session',
+          percentRemaining: 0,
+          resetAt: RESET,
+          allowanceCredits: 2,
+          usedCredits: 2,
+        },
+      ],
+      NOW,
+      { planTier: 'free' },
+    );
+
+    expect(warning?.headline).toBe("You've reached the Free limit for now");
+    expect(warning?.resetLabel).toBe('Resets in 4 hr 59 min');
+    expect(`${warning?.headline} ${warning?.resetLabel}`).not.toMatch(/credit|%|\b2\b/);
+  });
+
+  it('says the Free limit is near without a share or an amount', () => {
+    const warning = selectUsageWarning(
+      [{ bucket: 'weekly', percentRemaining: 20, allowanceCredits: 10, usedCredits: 8 }],
+      NOW,
+      { planTier: 'free' },
+    );
+
+    expect(warning?.headline).toBe("You're close to the Free limit for now");
+  });
+
+  it('keeps stating paid limits in credits', () => {
+    const warning = selectUsageWarning(
+      [{ bucket: 'session', percentRemaining: 0, allowanceCredits: 25, usedCredits: 25 }],
+      NOW,
+      { planTier: 'pro' },
+    );
+
+    expect(warning?.headline).toBe('You have used your 25 credits for this 5-hour window');
+  });
+});
