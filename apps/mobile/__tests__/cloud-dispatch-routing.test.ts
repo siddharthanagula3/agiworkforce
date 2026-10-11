@@ -92,6 +92,13 @@ describe('Mobile Managed Cloud dispatch routing', () => {
         reasons: [diagnostic],
       }),
     ).not.toContain(diagnostic);
+    const regional = cloudDispatchUnavailableMessage({
+      ...decision,
+      code: 'model_not_available_in_region',
+      reasons: [diagnostic],
+    });
+    expect(regional).toContain('not available in your region');
+    expect(regional).not.toContain(diagnostic);
   });
 
   it('preserves an eligible explicit model for ordinary chat', () => {
