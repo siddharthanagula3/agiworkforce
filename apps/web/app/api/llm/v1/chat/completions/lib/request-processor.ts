@@ -294,6 +294,11 @@ import {
 import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
+import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
+import {
+  resolveConversationChatSystemPromptVersion,
+  startsConversation,
+} from '@/lib/prompts/conversation-prompt-version';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
   orderInstructionBlocks,
@@ -3213,6 +3218,7 @@ async function processAdmittedRequest(
         ok: true;
         isTemporary: boolean;
         selectedRouteId: string | null;
+        chatSystemPromptVersion: string | null;
         projectId: string | null;
         projectContext: LoadedProjectContext | null;
         projectBlocks: readonly ProjectContextBlock[];
@@ -3251,8 +3257,10 @@ async function processAdmittedRequest(
               project_id: string | null;
               is_temporary: boolean;
               selected_route_id: string | null;
+              chat_system_prompt_version: string | null;
             }>(
-              `select c.id, c.project_id, c.is_temporary, to_jsonb(c)->>'selected_route_id' as selected_route_id
+              `select c.id, c.project_id, c.is_temporary, to_jsonb(c)->>'selected_route_id' as selected_route_id,
+                      to_jsonb(c)->>'chat_system_prompt_version' as chat_system_prompt_version
                    from web_conversations c
                   where c.id = $1 and c.user_id = $2 and c.deleted_at is null
                   limit 1`,
@@ -3323,6 +3331,7 @@ async function processAdmittedRequest(
             ok: true,
             isTemporary: ownedRows[0].is_temporary,
             selectedRouteId: ownedRows[0].selected_route_id,
+            chatSystemPromptVersion: ownedRows[0].chat_system_prompt_version,
             projectId: ownedRows[0].project_id,
             projectContext: loadedProjectContext,
             projectBlocks,
@@ -3354,6 +3363,7 @@ async function processAdmittedRequest(
         ok: true,
         isTemporary: false,
         selectedRouteId: null,
+        chatSystemPromptVersion: null,
         projectId: null,
         projectContext: null,
         projectBlocks: [],
@@ -5679,12 +5689,33 @@ async function processAdmittedRequest(
   }
 
   if (chatSurface !== 'api') {
+    const conversationPromptVersion = chatRequest.conversation_id
+      ? await resolveConversationChatSystemPromptVersion({
+          db: (await scopedDbPromise).db,
+          scope: { conversationId: chatRequest.conversation_id, userId },
+          recorded: ownership.chatSystemPromptVersion,
+          startsConversation: startsConversation(chatRequest.messages),
+        })
+      : undefined;
+    const memoryServesTurn =
+      managedMemoryPolicy.enabled &&
+      !conversationIsTemporary &&
+      chatRequest.memory_enabled !== false &&
+      chatRequest.personalization !== false;
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       researchUnavailable,
       timeZone: chatRequest.client_timezone,
       codeExecutionUnavailable,
       attachmentSandboxPaths: stagedAttachmentPaths(turnAttachments),
+      memory: memoryServesTurn ? 'on' : 'off',
+      ...(conversationPromptVersion === undefined
+        ? {}
+        : {
+            promptSelection: {
+              conversation: { [CHAT_SYSTEM_PROMPT_ID]: conversationPromptVersion },
+            },
+          }),
     });
 
     const customInstructionsPreamble = await timePhase(

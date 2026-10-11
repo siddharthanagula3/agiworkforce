@@ -96,3 +96,26 @@ describe('prompt stamps', () => {
     expect(normalizePromptStamps(many)).toHaveLength(16);
   });
 });
+
+describe('a conversation that started on an earlier version', () => {
+  it('keeps that version over a variant, a rollout and the pin', () => {
+    const resolved = resolvePrompt('chat.system', {
+      conversation: { 'chat.system': 2 },
+      variants: { 'chat.system': 3 },
+      rollouts: { 'chat.system': { version: 4, trafficFraction: 1 } },
+      requestId: 'req-1',
+    });
+
+    expect(resolved).toMatchObject({ version: 2, selectedBy: 'conversation', channel: 'stable' });
+    expect(resolved.stamp).toBe('chat.system@2');
+  });
+
+  it('falls through to the other selectors when the manifest no longer holds it', () => {
+    const resolved = resolvePrompt('chat.system', {
+      conversation: { 'chat.system': 9999 },
+      variants: { 'chat.system': 3 },
+    });
+
+    expect(resolved).toMatchObject({ version: 3, selectedBy: 'variant' });
+  });
+});

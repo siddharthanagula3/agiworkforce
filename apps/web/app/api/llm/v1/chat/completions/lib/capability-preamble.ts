@@ -5,17 +5,16 @@ import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
 import {
   CHAT_SYSTEM_PROMPT_ID,
-  chatSystemPromptSection,
   chatSystemPromptSections,
   type ChatSystemPromptSections,
 } from '@/lib/prompts/chat-system-prompt';
+import {
+  assembleChatSystemPrompt,
+  type ChatTurnMemory,
+} from '@/lib/prompts/chat-system-prompt-assembly';
 import { resolvePrompt, type ResolvePromptOptions } from '@/lib/prompts/prompt-registry';
 
 const TIME_CONTEXT_GRANULARITY_MS = 60_000;
-
-const TOOL_SECTION_PREFIX = 'tool.';
-
-const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
 
 function providerNativeCodeExecutionName(record: Record<string, unknown>): string | null {
   const type = record['type'];
@@ -95,6 +94,8 @@ export interface CapabilityPreambleInput {
    * the files.
    */
   attachmentSandboxPaths?: readonly string[];
+  /** Absent when the caller does not know whether memory serves this turn. */
+  memory?: ChatTurnMemory;
   /** Selects the prompt version; absent, the manifest pin serves. */
   promptSelection?: ResolvePromptOptions;
 }
@@ -149,77 +150,25 @@ export function capabilityPreambleStamp(options: ResolvePromptOptions = {}): str
   return resolvePrompt(CHAT_SYSTEM_PROMPT_ID, options).stamp;
 }
 
-function describeTool(sections: ChatSystemPromptSections, name: string): string {
-  const description = chatSystemPromptSection(sections, `${TOOL_SECTION_PREFIX}${name}`);
-  return description ? `- ${name}, ${description}` : `- ${name}`;
-}
-
 export function buildCapabilityPreamble(input: CapabilityPreambleInput): string | null {
   const { sections } = resolveChatSystemPrompt(input.promptSelection ?? {});
-  const section = (key: string, values?: Readonly<Record<string, string>>) =>
-    chatSystemPromptSection(sections, key, values);
-
   const now = roundDownToGranularity(input.now ?? new Date(), TIME_CONTEXT_GRANULARITY_MS);
-  const currentUtcTimestamp = now.toISOString();
-  const browserLocalInstant = formatLocalInstant(now, input.timeZone);
-  const toolNames = extractToolNames(input.tools);
-  const hasSearch = toolNames.includes('web_search');
-  const hasFetch = toolNames.includes('web_fetch') || toolNames.includes('url_fetch');
-  const hasFileCreation = toolNames.some((name) =>
-    ['execute_code', 'write_file', 'create_folder', 'create_office_file'].includes(name),
+  const { body, time } = assembleChatSystemPrompt(
+    sections,
+    {
+      toolNames: extractToolNames(input.tools),
+      ...(input.codeExecutionUnavailable ? { codeExecutionUnavailable: true } : {}),
+      ...(input.researchUnavailable ? { researchUnavailable: true } : {}),
+      ...(input.attachmentSandboxPaths
+        ? { attachmentSandboxPaths: input.attachmentSandboxPaths }
+        : {}),
+      ...(input.memory ? { memory: input.memory } : {}),
+    },
+    {
+      utc: now.toISOString(),
+      ...(input.timeZone ? { timeZone: input.timeZone } : {}),
+      localInstant: formatLocalInstant(now, input.timeZone),
+    },
   );
-  const hasCodeExecution =
-    !input.codeExecutionUnavailable &&
-    toolNames.some((name) => CODE_EXECUTION_TOOL_NAMES.includes(name));
-  const stagedAttachmentPaths =
-    !input.codeExecutionUnavailable && toolNames.includes('execute_code')
-      ? (input.attachmentSandboxPaths ?? [])
-      : [];
-
-  const timeContext =
-    section('time_utc', { utc: currentUtcTimestamp }) +
-    (browserLocalInstant
-      ? section('time_local', {
-          timeZone: input.timeZone ?? '',
-          localInstant: browserLocalInstant,
-        })
-      : '') +
-    section('time_rules');
-
-  const blocks: string[] = [section('identity'), section('instruction_precedence')];
-
-  if (toolNames.length > 0) {
-    blocks.push(
-      [section('tools_heading'), ...toolNames.map((name) => describeTool(sections, name))].join(
-        '\n',
-      ),
-      section('tools_reality'),
-    );
-
-    if (hasSearch) blocks.push(section('search'));
-    if (hasSearch || hasFetch) blocks.push(section('citations'));
-    if (hasCodeExecution) blocks.push(section('code_execution'));
-
-    if (stagedAttachmentPaths.length > 0) {
-      blocks.push(
-        [
-          section('staged_attachments_heading'),
-          stagedAttachmentPaths.map((path) => `- ${path}`).join('\n'),
-          section('staged_attachments_rules'),
-        ].join('\n'),
-      );
-    }
-
-    if (hasFileCreation) blocks.push(section('file_creation'));
-  } else {
-    blocks.push(section('no_tools'));
-  }
-
-  blocks.push(section('artifact_runtime'));
-
-  if (input.codeExecutionUnavailable) blocks.push(section('code_execution_unavailable'));
-  if (input.researchUnavailable) blocks.push(section('research_unavailable'));
-
-  const body = blocks.filter((block) => block.length > 0).join('\n\n');
-  return `${body}${SYSTEM_PROMPT_CACHE_BOUNDARY}${timeContext}`;
+  return `${body}${SYSTEM_PROMPT_CACHE_BOUNDARY}${time}`;
 }

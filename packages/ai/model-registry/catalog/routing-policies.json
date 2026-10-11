@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 20,
+    "policyVersion": 21,
     "records": [
       {
         "version": 1,
@@ -186,6 +186,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-07",
         "reason": "adds scope rules to the support prompt: answer only questions about using the product, and decline code, prose to order, translation, rewriting, homework and role-play with abstainReason out_of_scope; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 21,
+        "artifact": "prompt",
+        "id": "chat.system@5",
+        "channel": "internal",
+        "effectiveOn": "2026-10-10",
+        "reason": "adds capability honesty, search unavailable, people and privacy, user documents, refusal style, untrusted content, format and length, no-source citation and memory sections to v4, with search, citation and memory text chosen by turn state; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
       }
     ]
   },
