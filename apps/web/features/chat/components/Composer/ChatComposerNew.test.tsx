@@ -313,6 +313,40 @@ describe('ChatComposerNew', () => {
     expect(leading).toHaveClass('order-[-2]');
   });
 
+  it('gives a draft that wraps the full width and moves the controls to a row below', () => {
+    const scrollHeight = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(72);
+    try {
+      const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      const row = container.querySelector('.chat-composer-row') as HTMLElement;
+      const field = container.querySelector('.chat-composer-field') as HTMLElement;
+      const controls = container.querySelector('.chat-composer-controls') as HTMLElement;
+      const leading = container.querySelector('.chat-composer-leading-end') as HTMLElement;
+
+      fireEvent.change(textarea, {
+        target: { value: 'a draft long enough to wrap onto a second line' },
+      });
+
+      expect(row).toHaveClass('flex-wrap');
+      expect(field).toHaveClass('basis-full');
+      expect(controls).toHaveClass('flex', 'w-full');
+      expect(leading).toHaveClass('me-auto');
+
+      scrollHeight.mockReturnValue(36);
+      fireEvent.change(textarea, { target: { value: 'short' } });
+      expect(row).toHaveClass('flex-wrap');
+
+      fireEvent.change(textarea, { target: { value: '' } });
+      expect(row).toHaveClass('flex-nowrap');
+      expect(controls).toHaveClass('contents');
+      expect(leading).toHaveClass('order-[-2]');
+    } finally {
+      scrollHeight.mockRestore();
+    }
+  });
+
   it('calls onSend with typed message on Cmd+Enter', async () => {
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
