@@ -511,6 +511,12 @@
       "verifiedBy": "live-probe-and-eval-run-2026-10-10",
       "status": "ROSTER",
       "notes": "claude-haiku-5-5 takes a new family slot, anthropic/claude-haiku, so a consumer can address it as family:anthropic/claude-haiku instead of naming the model. This replaces the 2026-10-07 statement that it takes no family slot. It is the slot's first generation: claude-haiku-4-5 is in retired-models.json, so the slot has no previous model and an empty fallback chain, and the family tool's promote command, which only moves a slot to a newer member, has nothing to move. The slot was declared with the gate results the family tool computes (provider, family identity, lifecycle, capability coverage; no price or limit regression exists against itself), and the lifecycle stage was advanced with the checks that command runs. The owner approved live calls for this model on 2026-10-10. pnpm probe:models, scoped to this model alone, answered through anthropic/claude-haiku-5-5 and honoured a forced tool call (probes.json). pnpm evals:live --baseline ran all fifteen suites through the same route, 109 cases for about $0.08: golden 11/12 (0.917 against a 0.9 corpus threshold; the one miss is a 20-word summary answered in 25 words), refusal 10/10, jailbreak 11/11 and every capability suite at 1.000. That run is the slot's baseline, so pnpm evals:gate compared it with itself and the bar it held is each corpus's own threshold, not a predecessor. The stage moved registered, probed, benchmarked, evaluated, promoted on 2026-10-10, with lifecycleRefusals and runEvalGate from family-slots.mjs both clear before the last step. tierPolicy.minTier stays pro, tierAllowedModels is unchanged, and no routing policy slot, task route or default names the new family, so Auto does not serve it and no plan admits it that did not before."
+    },
+    {
+      "date": "2026-10-11",
+      "verifiedBy": "owner-approved-live-probe-qwen-free-quota-text-2026-10-11",
+      "status": "CORRECTION",
+      "notes": "The owner asked for every text offering in the QwenCloud free quota inventory to be checked and approved the calls. One request of at most 8 output tokens went to each of the 127 chat offerings through the international compatible-mode endpoint at 2026-10-11T16:29Z. 57 answered. 44 returned 404 model_not_found, 24 returned 403 access_denied and 2 (qvq-max-latest, qvq-max-2025-03-25) are not served in compatible mode. Of the 71 chat offerings that carry the 2026-10-09T16:00Z retiresAt recorded on 2026-10-02 from the Model Studio retirement notices, 69 are refused, which agrees with the second reminder the provider sent the owner for the 2026-10-10 decommissioning; qwen-vl-ocr and qwen-turbo still answer, neither is offered by the free picker and the free row of qwen-turbo ended on 2026-08-22, so their dates are left as recorded. qwen3-max-2025-10-30 (qwen-quota-196) carried no retirement and is refused with access_denied, so it now carries retiresAt set to the instant of that refusal, which is the latest it can have stopped serving, not a date the provider announced. No offering the free picker serves was refused. qwen-plus and qwen-turbo answered although their free rows are expired, so those two calls were billed at list price; they should not be probed again."
     }
   ],
   "providers": {
@@ -5500,7 +5506,8 @@
       "providerModelId": "qwen3-max-2025-10-30",
       "displayName": "qwen3-max-2025-10-30",
       "category": "chat",
-      "identityStatus": "exact"
+      "identityStatus": "exact",
+      "retiresAt": "2026-10-11T16:29:13.000Z"
     },
     "qwen-quota-197": {
       "provider": "qwen",

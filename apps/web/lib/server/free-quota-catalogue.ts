@@ -41,6 +41,8 @@ import {
   type LimitedMediaOffer,
 } from './free-pools';
 
+const ENDED_STATUS = 'expired' satisfies FreeQuotaDecision['status'];
+
 export interface FreeQuotaContext {
   store: KeyValueStore | null;
   apiKey: string;
@@ -318,7 +320,8 @@ export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuot
     evidenceUrl: inventory.evidenceUrl,
     reportedEligible: inventory.reportedEligible,
     reportedUnavailable: inventory.reportedUnavailable,
-    models: [...decisions.offerings]
+    models: decisions.offerings
+      .filter(({ decision }) => decision.status !== ENDED_STATUS)
       .sort(endingSoonerFirst)
       .map(({ entry, offering, decision }) => ({
         key: entry.offeringKey,
