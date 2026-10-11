@@ -55,13 +55,13 @@ beforeEach(() => {
 describe('per-plan attachment limits', () => {
   it.each([
     ['free', 25],
-    ['basic', 100],
-    ['pro', 250],
-    ['max', 512],
-    ['max_15x', 512],
-    ['team', 512],
-    ['team_premium', 512],
-    ['enterprise', 512],
+    ['basic', 25],
+    ['pro', 25],
+    ['max', 25],
+    ['max_15x', 25],
+    ['team', 25],
+    ['team_premium', 25],
+    ['enterprise', 25],
   ] as const)('lets %s upload files up to %i MB', (plan, mb) => {
     expect(getPlanMaxAttachmentBytes(plan)).toBe(mb * MIB);
   });
@@ -84,38 +84,34 @@ describe('per-plan attachment limits', () => {
   });
 
   it('accepts schemas up to the largest plan limit, which is the server’s outer bound', () => {
-    expect(MAX_PLAN_ATTACHMENT_BYTES).toBe(512 * MIB);
+    expect(MAX_PLAN_ATTACHMENT_BYTES).toBe(25 * MIB);
   });
 
   it('keeps a chat attachment within what is sent to the model inline', () => {
     expect(attachmentLimitBytes('max', 'chat-attachment')).toBe(MAX_CHAT_ATTACHMENT_BYTES);
-    expect(attachmentLimitBytes('max', 'knowledge-file')).toBe(512 * MIB);
+    expect(attachmentLimitBytes('max', 'knowledge-file')).toBe(25 * MIB);
   });
 });
 
 describe('attachmentSizeRefusal', () => {
   it('sends a paid chat file over the inline limit to a project, not "too large"', () => {
-    const refusal = attachmentSizeRefusal('pro', 'chat-attachment', 50 * MIB);
+    const refusal = attachmentSizeRefusal('pro', 'chat-attachment', 20 * MIB);
     expect(refusal?.message).toBe(
       'Files over 12 MB go into a project, where AGI reads and searches them.',
     );
     expect(refusal?.details).toMatchObject({ code: CHAT_ATTACHMENT_NEEDS_PROJECT_CODE });
   });
 
-  it('names the plan limit and the upgrade path for a file over it', () => {
-    const refusal = attachmentSizeRefusal('basic', 'knowledge-file', 101 * MIB);
+  it('names the plan limit and offers no upgrade while every plan shares it', () => {
+    const refusal = attachmentSizeRefusal('basic', 'knowledge-file', 26 * MIB);
     expect(refusal?.statusCode).toBe(413);
-    expect(refusal?.message).toBe(
-      'Basic accounts can upload files up to 100 MB each. Upgrade for larger files.',
-    );
-    expect(refusal?.details).toMatchObject({
-      code: ATTACHMENT_TOO_LARGE_CODE,
-      recovery: { action: 'upgrade', href: '/pricing' },
-    });
+    expect(refusal?.message).toBe('Basic accounts can upload files up to 25 MB each.');
+    expect(refusal?.details).toMatchObject({ code: ATTACHMENT_TOO_LARGE_CODE });
+    expect(refusal?.details).not.toHaveProperty('recovery');
   });
 
   it('admits a file at the plan limit', () => {
-    expect(attachmentSizeRefusal('pro', 'knowledge-file', 250 * MIB)).toBeNull();
+    expect(attachmentSizeRefusal('pro', 'knowledge-file', 25 * MIB)).toBeNull();
   });
 });
 
@@ -166,14 +162,14 @@ describe('admitAttachmentUpload', () => {
       db,
       userId: 'user-1',
       kind: 'knowledge-file',
-      byteCount: 200 * MIB,
+      byteCount: 20 * MIB,
     });
     await expect(
       admitAttachmentUpload({
         db,
         userId: 'user-1',
         kind: 'knowledge-file',
-        byteCount: 300 * MIB,
+        byteCount: 30 * MIB,
       }),
     ).rejects.toMatchObject({ statusCode: 413 });
 

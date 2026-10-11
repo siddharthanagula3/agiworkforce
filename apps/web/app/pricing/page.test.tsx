@@ -752,7 +752,7 @@ describe('PricingPage', () => {
       projects: '5',
       storage: '1 GB',
       downloads: '953.7 MB',
-      attachment: '100 MB',
+      attachment: '25 MB',
       customMcp: '5',
     });
     column('pro', {
@@ -760,7 +760,7 @@ describe('PricingPage', () => {
       projects: '25',
       storage: '10 GB',
       downloads: '2.7 GB',
-      attachment: '250 MB',
+      attachment: '25 MB',
       customMcp: '25',
       proFeatures: true,
     });
@@ -769,7 +769,7 @@ describe('PricingPage', () => {
       projects: 'unlimited',
       storage: '62 GB',
       downloads: '13.3 GB',
-      attachment: '512 MB',
+      attachment: '25 MB',
       customMcp: 'unlimited',
       proFeatures: true,
     });
@@ -778,7 +778,7 @@ describe('PricingPage', () => {
       projects: 'unlimited',
       storage: '124 GB',
       downloads: '26.6 GB',
-      attachment: '512 MB',
+      attachment: '25 MB',
       customMcp: 'unlimited',
       proFeatures: true,
       video: true,
@@ -790,7 +790,7 @@ describe('PricingPage', () => {
       projects: '25',
       storage: '25 GB',
       downloads: '3.3 GB',
-      attachment: '512 MB',
+      attachment: '25 MB',
       customMcp: '25',
       proFeatures: true,
       teamAdmin: true,
@@ -800,7 +800,7 @@ describe('PricingPage', () => {
       projects: 'custom',
       storage: 'custom',
       downloads: 'custom',
-      attachment: '512 MB',
+      attachment: '25 MB',
       customMcp: 'custom',
       proFeatures: true,
       video: true,

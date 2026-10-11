@@ -63,7 +63,11 @@ export function attachmentSizeRefusal(
     }).asUserSafe();
   }
   const label = getBillingPlanPricing(planTier).label;
-  const upgrade = upgradeRecovery(planTier);
+  const nextTier = getNextUpgradeTier(planTier);
+  const upgrade =
+    nextTier !== null && getPlanMaxAttachmentBytes(nextTier) > planLimit
+      ? upgradeRecovery(planTier)
+      : {};
   return new AppError(
     ErrorCode.PAYLOAD_TOO_LARGE,
     `${label} accounts can upload files up to ${sizeLabel(planLimit)} each.${
