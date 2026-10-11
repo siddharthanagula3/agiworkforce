@@ -135,14 +135,7 @@ describe('ComposerFooter · free model promotion', () => {
       Promise.resolve(
         url === FREE_MODEL_PROMOTION_PATH
           ? new Response(
-              JSON.stringify({
-                promotion: {
-                  modelId: 'fixture-promoted',
-                  endsAt: ENDS_AT,
-                  webSearchAvailable: true,
-                  webSearchWindowHours: 24,
-                },
-              }),
+              JSON.stringify({ promotion: { modelId: 'fixture-promoted', endsAt: ENDS_AT } }),
             )
           : new Response(null, { status: 403 }),
       ),

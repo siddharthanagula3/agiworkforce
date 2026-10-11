@@ -8,7 +8,6 @@
   "spendCeilingUsd": 380,
   "turnReserveUsd": 0.15,
   "perUserMessages": { "limit": 300, "window": "5 h" },
-  "perUserWebSearches": { "limit": 30, "windowHours": 24 },
   "promptTokenCeiling": 100000,
   "promptTokenHeadroom": 12000,
   "latestMessageTokenLimit": 40000,

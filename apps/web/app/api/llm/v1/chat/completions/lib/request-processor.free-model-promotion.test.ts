@@ -114,7 +114,6 @@ const PROMOTION = {
   spendCeilingMicrousd: 380_000_000,
   turnReserveMicrousd: 150_000,
   perUserMessages: { limit: 300, window: '5 h' },
-  perUserWebSearches: { limit: 30, windowMs: 86_400_000 },
   promptTokenCeiling: 100_000,
   promptBudgetTokens: 88_000,
   latestMessageTokenLimit: 40_000,
@@ -206,7 +205,6 @@ beforeEach(() => {
       handOver: mocks.handOver,
       releaseUnlessHandedOver: mocks.release,
     },
-    webSearchAllowed: true,
   });
 });
 
@@ -336,33 +334,20 @@ describe('processRequest under the free model promotion', () => {
     expect(result.contextTrim?.droppedMessages).toBeGreaterThan(0);
   });
 
-  it('offers provider web search while the account has promotion searches left, and not after', async () => {
+  it('offers provider web search on every promoted turn that asks for it', async () => {
     const searchTools = (result: Awaited<ReturnType<typeof processRequest>>) =>
       result.ok
         ? (result.llmRequest.tools ?? []).filter((tool) => nativeSearchToolName(tool) !== '')
         : null;
 
-    const allowed = await turn('promotion-turn-8', 'auto', 'What is the news today?', {
-      web_search: true,
-      stream: true,
-    });
-    mocks.admit.mockResolvedValueOnce({
-      promotion: PROMOTION,
-      hold: {
-        reservation: PROMOTION_RESERVATION,
-        handOver: mocks.handOver,
-        releaseUnlessHandedOver: mocks.release,
-      },
-      webSearchAllowed: false,
-    });
-    const spent = await turn('promotion-turn-9', 'auto', 'What is the news today?', {
-      web_search: true,
-      stream: true,
-    });
-
-    expect(searchTools(allowed)?.length).toBeGreaterThan(0);
-    expect(searchTools(spent)).toEqual([]);
-    expect(spent.ok && spent.chatRequest.web_search).toBe(false);
+    for (const requestId of ['promotion-turn-8', 'promotion-turn-9']) {
+      const result = await turn(requestId, 'auto', 'What is the news today?', {
+        web_search: true,
+        stream: true,
+      });
+      expect(searchTools(result)?.length).toBeGreaterThan(0);
+      expect(result.ok && result.chatRequest.web_search).not.toBe(false);
+    }
   });
 
   it('requires and offers provider search when the account asks to search the web in its own words', async () => {

@@ -17,7 +17,6 @@ import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter
 
 const MICROUSD_PER_USD = 1_000_000;
 const MILLISECONDS_PER_SECOND = 1_000;
-const MILLISECONDS_PER_HOUR = 60 * 60 * MILLISECONDS_PER_SECOND;
 const MESSAGE_FRAME_TOKENS = 8;
 const MANAGED_API_KEY = 'managed';
 const IMAGE_PART_TYPES: ReadonlySet<string> = new Set(['image_url', 'image', 'input_image']);
@@ -45,10 +44,6 @@ export const FreeModelPromotionConfigSchema = z
     perUserMessages: z.strictObject({
       limit: z.number().int().positive(),
       window: z.string().regex(/^\d+\s*(s|m|h|d)$/),
-    }),
-    perUserWebSearches: z.strictObject({
-      limit: z.number().int().nonnegative(),
-      windowHours: z.number().positive(),
     }),
     promptTokenCeiling: z.number().int().positive(),
     promptTokenHeadroom: z.number().int().nonnegative(),
@@ -133,7 +128,6 @@ export interface FreeModelPromotion {
   spendCeilingMicrousd: number;
   turnReserveMicrousd: number;
   perUserMessages: { limit: number; window: string };
-  perUserWebSearches: { limit: number; windowMs: number };
   promptTokenCeiling: number;
   promptBudgetTokens: number;
   latestMessageTokenLimit: number;
@@ -241,10 +235,6 @@ export function readFreeModelPromotion(
     spendCeilingMicrousd: toMicrousd(config.spendCeilingUsd),
     turnReserveMicrousd: toMicrousd(config.turnReserveUsd),
     perUserMessages: config.perUserMessages,
-    perUserWebSearches: {
-      limit: config.perUserWebSearches.limit,
-      windowMs: config.perUserWebSearches.windowHours * MILLISECONDS_PER_HOUR,
-    },
     promptTokenCeiling: config.promptTokenCeiling,
     promptBudgetTokens: config.promptTokenCeiling - config.promptTokenHeadroom,
     latestMessageTokenLimit: config.latestMessageTokenLimit,

@@ -15,7 +15,6 @@ const tx = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn() }));
 const db = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn(), transaction: vi.fn() }));
 const promotionLedger = vi.hoisted(() => ({
   settleFreeModelPromotionTurn: vi.fn().mockResolvedValue(undefined),
-  recordFreeModelPromotionSearches: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
@@ -209,7 +208,7 @@ describe('the Free reservation of a turn the free model promotion pays for', () 
     expect(getModelMetadataById(PROMOTED.id)?.provider).toBe('anthropic');
   });
 
-  it('pays for provider web searches from the promotion, not the Free windows, and counts them', async () => {
+  it('pays for provider web searches from the promotion, not the Free windows', async () => {
     const begun = await beginFreeTrialRequest({ ...BEGIN, requestId: 'p6' });
     if (!begun.ok) throw new Error('expected a reservation');
     const usage = { promptTokens: 4_000, completionTokens: 300, totalTokens: 4_300 };
@@ -221,7 +220,6 @@ describe('the Free reservation of a turn the free model promotion pays for', () 
       model: PROMOTED.id,
       usage,
       cost: { tokenMicrousd: 600, toolMicrousd: 20_000, serverToolMicrousd: 20_000 },
-      webSearchRequests: 2,
     });
 
     const settlement = tx.execute.mock.calls.find(([sql]) =>
@@ -230,12 +228,6 @@ describe('the Free reservation of a turn the free model promotion pays for', () 
     expect(settlement?.[1]?.[2]).toBe(0);
     const [, spent] = promotionLedger.settleFreeModelPromotionTurn.mock.calls[0]!;
     expect(spent).toBeGreaterThanOrEqual(20_600);
-    expect(promotionLedger.recordFreeModelPromotionSearches).toHaveBeenCalledWith({
-      promotionId: PROMOTION.promotionId,
-      userId: 'user-1',
-      requestId: 'p6',
-      searches: 2,
-    });
   });
 
   it('still charges sandbox and other costs the provider does not bill to the Free windows', async () => {
@@ -257,6 +249,5 @@ describe('the Free reservation of a turn the free model promotion pays for', () 
     const [, spent] = promotionLedger.settleFreeModelPromotionTurn.mock.calls[0]!;
     expect(spent).toBeGreaterThanOrEqual(20_600);
     expect(spent).toBeLessThan(27_600);
-    expect(promotionLedger.recordFreeModelPromotionSearches).not.toHaveBeenCalled();
   });
 });
