@@ -457,9 +457,28 @@
 }
 
 [data-design='agi'] .agi-scene-artifacts-title,
+[data-design='agi'] .agi-scene-artifact-meta {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-inline-size: 0;
+}
+
 [data-design='agi'] .agi-scene-artifact-name {
+  overflow: hidden;
   font-weight: 600;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+[data-design='agi'] .agi-scene-artifact-sub {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  min-inline-size: 0;
+  color: var(--chat-text-muted);
+  font-size: calc(var(--u) * 12);
 }
 
 [data-design='agi'] .agi-scene-count {

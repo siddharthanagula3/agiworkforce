@@ -296,9 +296,9 @@ describe('artifact beside a chat', () => {
       ['Source', false],
     ]);
     expect(text(container, '.agi-scene-artifact-name')).toBe('Project notes');
-    expect(text(container, '.agi-scene-artifact-type')).toBe('· HTML');
+    expect(text(container, '.agi-scene-artifact-type')).toBe('HTML');
     expect(text(container, '.agi-scene-version')).toBe('v1/1');
-    expect(container.querySelectorAll('.agi-scene-artifact-actions svg')).toHaveLength(6);
+    expect(container.querySelectorAll('.agi-scene-artifact-actions svg')).toHaveLength(5);
     expect(text(container, '.agi-scene-artifact-heading')).toBe('Project notes');
   });
 
@@ -316,18 +316,20 @@ describe('artifact beside a chat', () => {
       '<Eye className="h-3.5 w-3.5" aria-hidden="true" />',
       'aria-label="Source"',
       '<Code className="h-3.5 w-3.5" aria-hidden="true" />',
-      '<TypeIcon type={artifact.type} className="h-4 w-4 text-muted-foreground" />',
-      '· {typeLabel}',
-      'v{shownVersionIndex + 1}/{versionCount}',
+      '<TypeIcon type={artifact.type} className="h-3 w-3 shrink-0" />',
+      '<span className="truncate">{typeLabel}</span>',
+      'v{versionTimeline.position}/{versionTimeline.total}',
       '<ChevronLeft',
       '<ChevronRight',
       '<Copy className="h-3.5 w-3.5" />',
-      '<Download className="h-3.5 w-3.5" aria-hidden="true" />',
-      '<FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />',
-      '<Library className="h-3.5 w-3.5" aria-hidden="true" />',
+      '<Globe className="h-3.5 w-3.5" aria-hidden="true" />',
       '<Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />',
+      '<ArtifactMoreMenu items={moreMenuItems} />',
       'aria-label="Close artifact viewer"',
       '<div className="h-full w-full bg-white">',
+    ]);
+    expectSource('apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx', [
+      '<MoreHorizontal className="h-4 w-4" aria-hidden="true" />',
     ]);
     expectSource('apps/web/features/chat/components/artifacts/artifact-labels.tsx', [
       "export const ARTIFACT_KIND_LABEL = 'Artifact';",
@@ -1041,7 +1043,7 @@ describe('artifact example follows the canonical derivation', () => {
     if (!open) throw new Error('The example message derives no artifact');
     const page = new DOMParser().parseFromString(open.content, 'text/html');
     expect(text(root, '.agi-scene-artifact-name')).toBe(open.title);
-    expect(text(root, '.agi-scene-artifact-type')).toBe(`· ${open.type.toUpperCase()}`);
+    expect(text(root, '.agi-scene-artifact-type')).toBe(open.type.toUpperCase());
     expect(text(root, '.agi-scene-artifact-heading')).toBe(page.querySelector('h1')?.textContent);
     expect(text(root, '.agi-scene-artifact-body')).toBe(page.querySelector('p')?.textContent);
     const history = store.getState().getArtifactVersions(open.id);
@@ -1069,10 +1071,9 @@ describe('artifact example follows the canonical derivation', () => {
       'aria-label="Source"',
       'data-testid="artifact-version-chip"',
       'title="Copy"',
-      'title="Download"',
-      'title="Save to project"',
-      'title="Save to Library"',
-      'title="Fullscreen"',
+      'title="Publish"',
+      "title={isFullscreen ? 'Exit fullscreen' : 'Expand'}",
+      '<ArtifactMoreMenu items={moreMenuItems} />',
       'aria-label="Close artifact viewer"',
     ])
       expect(viewer).toContain(needle);

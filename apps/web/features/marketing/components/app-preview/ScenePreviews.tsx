@@ -18,12 +18,10 @@ import {
   FileText,
   Folder,
   FolderDown,
-  FolderPlus,
   Gavel,
   Globe,
   Image as ImageIcon,
   KeyRound,
-  Library,
   ListChecks,
   Mail,
   Maximize2,
@@ -149,7 +147,7 @@ export const ARTIFACT_SCENE_MESSAGE = ARTIFACT_PAGES.map((page) =>
     '```',
   ].join('\n'),
 ).join('\n\n');
-const ARTIFACT_ACTIONS: readonly LucideIcon[] = [Copy, Download, FolderPlus, Library, Maximize2, X];
+const ARTIFACT_ACTIONS: readonly LucideIcon[] = [Copy, Globe, Maximize2, MoreHorizontal, X];
 
 export function ArtifactScenePreview({ className }: { className?: string }) {
   return (
@@ -216,13 +214,17 @@ export function ArtifactScenePreview({ className }: { className?: string }) {
                 <Code className="agi-scene-icon" />
               </span>
             </span>
-            <Globe className="agi-app-icon agi-app-quiet" />
-            <span className="agi-scene-artifact-name">{ARTIFACT_PAGE.title}</span>
-            <span className="agi-scene-artifact-type">· HTML</span>
-            <span className="agi-scene-version">
-              <ChevronLeft className="agi-scene-icon" />
-              <span>v1/1</span>
-              <ChevronRight className="agi-scene-icon" />
+            <span className="agi-scene-artifact-meta">
+              <span className="agi-scene-artifact-name">{ARTIFACT_PAGE.title}</span>
+              <span className="agi-scene-artifact-sub">
+                <Globe className="agi-scene-icon" />
+                <span className="agi-scene-artifact-type">HTML</span>
+                <span className="agi-scene-version">
+                  <ChevronLeft className="agi-scene-icon" />
+                  <span>v1/1</span>
+                  <ChevronRight className="agi-scene-icon" />
+                </span>
+              </span>
             </span>
             <span className="agi-scene-artifact-actions agi-app-end">
               {ARTIFACT_ACTIONS.map((Icon, index) => (
