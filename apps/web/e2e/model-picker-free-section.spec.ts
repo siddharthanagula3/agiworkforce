@@ -64,20 +64,11 @@ async function stubFreeModels(page: Page, delayMs = 0) {
   );
 }
 
-async function focusedText(page: Page): Promise<string> {
-  return page.evaluate(() => document.activeElement?.textContent ?? '');
-}
-
 const LAYOUTS = [
   { name: 'desktop popover', viewport: { width: 1440, height: 900 } },
   { name: 'phone drawer', viewport: { width: 390, height: 844 } },
 ] as const;
 
-/**
- * jsdom has no competing listeners and no real focus model, so whether a click
- * or Enter on an aria-disabled row leaves the popover open is only meaningful
- * in a browser.
- */
 for (const layout of LAYOUTS) {
   test.describe(`model picker free section (${layout.name})`, () => {
     test.use({ viewport: layout.viewport });
@@ -89,51 +80,15 @@ for (const layout of LAYOUTS) {
       await page.locator('#model-selector').waitFor({ timeout: 30_000 });
     });
 
-    test('clicking an unavailable model keeps the menu open and says why', async ({ page }) => {
+    test('lists the ready free model and nothing about the one that is not', async ({ page }) => {
       await page.locator('#model-selector').click();
       const panel = page.getByRole('dialog', { name: 'Models' });
-      await panel.getByRole('button', { name: /Unavailable/ }).click();
-      const row = panel
-        .getByRole('group', { name: 'Unavailable free models' })
-        .locator('[aria-disabled="true"]');
-      await row.click();
+      const free = panel.getByRole('group', { name: 'Fixture Cloud free models' });
 
-      await expect(panel).toBeVisible();
-      await expect(
-        panel.getByRole('status').filter({ hasText: 'is not available right now' }),
-      ).toBeVisible();
-      await expect(row).toHaveAccessibleDescription(/is not available right now/);
-    });
-
-    test('keyboard reaches an unavailable model, Enter explains it, Escape returns focus', async ({
-      page,
-    }) => {
-      await page.locator('#model-selector').click();
-      const panel = page.getByRole('dialog', { name: 'Models' });
-      await panel.getByRole('button', { name: /Unavailable/ }).waitFor();
-
-      for (
-        let step = 0;
-        step < 20 && !(await focusedText(page)).startsWith('Unavailable');
-        step += 1
-      ) {
-        await page.keyboard.press('ArrowDown');
-      }
-      await page.keyboard.press('Enter');
-      await page.keyboard.press('ArrowDown');
-      expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-disabled'))).toBe(
-        'true',
-      );
-      await page.keyboard.press('Enter');
-
-      await expect(panel).toBeVisible();
-      await expect(
-        panel.getByRole('status').filter({ hasText: 'is not available right now' }),
-      ).toBeVisible();
-
-      await page.keyboard.press('Escape');
-      await expect(page.getByRole('dialog', { name: 'Models' })).toHaveCount(0);
-      await expect(page.locator('#model-selector')).toBeFocused();
+      await expect(free.getByRole('button')).toHaveCount(1, { timeout: 15_000 });
+      await expect(panel.getByRole('button', { name: /Unavailable/ })).toHaveCount(0);
+      await expect(panel.locator('[aria-disabled="true"]')).toHaveCount(0);
+      await expect(panel.getByText(/not available right now|paused right now/)).toHaveCount(0);
     });
 
     test('a slow free catalogue never holds back the rest of the menu', async ({ page }) => {
