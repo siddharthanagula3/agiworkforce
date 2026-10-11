@@ -8,12 +8,7 @@ type PromotionHookModule = typeof import('@features/chat/hooks/use-free-model-pr
 const state = vi.hoisted(() => ({
   tier: 'free' as string | null,
   savedDefault: null as string | null,
-  promotion: null as null | {
-    modelId: string;
-    endsAt: string;
-    webSearchAvailable: boolean;
-    webSearchWindowHours: number;
-  },
+  promotion: null as null | { modelId: string; endsAt: string },
 }));
 
 vi.mock('@features/chat/lib/default-model-preference', async (importOriginal) => ({
@@ -46,12 +41,7 @@ describe('the model a new Free chat opens on', () => {
   beforeEach(() => {
     state.tier = 'free';
     state.savedDefault = FREE_MODEL;
-    state.promotion = {
-      modelId: PROMOTED,
-      endsAt: ENDS_AT,
-      webSearchAvailable: true,
-      webSearchWindowHours: 24,
-    };
+    state.promotion = { modelId: PROMOTED, endsAt: ENDS_AT };
     useModelStore.getState().setSelectedModelId(FREE_MODEL);
   });
 

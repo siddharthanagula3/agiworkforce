@@ -236,7 +236,6 @@ async function settleStreamBilling(input: {
                 ? { serverToolMicrousd: serverTools.providerMicrousd }
                 : {}),
             },
-      ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
     });
     return;
   }

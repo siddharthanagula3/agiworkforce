@@ -35,10 +35,7 @@ import {
   type FreeModelPromotionFit,
   type FreeModelPromotionReservation,
 } from '@/lib/server/free-model-promotion';
-import {
-  recordFreeModelPromotionSearches,
-  settleFreeModelPromotionTurn,
-} from '@/lib/server/free-model-promotion-ledger';
+import { settleFreeModelPromotionTurn } from '@/lib/server/free-model-promotion-ledger';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
@@ -799,8 +796,6 @@ export async function settleFreeTrialRequest(params: {
   model?: string;
   usage?: TokenUsage;
   cost?: FreeTrialCost;
-  /** Provider-run searches in the turn, counted against a promoted account's search allowance. */
-  webSearchRequests?: number;
   attempt?: GenerationAttempt | null;
 }): Promise<number | null> {
   const attempt = params.attempt === undefined ? { outcome: params.outcome } : params.attempt;
@@ -936,7 +931,6 @@ async function settlePromotion(
     model?: string;
     usage?: TokenUsage;
     cost?: FreeTrialCost;
-    webSearchRequests?: number;
   },
 ): Promise<void> {
   if (!reservation.promotion) return;
@@ -954,14 +948,6 @@ async function settlePromotion(
       toolMicrousd,
     }),
   );
-  if ((params.webSearchRequests ?? 0) > 0) {
-    await recordFreeModelPromotionSearches({
-      promotionId: reservation.promotion.promotionId,
-      userId: reservation.userId,
-      requestId: reservation.requestId,
-      searches: params.webSearchRequests ?? 0,
-    });
-  }
 }
 
 export async function releaseExpiredFreeTrialReservations(

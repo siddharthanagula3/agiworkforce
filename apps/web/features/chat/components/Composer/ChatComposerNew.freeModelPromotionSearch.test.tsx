@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -55,6 +55,15 @@ function type(text: string) {
   fireEvent.change(input(), { target: { value: text } });
 }
 
+function requestedPaths(): string[] {
+  return vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+}
+
+async function promotionRead() {
+  await waitFor(() => expect(requestedPaths()).toContain(FREE_MODEL_PROMOTION_PATH));
+  await act(async () => {});
+}
+
 const FREE_SEARCH_BANNER = /Your Free plan has used its 20 web searches/;
 
 beforeEach(() => {
@@ -89,8 +98,6 @@ beforeEach(() => {
             promotion: {
               modelId: PROMOTED_MODEL,
               endsAt: new Date(Date.now() + 86_400_000).toISOString(),
-              webSearchAvailable: false,
-              webSearchWindowHours: 24,
             },
           }),
         );
@@ -105,19 +112,20 @@ afterEach(() => {
 });
 
 describe('web search on the promoted model for a Free account', () => {
-  it('never shows or applies the Free search allowance, and names the promotion limit instead', async () => {
+  it('sends the search with no search-limit banner, even with the Free allowance spent', async () => {
     useModelStore.getState().setSelectedModelId(PROMOTED_MODEL);
     const onSend = vi.fn();
     render(<ChatComposerNew onSend={onSend} conversationId="c1" />);
+    await promotionRead();
 
     type('search the internet and tell me the latest news');
-
-    expect(await screen.findByTestId('free-model-promotion-search-spent')).toHaveTextContent(
-      'resets within 24 hours',
-    );
-    expect(screen.queryByText(FREE_SEARCH_BANNER)).toBeNull();
+    await act(async () => {});
+    expect(screen.queryByText(/web search/i)).toBeNull();
     fireEvent.keyDown(input(), { key: 'Enter' });
+
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(FREE_SEARCH_BANNER)).toBeNull();
+    expect(requestedPaths()).not.toContain(WEB_SEARCH_ALLOWANCE_PATH);
   });
 
   it('still applies the Free search allowance on the Free model', async () => {
@@ -128,6 +136,5 @@ describe('web search on the promoted model for a Free account', () => {
     type('search the internet and tell me the latest news');
 
     expect(await screen.findByText(FREE_SEARCH_BANNER)).toBeTruthy();
-    expect(screen.queryByTestId('free-model-promotion-search-spent')).toBeNull();
   });
 });
