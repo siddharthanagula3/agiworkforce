@@ -89,6 +89,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
 // measurement is keyed by the model and route it measured, like probes.json.
 export const MODEL_ID_OWNER_PATTERNS = Object.freeze([
   /^tools\/evals\/measurements\/(?:baselines|runs|recordings)\/[A-Za-z0-9._-]+\.json$/u,
+  /^tools\/evals\/measurements\/prompt-evals\/runs\/[A-Za-z0-9._-]+\.json$/u,
   /^tools\/evals\/measurements\/ledger\.json$/u,
   // Audit evidence quotes the model ids a finding is about, as subject matter.
   /^audit\//u,
