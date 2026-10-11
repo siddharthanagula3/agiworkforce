@@ -364,4 +364,20 @@ describe('processRequest under the free model promotion', () => {
     expect(searchTools(spent)).toEqual([]);
     expect(spent.ok && spent.chatRequest.web_search).toBe(false);
   });
+
+  it('requires and offers provider search when the account asks to search the web in its own words', async () => {
+    const result = await turn(
+      'promotion-turn-10',
+      'auto',
+      'can you search in the web and tell me his linkedin',
+      { stream: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.searchRequirement).toEqual({ required: true, source: 'explicit_intent' });
+    expect(
+      (result.llmRequest.tools ?? []).filter((tool) => nativeSearchToolName(tool) !== '').length,
+    ).toBeGreaterThan(0);
+  });
 });

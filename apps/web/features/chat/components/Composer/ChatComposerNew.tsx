@@ -45,6 +45,8 @@ import { ComposerInput } from './ComposerInput';
 import { ImageMaskDialog, type ImageMaskResult } from './ImageMaskDialog';
 import { ComposerFooter } from './ComposerFooter';
 import { freeQuotaSelection, promotionalChatToolConflict } from '../../lib/free-quota-selection';
+import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
+import { freeModelPromotionSearchSpentNotice } from '@features/chat/lib/free-model-promotion-copy';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
@@ -1515,9 +1517,17 @@ const ChatComposerNewComponent = ({
   );
   const explicitSearchRequest =
     hasExplicitWebSearchIntent(message) || hasExplicitWebFetchIntent(message);
+  const { promotion: freeModelPromotion } = useFreeModelPromotion(
+    isFreeBillingPlanTier(entitlementTier),
+  );
+  const promotedModelSelected =
+    freeModelPromotion !== null && freeModelPromotion.modelId === composerSelectedModelId;
+  const promotionSearchSpent =
+    promotedModelSelected && explicitSearchRequest && !freeModelPromotion.webSearchAvailable;
   const checkFreeSearchAllowance =
     isFreeBillingPlanTier(entitlementTier) &&
     explicitSearchRequest &&
+    !promotedModelSelected &&
     (modelSupportsSearch || promotionalToolConflict === 'web_search');
   const { allowance: searchAllowance, retry: retrySearchAllowance } = useSearchAllowance(
     checkFreeSearchAllowance,
@@ -4533,6 +4543,19 @@ const ChatComposerNewComponent = ({
           {promotionalToolConflict === 'web_search' &&
             ' This model cannot search; choose Free Auto when search is available again.'}
         </div>
+      )}
+
+      {promotionSearchSpent && freeModelPromotion && (
+        <p
+          role="status"
+          data-testid="free-model-promotion-search-spent"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm text-foreground"
+        >
+          {freeModelPromotionSearchSpentNotice(
+            selectedModelMeta?.name ?? composerSelectedModelId,
+            freeModelPromotion.webSearchWindowHours,
+          )}
+        </p>
       )}
 
       {checkFreeSearchAllowance && searchAllowance.status === 'checking' && (
