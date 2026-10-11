@@ -497,6 +497,27 @@
     "openImage": "在新标签页中打开图片",
     "openImageLabel": "在新标签页中打开图片: {{alt}}"
   },
+  "richBlock": {
+    "email": "邮件",
+    "writing": "文稿",
+    "to": "收件人",
+    "cc": "抄送",
+    "bcc": "密送",
+    "subject": "主题",
+    "body": "正文",
+    "copy": "复制",
+    "copied": "已复制",
+    "copyEmail": "复制邮件",
+    "emailCopied": "邮件已复制",
+    "copyWriting": "复制这段文字",
+    "writingCopied": "文字已复制",
+    "copyFailed": "复制失败，剪贴板不可用",
+    "openInMail": "在邮件应用中打开",
+    "bodyCopiedForMail": "正文太长，无法放入邮件链接，已为你复制。请粘贴到新邮件中。",
+    "expandWriting": "放大阅读和编辑",
+    "closeWriting": "关闭放大的文字",
+    "editWriting": "编辑文字"
+  },
   "streaming": {
     "reconnecting": "正在重新连接…",
     "stopping": "正在停止云端任务…"
