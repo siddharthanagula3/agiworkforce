@@ -67,6 +67,7 @@ export function classifyToolLoopInputs(
   mcpTools: WebMcpToolDef[],
   requestTools: unknown[] | undefined,
   toolApprovalPolicy: ToolApprovalPolicy = DEFAULT_TOOL_APPROVAL_POLICY,
+  options: { requiredNativeSearch?: boolean } = {},
 ): ToolLoopInputClassification {
   const names = (requestTools ?? []).map(functionToolName).filter(Boolean);
   const hasMcpTools = mcpTools.length > 0;
@@ -109,7 +110,11 @@ export function classifyToolLoopInputs(
       hasPlaceTools ||
       hasProductComparisonTools ||
       hasImageTools ||
-      hasDeviceStepTools,
+      hasDeviceStepTools ||
+      // A provider-run search is not a function tool, so nothing above sees it.
+      // The loop is the only place a required search the model skipped is asked
+      // for again, so a required one has to run there.
+      options.requiredNativeSearch === true,
     approvalMode:
       hasMcpTools ||
       anyToolNeedsApproval(

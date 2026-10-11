@@ -210,6 +210,11 @@ describe('detectFreshnessIntent', () => {
     'give me the exchange rate for the yen',
     'what shipped last week',
     'what is the weather in Oslo',
+    'who is the president of india',
+    "who's the prime minister of the UK",
+    'who is the current CEO of Intel',
+    'name the sitting chief justice',
+    'who are the world champions in chess',
   ])('treats %j as date sensitive', (message) => {
     expect(detectFreshnessIntent(message, now)).toBe(true);
   });
@@ -219,6 +224,9 @@ describe('detectFreshnessIntent', () => {
     'explain how a red-black tree rebalances',
     'what happened in 1994',
     'compare these two drafts',
+    'who was the first president of india',
+    'who is the author of this draft',
+    'what does a prime minister do',
     '',
   ])('leaves %j alone', (message) => {
     expect(detectFreshnessIntent(message, now)).toBe(false);
