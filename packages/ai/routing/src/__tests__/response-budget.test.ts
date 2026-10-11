@@ -116,7 +116,7 @@ describe('response budget planning', () => {
 
   it('reserves room for hidden reasoning without expanding the visible answer', () => {
     const plan = planResponseBudget({
-      message: 'Reply with exactly: READY',
+      message: 'Reply with exactly: READY. Keep it short.',
       taskType: 'simple_chat',
       modelMinimumOutputTokens: 1024,
       modelMaxOutputTokens: 4096,
@@ -129,7 +129,7 @@ describe('response budget planning', () => {
 
   it('respects explicit caller and model ceilings even when a floor is configured', () => {
     const request = {
-      message: 'Reply with exactly: READY',
+      message: 'Reply with exactly: READY. Keep it short.',
       taskType: 'simple_chat' as const,
       modelMinimumOutputTokens: 1024,
       modelMaxOutputTokens: 900,
@@ -158,7 +158,43 @@ describe('response budget planning', () => {
       },
     });
 
-    expect(simple.outputTokenBudget).toBe(hard.outputTokenBudget);
+    expect(simple.depth).toBe('one_sentence');
     expect(hard.depth).toBe('one_sentence');
+    expect(simple.instruction).toBe(hard.instruction);
+    expect(hard.outputTokenBudget).toBe(RESPONSE_OUTPUT_TOKEN_CEILINGS.one_sentence);
+  });
+
+  it.each(['make a calculator', 'build me a todo app', 'Can you make a calculator?'])(
+    'leaves a short request for %j the whole output cap and no brevity instruction',
+    (message) => {
+      const plan = planResponseBudget({
+        message,
+        taskType: 'simple_chat',
+        modelMaxOutputTokens: 8_192,
+      });
+
+      expect(plan.depth).toBe('normal');
+      expect(plan.source).toBe('default');
+      expect(plan.outputTokenBudget).toBe(8_192);
+      expect(plan.instruction).not.toContain('concise');
+    },
+  );
+
+  it('steers a direct question to one sentence without cutting the reply at a guessed ceiling', () => {
+    const plan = planResponseBudget({
+      message: 'Did the production deployment succeed?',
+      taskType: 'simple_chat',
+      modelMaxOutputTokens: 8_192,
+    });
+
+    expect(plan).toMatchObject({ depth: 'one_sentence', source: 'deterministic' });
+    expect(plan.instruction).toContain('Use one concise sentence.');
+    expect(plan.outputTokenBudget).toBe(8_192);
+  });
+
+  it('falls back to the comprehensive ceiling when nothing else bounds an inferred depth', () => {
+    expect(planResponseBudget({ message: 'hi', taskType: 'simple_chat' }).outputTokenBudget).toBe(
+      RESPONSE_OUTPUT_TOKEN_CEILINGS.comprehensive,
+    );
   });
 });

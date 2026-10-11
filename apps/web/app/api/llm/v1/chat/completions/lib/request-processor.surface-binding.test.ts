@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/types';
+import {
+  getDefaultAutoRoutingProfile,
+  getDefaultModelFor,
+  resolveMaxOutputTokens,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule1 = typeof import('./chat-attachment-hydration');
 type ScanModule2 = typeof import('@/lib/services/managed-memory-context-service');
@@ -193,6 +197,19 @@ describe('processRequest surface binding', () => {
     expect(result.llmRequest.messages.map((message) => message.content).join('\n')).toContain(
       'Use one concise sentence.',
     );
+  });
+
+  it("gives a short build request on Auto the routed model's whole output cap", async () => {
+    const result = await processRequest(
+      chatRequest('surface-budget-build-1', 'make a calculator', { model: AUTO_MODEL }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.responseBudget).toMatchObject({ depth: 'normal', source: 'default' });
+    expect(result.maxTokens).toBe(resolveMaxOutputTokens(result.chatRequest.model));
+    expect(result.llmRequest.max_tokens).toBe(resolveMaxOutputTokens(result.chatRequest.model));
   });
 
   it('leaves an explicitly selected model outside the adaptive Auto budget', async () => {
