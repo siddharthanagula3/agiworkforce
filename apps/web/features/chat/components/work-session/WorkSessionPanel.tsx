@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Circle,
   CircleAlert,
-  Download,
   FileText,
   FolderOpen,
   Globe,
@@ -23,7 +22,6 @@ import {
   getManagedModelPresentationLabel,
 } from '@agiworkforce/unified-chat';
 import {
-  formatDeliverableTypeLine,
   isAutoModeModelId,
   runStatusLabel,
   toolCallStatusLabel,
@@ -32,7 +30,6 @@ import {
 import type { Message } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { useProjectStore } from '@features/projects';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import {
   SHEET_OVERLAY_QUERY,
@@ -40,12 +37,6 @@ import {
   useOverlayLayout,
 } from '../../hooks/use-overlay-dialog';
 import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
-import { ArtifactThumbnail } from '../artifacts/ArtifactThumbnail';
-import { canRenderLivePreview } from '../artifacts/artifact-render';
-import type { ArtifactData } from '../artifacts/ArtifactPreview';
-import { downloadAllArtifacts, downloadGeneratedFile } from '../../utils/downloadArtifacts';
-import { toast } from 'sonner';
-import { toUserMessage } from '@/lib/user-error-message';
 import {
   PanelWindowButton,
   useDetachedWindowTitle,
@@ -57,10 +48,8 @@ import {
   CHAT_DOCK_PANEL_LABEL,
   TASK_DOCK_ARTIFACTS_LABEL,
   TASK_DOCK_CONTEXT_LABEL,
-  TASK_DOCK_DOWNLOAD_ACTION,
   TASK_DOCK_FALLBACK_TITLE,
   TASK_DOCK_LABEL,
-  TASK_DOCK_OPEN_ACTION,
   TASK_DOCK_OUTPUTS_LABEL,
   TASK_DOCK_PANEL_LABEL,
   TASK_DOCK_PROGRESS_EMPTY,
@@ -68,20 +57,15 @@ import {
   TASK_DOCK_SOURCES_LABEL,
   TASK_DOCK_STEPS_LABEL,
 } from '../../lib/agi-work';
+import { OutputsList, useTaskDockSummary } from './OutputsList';
 import {
-  buildTaskDockSummary,
   type TaskDockContextItem,
-  type TaskDockOutput,
   type TaskDockStepStatus,
   type TaskDockSummary,
 } from './taskDockSummary';
 
 const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
 const RUN_TICK_INTERVAL_MS = 1_000;
-const BYTES_PER_KILOBYTE = 1_024;
-const BYTES_PER_MEGABYTE = 1_048_576;
-const DETAIL_SEPARATOR = ' · ';
-const ARTIFACT_OUTPUT_DETAIL = 'Artifact';
 const MAX_SOURCE_FAVICONS = 4;
 const SECTION_LABEL_CLASS = 'text-xs font-medium text-muted-foreground';
 const SECTION_SUMMARY_CLASS =
@@ -171,13 +155,6 @@ function StatusIcon({ status }: { status: TaskDockStepStatus }) {
     return <CircleAlert className="h-3.5 w-3.5 text-warning-text" aria-hidden="true" />;
   }
   return <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;
-}
-
-function byteLabel(byteCount: number | undefined): string | undefined {
-  if (byteCount === undefined) return undefined;
-  if (byteCount < BYTES_PER_KILOBYTE) return `${byteCount} B`;
-  if (byteCount < BYTES_PER_MEGABYTE) return `${(byteCount / BYTES_PER_KILOBYTE).toFixed(1)} KB`;
-  return `${(byteCount / BYTES_PER_MEGABYTE).toFixed(1)} MB`;
 }
 
 function formatDetailDate(value: string | undefined): string {
@@ -271,53 +248,6 @@ function SourceFavicon({ faviconUrl, host }: { faviconUrl?: string; host: string
       className="h-4 w-4 rounded-sm"
       onError={() => setFailed(true)}
     />
-  );
-}
-
-function outputPreviewType(output: TaskDockOutput): ArtifactData['type'] | null {
-  if (output.artifactContent === undefined || !output.artifactType) return null;
-  const type = output.artifactType as ArtifactData['type'];
-  return canRenderLivePreview(type) && type !== 'react' ? type : null;
-}
-
-function OutputLabel({ output }: { output: TaskDockOutput }) {
-  const typeLine =
-    output.mimeType || output.kind
-      ? [
-          formatDeliverableTypeLine({
-            kind: output.kind,
-            fileName: output.name,
-            mimeType: output.mimeType,
-          }),
-          byteLabel(output.byteCount),
-        ]
-          .filter(Boolean)
-          .join(DETAIL_SEPARATOR)
-      : ARTIFACT_OUTPUT_DETAIL;
-  return (
-    <span className="flex min-w-0 flex-col">
-      <span className="truncate text-sm font-medium leading-5 text-foreground">{output.name}</span>
-      <span className="truncate text-xs text-muted-foreground">{typeLine}</span>
-    </span>
-  );
-}
-
-function useTaskDockSummary(messages: Message[]): TaskDockSummary {
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const artifacts = useArtifactsStore((state) =>
-    activeConversationId ? state.getConversationArtifacts(activeConversationId) : [],
-  );
-  const projectId = useChatStore(
-    (state) =>
-      state.conversations.find((conversation) => conversation.id === state.activeConversationId)
-        ?.projectId ?? null,
-  );
-  const projectName = useProjectStore(
-    (state) => state.projects.find((project) => project.id === projectId)?.name ?? null,
-  );
-  return useMemo(
-    () => buildTaskDockSummary({ messages, artifacts, projectName }),
-    [artifacts, messages, projectName],
   );
 }
 
@@ -472,7 +402,6 @@ export function WorkSessionPanel({
   const summary = useTaskDockSummary(messages);
   const selectArtifact = useArtifactsStore((state) => state.selectArtifact);
   const setArtifactPanelOpen = useArtifactsStore((state) => state.setPanelOpen);
-  const knownArtifacts = useArtifactsStore((state) => state.artifacts);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const activeConversationTitle = useChatStore(
     (state) =>
@@ -521,41 +450,6 @@ export function WorkSessionPanel({
     if (first) selectArtifact(first.id);
     setArtifactPanelOpen(true);
   }, [conversationArtifacts, selectArtifact, setArtifactPanelOpen]);
-
-  const openOutput = useCallback(
-    (output: TaskDockOutput) => {
-      const artifactAvailable =
-        output.artifactId && knownArtifacts.some((artifact) => artifact.id === output.artifactId);
-      if (output.artifactId && artifactAvailable) {
-        selectArtifact(output.artifactId);
-        setArtifactPanelOpen(true);
-        return;
-      }
-      if (output.uri) window.open(output.uri, '_blank', 'noopener,noreferrer');
-    },
-    [knownArtifacts, selectArtifact, setArtifactPanelOpen],
-  );
-
-  const downloadOutput = useCallback(async (output: TaskDockOutput) => {
-    try {
-      if (output.uri) {
-        await downloadGeneratedFile(output.uri, output.name, output.mimeType);
-        return;
-      }
-      if (output.artifactContent !== undefined) {
-        await downloadAllArtifacts([
-          {
-            title: output.name,
-            content: output.artifactContent,
-            language: output.artifactLanguage,
-            type: output.artifactType,
-          },
-        ]);
-      }
-    } catch (error) {
-      toast.error(toUserMessage(error, 'Could not download this output'));
-    }
-  }, []);
 
   const dockTitle = agiWork
     ? (summary.title ?? TASK_DOCK_FALLBACK_TITLE)
@@ -643,73 +537,7 @@ export function WorkSessionPanel({
 
   const outputsSection = (
     <DockSection label={TASK_DOCK_OUTPUTS_LABEL} count={summary.outputs.length}>
-      <ul className="space-y-2">
-        {summary.outputs.map((output) => {
-          const canOpen = Boolean(output.artifactId || output.uri);
-          const canDownload = Boolean(output.uri || output.artifactContent !== undefined);
-          const previewType = outputPreviewType(output);
-          return (
-            <li
-              key={output.id}
-              className="overflow-hidden rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)]"
-            >
-              {previewType && output.artifactContent !== undefined && (
-                <button
-                  type="button"
-                  onClick={() => openOutput(output)}
-                  className="block w-full border-b border-[var(--chat-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                >
-                  <ArtifactThumbnail
-                    artifact={{
-                      type: previewType,
-                      content: output.artifactContent,
-                      title: output.name,
-                    }}
-                    className="aspect-[16/9] w-full"
-                  />
-                </button>
-              )}
-              <div className="flex items-center gap-2.5 py-2 pe-1.5 ps-3">
-                {!previewType && (
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--chat-surface-hover)]"
-                    aria-hidden="true"
-                  >
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </span>
-                )}
-                {canOpen ? (
-                  <button
-                    type="button"
-                    onClick={() => openOutput(output)}
-                    className="min-w-0 flex-1 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`${TASK_DOCK_OPEN_ACTION} ${output.name}`}
-                  >
-                    <OutputLabel output={output} />
-                  </button>
-                ) : (
-                  <div className="min-w-0 flex-1">
-                    <OutputLabel output={output} />
-                  </div>
-                )}
-                {canDownload && (
-                  <button
-                    type="button"
-                    onClick={() => void downloadOutput(output)}
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none sm:h-8 sm:w-8"
-                    aria-label={`${TASK_DOCK_DOWNLOAD_ACTION} ${output.name}`}
-                    title={TASK_DOCK_DOWNLOAD_ACTION}
-                  >
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      <OutputsList outputs={summary.outputs} />
     </DockSection>
   );
 

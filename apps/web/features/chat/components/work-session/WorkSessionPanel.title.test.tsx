@@ -16,6 +16,7 @@ import {
 vi.mock('../../utils/downloadArtifacts', () => ({
   downloadAllArtifacts: vi.fn().mockResolvedValue(undefined),
   downloadGeneratedFile: vi.fn().mockResolvedValue(undefined),
+  downloadArtifactFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 const GOAL = 'Draft the Q3 investor update';

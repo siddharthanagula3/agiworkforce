@@ -263,6 +263,7 @@ import {
   WorkSessionPanel,
   WorkSessionToggleButton,
 } from '../components/work-session/WorkSessionPanel';
+import { OutputsPopoverButton } from '../components/work-session/OutputsPopover';
 import { hasWorkSession, taskDockRunKey } from '../components/work-session/taskDockSummary';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
@@ -6396,7 +6397,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     onToggle={() => toggleSecondaryPanel('sources')}
                   />
                 ) : null}
-                <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
+                <OutputsPopoverButton
+                  messages={displayedMessages}
+                  fallback={
+                    <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
+                  }
+                />
               </div>
             </header>
           )}
