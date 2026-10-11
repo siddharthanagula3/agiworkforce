@@ -11,6 +11,7 @@
  * @packageDocumentation
  */
 
+import { explicitArtifacts, loadArtifactsPackage } from './artifacts-package';
 import { claimCitesSource, citedIds, citedUrls, normaliseUrl } from './citations';
 import { extractCode, runCodeTests } from './code-exec';
 import { parseJsonAnswer, readJsonPath, validateJsonSchema } from './json-schema';
@@ -349,6 +350,8 @@ export function gradeCheck(check: Check, response: ModelResponse): CheckResult {
         problems.length === 0 ? 'stayed inside the supplied sources' : problems.join('; '),
       );
     }
+    case 'artifacts':
+      throw new Error('artifacts loads the artifacts package; grade it with gradeCheckAsync');
     case 'language': {
       const detected = detectLanguage(text);
       return result(
@@ -360,7 +363,27 @@ export function gradeCheck(check: Check, response: ModelResponse): CheckResult {
   }
 }
 
+async function gradeArtifacts(
+  check: Extract<Check, { kind: 'artifacts' }>,
+  response: ModelResponse,
+): Promise<CheckResult> {
+  const artifacts = await explicitArtifacts(response.text);
+  const markers = (await loadArtifactsPackage()).EXPLICIT_ARTIFACT_MARKER_FOR;
+  const unmarked = artifacts.filter(
+    (artifact) => artifact.content.split('\n', 1)[0]?.trim() !== markers[artifact.type],
+  );
+  const passed = artifacts.length === check.count && unmarked.length === 0;
+  return result(
+    check,
+    passed,
+    `${artifacts.length} artifact(s) derived (expected ${check.count})${
+      unmarked.length > 0 ? `, ${unmarked.length} without its marker on the first line` : ''
+    }`,
+  );
+}
+
 export async function gradeCheckAsync(check: Check, response: ModelResponse): Promise<CheckResult> {
+  if (check.kind === 'artifacts') return gradeArtifacts(check, response);
   if (check.kind !== 'codeTests') return gradeCheck(check, response);
   const code = extractCode(response.text);
   if (code === null) return result(check, false, 'no JavaScript code block in the answer');

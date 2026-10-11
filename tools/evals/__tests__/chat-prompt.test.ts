@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { loadArtifactsPackage } from '../src/artifacts-package';
 import { chatPromptStamp, loadChatPromptRenderer, withChatPrompt } from '../src/chat-prompt';
 import { loadDataset } from '../src/dataset';
 import { resolveLiveTarget, type RegistryLike } from '../src/live';
@@ -85,6 +86,42 @@ describe('rendering the product chat system prompt for a case', () => {
     expect(await fingerprint(5, '2026-10-10')).not.toBe(await fingerprint(1, '2026-10-10'));
     expect(await fingerprint(5, '2026-10-10')).not.toBe(await fingerprint(5, '2026-10-11'));
     expect(chatPromptStamp(5)).toBe('chat.system@5');
+  });
+});
+
+describe('rendering version 7 for a web chat turn', () => {
+  it('names the markers the artifacts package derives, on every turn variant', async () => {
+    const markers = (await loadArtifactsPackage()).EXPLICIT_ARTIFACT_MARKER_FOR;
+    const v7 = await loadChatPromptRenderer(7, '2026-10-11');
+    for (const id of [
+      'chat-prompt/make-a-calculator',
+      'chat-prompt/own-resume-profile-search-off',
+      'chat-prompt/own-resume-profile-search-on',
+    ]) {
+      const rendered = v7.render(row(id));
+      expect(rendered, id).toContain(`its marker: ${markers['html']} for html or svg`);
+      expect(rendered, id).toContain(`${markers['react']} for jsx`);
+    }
+  });
+
+  it("lists the case plan's product capabilities, free when the case names none", async () => {
+    const v7 = await loadChatPromptRenderer(7, '2026-10-11');
+    const free = v7.render(row('chat-prompt/what-can-you-do-free'));
+    const pro = v7.render(row('chat-prompt/what-can-you-do-pro'));
+
+    expect(free).toContain('- read files the user attaches');
+    expect(free).not.toContain('- generate images');
+    expect(pro).toContain('- generate images');
+    expect(pro).toContain('- run Deep Research');
+    expect(v7.render(row('chat-prompt/make-a-calculator'))).not.toContain('- generate images');
+  });
+
+  it('renders versions before 7 exactly as their runs measured them', async () => {
+    const v6 = await loadChatPromptRenderer(6, '2026-10-11');
+    const rendered = v6.render(row('chat-prompt/what-can-you-do-pro'));
+
+    expect(rendered).not.toContain('What this app offers');
+    expect(rendered).not.toContain('first line of the block is its marker');
   });
 });
 
