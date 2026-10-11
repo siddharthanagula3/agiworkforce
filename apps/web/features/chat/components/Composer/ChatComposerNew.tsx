@@ -606,6 +606,7 @@ const FOCUS_AFTER_TRANSCRIPT_MS = 50;
 const COMPOSER_AUTO_HEIGHT = 'auto';
 const COMPOSER_MAX_HEIGHT_PX = 240;
 const COMPOSER_EXPANDABLE_HEIGHT_PX = 120;
+const COMPOSER_STACKED_LINE_RATIO = 1.5;
 const COMPOSER_EDITOR_CONTENT_SELECTOR = '.ProseMirror';
 const KEY_ESCAPE = 'Escape';
 /**
@@ -1732,6 +1733,7 @@ const ChatComposerNewComponent = ({
   const composerRowRef = useRef<HTMLDivElement>(null);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [composerExpandable, setComposerExpandable] = useState(false);
+  const [composerWrapsLines, setComposerWrapsLines] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   // The "+" trigger and its portaled menu. The menu is no longer a DOM
@@ -2241,6 +2243,22 @@ const ChatComposerNewComponent = ({
     if (!field) return;
     setComposerExpandable(field.scrollHeight > COMPOSER_EXPANDABLE_HEIGHT_PX);
   }, [message, emptyState, composerExpanded]);
+
+  // The widened field would hold on one line what wrapped in the narrow one, so
+  // the stacked layout is left only when the draft is cleared, never re-measured.
+  useEffect(() => {
+    if (!message.trim()) {
+      setComposerWrapsLines(false);
+      return;
+    }
+    if (composerWrapsLines || composerExpanded) return;
+    const field =
+      textareaRef.current ??
+      composerRowRef.current?.querySelector<HTMLElement>(COMPOSER_EDITOR_CONTENT_SELECTOR);
+    if (!field) return;
+    const oneLine = composerRestingHeightPx(Boolean(emptyState));
+    if (field.scrollHeight > oneLine * COMPOSER_STACKED_LINE_RATIO) setComposerWrapsLines(true);
+  }, [message, emptyState, composerExpanded, composerWrapsLines]);
 
   // Close popover on outside click or Escape
   useEffect(() => {
@@ -4056,6 +4074,7 @@ const ChatComposerNewComponent = ({
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
   const showExpandControl = composerExpanded || composerExpandable;
+  const composerStacked = Boolean(emptyState) || composerExpanded || composerWrapsLines;
   const expandControlLabel = composerExpanded
     ? tChat('composer.collapseInput', { defaultValue: 'Collapse message input' })
     : tChat('composer.expandInput', { defaultValue: 'Expand message input' });
@@ -4964,7 +4983,7 @@ const ChatComposerNewComponent = ({
           <div
             className={cn(
               'chat-composer-row min-w-0 flex-row items-end gap-1 sm:gap-2',
-              emptyState ? 'flex-wrap' : 'flex-nowrap',
+              composerStacked ? 'flex-wrap' : 'flex-nowrap',
               dictation.isActive ? 'hidden' : 'flex',
             )}
           >
@@ -4975,7 +4994,8 @@ const ChatComposerNewComponent = ({
               onKeyDown={handleComposerFieldKeyDown}
               className={cn(
                 'chat-composer-field relative -order-1 min-h-[36px] min-w-0 flex-1',
-                emptyState ? 'basis-full sm:min-h-[40px]' : 'basis-0 sm:min-h-[36px]',
+                composerStacked ? 'basis-full' : 'basis-0',
+                emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[36px]',
               )}
             >
               <ComposerInput
@@ -5055,13 +5075,13 @@ const ChatComposerNewComponent = ({
             <div
               className={cn(
                 'chat-composer-controls min-w-0 flex-row flex-nowrap items-center gap-1 sm:gap-2',
-                emptyState ? 'flex w-full' : 'contents',
+                composerStacked ? 'flex w-full' : 'contents',
               )}
             >
               <div
                 className={cn(
                   'chat-composer-leading-end flex shrink-0 flex-row items-center gap-1 sm:gap-2',
-                  emptyState ? 'me-auto' : 'order-[-2]',
+                  composerStacked ? 'me-auto' : 'order-[-2]',
                 )}
               >
                 {/* + Overflow Menu Button */}
