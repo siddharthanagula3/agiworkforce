@@ -32,8 +32,6 @@
     "admin/sso/verify-domain",
     "admin/takedown",
     "artifacts/index",
-    "artifacts/publish",
-    "artifacts/publish/[token]",
     "auth/logout",
     "auth/step-up",
     "billing/invoices",
