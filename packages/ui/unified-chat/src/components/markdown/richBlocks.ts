@@ -146,13 +146,28 @@ export function emailMailtoLink(draft: EmailDraft): MailtoLink {
   return { href: mailtoHref(draft, false), bodyIncluded: false };
 }
 
-const FENCE_OPEN_PATTERN = /^ {0,3}(`{3,}|~{3,})\s*([^\s`]*)[^`]*$/;
+const FENCE_MAX_INDENT = 3;
+const FENCE_MIN_LENGTH = 3;
 
 interface OpenFence {
   marker: string;
   length: number;
   language: string;
   start: number;
+}
+
+function opensFence(line: string, start: number): OpenFence | null {
+  let indent = 0;
+  while (indent < FENCE_MAX_INDENT && line[indent] === ' ') indent += 1;
+  const marker = line[indent];
+  if (marker !== '`' && marker !== '~') return null;
+  let end = indent;
+  while (line[end] === marker) end += 1;
+  const length = end - indent;
+  const info = line.slice(end);
+  if (length < FENCE_MIN_LENGTH || info.includes('`')) return null;
+  const language = info.trimStart().split(/\s/, 1)[0] ?? '';
+  return { marker, length, language: language.toLowerCase(), start };
 }
 
 function closesFence(line: string, fence: OpenFence): boolean {
@@ -184,16 +199,7 @@ export function richBlocksAsPlainText(markdown: string): string {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
     if (fence === null) {
-      const match = FENCE_OPEN_PATTERN.exec(line);
-      const run = match?.[1];
-      if (run) {
-        fence = {
-          marker: run[0] ?? '`',
-          length: run.length,
-          language: (match[2] ?? '').toLowerCase(),
-          start: index,
-        };
-      }
+      fence = opensFence(line, index);
       if (!fence || !isRichBlockLanguage(fence.language)) output.push(line);
       continue;
     }
