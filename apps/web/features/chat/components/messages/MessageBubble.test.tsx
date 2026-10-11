@@ -1657,7 +1657,8 @@ describe('MessageBubble', () => {
       const preview = await screen.findByTestId('inline-artifact-preview');
       const trailing = screen.getByTestId('message-trailing-prose');
       expect(trailing).toHaveTextContent('Press Esc to clear.');
-      const [lead] = await screen.findAllByTestId('markdown-content');
+      const lead = (await screen.findAllByTestId('markdown-content'))[0];
+      if (!lead) throw new Error('the lead prose did not render');
       expect(lead).toHaveTextContent('Here is your calculator.');
       expect(lead).not.toHaveTextContent('Press Esc to clear.');
       expect(lead).not.toHaveTextContent('CALC');
