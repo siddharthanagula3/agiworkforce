@@ -145,3 +145,71 @@ export function emailMailtoLink(draft: EmailDraft): MailtoLink {
   if (full.length <= MAILTO_MAX_LENGTH || !draft.body) return { href: full, bodyIncluded: true };
   return { href: mailtoHref(draft, false), bodyIncluded: false };
 }
+
+const FENCE_OPEN_PATTERN = /^ {0,3}(`{3,}|~{3,})\s*([^\s`]*)[^`]*$/;
+
+interface OpenFence {
+  marker: string;
+  length: number;
+  language: string;
+  start: number;
+}
+
+function closesFence(line: string, fence: OpenFence): boolean {
+  const trimmed = line.trim();
+  return (
+    trimmed.length >= fence.length &&
+    trimmed[0] === fence.marker &&
+    [...trimmed].every((character) => character === fence.marker)
+  );
+}
+
+function richBlockText(language: string, source: string): string {
+  if (language === EMAIL_BLOCK_LANGUAGE) {
+    const parsed = parseEmailBlock(source);
+    return parsed ? emailPlainText(parsed.draft) : source;
+  }
+  return source;
+}
+
+/**
+ * The message as a reader sees it: each email and writing fence becomes the
+ * text its card copies, and every other fence is left exactly as written.
+ */
+export function richBlocksAsPlainText(markdown: string): string {
+  const lines = markdown.split('\n');
+  const output: string[] = [];
+  let fence: OpenFence | null = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (fence === null) {
+      const match = FENCE_OPEN_PATTERN.exec(line);
+      const run = match?.[1];
+      if (run) {
+        fence = {
+          marker: run[0] ?? '`',
+          length: run.length,
+          language: (match[2] ?? '').toLowerCase(),
+          start: index,
+        };
+      }
+      if (!fence || !isRichBlockLanguage(fence.language)) output.push(line);
+      continue;
+    }
+    const rich = isRichBlockLanguage(fence.language);
+    if (closesFence(line, fence)) {
+      output.push(
+        rich ? richBlockText(fence.language, lines.slice(fence.start + 1, index).join('\n')) : line,
+      );
+      fence = null;
+      continue;
+    }
+    if (!rich) output.push(line);
+  }
+
+  if (fence !== null && isRichBlockLanguage(fence.language)) {
+    output.push(richBlockText(fence.language, lines.slice(fence.start + 1).join('\n')));
+  }
+  return output.join('\n');
+}

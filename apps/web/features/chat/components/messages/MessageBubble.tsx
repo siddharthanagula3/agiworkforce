@@ -125,6 +125,7 @@ import {
   hasStreamError,
   ProjectFileCitations,
   resolveModelEscalation,
+  richBlocksAsPlainText,
   StreamAnnouncer,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
@@ -1924,11 +1925,13 @@ const MessageBubbleComponent = function MessageBubble({
   ]);
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(message.content);
+    await navigator.clipboard.writeText(
+      isUser ? message.content : richBlocksAsPlainText(message.content),
+    );
     setCopied(true);
     toast.success('Copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
-  }, [message.content]);
+  }, [isUser, message.content]);
 
   const hasThinkingSteps =
     message.metadata?.thinkingSteps && message.metadata.thinkingSteps.length > 0;
