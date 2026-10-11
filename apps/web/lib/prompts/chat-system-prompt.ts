@@ -257,12 +257,6 @@ export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
 /** The version the chat route serves unless a variant or a rollout picks another. */
 export const CHAT_SYSTEM_PROMPT_PINNED_VERSION = 1;
 
-/**
- * What every conversation that began before conversations recorded their
- * version was served, so it is what such a conversation keeps.
- */
-export const CHAT_SYSTEM_PROMPT_LEGACY_VERSION = 1;
-
 const SECTION_SEPARATOR = '\n\n';
 const PLACEHOLDER = /\{([a-z][a-zA-Z0-9_]*)\}/gu;
 

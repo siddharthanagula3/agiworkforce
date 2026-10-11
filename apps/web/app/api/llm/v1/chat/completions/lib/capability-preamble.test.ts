@@ -274,7 +274,7 @@ describe('capability preamble', () => {
   });
 
   describe('chat system prompt version 5', () => {
-    const v5 = { promptSelection: { conversation: { 'chat.system': 5 } } };
+    const v5 = { promptSelection: { variants: { 'chat.system': 5 } } };
     const officeTool = { type: 'function', function: { name: 'create_office_file' } };
     const searchTool = { type: 'function', function: { name: 'web_search' } };
 
@@ -324,7 +324,7 @@ describe('capability preamble', () => {
     });
 
     it('leaves version 1 untouched by the memory state and the new sections', () => {
-      const v1 = { promptSelection: { conversation: { 'chat.system': 1 } } };
+      const v1 = { promptSelection: { variants: { 'chat.system': 1 } } };
       const plain = buildCapabilityPreamble({ tools: [officeTool], ...v1 });
 
       expect(buildCapabilityPreamble({ tools: [officeTool], memory: 'off', ...v1 })).toBe(plain);

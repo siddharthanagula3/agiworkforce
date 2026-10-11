@@ -29,7 +29,7 @@ export interface ResolvedPrompt {
   readonly text: string;
   /** `id@version`, the value written to the cost ledger and the routing trace. */
   readonly stamp: string;
-  readonly selectedBy: 'pinned' | 'conversation' | 'variant' | 'rollout';
+  readonly selectedBy: 'pinned' | 'variant' | 'rollout';
   readonly channel: 'stable' | 'canary';
 }
 
@@ -40,12 +40,6 @@ export interface PromptRollout {
 }
 
 export interface ResolvePromptOptions {
-  /**
-   * The version a stored conversation started on, keyed by prompt id. It wins
-   * over every other selector so a resumed conversation never has its system
-   * text changed under it.
-   */
-  readonly conversation?: Readonly<Record<string, number>>;
   /** Prompt-manifest variants for this subject, keyed by prompt id. */
   readonly variants?: Readonly<Record<string, number>>;
   /** Staged rollouts by prompt id, keyed the same way. */
@@ -80,18 +74,13 @@ function rolloutVersion(id: PromptId, options: ResolvePromptOptions): number | u
 
 export function resolvePrompt(id: PromptId, options: ResolvePromptOptions = {}): ResolvedPrompt {
   const definition = entry(id);
-  const held = (version: number | undefined) =>
-    version === undefined
-      ? undefined
-      : definition.versions.find((candidate) => candidate.version === version);
-  const continued = held(options.conversation?.[id]);
-  const requested = continued === undefined ? options.variants?.[id] : undefined;
-  const staged =
-    continued === undefined && requested === undefined ? rolloutVersion(id, options) : undefined;
+  const requested = options.variants?.[id];
+  const staged = requested === undefined ? rolloutVersion(id, options) : undefined;
   const asked = requested ?? staged;
   const selected =
-    continued ??
-    held(asked) ??
+    (asked === undefined
+      ? undefined
+      : definition.versions.find((version) => version.version === asked)) ??
     definition.versions.find((version) => version.version === definition.pinnedVersion);
 
   if (!selected) {
@@ -101,14 +90,7 @@ export function resolvePrompt(id: PromptId, options: ResolvePromptOptions = {}):
   }
 
   const served = selected.version === asked;
-  const selectedBy =
-    continued !== undefined
-      ? 'conversation'
-      : !served
-        ? 'pinned'
-        : requested === undefined
-          ? 'rollout'
-          : 'variant';
+  const selectedBy = !served ? 'pinned' : requested === undefined ? 'rollout' : 'variant';
   return {
     id,
     kind: definition.kind,

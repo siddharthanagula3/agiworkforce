@@ -76,12 +76,20 @@ Decisions that differ from the research proposal:
 
 ## How a version reaches users
 
-A conversation keeps the version it started on. The first turn writes the
-pinned version to `web_conversations.chat_system_prompt_version` (migration
-0361), and later turns read it back. A conversation with no recorded version
-whose history already has an answer keeps version 1. A request with no stored
-conversation gets the pinned version. Until 0361 is applied, every stored
-conversation keeps version 1.
+The version is global. When the pin moves, conversations already under way get
+the new system text on their next turn. Anthropic's warning about a changed
+system prompt applies to replayed signed thinking blocks, and neither path that
+could replay one does so here. The request schema drops `thinking` and
+`signature` from the client's message history, and a paused turn resumes from
+the messages its checkpoint stored, with the original system text in them.
+`request-processor.prompt-pin-switch.test.ts` holds both facts.
+
+The trade-off is consistency. An open conversation can change behaviour
+between two turns, and its cached prompt prefix is rebuilt once. Keeping the
+version per conversation needs a column on `web_conversations`, and that waits
+on production migrations, which are on hold. If either fact in that test stops
+holding, the version has to be kept per conversation before the pin moves
+again.
 
 ## Evaluation
 

@@ -91,11 +91,6 @@ import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
 import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
-import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
-import {
-  resolveConversationChatSystemPromptVersion,
-  startsConversation,
-} from '@/lib/prompts/conversation-prompt-version';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
 import { persistAssistantTurn } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
@@ -753,9 +748,8 @@ export async function serveFreeQuotaTurn(
     data_region: string | null;
     project_id: string | null;
     is_temporary: boolean | null;
-    chat_system_prompt_version: string | null;
   }>(
-    "select c.id, o.data_region, c.project_id, c.is_temporary, to_jsonb(c)->>'chat_system_prompt_version' as chat_system_prompt_version from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null",
+    'select c.id, o.data_region, c.project_id, c.is_temporary from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null',
     [body.conversation_id, scoped.userId, scoped.organizationId],
   );
   if (!conversation) return policyRefusal('Conversation not found.', 'conversation_not_found', 404);
@@ -912,16 +906,9 @@ export async function serveFreeQuotaTurn(
         409,
       );
     }
-    const promptVersion = await resolveConversationChatSystemPromptVersion({
-      db: scoped.db,
-      scope: { conversationId: body.conversation_id, userId: scoped.userId },
-      recorded: conversation.chat_system_prompt_version,
-      startsConversation: startsConversation(body.messages),
-    });
     const preamble = buildCapabilityPreamble({
       tools: [],
       ...(body.client_timezone ? { timeZone: body.client_timezone } : {}),
-      promptSelection: { conversation: { [CHAT_SYSTEM_PROMPT_ID]: promptVersion } },
     });
     messages.unshift(
       ...freeQuotaSystemMessages({

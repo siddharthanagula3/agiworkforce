@@ -1,20 +1,4 @@
 {
   "schemaVersion": 1,
-  "entries": [
-    {
-      "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
-      "migration": 361,
-      "reason": "reads the column through to_jsonb, so a missing column reads as null, and the one write catches undefined_column and serves the legacy prompt version; until 0361 is applied every conversation keeps the legacy version, which is what it was served before"
-    },
-    {
-      "file": "apps/web/lib/prompts/conversation-prompt-version.ts",
-      "migration": 361,
-      "reason": "reads the column through to_jsonb, so a missing column reads as null, and the one write catches undefined_column and serves the legacy prompt version; until 0361 is applied every conversation keeps the legacy version, which is what it was served before"
-    },
-    {
-      "file": "apps/web/lib/server/free-quota-turn.ts",
-      "migration": 361,
-      "reason": "reads the column through to_jsonb, so a missing column reads as null, and the one write catches undefined_column and serves the legacy prompt version; until 0361 is applied every conversation keeps the legacy version, which is what it was served before"
-    }
-  ]
+  "entries": []
 }
