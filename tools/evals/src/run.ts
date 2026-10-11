@@ -173,7 +173,12 @@ export interface LiveRunOptions {
   readonly recordedOn: string;
   readonly responderFor: (dataset: EvalDataset) => Responder;
   readonly runId?: string;
+  /** Set when every case already carries the rendered product chat prompt. */
+  readonly promptStamp?: string;
 }
+
+export const CHAT_PROMPT_REQUIRED_REASON =
+  'its rows assume the product chat system prompt; run with --chat-prompt-version';
 
 export interface LiveRunOutcome extends RunOutcome {
   readonly recording: Recording;
@@ -190,7 +195,10 @@ export async function runLive(
   const responses: Record<string, Recording['responses'][string]> = {};
   const withheld: string[] = [];
   for (const dataset of datasets) {
-    const reason = unsupportedSuiteReason(dataset, options.target);
+    const reason =
+      dataset.requiresChatPrompt === true && options.promptStamp === undefined
+        ? CHAT_PROMPT_REQUIRED_REASON
+        : unsupportedSuiteReason(dataset, options.target);
     if (reason !== null) {
       unsupported[dataset.suite] = reason;
       continue;
@@ -224,6 +232,7 @@ export async function runLive(
     modelKey: options.target.modelKey,
     routeId: options.target.routeId,
     recordedOn: options.recordedOn,
+    ...(options.promptStamp === undefined ? {} : { promptStamp: options.promptStamp }),
   };
   const recording: Recording = {
     schemaVersion: RECORDING_SCHEMA_VERSION,
@@ -232,6 +241,7 @@ export async function runLive(
     modelKey: options.target.modelKey,
     routeId: options.target.routeId,
     recordedOn: options.recordedOn,
+    ...(options.promptStamp === undefined ? {} : { promptStamp: options.promptStamp }),
     responses,
     withheld,
   };

@@ -18,6 +18,7 @@ import { LANGUAGE_CODES } from './language';
 import { fixturePath } from './request';
 import type {
   ArgumentMatcher,
+  ChatTurnMemory,
   Check,
   CorpusPriority,
   DatasetProvenance,
@@ -52,7 +53,9 @@ export const SUITE_NAMES: readonly SuiteName[] = [
   'browser',
   'computer-use',
   'multilingual',
+  'chat-prompt',
 ];
+const CHAT_TURN_MEMORY: readonly ChatTurnMemory[] = ['on', 'off'];
 const RISKS: readonly RiskLabel[] = ['low', 'high'];
 const BEHAVIOURS: readonly ExpectedBehaviour[] = ['answer', 'refusal', 'safe-completion'];
 const CHECK_KINDS = [
@@ -512,6 +515,13 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
     }
   }
   const system = raw['system'];
+  const memory = raw['memory'];
+  if (
+    memory !== undefined &&
+    (typeof memory !== 'string' || !(CHAT_TURN_MEMORY as readonly string[]).includes(memory))
+  ) {
+    fail(where, `memory must be one of ${CHAT_TURN_MEMORY.join(', ')}`);
+  }
 
   return {
     id,
@@ -536,6 +546,7 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
     ...(raw['requires'] === undefined
       ? {}
       : { requires: readStringArray(raw['requires'], `${where}.requires`) }),
+    ...(memory === undefined ? {} : { memory: memory as ChatTurnMemory }),
   };
 }
 
@@ -588,6 +599,10 @@ export function parseDataset(raw: unknown): EvalDataset {
   if (promptId !== undefined && (typeof promptId !== 'string' || !PROMPT_ID.test(promptId))) {
     fail(suite, 'promptId must be a dotted lower-case prompt manifest id');
   }
+  const requiresChatPrompt = raw['requiresChatPrompt'];
+  if (requiresChatPrompt !== undefined && typeof requiresChatPrompt !== 'boolean') {
+    fail(suite, 'requiresChatPrompt must be a boolean when present');
+  }
 
   const suiteName = suite as SuiteName;
   const cases = rawCases.map((entry, index) => parseCase(entry, suiteName, index));
@@ -605,6 +620,7 @@ export function parseDataset(raw: unknown): EvalDataset {
     provenance,
     passThreshold,
     ...(promptId === undefined ? {} : { promptId: promptId as string }),
+    ...(requiresChatPrompt === true ? { requiresChatPrompt: true } : {}),
     ...(requires === undefined ? {} : { requires: readStringArray(requires, `${suite}.requires`) }),
     ...(maxOutputTokens === undefined
       ? {}

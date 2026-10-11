@@ -2,7 +2,9 @@
  * Eval harness command line.
  *
  *   replay                 grade committed recordings with no network (CI)
- *   live --model <key>     measure a registry model through its provider adapter (paid)
+ *   live --model <key>     measure a registry model through its provider adapter (paid);
+ *                          --chat-prompt-version <n> renders that product chat prompt version
+ *                          in front of every case and writes under measurements/prompt-evals
  *   compare                hold one measured run against another, model or route
  *   release-evidence       the committed baselines as one dated evidence report
  *   fingerprint-reference  re-pin the hand-written reference recording to the corpora
@@ -12,12 +14,13 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { compareRuns, readGatePolicy } from './promotion-gate.mjs';
 import { auditMeasurements, readLedger, recordMeasurement } from './measurement-integrity.mjs';
+import { loadChatPromptRenderer, withChatPrompt } from '../src/chat-prompt';
 import { SUITE_NAMES, loadDatasets } from '../src/dataset';
 import {
   activeFamilies,
@@ -37,12 +40,23 @@ const EVALS_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REFERENCE_RECORDING = join(EVALS_ROOT, 'recordings', 'reference.json');
 const MEASUREMENTS = join(EVALS_ROOT, 'measurements');
+const PROMPT_MEASUREMENTS = join(MEASUREMENTS, 'prompt-evals');
 const REGISTRY_JSON = join(REPO_ROOT, 'packages/ai/model-registry/generated/registry.json');
 const PROBE_MODELS = join(REPO_ROOT, 'scripts/probe-models.mjs');
 
 function argValue(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
   return index === -1 ? undefined : args[index + 1];
+}
+
+function chatPromptVersion(args: readonly string[]): number | undefined {
+  const raw = argValue(args, '--chat-prompt-version');
+  if (raw === undefined) return undefined;
+  const version = Number.parseInt(raw, 10);
+  if (!Number.isInteger(version) || version < 1 || String(version) !== raw) {
+    throw new Error(`--chat-prompt-version takes a positive integer, not ${raw}`);
+  }
+  return version;
 }
 
 function selectedSuites(args: readonly string[]): readonly SuiteName[] {
@@ -123,6 +137,12 @@ interface ProbeAdapters {
 async function live(args: readonly string[]): Promise<void> {
   const modelKey = argValue(args, '--model');
   if (modelKey === undefined) throw new Error('live requires --model <modelKey>');
+  const promptVersion = chatPromptVersion(args);
+  if (promptVersion !== undefined && args.includes('--baseline')) {
+    throw new Error(
+      'a family baseline measures the bare model; --chat-prompt-version runs are compared with each other, not written as baselines',
+    );
+  }
   const registry = JSON.parse(readFileSync(REGISTRY_JSON, 'utf8')) as RegistryLike;
   const target = resolveLiveTarget(registry, modelKey, argValue(args, '--route'));
   const refusal = spendRefusal(registry, target, args.includes('--allow-costly'));
@@ -144,23 +164,38 @@ async function live(args: readonly string[]): Promise<void> {
   const adapter = resolved.adapter;
 
   const recordedOn = new Date().toISOString().slice(0, 10);
-  const outcome = await runLive(loadDatasets(selectedSuites(args)), {
-    target,
-    recordedOn,
-    responderFor: (dataset) =>
-      providerResponder({
-        adapter,
-        providerModelId: target.route.providerModelId,
-        dataset,
-        pricing: livePricing(registry, target),
-      }),
-  });
+  const renderer =
+    promptVersion === undefined
+      ? undefined
+      : await loadChatPromptRenderer(promptVersion, recordedOn);
+  const datasets = loadDatasets(selectedSuites(args));
+  const outcome = await runLive(
+    renderer === undefined ? datasets : withChatPrompt(datasets, renderer),
+    {
+      target,
+      recordedOn,
+      ...(renderer === undefined ? {} : { promptStamp: renderer.stamp }),
+      responderFor: (dataset) =>
+        providerResponder({
+          adapter,
+          providerModelId: target.route.providerModelId,
+          dataset,
+          pricing: livePricing(registry, target),
+        }),
+    },
+  );
   print(formatRun(outcome.report, outcome.reports));
 
-  const fileName = measurementFileName(target.route.isDefault ? modelKey : target.routeId);
-  recordMeasurement(join(MEASUREMENTS, 'recordings', fileName), outcome.recording);
-  recordMeasurement(join(MEASUREMENTS, 'runs', fileName), outcome.report);
-  print(`[evals] wrote measurements/recordings/${fileName} and measurements/runs/${fileName}`);
+  const subject = target.route.isDefault ? modelKey : target.routeId;
+  const fileName = measurementFileName(
+    renderer === undefined ? subject : `${subject}.${renderer.stamp}`,
+  );
+  const root = renderer === undefined ? MEASUREMENTS : PROMPT_MEASUREMENTS;
+  recordMeasurement(join(root, 'recordings', fileName), outcome.recording);
+  recordMeasurement(join(root, 'runs', fileName), outcome.report);
+  print(
+    `[evals] wrote ${relative(MEASUREMENTS, join(root, 'recordings', fileName))} and ${relative(MEASUREMENTS, join(root, 'runs', fileName))}`,
+  );
   print(
     `[evals] run ${outcome.report.runId}: ${outcome.attempts.length} attempt(s), ${outcome.attempts.filter((attempt) => !attempt.graded).length} retried`,
   );

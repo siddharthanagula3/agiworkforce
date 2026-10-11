@@ -27,7 +27,8 @@ export type SuiteName =
   | 'files'
   | 'browser'
   | 'computer-use'
-  | 'multilingual';
+  | 'multilingual'
+  | 'chat-prompt';
 
 export type ExpectedBehaviour = 'answer' | 'refusal' | 'safe-completion';
 
@@ -167,6 +168,9 @@ export interface EvalHaystack {
   readonly needle: string;
 }
 
+/** Whether memory serves the turn, as the chat system prompt is told it. */
+export type ChatTurnMemory = 'on' | 'off';
+
 export interface EvalCase {
   readonly id: string;
   readonly family: string;
@@ -187,6 +191,8 @@ export interface EvalCase {
    * which is what makes a mixed-modality corpus safe to run everywhere.
    */
   readonly requires?: readonly string[];
+  /** Read only when the run renders the product's chat system prompt. */
+  readonly memory?: ChatTurnMemory;
 }
 
 /**
@@ -225,6 +231,12 @@ export interface EvalDataset {
    * prompt's own id.
    */
   readonly promptId?: string;
+  /**
+   * The rows only mean something under the product's chat system prompt, so a
+   * run that does not render one reports the suite unsupported instead of
+   * grading the bare model against expectations the prompt sets.
+   */
+  readonly requiresChatPrompt?: boolean;
   readonly requires?: readonly string[];
   readonly maxOutputTokens?: number;
   readonly cases: readonly EvalCase[];
