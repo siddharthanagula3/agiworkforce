@@ -335,6 +335,54 @@ describe('voiceInputStore', () => {
     });
   });
 
+  describe('a refused transcription', () => {
+    async function recordAgainst(response: unknown) {
+      installCapture();
+      stubFetch(() => response);
+      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().stopListening();
+    }
+
+    it('says the month of voice minutes is used up when the allowance code comes back', async () => {
+      await recordAgainst({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'voice_minutes_monthly_limit_reached' } }),
+      });
+
+      expect(useVoiceInputStore.getState().mode).toBe('error');
+      expect(useVoiceInputStore.getState().error).toBe(
+        'This month’s voice minutes are used up. Upgrade for more, or type instead.',
+      );
+    });
+
+    it('keeps the wait-a-moment message for a plain 429', async () => {
+      await recordAgainst({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'rate_limited' } }),
+      });
+
+      expect(useVoiceInputStore.getState().error).toBe(
+        'Too many recordings just now. Wait a moment, then try again.',
+      );
+    });
+
+    it('keeps the wait-a-moment message for a 429 whose body cannot be read', async () => {
+      await recordAgainst({
+        ok: false,
+        status: 429,
+        json: async () => {
+          throw new Error('not json');
+        },
+      });
+
+      expect(useVoiceInputStore.getState().error).toBe(
+        'Too many recordings just now. Wait a moment, then try again.',
+      );
+    });
+  });
+
   describe('cancelListening', () => {
     it('does not let an older microphone grant replace a newer recording', async () => {
       installCapture();

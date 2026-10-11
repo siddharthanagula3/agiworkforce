@@ -10,6 +10,8 @@ import { WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolAppr
 type ScanModule0 = typeof import('@/lib/server/provider-training-opt-out');
 type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule2 = typeof import('./lib/voice-session-budget');
+type ScanModule3 = typeof import('@/lib/voice/free-voice-allowance');
+type ScanModule4 = typeof import('./lib/voice-session-settlement');
 
 const LIVE_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live'))!;
 const BACKEND_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live_backend'))!;
@@ -24,6 +26,10 @@ const mocks = vi.hoisted(() => ({
   userScopedDb: vi.fn(),
   fetch: vi.fn(),
   assertTierUnitAllowance: vi.fn(),
+  freeAllowanceSeconds: vi.fn<(planTier: string | null) => number | null>(() => null),
+  grantFree: vi.fn(),
+  sweep: vi.fn(),
+  settleFree: vi.fn(),
   requireEnv: vi.fn(),
   keepsOutOfTraining: vi.fn<(modelId: string) => boolean | null>(() => null),
 }));
@@ -82,6 +88,16 @@ vi.mock('./lib/voice-session-budget', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
   assessVoiceBudget: (...args: unknown[]) => mocks.assess(...args),
 }));
+vi.mock('@/lib/voice/free-voice-allowance', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule3>()),
+  freeVoiceAllowanceSeconds: (planTier: string | null) => mocks.freeAllowanceSeconds(planTier),
+  grantFreeVoiceSeconds: (...args: unknown[]) => mocks.grantFree(...args),
+  settleFreeVoiceSeconds: (...args: unknown[]) => mocks.settleFree(...args),
+}));
+vi.mock('./lib/voice-session-settlement', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule4>()),
+  settleAbandonedVoiceSessions: (...args: unknown[]) => mocks.sweep(...args),
+}));
 vi.mock('@/lib/services/managed-compute-access', () => ({
   evaluateManagedComputeSubscriptionAccess: vi.fn(async () => ({ allowed: true })),
   buildManagedComputeAccessGateResponse: vi.fn(() => null),
@@ -122,6 +138,8 @@ async function errorCode(response: Response): Promise<string | undefined> {
 const OFFER = 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\n';
 const CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
 const FIVE_HOUR_RESET = '2026-10-10T15:00:00.000Z';
+const ALLOWANCE_RESET = '2026-11-01T00:00:00.000Z';
+const FREE_ALLOWANCE_SECONDS = 600;
 const PAID_BLOCK = liveVoiceBlockChargeMicrousd(LIVE_MODEL.id, BACKEND_MODEL.id)!;
 
 function sessionDb(overrides: { insertedId?: string | null } = {}) {
@@ -178,6 +196,10 @@ describe('POST /api/voice/live/sessions', () => {
     mocks.finalize.mockResolvedValue({});
     mocks.providerStarted.mockResolvedValue(undefined);
     mocks.keepsOutOfTraining.mockReturnValue(null);
+    mocks.freeAllowanceSeconds.mockReturnValue(null);
+    mocks.grantFree.mockResolvedValue({ granted: true, grantedSeconds: 60, fresh: true });
+    mocks.settleFree.mockResolvedValue(0);
+    mocks.sweep.mockResolvedValue(0);
   });
 
   it('creates the session server-side with the live model, webrtc transport and delegation', async () => {
@@ -218,6 +240,11 @@ describe('POST /api/voice/live/sessions', () => {
     ).db.query.mock.calls.find(([sql]) => sql.includes('insert into public.voice_sessions'));
     expect(reserved).toMatchObject(voiceReservationIdentity(String(insert?.[1]?.[11])));
     expect(mocks.providerStarted).toHaveBeenCalledTimes(1);
+    expect(mocks.grantFree).not.toHaveBeenCalled();
+    expect(mocks.sweep).toHaveBeenCalledTimes(1);
+    expect(mocks.reserve.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.sweep.mock.invocationCallOrder[0]!,
+    );
 
     const [url, init] = mocks.fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/live/sessions');
@@ -269,6 +296,7 @@ describe('POST /api/voice/live/sessions', () => {
       'thinking',
     );
     mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
+    mocks.freeAllowanceSeconds.mockReturnValue(FREE_ALLOWANCE_SECONDS);
     const free = await POST(
       request({ sdp: OFFER, conversationId: CONVERSATION_ID, reasoning: 'thinking' }),
     );
@@ -304,24 +332,153 @@ describe('POST /api/voice/live/sessions', () => {
     }
   });
 
-  it('starts a Free session on a fixture budget, reserving one minute at the free backend price', async () => {
-    mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
-    mocks.fetch.mockResolvedValue(
-      new Response(
-        JSON.stringify({ session: { id: 'live_f' }, transport: { type: 'webrtc', sdp: 'answer' } }),
-        { status: 201 },
-      ),
-    );
+  describe('on the Free monthly voice allowance', () => {
+    beforeEach(() => {
+      mocks.entitlement.mockResolvedValue({
+        plan: 'free',
+        catalogVersion: null,
+        subscription: null,
+      });
+      mocks.freeAllowanceSeconds.mockReturnValue(FREE_ALLOWANCE_SECONDS);
+    });
 
-    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+    function providerAnswers(id: string): void {
+      mocks.fetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({ session: { id }, transport: { type: 'webrtc', sdp: 'answer' } }),
+          { status: 201 },
+        ),
+      );
+    }
 
-    expect(response.status).toBe(201);
-    expect(reservedCalls()[0]).toMatchObject({
-      planTier: 'free',
-      estimatedCostMicrousd: liveVoiceBlockChargeMicrousd(
-        LIVE_MODEL.id,
-        getRoutingSlotModel('voice_live_backend_free'),
-      ),
+    it('grants the first minute to the recorded session and touches no usage ledger', async () => {
+      providerAnswers('live_f');
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).toBe(201);
+      expect(((await response.json()) as { settlement: unknown }).settlement).toEqual({
+        ceilingSeconds: LIVE_VOICE_BLOCK_SECONDS,
+      });
+      expect(mocks.freeAllowanceSeconds).toHaveBeenCalledWith('free');
+      const scoped = (await mocks.userScopedDb.mock.results[0]!.value) as {
+        db: { query: { mock: { calls: [string, unknown[]][] } } };
+      };
+      const insert = scoped.db.query.mock.calls.find(([sql]) =>
+        sql.includes('insert into public.voice_sessions'),
+      );
+      expect(mocks.grantFree).toHaveBeenCalledTimes(1);
+      expect(mocks.grantFree).toHaveBeenCalledWith({
+        db: scoped.db,
+        userId: 'user-1',
+        sessionId: String(insert?.[1]?.[11]),
+        use: 'live',
+        grantKey: 'provider:1',
+        seconds: LIVE_VOICE_BLOCK_SECONDS,
+        limitSeconds: FREE_ALLOWANCE_SECONDS,
+      });
+      expect(mocks.assess).not.toHaveBeenCalled();
+      expect(mocks.reserve).not.toHaveBeenCalled();
+      expect(mocks.providerStarted).not.toHaveBeenCalled();
+      expect(mocks.finalize).not.toHaveBeenCalled();
+      expect(mocks.settleFree).not.toHaveBeenCalled();
+    });
+
+    it('settles abandoned calls before the allowance is read, as the owner on the plan backend', async () => {
+      providerAnswers('live_s');
+
+      await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(mocks.sweep.mock.invocationCallOrder[0]!).toBeLessThan(
+        mocks.grantFree.mock.invocationCallOrder[0]!,
+      );
+      const sweep = mocks.sweep.mock.calls[0]![0] as {
+        userId: string;
+        backendModelFor: () => Promise<string>;
+      };
+      expect(sweep.userId).toBe('user-1');
+      expect(await sweep.backendModelFor()).toBe(getRoutingSlotModel('voice_live_backend_free'));
+    });
+
+    it('still grants when the sweep of abandoned calls fails', async () => {
+      providerAnswers('live_s2');
+      mocks.sweep.mockRejectedValue(new Error('sweep failed'));
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).toBe(201);
+      expect(mocks.grantFree).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses with the month reset once the allowance is used and calls no provider', async () => {
+      mocks.grantFree.mockResolvedValue({
+        granted: false,
+        reason: 'allowance_used',
+        resetsAt: ALLOWANCE_RESET,
+      });
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).toBe(429);
+      const body = (await response.json()) as { error: { code: string; resets_at: string } };
+      expect(body.error.code).toBe('voice_minutes_monthly_limit_reached');
+      expect(body.error.resets_at).toBe(ALLOWANCE_RESET);
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      expect(mocks.reserve).not.toHaveBeenCalled();
+      expect(mocks.assess).not.toHaveBeenCalled();
+    });
+
+    it('settles the grant at zero seconds and finalizes nothing when the provider refuses', async () => {
+      mocks.fetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: { code: 'model_not_found', message: 'The model does not exist' },
+          }),
+          { status: 404 },
+        ),
+      );
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).toBe(403);
+      expect(mocks.settleFree).toHaveBeenCalledTimes(1);
+      expect(mocks.settleFree).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', usedSeconds: 0 }),
+      );
+      expect(mocks.finalize).not.toHaveBeenCalled();
+      expect(mocks.providerStarted).not.toHaveBeenCalled();
+    });
+
+    it('settles the grant at zero seconds when the store could not record the session', async () => {
+      providerAnswers('live_3');
+      mocks.userScopedDb.mockResolvedValue({
+        db: {
+          query: async (sql: string) => {
+            if (sql.includes('to_regclass')) return [{ ready: true }];
+            return [];
+          },
+        },
+        userId: 'user-1',
+        organizationId: null,
+      });
+
+      const response = await POST(request({ sdp: OFFER, conversationId: 'conv-1' }));
+
+      expect(response.status).toBe(503);
+      expect(mocks.settleFree).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', usedSeconds: 0 }),
+      );
+      expect(mocks.finalize).not.toHaveBeenCalled();
+    });
+
+    it('answers 503 billing_unavailable when the grant cannot be written', async () => {
+      mocks.grantFree.mockRejectedValue(new Error('usage store down'));
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).toBe(503);
+      expect(await errorCode(response)).toBe('billing_unavailable');
+      expect(mocks.fetch).not.toHaveBeenCalled();
     });
   });
 
@@ -358,6 +515,7 @@ describe('POST /api/voice/live/sessions', () => {
 
   it('delegates a free plan session to the free backend slot rather than the paid one', async () => {
     mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: null, subscription: null });
+    mocks.freeAllowanceSeconds.mockReturnValue(FREE_ALLOWANCE_SECONDS);
     mocks.fetch.mockResolvedValue(
       new Response(
         JSON.stringify({

@@ -13,6 +13,7 @@ type ScanModule7 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule10 = typeof import('../../lib/voice-session-budget');
 type ScanModule11 = typeof import('../../lib/voice-session-store');
+type ScanModule12 = typeof import('@/lib/voice/free-voice-allowance');
 
 const mocks = vi.hoisted(() => ({
   csrf: vi.fn(),
@@ -24,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   storeReady: vi.fn(),
   getSession: vi.fn(),
   touchSession: vi.fn(),
+  readFreeSession: vi.fn(),
+  grantFree: vi.fn(),
   keepsOutOfTraining: vi.fn<(modelId: string) => boolean | null>(() => null),
 }));
 
@@ -71,6 +74,11 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   ...(await importOriginal<ScanModule8>()),
   reserveManagedUsageProviderStep: (...args: unknown[]) => mocks.reserveStep(...args),
 }));
+vi.mock('@/lib/voice/free-voice-allowance', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule12>()),
+  readFreeVoiceSession: (...args: unknown[]) => mocks.readFreeSession(...args),
+  grantFreeVoiceSeconds: (...args: unknown[]) => mocks.grantFree(...args),
+}));
 vi.mock('../../lib/voice-session-budget', async (importOriginal) => ({
   ...(await importOriginal<ScanModule10>()),
   readVoiceReservation: (...args: unknown[]) => mocks.readReservation(...args),
@@ -87,11 +95,13 @@ const { createError } = await import('@/lib/errors');
 const { ManagedUsageRequestError } = await import('@/lib/services/managed-usage-request-service');
 const { LIVE_VOICE_BLOCK_SECONDS, liveVoiceBlockChargeMicrousd } =
   await import('@/lib/voice/live-voice-billing');
+const { FREE_VOICE_SESSION_ALLOWANCE_SECONDS } = await import('@/lib/voice/free-voice-allowance');
 const { voiceReservationIdentity } = await import('../../lib/voice-session-budget');
 
 const SESSION_ID = 'live_1';
 const LIVE_MODEL = getRoutingSlotModel('voice_live');
 const FIVE_HOUR_RESET = '2026-10-10T15:00:00.000Z';
+const ALLOWANCE_RESET = '2026-11-01T00:00:00.000Z';
 const db = { query: vi.fn() };
 
 function activeSession(status: 'active' | 'closed' = 'active') {
@@ -131,6 +141,8 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ userId: 'user-1' });
   mocks.userScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
   mocks.entitlement.mockResolvedValue({ plan: 'pro', catalogVersion: 3 });
+  mocks.readFreeSession.mockResolvedValue(null);
+  mocks.grantFree.mockResolvedValue({ granted: true, grantedSeconds: 120, fresh: true });
   mocks.storeReady.mockResolvedValue(true);
   mocks.getSession.mockResolvedValue(activeSession());
   mocks.touchSession.mockResolvedValue(activeSession());
@@ -167,7 +179,7 @@ describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
     expect(mocks.touchSession).toHaveBeenCalled();
   });
 
-  it('prices a free plan block at the cheaper free backend', async () => {
+  it('prices a Free session that holds no allowance grant at the free backend', async () => {
     mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: 3 });
 
     await extend({ block: 2 });
@@ -267,6 +279,103 @@ describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
     );
 
     expect(response.status).toBe(204);
+  });
+});
+
+describe('a session running on the Free monthly voice allowance', () => {
+  beforeEach(() => {
+    mocks.entitlement.mockResolvedValue({ plan: 'free', catalogVersion: 3 });
+    mocks.readFreeSession.mockResolvedValue({ grantedSeconds: 60, settledSeconds: null });
+    mocks.readReservation.mockResolvedValue(null);
+  });
+
+  it('grants the next minute from the allowance and reserves nothing in the ledger', async () => {
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ceilingSeconds: 2 * LIVE_VOICE_BLOCK_SECONDS });
+    expect(mocks.readFreeSession).toHaveBeenCalledWith(db, 'user-1', 'vs_1');
+    expect(mocks.grantFree).toHaveBeenCalledTimes(1);
+    expect(mocks.grantFree).toHaveBeenCalledWith({
+      db,
+      userId: 'user-1',
+      sessionId: 'vs_1',
+      use: 'live',
+      grantKey: 'provider:2',
+      seconds: LIVE_VOICE_BLOCK_SECONDS,
+      limitSeconds: FREE_VOICE_SESSION_ALLOWANCE_SECONDS,
+    });
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
+    expect(mocks.touchSession).toHaveBeenCalled();
+  });
+
+  it('answers a block already granted without granting it again', async () => {
+    mocks.readFreeSession.mockResolvedValue({ grantedSeconds: 120, settledSeconds: null });
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ceilingSeconds: 2 * LIVE_VOICE_BLOCK_SECONDS });
+    expect(mocks.grantFree).not.toHaveBeenCalled();
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
+  });
+
+  it('refuses a block two ahead of what the session was granted', async () => {
+    const response = await extend({ block: 3 });
+
+    expect(response.status).toBe(409);
+    expect((await errorBody(response))['code']).toBe('voice_block_out_of_order');
+    expect(mocks.grantFree).not.toHaveBeenCalled();
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
+  });
+
+  it('refuses the next minute with the month reset once the allowance is used', async () => {
+    mocks.grantFree.mockResolvedValue({
+      granted: false,
+      reason: 'allowance_used',
+      resetsAt: ALLOWANCE_RESET,
+    });
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(429);
+    expect(await errorBody(response)).toMatchObject({
+      code: 'voice_minutes_monthly_limit_reached',
+      resets_at: ALLOWANCE_RESET,
+    });
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
+  });
+
+  it('refuses to extend a session that was already settled', async () => {
+    mocks.grantFree.mockResolvedValue({
+      granted: false,
+      reason: 'session_settled',
+      resetsAt: ALLOWANCE_RESET,
+    });
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(409);
+    expect((await errorBody(response))['code']).toBe('voice_session_closed');
+  });
+
+  it('answers 503 billing_unavailable when the grant cannot be written', async () => {
+    mocks.grantFree.mockRejectedValue(new Error('usage store down'));
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(503);
+    expect((await errorBody(response))['code']).toBe('billing_unavailable');
+  });
+
+  it('answers 503 billing_unavailable when the allowance cannot be read', async () => {
+    mocks.readFreeSession.mockRejectedValue(new Error('usage store down'));
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(503);
+    expect((await errorBody(response))['code']).toBe('billing_unavailable');
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
   });
 });
 

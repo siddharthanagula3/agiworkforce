@@ -23,6 +23,7 @@ import { resolveAuthenticatedSurface } from '../../chat/completions/lib/request-
 import {
   getModelMetadataById,
   getRoutingSlotModel,
+  getVoiceLiveBackendModel,
   isModelLive,
   resolveEffectiveModelPricingForInputTokens,
   type PricedModel,
@@ -47,6 +48,15 @@ import {
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
 import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { settleAbandonedVoiceSessions } from '@/app/api/voice/live/sessions/lib/voice-session-settlement';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import {
+  freeVoiceAllowanceSeconds,
+  freeVoiceAllowanceUsedError,
+  grantFreeVoiceSeconds,
+  settleFreeVoiceSeconds,
+} from '@/lib/voice/free-voice-allowance';
 import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeSubscriptionAccess,
@@ -251,6 +261,8 @@ function describeTranscriptionFailure(status: number): string {
   if (status >= 500) return 'The transcription provider is unavailable. Try again shortly.';
   return 'Transcription failed.';
 }
+
+const FREE_ALLOWANCE_GRANT_KEY = 'recording';
 
 export type TranscriptionAdmission = (request: NextRequest, userId: string) => Promise<void>;
 
@@ -538,7 +550,8 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
     );
   }
 
-  let reservation: ManagedUsageRequestReservation;
+  let reservation: ManagedUsageRequestReservation | null = null;
+  let freeAllowanceSessionId: string | null = null;
   try {
     const idempotencyHeader = request.headers.get('Idempotency-Key');
     const idempotencyKey =
@@ -558,30 +571,71 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       });
       if (gateResponse) return gateResponse;
     }
-    await assertTierUnitAllowance({
-      db: scoped.db,
-      userId,
-      planTier: entitlement.plan,
-      unit: 'voice_minutes',
-      requestedUnits: estimatedSeconds / 60,
-    });
-    reservation = await reserveManagedUsageRequest({
-      db: scoped.db,
-      userId,
-      idempotencyKey,
-      requestHash: fingerprintManagedUsageRequest({
+    const freeAllowanceSeconds = freeVoiceAllowanceSeconds(entitlement.plan);
+    if (freeAllowanceSeconds === null) {
+      await assertTierUnitAllowance({
+        db: scoped.db,
+        userId,
+        planTier: entitlement.plan,
+        unit: 'voice_minutes',
+        requestedUnits: estimatedSeconds / 60,
+      });
+      reservation = await reserveManagedUsageRequest({
+        db: scoped.db,
+        userId,
+        idempotencyKey,
+        requestHash: fingerprintManagedUsageRequest({
+          model: selectedModel.id,
+          language: typeof language === 'string' ? language : null,
+          byteSize: file.size,
+          mimeType: mimeEssence,
+        }),
+        provider: selectedModel.provider,
         model: selectedModel.id,
-        language: typeof language === 'string' ? language : null,
-        byteSize: file.size,
-        mimeType: mimeEssence,
-      }),
-      provider: selectedModel.provider,
-      model: selectedModel.id,
-      estimatedCostMicrousd,
-      planTier: entitlement.plan,
-      isFlagship: false,
-      ...(apiKeyId ? { apiKeyId } : {}),
-    });
+        estimatedCostMicrousd,
+        planTier: entitlement.plan,
+        isFlagship: false,
+        ...(apiKeyId ? { apiKeyId } : {}),
+      });
+    } else {
+      const allowancePlan = entitlement.plan;
+      await settleAbandonedVoiceSessions({
+        db: scoped.db,
+        userId,
+        backendModelFor: async () => getVoiceLiveBackendModel(allowancePlan),
+      }).catch((error: unknown) => {
+        logger.warn(
+          { event: 'voice_session_expiry_failed', error, userId },
+          'Expired voice sessions could not be settled before the allowance was read',
+        );
+      });
+      const grant = await grantFreeVoiceSeconds({
+        db: scoped.db,
+        userId,
+        sessionId: idempotencyKey,
+        use: 'dictation',
+        grantKey: FREE_ALLOWANCE_GRANT_KEY,
+        seconds: estimatedSeconds,
+        limitSeconds: freeAllowanceSeconds,
+      });
+      if (!grant.granted) {
+        throw grant.reason === 'session_settled'
+          ? new ManagedUsageRequestError(
+              'This recording was already transcribed. Record again to transcribe a new one.',
+              409,
+              'idempotency_replay',
+            )
+          : freeVoiceAllowanceUsedError(grant.resetsAt);
+      }
+      if (!grant.fresh) {
+        throw new ManagedUsageRequestError(
+          'This recording is already being transcribed.',
+          409,
+          'idempotency_in_progress',
+        );
+      }
+      freeAllowanceSessionId = idempotencyKey;
+    }
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return managedUsageErrorResponse(request, error);
@@ -602,6 +656,17 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
 
   async function releaseReservation(reason: string): Promise<void> {
     try {
+      if (reservation === null) {
+        if (freeAllowanceSessionId !== null) {
+          await settleFreeVoiceSeconds({
+            db: scoped.db,
+            userId,
+            sessionId: freeAllowanceSessionId,
+            usedSeconds: 0,
+          });
+        }
+        return;
+      }
       await finalizeManagedUsageRequest({
         ...reservation,
         outcome: 'failed',
@@ -619,7 +684,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
           event: 'transcription_refund_settlement_unrecorded',
           error: settlementError,
           userId,
-          idempotencyKey: reservation.idempotencyKey,
+          idempotencyKey: reservation?.idempotencyKey ?? freeAllowanceSessionId,
         },
         'Transcription failure settlement could not be persisted',
       );
@@ -629,7 +694,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
   let response: Response;
   let responseText: string;
   try {
-    await markManagedUsageProviderStarted(reservation);
+    if (reservation !== null) await markManagedUsageProviderStarted(reservation);
     response = await fetch(providerApiUrl('openai', 'audio/transcriptions'), {
       method: 'POST',
       headers: {
@@ -678,20 +743,42 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
     settled.inputTokens,
     settled.outputTokens,
   );
-  await finalizeManagedUsageRequest({
-    ...reservation,
-    outcome: 'completed',
-    actualCostMicrousd,
-    usage: {
-      operation: 'transcription',
-      provider: selectedModel.provider,
+  const transcriptionUsage = {
+    operation: 'transcription',
+    provider: selectedModel.provider,
+    model: selectedModel.id,
+    estimatedAudioSeconds: estimatedSeconds,
+    inputTokens: settled.inputTokens,
+    outputTokens: settled.outputTokens,
+    usageSource: settled.source,
+  };
+  if (reservation !== null) {
+    await finalizeManagedUsageRequest({
+      ...reservation,
+      outcome: 'completed',
+      actualCostMicrousd,
+      usage: transcriptionUsage,
+    });
+  } else if (freeAllowanceSessionId !== null) {
+    await settleFreeVoiceSeconds({
+      db: scoped.db,
+      userId,
+      sessionId: freeAllowanceSessionId,
+      usedSeconds: estimatedSeconds,
+    });
+    await recordSettledProviderCost({
+      db: scoped.db,
+      userId,
+      provider: String(selectedModel.provider),
       model: selectedModel.id,
-      estimatedAudioSeconds: estimatedSeconds,
-      inputTokens: settled.inputTokens,
-      outputTokens: settled.outputTokens,
-      usageSource: settled.source,
-    },
-  });
+      actualCostCents: ledgerCentsFromMicrousd(actualCostMicrousd),
+      customerCanonicalMicrousd: 0,
+      sourceRef: `free_voice_allowance:${userId}:${freeAllowanceSessionId}`,
+      taskOutcome: 'delivered',
+      taskRef: freeAllowanceSessionId,
+      usage: { ...transcriptionUsage, funding: 'free_voice_allowance' },
+    });
+  }
 
   logger.info(
     {
@@ -701,17 +788,21 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       estimatedCostMicrousd,
       actualCostMicrousd,
       usageSource: settled.source,
+      fundedByFreeAllowance: reservation === null,
     },
-    'Transcription credits deducted',
+    'Transcription settled',
   );
 
-  try {
-    await markManagedUsageClientDelivered(reservation);
-  } catch (error) {
-    logger.warn(
-      { error, userId, idempotencyKey: reservation.idempotencyKey },
-      'Transcription delivery marker could not be persisted',
-    );
+  if (reservation !== null) {
+    const delivered = reservation;
+    try {
+      await markManagedUsageClientDelivered(delivered);
+    } catch (error) {
+      logger.warn(
+        { error, userId, idempotencyKey: delivered.idempotencyKey },
+        'Transcription delivery marker could not be persisted',
+      );
+    }
   }
 
   if (!parsedJson) {

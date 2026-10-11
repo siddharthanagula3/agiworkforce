@@ -277,6 +277,11 @@ export async function readTierUnitUsage(
   };
 }
 
+export function exhaustedTierUnitRefusal(unit: TierMeteredUnit): ManagedUsageRequestError {
+  const { code, message } = EXHAUSTED_UNIT_ERRORS[unit];
+  return new ManagedUsageRequestError(message, 429, code);
+}
+
 export async function assertTierUnitAllowance(input: {
   db: DatabaseAdapter;
   userId: string;
@@ -309,8 +314,7 @@ export async function assertTierUnitAllowance(input: {
     };
   }
   if (consumed + requested > hardLimit) {
-    const { code, message } = EXHAUSTED_UNIT_ERRORS[input.unit];
-    const refusal = new ManagedUsageRequestError(message, 429, code);
+    const refusal = exhaustedTierUnitRefusal(input.unit);
     try {
       refusal.limitContext = {
         resetsAt: (await readTierUnitPeriod(input.db)).resetAt,

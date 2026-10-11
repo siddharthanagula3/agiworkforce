@@ -20,8 +20,14 @@ import {
   getVoiceLiveBackendModel,
 } from '@agiworkforce/types';
 import { liveVoiceBlockChargeMicrousd } from '@/lib/voice/live-voice-billing';
+import {
+  freeVoiceAllowanceSeconds,
+  readFreeVoiceConsumedSeconds,
+} from '@/lib/voice/free-voice-allowance';
 
 const CREDIT_PRECISION = 100;
+const SECONDS_PER_MINUTE = 60;
+const VOICE_MINUTES_UNIT = 'voice_minutes';
 
 function voiceMinuteCredits(planTier: string): number | null {
   const microusd = liveVoiceBlockChargeMicrousd(
@@ -70,11 +76,24 @@ async function handler(request: NextRequest) {
         organizationId: scoped.organizationId,
       }),
     ]);
+    const allowanceVoiceMinutes =
+      freeVoiceAllowanceSeconds(planTier) === null
+        ? null
+        : Math.ceil(
+            (await readFreeVoiceConsumedSeconds(scoped.db, scoped.userId)) / SECONDS_PER_MINUTE,
+          );
     const body: AccountUsageLimitsResponse = {
       planTier,
       periodStart: period.periodStart,
       resetAt: period.resetAt,
-      units: period.units,
+      units:
+        allowanceVoiceMinutes === null
+          ? period.units
+          : period.units.map((unit) =>
+              unit.unit === VOICE_MINUTES_UNIT
+                ? { ...unit, consumed: allowanceVoiceMinutes }
+                : unit,
+            ),
       images,
       responses,
       storage,

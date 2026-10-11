@@ -3,6 +3,8 @@ import { chargeMicrousdForProviderCost, getRoutingSlotModel } from '@agiworkforc
 type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule1 = typeof import('@/lib/voice/live-voice-backend-cost');
 type ScanModule2 = typeof import('@/lib/server/claimed-user-scope-db');
+type ScanModule3 = typeof import('@/lib/voice/free-voice-allowance');
+type ScanModule4 = typeof import('@/lib/services/cogs-ledger-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -10,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
   backendCost: vi.fn(),
   claimed: vi.fn(),
+  settleFree: vi.fn(),
+  providerCost: vi.fn(),
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
@@ -23,6 +27,14 @@ vi.mock('@/lib/voice/live-voice-backend-cost', async (importOriginal) => ({
 vi.mock('@/lib/server/claimed-user-scope-db', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
   createClaimedUserScopedDb: (...args: unknown[]) => mocks.claimed(...args),
+}));
+vi.mock('@/lib/voice/free-voice-allowance', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule3>()),
+  settleFreeVoiceSeconds: (...args: unknown[]) => mocks.settleFree(...args),
+}));
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule4>()),
+  recordSettledProviderCost: (...args: unknown[]) => mocks.providerCost(...args),
 }));
 
 import {
@@ -91,6 +103,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.finalize.mockResolvedValue({});
   mocks.backendCost.mockResolvedValue(undefined);
+  mocks.settleFree.mockResolvedValue(null);
+  mocks.providerCost.mockResolvedValue(undefined);
 });
 
 describe('settleVoiceSession', () => {
@@ -140,6 +154,105 @@ describe('settleVoiceSession', () => {
 
     expect(settlement.billedSeconds).toBe(2 * LIVE_VOICE_BLOCK_SECONDS);
     expect(settlement.actualCostMicrousd).toBe(2 * BLOCK);
+  });
+});
+
+describe('settleVoiceSession on the Free monthly voice allowance', () => {
+  it('bills the seconds the allowance settled, charges the owner nothing and finalizes no ledger row', async () => {
+    mocks.settleFree.mockResolvedValue(90);
+    const db = ledgerHolding(0);
+    const backend = { inputTokens: 4_000, outputTokens: 200 };
+
+    const settlement = await settleVoiceSession({
+      db: db as never,
+      record: record(90),
+      backendModelId: BACKEND,
+      reason: 'close_requested',
+      reportedSeconds: 88,
+      backend,
+    });
+
+    expect(settlement).toEqual({ billedSeconds: 90, actualCostMicrousd: 0 });
+    expect(mocks.settleFree).toHaveBeenCalledWith({
+      db,
+      userId: 'user-1',
+      sessionId: 'vs_1',
+      usedSeconds: 90,
+    });
+    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.providerCost).toHaveBeenCalledTimes(1);
+    expect(mocks.providerCost.mock.calls[0]![0]).toMatchObject({
+      db,
+      userId: 'user-1',
+      provider: 'openai',
+      model: LIVE_MODEL,
+      customerCanonicalMicrousd: 0,
+      sourceRef: 'free_voice_allowance:user-1:vs_1',
+      taskOutcome: 'delivered',
+      taskRef: 'vs_1',
+      usage: expect.objectContaining({
+        operation: 'voice_live_session',
+        funding: 'free_voice_allowance',
+        billedSeconds: 90,
+        sessionSeconds: 90,
+        reportedSeconds: 88,
+      }),
+    });
+    expect(mocks.backendCost).toHaveBeenCalledWith(
+      expect.objectContaining({ backendModel: BACKEND, reported: backend }),
+    );
+  });
+
+  it('bills the span settled by the allowance rather than the span of the record', async () => {
+    mocks.settleFree.mockResolvedValue(60);
+
+    const settlement = await settleVoiceSession({
+      db: ledgerHolding(0) as never,
+      record: record(150),
+      backendModelId: BACKEND,
+      reason: 'close_requested',
+    });
+
+    expect(settlement).toEqual({ billedSeconds: 60, actualCostMicrousd: 0 });
+    expect(mocks.providerCost.mock.calls[0]![0]).toMatchObject({
+      usage: expect.objectContaining({ billedSeconds: 60, sessionSeconds: 150 }),
+    });
+    expect(mocks.backendCost).not.toHaveBeenCalled();
+  });
+
+  it('records no provider cost for a session that settled at zero seconds', async () => {
+    mocks.settleFree.mockResolvedValue(0);
+
+    const settlement = await settleVoiceSession({
+      db: ledgerHolding(0) as never,
+      record: record(0),
+      backendModelId: BACKEND,
+      reason: 'close_requested',
+    });
+
+    expect(settlement).toEqual({ billedSeconds: 0, actualCostMicrousd: 0 });
+    expect(mocks.providerCost).not.toHaveBeenCalled();
+    expect(mocks.finalize).not.toHaveBeenCalled();
+  });
+
+  it('leaves a session that holds no grant to the paid ledger', async () => {
+    const db = ledgerHolding(3 * BLOCK);
+
+    const settlement = await settleVoiceSession({
+      db: db as never,
+      record: record(150),
+      backendModelId: BACKEND,
+      reason: 'close_requested',
+    });
+
+    expect(mocks.settleFree).toHaveBeenCalledTimes(1);
+    expect(mocks.providerCost).not.toHaveBeenCalled();
+    expect(settlement.billedSeconds).toBe(150);
+    expect(finalized()).toMatchObject({
+      ...voiceReservationIdentity('vs_1'),
+      outcome: 'completed',
+      actualCostMicrousd: liveSessionChargeMicrousd(150, LIVE_MODEL)!,
+    });
   });
 });
 

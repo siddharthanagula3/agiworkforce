@@ -247,6 +247,7 @@ const USAGE_LIMIT_CODES = new Set([
   'insufficient_credits',
   'extra_usage_required',
   'organization_spend_cap_reached',
+  'voice_minutes_monthly_limit_reached',
 ]);
 
 export function isUsageLimitError(error: unknown): boolean {

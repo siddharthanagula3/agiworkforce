@@ -3,6 +3,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/voice/free-voice-allowance');
+type ScanModule1 = typeof import('@/lib/services/cogs-ledger-service');
+type ScanModule2 = typeof import('@/app/api/voice/live/sessions/lib/voice-session-settlement');
 
 const TRANSCRIPTION_MODEL = getModelMetadataById(getRoutingSlotModel('voice_transcription'))!;
 
@@ -15,6 +18,10 @@ const mocks = vi.hoisted(() => ({
   userScopedDb: vi.fn(),
   fetch: vi.fn(),
   assertTierUnitAllowance: vi.fn(),
+  grantFree: vi.fn(),
+  sweep: vi.fn(),
+  settleFree: vi.fn(),
+  providerCost: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -54,6 +61,19 @@ vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => {
     assertTierUnitAllowance: (...args: unknown[]) => mocks.assertTierUnitAllowance(...args),
   };
 });
+vi.mock('@/lib/voice/free-voice-allowance', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule0>()),
+  grantFreeVoiceSeconds: (...args: unknown[]) => mocks.grantFree(...args),
+  settleFreeVoiceSeconds: (...args: unknown[]) => mocks.settleFree(...args),
+}));
+vi.mock('@/app/api/voice/live/sessions/lib/voice-session-settlement', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule2>()),
+  settleAbandonedVoiceSessions: (...args: unknown[]) => mocks.sweep(...args),
+}));
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule1>()),
+  recordSettledProviderCost: (...args: unknown[]) => mocks.providerCost(...args),
+}));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
@@ -131,6 +151,10 @@ beforeEach(() => {
   mocks.finalize.mockResolvedValue({ requestStatus: 'completed', operationResult: 'finalized' });
   mocks.providerStarted.mockResolvedValue(undefined);
   mocks.clientDelivered.mockResolvedValue(undefined);
+  mocks.grantFree.mockResolvedValue({ granted: true, grantedSeconds: 1, fresh: true });
+  mocks.settleFree.mockResolvedValue(1);
+  mocks.providerCost.mockResolvedValue(undefined);
+  mocks.sweep.mockResolvedValue(0);
   vi.stubGlobal('fetch', mocks.fetch);
 });
 
@@ -145,6 +169,10 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
     expect(mocks.reserve.mock.invocationCallOrder[0]!).toBeLessThan(
       mocks.fetch.mock.invocationCallOrder[0]!,
     );
+    expect(mocks.grantFree).not.toHaveBeenCalled();
+    expect(mocks.sweep).not.toHaveBeenCalled();
+    expect(mocks.settleFree).not.toHaveBeenCalled();
+    expect(mocks.providerCost).not.toHaveBeenCalled();
     expect(mocks.reserve.mock.calls[0]![0]).toMatchObject({
       userId: 'user-1',
       provider: TRANSCRIPTION_MODEL.provider,
@@ -248,6 +276,194 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
     const response = await POST(transcriptionRequest({ 'Idempotency-Key': 'short' }));
     expect(response.status).toBe(400);
     expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/llm/v1/audio/transcriptions, on the Free monthly voice allowance', () => {
+  const IDEMPOTENCY_KEY = 'agi.transcription.web.abc123';
+  const ALLOWANCE_RESET = '2026-11-01T00:00:00.000Z';
+
+  function isProviderCall(call: unknown[]): boolean {
+    return String(call[0]).includes('audio/transcriptions');
+  }
+
+  function providerCalls(): unknown[][] {
+    return mocks.fetch.mock.calls.filter(isProviderCall);
+  }
+
+  beforeEach(() => {
+    mocks.getSubscription.mockResolvedValue({ plan_tier: 'free', status: 'active' });
+  });
+
+  it('grants the estimated seconds, settles them and records the cost with nothing charged', async () => {
+    providerReturns({
+      text: 'hello',
+      usage: { type: 'tokens', input_tokens: 400, output_tokens: 100 },
+    });
+
+    const response = await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.grantFree).toHaveBeenCalledTimes(1);
+    const grant = mocks.grantFree.mock.calls[0]![0] as { seconds: number };
+    expect(grant).toMatchObject({
+      userId: 'user-1',
+      sessionId: IDEMPOTENCY_KEY,
+      use: 'dictation',
+      grantKey: 'recording',
+      limitSeconds: 600,
+    });
+    expect(grant.seconds).toBeGreaterThan(0);
+    expect(mocks.settleFree).toHaveBeenCalledTimes(1);
+    expect(mocks.settleFree.mock.calls[0]![0]).toMatchObject({
+      userId: 'user-1',
+      sessionId: IDEMPOTENCY_KEY,
+      usedSeconds: grant.seconds,
+    });
+    expect(mocks.providerCost).toHaveBeenCalledTimes(1);
+    expect(mocks.providerCost.mock.calls[0]![0]).toMatchObject({
+      userId: 'user-1',
+      provider: String(TRANSCRIPTION_MODEL.provider),
+      model: TRANSCRIPTION_MODEL.id,
+      customerCanonicalMicrousd: 0,
+      sourceRef: `free_voice_allowance:user-1:${IDEMPOTENCY_KEY}`,
+      usage: expect.objectContaining({
+        operation: 'transcription',
+        funding: 'free_voice_allowance',
+        estimatedAudioSeconds: grant.seconds,
+        inputTokens: 400,
+        outputTokens: 100,
+      }),
+    });
+    expect(mocks.assertTierUnitAllowance).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.providerStarted).not.toHaveBeenCalled();
+    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.clientDelivered).not.toHaveBeenCalled();
+  });
+
+  it('settles abandoned calls before the allowance is granted, on the plan backend', async () => {
+    providerReturns({ text: 'hello' });
+
+    await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(mocks.sweep).toHaveBeenCalledTimes(1);
+    expect(mocks.sweep.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.grantFree.mock.invocationCallOrder[0]!,
+    );
+    const sweep = mocks.sweep.mock.calls[0]![0] as {
+      userId: string;
+      backendModelFor: () => Promise<string>;
+    };
+    expect(sweep.userId).toBe('user-1');
+    expect(await sweep.backendModelFor()).toBe(getRoutingSlotModel('voice_live_backend_free'));
+  });
+
+  it('still grants when the sweep of abandoned calls fails', async () => {
+    providerReturns({ text: 'hello' });
+    mocks.sweep.mockRejectedValue(new Error('sweep failed'));
+
+    const response = await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.grantFree).toHaveBeenCalledTimes(1);
+  });
+
+  it('grants before the provider is called', async () => {
+    providerReturns({ text: 'hello' });
+
+    await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    const providerCallIndex = mocks.fetch.mock.calls.findIndex(isProviderCall);
+    expect(providerCalls()).toHaveLength(1);
+    expect(mocks.grantFree.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.fetch.mock.invocationCallOrder[providerCallIndex]!,
+    );
+  });
+
+  it('refuses with the month reset once the allowance is used and calls no provider', async () => {
+    mocks.grantFree.mockResolvedValue({
+      granted: false,
+      reason: 'allowance_used',
+      resetsAt: ALLOWANCE_RESET,
+    });
+
+    const response = await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('voice_minutes_monthly_limit_reached');
+    expect(providerCalls()).toHaveLength(0);
+    expect(mocks.settleFree).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it('answers a recording that was already transcribed as a replay and calls no provider', async () => {
+    mocks.grantFree.mockResolvedValue({
+      granted: false,
+      reason: 'session_settled',
+      resetsAt: ALLOWANCE_RESET,
+    });
+
+    const response = await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'idempotency_replay',
+    );
+    expect(providerCalls()).toHaveLength(0);
+  });
+
+  it('answers a recording already being transcribed as in progress and calls no provider', async () => {
+    mocks.grantFree.mockResolvedValue({ granted: true, grantedSeconds: 1, fresh: false });
+
+    const response = await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'idempotency_in_progress',
+    );
+    expect(providerCalls()).toHaveLength(0);
+    expect(mocks.settleFree).not.toHaveBeenCalled();
+  });
+
+  it('settles the grant at zero seconds when the provider rejects the audio', async () => {
+    mocks.fetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => 'Invalid audio format',
+      headers: new Headers({ 'content-type': 'application/json' }),
+    });
+
+    const response = await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.settleFree).toHaveBeenCalledTimes(1);
+    expect(mocks.settleFree.mock.calls[0]![0]).toMatchObject({
+      sessionId: IDEMPOTENCY_KEY,
+      usedSeconds: 0,
+    });
+    expect(mocks.providerCost).not.toHaveBeenCalled();
+    expect(mocks.finalize).not.toHaveBeenCalled();
+  });
+
+  it('settles the grant at zero seconds when the provider call throws', async () => {
+    mocks.fetch.mockRejectedValue(new Error('socket hang up'));
+
+    await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(mocks.settleFree).toHaveBeenCalledTimes(1);
+    expect(mocks.settleFree.mock.calls[0]![0]).toMatchObject({ usedSeconds: 0 });
+    expect(mocks.finalize).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 when the grant cannot be written and calls no provider', async () => {
+    mocks.grantFree.mockRejectedValue(new Error('usage store down'));
+
+    const response = await POST(transcriptionRequest({ 'Idempotency-Key': IDEMPOTENCY_KEY }));
+
+    expect(response.status).toBe(503);
+    expect(providerCalls()).toHaveLength(0);
   });
 });
 

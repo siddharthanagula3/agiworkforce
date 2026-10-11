@@ -29,7 +29,15 @@ import {
   liveVoiceBlockChargeMicrousd,
 } from '@/lib/voice/live-voice-billing';
 import {
+  FREE_VOICE_SESSION_ALLOWANCE_SECONDS,
+  freeVoiceAllowanceUsedError,
+  grantFreeVoiceSeconds,
+  readFreeVoiceSession,
+  type FreeVoiceSessionState,
+} from '@/lib/voice/free-voice-allowance';
+import {
   readVoiceReservation,
+  VOICE_INITIAL_BLOCK,
   voiceBlockOperationKey,
   voiceJsonError,
   voiceReservationIdentity,
@@ -42,13 +50,11 @@ import {
   type VoiceSessionRecord,
 } from '../../lib/voice-session-store';
 
-const INITIAL_BLOCK = 1;
-
 const ExtendLiveSessionSchema = z.object({
   block: z
     .number()
     .int()
-    .min(INITIAL_BLOCK + 1),
+    .min(VOICE_INITIAL_BLOCK + 1),
 });
 
 function billingUnavailable(request: NextRequest): NextResponse {
@@ -60,6 +66,69 @@ function billingUnavailable(request: NextRequest): NextResponse {
       'billing_unavailable',
     ),
   );
+}
+
+/**
+ * Gives a session that runs on the monthly voice allowance its next minute.
+ * Blocks are taken in order, so the ceiling a tab is told always equals what
+ * the session has been granted.
+ */
+async function extendOnFreeAllowance(input: {
+  request: NextRequest;
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+  userId: string;
+  record: VoiceSessionRecord;
+  block: number;
+  session: FreeVoiceSessionState;
+  headers: Record<string, string>;
+}): Promise<NextResponse> {
+  const { request, db, userId, record, block } = input;
+  const covered = () =>
+    NextResponse.json(
+      { ceilingSeconds: block * LIVE_VOICE_BLOCK_SECONDS },
+      { headers: input.headers },
+    );
+  await touchVoiceSession({ db, userId, providerSessionId: record.providerSessionId }).catch(
+    (error: unknown) => {
+      logger.warn(
+        { error, userId, sessionId: record.providerSessionId },
+        'Voice session could not be marked as seen',
+      );
+    },
+  );
+  const grantedBlocks = Math.floor(input.session.grantedSeconds / LIVE_VOICE_BLOCK_SECONDS);
+  if (block <= grantedBlocks) return covered();
+  if (block !== grantedBlocks + 1) {
+    return voiceJsonError(
+      request,
+      409,
+      'voice_block_out_of_order',
+      'This voice session has not reached that minute yet.',
+    );
+  }
+  try {
+    const grant = await grantFreeVoiceSeconds({
+      db,
+      userId,
+      sessionId: record.id,
+      use: 'live',
+      grantKey: voiceBlockOperationKey(block),
+      seconds: LIVE_VOICE_BLOCK_SECONDS,
+      limitSeconds: FREE_VOICE_SESSION_ALLOWANCE_SECONDS,
+    });
+    if (grant.granted) return covered();
+    if (grant.reason === 'session_settled') {
+      return voiceJsonError(request, 409, 'voice_session_closed', 'This voice session has ended.');
+    }
+    const refusal = freeVoiceAllowanceUsedError(grant.resetsAt);
+    return voiceUsageErrorResponse(request, refusal, { [refusal.code]: grant.resetsAt });
+  } catch (error) {
+    logger.error(
+      { event: 'live_voice_extension_failed', error, userId, sessionId: record.providerSessionId },
+      'Live voice allowance could not be extended',
+    );
+    return billingUnavailable(request);
+  }
 }
 
 /**
@@ -130,6 +199,28 @@ async function handleExtendLiveSession(
     return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
   }
 
+  let freeSession: FreeVoiceSessionState | null;
+  try {
+    freeSession = await readFreeVoiceSession(scoped.db, userId, record.id);
+  } catch (error) {
+    logger.error(
+      { event: 'live_voice_extension_failed', error, userId, sessionId },
+      'Live voice allowance could not be read before extending the block',
+    );
+    return billingUnavailable(request);
+  }
+  if (freeSession) {
+    return extendOnFreeAllowance({
+      request,
+      db: scoped.db,
+      userId,
+      record,
+      block: body.block,
+      session: freeSession,
+      headers,
+    });
+  }
+
   const identity = voiceReservationIdentity(record.id);
   const reservation: ManagedUsageRequestReservation = {
     db: scoped.db,
@@ -164,7 +255,7 @@ async function handleExtendLiveSession(
 
     await reserveManagedUsageProviderStep({
       reservation,
-      operationKey: voiceBlockOperationKey(INITIAL_BLOCK),
+      operationKey: voiceBlockOperationKey(VOICE_INITIAL_BLOCK),
       estimatedCostMicrousd: 0,
       planTier,
       isFlagship: false,

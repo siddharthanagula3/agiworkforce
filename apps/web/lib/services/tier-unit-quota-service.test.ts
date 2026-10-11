@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { TIER_POLICIES } from '@agiworkforce/types';
 
-import { assertTierUnitAllowance, getTierUnitAllowance } from './tier-unit-quota-service';
+import {
+  assertTierUnitAllowance,
+  exhaustedTierUnitRefusal,
+  getTierUnitAllowance,
+} from './tier-unit-quota-service';
 import { buildComputerUseSoftCapWarningHeader } from '@/lib/server/managed-usage-policy';
 
 const MAX_POLICY = TIER_POLICIES.max;
@@ -26,6 +30,10 @@ describe('tier metered-unit allowances', () => {
       hardLimit: FREE_POLICY.voiceMinutesPerMonth,
       softLimit: null,
     });
+  });
+
+  it('gives the free tier ten voice minutes a month', () => {
+    expect(FREE_POLICY.voiceMinutesPerMonth).toBe(10);
   });
 
   it('exposes both computer-use ceilings the tier policy documents', () => {
@@ -148,9 +156,9 @@ describe('voice minutes consumption', () => {
   });
 
   it('turns consumed seconds into whole minutes against the allowance', async () => {
-    const { decision } = await captureVoiceQuery(605);
+    const { decision } = await captureVoiceQuery(305);
 
-    expect(decision.consumed).toBe(11);
+    expect(decision.consumed).toBe(6);
   });
 
   it('refuses a live block once the month of voice seconds fills the allowance', async () => {
@@ -165,5 +173,12 @@ describe('voice minutes consumption', () => {
     }).catch((caught: unknown) => caught);
 
     expect(error).toMatchObject({ status: 429, code: 'voice_minutes_monthly_limit_reached' });
+  });
+
+  it('names the exhausted allowance the same way a refused block does', () => {
+    expect(exhaustedTierUnitRefusal('voice_minutes')).toMatchObject({
+      status: 429,
+      code: 'voice_minutes_monthly_limit_reached',
+    });
   });
 });

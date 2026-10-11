@@ -86,10 +86,24 @@ const HTTP_PAYLOAD_TOO_LARGE = 413;
 const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_SERVER_ERROR = 500;
 
+const VOICE_ALLOWANCE_USED_CODE = 'voice_minutes_monthly_limit_reached';
+
 class TranscriptionError extends Error {
-  constructor(readonly status: number) {
+  constructor(
+    readonly status: number,
+    readonly code: string | null = null,
+  ) {
     super(`transcription_failed_${status}`);
     this.name = 'TranscriptionError';
+  }
+}
+
+async function readTranscriptionErrorCode(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { error?: { code?: unknown } };
+    return typeof body.error?.code === 'string' ? body.error.code : null;
+  } catch {
+    return null;
   }
 }
 
@@ -103,6 +117,9 @@ function transcriptionErrorMessage(error: unknown): string {
     }
     if (error.status === HTTP_PAYLOAD_TOO_LARGE) {
       return 'That recording was too long to transcribe. Try a shorter one.';
+    }
+    if (error.code === VOICE_ALLOWANCE_USED_CODE) {
+      return 'This month’s voice minutes are used up. Upgrade for more, or type instead.';
     }
     if (error.status === HTTP_TOO_MANY_REQUESTS) {
       return 'Too many recordings just now. Wait a moment, then try again.';
@@ -159,7 +176,7 @@ async function transcribeViaServer(blob: Blob, language: string): Promise<string
   });
 
   if (!response.ok) {
-    throw new TranscriptionError(response.status);
+    throw new TranscriptionError(response.status, await readTranscriptionErrorCode(response));
   }
 
   const data = (await response.json()) as { text?: string };

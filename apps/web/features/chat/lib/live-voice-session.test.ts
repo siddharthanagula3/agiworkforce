@@ -11,6 +11,8 @@ import {
   SPOKEN_PROGRESS_MIN_INTERVAL_MS,
   LiveVoiceSession,
   LiveVoiceSessionError,
+  isUsageLimitError,
+  readLiveSessionError,
   type LiveTranscriptTurn,
   type LiveVoiceSessionCallbacks,
 } from './live-voice-session';
@@ -834,5 +836,29 @@ describe('LiveVoiceSession', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('the monthly voice allowance refusal', () => {
+  it('reads a 429 voice_minutes_monthly_limit_reached into a usage limit error', async () => {
+    const error = await readLiveSessionError(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'voice_minutes_monthly_limit_reached',
+            message: 'Your plan’s monthly voice allowance is used up.',
+            resets_at: '2026-11-01T00:00:00.000Z',
+          },
+        }),
+        { status: 429 },
+      ),
+    );
+
+    expect(error.code).toBe('voice_minutes_monthly_limit_reached');
+    expect(isUsageLimitError(error)).toBe(true);
+  });
+
+  it('keeps an unrelated session refusal out of the usage limits', () => {
+    expect(isUsageLimitError(new LiveVoiceSessionError('rejected', 'http_400'))).toBe(false);
   });
 });

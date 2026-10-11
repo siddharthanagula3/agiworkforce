@@ -2767,7 +2767,7 @@
     "/voice/live/sessions": {
       "post": {
         "summary": "Open a live voice session",
-        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the plan's backend slot: `voice_live_backend` on paid plans and `voice_live_backend_free` on Free. The session draws on the plan's shared usage budget, the same windows chat uses, one minute at a time: each block is reserved at the live model's per-minute rate plus a backend allowance, and the session settles at what it actually used. Close the session to settle it.",
+        "description": "Exchanges a WebRTC offer for an answer and opens a live voice session against the `voice_live` routing slot, with the delegated backend on the plan's backend slot: `voice_live_backend` on paid plans and `voice_live_backend_free` on Free. On a paid plan the session draws on the plan's shared usage budget, the same windows chat uses, one minute at a time: each block is reserved at the live model's per-minute rate plus a backend allowance, and the session settles at what it actually used. On Free the session draws on the plan's monthly voice minutes instead, one minute at a time, shared with dictation, and is refused with `voice_minutes_monthly_limit_reached` once the calendar month's minutes are used. Close the session to settle it.",
         "tags": ["Voice"],
         "security": [
           {

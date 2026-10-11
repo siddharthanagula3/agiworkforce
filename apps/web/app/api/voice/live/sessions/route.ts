@@ -82,8 +82,16 @@ import {
   liveVoiceBlockChargeMicrousd,
 } from '@/lib/voice/live-voice-billing';
 import {
+  freeVoiceAllowanceSeconds,
+  freeVoiceAllowanceUsedError,
+  grantFreeVoiceSeconds,
+  settleFreeVoiceSeconds,
+} from '@/lib/voice/free-voice-allowance';
+import {
   assessVoiceBudget,
+  VOICE_INITIAL_BLOCK,
   VOICE_USAGE_NOT_IN_PLAN,
+  voiceBlockOperationKey,
   voiceJsonError,
   voiceReservationIdentity,
   voiceUsageErrorResponse,
@@ -277,7 +285,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   let backendModel: ModelMetadata;
   let planTier: string | null = null;
   let reasoning: ReturnType<typeof resolveLiveVoiceReasoning>;
-  let reservation: ManagedUsageRequestReservation;
+  let reservation: ManagedUsageRequestReservation | null = null;
   let limitResets: VoiceLimitResets | undefined;
   try {
     const entitlement = await resolveEntitlementBundle(scoped.db, userId);
@@ -334,39 +342,68 @@ async function handleCreateLiveSession(request: NextRequest) {
       requested: body.reasoning,
       planTier,
     });
-    const blockMicrousd = liveVoiceBlockChargeMicrousd(liveModel.id, backendModel.id) ?? 0;
-    const budget = await assessVoiceBudget({
-      db: scoped.db,
-      userId,
-      planTier,
-      catalogVersion: entitlement.catalogVersion,
-      revenueContext: entitlement.revenueContext,
-      blockMicrousd,
-    });
-    limitResets = budget.resetsAt;
-    if (!budget.planFundsBlock) {
-      return voiceJsonError(
-        request,
-        402,
-        VOICE_USAGE_NOT_IN_PLAN.code,
-        VOICE_USAGE_NOT_IN_PLAN.message,
-      );
+    const freeAllowanceSeconds = freeVoiceAllowanceSeconds(planTier);
+    if (freeAllowanceSeconds === null) {
+      const blockMicrousd = liveVoiceBlockChargeMicrousd(liveModel.id, backendModel.id) ?? 0;
+      const budget = await assessVoiceBudget({
+        db: scoped.db,
+        userId,
+        planTier,
+        catalogVersion: entitlement.catalogVersion,
+        revenueContext: entitlement.revenueContext,
+        blockMicrousd,
+      });
+      limitResets = budget.resetsAt;
+      if (!budget.planFundsBlock) {
+        return voiceJsonError(
+          request,
+          402,
+          VOICE_USAGE_NOT_IN_PLAN.code,
+          VOICE_USAGE_NOT_IN_PLAN.message,
+        );
+      }
+      reservation = await reserveManagedUsageRequest({
+        db: scoped.db,
+        userId,
+        idempotencyKey: reservationIdentity.idempotencyKey,
+        requestHash: reservationIdentity.requestHash,
+        leaseToken: reservationIdentity.leaseToken,
+        provider,
+        model: liveModel.id,
+        estimatedCostMicrousd: blockMicrousd,
+        leaseSeconds: LIVE_VOICE_LEASE_SECONDS,
+        planTier,
+        isFlagship: false,
+        quotaFeature: LIVE_VOICE_FEATURE,
+        conversationId,
+      });
+    } else {
+      const allowanceBackend = backendModel.id;
+      await settleAbandonedVoiceSessions({
+        db: scoped.db,
+        userId,
+        backendModelFor: async () => allowanceBackend,
+      }).catch((error: unknown) => {
+        logger.warn(
+          { event: 'voice_session_expiry_failed', error, userId },
+          'Expired voice sessions could not be settled before the allowance was read',
+        );
+      });
+      const grant = await grantFreeVoiceSeconds({
+        db: scoped.db,
+        userId,
+        sessionId: voiceSessionId,
+        use: 'live',
+        grantKey: voiceBlockOperationKey(VOICE_INITIAL_BLOCK),
+        seconds: LIVE_VOICE_BLOCK_SECONDS,
+        limitSeconds: freeAllowanceSeconds,
+      });
+      if (!grant.granted) {
+        const refusal = freeVoiceAllowanceUsedError(grant.resetsAt);
+        limitResets = { [refusal.code]: grant.resetsAt };
+        throw refusal;
+      }
     }
-    reservation = await reserveManagedUsageRequest({
-      db: scoped.db,
-      userId,
-      idempotencyKey: reservationIdentity.idempotencyKey,
-      requestHash: reservationIdentity.requestHash,
-      leaseToken: reservationIdentity.leaseToken,
-      provider,
-      model: liveModel.id,
-      estimatedCostMicrousd: blockMicrousd,
-      leaseSeconds: LIVE_VOICE_LEASE_SECONDS,
-      planTier,
-      isFlagship: false,
-      quotaFeature: LIVE_VOICE_FEATURE,
-      conversationId,
-    });
   } catch (error) {
     if (isAppError(error)) throw error;
     if (error instanceof ManagedUsageRequestError) {
@@ -388,6 +425,15 @@ async function handleCreateLiveSession(request: NextRequest) {
 
   const releaseReservation = async (reason: string): Promise<void> => {
     try {
+      if (reservation === null) {
+        await settleFreeVoiceSeconds({
+          db: scoped.db,
+          userId,
+          sessionId: voiceSessionId,
+          usedSeconds: 0,
+        });
+        return;
+      }
       await finalizeManagedUsageRequest({
         ...reservation,
         outcome: 'failed',
@@ -400,7 +446,7 @@ async function handleCreateLiveSession(request: NextRequest) {
           event: 'live_voice_refund_settlement_unrecorded',
           error: settlementError,
           userId,
-          idempotencyKey: reservation.idempotencyKey,
+          idempotencyKey: reservationIdentity.idempotencyKey,
         },
         'Live voice failure settlement could not be persisted',
       );
@@ -508,7 +554,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   let response: Response;
   let responseText: string;
   try {
-    await markManagedUsageProviderStarted(reservation);
+    if (reservation !== null) await markManagedUsageProviderStarted(reservation);
     response = await requestProviderSession(functionTools);
     responseText = await response.text();
     if (response.status === 400 && functionTools.names.length > 0) {
@@ -645,7 +691,8 @@ async function handleCreateLiveSession(request: NextRequest) {
       model: liveModel.id,
       sessionId,
       voiceSessionId,
-      reservedMicrousd: reservation.estimatedCostMicrousd,
+      reservedMicrousd: reservation?.estimatedCostMicrousd ?? 0,
+      fundedByFreeAllowance: reservation === null,
       contextTurns: context.turns.length,
       contextProject: context.projectPrompt !== null,
       contextMemory: context.memoryPrompt !== null,
