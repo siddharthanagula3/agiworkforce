@@ -350,9 +350,17 @@ function groundingSearchResultsDelta(payload: unknown): Record<string, unknown> 
   };
 }
 
+function trailingLineBreaks(text: string): number {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === ' ' || text[end - 1] === '\t')) end -= 1;
+  let breaks = 0;
+  while (breaks < end && text[end - breaks - 1] === '\n') breaks += 1;
+  return breaks;
+}
+
 export function paragraphBreakBetween(before: string, after: string): string {
   if (before.trim().length === 0 || after.length === 0) return '';
-  const trailing = /\n*$/.exec(before.replace(/[ \t]+$/, ''))?.[0].length ?? 0;
+  const trailing = trailingLineBreaks(before);
   const leading = /^\n*/.exec(after)?.[0].length ?? 0;
   return '\n'.repeat(Math.max(0, 2 - trailing - leading));
 }
