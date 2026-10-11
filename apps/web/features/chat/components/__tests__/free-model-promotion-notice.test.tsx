@@ -10,11 +10,8 @@ const PROMOTED = Object.values(modelsById).find(
   (model: ModelMetadata) => model.provider === 'anthropic' && model.qualityTier === 'fast',
 ) as ModelMetadata;
 const ENDS_AT = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
-const ENDS_ON = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-}).format(new Date(ENDS_AT));
+const MONTH_NAME = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/;
+const ISO_DATE = /\d{4}-\d{2}-\d{2}/;
 
 function signedInOn(tier: string): void {
   useBillingStore.setState({
@@ -54,14 +51,14 @@ afterEach(() => {
 });
 
 describe('the free model promotion notice', () => {
-  it('names the model and the date, and says it lasts while capacity does, never unlimited', async () => {
+  it('names the model and says it is free for a limited time, with no date, never unlimited', async () => {
     signedInOn('free');
     render(<FreeModelPromotionNotice />);
 
     const notice = await screen.findByTestId('free-model-promotion-notice');
-    expect(notice.textContent).toBe(
-      `${PROMOTED.name} free until ${ENDS_ON}, while promotional capacity lasts.`,
-    );
+    expect(notice.textContent).toBe(`${PROMOTED.name} is free for a limited time.`);
+    expect(notice.textContent).not.toMatch(MONTH_NAME);
+    expect(notice.textContent).not.toMatch(ISO_DATE);
     expect(notice.textContent?.toLowerCase()).not.toContain('unlimited');
   });
 

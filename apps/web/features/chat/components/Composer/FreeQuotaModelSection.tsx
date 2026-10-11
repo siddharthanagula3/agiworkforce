@@ -29,7 +29,6 @@ import {
   presentFreeModels,
   type FreeModelEntry,
   type FreeModelMatches,
-  type FreeModelPool,
 } from '@features/chat/lib/free-model-presentation';
 import {
   freeQuotaSelection,
@@ -75,12 +74,6 @@ function lineRuns(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
     else runs.push([entry]);
   }
   return runs;
-}
-
-function joinIssuers(issuers: readonly string[]): string {
-  return issuers.length > 1
-    ? `${issuers.slice(0, -1).join(', ')} and ${issuers[issuers.length - 1]}`
-    : (issuers[0] ?? '');
 }
 
 function readyGuidance(entry: FreeModelEntry, promotional: boolean): string {
@@ -144,30 +137,6 @@ function unavailableExplanation(entry: FreeModelEntry, fallbackModelName: string
     return `${issuer}'s free offer for ${label.displayName} ended${model.expiresOn ? ` on ${freeQuotaCalendarDay(model.expiresOn)}` : ''}. ${nextStep}`;
   }
   return `${label.displayName} from ${issuer} is not available right now. ${nextStep}`;
-}
-
-function pauseNotice(
-  pools: readonly FreeModelPool[],
-  fallbackModelName: string | null,
-  settled: boolean,
-): string {
-  const paused = pools.filter((pool) => pool.pause === 'paused').map((pool) => pool.issuer);
-  const usedUp = pools.filter((pool) => pool.pause === 'used_up').map((pool) => pool.issuer);
-  if (settled && pools.every((pool) => pool.pause)) {
-    const state =
-      paused.length > 0
-        ? 'Free models are paused right now.'
-        : 'Free model allowances are used up.';
-    return fallbackModelName
-      ? `${state} Keep chatting with ${fallbackModelName}, or check back later.`
-      : `${state} Check back later.`;
-  }
-  return [
-    paused.length > 0 ? `${joinIssuers(paused)} free models are paused right now.` : null,
-    usedUp.length > 0 ? `${joinIssuers(usedUp)} free allowances are used up.` : null,
-  ]
-    .filter(Boolean)
-    .join(' ');
 }
 
 function ReadyRow({
@@ -320,12 +289,10 @@ export function FreeQuotaModelSection({
 }) {
   const [expanded, setExpanded] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [unavailableOpen, setUnavailableOpen] = useState(false);
   const [explainedRow, setExplainedRow] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const moreId = useId();
-  const unavailableId = useId();
   const featuredNoteId = useId();
   const moreNoteId = useId();
   const limitedNoteId = useId();
@@ -346,15 +313,11 @@ export function FreeQuotaModelSection({
   const limitedNote = limitedOffer && limitedMedia ? freeMediaOfferNote(limitedMedia) : null;
   const promotionalIssuer = experiential.catalogue?.issuer ?? null;
   const loading = quota.status === 'loading' || experiential.status === 'loading';
-  const settled = !loading && quota.status !== 'error' && experiential.status !== 'error';
-  const listedPools = view.pools.filter((pool) => !pool.pause);
-  const pausedPools = view.pools.filter((pool) => pool.pause);
+  const listedPools = view.pools;
   const more = listedPools
     .map((pool) => ({ issuer: pool.issuer, entries: pool.more }))
     .filter((group) => group.entries.length > 0);
   const moreCount = listedPools.reduce((total, pool) => total + pool.more.length, 0);
-  const unavailable = listedPools.filter((pool) => pool.unavailable.length > 0);
-  const unavailableCount = unavailable.reduce((total, pool) => total + pool.unavailable.length, 0);
   const groupedByIssuer = listedPools.length > 1;
   const pinnedNoteId = listedPools.some((pool) => pool.issuer === promotionalIssuer)
     ? featuredNoteId
@@ -552,36 +515,6 @@ export function FreeQuotaModelSection({
               )}
             </>
           )}
-          {unavailableCount > 0 && (
-            <>
-              <Disclosure
-                label="Unavailable"
-                count={unavailableCount}
-                open={unavailableOpen}
-                controls={unavailableId}
-                onToggle={() => setUnavailableOpen(!unavailableOpen)}
-              />
-              {unavailableOpen && (
-                <div id={unavailableId} role="group" aria-label="Unavailable free models">
-                  {unavailable.map((pool) => (
-                    <div key={pool.issuer}>
-                      {groupedByIssuer && <PoolHeading issuer={pool.issuer} noteId={null} />}
-                      {pool.unavailable.map((entry) => renderEntry(entry, 'list', null))}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-          {pausedPools.length > 0 && (
-            <p
-              {...PICKER_ROW}
-              tabIndex={-1}
-              className={`${NOTE_CLASS} rounded-md ${FOCUS_RING_CLASS}`}
-            >
-              {pauseNotice(view.pools, fallbackModelName, settled)}
-            </p>
-          )}
           {loading && (
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
               <Spinner size="sm" />
@@ -596,16 +529,6 @@ export function FreeQuotaModelSection({
               onClick={quota.retry}
             >
               Retry loading free models
-            </button>
-          )}
-          {experiential.status === 'error' && (
-            <button
-              type="button"
-              {...PICKER_ROW}
-              className={`${ACTIVE_ROW_CLASS} min-h-11 text-sm text-foreground`}
-              onClick={experiential.retry}
-            >
-              Retry Experiential Labs free models
             </button>
           )}
         </div>

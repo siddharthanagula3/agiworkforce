@@ -16,7 +16,7 @@ import {
   estimateMessageCredits,
 } from '@/lib/billing/credit-estimates';
 import { ProviderLogo } from './ProviderLogo';
-import { freeModelPromotionPickerLabel } from '@features/chat/lib/free-model-promotion-copy';
+import { FREE_MODEL_PROMOTION_PICKER_LABEL } from '@features/chat/lib/free-model-promotion-copy';
 
 const FAVOURITES_RAIL_KEY = 'favourites';
 const FAVOURITES_RAIL_LABEL = 'Favourites';
@@ -557,7 +557,7 @@ export function ModelCatalogue({
                 className={`${TAG_CLASS} whitespace-nowrap bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
               >
                 {entry.promotionEndsAt && !entry.eventAccess
-                  ? freeModelPromotionPickerLabel(entry.promotionEndsAt)
+                  ? FREE_MODEL_PROMOTION_PICKER_LABEL
                   : EVENT_TAG_LABEL}
               </span>
             )}

@@ -167,11 +167,22 @@ describe('ComposerFooter · free section', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('keeps the picker open and explains why when an unavailable model is clicked', async () => {
+  it('shows no unavailable group and lists no not-ready model that is not selected', async () => {
     const dialog = openPicker();
     await within(dialog).findByRole('button', { name: READY_NAME });
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /Unavailable/ }));
+    expect(within(dialog).queryByRole('button', { name: /Unavailable/ })).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: UNAVAILABLE_NAME }),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/paused|used up/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the picker open and explains why when the selected unavailable model is clicked', async () => {
+    sel.id = UNAVAILABLE_KEY;
+    const dialog = openPicker();
+    await within(dialog).findByRole('button', { name: READY_NAME });
+
     fireEvent.click(within(dialog).getByRole('button', { name: UNAVAILABLE_NAME }));
 
     expect(screen.getByRole('dialog', { name: 'Models' })).toBeInTheDocument();
@@ -183,18 +194,14 @@ describe('ComposerFooter · free section', () => {
         },
       ),
     ).toHaveAttribute('role', 'status');
-    expect(sel.id).toBe('fixture-free-router');
+    expect(sel.id).toBe(UNAVAILABLE_KEY);
   });
 
-  it('lets arrow keys reach an unavailable model and Enter explain it', async () => {
+  it('lets arrow keys reach the selected unavailable model and Enter explain it', async () => {
+    sel.id = UNAVAILABLE_KEY;
     const user = userEvent.setup();
     const dialog = openPicker();
     await within(dialog).findByRole('button', { name: READY_NAME });
-    const disclosure = () => within(dialog).getByRole('button', { name: /Unavailable/ });
-
-    await walkTo(disclosure);
-    await user.keyboard('{Enter}');
-    expect(disclosure()).toHaveAttribute('aria-expanded', 'true');
 
     const unavailable = () => within(dialog).queryByRole('button', { name: UNAVAILABLE_NAME });
     await walkTo(unavailable);

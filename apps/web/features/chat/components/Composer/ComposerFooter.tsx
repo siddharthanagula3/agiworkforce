@@ -88,7 +88,7 @@ import {
 } from '@shared/config/llm';
 import { environmentAvailability, modelLock } from '@features/chat/lib/model-plan-admission';
 import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
-import { freeModelPromotionPickerLabel } from '@features/chat/lib/free-model-promotion-copy';
+import { FREE_MODEL_PROMOTION_PICKER_LABEL } from '@features/chat/lib/free-model-promotion-copy';
 import { ROUTING_PROFILE_CHOICE_OPTIONS, type ModelReasoning } from '@agiworkforce/types';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFastModeAvailability } from '@/features/chat/hooks/use-fast-mode-availability';
@@ -1185,7 +1185,7 @@ export function ComposerFooter({
         model={model}
         row={row}
         {...(promotion && model.id === promotion.modelId
-          ? { promotionLabel: freeModelPromotionPickerLabel(promotion.endsAt) }
+          ? { promotionLabel: FREE_MODEL_PROMOTION_PICKER_LABEL }
           : {})}
         isSelected={model.id === selectedModelId}
         isLocked={lock.locked}
