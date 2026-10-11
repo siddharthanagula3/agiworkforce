@@ -78,6 +78,35 @@ describe('createArtifactStore', () => {
     expect(s.getState().panelOpen).toBe(false);
   });
 
+  it('openArtifactForEditing records the edit request until it is cleared', () => {
+    const s = createArtifactStore();
+    s.getState().upsertArtifact(artifact());
+    s.getState().openArtifactForEditing('a1');
+    expect(s.getState().selectedArtifactId).toBe('a1');
+    expect(s.getState().panelOpen).toBe(true);
+    expect(s.getState().editRequestedArtifactId).toBe('a1');
+    s.getState().clearEditRequest();
+    expect(s.getState().editRequestedArtifactId).toBeNull();
+  });
+
+  it('any other way of opening an artifact drops a pending edit request', () => {
+    const s = createArtifactStore();
+    s.getState().upsertArtifact(artifact());
+    s.getState().upsertArtifact(artifact({ id: 'a2' }));
+
+    s.getState().openArtifactForEditing('a1');
+    s.getState().selectArtifact('a2');
+    expect(s.getState().editRequestedArtifactId).toBeNull();
+
+    s.getState().openArtifactForEditing('a1');
+    s.getState().openArtifact('a2');
+    expect(s.getState().editRequestedArtifactId).toBeNull();
+
+    s.getState().openArtifactForEditing('a1');
+    s.getState().removeArtifact('a1');
+    expect(s.getState().editRequestedArtifactId).toBeNull();
+  });
+
   it('enforces maxArtifacts by dropping the oldest new artifact', () => {
     const s = createArtifactStore({ maxArtifacts: 2 });
     s.getState().upsertArtifact(artifact({ id: 'a1' }));
