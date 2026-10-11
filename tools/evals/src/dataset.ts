@@ -19,6 +19,7 @@ import { fixturePath } from './request';
 import type {
   ArgumentMatcher,
   ChatTurnMemory,
+  ChatTurnPlan,
   Check,
   CorpusPriority,
   DatasetProvenance,
@@ -56,6 +57,7 @@ export const SUITE_NAMES: readonly SuiteName[] = [
   'chat-prompt',
 ];
 const CHAT_TURN_MEMORY: readonly ChatTurnMemory[] = ['on', 'off'];
+const CHAT_TURN_PLANS: readonly ChatTurnPlan[] = ['free', 'pro'];
 const RISKS: readonly RiskLabel[] = ['low', 'high'];
 const BEHAVIOURS: readonly ExpectedBehaviour[] = ['answer', 'refusal', 'safe-completion'];
 const CHECK_KINDS = [
@@ -77,6 +79,7 @@ const CHECK_KINDS = [
   'sourceQuality',
   'sourceRestriction',
   'language',
+  'artifacts',
 ] as const;
 const PRIORITIES: readonly CorpusPriority[] = ['P0', 'P1'];
 const PROVENANCE_KINDS: readonly ProvenanceKind[] = ['authored', 'derived', 'captured'];
@@ -121,6 +124,11 @@ function readRegex(value: unknown, where: string, field: string): string {
   } catch (error) {
     fail(where, `pattern is not a valid regex: ${(error as Error).message}`);
   }
+  return value;
+}
+
+function readNonNegativeInteger(value: unknown, where: string, message: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) fail(where, message);
   return value;
 }
 
@@ -324,6 +332,11 @@ function parseCheck(raw: unknown, where: string): Check {
       }
       return { kind: 'language', expected: expected as LanguageCode };
     }
+    case 'artifacts':
+      return {
+        kind: 'artifacts',
+        count: readNonNegativeInteger(raw['count'], where, 'count must be a whole number'),
+      };
   }
 }
 
@@ -522,6 +535,13 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
   ) {
     fail(where, `memory must be one of ${CHAT_TURN_MEMORY.join(', ')}`);
   }
+  const plan = raw['plan'];
+  if (
+    plan !== undefined &&
+    (typeof plan !== 'string' || !(CHAT_TURN_PLANS as readonly string[]).includes(plan))
+  ) {
+    fail(where, `plan must be one of ${CHAT_TURN_PLANS.join(', ')}`);
+  }
 
   return {
     id,
@@ -547,6 +567,7 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
       ? {}
       : { requires: readStringArray(raw['requires'], `${where}.requires`) }),
     ...(memory === undefined ? {} : { memory: memory as ChatTurnMemory }),
+    ...(plan === undefined ? {} : { plan: plan as ChatTurnPlan }),
   };
 }
 

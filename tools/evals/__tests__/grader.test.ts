@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { gradeCase, gradeCheck, isRefusal } from '../src/grader';
+import { gradeCase, gradeCheck, gradeCheckAsync, isRefusal } from '../src/grader';
 import type { EvalCase } from '../src/types';
 
 describe('isRefusal', () => {
@@ -147,5 +147,25 @@ describe('gradeCase', () => {
     expect(
       (await gradeCase({ ...evalCase, notes: 'why this row exists' }, { text: '392' })).notes,
     ).toBe('why this row exists');
+  });
+});
+
+describe('the artifacts check', () => {
+  const check = { kind: 'artifacts', count: 1 } as const;
+  const marked = '```html\n<!-- @artifact -->\n<main>Calculator</main>\n```';
+
+  it('passes one block that derives as an artifact with its marker first', async () => {
+    expect((await gradeCheckAsync(check, { text: `Here it is:\n\n${marked}` })).passed).toBe(true);
+  });
+
+  it('fails a renderable block the explicit policy leaves as code', async () => {
+    const unmarked = '```html\n<main>Calculator</main>\n```';
+    expect((await gradeCheckAsync(check, { text: unmarked })).passed).toBe(false);
+  });
+
+  it('fails a marker that is not on the first line, and a second artifact', async () => {
+    const late = '```html\n<main>Calculator</main>\n<!-- @artifact -->\n```';
+    expect((await gradeCheckAsync(check, { text: late })).passed).toBe(false);
+    expect((await gradeCheckAsync(check, { text: `${marked}\n\n${marked}` })).passed).toBe(false);
   });
 });
