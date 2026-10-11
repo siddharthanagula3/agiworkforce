@@ -96,6 +96,7 @@ vi.mock('@/lib/services/published-artifact-service', () => ({
   readPublishedArtifactVersion: vi.fn(),
   recordPublishedVersion: vi.fn(),
   requiresSandboxedRender: vi.fn(),
+  renamePublishedArtifact: vi.fn(),
   setPublishedArtifactVisibility: vi.fn(),
   unpublishArtifactRecord: vi.fn(),
   unpublishArtifactsForConversations: vi.fn(),

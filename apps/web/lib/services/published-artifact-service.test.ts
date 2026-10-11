@@ -8,6 +8,7 @@ const {
   getPublishedArtifactByToken,
   isPublishableKind,
   listPublishedArtifacts,
+  renamePublishedArtifact,
   mintPublishToken,
   publishArtifactRecord,
   requiresSandboxedRender,
@@ -145,6 +146,20 @@ describe('publishArtifactRecord', () => {
     const [sql] = insertCall(db);
     expect(sql).toContain('on conflict (user_id, artifact_id) do update set');
     expect(sql).not.toMatch(/do update set[\s\S]*token = excluded\.token/);
+  });
+
+  it('keeps a name the publisher gave the page when the artifact is republished', async () => {
+    await publishArtifactRecord(db as never, {
+      userId: 'user-1',
+      artifactId: 'artifact-1',
+      title: 'Dashboard v2',
+      kind: 'html',
+      content: '<h1>hi</h1>',
+    });
+    const [sql] = insertCall(db);
+    expect(sql).toMatch(
+      /title = case when published_artifacts\.title = '' then excluded\.title\s+else published_artifacts\.title end/,
+    );
   });
 
   it('refuses kinds with no public renderer before touching the database', async () => {
@@ -364,6 +379,43 @@ describe('listPublishedArtifacts', () => {
     const [entry] = await listPublishedArtifacts(db as never, { userId: 'user-1' });
     expect(db.query.mock.calls[0]![1]).toEqual(['user-1', 200]);
     expect(entry).toMatchObject({ token: 'aaaaaaaaaaaaaaaaaaaaaaaa', contentChars: 2048 });
+  });
+});
+
+describe('renamePublishedArtifact', () => {
+  it('renames only a row the caller owns', async () => {
+    const db = makeDb([row({ title: 'Scoreboard' })]);
+    const renamed = await renamePublishedArtifact(db as never, {
+      userId: 'user-1',
+      token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      title: '  Scoreboard  ',
+    });
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('where token = $1 and user_id = $2');
+    expect(params).toEqual(['aaaaaaaaaaaaaaaaaaaaaaaa', 'user-1', 'Scoreboard']);
+    expect(renamed?.title).toBe('Scoreboard');
+  });
+
+  it('answers null for a foreign or malformed token and an empty name', async () => {
+    const db = makeDb([]);
+    expect(
+      await renamePublishedArtifact(db as never, {
+        userId: 'user-1',
+        token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+        title: 'Mine',
+      }),
+    ).toBeNull();
+    expect(
+      await renamePublishedArtifact(db as never, { userId: 'user-1', token: 'bad', title: 'x' }),
+    ).toBeNull();
+    expect(
+      await renamePublishedArtifact(db as never, {
+        userId: 'user-1',
+        token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+        title: '   ',
+      }),
+    ).toBeNull();
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 });
 

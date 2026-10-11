@@ -147,6 +147,24 @@ describe('WebRuntime x_generated_files stream handling', () => {
     });
   });
 
+  it('marks a Continue turn as a continuation and a plain turn as a send', async () => {
+    const runtime = new WebRuntime();
+    sendCloudMessage.mockResolvedValue(undefined);
+
+    await runtime.sendMessage('conv_continue', 'hello');
+    await runtime.sendMessage('conv_continue', 'Continue your previous response.', {
+      isContinuation: true,
+      messageHistory: [
+        { role: 'user', content: 'make a calculator' },
+        { role: 'assistant', content: '```html\n<style>' },
+        { role: 'user', content: 'Continue your previous response.' },
+      ],
+    });
+
+    expect(sendCloudMessage.mock.calls[0]?.[12]).toMatch(/^agi\.chat\.desktop\.send\./);
+    expect(sendCloudMessage.mock.calls[1]?.[12]).toMatch(/^agi\.chat\.desktop\.continue\./);
+  });
+
   it('emits a generated_files event when the delta carries x_generated_files', async () => {
     const runtime = new WebRuntime();
     const events = collectEvents(runtime);
