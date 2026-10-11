@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createManagedChatIdempotencyKey,
   isManagedChatIdempotencyKey,
+  managedChatIdempotencyPurpose,
 } from '../managedChatIdempotency';
 
 describe('managed chat idempotency identity', () => {
@@ -64,5 +65,22 @@ describe('managed chat idempotency identity', () => {
   it('does not accept arbitrary legacy header values as an AGI-owned key', () => {
     expect(isManagedChatIdempotencyKey('random-request-id')).toBe(false);
     expect(isManagedChatIdempotencyKey('agi.chat.web.send.bad key')).toBe(false);
+  });
+
+  it('reads the purpose back from a key it issued, and nothing from any other value', () => {
+    const continuation = createManagedChatIdempotencyKey({
+      surface: 'web',
+      purpose: 'continue',
+      operationId,
+    });
+
+    expect(managedChatIdempotencyPurpose(continuation)).toBe('continue');
+    expect(
+      managedChatIdempotencyPurpose(
+        createManagedChatIdempotencyKey({ surface: 'desktop', purpose: 'send', operationId }),
+      ),
+    ).toBe('send');
+    expect(managedChatIdempotencyPurpose('agi.chat.api.0190a000')).toBeNull();
+    expect(managedChatIdempotencyPurpose('random-request-id')).toBeNull();
   });
 });

@@ -214,5 +214,6 @@ describe('CONTINUE_GENERATION_INSTRUCTION', () => {
   it('asks for a seamless in-place continuation, not a restart', () => {
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/continue/i);
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/do not repeat/i);
+    expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/rather than commenting on it/i);
   });
 });

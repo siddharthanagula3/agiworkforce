@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getDefaultModelFor } from '@agiworkforce/types';
+import { getDefaultModelFor, resolveMaxOutputTokens } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/server/rls-db');
 type ScanModule1 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule2 = typeof import('./chat-attachment-hydration');
@@ -88,7 +88,10 @@ const RESERVATION = {
   reservedMicrousd: 7_500,
 };
 
-function freeTurn(key: string): Promise<Awaited<ReturnType<typeof processRequest>>> {
+function freeTurn(
+  key: string,
+  options: { model?: string; content?: string } = {},
+): Promise<Awaited<ReturnType<typeof processRequest>>> {
   const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -97,8 +100,8 @@ function freeTurn(key: string): Promise<Awaited<ReturnType<typeof processRequest
       'x-agi-surface': 'web',
     },
     body: JSON.stringify({
-      model: FREE_CHAT_MODEL,
-      messages: [{ role: 'user', content: 'Hello there' }],
+      model: options.model ?? FREE_CHAT_MODEL,
+      messages: [{ role: 'user', content: options.content ?? 'Hello there' }],
       stream: false,
     }),
   });
@@ -163,6 +166,18 @@ describe('processRequest on the Free usage windows', () => {
       expect.objectContaining({ reservation: result.freeTrial, provider: result.provider }),
     );
   });
+
+  it.each(['auto', FREE_CHAT_MODEL])(
+    'asks the Free windows for the whole output cap on a short build request (%s)',
+    async (model) => {
+      const result = await freeTurn('free-window-build-1', { model, content: 'make a calculator' });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const fitted = mocks.fitFree.mock.calls[0]?.[0] as { request: { max_tokens: number } };
+      expect(fitted.request.max_tokens).toBe(resolveMaxOutputTokens(FREE_CHAT_MODEL));
+    },
+  );
 
   it('refuses a Free turn at the limit with 429, the reset time and Retry-After', async () => {
     const resetAt = new Date(Date.now() + 3_600_000).toISOString();
