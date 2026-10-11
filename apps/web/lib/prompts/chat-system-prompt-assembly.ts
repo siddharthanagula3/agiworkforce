@@ -13,6 +13,10 @@ import { chatSystemPromptSection, type ChatSystemPromptSections } from './chat-s
 
 const TOOL_SECTION_PREFIX = 'tool.';
 
+const CAPABILITY_SECTION_PREFIX = 'capability.';
+
+const ARTIFACTS_CAPABILITY = 'artifacts';
+
 const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
 
 const FILE_CREATION_TOOL_NAMES = [
@@ -24,6 +28,12 @@ const FILE_CREATION_TOOL_NAMES = [
 
 export type ChatTurnMemory = 'on' | 'off';
 
+export interface ArtifactMarkers {
+  readonly html: string;
+  readonly react: string;
+  readonly mermaid: string;
+}
+
 export interface ChatTurnState {
   readonly toolNames: readonly string[];
   readonly codeExecutionUnavailable?: boolean;
@@ -31,6 +41,13 @@ export interface ChatTurnState {
   readonly attachmentSandboxPaths?: readonly string[];
   /** Absent when the caller does not know the turn's memory state. */
   readonly memory?: ChatTurnMemory;
+  /** Present when the surface renders artifacts, so the prompt can name their markers. */
+  readonly artifactMarkers?: ArtifactMarkers;
+  /** The window.agi runtime text; absent means sent, as every version before 7 assumed. */
+  readonly artifactRuntime?: boolean;
+  readonly artifactConnectors?: boolean;
+  /** Capability ids the plan and surface grant; absent when the caller does not know them. */
+  readonly productCapabilities?: readonly string[];
 }
 
 export interface ChatTurnClock {
@@ -44,6 +61,22 @@ export interface AssembledChatSystemPrompt {
   readonly body: string;
   /** Changes with the clock, so it belongs after the cache boundary. */
   readonly time: string;
+}
+
+function productCapabilityBlock(
+  sections: ChatSystemPromptSections,
+  capabilities: readonly string[] | undefined,
+): string {
+  const lines = (capabilities ?? [])
+    .map((id) => chatSystemPromptSection(sections, `${CAPABILITY_SECTION_PREFIX}${id}`))
+    .filter((line) => line.length > 0)
+    .map((line) => `- ${line}`);
+  const heading = chatSystemPromptSection(sections, 'product_capabilities_heading');
+  if (lines.length === 0 || heading.length === 0) return '';
+  return [
+    [heading, ...lines].join('\n'),
+    chatSystemPromptSection(sections, 'product_capabilities_rules'),
+  ].join('\n\n');
 }
 
 function describeTool(sections: ChatSystemPromptSections, name: string): string {
@@ -86,6 +119,12 @@ export function assembleChatSystemPrompt(
     section('instruction_precedence'),
     section('untrusted_content'),
     section('capability_honesty'),
+    productCapabilityBlock(
+      sections,
+      state.productCapabilities && state.artifactMarkers
+        ? [...state.productCapabilities, ARTIFACTS_CAPABILITY]
+        : state.productCapabilities,
+    ),
   ];
 
   if (toolNames.length > 0) {
@@ -118,7 +157,20 @@ export function assembleChatSystemPrompt(
   blocks.push(section('user_documents'), section('people_and_privacy'), section('refusal_style'));
   if (state.memory === 'on') blocks.push(section('memory_on'));
   if (state.memory === 'off') blocks.push(section('memory_off'));
-  blocks.push(section('format_and_length'), section('artifact_runtime'));
+  blocks.push(section('format_and_length'), section('email_and_writing_blocks'));
+  if (state.artifactMarkers) {
+    blocks.push(
+      section('artifacts', {
+        htmlMarker: state.artifactMarkers.html,
+        reactMarker: state.artifactMarkers.react,
+        mermaidMarker: state.artifactMarkers.mermaid,
+      }),
+    );
+  }
+  if (state.artifactRuntime !== false) {
+    blocks.push(section('artifact_runtime'));
+    if (state.artifactConnectors) blocks.push(section('artifact_runtime_connectors'));
+  }
 
   if (state.codeExecutionUnavailable) blocks.push(section('code_execution_unavailable'));
   if (state.researchUnavailable) blocks.push(section('research_unavailable'));

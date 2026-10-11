@@ -79,6 +79,27 @@ Decisions that differ from the research proposal:
   not even as an example. A version 5 run offered a made-up LinkedIn address as
   an example. Version 5 stays locked as it was measured.
 
+## What version 7 adds
+
+Version 7 was written on 2026-10-11 from reports on the running product, not
+from new external sources. A tool-less turn asked to "make a calculator" or to
+"show it in an artifact" said it could not run code and had no artifact
+feature. Asked "what can you do", the model listed only that turn's tools.
+
+| Section                                                                | When it is sent                                                                                 | Fact it comes from                                                                                                  |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `artifacts`                                                            | on surfaces that render artifacts                                                               | the explicit-v1 derivation in `@agiworkforce/artifacts`; the markers are filled from `EXPLICIT_ARTIFACT_MARKER_FOR` |
+| product capabilities (heading, one `capability.<id>` line each, rules) | when the route knows the plan and surface                                                       | `buildMeCapabilityHandshake`, the same grant `/api/me` serves, via `product-capability-facts.ts`                    |
+| `email_and_writing_blocks`                                             | always                                                                                          | the `email` and `writing` card fences the chat renders                                                              |
+| `no_tools`, `capability_honesty` (rewritten)                           | as before                                                                                       | stop leading with a missing tool when an artifact or plain answer meets the request                                 |
+| `artifact_runtime` (rewritten), `artifact_runtime_connectors`          | runtime unless the caller turns it off; connectors only where released and included in the plan | the window.agi APIs; connectors are unreleased                                                                      |
+
+Under explicit-v1, the policy every saved assistant turn carries, a block
+becomes an artifact only when it carries a marker. The prompt asks for the
+marker on the first line. The free quota route and Slack no longer send the
+runtime text: it is about 1,300 characters on any turn that will never publish
+an app.
+
 ## How a version reaches users
 
 The version is global. When the pin moves, conversations already under way get

@@ -101,7 +101,16 @@ export type Check =
       readonly sources: readonly string[];
       readonly urls?: readonly string[];
     }
-  | { readonly kind: 'language'; readonly expected: LanguageCode };
+  | { readonly kind: 'language'; readonly expected: LanguageCode }
+  | {
+      /**
+       * How many blocks of the answer become artifacts under the explicit
+       * derivation policy, decided by the artifacts package's own
+       * `deriveArtifacts`, each opening with its type's marker.
+       */
+      readonly kind: 'artifacts';
+      readonly count: number;
+    };
 
 export type CheckKind = Check['kind'];
 
@@ -171,6 +180,9 @@ export interface EvalHaystack {
 /** Whether memory serves the turn, as the chat system prompt is told it. */
 export type ChatTurnMemory = 'on' | 'off';
 
+/** The plan whose product capabilities the chat system prompt describes. */
+export type ChatTurnPlan = 'free' | 'pro';
+
 export interface EvalCase {
   readonly id: string;
   readonly family: string;
@@ -193,6 +205,8 @@ export interface EvalCase {
   readonly requires?: readonly string[];
   /** Read only when the run renders the product's chat system prompt. */
   readonly memory?: ChatTurnMemory;
+  /** Read only when the run renders the product's chat system prompt; absent means free. */
+  readonly plan?: ChatTurnPlan;
 }
 
 /**

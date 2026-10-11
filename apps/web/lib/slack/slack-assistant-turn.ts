@@ -225,7 +225,11 @@ function systemMessage(input: {
           ? SLACK_DIRECT_MESSAGE_DIRECTIVE
           : SLACK_CHANNEL_DIRECTIVE,
         input.mode === 'task' ? SLACK_TASK_DIRECTIVE : null,
-        buildCapabilityPreamble({ tools: input.plan.tools, timeZone: input.timeZone ?? undefined }),
+        buildCapabilityPreamble({
+          tools: input.plan.tools,
+          timeZone: input.timeZone ?? undefined,
+          artifactRuntime: false,
+        }),
         withheldToolsDirective(input.plan),
       ]
         .filter((part): part is string => Boolean(part))
