@@ -66,6 +66,26 @@ describe('repairContinuationSeam', () => {
     expect(repairContinuationSeam('anything', '')).toBe('');
   });
 
+  it('drops a fence the model reopens inside the block it was cut off in', () => {
+    const seed = ['```html', '<style>', '  body {', '    color: re'].join('\n');
+    expect(repairContinuationSeam(seed, '```html\nd;\n  }\n</style>\n```')).toBe(
+      'd;\n  }\n</style>\n```',
+    );
+    expect(repairContinuationSeam(seed, '~~~css\nd;')).toBe('d;');
+  });
+
+  it('keeps a bare fence that closes the open block', () => {
+    const seed = ['```html', '<p>done</p>', ''].join('\n');
+    expect(repairContinuationSeam(seed, '```\n\nThat is the page.')).toBe(
+      '```\n\nThat is the page.',
+    );
+  });
+
+  it('keeps a fence that opens a new block after closed code', () => {
+    const seed = ['```ts', 'const a = 1;', '```', ''].join('\n');
+    expect(repairContinuationSeam(seed, '```css\nbody {}\n```')).toBe('```css\nbody {}\n```');
+  });
+
   it('returns nothing when the continuation only repeats what we already have', () => {
     expect(repairContinuationSeam('breaking the problem down', 'the problem down')).toBe('');
   });
