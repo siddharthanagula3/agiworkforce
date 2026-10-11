@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { EXPLICIT_ARTIFACT_MARKER_FOR } from '@agiworkforce/artifacts';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
@@ -329,6 +330,104 @@ describe('capability preamble', () => {
 
       expect(buildCapabilityPreamble({ tools: [officeTool], memory: 'off', ...v1 })).toBe(plain);
       expect(plain).not.toContain('Web search is not available on this turn.');
+    });
+  });
+
+  describe('chat system prompt version 7', () => {
+    const v7 = { promptSelection: { variants: { 'chat.system': 7 } } };
+    const officeTool = { type: 'function', function: { name: 'create_office_file' } };
+    const searchTool = { type: 'function', function: { name: 'web_search' } };
+
+    it.each([
+      ['no tools', []],
+      ['tools without search', [officeTool]],
+      ['search', [searchTool]],
+    ])(
+      'tells a %s turn how to write an artifact, with the markers the package derives',
+      (_case, tools) => {
+        const preamble = String(buildCapabilityPreamble({ tools, artifacts: true, ...v7 }));
+
+        expect(preamble).toContain(
+          `first line of the block is its marker: ${EXPLICIT_ARTIFACT_MARKER_FOR.html}`,
+        );
+        expect(preamble).toContain(`${EXPLICIT_ARTIFACT_MARKER_FOR.react} for jsx`);
+        expect(preamble).toContain(`${EXPLICIT_ARTIFACT_MARKER_FOR.mermaid} for mermaid`);
+        expect(preamble).not.toMatch(/\{[a-z][A-Za-z]*Marker\}/);
+        expect(preamble).toContain('language email');
+      },
+    );
+
+    it('says nothing about artifacts on a surface that does not render them', () => {
+      const preamble = String(buildCapabilityPreamble({ tools: [], ...v7 }));
+
+      expect(preamble).not.toContain('Artifacts panel');
+    });
+
+    it('sends the runtime text unless the caller turns it off, and connectors only when allowed', () => {
+      const runtime = 'window.agi.complete(prompt) sends one text prompt';
+      const connectors = "connectors: ['google_calendar']";
+
+      expect(buildCapabilityPreamble({ tools: [], ...v7 })).toContain(runtime);
+      expect(buildCapabilityPreamble({ tools: [], ...v7 })).not.toContain(connectors);
+      expect(buildCapabilityPreamble({ tools: [], artifactRuntime: false, ...v7 })).not.toContain(
+        runtime,
+      );
+      expect(buildCapabilityPreamble({ tools: [], artifactConnectors: true, ...v7 })).toContain(
+        connectors,
+      );
+    });
+
+    it('lists only the capabilities the caller passes, and distinguishes them from this turn', () => {
+      const preamble = String(
+        buildCapabilityPreamble({
+          tools: [],
+          productCapabilities: [
+            'canChat',
+            'canUploadFiles',
+            'canUseWebSearch',
+            'canUseMarketplace',
+          ],
+          ...v7,
+        }),
+      );
+
+      expect(preamble).toContain('What this app offers this user');
+      expect(preamble).toContain('- read files the user attaches');
+      expect(preamble).toContain('- search the web and cite its sources');
+      expect(preamble).not.toContain('generate images');
+      expect(preamble).toContain('turning on Run code');
+      expect(buildCapabilityPreamble({ tools: [], ...v7 })).not.toContain('What this app offers');
+      expect(preamble).not.toContain('- build interactive pages');
+      expect(
+        buildCapabilityPreamble({
+          tools: [],
+          artifacts: true,
+          productCapabilities: ['canChat'],
+          ...v7,
+        }),
+      ).toContain('- build interactive pages');
+    });
+
+    it('no longer opens a tool-less turn with the code it cannot run', () => {
+      const preamble = String(buildCapabilityPreamble({ tools: [], ...v7 }));
+
+      expect(preamble).toContain('write the answer, the code or the artifact directly');
+      expect(preamble).not.toContain('No tools are available on this turn');
+    });
+
+    it('leaves earlier versions untouched by the new turn state', () => {
+      const v6 = { promptSelection: { variants: { 'chat.system': 6 } } };
+      const plain = buildCapabilityPreamble({ tools: [officeTool], ...v6 });
+
+      expect(
+        buildCapabilityPreamble({
+          tools: [officeTool],
+          artifacts: true,
+          artifactConnectors: true,
+          productCapabilities: ['canChat'],
+          ...v6,
+        }),
+      ).toBe(plain);
     });
   });
 });
