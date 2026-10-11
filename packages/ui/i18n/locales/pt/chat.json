@@ -497,6 +497,27 @@
     "openImage": "Abrir imagem em uma nova aba",
     "openImageLabel": "Abrir imagem em uma nova aba: {{alt}}"
   },
+  "richBlock": {
+    "email": "E-mail",
+    "writing": "Texto",
+    "to": "Para",
+    "cc": "Cc",
+    "bcc": "Cco",
+    "subject": "Assunto",
+    "body": "Mensagem",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "copyEmail": "Copiar e-mail",
+    "emailCopied": "E-mail copiado",
+    "copyWriting": "Copiar este texto",
+    "writingCopied": "Texto copiado",
+    "copyFailed": "Falha ao copiar, área de transferência indisponível",
+    "openInMail": "Abrir no app de e-mail",
+    "bodyCopiedForMail": "Esta mensagem é longa demais para um link de e-mail, por isso foi copiada. Cole-a no novo e-mail.",
+    "expandWriting": "Abrir maior para ler e editar",
+    "closeWriting": "Fechar texto ampliado",
+    "editWriting": "Editar texto"
+  },
   "streaming": {
     "reconnecting": "Reconectando…",
     "stopping": "Parando a tarefa na nuvem…"

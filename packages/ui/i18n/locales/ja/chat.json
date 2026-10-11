@@ -497,6 +497,27 @@
     "openImage": "画像を新しいタブで開く",
     "openImageLabel": "画像を新しいタブで開く: {{alt}}"
   },
+  "richBlock": {
+    "email": "メール",
+    "writing": "文章",
+    "to": "宛先",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "subject": "件名",
+    "body": "本文",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "copyEmail": "メールをコピー",
+    "emailCopied": "メールをコピーしました",
+    "copyWriting": "このテキストをコピー",
+    "writingCopied": "テキストをコピーしました",
+    "copyFailed": "コピーできませんでした。クリップボードを利用できません",
+    "openInMail": "メールアプリで開く",
+    "bodyCopiedForMail": "本文がメールリンクには長すぎるため、コピーしました。新しいメールに貼り付けてください。",
+    "expandWriting": "大きく開いて読む・編集する",
+    "closeWriting": "拡大表示を閉じる",
+    "editWriting": "テキストを編集"
+  },
   "streaming": {
     "reconnecting": "再接続中…",
     "stopping": "クラウドタスクを停止しています…"

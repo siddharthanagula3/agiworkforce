@@ -13,7 +13,10 @@ import { reactNodeText } from './reactNodeText';
 import { MarkdownTable } from './MarkdownTable';
 import { CodeBlock } from './CodeBlock';
 import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
-import { StreamTailContext } from './streamTailContext';
+import { StreamTailContext, useIsStreamTail } from './streamTailContext';
+import { EmailBlock } from './EmailBlock';
+import { WritingBlock } from './WritingBlock';
+import { EMAIL_BLOCK_LANGUAGE, isRichBlockLanguage, parseEmailBlock } from './richBlocks';
 import {
   TaskItemIndexContext,
   TaskToggleContext,
@@ -453,8 +456,62 @@ const MarkdownTableHeader = ({
   </th>
 );
 
+const LANGUAGE_CLASS_PREFIX = 'language-';
+const TRAILING_NEWLINE_PATTERN = /\n$/;
+
+interface HastNode {
+  type?: string;
+  tagName?: string;
+  properties?: { className?: unknown };
+  children?: readonly HastNode[];
+}
+
+function fenceLanguage(node: HastNode | undefined): string {
+  const code = node?.children?.find((child) => child.type === 'element');
+  if (code?.tagName !== 'code') return '';
+  const classes = Array.isArray(code.properties?.className) ? code.properties.className : [];
+  const languageClass = classes.find(
+    (value): value is string =>
+      typeof value === 'string' && value.startsWith(LANGUAGE_CLASS_PREFIX),
+  );
+  return languageClass ? languageClass.slice(LANGUAGE_CLASS_PREFIX.length) : '';
+}
+
+const renderWritingBody = (text: string) => <MarkdownContent content={text} />;
+
+const RichFence = ({ language, source }: { language: string; source: string }) => {
+  const streaming = useIsStreamTail();
+  if (language === EMAIL_BLOCK_LANGUAGE) {
+    const parsed = parseEmailBlock(source, streaming);
+    return parsed ? (
+      <EmailBlock parsed={parsed} streaming={streaming} />
+    ) : (
+      <MarkdownContent content={source} />
+    );
+  }
+  return <WritingBlock source={source} streaming={streaming} renderBody={renderWritingBody} />;
+};
+
+const MarkdownPre = ({
+  node,
+  children,
+  ...rest
+}: React.ComponentPropsWithoutRef<'pre'> & { node?: HastNode }) => {
+  const language = fenceLanguage(node);
+  if (isRichBlockLanguage(language)) {
+    return (
+      <RichFence
+        language={language}
+        source={reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '')}
+      />
+    );
+  }
+  return <pre {...rest}>{children}</pre>;
+};
+
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
+  pre: MarkdownPre as Components['pre'],
   img: MarkdownImage as Components['img'],
   h1: ({ children }) => <h1 className="mb-4 mt-6 text-h2">{children}</h1>,
   h2: ({ children }) => <h2 className="mb-3 mt-5 text-h3">{children}</h2>,

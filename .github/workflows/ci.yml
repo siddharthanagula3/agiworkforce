@@ -1236,6 +1236,7 @@ jobs:
             qa-14-public-route-contrast.spec.ts \
             quick-ask-entry.spec.ts \
             release-notes.spec.ts \
+            rich-blocks-sticky.spec.ts \
             shared-link-pages.spec.ts \
             status-first-screen.spec.ts \
             trial-cancel.spec.ts \

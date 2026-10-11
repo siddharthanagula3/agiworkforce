@@ -497,6 +497,27 @@
     "openImage": "새 탭에서 이미지 열기",
     "openImageLabel": "새 탭에서 이미지 열기: {{alt}}"
   },
+  "richBlock": {
+    "email": "이메일",
+    "writing": "글",
+    "to": "받는 사람",
+    "cc": "참조",
+    "bcc": "숨은 참조",
+    "subject": "제목",
+    "body": "본문",
+    "copy": "복사",
+    "copied": "복사됨",
+    "copyEmail": "이메일 복사",
+    "emailCopied": "이메일이 복사됨",
+    "copyWriting": "이 텍스트 복사",
+    "writingCopied": "텍스트가 복사됨",
+    "copyFailed": "복사하지 못했습니다. 클립보드를 사용할 수 없습니다",
+    "openInMail": "메일 앱에서 열기",
+    "bodyCopiedForMail": "메일 링크에 담기에는 본문이 너무 길어 복사했습니다. 새 이메일에 붙여넣으세요.",
+    "expandWriting": "크게 열어 읽고 편집",
+    "closeWriting": "확대한 텍스트 닫기",
+    "editWriting": "텍스트 편집"
+  },
   "streaming": {
     "reconnecting": "재연결 중…",
     "stopping": "클라우드 작업을 중지하는 중…"
