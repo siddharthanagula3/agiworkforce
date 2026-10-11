@@ -6,6 +6,7 @@ import { cn } from '../lib/utils';
 export interface UsageWarningBannerProps {
   warning: ManagedUsageWarning | null;
   onUpgrade?: () => void;
+  upgradeLabel?: string;
   onDismiss?: () => void;
   className?: string;
 }
@@ -13,6 +14,7 @@ export interface UsageWarningBannerProps {
 export function UsageWarningBanner({
   warning,
   onUpgrade,
+  upgradeLabel = 'Get more usage',
   onDismiss,
   className,
 }: UsageWarningBannerProps) {
@@ -58,7 +60,7 @@ export function UsageWarningBanner({
           onClick={onUpgrade}
           className="shrink-0 text-xs font-semibold text-[var(--chat-text-primary)] underline underline-offset-2 hover:opacity-80"
         >
-          Get more usage
+          {upgradeLabel}
         </button>
       ) : null}
 
