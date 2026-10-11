@@ -47,8 +47,10 @@ const COMPLIANCE_MARKERS: readonly RegExp[] = [
   /\bfirst,?\s+you(?:'ll| will)?\s+(?:need|want)\b/i,
 ];
 
+const TYPOGRAPHIC_APOSTROPHES = /[\u2018\u2019\u02bc]/g;
+
 function normalise(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
+  return text.replace(TYPOGRAPHIC_APOSTROPHES, "'").replace(/\s+/g, ' ').trim();
 }
 
 function wordCount(text: string): number {
