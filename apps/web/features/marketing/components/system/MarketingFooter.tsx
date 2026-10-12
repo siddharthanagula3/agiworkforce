@@ -30,38 +30,38 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
     >
       <Container>
         {!condensed && (
-          <div className="agi-ds-footer-brand">
-            <span className="agi-ds-footer-wordmark">
-              <AgiMark size={MARK_SIZE} />
-              <span>AGI</span>
-            </span>
-            <p className="agi-ds-footer-statement">
-              One workspace for <span className="agi-ds-footer-phrase">AI-assisted</span> work.
-            </p>
+          <div className="agi-ds-footer-top">
+            <div className="agi-ds-footer-brand">
+              <span className="agi-ds-footer-wordmark">
+                <AgiMark size={MARK_SIZE} />
+                <span>AGI</span>
+              </span>
+              <p className="agi-ds-footer-statement">
+                One workspace for <span className="agi-ds-footer-phrase">AI-assisted</span> work.
+              </p>
+            </div>
+            <nav aria-label="Footer" className="agi-ds-footer-cols">
+              {FOOTER_COLUMNS.map((column) => {
+                const headingId = columnHeadingId(column.title);
+                return (
+                  <div className="agi-ds-footer-col" key={column.title}>
+                    <h2 className="agi-ds-footer-title" id={headingId}>
+                      {column.title}
+                    </h2>
+                    <ul aria-labelledby={headingId} className="agi-ds-footer-list">
+                      {column.links.map((link) => (
+                        <li key={link.href}>
+                          <Link href={link.href} className="agi-ds-footer-link">
+                            {link.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </nav>
           </div>
-        )}
-        {!condensed && (
-          <nav aria-label="Footer" className="agi-ds-footer-cols">
-            {FOOTER_COLUMNS.map((column) => {
-              const headingId = columnHeadingId(column.title);
-              return (
-                <div className="agi-ds-footer-col" key={column.title}>
-                  <h2 className="agi-ds-footer-title" id={headingId}>
-                    {column.title}
-                  </h2>
-                  <ul aria-labelledby={headingId} className="agi-ds-footer-list">
-                    {column.links.map((link) => (
-                      <li key={link.href}>
-                        <Link href={link.href} className="agi-ds-footer-link">
-                          {link.label}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </nav>
         )}
         <div className="agi-ds-footer-legal">
           <span>© {COPYRIGHT_YEAR} AGI. Proprietary.</span>
