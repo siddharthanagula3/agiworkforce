@@ -712,6 +712,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           <SheetContent
             id="webappshell-mobile-nav"
             side="left"
+            hideCloseButton
             style={{ width: MOBILE_NAV_DRAWER_WIDTH }}
             className="max-w-[85vw] gap-0 overflow-y-auto overscroll-contain p-0 [scrollbar-width:thin]"
             data-testid="mobile-nav-drawer"
@@ -730,7 +731,12 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
             }}
           >
             <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <Sidebar {...sharedSidebarProps} collapsed={false} width={MOBILE_NAV_DRAWER_WIDTH} />
+            <Sidebar
+              {...sharedSidebarProps}
+              collapsed={false}
+              width={MOBILE_NAV_DRAWER_WIDTH}
+              onToggleCollapse={() => setMobileNavOpen(false)}
+            />
           </SheetContent>
         </Sheet>
       )}

@@ -1168,6 +1168,23 @@
   }
 }
 
+[data-voice-mode='true']
+  .message-text[data-streaming='true']
+  > :not(span, ul, ol):last-child::after,
+[data-voice-mode='true']
+  .message-text[data-streaming='true']
+  > :not(ul, ol):has(+ span:last-child)::after,
+[data-voice-mode='true']
+  .message-text[data-streaming='true']
+  > :is(ul, ol):last-child
+  > li:last-child::after,
+[data-voice-mode='true']
+  .message-text[data-streaming='true']
+  > :is(ul, ol):has(+ span:last-child)
+  > li:last-child::after {
+  content: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .message-text[data-streaming='true'] > :not(span, ul, ol):last-child::after,
   .message-text[data-streaming='true'] > :not(ul, ol):has(+ span:last-child)::after,

@@ -6148,6 +6148,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   return (
     <div
       data-chat-surface={compact ? 'quick-ask' : 'full'}
+      data-voice-mode={voiceModeActive ? 'true' : undefined}
       className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
     >
       {/* Dialogs lifted from ChatSidebar to the page level */}
@@ -6184,6 +6185,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           <SheetContent
             id={MOBILE_NAV_DRAWER_ID}
             side="left"
+            hideCloseButton
             className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto overscroll-contain p-0 [scrollbar-width:thin]"
             data-testid="chat-mobile-nav-drawer"
             onEscapeKeyDown={keepOpenForMenuEscape}
@@ -6195,7 +6197,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             }}
           >
             <SheetTitle className="sr-only">{t('chat:openNavigation')}</SheetTitle>
-            <Sidebar {...sharedSidebarProps} collapsed={false} width={MOBILE_NAV_DRAWER_WIDTH} />
+            <Sidebar
+              {...sharedSidebarProps}
+              collapsed={false}
+              width={MOBILE_NAV_DRAWER_WIDTH}
+              onToggleCollapse={() => setMobileNavOpen(false)}
+            />
           </SheetContent>
         </Sheet>
       )}

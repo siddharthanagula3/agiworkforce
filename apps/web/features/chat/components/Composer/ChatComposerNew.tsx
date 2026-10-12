@@ -4063,6 +4063,7 @@ const ChatComposerNewComponent = ({
   const hasContent = Boolean(message.trim() || attachments.length > 0);
   const showExpandControl = composerExpanded || composerExpandable;
   const composerStacked = Boolean(emptyState) || composerExpanded || composerWrapsLines;
+  const mediaControlsWrap = imageMode || videoMode;
   const expandControlLabel = composerExpanded
     ? tChat('composer.collapseInput', { defaultValue: 'Collapse message input' })
     : tChat('composer.expandInput', { defaultValue: 'Expand message input' });
@@ -4971,7 +4972,8 @@ const ChatComposerNewComponent = ({
           <div
             className={cn(
               'chat-composer-row min-w-0 flex-row items-end gap-1 sm:gap-2',
-              composerStacked ? 'flex-wrap' : 'flex-nowrap',
+              composerStacked ? 'flex-wrap' : 'flex-nowrap pointer-coarse:items-center',
+              mediaControlsWrap && 'max-sm:flex-wrap',
               dictation.isActive ? 'hidden' : 'flex',
             )}
           >
@@ -4983,6 +4985,7 @@ const ChatComposerNewComponent = ({
               className={cn(
                 'chat-composer-field relative -order-1 min-h-[36px] min-w-0 flex-1',
                 composerStacked ? 'basis-full' : 'basis-0',
+                mediaControlsWrap && 'max-sm:basis-full',
                 emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[36px]',
               )}
             >
@@ -5064,12 +5067,14 @@ const ChatComposerNewComponent = ({
               className={cn(
                 'chat-composer-controls min-w-0 flex-row flex-nowrap items-center gap-1 sm:gap-2',
                 composerStacked ? 'flex w-full' : 'contents',
+                mediaControlsWrap && 'max-sm:flex max-sm:w-full max-sm:flex-wrap max-sm:gap-y-1.5',
               )}
             >
               <div
                 className={cn(
                   'chat-composer-leading-end flex shrink-0 flex-row items-center gap-1 sm:gap-2',
                   composerStacked ? 'me-auto' : 'order-[-2]',
+                  mediaControlsWrap && 'max-sm:me-0',
                 )}
               >
                 {/* + Overflow Menu Button */}
@@ -5369,7 +5374,7 @@ const ChatComposerNewComponent = ({
 
               {/* Image-mode pills (only when the user is generating an image). */}
               {imageMode && (
-                <div className={cn('flex shrink-0 items-center gap-1')}>
+                <div className={cn('flex shrink-0 items-center gap-1 max-sm:contents')}>
                   {/* Image pill: click to exit image mode */}
                   <button
                     type="button"
@@ -5481,7 +5486,7 @@ const ChatComposerNewComponent = ({
                   </div>
 
                   {selectedPromotionalImage && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground max-sm:order-2">
                       Free quota ·{' '}
                       {selectedPromotionalImage.outputSize?.replaceAll('*', ' × ') ??
                         'provider default'}
@@ -5601,7 +5606,7 @@ const ChatComposerNewComponent = ({
               model's catalog output tuples; restricted qualities carry their
               required duration on send. Exit resets the whole media choice. */}
               {videoMode && (
-                <div className={cn('flex shrink-0 items-center gap-1')}>
+                <div className={cn('flex shrink-0 items-center gap-1 max-sm:contents')}>
                   <button
                     type="button"
                     onClick={() => {
@@ -5833,7 +5838,13 @@ const ChatComposerNewComponent = ({
               )}
 
               {imageMode && (
-                <div className="relative shrink-0">
+                <span
+                  aria-hidden="true"
+                  className="hidden max-sm:order-1 max-sm:block max-sm:h-0 max-sm:basis-full"
+                />
+              )}
+              {imageMode && (
+                <div className="relative shrink-0 max-sm:order-2 max-sm:min-w-0 max-sm:shrink">
                   <button
                     ref={imageModelTriggerRef}
                     type="button"
@@ -5841,7 +5852,7 @@ const ChatComposerNewComponent = ({
                       setShowImageModelMenu((p) => !p);
                       setShowImageAspectMenu(false);
                     }}
-                    className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                    className="flex h-8 max-w-full items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
                     aria-label="Select image model"
                   >
                     {/* AUDIT-FIX CMP-26: no hardcoded model name. The catalog is
@@ -6022,7 +6033,7 @@ const ChatComposerNewComponent = ({
               )}
 
               {/* Voice input is part of free chat and remains capability-neutral. */}
-              <div className="relative shrink-0">
+              <div className={cn('relative shrink-0', mediaControlsWrap && 'max-sm:ms-auto')}>
                 {/* AUDIT-FIX CMP-16: dictation follows the textarea, which stays
                   enabled during streaming for type-ahead. Disabling the mic
                   meant a queued follow-up could be typed but never dictated. */}

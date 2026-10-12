@@ -43,4 +43,25 @@ describe('Sheet', () => {
 
     expect(screen.getByRole('dialog').getAttribute('aria-modal')).toBeNull();
   });
+
+  it('renders its own close button unless the content carries one', () => {
+    const { unmount } = render(
+      <Sheet open>
+        <SheetContent side="left">
+          <SheetTitle>Navigation</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+    unmount();
+
+    render(
+      <Sheet open>
+        <SheetContent side="left" hideCloseButton>
+          <SheetTitle>Navigation</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  });
 });

@@ -27,7 +27,7 @@ const KEY = {
 } as const;
 
 const ROUND_CONTROL_CLASS =
-  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--chat-border-strong)] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--chat-border-strong)] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9 pointer-coarse:h-11 pointer-coarse:w-11';
 
 const MIDDLE_CLASS = 'flex min-w-0 flex-1 items-center';
 
@@ -93,7 +93,7 @@ export function DictationStrip({
         type="button"
         onClick={onCancel}
         aria-label={failed ? LABEL.dismiss : LABEL.cancel}
-        className={cn(ROUND_CONTROL_CLASS, 'sm:h-9 sm:w-9')}
+        className={ROUND_CONTROL_CLASS}
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>

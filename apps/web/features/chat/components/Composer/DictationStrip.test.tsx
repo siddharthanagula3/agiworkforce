@@ -29,6 +29,18 @@ function renderRecording({ reducedMotion = false }: { reducedMotion?: boolean } 
 }
 
 describe('DictationStrip · recording', () => {
+  it('sizes cancel and stop like the send button so a phone keeps them round', () => {
+    renderRecording();
+    const send = screen.getByRole('button', { name: 'Send message' });
+    for (const name of ['Discard recording', 'Stop recording and edit the transcript']) {
+      const control = screen.getByRole('button', { name });
+      for (const size of ['h-8', 'min-h-0', 'w-8', 'pointer-coarse:h-11', 'pointer-coarse:w-11']) {
+        expect(control).toHaveClass(size);
+        expect(send).toHaveClass(size);
+      }
+    }
+  });
+
   it('offers cancel, stop and send in the bar', () => {
     renderRecording();
     expect(screen.getByRole('button', { name: 'Discard recording' })).toBeInTheDocument();

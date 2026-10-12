@@ -2038,6 +2038,29 @@ describe('ChatComposerNew', () => {
       expect(screen.getByText('Create video')).toBeInTheDocument();
     });
 
+    it('lets the image controls wrap inside the card on a phone', () => {
+      const { container } = render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+      const row = container.querySelector('.chat-composer-row') as HTMLElement;
+      const field = container.querySelector('.chat-composer-field') as HTMLElement;
+      const controls = container.querySelector('.chat-composer-controls') as HTMLElement;
+      expect(row).not.toHaveClass('max-sm:flex-wrap');
+      expect(controls).not.toHaveClass('max-sm:flex-wrap');
+
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      fireEvent.click(screen.getByText('Create image'));
+
+      expect(row).toHaveClass('max-sm:flex-wrap');
+      expect(field).toHaveClass('max-sm:basis-full');
+      expect(controls).toHaveClass('max-sm:flex', 'max-sm:w-full', 'max-sm:flex-wrap');
+      const modelPicker = screen.getByRole('button', { name: /select image model/i });
+      expect(modelPicker.parentElement).toHaveClass('max-sm:order-2', 'max-sm:shrink');
+      expect(
+        screen
+          .getByRole('button', { name: /add a style to the prompt/i })
+          .closest('.max-sm\\:contents'),
+      ).not.toBeNull();
+    });
+
     it('does not consume a typed /image prompt when this host has no image turn owner', async () => {
       const onSend = vi.fn();
       render(<ChatComposerNew onSend={onSend} />);
