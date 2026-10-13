@@ -946,7 +946,7 @@ export class PublicRuntimeContainers {
     const documents = observer.documents.filter((entry) => entry.url === handle.state.path);
     if (observer.documents.length !== 1 || documents.length !== 1 || documents[0].method !== 'GET')
       throw new Error('The proof must observe exactly one requested main document');
-    const proof = {
+    const baseProof = {
       version: PROOF_VERSION,
       runId: this.runId,
       stateId: handle.state.stateId,
@@ -983,14 +983,17 @@ export class PublicRuntimeContainers {
     const archive = gzipSync(serialized);
     if (archive.byteLength > 64 * 1024 * 1024)
       throw new Error('Compressed execution evidence exceeded its case budget');
-    proof.evidence = {
-      filename: `evidence/${handle.state.stateId}.json.gz`,
-      digest: digest(archive),
-      nodeCoverageDigest: digest(nodeCoverage),
-      browserCoverageDigest: digest(receipt.browserCoverage),
-      browserHttpDigest: digest(receipt.browserHttpRequests),
-      eventsDigest: digest(eventsJsonl),
-      postgresLogDigest: digest(postgresJsonl),
+    const proof = {
+      ...baseProof,
+      evidence: {
+        filename: `evidence/${handle.state.stateId}.json.gz`,
+        digest: digest(archive),
+        nodeCoverageDigest: digest(nodeCoverage),
+        browserCoverageDigest: digest(receipt.browserCoverage),
+        browserHttpDigest: digest(receipt.browserHttpRequests),
+        eventsDigest: digest(eventsJsonl),
+        postgresLogDigest: digest(postgresJsonl),
+      },
     };
     validateRawReceipt(receipt, proof, authorityQueries(this.runId));
     await mkdir(this.evidenceDirectory, { recursive: true });
