@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
+import { runInNewContext } from 'node:vm';
 import { PublicRuntimeContainers } from './containers.mjs';
 import { assertNoUnrecordedResources, restoreOwnership } from './cleanup.mjs';
-import { DATABASE_SOCKET, digest, PROOF_LABEL } from './proof.mjs';
+import { DATABASE_PREFIX, DATABASE_SOCKET, digest, PROOF_LABEL } from './proof.mjs';
 
 function harness() {
   const value = Object.create(PublicRuntimeContainers.prototype);
@@ -25,6 +28,116 @@ function harness() {
 
 test('the isolated database uses the official image bootstrap socket directory', () => {
   assert.equal(DATABASE_SOCKET, '/var/run/postgresql');
+});
+
+test('case listeners keep same-origin middleware rewrites internal', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-listener-'));
+  const value = harness();
+  const applicationRequire = createRequire(new URL('../../apps/web/package.json', import.meta.url));
+  const { NextRequest } = applicationRequire('next/server');
+  const { getRelativeURL } = applicationRequire('next/dist/shared/lib/router/utils/relativize-url');
+  Object.assign(value, {
+    directory,
+    root: directory,
+    database: `${DATABASE_PREFIX}${value.runId}`,
+    prefix: 'owned',
+    index: 0,
+    activeCase: null,
+    databaseCommand: async () => '{}',
+    configurePeer: async () => {},
+    volume: async (name) => name,
+    removeContainer: async () => {},
+    docker: async () => '0',
+  });
+  let applicationArguments;
+  value.run = async (name, args) => {
+    if (name.endsWith('-permissions-0')) return name;
+    assert.ok(name.endsWith('-app-0'));
+    applicationArguments = args;
+    throw new Error('Captured application launch');
+  };
+  try {
+    await assert.rejects(
+      value.startCase({ path: '/', pattern: '/' }),
+      /Captured application launch/,
+    );
+    const dockerfile = await readFile(
+      new URL('../../apps/web/Dockerfile', import.meta.url),
+      'utf8',
+    );
+    const imageHostnames = [...dockerfile.matchAll(/^ENV HOSTNAME=(\S+)$/gm)];
+    assert.equal(imageHostnames.length, 1);
+    const hostname =
+      applicationArguments.find((argument) => argument.startsWith('HOSTNAME='))?.slice(9) ??
+      imageHostnames[0][1];
+    const initialURL = `http://${hostname}:3000/`;
+    const request = new NextRequest(initialURL, { headers: { host: '127.0.0.1:3000' } });
+    assert.equal(getRelativeURL(request.url, initialURL), '/');
+    assert.equal(applicationArguments[applicationArguments.indexOf('--network') + 1], 'none');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('http observations retain entry headers and document classification after middleware mutates them', async () => {
+  const source = await readFile(new URL('./observer.mjs', import.meta.url), 'utf8');
+  const start = 'const originalEmit = http.Server.prototype.emit;';
+  const end = 'await startPublicHttpBridge();';
+  assert.equal(source.split(start).length, 2);
+  assert.equal(source.split(end).length, 2);
+  const events = [];
+  const report = { documents: [] };
+  const originalEmit = http.Server.prototype.emit;
+  const server = http.createServer((request, response) => {
+    request.headers['x-original'] = 'changed by middleware';
+    request.headers['content-security-policy'] = 'generated nonce';
+    request.headers['sec-fetch-dest'] = 'document';
+    response.end('fixture');
+  });
+  try {
+    runInNewContext(source.slice(source.indexOf(start), source.indexOf(end)), {
+      http,
+      structuredClone,
+      report,
+      record: (kind, value) => events.push(JSON.parse(JSON.stringify({ kind, ...value }))),
+    });
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    for (const destination of ['document', 'style']) {
+      await new Promise((resolve, reject) => {
+        const request = http.get(
+          {
+            hostname: '127.0.0.1',
+            port: server.address().port,
+            path: `/${destination}`,
+            agent: false,
+            headers: { 'x-original': 'entry', 'sec-fetch-dest': destination },
+          },
+          (response) => {
+            response.resume();
+            response.once('end', resolve);
+          },
+        );
+        request.once('error', reject);
+        request.setTimeout(5000, () => request.destroy(new Error('HTTP fixture timed out')));
+      });
+    }
+    assert.equal(report.documents.length, 1);
+    assert.equal(report.documents[0].headers['x-original'], 'entry');
+    assert.equal(report.documents[0].headers['content-security-policy'], undefined);
+    assert.deepEqual(
+      events
+        .filter(({ kind }) => kind === 'response')
+        .map(({ kind: _kind, status: _status, ...value }) => value),
+      events.filter(({ kind }) => kind === 'request').map(({ kind: _kind, ...value }) => value),
+    );
+  } finally {
+    http.Server.prototype.emit = originalEmit;
+    server.closeAllConnections();
+    if (server.listening) await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test('a ready bootstrap child cannot stand in for the final postgres process', async () => {

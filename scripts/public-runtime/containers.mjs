@@ -567,8 +567,6 @@ export class PublicRuntimeContainers {
       '--env',
       'PORT=3000',
       '--env',
-      'HOSTNAME=127.0.0.1',
-      '--env',
       'CI=true',
       '--env',
       'NEXT_TELEMETRY_DISABLED=1',

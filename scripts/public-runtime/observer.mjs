@@ -190,11 +190,15 @@ const originalEmit = http.Server.prototype.emit;
 http.Server.prototype.emit = function (event, ...args) {
   if (event === 'request') {
     const [request, response] = args;
-    const incoming = { method: request.method, url: request.url, headers: request.headers };
+    const incoming = {
+      method: request.method,
+      url: request.url,
+      headers: structuredClone(request.headers),
+    };
     record('request', incoming);
     response.once('finish', () => {
       record('response', { ...incoming, status: response.statusCode });
-      if (request.headers['sec-fetch-dest'] === 'document')
+      if (incoming.headers['sec-fetch-dest'] === 'document')
         report.documents.push({ ...incoming, status: response.statusCode });
     });
   }
