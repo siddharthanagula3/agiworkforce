@@ -26,6 +26,165 @@ function harness() {
   return value;
 }
 
+async function startupHarness(t, state) {
+  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-startup-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const value = harness();
+  Object.assign(value, {
+    directory,
+    root: directory,
+    database: `${DATABASE_PREFIX}${value.runId}`,
+    prefix: 'owned',
+    socketVolume: 'owned-socket',
+    index: 18,
+    activeCase: null,
+    databaseCommand: async () => '{}',
+    configurePeer: async () => {},
+    volume: async (name) => name,
+    removeContainer: async () => {},
+  });
+  const current = {
+    Id: 'app-id',
+    Image: value.imageId,
+    Config: {
+      Labels: { [PROOF_LABEL]: value.runId },
+      User: '1000:1000',
+      Healthcheck: { Test: ['NONE'] },
+    },
+    HostConfig: {
+      NetworkMode: 'none',
+      ReadonlyRootfs: true,
+      CapDrop: ['ALL'],
+      SecurityOpt: ['no-new-privileges'],
+    },
+    Mounts: [],
+    State: state,
+  };
+  value.run = async (name, args) => {
+    if (name === 'owned-permissions-18') return name;
+    assert.equal(name, 'owned-app-18');
+    current.Mounts = args.flatMap((argument, index) => {
+      if (argument !== '--mount') return [];
+      const fields = Object.fromEntries(args[index + 1].split(',').map((part) => part.split('=')));
+      return [
+        {
+          Type: fields.type,
+          Source: fields.source,
+          Destination: fields.destination,
+          RW: !('readonly' in fields),
+        },
+      ];
+    });
+    value.names.set(name, { id: current.Id, image: current.Image });
+    return name;
+  };
+  value.inspect = async (id, options) => {
+    assert.ok(['owned-app-18', 'app-id'].includes(id));
+    if (id === 'app-id') assert.deepEqual(options, { timeout: 10_000, maxBuffer: 128 * 1024 });
+    return current;
+  };
+  const calls = [];
+  value.docker = async (args, options) => {
+    calls.push({ args, options });
+    if (args[0] === 'wait') return '0';
+    if (args[0] === 'logs') {
+      assert.deepEqual(args, ['logs', '--tail', '80', 'app-id']);
+      assert.deepEqual(options, { includeStderr: true, timeout: 10_000, maxBuffer: 128 * 1024 });
+      return 'startup stdout\nstartup stderr';
+    }
+    if (args[0] === 'exec') throw new Error('application listener unavailable');
+    throw new Error(`Unexpected Docker operation ${args[0]}`);
+  };
+  const route = {
+    path: '/connectors/mcp-directory/fixture',
+    pattern: '/connectors/mcp-directory/[...id]',
+    state: 'successful-content',
+    stateId: 'fixture-state',
+  };
+  return { value, calls, current, route };
+}
+
+test('a stopped case retains its identity and bounded owned application startup evidence', async (t) => {
+  const state = {
+    ExitCode: 137,
+    Running: false,
+    OOMKilled: true,
+    Error: 'engine failure',
+    StartedAt: '2026-10-13T20:26:00Z',
+    FinishedAt: '2026-10-13T20:26:01Z',
+  };
+  const { value, calls, route } = await startupHarness(t, state);
+  await assert.rejects(value.startCase(route), (error) => {
+    assert.match(error.message, /^Public runtime stopped; case /);
+    assert.ok(
+      error.message.includes(
+        JSON.stringify({
+          index: 18,
+          pattern: route.pattern,
+          path: route.path,
+          state: route.state,
+          stateId: route.stateId,
+        }),
+      ),
+    );
+    assert.ok(error.message.includes(`Docker State: ${JSON.stringify(state)}`));
+    assert.ok(error.message.endsWith('startup stdout\nstartup stderr'));
+    return true;
+  });
+  assert.deepEqual(
+    calls.map(({ args }) => args[0]),
+    ['wait', 'logs'],
+  );
+});
+
+test('case readiness timeout keeps all 90 attempts and reports the owned running state', async (t) => {
+  const { value, calls, route } = await startupHarness(t, { Running: true });
+  const nativeSetTimeout = globalThis.setTimeout;
+  let waits = 0;
+  t.mock.method(globalThis, 'setTimeout', (callback, milliseconds, ...args) => {
+    assert.equal(milliseconds, 500);
+    waits++;
+    return nativeSetTimeout(callback, 0, ...args);
+  });
+  await assert.rejects(value.startCase(route), (error) => {
+    assert.match(error.message, /^Cold public server readiness timed out; case /);
+    const summary = JSON.parse(error.message.split('Docker State: ')[1].split('\n')[0]);
+    assert.deepEqual(summary, {
+      ExitCode: 'unknown',
+      Running: true,
+      OOMKilled: 'unknown',
+      Error: 'unknown',
+      StartedAt: 'unknown',
+      FinishedAt: 'unknown',
+    });
+    assert.ok(error.message.endsWith('startup stdout\nstartup stderr'));
+    return true;
+  });
+  assert.equal(waits, 90);
+  assert.equal(calls.filter(({ args }) => args[0] === 'exec').length, 90);
+  assert.equal(calls.filter(({ args }) => args[0] === 'logs').length, 1);
+});
+
+test('a case refuses startup diagnostics if its recorded application owner changes', async (t) => {
+  for (const change of [
+    { Id: 'replacement' },
+    { Image: 'replacement-image' },
+    { Config: { Labels: {} } },
+  ]) {
+    const { value, calls, current, route } = await startupHarness(t, { Running: false });
+    const inspect = value.inspect;
+    value.inspect = async (id, options) => {
+      await inspect(id, options);
+      return id === 'app-id' ? { ...current, ...change } : current;
+    };
+    await assert.rejects(value.startCase(route), /ownership changed before startup diagnostics/);
+    assert.deepEqual(
+      calls.map(({ args }) => args[0]),
+      ['wait'],
+    );
+  }
+});
+
 test('the isolated database uses the official image bootstrap socket directory', () => {
   assert.equal(DATABASE_SOCKET, '/var/run/postgresql');
 });
@@ -243,7 +402,45 @@ test('unavailable diagnostics retain the failing readiness result', async () => 
     throw new Error('logging failed');
   };
   const error = await value.readinessError('database', 'Database stopped');
-  assert.equal(error.message, 'Database stopped (exit 1):\nStartup logs unavailable');
+  assert.match(error.message, /^Database stopped \(exit 1\):\nDocker State: /);
+  assert.ok(error.message.endsWith('\nStartup logs unavailable'));
+});
+
+test('startup state summaries whitelist bounded fields and leave absent values unknown', async () => {
+  const value = harness();
+  value.names.set('app', { id: 'original', image: value.imageId });
+  const current = {
+    Id: 'original',
+    Image: value.imageId,
+    Config: { Labels: { [PROOF_LABEL]: value.runId }, Env: ['PRIVATE_VALUE=not-for-output'] },
+  };
+  value.inspect = async () => current;
+  value.docker = async () => '🧪'.repeat(20 * 1024) + '\nlog-tail';
+  const missing = await value.readinessError('app', 'Stopped');
+  const summary = JSON.parse(missing.message.split('Docker State: ')[1].split('\n')[0]);
+  assert.deepEqual(Object.values(summary), Array(6).fill('unknown'));
+  current.State = {
+    ExitCode: '0',
+    Running: 'false',
+    OOMKilled: null,
+    Error: 'x'.repeat(4000) + '\nengine tail',
+    StartedAt: 's'.repeat(4000),
+    FinishedAt: 'f'.repeat(4000),
+    Health: { Log: ['not-for-output'] },
+  };
+  const bounded = await value.readinessError('app', 'Stopped');
+  const retained = JSON.parse(bounded.message.split('Docker State: ')[1].split('\n')[0]);
+  assert.deepEqual(Object.keys(retained), Object.keys(summary));
+  assert.equal(retained.ExitCode, 'unknown');
+  assert.equal(retained.Running, 'unknown');
+  assert.equal(retained.OOMKilled, 'unknown');
+  assert.equal(retained.Error.length, 1024);
+  assert.equal(retained.StartedAt.length, 64);
+  assert.equal(retained.FinishedAt.length, 64);
+  assert.ok(bounded.message.endsWith('\nlog-tail'));
+  assert.ok(Buffer.byteLength(bounded.message.split('\n').slice(1).join('\n')) <= 32 * 1024);
+  assert.ok(!bounded.message.includes('\uFFFD'));
+  assert.ok(!bounded.message.includes('not-for-output'));
 });
 
 test('failed cases collect only bounded diagnostics from verified current resources', async () => {

@@ -134,7 +134,29 @@ export class PublicRuntimeContainers {
     } catch {
       logs = 'Startup logs unavailable';
     }
-    return new Error(`${message} (exit ${current.State.ExitCode}):\n${logs.slice(-32 * 1024)}`);
+    const state = {
+      ExitCode: Number.isInteger(current.State?.ExitCode) ? current.State.ExitCode : 'unknown',
+      Running: typeof current.State?.Running === 'boolean' ? current.State.Running : 'unknown',
+      OOMKilled:
+        typeof current.State?.OOMKilled === 'boolean' ? current.State.OOMKilled : 'unknown',
+      Error:
+        typeof current.State?.Error === 'string' ? current.State.Error.slice(0, 1024) : 'unknown',
+      StartedAt:
+        typeof current.State?.StartedAt === 'string'
+          ? current.State.StartedAt.slice(0, 64)
+          : 'unknown',
+      FinishedAt:
+        typeof current.State?.FinishedAt === 'string'
+          ? current.State.FinishedAt.slice(0, 64)
+          : 'unknown',
+    };
+    const summary = `Docker State: ${JSON.stringify(state)}\n`;
+    const bytes = Buffer.from(logs);
+    let start = Math.max(0, bytes.length - (32 * 1024 - Buffer.byteLength(summary)));
+    while ((bytes[start] & 0xc0) === 0x80) start++;
+    return new Error(
+      `${message} (exit ${state.ExitCode}):\n${summary}${bytes.subarray(start).toString('utf8')}`,
+    );
   }
 
   async persistOwnership() {
@@ -608,10 +630,17 @@ export class PublicRuntimeContainers {
         : '/harness/scripts/public-runtime/observer.mjs',
     ]);
     assertIsolatedContainer(await this.inspect(appName), this.runId, this.imageId, mounts);
+    const startupCase = JSON.stringify({
+      index,
+      pattern: typeof state.pattern === 'string' ? state.pattern.slice(0, 512) : 'unknown',
+      path: typeof state.path === 'string' ? state.path.slice(0, 512) : 'unknown',
+      state: typeof state.state === 'string' ? state.state.slice(0, 128) : 'unknown',
+      stateId: typeof state.stateId === 'string' ? state.stateId.slice(0, 128) : 'unknown',
+    });
     let ready = false;
     for (let attempt = 0; attempt < 90; attempt++) {
       if (!(await this.inspect(appName)).State.Running)
-        throw new Error(`Public runtime stopped: ${await this.docker(['logs', appName])}`);
+        throw await this.readinessError(appName, `Public runtime stopped; case ${startupCase}`);
       try {
         await this.docker([
           'exec',
@@ -626,7 +655,11 @@ export class PublicRuntimeContainers {
         await delay(500);
       }
     }
-    if (!ready) throw new Error('Cold public server readiness timed out');
+    if (!ready)
+      throw await this.readinessError(
+        appName,
+        `Cold public server readiness timed out; case ${startupCase}`,
+      );
     const relayName = await this.run(`${this.prefix}-relay-${index}`, [
       '--memory',
       '256m',
