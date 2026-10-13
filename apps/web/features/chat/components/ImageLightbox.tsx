@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Download, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useDialogKeyboard } from '@agiworkforce/ui';
@@ -93,9 +94,9 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
     [onClose],
   );
 
-  if (!current) return null;
+  if (!current || typeof document === 'undefined') return null;
 
-  return (
+  const viewer = (
     <div
       ref={panelRef}
       role="dialog"
@@ -245,4 +246,9 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
       </div>
     </div>
   );
+
+  // The transcript positions each row with a transform, which makes that row
+  // the containing block of a fixed descendant: mounted in place, this viewer
+  // is sized to the message and later rows paint over it.
+  return createPortal(viewer, document.body);
 }

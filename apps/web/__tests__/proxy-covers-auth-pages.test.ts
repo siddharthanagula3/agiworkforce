@@ -1,11 +1,13 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
 import {
   PRODUCT_ROUTE_PREFIXES,
   SESSION_AUTH_ROUTE_PREFIXES,
   routeMatcherPatterns,
 } from '@agiworkforce/types/product-routes';
+import { getIdentityProvider } from '../lib/server/identity';
 
 /**
  * Every page that calls `getRequestIdentity()` must be covered by the proxy
@@ -81,45 +83,31 @@ function inlinePatterns(name: string): string[] {
   const block = new RegExp(
     `${name} = (?:identityMiddleware\\.)?createRouteMatcher\\(\\[([\\s\\S]*?)\\]\\)`,
   ).exec(proxySource);
-  return [...(block?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+  const withoutComments = (block?.[1] ?? '').replace(/\/\/[^\n]*/g, '');
+  return [...withoutComments.matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
 }
 
-const WILDCARD = '\u0000';
+const ORIGIN = 'https://agiworkforce.com';
 
 /**
- * Escapes every regex metacharacter, not a hand-picked few.
- *
- * The previous version escaped `/` and nothing else, which left `\`, and
- * every other metacharacter, to be reinterpreted. `/` never needed escaping
- * here at all: these patterns are compiled with the RegExp constructor, not
- * written as literals.
+ * Asks the matcher the proxy builds rather than a translation of its pattern
+ * dialect. The translation that stood here read `(.*)` as a segment boundary,
+ * which the real matcher does not, so it agreed with the proxy by assumption.
  */
-function patternToRegExp(pattern: string): RegExp {
-  const escaped = pattern
-    .replaceAll('(.*)', WILDCARD)
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replaceAll(WILDCARD, '(?:/.*)?');
-  return new RegExp(`^${escaped}$`);
-}
-
-function covers(patterns: string[], route: string): boolean {
-  return patterns.some((pattern) => {
-    try {
-      return patternToRegExp(pattern).test(route);
-    } catch {
-      return false;
-    }
-  });
+function proxyMatcher(patterns: string[]): (route: string) => boolean {
+  const matches = getIdentityProvider().middleware.createRouteMatcher(patterns);
+  return (route) => matches(new NextRequest(`${ORIGIN}${route}`));
 }
 
 describe('proxy covers every page that calls getRequestIdentity()', () => {
   const routes = [...new Set(pagesCallingAuth(APP))].filter((r) => !r.includes('['));
   const protectedPatterns = routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES);
-  const sessionPatterns = [
+  const isProtected = proxyMatcher(protectedPatterns);
+  const hasIdentitySession = proxyMatcher([
     ...routeMatcherPatterns(SESSION_AUTH_ROUTE_PREFIXES),
     ...protectedPatterns,
     ...inlinePatterns('isIdentitySessionRoute'),
-  ];
+  ]);
 
   it('finds the pages to check', () => {
     expect(routes.length).toBeGreaterThan(3);
@@ -143,7 +131,7 @@ describe('proxy covers every page that calls getRequestIdentity()', () => {
         return;
       }
       expect(
-        covers(protectedPatterns, route),
+        isProtected(route),
         `${route} calls getRequestIdentity() but isProtectedAppRoute does not match it, so a signed-out visitor gets an error boundary instead of the sign-in gate`,
       ).toBe(true);
     });
@@ -156,7 +144,7 @@ describe('proxy covers every page that calls getRequestIdentity()', () => {
     // stated reason above never stands in for the session.
     for (const route of routes) {
       expect(
-        covers(sessionPatterns, route),
+        hasIdentitySession(route),
         `${route} reads the identity but gets no identity session`,
       ).toBe(true);
     }

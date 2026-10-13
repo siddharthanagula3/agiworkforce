@@ -87,11 +87,14 @@ export function isAuthPath(pathname: string): boolean {
 
 /**
  * The same prefixes in the pattern dialect `createRouteMatcher` speaks, where
- * `(.*)` is a suffix wildcard rather than a segment boundary. The predicates
- * above are stricter by a segment boundary; no route in the app falls between
- * the two, and `apps/web/__tests__/product-routes-cover-the-app.test.ts` is what
- * keeps that true as routes are added.
+ * `(.*)` is a suffix wildcard and not a segment boundary: `/open(.*)` also
+ * claims `/openapi.json`. Each prefix is therefore spelled three ways: itself,
+ * its subtree, and the dot-suffixed forms the framework serves the same route
+ * under (`/settings.segments/...`, `/settings.action`). Dropping the third
+ * lets those forms past the gate that covers the route itself.
+ * `apps/web/__tests__/product-routes-cover-the-app.test.ts` holds all three
+ * against the real matcher and every route and public file in the app.
  */
 export function routeMatcherPatterns(prefixes: readonly string[]): string[] {
-  return prefixes.map((prefix) => `${prefix}(.*)`);
+  return prefixes.flatMap((prefix) => [prefix, `${prefix}/(.*)`, `${prefix}.(.*)`]);
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import JSZip from 'jszip';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { AVAILABLE_MODELS } from '@shared/stores/model-store';
 import { regenerateModelOptions } from '@features/chat/lib/regenerate-model-options';
@@ -1933,6 +1934,186 @@ describe('MessageBubble', () => {
             .find((artifact) => artifact.id === 'genfile-gf-pdf')?.generatedFile,
         ).toEqual(expect.objectContaining({ uri: '/api/files/gf-pdf' })),
       );
+    });
+
+    const WORKBOOK_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const DECK_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    const workbookFile = genFile({
+      id: 'gf-xlsx',
+      fileName: 'budget.xlsx',
+      mimeType: WORKBOOK_MIME,
+      uri: '/api/files/gf-xlsx',
+      kind: 'xlsx',
+    });
+    const deckFile = genFile({
+      id: 'gf-pptx',
+      fileName: 'workshop.pptx',
+      mimeType: DECK_MIME,
+      uri: '/api/files/gf-pptx',
+      kind: 'pptx',
+    });
+
+    const workbookBytes = () =>
+      new JSZip()
+        .file(
+          'xl/worksheets/sheet1.xml',
+          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' +
+            '<row r="1"><c r="A1" t="inlineStr"><is><t>Item</t></is></c><c r="B1" t="inlineStr"><is><t>Quantity</t></is></c></row>' +
+            '<row r="2"><c r="A2" t="inlineStr"><is><t>Mugs</t></is></c><c r="B2"><v>3</v></c></row>' +
+            '</sheetData></worksheet>',
+        )
+        .generateAsync({ type: 'arraybuffer' });
+    const deckBytes = () =>
+      new JSZip()
+        .file(
+          'ppt/slides/slide1.xml',
+          '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+            '<p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Repair together</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>',
+        )
+        .generateAsync({ type: 'arraybuffer' });
+
+    const cardFormatLine = (fileName: string) => {
+      const open = screen.getByRole('button', { name: `Open artifact: ${fileName}` });
+      return document.getElementById(open.getAttribute('aria-describedby') ?? '')?.textContent;
+    };
+
+    const saveOfficePreviewArtifacts = (messageId: string) => {
+      const { addArtifactForMessage } = useArtifactsStore.getState();
+      addArtifactForMessage(
+        messageId,
+        {
+          id: 'genfile-gf-xlsx',
+          type: 'spreadsheet',
+          language: 'csv',
+          title: 'budget.xlsx',
+          content: 'Item,Quantity\nMugs,3',
+        },
+        'conv-generated-files',
+      );
+      addArtifactForMessage(
+        messageId,
+        {
+          id: 'genfile-gf-pptx',
+          type: 'presentation',
+          language: 'markdown',
+          title: 'workshop.pptx',
+          content: '# Repair together',
+        },
+        'conv-generated-files',
+      );
+    };
+
+    it('names a generated workbook and deck by their file format, not their preview format', async () => {
+      const workbook = await workbookBytes();
+      const deck = await deckBytes();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((uri: string) =>
+          Promise.resolve(new Response(uri === workbookFile.uri ? workbook : deck)),
+        ),
+      );
+      try {
+        render(
+          <MessageBubble
+            message={makeMessage({
+              id: 'message-office-fresh',
+              role: 'assistant',
+              content: 'Files attached.',
+              metadata: { generatedFiles: [workbookFile, deckFile] },
+            })}
+          />,
+        );
+
+        await waitFor(() => expect(cardFormatLine('budget.xlsx')).toContain('Spreadsheet · XLSX'));
+        await waitFor(() => expect(cardFormatLine('workshop.pptx')).toContain('Slides · PPTX'));
+        expect(cardFormatLine('budget.xlsx')).not.toContain('CSV');
+        expect(cardFormatLine('workshop.pptx')).not.toContain('MD');
+        expect(screen.queryByTestId('deliverable-card')).toBeNull();
+        expect(screen.queryByTestId('artifact-created-row')).toBeNull();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('keeps a saved workbook and deck on their file format and file download while the previews load again', async () => {
+      const workbook = await workbookBytes();
+      const fetchMock = vi.fn((_uri: string, init?: RequestInit) =>
+        init?.signal ? Promise.resolve(new Response(workbook)) : new Promise<Response>(() => {}),
+      );
+      const createObjectURL = vi.fn((_blob: Blob) => 'blob:https://app.local/budget');
+      const savedNames: string[] = [];
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        savedNames.push(this.download);
+      });
+      const urlStatics = {
+        createObjectURL: URL.createObjectURL,
+        revokeObjectURL: URL.revokeObjectURL,
+      };
+      Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        saveOfficePreviewArtifacts('message-office-saved');
+        render(
+          <MessageBubble
+            message={makeMessage({
+              id: 'message-office-saved',
+              role: 'assistant',
+              content: 'Files attached.',
+              metadata: { generatedFiles: [workbookFile, deckFile] },
+            })}
+          />,
+        );
+
+        expect(cardFormatLine('budget.xlsx')).toContain('Spreadsheet · XLSX');
+        expect(cardFormatLine('workshop.pptx')).toContain('Slides · PPTX');
+        expect(screen.queryByTestId('deliverable-card')).toBeNull();
+        expect(screen.queryByTestId('artifact-created-row')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Download budget.xlsx' }));
+        await waitFor(() => expect(createObjectURL).toHaveBeenCalledOnce());
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/files/gf-xlsx',
+          expect.objectContaining({ signal: expect.any(AbortSignal) }),
+        );
+        const saved = createObjectURL.mock.calls[0]?.[0];
+        expect(saved?.type).toBe(WORKBOOK_MIME);
+        expect(saved?.size).toBe(workbook.byteLength);
+        expect(savedNames).toEqual(['budget.xlsx']);
+      } finally {
+        Object.assign(URL, urlStatics);
+        click.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('keeps a saved workbook on its file format when the file can no longer be fetched', async () => {
+      const fetchMock = vi.fn(() => Promise.resolve(new Response('gone', { status: 404 })));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        saveOfficePreviewArtifacts('message-office-gone');
+        render(
+          <MessageBubble
+            message={makeMessage({
+              id: 'message-office-gone',
+              role: 'assistant',
+              content: 'Files attached.',
+              metadata: { generatedFiles: [workbookFile, deckFile] },
+            })}
+          />,
+        );
+
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        expect(cardFormatLine('budget.xlsx')).toContain('Spreadsheet · XLSX');
+        expect(cardFormatLine('workshop.pptx')).toContain('Slides · PPTX');
+        expect(screen.queryByTestId('deliverable-card')).toBeNull();
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('fetches CSV content same-origin and renders it as a spreadsheet artifact', async () => {

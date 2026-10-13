@@ -7,7 +7,7 @@ const NOW = new Date('2026-09-01T12:00:00.000Z');
 const RETRY_AT = '2026-09-01T12:00:45.000Z';
 
 const SERVER_MESSAGE =
-  'No free capacity right now. Try again shortly, or use your own provider key. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
+  'No free capacity right now. Try again shortly, or use your own provider key. Paid plans carry more capacity. If upgrades are not open to your account yet, the pricing page offers the upgrade waitlist or takes an access code.';
 
 function makeProps(freeCapacity: Partial<FreeCapacityRecovery> = {}) {
   return {

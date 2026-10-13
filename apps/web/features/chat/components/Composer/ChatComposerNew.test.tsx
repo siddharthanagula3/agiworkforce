@@ -30,6 +30,7 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
 import type { LimitedPromotionalMedia } from '@features/chat/hooks/use-promotional-media-models';
+import { WEB_SETTINGS_NAV_GROUPS } from '@features/settings/components/web-settings-navigation';
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -1794,6 +1795,26 @@ describe('ChatComposerNew', () => {
     });
 
     expect(await screen.findByTestId('memory-indicator')).toHaveTextContent('Memory off');
+  });
+
+  it('points the disabled Memory row at the Memory settings tab, where its switch lives', async () => {
+    chatComposerMocks.memoryCapabilityEnabled = false;
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="memory-setup-guidance" />);
+    await waitFor(() => {
+      expect(chatComposerMocks.memoryCapabilityListeners.size).toBe(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+    const row = screen.getByRole('button', { name: 'Memory' });
+    expect(row).toBeDisabled();
+    expect(row).toHaveAttribute('title', 'Turn on Memory in Settings > Memory to use it here.');
+
+    const namedTab = /Settings > (.+) to use it here\.$/.exec(row.getAttribute('title') ?? '')?.[1];
+    const settingsTab = WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find(
+      (item) => item.label === namedTab,
+    );
+    expect(settingsTab?.key).toBe('memory');
   });
 
   it('sends the persistent Office file-creation selection to the server', async () => {

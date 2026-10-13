@@ -7,6 +7,8 @@ import ReactMarkdown from 'react-markdown';
 import { Prose, Stack } from '@/features/marketing/components/system';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
+
 import type { HelpSearchResult } from '@/app/api/help/search/route';
 
 type SearchState =
@@ -119,19 +121,17 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
           </Prose>
         ) : null}
         {state.kind === 'empty' ? (
-          <Prose size="sm">
-            Nothing here covers that yet. Email contact@agiworkforce.com for support.
-          </Prose>
+          <Prose size="sm">Nothing here covers that yet. Email {CONTACT_EMAIL} for support.</Prose>
         ) : null}
         {isUnavailable ? (
           <Prose size="sm">
-            Search is not answering right now. The links below still work, and you can email
-            contact@agiworkforce.com for support.
+            Search is not answering right now. The links below still work, and you can email{' '}
+            {CONTACT_EMAIL} for support.
           </Prose>
         ) : null}
         {isError ? (
           <Prose size="sm">
-            That search did not go through. Try again, or email contact@agiworkforce.com.
+            That search did not go through. Try again, or email {CONTACT_EMAIL}.
           </Prose>
         ) : null}
       </div>

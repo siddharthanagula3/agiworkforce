@@ -23,6 +23,9 @@ interface KeyboardShortcutsDialogProps {
   shortcuts: readonly KeyboardShortcutDoc[];
 }
 
+const SHORTCUT_ROW_CLASS =
+  'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/30 p-3';
+
 function KeyboardShortcutsDialogImpl({
   open,
   onOpenChange,
@@ -81,12 +84,12 @@ function KeyboardShortcutsDialogImpl({
                 {categoryShortcuts.map((shortcut) => (
                   <div
                     key={`shortcut-${shortcut.key}-${shortcut.description}`}
-                    className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3"
+                    className={SHORTCUT_ROW_CLASS}
                   >
                     <span className="text-sm text-foreground">{shortcut.description}</span>
 
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
+                    <div className="ms-auto flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
                         {formatShortcut(shortcut).map((key, keyIndex) => (
                           <React.Fragment key={keyIndex}>
                             <Badge
@@ -134,14 +137,11 @@ function KeyboardShortcutsDialogImpl({
               */}
               <div className="space-y-2">
                 {hostShortcuts.map((shortcut) => (
-                  <div
-                    key={shortcut.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3"
-                  >
+                  <div key={shortcut.id} className={SHORTCUT_ROW_CLASS}>
                     <span className="text-sm text-foreground">{shortcut.description}</span>
                     <Badge
                       variant="outline"
-                      className="min-w-[32px] justify-center font-mono text-xs"
+                      className="ms-auto min-w-[32px] justify-center font-mono text-xs"
                     >
                       {shortcut.chord}
                     </Badge>

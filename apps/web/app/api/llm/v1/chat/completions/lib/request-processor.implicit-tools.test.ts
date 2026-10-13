@@ -268,6 +268,31 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.code_execution).toBeUndefined();
   });
 
+  it.each([
+    [
+      'a refusal that never names the web, on a turn routed to research',
+      'AUDIT ROUND4. Use an available presentation skill to create a three-slide editable deck for a fictional community repair workshop. Slide 1: Repair Together, 15 October 2026 at 3 pm. Slide 2: Bring one broken small household item; tools are provided. Slide 3: Three steps: check in, diagnose, repair. Use a restrained black-and-white design and one simple diagram. No invented venue, photos, search or publishing.',
+      'research',
+    ],
+    [
+      'a refused list of actions that ends in a search',
+      'AUDIT 2026-10-12. Can you access my Gmail inbox or use an installed plugin in this chat right now? Do not connect anything, send anything, or search the web. State only what is actually available and the next step if it is unavailable, in two sentences.',
+      'reasoning',
+    ],
+    [
+      'a refusal to search and to open any link',
+      'AUDIT-RENDER2 R06. No search and do not open any links. Show this URL once as a bare link and once as a Markdown link labelled Synthetic long URL: https://example.com/audit/very-long-path-segment-for-layout-checking/another-long-path-segment?label=abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789 . Then show this exact unbroken token in inline code: AUDIT_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 . No other prose.',
+      'general',
+    ],
+  ] as const)('turns on neither search nor URL fetch for %s', (_shape, prompt, taskType) => {
+    const chatRequest = request();
+
+    applyImplicitManagedToolIntent()(chatRequest, { prompt, taskType, planTier: 'free' });
+
+    expect(chatRequest.web_search).toBeUndefined();
+    expect(chatRequest.web_fetch).toBeUndefined();
+  });
+
   it('does not implicitly activate streaming-only tools on a non-streaming request', () => {
     const chatRequest = request({ stream: false });
 

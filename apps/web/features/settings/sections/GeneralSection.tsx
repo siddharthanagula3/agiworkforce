@@ -959,12 +959,7 @@ export function GeneralSection() {
           <MotionRow />
           <SidebarItemsRow />
 
-          <Row
-            label="Display Language"
-            hint="Translates pricing, marketing pages, device sign-in, and the app's navigation. Settings field labels and your conversations are unaffected."
-          >
-            <LanguageSelector />
-          </Row>
+          <DisplayLanguageRow />
 
           {/* Default model */}
           <DefaultModelRow />
@@ -1230,6 +1225,18 @@ function AccentColorRow() {
           );
         })}
       </div>
+    </Row>
+  );
+}
+
+const DISPLAY_LANGUAGE_SCOPE_ID = 'display-language-scope';
+
+function DisplayLanguageRow() {
+  const { t } = useTranslation('settings');
+
+  return (
+    <Row label="Display Language" hint={t('translationScope')} hintId={DISPLAY_LANGUAGE_SCOPE_ID}>
+      <LanguageSelector describedBy={DISPLAY_LANGUAGE_SCOPE_ID} />
     </Row>
   );
 }
@@ -1624,17 +1631,23 @@ function ReadAloudVoiceRow() {
 function Row({
   label,
   hint,
+  hintId,
   children,
 }: {
   label: string;
   hint?: string;
+  hintId?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex min-h-9 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className={`flex min-w-0 flex-col gap-0.5 ${hint ? '' : 'sm:shrink-0'}`}>
         <span className="text-sm text-foreground">{label}</span>
-        {hint && <span className="text-caption text-muted-foreground">{hint}</span>}
+        {hint && (
+          <span id={hintId} className="text-caption text-muted-foreground">
+            {hint}
+          </span>
+        )}
       </span>
       {children}
     </div>

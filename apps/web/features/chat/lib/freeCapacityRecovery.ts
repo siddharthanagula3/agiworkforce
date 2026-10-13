@@ -1,4 +1,5 @@
 import { getNextUpgradeTier } from '@agiworkforce/types';
+import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 
 import type { FreeCapacitySlot, PaywallSlot } from '@/features/chat/types/message-metadata';
 
@@ -15,8 +16,7 @@ export const FREE_CAPACITY_UNAVAILABLE_CODE = 'free_capacity_unavailable';
 
 export const BYOK_RECOVERY_ACTION = 'byok';
 const FREE_CAPACITY_FEATURE = 'rolling_capacity';
-const FREE_CAPACITY_FALLBACK_REASON =
-  'No free capacity right now. Try again shortly, or use your own provider key. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
+const FREE_CAPACITY_FALLBACK_REASON = `No free capacity right now. Try again shortly, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`;
 const DEFAULT_REQUIRED_TIER = 'basic';
 
 const SAME_ORIGIN_PROBE = 'https://same-origin.probe';

@@ -2517,7 +2517,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         meta: {
           ...handoff.meta,
           projectId: handoff.projectId,
-          workMode: 'agiwork',
           skillName: handoff.skillId ?? handoff.meta.skillName,
         },
         onTurnCommitted: () => {

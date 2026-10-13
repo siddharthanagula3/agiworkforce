@@ -23,15 +23,23 @@ const VOICE_NAV_ITEM: SettingsNavItem = {
 
 const VOICE_NAV_ANCHOR = 'notifications';
 
+const GENERAL_NAV_KEY = 'general';
+
+const GENERAL_NAV_FIELDS: NonNullable<SettingsNavItem['fields']> = [
+  { label: 'Chat font', keywords: ['typeface', 'sans serif', 'dyslexic', 'dyslexia'] },
+  { label: 'Chat text size', keywords: ['font size'] },
+];
+
 export const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
   (group) =>
     group.label === SETTINGS_NAV_GROUP_CUSTOMIZE
       ? { ...group, items: [...group.items, MEMORY_NAV_ITEM] }
       : {
           ...group,
-          items: group.items.flatMap((item) =>
-            item.key === VOICE_NAV_ANCHOR ? [item, VOICE_NAV_ITEM] : [item],
-          ),
+          items: group.items.flatMap((item) => {
+            if (item.key === GENERAL_NAV_KEY) return [{ ...item, fields: GENERAL_NAV_FIELDS }];
+            return item.key === VOICE_NAV_ANCHOR ? [item, VOICE_NAV_ITEM] : [item];
+          }),
         },
 );
 

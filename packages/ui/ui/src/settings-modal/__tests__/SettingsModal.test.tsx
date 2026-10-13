@@ -1,11 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { useState, type ReactNode } from 'react';
+import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { CreditCard, Settings2 } from 'lucide-react';
 import { NAV_GROUP_LABEL_TESTID, SettingsModal } from '../SettingsModal';
+import { useUnsavedChangesGuard } from '../../primitives/UnsavedChanges';
 import {
   SETTINGS_NAV_GROUPS_WEB,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
   SETTINGS_NAV_GROUP_SETTINGS,
 } from '../../settings-nav';
+import type { SettingsNavGroupResolved } from '../../settings-nav';
 import type { SettingsDataAdapter } from '../types';
 
 /**
@@ -367,6 +371,222 @@ describe('SettingsModal nav (web IA)', () => {
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
     expect(within(nav).getByRole('button', { name: 'General' })).toBeTruthy();
     expect(within(nav).queryByText('No matches.')).toBeNull();
+  });
+
+  describe('controls indexed inside a section', () => {
+    const FIELD_NAV_GROUPS: SettingsNavGroupResolved[] = [
+      {
+        label: SETTINGS_NAV_GROUP_SETTINGS,
+        items: [
+          {
+            key: 'general',
+            label: 'General',
+            icon: Settings2,
+            fields: [
+              { label: 'Chat font', keywords: ['typeface'] },
+              { label: 'Chat text size', keywords: ['font size'] },
+            ],
+          },
+          { key: 'billing', label: 'Billing', icon: CreditCard },
+        ],
+      },
+    ];
+
+    function UnsavedBilling() {
+      const { dialog } = useUnsavedChangesGuard({ dirty: true });
+      return (
+        <div>
+          {dialog}
+          <p>Unsaved billing content</p>
+        </div>
+      );
+    }
+
+    function UnsavedOutsideTheModal() {
+      return useUnsavedChangesGuard({ dirty: true }).dialog;
+    }
+
+    function FieldSearchHarness({
+      initialSection = 'billing',
+      billing = <p>Billing content</p>,
+      beside = null,
+    }: {
+      initialSection?: string;
+      billing?: ReactNode;
+      beside?: ReactNode;
+    }) {
+      const [section, setSection] = useState(initialSection);
+      return (
+        <>
+          {beside}
+          <SettingsModal
+            open
+            onClose={vi.fn()}
+            activeSection={section}
+            onSectionChange={setSection}
+            navGroups={FIELD_NAV_GROUPS}
+            sectionContent={{
+              general: (
+                <div>
+                  <input aria-label="Full name" />
+                  <select aria-label="Chat font" />
+                  <select aria-label="Chat text size" />
+                </div>
+              ),
+              billing,
+            }}
+          />
+        </>
+      );
+    }
+
+    let scrollIntoView: MockInstance<Element['scrollIntoView']>;
+
+    beforeEach(() => {
+      scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      scrollIntoView.mockRestore();
+    });
+
+    function searchSettings(query: string) {
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Search settings' }), {
+        target: { value: query },
+      });
+      return screen.getByRole('navigation', { name: 'Settings navigation' });
+    }
+
+    it.each(['font', 'text size', 'typeface', 'FONT SIZE'])(
+      'finds the section that holds a control from the query "%s"',
+      (query) => {
+        render(<FieldSearchHarness />);
+        const nav = searchSettings(query);
+
+        expect(within(nav).getByRole('button', { name: 'General' })).toBeTruthy();
+        expect(within(nav).queryByRole('button', { name: 'Billing' })).toBeNull();
+        expect(within(nav).queryByText('No matches.')).toBeNull();
+      },
+    );
+
+    it.each([
+      ['font', 'Chat font'],
+      ['text size', 'Chat text size'],
+      ['font size', 'Chat text size'],
+      ['typeface', 'Chat font'],
+    ])('opens the section and focuses the control the query "%s" matched', (query, control) => {
+      render(<FieldSearchHarness />);
+      const nav = searchSettings(query);
+      scrollIntoView.mockClear();
+
+      fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+
+      const target = screen.getByRole('combobox', { name: control });
+      expect(document.activeElement).toBe(target);
+      expect(scrollIntoView.mock.contexts).toContain(target);
+    });
+
+    it('focuses the matched control when its section is already open', () => {
+      render(<FieldSearchHarness initialSection="general" />);
+      const nav = searchSettings('text size');
+
+      fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+
+      expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Chat text size' }));
+    });
+
+    it('moves focus to no control when the section itself is what matched', () => {
+      render(<FieldSearchHarness />);
+      const nav = searchSettings('general');
+
+      fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+
+      expect(screen.getByRole('combobox', { name: 'Chat font' })).toBeTruthy();
+      expect(document.activeElement?.getAttribute('aria-label')).not.toBe('Chat font');
+      expect(document.activeElement?.getAttribute('aria-label')).not.toBe('Chat text size');
+    });
+
+    it('moves focus to no control when the query names the section as well as one of its controls', () => {
+      render(<FieldSearchHarness />);
+      const nav = searchSettings('e');
+      scrollIntoView.mockClear();
+
+      fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+
+      expect(document.activeElement?.tagName).not.toBe('SELECT');
+      expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center' });
+    });
+
+    it('moves focus to no control when the section is opened without a search', () => {
+      render(<FieldSearchHarness />);
+      const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+      fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+
+      expect(screen.getByRole('combobox', { name: 'Chat font' })).toBeTruthy();
+      expect(document.activeElement?.tagName).not.toBe('SELECT');
+    });
+
+    const UNSAVED_IN_THE_SECTION = <FieldSearchHarness billing={<UnsavedBilling />} />;
+    const UNSAVED_BESIDE_THE_MODAL = <FieldSearchHarness beside={<UnsavedOutsideTheModal />} />;
+
+    function pickGeneralWithUnsavedChanges(harness: ReactNode, query: string) {
+      render(harness);
+      const general = within(searchSettings(query)).getByRole('button', { name: 'General' });
+      general.focus();
+      scrollIntoView.mockClear();
+      const focusReturned = vi.fn();
+      general.addEventListener('focus', focusReturned);
+      fireEvent.click(general);
+      return { general, focusReturned };
+    }
+
+    it.each([
+      ['the section being left', UNSAVED_IN_THE_SECTION],
+      ['something beside the modal', UNSAVED_BESIDE_THE_MODAL],
+    ])(
+      'focuses the matched control once a discard prompt owned by %s has handed focus back',
+      async (_owner, harness) => {
+        const { general, focusReturned } = pickGeneralWithUnsavedChanges(harness, 'font');
+
+        const prompt = await screen.findByRole('alertdialog');
+        expect(screen.getByText(/illing content/)).toBeTruthy();
+        expect(screen.queryByRole('combobox', { name: 'Chat font', hidden: true })).toBeNull();
+
+        fireEvent.click(within(prompt).getByRole('button', { name: 'Discard' }));
+
+        await waitFor(() => expect(focusReturned).toHaveBeenCalled());
+        const target = screen.getByRole('combobox', { name: 'Chat font' });
+        await waitFor(() => expect(document.activeElement).toBe(target));
+        expect(document.activeElement).not.toBe(general);
+        expect(scrollIntoView.mock.contexts).toContain(target);
+        expect(screen.queryByRole('alertdialog')).toBeNull();
+      },
+    );
+
+    it('stays on the unsaved section, with focus back on the nav item, when the prompt is declined', async () => {
+      const { general, focusReturned } = pickGeneralWithUnsavedChanges(
+        UNSAVED_IN_THE_SECTION,
+        'font',
+      );
+
+      const prompt = await screen.findByRole('alertdialog');
+      fireEvent.click(within(prompt).getByRole('button', { name: 'Keep editing' }));
+
+      await waitFor(() => expect(focusReturned).toHaveBeenCalled());
+      expect(document.activeElement).toBe(general);
+      expect(screen.getByText('Unsaved billing content')).toBeTruthy();
+      expect(screen.queryByRole('combobox', { name: 'Chat font' })).toBeNull();
+      expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center' });
+    });
+
+    it('still reports no matches for a query nothing is indexed under', () => {
+      render(<FieldSearchHarness />);
+      const nav = searchSettings('nothing indexed here');
+
+      expect(within(nav).getByText('No matches.')).toBeTruthy();
+      expect(within(nav).queryByRole('button', { name: 'General' })).toBeNull();
+    });
   });
 
   it('groups the nav under Settings and Customize', () => {

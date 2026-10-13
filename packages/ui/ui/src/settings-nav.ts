@@ -249,11 +249,18 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   { label: 'Advanced', keys: ['developer'] },
 ];
 
+export interface SettingsNavField {
+  /** The accessible name of the control, as its section renders it. */
+  label: string;
+  keywords?: string[];
+}
+
 export interface SettingsNavItem {
   key: SettingsNavKey;
   label: string;
   icon: LucideIcon;
   keywords?: string[];
+  fields?: SettingsNavField[];
 }
 
 export interface SettingsNavGroupResolved {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import type { GeneratedFile } from '@agiworkforce/types';
 
 import { usePublishedSitesStore } from '@features/sites/stores/published-sites-store';
 import { useArtifactsStore } from '../../stores/artifacts-store';
@@ -22,6 +23,41 @@ const BRIEF: ArtifactData = {
   language: 'markdown',
   content: '# Launch brief\n\nShip it.',
 };
+
+function generatedFileArtifact(
+  preview: Pick<ArtifactData, 'type' | 'language'>,
+  file: Pick<GeneratedFile, 'kind' | 'fileName' | 'mimeType'>,
+): ArtifactData {
+  return {
+    id: `genfile-${file.fileName}`,
+    title: file.fileName,
+    content: 'Item,Quantity\nMugs,3',
+    ...preview,
+    generatedFile: {
+      id: file.fileName,
+      computeSessionId: 'generated-message-1',
+      ownerUserId: '',
+      sourceSurface: 'web',
+      privacyMode: 'managed',
+      providerMode: 'ManagedGateway',
+      uri: `/api/files/${file.fileName}`,
+      byteCount: 2560,
+      checksumSha256: '',
+      previewDerivatives: [],
+      createdAt: '2026-10-13T00:00:00.000Z',
+      ...file,
+    },
+  };
+}
+
+function cardDescription(artifact: ArtifactData): string | null {
+  const { unmount } = render(<InlineArtifactCards artifacts={[artifact]} />);
+  const open = screen.getByRole('button', { name: `Open artifact: ${artifact.title}` });
+  const description = document.getElementById(open.getAttribute('aria-describedby') ?? '');
+  const text = description?.textContent ?? null;
+  unmount();
+  return text;
+}
 
 beforeEach(() => {
   useArtifactsStore.getState().reset();
@@ -65,6 +101,87 @@ describe('InlineArtifactCards: the compact artifact card', () => {
     expect(open).toHaveAccessibleDescription('Document · MD');
     fireEvent.click(open);
     expect(useArtifactsStore.getState().selectedArtifactId).toBe(BRIEF.id);
+  });
+
+  it('badges a generated workbook and deck with the format of the file, not of its preview', () => {
+    const workbook = generatedFileArtifact(
+      { type: 'spreadsheet', language: 'csv' },
+      {
+        kind: 'xlsx',
+        fileName: 'audit_round4_shop.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+    );
+    const deck = generatedFileArtifact(
+      { type: 'presentation', language: 'markdown' },
+      {
+        kind: 'pptx',
+        fileName: 'repair-together-workshop.pptx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      },
+    );
+
+    expect(cardDescription(workbook)).toBe('Spreadsheet · XLSX · Managed');
+    expect(cardDescription(deck)).toBe('Slides · PPTX · Managed');
+  });
+
+  it.each([
+    [
+      'CSV',
+      { type: 'csv', language: 'csv' },
+      { kind: 'csv', fileName: 'shop.csv', mimeType: 'text/csv' },
+      'Spreadsheet · CSV · Managed',
+    ],
+    [
+      'Markdown',
+      { type: 'document', language: 'markdown' },
+      { kind: 'markdown', fileName: 'brief.md', mimeType: 'text/markdown' },
+      'Document · MD · Managed',
+    ],
+    [
+      'PDF',
+      { type: 'document', language: 'pdf' },
+      { kind: 'pdf', fileName: 'report.pdf', mimeType: 'application/pdf' },
+      'Document · PDF · Managed',
+    ],
+    [
+      'Word',
+      { type: 'document', language: 'docx' },
+      {
+        kind: 'docx',
+        fileName: 'letter.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      },
+      'Document · DOCX · Managed',
+    ],
+    [
+      'image',
+      { type: 'image', language: 'png' },
+      { kind: 'image', fileName: 'chart.png', mimeType: 'image/png' },
+      'Image · PNG · Managed',
+    ],
+    [
+      'source code',
+      { type: 'code', language: 'py' },
+      { kind: 'other', fileName: 'totals.py', mimeType: 'text/x-python' },
+      'Code · PY · Managed',
+    ],
+  ] as const)('keeps the badge of a generated %s file', (_format, preview, file, badge) => {
+    expect(cardDescription(generatedFileArtifact(preview, file))).toBe(badge);
+  });
+
+  it('names an unrecognised generated file by what is known about it, never by its preview', () => {
+    const unknownExtension = generatedFileArtifact(
+      { type: 'code', language: 'text' },
+      { kind: 'other', fileName: 'ledger.sqlite', mimeType: 'application/octet-stream' },
+    );
+    const nothingKnown = generatedFileArtifact(
+      { type: 'code', language: 'export' },
+      { kind: 'other', fileName: 'export', mimeType: '' },
+    );
+
+    expect(cardDescription(unknownExtension)).toBe('Code · SQLITE · Managed');
+    expect(cardDescription(nothingKnown)).toBe('Code · FILE · Managed');
   });
 
   it('says a published artifact is published, to whom, and links to its site page', () => {

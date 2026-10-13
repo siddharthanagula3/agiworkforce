@@ -35,9 +35,10 @@
   --support-radius: 14px;
   --support-dur: var(--duration-quick);
   --support-ease: var(--curve-standard);
+  --support-edge: 1rem;
 
   position: fixed;
-  right: 1rem;
+  right: var(--support-edge);
   /* `--agi-consent-inset` is the consent banner's measured height, published on
      <html> only while it is up. Reading it here rather than keeping a second
      estimate is what keeps the launcher clear of the banner at every width:
@@ -54,9 +55,19 @@
   color: var(--support-ink);
 }
 
+/* `[data-design='agi']` paints a ground on whatever carries it, and under 640px
+   this box spans the whole row. Painted or clickable, it hides the line of the
+   page behind it and takes that line's clicks. The attribute is here only to
+   outrank that rule whichever stylesheet loads last. */
+.root[data-support-widget] {
+  background: transparent;
+  pointer-events: none;
+}
+
 /* ── Launcher ─────────────────────────────────────────────────────── */
 
 .launcher {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -98,7 +109,17 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 399px) {
+/* Both widths track the single-column documentation layout in
+   features/docs/docs.css, where the article column runs to the right gutter.
+   To 80rem the labelled pill would lie over that column. Under 72.25rem (the
+   18rem rail, the 45rem column, their gutters, and this 48px circle with its
+   inset) the circle would too, so the launcher docks into the gutter, which
+   docs.css keeps wider than the docked width for each pointer. The last half
+   pixel against the screen edge does not hit-test, so each docked width is 2px
+   over its target floor: 24px, or 44px on a coarse pointer. Moving either
+   breakpoint, or a docked width without its gutter, puts the launcher back
+   over the text; e2e/help-support-launcher-clearance.spec.ts measures it. */
+@media (max-width: 80rem) {
   .launcherLabel {
     position: absolute;
     width: 1px;
@@ -117,9 +138,35 @@
   }
 }
 
+@media (max-width: 72.25rem) {
+  .launcher {
+    min-width: 26px;
+    margin-right: calc(-1 * var(--support-edge));
+    border-right: 0;
+    border-radius: var(--corner-pill) 0 0 var(--corner-pill);
+  }
+
+  /* An outset ring would fall off the screen edge the launcher is docked to. */
+  .launcher:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .launcherMark {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (max-width: 72.25rem) and (pointer: coarse) {
+  .launcher {
+    min-width: 46px;
+  }
+}
+
 /* ── Panel ────────────────────────────────────────────────────────── */
 
 .panel {
+  pointer-events: auto;
   z-index: var(--z-panel-raised);
   display: flex;
   flex-direction: column;
@@ -134,8 +181,9 @@
 
 @media (max-width: 639px) {
   .root {
-    left: 0.75rem;
-    right: 0.75rem;
+    --support-edge: 0.75rem;
+
+    left: var(--support-edge);
     align-items: stretch;
   }
 

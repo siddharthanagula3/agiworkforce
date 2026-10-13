@@ -47,7 +47,7 @@ const HELP_LINKS: readonly HelpLink[] = [
     icon: Bug,
   },
   {
-    href: '/changelog',
+    href: '/release-notes',
     label: 'Release notes',
     description: 'What shipped, and when.',
     icon: FileText,

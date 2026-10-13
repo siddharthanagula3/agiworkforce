@@ -38,10 +38,21 @@ export function __resetRetrievalIndexForTests(): void {
   cachedIndex = null;
 }
 
+function repeatsOwnHeading(line: string, chunk: CorpusChunk): boolean {
+  const content = line.trim();
+  return content === chunk.docTitle || content === chunk.heading;
+}
+
 export function buildCitation(chunk: CorpusChunk): SupportCitation {
-  const snippet = chunk.text.replace(/\s+/g, ' ').trim();
+  const sectionHeading = chunk.heading === chunk.docTitle ? null : chunk.heading;
+  const snippet = chunk.text
+    .split('\n')
+    .filter((line) => !repeatsOwnHeading(line, chunk))
+    .join('\n')
+    .replace(/\s+/g, ' ')
+    .trim();
   return {
-    title: chunk.heading ? `${chunk.docTitle}, ${chunk.heading}` : chunk.docTitle,
+    title: sectionHeading ? `${chunk.docTitle}, ${sectionHeading}` : chunk.docTitle,
     url: `${SITE_URL}${chunk.path}`,
     snippet: snippet.length > SNIPPET_CHARS ? `${snippet.slice(0, SNIPPET_CHARS - 1)}…` : snippet,
     docId: chunk.docId,

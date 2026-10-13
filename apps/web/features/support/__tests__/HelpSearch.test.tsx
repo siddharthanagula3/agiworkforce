@@ -1,6 +1,8 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { STATIC_FAQS } from '@/lib/support/static-data';
 
 import { HelpSearch } from '../components/HelpSearch';
 
@@ -96,6 +98,53 @@ describe('HelpSearch', () => {
     const link = await screen.findByRole('link', { name: 'Bring your own key' });
     expect(link).toHaveAttribute('href', '/byok');
     expect(await screen.findByText('1 page matches.')).toBeInTheDocument();
+  });
+
+  it('shows each result title once, above its own excerpt, and reaches it by keyboard', async () => {
+    const faq = STATIC_FAQS.find((entry) => entry.id === 'faq-004');
+    if (!faq) throw new Error('faq-004 is missing from the static FAQs');
+    const sectionTitle = 'Plans and invoices, Invoices';
+    const sectionExcerpt = 'Invoices appear once you are billed on a paid plan.';
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        query: 'billing',
+        corpus: 'available',
+        results: [
+          {
+            docId: `static-faq:${faq.id}`,
+            title: faq.question,
+            url: 'https://agiworkforce.com/pricing',
+            path: '/pricing',
+            category: faq.category,
+            snippet: faq.answer,
+          },
+          {
+            docId: 'billing-fixture',
+            title: sectionTitle,
+            url: 'https://agiworkforce.com/help/billing-fixture',
+            path: '/help/billing-fixture',
+            category: 'billing',
+            snippet: sectionExcerpt,
+          },
+        ],
+      }),
+    );
+
+    const user = userEvent.setup();
+    const { container } = render(<HelpSearch />);
+    await user.type(screen.getByLabelText('Search the help centre'), 'billing');
+
+    const heading = await screen.findByRole('heading', { name: faq.question });
+    expect(screen.getAllByRole('heading')).toHaveLength(2);
+    expect(container.textContent?.split(faq.question)).toHaveLength(2);
+    expect(screen.getByText(faq.answer)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: sectionTitle })).toBeInTheDocument();
+    expect(screen.getByText(sectionExcerpt)).toBeInTheDocument();
+
+    await user.tab();
+    const link = within(heading).getByRole('link', { name: faq.question });
+    expect(link).toHaveFocus();
+    expect(link).toHaveAttribute('href', '/pricing');
   });
 
   it('renders readable excerpt formatting without embedded links, images or HTML', async () => {

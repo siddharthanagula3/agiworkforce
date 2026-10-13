@@ -82,6 +82,74 @@ describe('resolveWebSearchRequirement', () => {
     ).toEqual({ required: false, source: null });
   });
 
+  it.each([
+    'You never search. Look up the current CEO.',
+    "Don't search just my email, search the web",
+  ])('still requires the search that %j asks for', (userMessage) => {
+    expect(resolveWebSearchRequirement({ ...base, webSearchEnabled: true, userMessage })).toEqual({
+      required: true,
+      source: 'explicit_intent',
+    });
+  });
+
+  describe('a message that carries the current year', () => {
+    const now = new Date('2026-10-12T00:00:00Z');
+    const datedTask =
+      'AUDIT 2026-10-12. In one short sentence, tell me what information you need to help plan a workshop.';
+
+    it('requires a search on the year alone, which is the signal an opt-out has to beat', () => {
+      expect(
+        resolveWebSearchRequirement({
+          ...base,
+          webSearchEnabled: true,
+          userMessage: datedTask,
+          now,
+        }),
+      ).toEqual({ required: true, source: 'freshness' });
+    });
+
+    it.each([
+      `${datedTask} No search.`,
+      'AUDIT 2026-10-12. Return only valid JSON, no markdown or explanation: an object with keys total and labels. total is 7+8. labels is the array ["red","blue"]. This is self-contained; do not search.',
+      'AUDIT 2026-10-12. Turn this fictional note into a friendly customer email under 70 words. Keep the date and time exact, do not invent details, and do not search: The library repair workshop moved from Tuesday 13 October to Thursday 15 October 2026, 3 pm. Existing bookings stay valid. Reply only with the email.',
+      'AUDIT ROUND4. Use an available presentation skill to create a three-slide editable deck for a fictional community repair workshop. Slide 1: Repair Together, 15 October 2026 at 3 pm. Slide 2: Bring one broken small household item; tools are provided. Slide 3: Three steps: check in, diagnose, repair. Use a restrained black-and-white design and one simple diagram. No invented venue, photos, search or publishing.',
+      'AUDIT 2026-10-12. Can you access my Gmail inbox or use an installed plugin in this chat right now? Do not connect anything, send anything, or search the web. State only what is actually available and the next step if it is unavailable, in two sentences.',
+      'AUDIT 2026-10-12. Generate a photorealistic square image of a yellow ceramic mug on a plain blue tabletop, soft daylight. Use the selected image generator. Do not create SVG or code, and do not search the web.',
+    ])(
+      'lets the refusal in %j win over the year, a research route and a work run',
+      (userMessage) => {
+        for (const inferred of [
+          {},
+          { researchTask: true },
+          { agiWorkRun: true },
+          { researchTask: true, agiWorkRun: true },
+        ]) {
+          expect(
+            resolveWebSearchRequirement({
+              ...base,
+              ...inferred,
+              webSearchEnabled: true,
+              userMessage,
+              now,
+            }),
+          ).toEqual({ required: false, source: null });
+        }
+      },
+    );
+
+    it('still searches when Search mode was chosen for the turn', () => {
+      expect(
+        resolveWebSearchRequirement({
+          ...base,
+          webSearchEnabled: true,
+          searchRequested: true,
+          userMessage: `${datedTask} No search.`,
+          now,
+        }),
+      ).toEqual({ required: true, source: 'explicit_mode' });
+    });
+  });
+
   it('leaves an ordinary turn alone', () => {
     expect(resolveWebSearchRequirement({ ...base, userMessage: 'rewrite this paragraph' })).toEqual(
       { required: false, source: null },

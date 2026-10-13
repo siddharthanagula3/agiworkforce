@@ -1062,6 +1062,15 @@ body > [data-state]:has(+ .dx-nav-drawer) {
     padding: var(--space-5) var(--dx-gap-block) var(--space-8);
   }
 
+  /* The support launcher docks in this gutter, which has to stay wider than
+     its docked width in SupportWidget.module.css. Keyed to the article rather
+     than to the launcher, which mounts after hydration and would rewrap every
+     line when it arrived. `:where()` keeps the ID out of the specificity, so
+     the print reset below still clears this padding. */
+  .dx-main:where(:has(#help-article-title)) {
+    padding-inline-end: calc(var(--space-5) + var(--space-1));
+  }
+
   .dx-title {
     font-size: var(--dx-type-title-compact);
     line-height: 1.2;
@@ -1104,6 +1113,23 @@ body > [data-state]:has(+ .dx-nav-drawer) {
     display: flex;
     align-items: center;
     min-block-size: var(--dx-control-size);
+  }
+}
+
+/* On a coarse pointer the docked support launcher is a full touch target,
+   wider than either gutter beside a help article: the shell's `--space-6`
+   above 56rem and the one set for a fine pointer below it. 72.25rem is the
+   width under which the launcher docks (SupportWidget.module.css). These two
+   follow the 56rem block because they have to win over its gutter. */
+@media (max-width: 72.25rem) and (pointer: coarse) {
+  .dx-main:where(:has(#help-article-title)) {
+    padding-inline-end: var(--space-4);
+  }
+}
+
+@media (max-width: 56rem) and (pointer: coarse) {
+  .dx-main:where(:has(#help-article-title)) {
+    padding-inline-end: var(--space-7);
   }
 }
 

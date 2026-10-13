@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { ImageLightbox } from '../ImageLightbox';
 
@@ -10,6 +11,28 @@ const IMAGES = [
 ];
 
 const shownSrc = () => screen.getByRole('img').getAttribute('src');
+const viewer = () => screen.queryByRole('dialog', { name: 'Image preview' });
+
+const THUMBNAIL_LABEL = 'View first full size';
+const TRANSCRIPT_ROW_TESTID = 'transcript-row';
+
+function TranscriptRowWithThumbnail() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-testid={TRANSCRIPT_ROW_TESTID} style={{ transform: 'translateY(480px)' }}>
+      <button type="button" aria-label={THUMBNAIL_LABEL} onClick={() => setOpen(true)} />
+      {open && <ImageLightbox images={IMAGES} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function openFromThumbnail(): HTMLElement {
+  render(<TranscriptRowWithThumbnail />);
+  const thumbnail = screen.getByLabelText(THUMBNAIL_LABEL);
+  thumbnail.focus();
+  fireEvent.click(thumbnail);
+  return thumbnail;
+}
 
 describe('ImageLightbox, single image', () => {
   it('renders the image without navigation chrome', () => {
@@ -82,6 +105,8 @@ describe('ImageLightbox, bad input', () => {
     const { container } = render(<ImageLightbox images={[]} onClose={vi.fn()} />);
 
     expect(container).toBeEmptyDOMElement();
+    expect(viewer()).toBeNull();
+    expect(screen.queryByRole('img')).toBeNull();
   });
 });
 
@@ -111,5 +136,46 @@ describe('ImageLightbox, close', () => {
     expect(anchor.getAttribute('download')).toBe('b.png');
     expect(click).toHaveBeenCalled();
     createElement.mockRestore();
+  });
+});
+
+describe('ImageLightbox, placement', () => {
+  it('renders into document.body, outside the transcript row that opened it', () => {
+    openFromThumbnail();
+
+    const dialog = viewer();
+    expect(dialog).not.toBeNull();
+    expect(dialog?.parentElement).toBe(document.body);
+    expect(screen.getByTestId(TRANSCRIPT_ROW_TESTID).contains(dialog)).toBe(false);
+  });
+
+  it('returns focus to the thumbnail when Escape closes it', async () => {
+    const thumbnail = openFromThumbnail();
+    await waitFor(() => expect(viewer()?.contains(document.activeElement)).toBe(true));
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(viewer()).toBeNull();
+    expect(thumbnail).toHaveFocus();
+  });
+
+  it('returns focus to the thumbnail when the close control closes it', async () => {
+    const thumbnail = openFromThumbnail();
+    await waitFor(() => expect(viewer()?.contains(document.activeElement)).toBe(true));
+
+    fireEvent.click(screen.getByLabelText('Close preview'));
+
+    expect(viewer()).toBeNull();
+    expect(thumbnail).toHaveFocus();
+  });
+
+  it('locks page scroll while open and restores the previous value on close', () => {
+    document.body.style.overflow = 'auto';
+    openFromThumbnail();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.body.style.overflow).toBe('auto');
+    document.body.style.overflow = '';
   });
 });

@@ -8,6 +8,7 @@ import {
   Mail,
   Presentation,
 } from 'lucide-react';
+import { formatDeliverableFormatLabel } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import type { ArtifactData } from './ArtifactPreview';
 
@@ -84,7 +85,18 @@ const EXTENSION_LABEL: Record<string, string> = {
   mermaid: 'Mermaid',
 };
 
-export function artifactExtensionLabel(artifact: Pick<ArtifactData, 'language' | 'type'>): string {
+export function artifactExtensionLabel(
+  artifact: Pick<ArtifactData, 'language' | 'type' | 'generatedFile'>,
+): string {
+  const file = artifact.generatedFile;
+  const fileFormat = file
+    ? formatDeliverableFormatLabel({
+        kind: file.kind,
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+      })
+    : undefined;
+  if (fileFormat) return fileFormat;
   const raw = (artifact.language || artifact.type || '').toLowerCase();
   const mapped = EXTENSION_LABEL[raw];
   if (mapped) return mapped;

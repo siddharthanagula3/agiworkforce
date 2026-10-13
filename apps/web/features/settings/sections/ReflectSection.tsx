@@ -175,10 +175,10 @@ export function ReflectSection() {
             memories from chats to create a recap.
           </p>
           <SettingsSectionLink
-            section="capabilities"
+            section="memory"
             className="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
           >
-            Open Capabilities settings
+            Open Memory settings
           </SettingsSectionLink>
         </div>
       ) : null}

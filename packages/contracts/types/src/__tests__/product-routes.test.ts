@@ -61,25 +61,71 @@ describe('product routes', () => {
     }
   });
 
-  it('hands the proxy the pattern dialect it speaks', () => {
+  it('hands the proxy each prefix as itself, its subtree and its dot-suffixed forms', () => {
     expect(routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES)).toEqual([
-      '/chat(.*)',
-      '/code(.*)',
-      '/library(.*)',
-      '/models(.*)',
-      '/developers(.*)',
-      '/open(.*)',
-      '/quick-ask(.*)',
-      '/schedules(.*)',
-      '/tasks(.*)',
-      '/settings(.*)',
-      '/billing(.*)',
-      '/upgrade(.*)',
-      '/admin(.*)',
-      '/workspace(.*)',
-      '/operator(.*)',
-      '/welcome(.*)',
+      '/chat',
+      '/chat/(.*)',
+      '/chat.(.*)',
+      '/code',
+      '/code/(.*)',
+      '/code.(.*)',
+      '/library',
+      '/library/(.*)',
+      '/library.(.*)',
+      '/models',
+      '/models/(.*)',
+      '/models.(.*)',
+      '/developers',
+      '/developers/(.*)',
+      '/developers.(.*)',
+      '/open',
+      '/open/(.*)',
+      '/open.(.*)',
+      '/quick-ask',
+      '/quick-ask/(.*)',
+      '/quick-ask.(.*)',
+      '/schedules',
+      '/schedules/(.*)',
+      '/schedules.(.*)',
+      '/tasks',
+      '/tasks/(.*)',
+      '/tasks.(.*)',
+      '/settings',
+      '/settings/(.*)',
+      '/settings.(.*)',
+      '/billing',
+      '/billing/(.*)',
+      '/billing.(.*)',
+      '/upgrade',
+      '/upgrade/(.*)',
+      '/upgrade.(.*)',
+      '/admin',
+      '/admin/(.*)',
+      '/admin.(.*)',
+      '/workspace',
+      '/workspace/(.*)',
+      '/workspace.(.*)',
+      '/operator',
+      '/operator/(.*)',
+      '/operator.(.*)',
+      '/welcome',
+      '/welcome/(.*)',
+      '/welcome.(.*)',
     ]);
+  });
+
+  // `/open(.*)` is a suffix wildcard to the proxy's matcher: it claimed the
+  // published `/openapi.json` and sent a signed-out reader to sign in.
+  it('never lets a prefix run straight into a wildcard', () => {
+    for (const prefixes of [
+      PRODUCT_ROUTE_PREFIXES,
+      AUTH_ROUTE_PREFIXES,
+      SESSION_AUTH_ROUTE_PREFIXES,
+    ]) {
+      for (const pattern of routeMatcherPatterns(prefixes)) {
+        expect(pattern, pattern).not.toMatch(/[^/.]\(/u);
+      }
+    }
   });
 
   // A route that gets an identity session but that the shell would open in a

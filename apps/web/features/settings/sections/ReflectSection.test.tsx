@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReflectSection } from './ReflectSection';
 import { SettingsSectionNavigationProvider } from '../components/SettingsSectionLink';
+import { WEB_SETTINGS_NAV_GROUPS } from '../components/web-settings-navigation';
 
 const recap = {
   range: '30d',
@@ -40,6 +41,13 @@ const recap = {
   ],
   sampled: false,
   sampledConversationCount: 3,
+};
+
+const memoryRequired = {
+  error: {
+    code: 'memory_required',
+    message: 'Turn on Memory and Save memories from chats to view Reflect.',
+  },
 };
 
 function response(body: unknown, status = 200) {
@@ -90,17 +98,7 @@ describe('ReflectSection', () => {
 
   it('shows a real memory-required state instead of an empty fabricated recap', async () => {
     const onNavigate = vi.fn();
-    vi.mocked(fetch).mockImplementation(() =>
-      response(
-        {
-          error: {
-            code: 'memory_required',
-            message: 'Turn on Memory and Save memories from chats to view Reflect.',
-          },
-        },
-        409,
-      ),
-    );
+    vi.mocked(fetch).mockImplementation(() => response(memoryRequired, 409));
     render(
       <SettingsSectionNavigationProvider onNavigate={onNavigate}>
         <ReflectSection />
@@ -108,9 +106,58 @@ describe('ReflectSection', () => {
     );
 
     expect(await screen.findByText('Memory is off')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Open Capabilities settings' }));
-    expect(onNavigate).toHaveBeenCalledWith('capabilities');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Memory settings' }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith('memory');
     expect(screen.queryByText('Writing led your past 30 days')).toBeNull();
+  });
+
+  it('sends the memory-required setup link to the settings tab its label names', async () => {
+    const onNavigate = vi.fn();
+    vi.mocked(fetch).mockImplementation(() => response(memoryRequired, 409));
+    render(
+      <SettingsSectionNavigationProvider onNavigate={onNavigate}>
+        <ReflectSection />
+      </SettingsSectionNavigationProvider>,
+    );
+
+    const setupLink = await screen.findByRole('button', { name: /^Open .+ settings$/ });
+    fireEvent.click(setupLink);
+
+    const section = onNavigate.mock.calls[0]?.[0] as string;
+    const navItem = WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find(
+      (item) => item.key === section,
+    );
+    expect(navItem?.label).toBe('Memory');
+    expect(setupLink).toHaveAccessibleName(`Open ${navItem?.label} settings`);
+    expect(screen.queryByText(/capabilities/i)).toBeNull();
+  });
+
+  it('links the memory-required state straight to the Memory page outside the modal', async () => {
+    vi.mocked(fetch).mockImplementation(() => response(memoryRequired, 409));
+    render(<ReflectSection />);
+
+    expect(await screen.findByRole('link', { name: 'Open Memory settings' })).toHaveAttribute(
+      'href',
+      '/settings/memory',
+    );
+  });
+
+  it('leaves memory preferences untouched when the setup link is followed', async () => {
+    const onNavigate = vi.fn();
+    vi.mocked(fetch).mockImplementation(() => response(memoryRequired, 409));
+    render(
+      <SettingsSectionNavigationProvider onNavigate={onNavigate}>
+        <ReflectSection />
+      </SettingsSectionNavigationProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Memory settings' }));
+
+    const requests = vi.mocked(fetch).mock.calls;
+    expect(requests).toHaveLength(1);
+    expect(String(requests[0]?.[0])).toContain('/api/reflect');
+    expect(requests[0]?.[1]?.method ?? 'GET').toBe('GET');
   });
 });
 

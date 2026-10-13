@@ -93,11 +93,33 @@ const RECENCY_PATTERN = buildPhrasePattern(RECENCY_PHRASES);
 const SOURCE_PATTERN = buildPhrasePattern(SOURCE_PHRASES);
 const SEARCH_OPT_OUT_PATTERN =
   /\b(?:do\s+not|don't|dont|never|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:the|on)\s+)?(?:web|internet|online)|browse(?:ing)?\s+(?:the\s+)?web|look(?:ing)?\s+(?:it|this|that)\s+up)\b/iu;
+const LONG_DASHES = String.fromCharCode(0x2013, 0x2014);
+const REFUSAL_CLAUSE_START = String.raw`(?:^|[.;:!?,()\n*>\u2022${LONG_DASHES}]|(?<![\p{L}\p{N}])-)[^\S\n]*(?:(?:and|but|so|also|please|again)\s+)?`;
+const REFUSAL_CLAUSE_END = String.raw`(?=\s*(?:$|[.,;:!?()\n*\u2026${LONG_DASHES}])|\s+-\s|\s+(?:or|nor|and(?!\s+replace\b)|but|just|please|yet|(?:is\s+)?(?:needed|required|necessary|allowed)|at\s+all|this\s+time)\b)`;
+const REFUSING_AUXILIARY = String.raw`(?:do\s+not|don['\u2019]?t|never)`;
+const REFUSING_MODAL = String.raw`(?:${REFUSING_AUXILIARY}\s+(?:(?:need|have)\s+to|want\s+you\s+to)|no\s+need\s+to)`;
+const REFUSING_IMPERATIVE = String.raw`(?:${REFUSAL_CLAUSE_START}|\b(?:and|but|so|then|just|please)\s+)${REFUSING_AUXILIARY}`;
+const REFUSING_COMMAND = String.raw`(?:${REFUSING_IMPERATIVE}|\b${REFUSING_MODAL})`;
+const REFUSED_LIST_ITEM = String.raw`(?:[\p{L}\p{N}'\u2019/-]+\s+)?[\p{L}\p{N}'\u2019/-]+`;
+const REFUSED_SEARCH_NOUN = String.raw`(?:(?:web|internet|online|external|live)\s+)?(?:search(?:es|ing)?|browsing|googling)`;
+const REFUSED_OTHER_ACTIONS = String.raw`(?!\s+(?:just|only|simply|hesitate|forget|fail|worry|be\s+afraid)\b)\s(?:[^.;:!?,\n${LONG_DASHES}]{1,80}?|[^.;:!?\n${LONG_DASHES}]{1,80}?,)\s(?:or|nor)\s+`;
+
+const SEARCH_REFUSAL_FORMS: Readonly<Record<string, string>> = {
+  namedTarget: String.raw`\b(?:${REFUSING_MODAL}|${REFUSING_AUXILIARY}|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:web|internet|online)|brows(?:e|ing)\s+(?:the\s+)?web|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|googl(?:e|ing)\s+(?:it|this|that)|check(?:ing)?\s+(?:online|the\s+web))\b`,
+  bareAction: String.raw`(?:${REFUSING_COMMAND}\s+(?:search|browse|google)|\b(?:without|avoid)\s+(?:searching|browsing|googling))(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
+  toolUse: String.raw`(?:${REFUSING_COMMAND}\s+(?:use|run|do|perform)|\b(?:without|no|avoid)\s+(?:using|running|doing|performing))\s+(?:(?:a|an|any|the|your)\s+)?(?:(?:web|internet|online)\s+)?search(?:es)?(?:\s+tools?)?${REFUSAL_CLAUSE_END}`,
+  listedAction: String.raw`\s(?:or|nor)\s+(?<=${REFUSING_IMPERATIVE}${REFUSED_OTHER_ACTIONS})(?:search(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:web|internet|online))?|browse(?:\s+the\s+web)?|google|look\s+(?:it|this|that|anything)\s+up)(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
+  bareNoun: String.raw`${REFUSAL_CLAUSE_START}no\s+${REFUSED_SEARCH_NOUN}(?:\s+(?:for|on)\s+(?:this|that)(?:\s+one)?|\s+for\s+now|\s+today|\s+here)?${REFUSAL_CLAUSE_END}`,
+  listedBeforeLastItem: String.raw`${REFUSAL_CLAUSE_START}no\s+(?:${REFUSED_LIST_ITEM}\s*,\s*){1,6}${REFUSED_SEARCH_NOUN}(?:\s*,\s*${REFUSED_LIST_ITEM}){0,6}(?:\s*,)?\s+(?:or|nor)\s+(?=[\p{L}\p{N}])`,
+  listedLast: String.raw`${REFUSAL_CLAUSE_START}no\s+(?:${REFUSED_LIST_ITEM}\s*,\s*){0,6}${REFUSED_LIST_ITEM}(?:\s*,)?\s+(?:or|nor|and\s+no)\s+${REFUSED_SEARCH_NOUN}${REFUSAL_CLAUSE_END}`,
+};
+
+const SEARCH_REFUSAL_PATTERN = new RegExp(Object.values(SEARCH_REFUSAL_FORMS).join('|'), 'giu');
 const HTTP_URL_PATTERN = /https?:\/\/[^\s<>"']+/i;
 const URL_FETCH_ACTION_PATTERN =
   /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
 const URL_FETCH_OPT_OUT_PATTERN =
-  /\b(?:do\s+not|don't|dont|never|avoid)\s+(?:fetch|open|read)\s+(?:(?:this|that|the)\s+)?(?:url|link|page|https?:\/\/)/iu;
+  /\b(?:do\s+not|don't|dont|never|avoid)\s+(?:fetch|open|read)\s+(?:(?:this|that|the|these|those|any)\s+)?(?:url|link|page|https?:\/\/)/iu;
 
 export type ExplicitSearchIntentSignal = 'search_verb' | 'recency' | 'sources';
 
@@ -123,7 +145,9 @@ export function detectExplicitWebSearchIntent(text: string): ExplicitSearchInten
 }
 
 export function hasExplicitWebSearchOptOut(text: string): boolean {
-  return SEARCH_OPT_OUT_PATTERN.test(text);
+  if (SEARCH_OPT_OUT_PATTERN.test(text)) return true;
+  const outsideRefusals = text.replace(SEARCH_REFUSAL_PATTERN, '\n');
+  return outsideRefusals !== text && !SEARCH_VERB_PATTERN.test(outsideRefusals);
 }
 
 export function hasExplicitWebSearchIntent(text: string): boolean {

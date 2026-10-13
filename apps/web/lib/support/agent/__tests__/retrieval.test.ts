@@ -1,11 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { SITE_URL } from '@/lib/seo/site';
-import { retrieveSupportChunks } from '../retrieval/retrieve';
+import { buildCitation, retrieveSupportChunks } from '../retrieval/retrieve';
 import { getSupportCorpus } from '../corpus';
 import { MIN_ABSOLUTE_SCORE, evaluateRelevanceFloor } from '../policy/relevance-floor';
 import { buildBm25Index, scoreBm25 } from '../retrieval/bm25';
 import { tokenize } from '../retrieval/tokenize';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
+import { helpResultPath } from '@/lib/support/help-articles';
+import { STATIC_FAQS } from '@/lib/support/static-data';
+import type { CorpusChunk } from '../types';
+
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+const SECTION_CHUNK: CorpusChunk = {
+  id: 'billing-fixture#1',
+  docId: 'billing-fixture',
+  docTitle: 'Plans and invoices',
+  path: '/pricing',
+  category: 'billing',
+  tags: ['billing'],
+  heading: 'Invoices',
+  headingPath: 'Plans and invoices › Invoices',
+  text: 'Invoices appear once you are billed on a paid plan.\n\nPlans and invoices are both listed under Settings, Billing.',
+  updated: '2026-10-12',
+  origin: 'markdown',
+};
 
 describe('support corpus', () => {
   it('loads and contains only public paths', () => {
@@ -85,6 +106,58 @@ describe('retrieveSupportChunks', () => {
       expect(item.citation.url.startsWith(`${SITE_URL}/`)).toBe(true);
       expect(new URL(item.citation.url).origin).toBe(new URL(SITE_URL).origin);
     }
+  });
+});
+
+describe('buildCitation', () => {
+  it('names the cancellation FAQ once for a billing search and excerpts its answer', () => {
+    const faq = STATIC_FAQS.find((entry) => entry.id === 'faq-004');
+    if (!faq) throw new Error('faq-004 is missing from the static FAQs');
+
+    const hit = retrieveSupportChunks('billing').chunks.find(
+      (item) => item.chunk.id === `static-faq:${faq.id}`,
+    );
+    if (!hit) throw new Error('a billing search no longer returns the cancellation FAQ');
+
+    expect(hit.citation.title).toBe(faq.question);
+    expect(hit.citation.snippet.length).toBeGreaterThan(0);
+    expect(hit.citation.snippet).not.toContain(faq.question);
+    expect(collapseWhitespace(faq.answer)).toContain(hit.citation.snippet.replace(/…$/u, ''));
+    expect(helpResultPath(hit.chunk)).toBe('/pricing');
+  });
+
+  it('gives every FAQ and support article one title and an excerpt that does not open with it', () => {
+    const corpus = getSupportCorpus();
+    if (!corpus.available) throw new Error('corpus unavailable');
+    const singleSection = corpus.chunks.filter((chunk) => chunk.heading === chunk.docTitle);
+    expect(singleSection.length).toBeGreaterThan(0);
+
+    for (const chunk of singleSection) {
+      const citation = buildCitation(chunk);
+      expect(citation.title).toBe(chunk.docTitle);
+      expect(citation.snippet.length).toBeGreaterThan(0);
+      expect(citation.snippet).not.toContain(chunk.docTitle);
+    }
+  });
+
+  it('keeps the section heading in the title and a body that mentions the title in a sentence', () => {
+    const citation = buildCitation(SECTION_CHUNK);
+
+    expect(citation.title).toBe('Plans and invoices, Invoices');
+    expect(citation.snippet).toBe(
+      'Invoices appear once you are billed on a paid plan. Plans and invoices are both listed under Settings, Billing.',
+    );
+  });
+
+  it('leaves the excerpt empty when the body holds nothing but the title', () => {
+    const citation = buildCitation({
+      ...SECTION_CHUNK,
+      heading: SECTION_CHUNK.docTitle,
+      text: `${SECTION_CHUNK.docTitle}\n\n`,
+    });
+
+    expect(citation.title).toBe(SECTION_CHUNK.docTitle);
+    expect(citation.snippet).toBe('');
   });
 });
 

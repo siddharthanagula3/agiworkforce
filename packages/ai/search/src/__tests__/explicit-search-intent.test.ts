@@ -8,6 +8,11 @@ import {
   hasExplicitWebSearchIntent,
 } from '../explicit-search-intent';
 
+const EM_DASH = String.fromCodePoint(0x2014);
+
+const AUDIT_PROMPT_R06 =
+  'AUDIT-RENDER2 R06. No search and do not open any links. Show this URL once as a bare link and once as a Markdown link labelled Synthetic long URL: https://example.com/audit/very-long-path-segment-for-layout-checking/another-long-path-segment?label=abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789 . Then show this exact unbroken token in inline code: AUDIT_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 . No other prose.';
+
 describe('detectExplicitWebSearchIntent', () => {
   it('reports the search-verb signal for a direct instruction to search', () => {
     expect(detectExplicitWebSearchIntent('Search the web for the Reuters top story')).toBe(
@@ -92,6 +97,273 @@ describe('detectExplicitWebSearchIntent', () => {
   });
 });
 
+describe('hasExplicitWebSearchOptOut', () => {
+  it.each([
+    [
+      'AUTH-06',
+      'AUDIT 2026-10-12. Turn this fictional note into a friendly customer email under 70 words. Keep the date and time exact, do not invent details, and do not search: The library repair workshop moved from Tuesday 13 October to Thursday 15 October 2026, 3 pm. Existing bookings stay valid. Reply only with the email.',
+    ],
+    [
+      'AUTH-07',
+      'AUDIT 2026-10-12. Return only valid JSON, no markdown or explanation: an object with keys total and labels. total is 7+8. labels is the array ["red","blue"]. This is self-contained; do not search.',
+    ],
+    [
+      'AUTH-18',
+      'AUDIT 2026-10-12. In one short sentence, tell me what information you need to help plan a workshop. No search.',
+    ],
+    [
+      'R4-T03',
+      'AUDIT ROUND4. Use an available presentation skill to create a three-slide editable deck for a fictional community repair workshop. Slide 1: Repair Together, 15 October 2026 at 3 pm. Slide 2: Bring one broken small household item; tools are provided. Slide 3: Three steps: check in, diagnose, repair. Use a restrained black-and-white design and one simple diagram. No invented venue, photos, search or publishing.',
+    ],
+    [
+      'AUTH-02',
+      'AUDIT 2026-10-12 controlled test. Use only these supplied numbers. Do not search the web. Orders are $18, $27 and $35. Apply 10% discount to the subtotal, then 5% tax to the discounted amount. Reply in exactly four lines: subtotal, discount, tax, final total. No introduction or notes.',
+    ],
+    [
+      'AUTH-03',
+      'Now change only the discount to 25%. Keep the same orders and tax. No search. Exactly the same four-line format.',
+    ],
+    [
+      'AUTH-09',
+      'AUDIT 2026-10-12. Generate a photorealistic square image of a yellow ceramic mug on a plain blue tabletop, soft daylight. Use the selected image generator. Do not create SVG or code, and do not search the web.',
+    ],
+    [
+      'AUTH-12',
+      'AUDIT 2026-10-12. Using only this fictional data, show four compact sections, without web search: 1) an email draft under 40 words inviting Sam to a workshop on 15 October at 3 pm; 2) a Markdown table with columns Item, Quantity, Unit price, Total, Notes for mugs (3 at $4) and notebooks (2 at $5), notes "Synthetic audit data"; 3) a fenced Python function add(a,b) that returns a+b; 4) the equation x^2 + y^2 = 25 using displayed math. Do not add research or tool commentary.',
+    ],
+    [
+      'AUTH-15',
+      'AUDIT 2026-10-12. Can you access my Gmail inbox or use an installed plugin in this chat right now? Do not connect anything, send anything, or search the web. State only what is actually available and the next step if it is unavailable, in two sentences.',
+    ],
+    [
+      'AUTH-16',
+      'Start with one simple example of adding fractions with the same denominator, then ask me one question. Do not reveal its answer yet. No web search.',
+    ],
+    [
+      'AUTH-17',
+      'AUDIT 2026-10-12 cancellation test. Write 80 numbered fictional workshop activity ideas, each with two sentences. Use no web search.',
+    ],
+    [
+      'R01',
+      'AUDIT-RENDER2 R01. Do not search. Return only a Markdown table with 8 rows and these 6 columns: Item, Owner, Quantity, Unit price, Status, Notes. Use synthetic item names Alpha through Theta, owner Test User, quantities 1 through 8, price $4 each, alternating Ready/Pending. Each Notes cell must contain the exact inline code `audit_item_id_1234567890` followed by this sentence: This deliberately long note checks whether a wide table remains readable without losing any columns.',
+    ],
+    [
+      'R04',
+      'AUDIT-RENDER2 R04. No search. Render the following as mathematical notation, not code: inline E=mc^2 in a sentence; a displayed fraction 1/2+1/3=5/6; a 2 by 2 matrix with rows 1,2 and 3,4; an aligned two-line derivation x+2=5 then x=3. Use LaTeX math delimiters. No other explanation.',
+    ],
+    [
+      'R05',
+      'AUDIT-RENDER2 R05. Do not search or translate. Reproduce these exact lines as a five-row Markdown table',
+    ],
+    ['R06', AUDIT_PROMPT_R06],
+    [
+      'R3-T04',
+      'AUDIT-ROUND3 PDF skill test. Create a one-page PDF titled Workshop Checklist. Use only this synthetic content: Prepare 3 mugs and 2 notebooks. Checklist: count supplies; pack the box. No search, images, personal data, sharing or publishing. Return the actual downloadable PDF.',
+    ],
+    [
+      'R3-T06',
+      'AUDIT ROUND3 Work visual test. Use only the attached synthetic Workshop Checklist PDF. Make a two-item preparation checklist and a downloadable CSV with columns item,quantity for mugs,3 and notebooks,2. No search, external services, sharing or publishing.',
+    ],
+    [
+      'R4-T01',
+      'AUDIT ROUND4. Use your spreadsheet skill for this fictional shop data: Mugs,3,4; Notebooks,2,5; Pens,6,1.50. Create an editable spreadsheet with Item, Quantity, Unit price and Line total, a working SUM grand total, and sensible currency formatting. Tell me which skill actually ran. Do not search or connect any service.',
+    ],
+    [
+      'R4-T04',
+      'AUDIT ROUND4. From these synthetic counts only, show a compact table, a labelled bar chart and a downloadable CSV together: North 12, South 7, East 15, West 9. Then write a two-sentence summary. Keep every value consistent. No search or external tools that contact other services.',
+    ],
+    ['R4-T07', 'Include a short Python code block below. No search or commentary.'],
+  ])('recognises the opt-out in audit prompt %s', (_fixture, prompt) => {
+    expect(hasExplicitWebSearchOptOut(prompt)).toBe(true);
+    expect(detectExplicitWebSearchIntent(prompt)).toBeNull();
+  });
+
+  it.each([
+    [
+      'AUTH-13',
+      "AUDIT 2026-10-12. Search the public web now. On AGI Workforce's official pricing page, what is the current advertised monthly price of Basic? Quote the price exactly, link the official page, and distinguish monthly from yearly billing. Keep the answer under 90 words; if you cannot verify it live, say so.",
+    ],
+    [
+      'R12',
+      'AUDIT-RENDER2 R12. Search the public web for the official W3C WCAG 2.2 overview. In under 70 words state its purpose and provide an inline citation/link to the official W3C page. Do not cite unrelated domains. If live search is unavailable say so, and do not invent a citation.',
+    ],
+  ])('finds no refusal in audit prompt %s, which asks for a search', (_fixture, prompt) => {
+    expect(hasExplicitWebSearchOptOut(prompt)).toBe(false);
+  });
+
+  it.each([
+    'no search',
+    'Do not search.',
+    "don't search",
+    'Don’t search, just answer from what I pasted.',
+    'dont search just answer',
+    'Answer without searching.',
+    'no browsing',
+    'No searching or browsing, please.',
+    'Answer from memory: no tools, search or citations.',
+    'no tools, citations or search',
+    'No tools and no search.',
+    'No external search needed.',
+    "Don't search on the web for this.",
+    'Do not search in the internet, I only want your view.',
+    'No browsing the web for this one.',
+    "Don't google it, tell me what you think.",
+    "Don't check online; use the table above.",
+    'Never search for anything.',
+    'Summarise the latest draft I pasted, and do not search.',
+    'Give me today’s plan from my notes. No search.',
+    `Answer directly ${EM_DASH} no search.`,
+    'No search – just the four lines.',
+    'Rules:\n- No search\n- Under 70 words',
+    'Keep it short, and no search please.',
+    "Don't search yet, tell me your plan first.",
+    'No search this time.',
+    'No need to search.',
+    'No search is needed here.',
+    "Don't look up anything, use what you know.",
+    'Do not look anything up.',
+    "I don't want you to search the web for this.",
+    "You don't have to search, just answer.",
+    'Do not use search.',
+    'Answer without using the search tool.',
+    "Don't run any searches.",
+    'Do not use tools, browse, or search.',
+    'Do not call tools or search.',
+    'Do not search or look it up.',
+    "Don't google it or look it up.",
+    'If unsure, don’t guess or search the web.',
+    'This is self-contained so do not search.',
+    'Please just don’t search.',
+    'No search for this one, please.',
+    'No search for now.',
+    'No search today.',
+    'No search on this one.',
+    'No googling.',
+    'Rules:\n* No search\n* Under 70 words',
+    'Rules:\n• No search\n• Under 70 words',
+    'Rules:\n1) No search\n2) Under 70 words',
+    '**No search.** Just answer.',
+    'Constraints: **no search**, JSON only.',
+    '> No search',
+    'Do not search (this is self-contained).',
+    'Do not search…',
+    'Summarise this \n\nNo search',
+    'Line one\r\n\r\nNo search\r\n',
+  ])('reads %j as a refusal', (text) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(true);
+    expect(detectExplicitWebSearchIntent(text)).toBeNull();
+  });
+
+  it.each([
+    "Don't search the web. Look up the value in the table I pasted.",
+    'Answer without web search, then look it up in the attached glossary.',
+  ])('keeps reading %j as a refusal, because it rules out the web by name', (text) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(true);
+    expect(detectExplicitWebSearchIntent(text)).toBeNull();
+  });
+
+  it.each([
+    ['Search the web for the phrase "no search results"', 'search_verb'],
+    ["don't search my email, search the web", 'search_verb'],
+    ['Search the web without filters for mechanical keyboards', 'search_verb'],
+    ['Search the web for the Reuters top story', 'search_verb'],
+    ['Why does my query return no search results? Look it up.', 'search_verb'],
+    ['My app has no search. Look up a library that adds one.', 'search_verb'],
+    [
+      'The dashboard has no filters, search or sorting. Look up a component library.',
+      'search_verb',
+    ],
+    ['I have no idea how to filter or search. Look up the docs.', 'search_verb'],
+    ['I have no idea, search the web and tell me', 'search_verb'],
+    ["Don't search and replace by hand; look up the sed syntax.", 'search_verb'],
+    ["Don't use search and replace here; look up the regex syntax.", 'search_verb'],
+    ["Don't use the search bar, search the web for me instead.", 'search_verb'],
+    ["Don't search and replace by hand; use sed.", 'search_verb'],
+    ["Don't use search and replace here.", 'search_verb'],
+    ["Don't use the search bar on the latest build, it is broken.", 'recency'],
+    [
+      'The dashboard has no filters, search or sorting. What is the latest component library?',
+      'recency',
+    ],
+    ['No filters or search box yet. What is the latest design?', 'recency'],
+    ['It keeps no browsing history, what is the latest on that?', 'recency'],
+    ['What does "do not search" mean in a robots file? Cite sources.', 'sources'],
+    ['Search the web for this phrase: no search results', 'search_verb'],
+    ['No search results came up. Look it up again.', 'search_verb'],
+    ['No search results came up, what changed today?', 'recency'],
+    ['No search for that term returns anything. Why?', 'search_verb'],
+    ['My app has no sorting or search. Look up a library that adds them.', 'search_verb'],
+    ['My app has no sorting or search. What is the latest library for that?', 'recency'],
+    ['No idea how to filter or search. Look up the docs.', 'search_verb'],
+    ['No idea how to filter or search. Cite sources.', 'sources'],
+    ['No sorting or search yet. Look up a library that adds them.', 'search_verb'],
+    ['No search, no problem. Look up the lyrics.', 'search_verb'],
+    ['No problem, search or look it up whenever.', 'search_verb'],
+    [
+      'Staff must do no searching, or personal browsing on work devices. What is the latest guidance?',
+      'recency',
+    ],
+    ["Don't search just my email, search the web", 'search_verb'],
+    ['You never search. Look up the current CEO.', 'search_verb'],
+    ['You never search. What is the latest on the merger?', 'recency'],
+    ['Why do you never search? Search the web for the Reuters top story.', 'search_verb'],
+    ["You don't search, you guess. Look it up this time.", 'search_verb'],
+    [
+      "If you don't search, you will get this wrong. Search the web for the Reuters top story.",
+      'search_verb',
+    ],
+    ['People do not search. Cite sources for that claim.', 'sources'],
+    ["I can't answer this without searching. Search the web for me.", 'search_verb'],
+    ["I can't verify this without checking online, please look it up.", 'search_verb'],
+    ['Without browsing, can you tell me the latest price? If not, search the web.', 'search_verb'],
+    ["Don't check the web app, look up the API docs", 'search_verb'],
+    ["Don't hesitate to ask questions or search the web.", 'search_verb'],
+    ["Don't just guess or search the web.", 'search_verb'],
+    ["If you don't know, say so, or search the web.", 'search_verb'],
+    ["Don't guess, check the docs or search the web.", 'search_verb'],
+    [`Don't guess ${EM_DASH} check the docs or search the web.`, 'search_verb'],
+    ["Don't use Bing, search the web with Google, or look it up.", 'search_verb'],
+    [
+      "Don't guess or search the web for rumours; search the web for official sources.",
+      'search_verb',
+    ],
+  ] as const)('still allows a search for %j', (text, signal) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(false);
+    expect(detectExplicitWebSearchIntent(text)).toBe(signal);
+  });
+
+  it.each([
+    'search without filters',
+    'Do not search unless you need to.',
+    'AUDIT 2026-10-12. I run a small print shop. Three orders are $18, $27 and $35. A 10% discount applies to the subtotal, then 5% tax applies to the discounted amount. Show the subtotal, discount, tax and final total in four short lines.',
+    'write me a haiku about rain',
+    'No problem, thanks.',
+    'There is no search engine I trust.',
+    '',
+  ])('finds no refusal in %j', (text) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(false);
+  });
+
+  it.each([
+    ['a long gap after the search noun', `No search${' '.repeat(150_000)}x`],
+    ['a long gap inside a refused list', `No venue, search,${' '.repeat(150_000)}x`],
+    ['a long gap before the last list item', `No venue or search${' '.repeat(150_000)}x`],
+    [
+      'a long comma list that never names search',
+      `${'no venue, photos, catering, parking, seating, signage, '.repeat(4000)}end`,
+    ],
+    ['a run of blank lines', `${'\n'.repeat(60_000)}x`],
+    ['a run of Windows blank lines', `${'\r\n'.repeat(60_000)}x`],
+    ['a run of indented blank lines', `${'\n '.repeat(60_000)}x`],
+    ['blank lines inside the text', `Summarise this log.\n${'\n'.repeat(60_000)}end of log`],
+    ['many refused alternatives that are not a search', `Do not a${' or searchx'.repeat(15_000)}`],
+  ])('reads a pasted message with %s in linear time', (_shape, text) => {
+    const startedAt = performance.now();
+    expect(hasExplicitWebSearchOptOut(text)).toBe(false);
+    expect(performance.now() - startedAt).toBeLessThan(2000);
+  });
+});
+
 describe('hasExplicitWebFetchIntent', () => {
   it('requires a URL and a request to inspect its contents', () => {
     expect(hasExplicitWebFetchIntent('Summarize https://www.iana.org/help/example-domains')).toBe(
@@ -108,5 +380,12 @@ describe('hasExplicitWebFetchIntent', () => {
     expect(
       hasExplicitWebFetchIntent('Do not open this URL: https://example.com. Summarize my note.'),
     ).toBe(false);
+  });
+
+  it('does not fetch for audit prompt R06, which forbids opening any link', () => {
+    expect(hasExplicitWebFetchIntent(AUDIT_PROMPT_R06)).toBe(false);
+    expect(
+      hasExplicitWebFetchIntent('Do not open any other tabs, just read https://example.com/report'),
+    ).toBe(true);
   });
 });

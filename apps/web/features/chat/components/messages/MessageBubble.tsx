@@ -1503,6 +1503,14 @@ const MessageBubbleComponent = function MessageBubble({
     [message.id, message.timestamp, trustBoundary],
   );
 
+  // Built once per file, outside the store-fed merge below: the artifacts
+  // store compares generatedFile by identity, so a record rebuilt on each
+  // merge would upsert again on every render.
+  const generatedFileRecords = useMemo(
+    () => new Map(generatedFiles.map((f) => [f.id, toGeneratedFile(f)])),
+    [generatedFiles, toGeneratedFile],
+  );
+
   const generatedFileArtifacts = useMemo<ArtifactData[]>(() => {
     if (isUser) return [];
     const out: ArtifactData[] = [];
@@ -1536,7 +1544,7 @@ const MessageBubbleComponent = function MessageBubble({
           language: generatedFileLanguage(f),
           title: f.fileName,
           content: f.uri,
-          generatedFile: toGeneratedFile(f),
+          generatedFile: generatedFileRecords.get(f.id),
         });
       } else if (f.kind === 'pdf') {
         out.push({
@@ -1545,7 +1553,7 @@ const MessageBubbleComponent = function MessageBubble({
           language: 'pdf',
           title: f.fileName,
           content: '',
-          generatedFile: toGeneratedFile(f),
+          generatedFile: generatedFileRecords.get(f.id),
         });
       } else if (f.kind === 'docx') {
         out.push({
@@ -1554,7 +1562,7 @@ const MessageBubbleComponent = function MessageBubble({
           language: 'docx',
           title: f.fileName,
           content: f.uri,
-          generatedFile: toGeneratedFile(f),
+          generatedFile: generatedFileRecords.get(f.id),
         });
       } else if (f.kind === 'pptx' || f.kind === 'xlsx') {
         const preview = officePreviews[f.id];
@@ -1565,7 +1573,7 @@ const MessageBubbleComponent = function MessageBubble({
             language: f.kind === 'pptx' ? 'markdown' : 'csv',
             title: f.fileName,
             content: preview,
-            generatedFile: toGeneratedFile(f),
+            generatedFile: generatedFileRecords.get(f.id),
           });
         }
       } else if (isGeneratedTextArtifact(f)) {
@@ -1578,7 +1586,7 @@ const MessageBubbleComponent = function MessageBubble({
             language,
             title: f.fileName,
             content: source,
-            generatedFile: toGeneratedFile(f),
+            generatedFile: generatedFileRecords.get(f.id),
           });
         }
       }
@@ -1616,7 +1624,7 @@ const MessageBubbleComponent = function MessageBubble({
     generatedFiles,
     generatedTextContent,
     officePreviews,
-    toGeneratedFile,
+    generatedFileRecords,
   ]);
 
   const artifacts = useMemo(() => {
@@ -1644,20 +1652,27 @@ const MessageBubbleComponent = function MessageBubble({
         artifactManifest: artifact.artifactManifest ?? existing.artifactManifest,
       };
     }
+    for (const [fileId, generatedFile] of generatedFileRecords) {
+      const savedIndex = merged.findIndex(
+        (existing) => existing.id === generatedFileArtifactId(fileId),
+      );
+      const saved = merged[savedIndex];
+      if (saved && !saved.generatedFile) merged[savedIndex] = { ...saved, generatedFile };
+    }
     return merged;
-  }, [visibleExistingArtifacts, extractedArtifacts, generatedFileArtifacts]);
+  }, [visibleExistingArtifacts, extractedArtifacts, generatedFileArtifacts, generatedFileRecords]);
 
   // Generated files rendered through the EXISTING attachment grid: images get
   // the thumbnail + ImageLightbox path; descriptors without a successfully
   // constructed workbench artifact remain honest download chips.
   const unprojectedGeneratedFiles = useMemo<GeneratedFileMetadataEntry[]>(() => {
     const artifactFileIds = new Set(
-      generatedFileArtifacts
+      artifacts
         .map((artifact) => artifact.generatedFile?.id)
         .filter((id): id is string => Boolean(id)),
     );
     return generatedFiles.filter((file) => file.kind === 'image' || !artifactFileIds.has(file.id));
-  }, [generatedFiles, generatedFileArtifacts]);
+  }, [generatedFiles, artifacts]);
 
   const generatedFileAttachments = useMemo<Attachment[]>(
     () =>

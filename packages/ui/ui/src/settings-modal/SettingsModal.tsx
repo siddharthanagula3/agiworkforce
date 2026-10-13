@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../cn';
-import { confirmNavigation } from '../primitives/UnsavedChanges';
+import { confirmNavigation, hasUnsavedChanges } from '../primitives/UnsavedChanges';
 import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, keepOpenForMenuEscape } from '../sidebar/Menu';
 import type {
@@ -35,7 +35,7 @@ import type {
 } from './types';
 import { CUSTOM_MCP_UNVERIFIED_NOTICE, isUnverifiedCustomConnector } from './types';
 import { SETTINGS_NAV_KEYWORDS } from '../settings-nav';
-import type { SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
+import type { SettingsNavField, SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
 import { DirectoryPanel } from '../directory';
 import type { DirectoryAdapter } from '../directory';
@@ -104,13 +104,43 @@ interface NavEntry {
 
 export const NAV_GROUP_LABEL_TESTID = 'settings-nav-group-label';
 
-function matchesNavFilter(
-  entry: { key: string; label: string; keywords?: string[] },
-  filter: string,
-): boolean {
+interface SearchableNavEntry {
+  key: string;
+  label: string;
+  keywords?: string[];
+  fields?: SettingsNavField[];
+}
+
+function matchesNavSection(entry: SearchableNavEntry, filter: string): boolean {
   if (entry.label.toLowerCase().includes(filter)) return true;
   const keywords = entry.keywords ?? SETTINGS_NAV_KEYWORDS[entry.key as SettingsNavKey] ?? [];
   return keywords.some((keyword) => keyword.toLowerCase().includes(filter));
+}
+
+function matchingNavField(entry: SearchableNavEntry, filter: string): SettingsNavField | undefined {
+  return entry.fields?.find(
+    (field) =>
+      field.label.toLowerCase().includes(filter) ||
+      (field.keywords ?? []).some((keyword) => keyword.toLowerCase().includes(filter)),
+  );
+}
+
+function matchesNavFilter(entry: SearchableNavEntry, filter: string): boolean {
+  return matchesNavSection(entry, filter) || matchingNavField(entry, filter) !== undefined;
+}
+
+function navFieldToReveal(
+  entry: SearchableNavEntry | undefined,
+  filter: string,
+): SettingsNavField | undefined {
+  if (!entry || !filter || matchesNavSection(entry, filter)) return undefined;
+  return matchingNavField(entry, filter);
+}
+
+function findControlByLabel(root: HTMLElement | null, label: string): HTMLElement | undefined {
+  return Array.from(root?.querySelectorAll<HTMLElement>('[aria-label]') ?? []).find(
+    (node) => node.getAttribute('aria-label') === label,
+  );
 }
 
 const ALL_NAV_ENTRIES: NavEntry[] = [
@@ -1991,6 +2021,11 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useUiTranslation('settings');
   const [navSearch, setNavSearch] = useState('');
+  const [fieldToReveal, setFieldToReveal] = useState<{
+    section: string;
+    label: string;
+    afterPrompt: boolean;
+  } | null>(null);
   const [customConnectorOpen, setCustomConnectorOpen] = useState(Boolean(openCustomConnector));
   const paneRef = useRef<HTMLDivElement | null>(null);
 
@@ -2056,6 +2091,28 @@ export function SettingsModal({
       .querySelector<HTMLElement>('[aria-current="page"]')
       ?.scrollIntoView({ block: 'nearest' });
   }, [activeSection, navScrollNode]);
+
+  useEffect(() => {
+    if (!fieldToReveal || fieldToReveal.section !== activeSection) return;
+    const control = findControlByLabel(paneRef.current, fieldToReveal.label);
+    control?.scrollIntoView({ block: 'center' });
+    const focusControl = () => {
+      control?.focus({ preventScroll: true });
+      setFieldToReveal(null);
+    };
+    if (!fieldToReveal.afterPrompt) {
+      focusControl();
+      return;
+    }
+    // The discard prompt unmounts either with the section it guards or one
+    // commit later, and returns focus to the nav item from a zero-delay timer
+    // it sets as it unmounts. The first timer here outlasts the unmount, the
+    // second the hand-back; a focus applied any sooner is taken away again.
+    let afterHandBack = window.setTimeout(() => {
+      afterHandBack = window.setTimeout(focusControl, 0);
+    }, 0);
+    return () => window.clearTimeout(afterHandBack);
+  }, [activeSection, fieldToReveal]);
 
   function renderSection() {
     if (
@@ -2157,11 +2214,18 @@ export function SettingsModal({
   };
 
   const selectSection = (key: string) => {
-    if (key === activeSection) {
+    const item = navGroups?.flatMap((group) => group.items).find((entry) => entry.key === key);
+    const field = navFieldToReveal(item, navSearch.trim().toLowerCase());
+    const openSection = (afterPrompt: boolean) => {
       onSectionChange(key);
+      setFieldToReveal(field ? { section: key, label: field.label, afterPrompt } : null);
+    };
+    if (key === activeSection) {
+      openSection(false);
       return;
     }
-    confirmNavigation(() => onSectionChange(key));
+    const prompts = hasUnsavedChanges();
+    confirmNavigation(() => openSection(prompts));
   };
 
   return (
