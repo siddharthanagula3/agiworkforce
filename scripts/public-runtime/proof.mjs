@@ -9,7 +9,37 @@ export const DATABASE_PREFIX = 'agi_public_proof_';
 export const DATABASE_SOCKET = '/run/agi-proof-db';
 export const HTTP_SOCKET = '/run/agi-proof-http/http.sock';
 export const CONTROL_SOCKET = '/run/agi-proof-http/control.sock';
-export const PROOF_ORIGIN = 'http://127.0.0.1:3000';
+export function resolveProofOrigin(value = 'http://127.0.0.1:3000') {
+  let origin;
+  try {
+    if (typeof value !== 'string') throw new Error('Origin must be a string');
+    origin = new URL(value);
+  } catch {
+    throw new Error(
+      'Public runtime origin must be an HTTP 127.0.0.1 origin with an unprivileged port',
+    );
+  }
+  const port = Number(origin.port);
+  if (
+    origin.protocol !== 'http:' ||
+    origin.hostname !== '127.0.0.1' ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== '/' ||
+    origin.search ||
+    origin.hash ||
+    !Number.isInteger(port) ||
+    port < 1024 ||
+    port > 65535 ||
+    value !== origin.origin
+  ) {
+    throw new Error(
+      'Public runtime origin must be an HTTP 127.0.0.1 origin with an unprivileged port',
+    );
+  }
+  return origin.origin;
+}
+export const PROOF_ORIGIN = resolveProofOrigin(process.env.PUBLIC_RUNTIME_ORIGIN);
 export const SOURCE_OBLIGATIONS = [
   'module-initializers-unverified',
   'import-side-effects-unverified',

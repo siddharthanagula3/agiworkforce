@@ -15,9 +15,39 @@ import {
   PROOF_LABEL,
   PROOF_VERSION,
   renderExecutionWitness,
+  resolveProofOrigin,
   validateRuntimeProof,
   validateRawReceipt,
 } from './proof.mjs';
+
+test('the default proof origin is preserved and overrides remain exact unprivileged loopback origins', () => {
+  assert.equal(resolveProofOrigin(), 'http://127.0.0.1:3000');
+  for (const port of [1024, 3100, 65535]) {
+    const origin = `http://127.0.0.1:${port}`;
+    assert.equal(resolveProofOrigin(origin), origin);
+  }
+  for (const origin of [
+    '',
+    'not-a-url',
+    'https://127.0.0.1:3100',
+    'http://localhost:3100',
+    'http://example.invalid:3100',
+    'http://127.0.0.1',
+    'http://127.0.0.1:0',
+    'http://127.0.0.1:1023',
+    'http://127.0.0.1:65536',
+    'http://127.0.0.1:invalid',
+    'http://user@127.0.0.1:3100',
+    'http://user:password@127.0.0.1:3100',
+    'http://127.0.0.1:3100/path',
+    'http://127.0.0.1:3100/',
+    'http://127.0.0.1:3100?query=1',
+    'http://127.0.0.1:3100#fragment',
+    'http://2130706433:3100',
+    ' http://127.0.0.1:3100',
+  ])
+    assert.throws(() => resolveProofOrigin(origin), /HTTP 127\.0\.0\.1 origin/);
+});
 
 const runId = 'a'.repeat(24);
 const database = `${DATABASE_PREFIX}${runId}_1`;

@@ -1051,7 +1051,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: scope
     if: needs.scope.outputs.web_changed == 'true'
-    timeout-minutes: 60
+    timeout-minutes: 90
     # DATABASE_URL below points at a Postgres this job never started, so every
     # page answered 500 from the health check. The env-validation crash used to
     # kill the server first and hide it.
@@ -1191,7 +1191,8 @@ jobs:
       # 37698652308): 834 tests took 25.0 minutes at two workers and the
       # 25-minute cap stopped the route contrast spec at 233 of its 240
       # route and theme pairs, so the cap is 35 minutes and the job's limit
-      # is 60 to leave room for the build before it.
+      # is 90: private-runner run 38370655130 needed 29 minutes before tests
+      # and exhausted the former 60-minute job limit before final reporting.
       - name: Run signed-out Web Playwright flows
         working-directory: apps/web
         env:
