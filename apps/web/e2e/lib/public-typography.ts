@@ -582,8 +582,71 @@ export function scanPublicTypography(
     );
     return text.trim() === 'AGI' && wordmark?.textContent?.replace(/\s+/g, ' ').trim() === 'AGI';
   };
+  const statisticRoles = {
+    'stat-value': {
+      selector: 'dd.agi-ds-stat-value',
+      size: '--public-stat-size',
+      font: '--font-geist-sans',
+    },
+    'stat-label': {
+      selector: 'dt.agi-ds-stat-label',
+      size: '--public-label-size',
+      font: '--font-geist-mono',
+    },
+    'stat-note': {
+      selector: 'dd.agi-ds-stat-note',
+      size: '--public-stat-note-size',
+      font: '--font-geist-sans',
+    },
+  };
+  type StatisticRole = keyof typeof statisticRoles;
+  const statisticRoleOf = (element: Element): StatisticRole | null => {
+    const group = element.closest('.agi-ds-stat');
+    if (!group?.parentElement?.matches('dl.agi-ds-stats') || !group.closest('[data-design="agi"]'))
+      return null;
+    return (
+      (Object.keys(statisticRoles) as StatisticRole[]).find(
+        (role) => element.closest(statisticRoles[role].selector)?.parentElement === group,
+      ) ?? null
+    );
+  };
+  const statisticScales = new Map<string, { size: number | null; font: string }>();
+  const statisticScale = (role: string) => {
+    if (!Object.hasOwn(statisticRoles, role)) return null;
+    const cached = statisticScales.get(role);
+    if (cached) return cached;
+    const probe = document.createElement('span');
+    probe.dataset['design'] = 'agi';
+    probe.style.cssText =
+      'position:absolute;visibility:hidden;width:0;height:0;pointer-events:none;';
+    root.append(probe);
+    try {
+      for (const [name, tokens] of Object.entries(statisticRoles)) {
+        const sizeValue = getComputedStyle(probe).getPropertyValue(tokens.size).trim();
+        let size: number | null = null;
+        if (sizeValue && CSS.supports('font-size', sizeValue)) {
+          probe.style.setProperty('font-size', sizeValue, 'important');
+          const measured = parseFloat(getComputedStyle(probe).fontSize);
+          if (Number.isFinite(measured) && measured > 0) size = measured;
+        }
+        statisticScales.set(name, {
+          size,
+          font: firstFamily(styleOf(root).getPropertyValue(tokens.font)),
+        });
+      }
+    } finally {
+      probe.remove();
+    }
+    return statisticScales.get(role) ?? null;
+  };
   const roleOf = (element: Element, text: string, mono: boolean) => {
     if (wordmarkOf(element, text)) return 'wordmark';
+    const utility = element.closest(
+      'dialog,[role="dialog"],[role="alertdialog"],[role="region"][aria-label="Cookie consent"]',
+    );
+    if (utility && !element.closest('main,[role="main"]')) return 'ui';
+    const statistic = statisticRoleOf(element);
+    if (statistic) return statistic;
     const heading = element.closest('h1,h2,h3,h4,h5,h6,[role="heading"]');
     if (heading) {
       const navigation = heading.closest('nav,[role="navigation"]');
@@ -616,6 +679,8 @@ export function scanPublicTypography(
   const allowedSize = (size: number, role: string, mono: boolean, element: Element) => {
     const between = (minimum: number, maximum: number) =>
       size >= minimum - tolerance && size <= maximum + tolerance;
+    const statistic = statisticScale(role);
+    if (statistic) return statistic.size !== null && Math.abs(size - statistic.size) <= tolerance;
     if (role === 'body') return between(17, 18);
     if (role === 'reading') return between(16, 17);
     if (role === 'lede') return between(20, 22);
@@ -780,7 +845,14 @@ export function scanPublicTypography(
     )
       issue(findings, 'rendered-size-outside-scale', element, text, renderedSize, role);
     const headingFamilyRequired = Boolean(element.closest('h1,h2,h3,h4,h5,h6,[role="heading"]'));
-    const expectedFamily = mono && !headingFamilyRequired ? canonicalMono : sans;
+    const statistic = statisticScale(role);
+    if (statistic && statistic.size === null)
+      issue(unmeasured, 'missing-canonical-stat-size', element, text);
+    const expectedFamily = statistic
+      ? statistic.font
+      : mono && !headingFamilyRequired
+        ? canonicalMono
+        : sans;
     if (!expectedFamily && role !== 'wordmark')
       issue(
         unmeasured,
@@ -788,7 +860,11 @@ export function scanPublicTypography(
         element,
         text,
         undefined,
-        mono ? '--font-geist-mono' : '--font-geist-sans',
+        statistic
+          ? statisticRoles[role as StatisticRole].font
+          : mono
+            ? '--font-geist-mono'
+            : '--font-geist-sans',
       );
     else if (role !== 'wordmark' && family !== expectedFamily)
       issue(findings, 'font-family', element, text, undefined, expectedFamily);

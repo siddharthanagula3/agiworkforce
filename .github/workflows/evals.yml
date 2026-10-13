@@ -37,6 +37,8 @@ on:
   pull_request:
     paths:
       - 'tools/evals/**'
+      - 'scripts/run-live-evals*.mjs'
+      - 'scripts/lib/ci-prerequisites*.mjs'
       - 'packages/contracts/types/src/models.json'
       - 'packages/contracts/types/src/provider-adapter.ts'
       - 'packages/ai/model-registry/catalog/**'
@@ -53,6 +55,8 @@ on:
       - main
     paths:
       - 'tools/evals/**'
+      - 'scripts/run-live-evals*.mjs'
+      - 'scripts/lib/ci-prerequisites*.mjs'
       - 'packages/contracts/types/src/models.json'
       - 'packages/contracts/types/src/provider-adapter.ts'
       - 'packages/ai/model-registry/catalog/**'
@@ -104,6 +108,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Self-test live eval prerequisites
+        run: node --test scripts/lib/ci-prerequisites.test.mjs scripts/run-live-evals.test.mjs
 
       - name: Typecheck the harness
         run: pnpm exec tsc --noEmit -p tools/evals/tsconfig.json
@@ -203,19 +210,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Without the key the live corpora skip themselves and the run would be
-      # green while measuring nothing, so say so and stop instead. On the weekly
-      # schedule this is the signal that no quality measurement is happening:
-      # a red Monday means the secret is missing, not that the model regressed.
-      - name: Require the provider key
-        run: |
-          if [ -z "${ANTHROPIC_API_KEY}" ]; then
-            echo "ANTHROPIC_API_KEY is not set for this repository; the live corpora cannot run." >&2
-            exit 1
-          fi
-
       - name: Measure output quality
-        run: pnpm exec vitest run tools/evals
+        # CI-LIVE-EVAL-CREDENTIAL-MISSING-01 in audit/registers/known-flaws.md
+        run: node scripts/run-live-evals.mjs
 
   # The signal the staged-release gate reads. `harness` passing is not the same
   # reading: `--audit` exits 0 on a baseline whose suite scored under its own

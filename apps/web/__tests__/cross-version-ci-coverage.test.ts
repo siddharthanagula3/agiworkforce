@@ -34,18 +34,23 @@ describe('the cross-version workflow runs what the matrices claim', () => {
 
   it('runs the guard that keeps the matrices honest', () => {
     expect(workflow).toContain('node scripts/check-cross-version-matrix.mjs');
-    expect(workflow).toContain('node --test scripts/check-cross-version-matrix.test.mjs');
+    expect(workflow.replace(/\s+/gu, ' ')).toContain(
+      'node --test --test-concurrency=1 scripts/check-cross-version-matrix.test.mjs',
+    );
   });
 
   it('names the pairs it cannot test rather than omitting them', () => {
     const blocked = matrix.pairs.filter((pair) => pair.status === 'blocked');
     expect(blocked.length).toBeGreaterThan(0);
     expect(workflow).toContain('unreleased-pairs');
-    expect(workflow).toMatch(/expected to fail/i);
+    expect(workflow).toContain('node scripts/report-unreleased-pairs.mjs');
+    expect(workflow).toContain('scripts/report-unreleased-pairs.test.mjs');
+    expect(workflow).toContain('CI-CROSS-VERSION-PREDECESSORS-MISSING-01');
   });
 
   it('still runs the §110 chain, so its absence is reported and not skipped', () => {
     expect(workflow).toContain('node scripts/run-cross-surface-chain.mjs');
+    expect(workflow).toContain('scripts/run-cross-surface-chain.test.mjs');
     expect(workflow).toContain(chain.tenant.id);
     expect(workflow).toContain(chain.tenant.token);
   });

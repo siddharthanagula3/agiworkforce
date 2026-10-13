@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
+import { missingEnvironment, reportNotRun } from './lib/ci-prerequisites.mjs';
+
 const SURFACE_CHAIN = '.github/cross-surface-e2e-chain.json';
 
 const root = process.cwd();
@@ -15,81 +17,76 @@ const chain = JSON.parse(fs.readFileSync(path.join(root, SURFACE_CHAIN), 'utf8')
  * secrets there is no safe place to run it, and the honest report is the list
  * of steps that did not run and the action that would let them.
  */
-export function tenantCredentials(env) {
-  const id = env[chain.tenant.id]?.trim();
-  const token = env[chain.tenant.token]?.trim();
+export function tenantCredentials(env, chainSpec = chain) {
+  const id = env[chainSpec.tenant.id]?.trim();
+  const token = env[chainSpec.tenant.token]?.trim();
   return id && token ? { id, token } : null;
 }
 
-export function blockedExplanations(step) {
+export function blockedExplanations(step, chainSpec = chain) {
   return (step.blockedBy ?? []).map((cause) =>
     cause === 'tenant'
-      ? `no QA enterprise tenant (${chain.tenant.id})`
-      : (chain.surfaces[step.surface]?.why ?? cause),
+      ? `no QA enterprise tenant (${chainSpec.tenant.id})`
+      : (chainSpec.surfaces[step.surface]?.why ?? cause),
   );
 }
 
-function reportNotRun(reason) {
+function blockedStepsTable(chainSpec) {
   const lines = [
-    `# Cross-surface E2E chain: not run`,
-    '',
-    reason,
-    '',
     `| # | Step | Surface | Why it did not run |`,
     `| - | ---- | ------- | ------------------ |`,
-    ...chain.steps.map(
+    ...chainSpec.steps.map(
       (step) =>
-        `| ${step.order} | ${step.title} | ${step.surface} | ${blockedExplanations(step).join('; ')} |`,
+        `| ${step.order} | ${step.title} | ${step.surface} | ${blockedExplanations(step, chainSpec).join('; ')} |`,
     ),
-    '',
-    chain.tenant.unblockedBy,
   ];
   return lines.join('\n');
 }
 
-function writeSummary(body) {
-  console.log(body);
-  const summaryPath = process.env['GITHUB_STEP_SUMMARY'];
-  if (summaryPath) fs.appendFileSync(summaryPath, `${body}\n`);
-}
-
-function runStep(step) {
+function runStep(step, env, spawnImpl) {
   console.log(`\n== ${step.order}. ${step.title} (${step.surface})`);
-  const result = spawnSync('bash', ['-lc', step.command], { stdio: 'inherit' });
+  const result = spawnImpl('bash', ['-lc', step.command], { env, stdio: 'inherit' });
   return result.status === 0;
 }
 
-function main() {
-  const credentials = tenantCredentials(process.env);
+export function runChain({
+  env = process.env,
+  chainSpec = chain,
+  spawnImpl = spawnSync,
+  report = reportNotRun,
+} = {}) {
+  const credentials = tenantCredentials(env, chainSpec);
   if (!credentials) {
-    writeSummary(
-      reportNotRun(
-        `\`${chain.tenant.id}\` and \`${chain.tenant.token}\` are not set, so no step ran. ` +
-          `Nothing below was tested; this is a gap, not a pass.`,
-      ),
+    const missing = missingEnvironment([chainSpec.tenant.id, chainSpec.tenant.token], env);
+    report(
+      {
+        title: 'Cross-surface E2E chain',
+        reason: `Missing repository secrets: ${missing.join(', ')}. 0 of ${chainSpec.steps.length} §110 steps executed.`,
+        unblockedBy: chainSpec.tenant.unblockedBy,
+        flawId: 'CI-CROSS-SURFACE-TENANT-MISSING-01',
+        details: blockedStepsTable(chainSpec),
+      },
+      { env },
     );
-    console.error(
-      `\nCross-surface chain did not run: ${chain.tenant.unblockedBy}\n` +
-        `0 of ${chain.steps.length} §110 steps executed.`,
-    );
-    process.exit(process.env['AGI_CHAIN_REPORT_ONLY'] === '1' ? 0 : 1);
+    return 0;
   }
 
-  const runnable = chain.steps.filter((step) => step.status === 'covered');
+  const runnable = chainSpec.steps.filter((step) => step.status === 'covered');
   if (runnable.length === 0) {
     console.error(
       `The tenant credentials are set, but every §110 step is still marked blocked in ` +
         `${SURFACE_CHAIN}. Move a step to "covered" with the spec that runs it.`,
     );
-    process.exit(1);
+    return 1;
   }
 
-  const failed = runnable.filter((step) => !runStep(step));
+  const failed = runnable.filter((step) => !runStep(step, env, spawnImpl));
   console.log(
-    `\n${runnable.length - failed.length} of ${chain.steps.length} §110 steps passed, ` +
-      `${chain.steps.length - runnable.length} still blocked.`,
+    `\n${runnable.length - failed.length} of ${chainSpec.steps.length} §110 steps passed, ` +
+      `${chainSpec.steps.length - runnable.length} still blocked.`,
   );
-  process.exit(failed.length === 0 ? 0 : 1);
+  return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) main();
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`)
+  process.exitCode = runChain();

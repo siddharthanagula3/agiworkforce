@@ -190,3 +190,116 @@ test('a real rollback posts to the rollback endpoint after reading the plan', as
   assert.ok(write.url.includes('/rollback/dpl_good'));
   assert.ok(decodeURIComponent(write.url).includes('description=bad+deploy'));
 });
+
+for (const env of [{}, { VERCEL_TOKEN: 'fixture-token', VERCEL_ORG_ID: ' \t ' }]) {
+  test(`a drill reports missing prerequisites without contacting Vercel or the database (${Object.keys(env).join(', ') || 'all missing'})`, async () => {
+    const reports = [];
+    const result = await runRollback({
+      argv: ['--drill'],
+      env,
+      fetchImpl: () => assert.fail('an unconfigured drill must not contact Vercel'),
+      recordEventImpl: () => assert.fail('an unconfigured drill must not write an audit event'),
+      report: (report) => reports.push(report),
+    });
+
+    const missing = env.VERCEL_TOKEN
+      ? ['VERCEL_ORG_ID', 'VERCEL_PROJECT_ID']
+      : ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
+    assert.deepEqual(result, { rolledBack: false, notRun: true, missing });
+    assert.equal(reports.length, 1);
+    for (const name of missing) {
+      assert.ok(reports[0].reason.includes(name));
+      assert.ok(reports[0].unblockedBy.includes(name));
+    }
+    if (env.VERCEL_TOKEN) assert.ok(!reports[0].reason.includes('VERCEL_TOKEN'));
+    assert.ok(!JSON.stringify(reports).includes('fixture-token'));
+    assert.equal(reports[0].flawId, 'CI-ROLLBACK-DRILL-CONFIG-MISSING-01');
+  });
+}
+
+for (const argv of [
+  ['--reason', 'fixture'],
+  ['--dry-run', '--reason', 'fixture'],
+]) {
+  test(`missing credentials still block a rollback outside the drill (${argv.join(' ')})`, async () => {
+    await assert.rejects(
+      runRollback({
+        argv,
+        env: {},
+        fetchImpl: () => assert.fail('missing credentials must stop before the API'),
+        recordEventImpl: () => assert.fail('missing credentials must stop before audit storage'),
+        report: () => assert.fail('only a drill may report missing prerequisites'),
+      }),
+      RollbackError,
+    );
+  });
+}
+
+test('a configured drill resolves its target and records the drill without requesting rollback', async () => {
+  const calls = [];
+  const events = [];
+  const result = await runRollback({
+    argv: ['--drill', '--reason', 'fixture drill'],
+    env: { ...ENV, AGI_DATABASE_URL: 'postgresql://fixture.invalid/audit' },
+    fetchImpl: recordingFetch(calls),
+    recordEventImpl: async (_config, event) => events.push(event),
+    report: () => assert.fail('configured drills must not report a missing prerequisite'),
+  });
+
+  assert.deepEqual(result, { rolledBack: false, targetId: 'dpl_good', currentId: 'dpl_new' });
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['GET', 'GET'],
+  );
+  assert.equal(events.length, 1);
+  assert.equal(events[0].event, 'rollback_drill');
+  assert.equal(events[0].outcome, 'succeeded');
+  assert.equal(events[0].deploymentId, 'dpl_good');
+});
+
+test('a configured drill fails when Vercel refuses its credentials', async () => {
+  await assert.rejects(
+    runRollback({
+      argv: ['--drill'],
+      env: ENV,
+      fetchImpl: async () => ({ ok: false, status: 403 }),
+      recordEventImpl: () => assert.fail('a failed lookup must not record success'),
+      report: () => assert.fail('an API failure is not a missing prerequisite'),
+    }),
+    /Vercel project lookup returned 403/u,
+  );
+});
+
+test('a configured drill fails when there is no earlier ready deployment', async () => {
+  await assert.rejects(
+    runRollback({
+      argv: ['--drill'],
+      env: ENV,
+      fetchImpl: async (url) => ({
+        ok: true,
+        json: async () =>
+          url.includes('/v9/projects/')
+            ? { targets: { production: SERVING } }
+            : { deployments: [] },
+      }),
+      recordEventImpl: () => assert.fail('a failed resolution must not record success'),
+      report: () => assert.fail('a failed resolution is not missing configuration'),
+    }),
+    /No earlier ready production deployment/u,
+  );
+});
+
+test('a configured drill preserves an audit-storage failure', async () => {
+  await assert.rejects(
+    runRollback({
+      argv: ['--drill'],
+      env: { ...ENV, AGI_DATABASE_URL: 'postgresql://fixture.invalid/audit' },
+      fetchImpl: recordingFetch([]),
+      recordEventImpl: async () => {
+        throw new Error('fixture audit write failed');
+      },
+      report: () => assert.fail('an audit-storage failure is not a missing prerequisite'),
+    }),
+    /fixture audit write failed/u,
+  );
+});

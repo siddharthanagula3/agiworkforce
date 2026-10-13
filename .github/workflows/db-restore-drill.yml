@@ -110,9 +110,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Self-test the rollback resolver
-        run: node --test scripts/release/rollback.test.mjs
+        run: node --test scripts/lib/ci-prerequisites.test.mjs scripts/release/rollback.test.mjs
 
       - name: Resolve the deployment production would roll back to
+        # CI-ROLLBACK-DRILL-CONFIG-MISSING-01 in audit/registers/known-flaws.md
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

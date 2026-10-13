@@ -1,0 +1,17 @@
+name: Prepare runner memory
+description: Reclaim unused hosted-runner toolchains and add swap before memory-heavy checks.
+inputs:
+  swap-gib:
+    description: Swap capacity to add in GiB.
+    default: '8'
+  minimum-free-gib:
+    description: Minimum disk capacity to preserve after allocating swap.
+    default: '14'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        AGI_SWAP_GIB: ${{ inputs.swap-gib }}
+        AGI_MIN_FREE_GIB: ${{ inputs.minimum-free-gib }}
+      run: bash "$GITHUB_ACTION_PATH/prepare.sh"

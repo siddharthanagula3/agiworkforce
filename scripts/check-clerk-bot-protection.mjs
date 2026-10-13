@@ -315,18 +315,20 @@ export async function fetchPublishableKeyFromProductionSite({
   productionUrl,
   fetchImpl = globalThis.fetch,
 }) {
-  const response = await fetchImpl(productionUrl, { headers: { accept: 'text/html' } });
-  if (!response.ok) {
-    throw new Error(
-      `Production page ${productionUrl} returned ${response.status}; cannot read ${PUBLISHABLE_KEY_NAME} from it`,
-    );
+  const pages = [...new Set([productionUrl, new URL('/login', productionUrl).href])];
+  for (const pageUrl of pages) {
+    const response = await fetchImpl(pageUrl, { headers: { accept: 'text/html' } });
+    if (!response.ok) {
+      throw new Error(
+        `Production page ${pageUrl} returned ${response.status}; cannot read ${PUBLISHABLE_KEY_NAME} from it`,
+      );
+    }
+    const key = extractPublishableKeyFromHtml(await response.text());
+    if (key) return key;
   }
-  const html = await response.text();
-  const key = extractPublishableKeyFromHtml(html);
-  if (!key) {
-    throw new Error(`no ${PUBLISHABLE_KEY_NAME} found on the production page at ${productionUrl}`);
-  }
-  return key;
+  throw new Error(
+    `no ${PUBLISHABLE_KEY_NAME} found on the production pages at ${pages.join(', ')}`,
+  );
 }
 
 function parseArgs(argv) {

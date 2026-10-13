@@ -8,6 +8,8 @@ on:
     branches: [main, develop]
     paths:
       - '.github/workflows/codeql.yml'
+      - 'scripts/report-cargo-audit.mjs'
+      - 'scripts/report-cargo-audit.test.mjs'
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
@@ -15,11 +17,14 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/codeql.yml'
+      - 'scripts/report-cargo-audit.mjs'
+      - 'scripts/report-cargo-audit.test.mjs'
       - '**/*.rs'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
   schedule:
     - cron: '17 4 * * 1' # Weekly on Monday at 4:17 UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -46,26 +51,28 @@ jobs:
         with:
           toolchain: '1.94.0'
           components: clippy
+          cache: false
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: 'apps/desktop/src-tauri -> target'
+          workspaces: '. -> target'
           cache-on-failure: true
+          cache-bin: false
 
       - name: Install pinned cargo-audit
-        # audit-check installs cargo-audit without --locked when the binary is
-        # absent. That selected kstring 2.0.4 (Rust 1.96) on our Rust 1.94
-        # runner. Preinstall the current cargo-audit release from its published
-        # lockfile so the action finds the compatible, deterministic binary.
         env:
           RUSTFLAGS: ''
         run: cargo install cargo-audit --version 0.22.2 --locked
 
       - name: Run cargo audit (CVE scanning)
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          report="$RUNNER_TEMP/cargo-audit.json"
+          audit_status=0
+          test -f .cargo/audit.toml
+          cargo audit --json --file Cargo.lock > "$report" || audit_status=$?
+          node scripts/report-cargo-audit.mjs "$report"
+          exit "$audit_status"
 
       - name: Seed native messaging host sidecar placeholder
         # Tauri's `bundle.externalBin` validation in agiworkforce-desktop's

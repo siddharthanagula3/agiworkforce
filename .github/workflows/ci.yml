@@ -236,6 +236,10 @@ jobs:
           # affected selection to a full or incorrect graph.
           fetch-depth: 0
 
+      - name: Prepare memory for private-repository checks
+        if: github.event.repository.private == true
+        uses: ./.github/actions/prepare-runner-memory
+
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 9.15.3
@@ -280,8 +284,6 @@ jobs:
         # that looked green simply had web outside `--affected`, so the biggest
         # package never got checked. That made any commit touching apps/web
         # unable to pass CI, and therefore unable to deploy.
-        #
-        # The runner has 16 GB, so 8 GB of old space is well within budget.
         env:
           NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm exec turbo run typecheck --affected
@@ -312,6 +314,7 @@ jobs:
         env:
           AGI_LIVE_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
           AGI_TEST_LIVE_CONVERSATION_DRAFTS: '1'
+          NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm test:affected
 
       - name: Test (webview HTML rendering, jsdom)
@@ -1100,6 +1103,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Prepare memory for private-repository checks
+        if: github.event.repository.private == true
+        uses: ./.github/actions/prepare-runner-memory
+
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 9.15.3
@@ -1207,6 +1214,7 @@ jobs:
             marketing-stage-contrast.spec.ts \
             policy-version-history.spec.ts \
             pricing-public.spec.ts \
+            provider-stat-band.spec.ts \
             public-account-pages.spec.ts \
             public-auth-clean.spec.ts \
             public-coded-examples.spec.ts \
@@ -1225,6 +1233,7 @@ jobs:
             public-page-readiness-instrument.spec.ts \
             public-preview-placement.spec.ts \
             public-provider-cards.spec.ts \
+            public-reduced-motion.spec.ts \
             public-route-inventory-instrument.spec.ts \
             public-route-inventory.spec.ts \
             public-scroll-features-activation.spec.ts \

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastRunOn": "2026-09-12",
+  "lastRunOn": "2026-10-13",
   "probes": {
     "claude-fable-5-1": {
       "routeId": "anthropic/claude-fable-5-1",
@@ -11,6 +11,32 @@
       "detail": "400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011CeyJZBHcGBPvDuFSMuZoC\"}",
       "toolOutcome": "skipped",
       "toolDetail": null
+    },
+    "claude-haiku-5-5": {
+      "routeId": "anthropic/claude-haiku-5-5",
+      "probedOn": "2026-10-10",
+      "outcome": "answered",
+      "ttfbMs": 714,
+      "echoedModelId": null,
+      "detail": null,
+      "toolOutcome": "honoured",
+      "toolDetail": null
+    },
+    "claude-opus-5-5": {
+      "routeId": "anthropic/claude-opus-5-5",
+      "probedOn": "2026-10-13",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ANTHROPIC_API_KEY"
+    },
+    "claude-sonnet-5-5": {
+      "routeId": "anthropic/claude-sonnet-5-5",
+      "probedOn": "2026-10-13",
+      "outcome": "no_credential",
+      "ttfbMs": null,
+      "echoedModelId": null,
+      "detail": "no value for ANTHROPIC_API_KEY"
     },
     "deepseek-flash": {
       "routeId": "deepseek/deepseek-flash",
@@ -220,16 +246,6 @@
       "echoedModelId": "sonar-reasoning-pro",
       "detail": null,
       "toolOutcome": "not_honoured",
-      "toolDetail": null
-    },
-    "claude-haiku-5-5": {
-      "routeId": "anthropic/claude-haiku-5-5",
-      "probedOn": "2026-10-10",
-      "outcome": "answered",
-      "ttfbMs": 714,
-      "echoedModelId": null,
-      "detail": null,
-      "toolOutcome": "honoured",
       "toolDetail": null
     }
   }

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { publicMaskPaintHandle } from './lib/public-mask-paint';
 import { scanPublicTypography, type PublicTypographyOptions } from './lib/public-typography';
@@ -476,6 +478,219 @@ test('navigation headings use UI sizes while content headings and the small-text
       (item) => item.selector === '#section' && item.kind === 'size-outside-scale',
     ),
   ).toBe(true);
+});
+
+test('only explicit consent and dialog UI outside main use the utility size scale', async ({
+  page,
+}) => {
+  const markup = `
+    <main><h3 id="main-heading">Main heading</h3><p id="main-body">Main body.</p>
+      <div role="dialog"><h3 id="main-dialog">Embedded dialog heading</h3></div>
+      <section role="region" aria-label="Cookie consent"><p id="main-region">Main region copy.</p></section>
+    </main>
+    <section role="region" aria-label="Examples"><p id="ordinary-region">Ordinary region copy.</p></section>
+    <div role="region" aria-label="Cookie consent"><h3 id="consent-heading">Cookies on this site</h3><p id="consent-copy">Cookie preferences.</p></div>
+    <div role="dialog"><h3 id="dialog-heading">Preferences</h3><p id="dialog-copy">Choose a preference.</p></div>
+    <div role="dialog"><main><h1 id="dialog-main-heading" style="font-size:16px">Dialog main title</h1><p id="dialog-main-body">Dialog main body.</p></main></div>
+    <div role="alertdialog"><h3 id="alert-heading">Confirm choice</h3></div>
+    <dialog open><h3 id="native-heading">Native dialog</h3></dialog>
+  `;
+  const result = await scan(page, markup, 'h3,p { font-size:16px; }');
+  for (const selector of [
+    '#consent-heading',
+    '#consent-copy',
+    '#dialog-heading',
+    '#dialog-copy',
+    '#alert-heading',
+    '#native-heading',
+  ]) {
+    expect(result.samples.find((sample) => sample.selector === selector)?.role).toBe('ui');
+    expect(result.findings.filter((finding) => finding.selector === selector)).toEqual([]);
+  }
+  for (const selector of [
+    '#main-heading',
+    '#main-body',
+    '#main-dialog',
+    '#main-region',
+    '#ordinary-region',
+    '#dialog-main-heading',
+    '#dialog-main-body',
+  ]) {
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ selector, kind: 'size-outside-scale' }),
+    );
+  }
+});
+
+test('consent classification retains font, floor, scaling, clipping and contrast checks', async ({
+  page,
+}) => {
+  const markup =
+    '<div id="consent" role="region" aria-label="Cookie consent"><p id="copy">Readable cookie preferences.</p></div>';
+  const base = '#copy { font-size:16px; }';
+  const passing = await scan(page, markup, base);
+  expect(passing.findings).toEqual([]);
+  expect(passing.unmeasured).toEqual([]);
+  expect(passing.coverage.paintedTextNodes).toBe(1);
+  for (const [css, kind] of [
+    ['#copy { font-size:13px; }', 'declared-size-floor'],
+    ['#copy { font-family:serif; }', 'font-family'],
+    ['#consent { transform:scale(.5); }', 'rendered-size-floor'],
+    ['#consent { width:200px; height:10px; overflow:hidden; }', 'text-clipped'],
+    ['#consent { opacity:.5; }', 'text-opacity'],
+  ]) {
+    const result = await scan(page, markup, base + css);
+    expect(result.findings, css).toContainEqual(expect.objectContaining({ kind }));
+    expect(result.samples).not.toHaveLength(0);
+  }
+  const dim = await scan(page, markup, base + '#copy { color:#aaa; }');
+  expect(dim.samples).toHaveLength(1);
+  const contrast = evaluatePublicTextContrast(dim.samples, dim.canvasColor!);
+  expect(contrast.findings).toContainEqual(
+    expect.objectContaining({ selector: '#copy', kind: 'contrast' }),
+  );
+});
+
+const publicTokenSource = readFileSync(
+  path.resolve(__dirname, '../../../packages/ui/design-tokens/src/tailwind.css'),
+  'utf8',
+);
+const publicTokenDeclarations = publicTokenSource.match(/\[data-design='agi'\]\s*\{([^}]+)\}/)?.[1];
+if (!publicTokenDeclarations) throw new Error('The canonical public typography tokens are missing');
+const statisticStyle = `
+  [data-design="agi"] { ${publicTokenDeclarations} --agi-font:var(--font-geist-sans); }
+  .agi-ds-stat-value { font-size:var(--public-stat-size); font-family:var(--agi-font); }
+  .agi-ds-stat-label { font-size:var(--public-label-size); font-family:var(--public-label-font); }
+  .agi-ds-stat-note { font-size:var(--public-stat-note-size); font-family:var(--agi-font); }
+`;
+const statisticMarkup = `<main id="stat-owner" class="stat-owner" data-design="agi"><dl class="agi-ds-stats"><div class="agi-ds-stat">
+  <dt id="stat-label" class="agi-ds-stat-label">Providers</dt>
+  <dd id="stat-value" class="agi-ds-stat-value">42</dd>
+  <dd id="stat-note" class="agi-ds-stat-note">Catalogue date</dd>
+  </div></dl><p id="body">Main body stays prose.</p></main>`;
+
+test('statistics use their canonical token sizes and font roles without relaxing surrounding prose', async ({
+  page,
+}) => {
+  const result = await scan(page, statisticMarkup, statisticStyle);
+  expect(result.findings).toEqual([]);
+  expect(result.unmeasured).toEqual([]);
+  for (const role of ['stat-label', 'stat-value', 'stat-note']) {
+    expect(result.samples.find((sample) => sample.selector === `#${role}`)?.role).toBe(role);
+  }
+  const prose = await scan(page, statisticMarkup, statisticStyle + '#body { font-size:16px; }');
+  expect(prose.findings).toContainEqual(
+    expect.objectContaining({ selector: '#body', kind: 'declared-size-floor' }),
+  );
+  const unrelated = await scan(
+    page,
+    '<main><p id="copy" class="agi-ds-stat-value">Ordinary prose.</p></main>',
+    '#copy { font-size:16px; }',
+  );
+  expect(unrelated.samples[0]?.role).toBe('body');
+  expect(unrelated.findings).toContainEqual(
+    expect.objectContaining({ selector: '#copy', kind: 'declared-size-floor' }),
+  );
+});
+
+test('statistics reject wrong sizes and fonts, local token overrides and missing canonical sizes', async ({
+  page,
+}) => {
+  for (const [id, token] of [
+    ['stat-label', '--public-label-size'],
+    ['stat-value', '--public-stat-size'],
+    ['stat-note', '--public-stat-note-size'],
+  ]) {
+    const wrongSize = await scan(
+      page,
+      statisticMarkup,
+      statisticStyle + `#${id} { font-size:calc(var(${token}) + 1px); }`,
+    );
+    expect(wrongSize.findings).toContainEqual(
+      expect.objectContaining({ selector: `#${id}`, kind: 'size-outside-scale' }),
+    );
+    const wrongFont = await scan(
+      page,
+      statisticMarkup,
+      statisticStyle +
+        `#${id} { font-family:var(${id === 'stat-label' ? '--font-geist-sans' : '--font-geist-mono'}); }`,
+    );
+    expect(wrongFont.findings).toContainEqual(
+      expect.objectContaining({ selector: `#${id}`, kind: 'font-family' }),
+    );
+  }
+  const localOverride = await scan(
+    page,
+    statisticMarkup,
+    statisticStyle + '#stat-value { --public-stat-size:18px; }',
+  );
+  expect(localOverride.findings).toContainEqual(
+    expect.objectContaining({ selector: '#stat-value', kind: 'size-outside-scale' }),
+  );
+  const ownerOverrides =
+    '--public-stat-size:18px; --public-label-size:16px; --public-stat-note-size:16px; --agi-font:serif; --public-label-font:serif; --font-geist-sans:serif; --font-geist-mono:serif;';
+  for (const [markup, css] of [
+    [statisticMarkup, `#stat-owner { ${ownerOverrides} }`],
+    [statisticMarkup, `.stat-owner { ${ownerOverrides} }`],
+    [statisticMarkup.replace('id="stat-owner"', `id="stat-owner" style="${ownerOverrides}"`), ''],
+  ] as const) {
+    const ownerOverride = await scan(page, markup, statisticStyle + css);
+    for (const selector of ['#stat-value', '#stat-label', '#stat-note']) {
+      expect(ownerOverride.findings).toContainEqual(
+        expect.objectContaining({ selector, kind: 'size-outside-scale' }),
+      );
+      expect(ownerOverride.findings).toContainEqual(
+        expect.objectContaining({ selector, kind: 'font-family' }),
+      );
+    }
+  }
+  for (const value of ['initial', 'not-a-font-size']) {
+    const missing = await scan(
+      page,
+      statisticMarkup,
+      statisticStyle + `[data-design="agi"] { --public-stat-size:${value}; }`,
+    );
+    expect(missing.unmeasured).toContainEqual(
+      expect.objectContaining({ selector: '#stat-value', kind: 'missing-canonical-stat-size' }),
+    );
+  }
+  const scaled = await scan(
+    page,
+    statisticMarkup,
+    statisticStyle + '#stat-value { transform:scale(.8); }',
+  );
+  expect(scaled.findings).toContainEqual(
+    expect.objectContaining({ selector: '#stat-value', kind: 'rendered-size-outside-scale' }),
+  );
+});
+
+test('statistic calibration does not mutate the measured owner or its descendants', async ({
+  page,
+}) => {
+  await scan(page, statisticMarkup, statisticStyle);
+  const observed = await page.evaluateHandle(() => {
+    const owner = document.querySelector('#stat-owner');
+    if (!owner) throw new Error('Statistic owner fixture is missing');
+    const state = { mutations: 0, observer: null as MutationObserver | null };
+    state.observer = new MutationObserver((records) => {
+      state.mutations += records.length;
+    });
+    state.observer.observe(owner, { childList: true, subtree: true });
+    return state;
+  });
+  try {
+    const report = await page.evaluate(scanPublicTypography, { pageType: 'marketing' as const });
+    expect(report.findings).toEqual([]);
+    expect(report.unmeasured).toEqual([]);
+    expect(
+      await observed.evaluate(
+        (state) => state.mutations + (state.observer?.takeRecords().length ?? 0),
+      ),
+    ).toBe(0);
+  } finally {
+    await observed.evaluate((state) => state.observer?.disconnect());
+    await observed.dispose();
+  }
 });
 
 test('checks the canonical mono font and its higher floor', async ({ page }) => {

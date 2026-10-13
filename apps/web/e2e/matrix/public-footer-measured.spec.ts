@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 import { createHash } from 'node:crypto';
@@ -31,6 +31,213 @@ import {
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+const STABLE_FOOTER_IDENTITY = {
+  connected: true,
+  matches: 1,
+  sameElement: true,
+  sameParent: true,
+  sameNodes: true,
+  sameContent: true,
+  mutated: false,
+};
+
+async function captureFooterIdentity(footer: Locator, selector: string) {
+  return footer.evaluateHandle((root, scopeSelector) => {
+    const parent = root.parentNode;
+    const content = root.outerHTML;
+    const collectNodes = () => {
+      const nodes: Node[] = [root];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ALL);
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      return nodes;
+    };
+    const nodes = collectNodes();
+    let mutated = false;
+    const recordMutations = (records: MutationRecord[]) => {
+      mutated ||= records.some(
+        (record) =>
+          record.target !== parent || [...record.addedNodes, ...record.removedNodes].includes(root),
+      );
+    };
+    const observer = new MutationObserver(recordMutations);
+    observer.observe(root, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    if (parent) observer.observe(parent, { childList: true });
+    return {
+      root,
+      inspect() {
+        recordMutations(observer.takeRecords());
+        const currentNodes = collectNodes();
+        return {
+          connected: root.isConnected,
+          matches: document.querySelectorAll(scopeSelector).length,
+          sameElement: document.querySelector(scopeSelector) === root,
+          sameParent: root.parentNode === parent,
+          sameNodes:
+            currentNodes.length === nodes.length &&
+            currentNodes.every((node, index) => node === nodes[index]),
+          sameContent: root.outerHTML === content,
+          mutated,
+          nodeCount: currentNodes.length,
+          scope: {
+            selector: scopeSelector,
+            tag: root.localName,
+            label: root.getAttribute('aria-label'),
+          },
+        };
+      },
+      disconnect() {
+        observer.disconnect();
+      },
+    };
+  }, selector);
+}
+
+type FooterIdentity = Awaited<ReturnType<typeof captureFooterIdentity>>;
+
+async function disposeFooterIdentity(identity: FooterIdentity) {
+  try {
+    await identity.evaluate((witness) => witness.disconnect());
+  } finally {
+    await identity.dispose();
+  }
+}
+
+test.describe('footer identity instrument', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setContent(
+      '<header>Site header</header><main>Before the footer</main><footer class="agi-ds-footer"><a href="/help">Help</a></footer>',
+    );
+  });
+
+  test('unrelated document insertion preserves the exact footer witness', async ({ page }) => {
+    const footer = page.locator('footer.agi-ds-footer');
+    const identity = await captureFooterIdentity(footer, 'footer.agi-ds-footer');
+    try {
+      const before = await identity.evaluate((witness) => witness.inspect());
+      expect(before).toMatchObject(STABLE_FOOTER_IDENTITY);
+      expect(before.nodeCount).toBe(3);
+      const indices = await footer.evaluate((root) => {
+        const before = [...document.querySelectorAll('*')].indexOf(root);
+        root.before(document.createElement('aside'));
+        return { before, after: [...document.querySelectorAll('*')].indexOf(root) };
+      });
+      expect(indices.after).toBe(indices.before + 1);
+      const typography = await page.evaluate(scanPublicTypography, {
+        pageType: 'marketing' as const,
+        scopeSelector: 'footer.agi-ds-footer',
+      });
+      expect(typography.scope).toMatchObject(before.scope);
+      expect(typography.coverage.textNodes).toBe(1);
+      expect(await identity.evaluate((witness) => witness.inspect())).toEqual(before);
+    } finally {
+      await disposeFooterIdentity(identity);
+    }
+  });
+
+  test('footer settling completes before the typography identity witness begins', async ({
+    page,
+  }) => {
+    const footer = page.locator('footer.agi-ds-footer');
+    await footer.evaluate((root) => {
+      const link = root.querySelector('a');
+      if (!link) throw new Error('Footer identity fixture has no link');
+      requestAnimationFrame(() => {
+        link.textContent = 'Settled footer';
+      });
+    });
+    const settled = await stableFooterState(page, footer);
+    expect(settled.text.map((node) => node.text)).toEqual(['Settled footer']);
+    const identity = await captureFooterIdentity(footer, 'footer.agi-ds-footer');
+    try {
+      const before = await identity.evaluate((witness) => witness.inspect());
+      expect(before).toMatchObject(STABLE_FOOTER_IDENTITY);
+      expect(before.nodeCount).toBe(3);
+      const typography = await page.evaluate(scanPublicTypography, {
+        pageType: 'marketing' as const,
+        scopeSelector: 'footer.agi-ds-footer',
+      });
+      expect(typography.scope).toMatchObject(before.scope);
+      expect(typography.coverage.textNodes).toBe(1);
+      expect(await identity.evaluate((witness) => witness.inspect())).toEqual(before);
+    } finally {
+      await disposeFooterIdentity(identity);
+    }
+  });
+
+  test('an identical replacement footer fails identity even when its content matches', async ({
+    page,
+  }) => {
+    const footer = page.locator('footer.agi-ds-footer');
+    const identity = await captureFooterIdentity(footer, 'footer.agi-ds-footer');
+    try {
+      await footer.evaluate((root) => root.replaceWith(root.cloneNode(true)));
+      expect(await identity.evaluate((witness) => witness.inspect())).toMatchObject({
+        connected: false,
+        matches: 1,
+        sameElement: false,
+        sameContent: true,
+        mutated: true,
+      });
+    } finally {
+      await disposeFooterIdentity(identity);
+    }
+  });
+
+  test('an identical replacement descendant fails footer node identity', async ({ page }) => {
+    const footer = page.locator('footer.agi-ds-footer');
+    const identity = await captureFooterIdentity(footer, 'footer.agi-ds-footer');
+    try {
+      await footer.locator('a').evaluate((link) => link.replaceWith(link.cloneNode(true)));
+      expect(await identity.evaluate((witness) => witness.inspect())).toMatchObject({
+        connected: true,
+        sameElement: true,
+        sameNodes: false,
+        sameContent: true,
+        mutated: true,
+      });
+    } finally {
+      await disposeFooterIdentity(identity);
+    }
+  });
+
+  for (const change of ['text', 'attribute', 'restored-text', 'restored-root'] as const) {
+    test(`synchronous ${change} changes are caught before observer delivery`, async ({ page }) => {
+      const footer = page.locator('footer.agi-ds-footer');
+      const identity = await captureFooterIdentity(footer, 'footer.agi-ds-footer');
+      try {
+        const state = await identity.evaluate((witness, change) => {
+          const link = witness.root.querySelector('a');
+          if (!link?.firstChild) throw new Error('Footer identity fixture has no link text');
+          if (change === 'attribute') link.setAttribute('href', '/changed');
+          else if (change === 'restored-root') {
+            const parent = witness.root.parentNode;
+            if (!parent) throw new Error('Footer identity fixture has no parent');
+            witness.root.remove();
+            parent.appendChild(witness.root);
+          } else {
+            const original = link.firstChild.nodeValue;
+            link.firstChild.nodeValue = 'Changed';
+            if (change === 'restored-text') link.firstChild.nodeValue = original;
+          }
+          return witness.inspect();
+        }, change);
+        expect(state).toMatchObject({
+          ...STABLE_FOOTER_IDENTITY,
+          sameContent: change === 'restored-text' || change === 'restored-root',
+          mutated: true,
+        });
+      } finally {
+        await disposeFooterIdentity(identity);
+      }
+    });
+  }
+});
+
 const selectedPaths = process.env['PUBLIC_DESIGN_ROUTES']?.split(',');
 const selectedWidths = process.env['PUBLIC_DESIGN_WIDTHS']?.split(',').map(Number);
 const routes = FOOTER_SAMPLE_ROUTES.filter(
@@ -59,6 +266,7 @@ test.describe('shared footer measured readability and controls', () => {
             ],
           };
           let context: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+          let footerIdentity: FooterIdentity | undefined;
           let failure: unknown;
           try {
             if (!baseURL) throw new Error('Footer measurement requires a base URL');
@@ -98,18 +306,6 @@ test.describe('shared footer measured readability and controls', () => {
             await expect(footer).toHaveCount(1);
             await expect(footer).toHaveClass(/agi-ds-footer/u);
             const scopeSelector = 'footer.agi-ds-footer';
-            const ownership = await footer.evaluate(
-              (root, selector) => ({
-                matches: document.querySelectorAll(selector).length,
-                sameElement: document.querySelector(selector) === root,
-                elementIndex: [...document.querySelectorAll('*')].indexOf(root),
-                tag: root.localName,
-                label: root.getAttribute('aria-label'),
-              }),
-              scopeSelector,
-            );
-            expect(ownership.matches).toBe(1);
-            expect(ownership.sameElement).toBe(true);
             await footer.scrollIntoViewIfNeeded();
             await page.mouse.move(0, 0);
             const measuredState = await stableFooterState(page, footer);
@@ -126,18 +322,23 @@ test.describe('shared footer measured readability and controls', () => {
               evidence['fontProofError'] = String(error);
             }
             expect.soft(fontFailure, 'Footer font proof').toBeUndefined();
+            footerIdentity = await captureFooterIdentity(footer, scopeSelector);
+            const ownership = await footerIdentity.evaluate((witness) => witness.inspect());
+            evidence['footerIdentityBeforeTypography'] = ownership;
+            expect(ownership).toMatchObject(STABLE_FOOTER_IDENTITY);
+            expect(ownership.nodeCount).toBeGreaterThan(1);
             const typography = await page.evaluate(scanPublicTypography, {
               pageType: 'marketing' as const,
               pathname: route.pathname,
               scopeSelector,
             });
             evidence['typography'] = typography;
-            expect.soft(typography.scope).toEqual({
-              selector: scopeSelector,
-              elementIndex: ownership.elementIndex,
-              tag: ownership.tag,
-              label: ownership.label,
-            });
+            const measuredIdentity = await footerIdentity.evaluate((witness) => witness.inspect());
+            evidence['footerIdentityAfterTypography'] = measuredIdentity;
+            expect.soft(measuredIdentity).toEqual(ownership);
+            expect.soft(typography.scope).toMatchObject(ownership.scope);
+            await disposeFooterIdentity(footerIdentity);
+            footerIdentity = undefined;
             expect.soft(typography.samples.length).toBeGreaterThan(0);
             const rawTextCount = await footer.evaluate((root) => {
               const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -385,6 +586,14 @@ test.describe('shared footer measured readability and controls', () => {
           } catch (error) {
             failure = error;
           } finally {
+            if (footerIdentity) {
+              try {
+                await disposeFooterIdentity(footerIdentity);
+              } catch (error) {
+                failure ??= error;
+                evidence['footerIdentityDisposeError'] = String(error);
+              }
+            }
             try {
               await context?.close();
               evidence['contextClosed'] = context !== undefined;

@@ -37,7 +37,7 @@ export interface SharedSession {
 
 export function SharedSessionViewer({ session, token }: { session: SharedSession; token: string }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <main id="main-content" className="min-h-screen bg-background text-foreground">
       {/* Top banner */}
       <div className="border-b border-border bg-primary/10 px-4 py-3 text-center text-sm text-foreground">
         Read-only shared session.{' '}
@@ -119,6 +119,6 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
           </div>
         ))}
       </div>
-    </div>
+    </main>
   );
 }

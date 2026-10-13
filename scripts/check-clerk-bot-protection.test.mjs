@@ -408,13 +408,62 @@ test('fetchPublishableKeyFromProductionSite extracts the key from the served pag
   assert.deepEqual(requested, ['https://agiworkforce.com']);
 });
 
-test('fetchPublishableKeyFromProductionSite fails accurately when the page has no key', async () => {
+test('fetchPublishableKeyFromProductionSite reads the login page when marketing does not load Clerk', async () => {
+  const requested = [];
+  const key = await fetchPublishableKeyFromProductionSite({
+    productionUrl: 'https://agiworkforce.com',
+    fetchImpl: async (url) => {
+      requested.push(url);
+      return htmlResponse(
+        url.endsWith('/login')
+          ? REALISTIC_PRODUCTION_HTML_FIXTURE
+          : '<html><body>Public marketing</body></html>',
+      );
+    },
+  });
+  assert.equal(key, FAKE_PUBLISHABLE_KEY);
+  assert.deepEqual(requested, ['https://agiworkforce.com', 'https://agiworkforce.com/login']);
+});
+
+test('fetchPublishableKeyFromProductionSite preserves HTTP failures without looking elsewhere', async () => {
+  const requested = [];
+  await assert.rejects(
+    fetchPublishableKeyFromProductionSite({
+      productionUrl: 'https://agiworkforce.com',
+      fetchImpl: async (url) => {
+        requested.push(url);
+        return { ok: false, status: 503 };
+      },
+    }),
+    /returned 503/u,
+  );
+  assert.deepEqual(requested, ['https://agiworkforce.com']);
+});
+
+test('fetchPublishableKeyFromProductionSite fails accurately when the pages have no key', async () => {
   const fetchImpl = async () => htmlResponse('<html><body>nothing to see</body></html>');
 
   await assert.rejects(
     fetchPublishableKeyFromProductionSite({ productionUrl: 'https://agiworkforce.com', fetchImpl }),
     /no NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY found on the production page/u,
   );
+});
+
+test('run still fails protection checks when its public key comes from the login page', async () => {
+  const code = await run(
+    [],
+    {},
+    {
+      fetchImpl: async (url) => {
+        if (url === 'https://agiworkforce.com') return htmlResponse('<html></html>');
+        if (url === 'https://agiworkforce.com/login') {
+          return htmlResponse(REALISTIC_PRODUCTION_HTML_FIXTURE);
+        }
+        return jsonResponse(environmentWith({ captchaEnabled: false }));
+      },
+    },
+  );
+  assert.equal(code, 1);
 });
 
 test('run falls back to the production page when Vercel cannot decrypt the value, and still passes with a good instance', async () => {

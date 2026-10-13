@@ -9,8 +9,11 @@ import { pathToFileURL } from 'node:url';
 
 import { Client } from 'pg';
 
+import { missingEnvironment, reportNotRun } from '../lib/ci-prerequisites.mjs';
+
 const API_ORIGIN = 'https://api.vercel.com';
 const DEPLOYMENT_PAGE_SIZE = 20;
+const REQUIRED_ENVIRONMENT = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
 
 export class RollbackError extends Error {
   constructor(message, details = []) {
@@ -40,9 +43,7 @@ export function parseArguments(argv) {
 }
 
 export function readEnvironment(env) {
-  const missing = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'].filter(
-    (name) => !env[name]?.trim(),
-  );
+  const missing = missingEnvironment(REQUIRED_ENVIRONMENT, env);
   if (missing.length > 0) {
     throw new RollbackError('The rollback path is not configured', missing);
   }
@@ -184,8 +185,27 @@ async function recordEvent(config, event) {
   }
 }
 
-export async function runRollback({ argv, env, fetchImpl = fetch }) {
+export async function runRollback({
+  argv,
+  env,
+  fetchImpl = fetch,
+  recordEventImpl = recordEvent,
+  report = reportNotRun,
+}) {
   const options = parseArguments(argv);
+  const missing = missingEnvironment(REQUIRED_ENVIRONMENT, env);
+  if (options.drill && missing.length > 0) {
+    report(
+      {
+        title: 'Rollback drill',
+        reason: `Missing repository secrets: ${missing.join(', ')}. No rollback target was resolved.`,
+        unblockedBy: `Add the repository secrets ${missing.join(', ')} and rerun Recovery Drills.`,
+        flawId: 'CI-ROLLBACK-DRILL-CONFIG-MISSING-01',
+      },
+      { env },
+    );
+    return { rolledBack: false, notRun: true, missing };
+  }
   const config = readEnvironment(env);
 
   const current = await readProductionTarget(fetchImpl, config);
@@ -198,7 +218,7 @@ export async function runRollback({ argv, env, fetchImpl = fetch }) {
       `resolved rollback target ${targetId} (currently serving ${current?.id ?? 'nothing'})`,
     );
     if (options.drill) {
-      await recordEvent(config, {
+      await recordEventImpl(config, {
         event: 'rollback_drill',
         surface: 'web',
         environment: 'production',
@@ -217,7 +237,7 @@ export async function runRollback({ argv, env, fetchImpl = fetch }) {
   }
 
   await requestRollback(fetchImpl, config, targetId, options.reason);
-  await recordEvent(config, {
+  await recordEventImpl(config, {
     event: 'rolled_back',
     surface: 'web',
     environment: 'production',

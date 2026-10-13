@@ -1423,19 +1423,8 @@ html[data-contrast='more'] *:focus-visible {
     padding-bottom: var(--safe-area-extra-bottom, 1rem);
   }
 }
-/* Reduced motion.
- *
- * Reduced motion is a request for a gentler equivalent, not for a dead
- * interface. Killing every transition outright also kills the press, hover and
- * focus feedback that tells someone their input registered - the one thing an
- * interface cannot afford to lose - and it removes opacity changes that carry
- * no vestibular risk at all.
- *
- * So: scripted and looping animation stops, because that is the vestibular
- * part - ten infinite loops here including two full-width marquees. Transitions
- * survive as a short cross-fade. Components that translate on entry disarm
- * themselves separately (see .agi-reveal-armed), which is where a slide should
- * be replaced rather than merely accelerated. */
+/* A universal positive duration activates transition-property: all on otherwise
+   static elements. Reduced motion must keep these state changes immediate. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1448,7 +1437,7 @@ html[data-contrast='more'] *:focus-visible {
   *,
   *::before,
   *::after {
-    transition-duration: var(--duration-instant) !important;
+    transition: none !important;
   }
 }
 /* ──────────────────────────────────────────────────────────────────────

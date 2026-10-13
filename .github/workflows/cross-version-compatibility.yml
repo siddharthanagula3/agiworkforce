@@ -6,8 +6,8 @@ name: Cross-version and cross-surface
 # QA enterprise tenant that does not exist yet. Those gaps live in
 # .github/cross-version-matrix.json and .github/cross-surface-e2e-chain.json,
 # and check-cross-version-matrix.mjs fails if either file ever claims coverage
-# it does not have. The unreleased-pairs job below fails on purpose, on a
-# schedule, so the gap stays visible without blocking unrelated merges.
+# it does not have. Missing prerequisites produce warnings and NOT RUN summaries;
+# configured checks and matrix integrity remain blocking.
 
 on:
   push:
@@ -41,7 +41,12 @@ jobs:
         run: node scripts/check-cross-version-matrix.mjs
 
       - name: Guard regression tests
-        run: node --test scripts/check-cross-version-matrix.test.mjs
+        run: >-
+          node --test --test-concurrency=1
+          scripts/check-cross-version-matrix.test.mjs
+          scripts/lib/ci-prerequisites.test.mjs
+          scripts/report-unreleased-pairs.test.mjs
+          scripts/run-cross-surface-chain.test.mjs
 
   covered-pairs:
     name: ${{ matrix.pair }}
@@ -92,7 +97,7 @@ jobs:
         run: ${{ steps.pair.outputs.command }}
 
   unreleased-pairs:
-    name: Pairs with no released predecessor (expected to fail)
+    name: Report pairs with missing prerequisites
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -104,16 +109,8 @@ jobs:
           node-version: 24
 
       - name: Name every pair that cannot be tested and what would unblock it
-        run: |
-          node -e "
-            const matrix = require('./.github/cross-version-matrix.json');
-            const blocked = matrix.pairs.filter((pair) => pair.status === 'blocked');
-            for (const pair of blocked) {
-              console.error('::error title=' + pair.title + '::' + pair.reason + ' Unblocked by: ' + pair.unblockedBy);
-            }
-            console.error(blocked.length + ' of ' + matrix.pairs.length + ' §109 pairs cannot be tested yet.');
-            process.exit(blocked.length === 0 ? 0 : 1);
-          "
+        # CI-CROSS-VERSION-PREDECESSORS-MISSING-01 in audit/registers/known-flaws.md
+        run: node scripts/report-unreleased-pairs.mjs
 
   cross-surface-chain:
     name: Cross-surface E2E chain (§110)
@@ -126,14 +123,9 @@ jobs:
         with:
           node-version: 24
 
-      # Without the tenant secrets the runner writes the list of steps that did
-      # not run into the job summary and exits non-zero. On push and pull
-      # request it reports rather than fails, so an absent founder credential
-      # does not block merges; the weekly and manual runs let it fail, which is
-      # what keeps the gap from reading as a pass.
       - name: Walk the chain against the QA enterprise tenant
+        # CI-CROSS-SURFACE-TENANT-MISSING-01 in audit/registers/known-flaws.md
         env:
           QA_ENTERPRISE_TENANT_ID: ${{ secrets.QA_ENTERPRISE_TENANT_ID }}
           QA_ENTERPRISE_TENANT_TOKEN: ${{ secrets.QA_ENTERPRISE_TENANT_TOKEN }}
-          AGI_CHAIN_REPORT_ONLY: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '0' || '1' }}
         run: node scripts/run-cross-surface-chain.mjs

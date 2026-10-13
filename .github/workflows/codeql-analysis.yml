@@ -27,11 +27,17 @@ jobs:
     outputs:
       rust: ${{ steps.rust.outputs.rust }}
     steps:
+      - name: Explain unavailable code scanning
+        if: github.event.repository.private == true
+        run: echo '::notice::CodeQL did not run because code scanning is unavailable for this repository. The Semgrep gate in ci.yml remains the enforced static analysis.'
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event.repository.private == false
         with:
           fetch-depth: 0
 
       - name: Detect Rust or Cargo changes
+        if: github.event.repository.private == false
         id: rust
         shell: bash
         env:
@@ -56,6 +62,7 @@ jobs:
 
   interpreted:
     name: CodeQL (${{ matrix.language }})
+    if: github.event.repository.private == false
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
