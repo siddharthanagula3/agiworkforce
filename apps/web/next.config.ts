@@ -24,6 +24,7 @@ const standaloneOutput = standaloneEnabled ? ({ output: STANDALONE_OUTPUT } as c
 const TRACED_ROUTE_GLOB = '/**';
 
 const TRACED_RUNTIME_FILES = [
+  './assets/og/**',
   '../../.agents/skills/**',
   '../../skills-lock.json',
   '../../node_modules/.pnpm/argon2@*/node_modules/argon2/prebuilds/**',
