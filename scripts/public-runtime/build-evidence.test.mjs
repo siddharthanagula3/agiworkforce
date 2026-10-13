@@ -1,8 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { buildEvidenceReader, proofDockerfile } from './build-evidence.mjs';
+import { buildEvidenceReader, collectBuildEvidence, proofDockerfile } from './build-evidence.mjs';
 import { digest } from './proof.mjs';
+
+function temporaryBuild(t) {
+  const directory = mkdtempSync(path.join(tmpdir(), 'public-build-evidence-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const server = path.join(directory, 'server');
+  const output = path.join(directory, 'evidence');
+  mkdirSync(server);
+  writeFileSync(path.join(directory, 'BUILD_ID'), 'test-build');
+  writeFileSync(path.join(server, 'render.js'), 'function render(){return 1;}');
+  writeFileSync(path.join(server, 'render.js.map'), '{"version":3}');
+  return { server, output, revision: 'a'.repeat(40) };
+}
 
 test('the proof stage extends the canonical builder and runner without replacing either', () => {
   const original =
@@ -57,4 +72,35 @@ test('server maps are usable only for their immutable build and exact generated 
     () => buildEvidenceReader('/server', '/proof', expected, read)('/server/chunks/render.js.map'),
     /map digest changed/,
   );
+});
+
+test('collection retains emitted pairs and records a map without executable JavaScript', (t) => {
+  const { server, output, revision } = temporaryBuild(t);
+  mkdirSync(path.join(server, 'edge/chunks'), { recursive: true });
+  writeFileSync(path.join(server, 'edge/chunks/wrapper.js.map'), '{"version":3}');
+  const manifest = collectBuildEvidence(server, output, revision);
+  assert.deepEqual(Object.keys(manifest.maps), ['render.js']);
+  assert.deepEqual(manifest.orphanMaps, ['edge/chunks/wrapper.js.map']);
+  assert.equal(
+    buildEvidenceReader(server, output, { revision, buildId: 'test-build' })(
+      path.join(server, 'render.js.map'),
+    ),
+    '{"version":3}',
+  );
+});
+
+test('collection does not suppress adjacent JavaScript read failures other than ENOENT', (t) => {
+  const { server, output, revision } = temporaryBuild(t);
+  mkdirSync(path.join(server, 'invalid.js'));
+  writeFileSync(path.join(server, 'invalid.js.map'), '{"version":3}');
+  assert.throws(() => collectBuildEvidence(server, output, revision), { code: 'EISDIR' });
+});
+
+test('an orphan map cannot later satisfy a required runtime script binding', (t) => {
+  const { server, output, revision } = temporaryBuild(t);
+  writeFileSync(path.join(server, 'missing.js.map'), '{"version":3}');
+  collectBuildEvidence(server, output, revision);
+  writeFileSync(path.join(server, 'missing.js'), 'function requiredRender(){return 1;}');
+  const read = buildEvidenceReader(server, output, { revision, buildId: 'test-build' });
+  assert.throws(() => read(path.join(server, 'missing.js.map')), /No source map is bound/);
 });

@@ -18,6 +18,7 @@ export function collectBuildEvidence(serverRoot, outputRoot, revision) {
   if (!/^[a-f0-9]{40}$/.test(revision ?? ''))
     throw new Error('Build evidence requires an exact source revision');
   const maps = {};
+  const orphanMaps = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const filename = path.join(directory, entry.name);
@@ -25,7 +26,14 @@ export function collectBuildEvidence(serverRoot, outputRoot, revision) {
       if (entry.isDirectory()) visit(filename);
       else if (entry.isFile() && filename.endsWith('.js.map')) {
         const relative = path.relative(serverRoot, filename.slice(0, -4)).split(path.sep).join('/');
-        const generated = readFileSync(filename.slice(0, -4));
+        let generated;
+        try {
+          generated = readFileSync(filename.slice(0, -4));
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+          orphanMaps.push(`${relative}.map`);
+          continue;
+        }
         const map = readFileSync(filename);
         const archive = `${relative}.map.gz`;
         const destination = path.join(outputRoot, archive);
@@ -41,6 +49,7 @@ export function collectBuildEvidence(serverRoot, outputRoot, revision) {
     revision,
     buildId: readFileSync(path.join(serverRoot, '../BUILD_ID'), 'utf8').trim(),
     maps,
+    orphanMaps,
   };
   writeFileSync(path.join(outputRoot, 'manifest.json'), JSON.stringify(manifest));
   return manifest;
