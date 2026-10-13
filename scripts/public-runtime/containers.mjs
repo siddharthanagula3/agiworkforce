@@ -92,8 +92,8 @@ export class PublicRuntimeContainers {
     return (includeStderr ? `${result.stdout}\n${result.stderr}` : result.stdout).trim();
   }
 
-  async inspect(name) {
-    return JSON.parse(await this.docker(['inspect', name]))[0];
+  async inspect(name, options) {
+    return JSON.parse(await this.docker(['inspect', name], options))[0];
   }
 
   async postgresReady() {
@@ -116,7 +116,7 @@ export class PublicRuntimeContainers {
   async readinessError(name, message) {
     const owned = this.names.get(name);
     if (!owned) throw new Error('Refusing startup diagnostics for an unowned container');
-    const current = await this.inspect(owned.id);
+    const current = await this.inspect(owned.id, { timeout: 10_000, maxBuffer: 128 * 1024 });
     if (
       current.Id !== owned.id ||
       current.Image !== owned.image ||
@@ -1001,6 +1001,46 @@ export class PublicRuntimeContainers {
       this.handleBindings.get(handle) !== digest(handle.state)
     )
       throw new Error('Runtime case identity changed');
+  }
+
+  async caseFailureDiagnostics(handle) {
+    this.assertCase(handle);
+    const application = await this.readinessError(handle.appName, 'Failed case application');
+    const relay = await this.readinessError(handle.relayName, 'Failed case relay');
+    const owned = this.names.get(handle.appName);
+    const current = await this.inspect(owned.id, { timeout: 10_000, maxBuffer: 128 * 1024 });
+    if (
+      current.Id !== owned.id ||
+      current.Image !== owned.image ||
+      current.Config?.Labels?.[PROOF_LABEL] !== this.runId
+    )
+      throw new Error('Container ownership changed before failure event collection');
+    let eventsTail;
+    try {
+      eventsTail = await this.docker(
+        [
+          'exec',
+          owned.id,
+          'node',
+          '-e',
+          "const fs=require('node:fs');const file=fs.openSync('/proof-output/events.jsonl','r');try{const size=fs.fstatSync(file).size;const buffer=Buffer.alloc(Math.min(size,65536));const read=fs.readSync(file,buffer,0,buffer.length,Math.max(0,size-buffer.length));process.stdout.write(buffer.subarray(0,read))}finally{fs.closeSync(file)}",
+        ],
+        { timeout: 10_000, maxBuffer: 128 * 1024 },
+      );
+    } catch {
+      eventsTail = 'Failure events unavailable';
+    }
+    return {
+      failureOnly: true,
+      revision: this.revision,
+      imageId: this.imageId,
+      buildId: this.buildId,
+      stateId: handle.state.stateId,
+      application: application.message,
+      relay: relay.message,
+      eventsTail,
+      limits: ['Bounded failure diagnostics, not a complete runtime receipt or passing proof.'],
+    };
   }
 
   async stopContainer(name) {

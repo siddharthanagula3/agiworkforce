@@ -82,6 +82,29 @@ test('cold public runtime proof', async ({ browser }, testInfo) => {
           { coverage: browserProof.coverage, httpRequests: browserProof.httpRequests },
         );
         expect(proof.document).toEqual(browserProof.document);
+      } catch (error) {
+        let diagnostics;
+        try {
+          diagnostics = await harness.caseFailureDiagnostics(handle);
+        } catch (diagnosticError) {
+          diagnostics = {
+            failureOnly: true,
+            stateId: handle.state.stateId,
+            error: String(diagnosticError),
+          };
+        }
+        try {
+          await testInfo.attach(`runtime-failure-${handle.state.stateId}.json`, {
+            body: JSON.stringify(diagnostics),
+            contentType: 'application/json',
+          });
+        } catch (attachmentError) {
+          testInfo.annotations.push({
+            type: 'runtime-failure-diagnostics-unavailable',
+            description: String(attachmentError),
+          });
+        }
+        throw error;
       } finally {
         await context.close();
       }

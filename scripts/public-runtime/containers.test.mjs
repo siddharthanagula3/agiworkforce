@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { promisify } from 'node:util';
 import { PublicRuntimeContainers } from './containers.mjs';
 import { assertNoUnrecordedResources, restoreOwnership } from './cleanup.mjs';
 import { DATABASE_SOCKET, digest, PROOF_LABEL } from './proof.mjs';
@@ -63,8 +65,9 @@ test('the final postgres process must accept the exact fixture connection', asyn
 test('startup diagnostics read bounded stdout and stderr from the recorded owner', async () => {
   const value = harness();
   value.names.set('database', { id: 'original', image: value.postgresImageId });
-  value.inspect = async (id) => {
+  value.inspect = async (id, options) => {
     assert.equal(id, 'original');
+    assert.deepEqual(options, { timeout: 10_000, maxBuffer: 128 * 1024 });
     return {
       Id: id,
       Image: value.postgresImageId,
@@ -128,6 +131,87 @@ test('unavailable diagnostics retain the failing readiness result', async () => 
   };
   const error = await value.readinessError('database', 'Database stopped');
   assert.equal(error.message, 'Database stopped (exit 1):\nStartup logs unavailable');
+});
+
+test('failed cases collect only bounded diagnostics from verified current resources', async () => {
+  const value = harness();
+  value.activeCase = 0;
+  value.handleBindings = new WeakMap();
+  value.revision = 'b'.repeat(40);
+  value.buildId = 'build';
+  const handle = { index: 0, state: { stateId: 'root' }, appName: 'app', relayName: 'relay' };
+  value.handleBindings.set(handle, digest(handle.state));
+  for (const name of ['app', 'relay'])
+    value.names.set(name, { id: `${name}-id`, image: value.imageId });
+  value.inspect = async (id, options) => {
+    assert.deepEqual(options, { timeout: 10_000, maxBuffer: 128 * 1024 });
+    return {
+      Id: id,
+      Image: value.imageId,
+      Config: { Labels: { [PROOF_LABEL]: value.runId } },
+      State: { ExitCode: 0 },
+    };
+  };
+  const commands = [];
+  value.docker = async (args, options) => {
+    commands.push({ args, options });
+    return args[0] === 'exec' ? 'request failure' : 'runtime failure';
+  };
+  const result = await value.caseFailureDiagnostics(handle);
+  assert.equal(result.failureOnly, true);
+  assert.equal(result.eventsTail, 'request failure');
+  assert.equal(result.stateId, 'root');
+  assert.equal(result.teardownComplete, undefined);
+  assert.equal(result.proofs, undefined);
+  assert.equal(commands.length, 3);
+  const events = commands[2];
+  assert.deepEqual(events.args.slice(0, 3), ['exec', 'app-id', 'node']);
+  assert.match(events.args[4], /Buffer\.alloc\(Math\.min\(size,65536\)\)/);
+  assert.deepEqual(events.options, { timeout: 10_000, maxBuffer: 128 * 1024 });
+  assert.match(result.limits[0], /not a complete runtime receipt/);
+  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-event-tail-'));
+  try {
+    const filename = path.join(directory, 'events.jsonl');
+    const script = events.args[4].replace("'/proof-output/events.jsonl'", JSON.stringify(filename));
+    for (const size of [0, 20, 90 * 1024]) {
+      const content = Buffer.alloc(size);
+      for (let offset = 0; offset + 4 <= size; offset += 4) content.writeUInt32LE(offset, offset);
+      const expected = content.subarray(Math.max(0, size - 65_536));
+      if (size > 65_536) assert.notDeepEqual(expected, content.subarray(0, 65_536));
+      await writeFile(filename, content);
+      const { stdout } = await promisify(execFile)(process.execPath, ['-e', script], {
+        ...events.options,
+        encoding: 'buffer',
+      });
+      assert.deepEqual(stdout, expected);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+  commands.length = 0;
+  handle.state.stateId = 'mutated';
+  await assert.rejects(value.caseFailureDiagnostics(handle), /case identity changed/);
+  assert.deepEqual(commands, []);
+
+  handle.state.stateId = 'root';
+  for (const change of [
+    { Id: 'replacement' },
+    { Image: 'replacement-image' },
+    { Config: { Labels: {} } },
+  ]) {
+    let inspected = 0;
+    value.inspect = async (id) => ({
+      Id: id,
+      Image: value.imageId,
+      Config: { Labels: { [PROOF_LABEL]: value.runId } },
+      State: { ExitCode: 0 },
+      ...(++inspected === 3 ? change : {}),
+    });
+    commands.length = 0;
+    await assert.rejects(value.caseFailureDiagnostics(handle), /ownership changed before/);
+    assert.equal(commands.length, 2);
+    assert.ok(commands.every(({ args }) => args[0] === 'logs'));
+  }
 });
 
 test('docker log collection includes both pipes while ordinary commands retain stdout only', async () => {
