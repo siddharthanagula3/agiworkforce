@@ -156,6 +156,80 @@ describe('GET /api/user/export completeness', () => {
     expect(reads[0]?.[1]).toEqual(['user_export']);
   });
 
+  it('exports redeemed invites using only their existing columns and the requesting user invite ids', async () => {
+    const redeemedAt = '2026-09-01T00:00:00.000Z';
+    const invites = [
+      { id: '10000000-0000-4000-8000-000000000001', plan_tier: 'fixture-plan', trial_days: 0 },
+      { id: '10000000-0000-4000-8000-000000000002', plan_tier: null, trial_days: null },
+    ];
+    const redemptions = invites.map((invite, index) => ({
+      id: `redemption-${index}`,
+      invite_id: invite.id,
+      redeemed_at: redeemedAt,
+      surface: null,
+      source: 'fixture-source',
+    }));
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from beta_redemptions')) {
+        return redemptions.map((row) => ({ ...row, redeemed_at: new Date(row.redeemed_at) }));
+      }
+      if (sql.includes('from beta_invites')) return invites;
+      return [];
+    });
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Export-Status')).toBe('complete');
+    expect(body.data.beta_redemptions).toEqual(
+      redemptions.map((redemption, index) => ({ ...redemption, beta_invite: invites[index] })),
+    );
+    expect(body.data.export_metadata.completeness).toMatchObject({
+      status: 'complete',
+      unavailable_sections: [],
+      skipped_rows: [],
+    });
+    const redemptionReads = mockQuery.mock.calls.filter(([sql]) =>
+      String(sql).includes('from beta_redemptions'),
+    );
+    expect(redemptionReads).toHaveLength(1);
+    expect(redemptionReads[0]?.[0]).toMatch(/where user_id = \$1/);
+    expect(redemptionReads[0]?.[1]).toEqual(['user_export']);
+    const inviteReads = mockQuery.mock.calls.filter(([sql]) =>
+      String(sql).includes('from beta_invites'),
+    );
+    expect(inviteReads).toHaveLength(1);
+    expect(String(inviteReads[0]?.[0]).replace(/\s+/g, ' ').trim()).toBe(
+      'select id, plan_tier, trial_days from beta_invites where id = any($1::uuid[])',
+    );
+    expect(inviteReads[0]?.[1]).toEqual([invites.map((invite) => invite.id)]);
+    expect(inviteReads[0]?.[0]).not.toMatch(/updated_at|\*/);
+  });
+
+  it('keeps linked invite read failures in the export completeness ledger', async () => {
+    const redemption = {
+      id: 'redemption-fixture',
+      invite_id: '10000000-0000-4000-8000-000000000001',
+      redeemed_at: '2026-09-01T00:00:00.000Z',
+      surface: null,
+      source: null,
+    };
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from beta_redemptions')) return [redemption];
+      if (sql.includes('from beta_invites')) throw new Error('invite read unavailable');
+      return [];
+    });
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Export-Status')).toBe('partial');
+    expect(body.data.beta_redemptions).toEqual([{ ...redemption, beta_invite: null }]);
+    expect(body.data.export_metadata.completeness.unavailable_sections).toEqual(['beta_invites']);
+  });
+
   it('names linked banks as unavailable instead of silently omitting a failed read', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('from bank_account_items')) throw new Error('linked banks unavailable');

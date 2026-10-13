@@ -378,6 +378,7 @@ describe('App Store server notifications', () => {
       expect.objectContaining({
         platform: 'ios',
         reason: 'no_account_token',
+        endpoint: '/api/mobile/iap/apple-notifications',
         storeTransactionId: 'store-transaction-2',
         originalTransactionId: 'store-transaction-1',
       }),
@@ -406,7 +407,11 @@ describe('App Store server notifications', () => {
 
       expect(response.status).toBe(200);
       expect(mocks.unattributed).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: grant, storeTransactionId: 'store-transaction-2' }),
+        expect.objectContaining({
+          reason: grant,
+          storeTransactionId: 'store-transaction-2',
+          endpoint: '/api/mobile/iap/apple-notifications',
+        }),
       );
     },
   );

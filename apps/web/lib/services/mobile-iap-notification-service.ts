@@ -567,6 +567,7 @@ async function applyMobileIapLifecycleEvent(input: {
       );
       await closeGrantedStoreChargeRequest(
         tx,
+        anchor.user_id,
         input.event.platform,
         input.event.storeTransactionId,
       );

@@ -5,6 +5,7 @@ import { recordCogsAdjustment } from './cogs-ledger-service';
 import {
   STORE_TEST_PURCHASE_REFUSED,
   recordVerifiedMobileIapPurchase,
+  storeChargeId,
 } from './mobile-iap-ledger-service';
 import { SubscriptionService } from './subscription-service';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
@@ -160,6 +161,10 @@ describe('verified mobile IAP ledger', () => {
         }),
       ],
     );
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringMatching(/where charge_id = \$1 and user_id = \$3 and status = 'pending'/u),
+      [storeChargeId('ios', 'transaction-1'), expect.any(String), 'user-1'],
+    );
   });
 
   it('records a Japanese store purchase with the expiry local law sets for it', async () => {
@@ -206,6 +211,7 @@ describe('verified mobile IAP ledger', () => {
         verified: verified(),
       }),
     ).rejects.toThrow(/another account/i);
+    expect(h.execute).not.toHaveBeenCalled();
   });
 
   it('does not grant a top-up without an active paid subscription', async () => {
@@ -247,6 +253,10 @@ describe('verified mobile IAP ledger', () => {
     expect(upsert).toBeDefined();
     expect(String(upsert![0])).toContain('stripe_subscription_id = case when $7');
     expect((upsert![1] as unknown[])[6]).toBe(true);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringMatching(/where charge_id = \$1 and user_id = \$3 and status = 'pending'/u),
+      [storeChargeId('ios', 'transaction-sub-1'), expect.any(String), 'user-1'],
+    );
   });
 
   it('refuses a store purchase while the web subscription is still entitled', async () => {

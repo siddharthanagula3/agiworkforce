@@ -10,6 +10,7 @@ import { SubscriptionService } from './subscription-service';
 import {
   recordMobileIapStoreCommission,
   recordVerifiedMobileIapPurchase,
+  storeChargeId,
 } from './mobile-iap-ledger-service';
 import { createError } from '@/lib/errors';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
@@ -179,6 +180,10 @@ describe('mobile IAP lifecycle ledger', () => {
     expect(
       h.query.mock.calls.some(([sql]) => String(sql).includes('get_or_create_credit_account')),
     ).toBe(true);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringMatching(/where charge_id = \$1 and user_id = \$3 and status = 'pending'/u),
+      [storeChargeId('ios', 'transaction-1'), expect.any(String), 'user-1'],
+    );
   });
 
   it('re-grants only the amount previously revoked when Apple reverses a refund', async () => {

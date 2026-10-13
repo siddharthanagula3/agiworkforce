@@ -18,6 +18,7 @@ import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-ser
 import { recordAuditEvent } from '@/lib/security-audit';
 import { authenticatedMediaUrl } from '@/lib/server/media-storage';
 import { readRestrictedUserExportSections } from '@/lib/server/restricted-user-export-reader';
+import { BETA_INVITE_EXPORT_SECTION } from '@/lib/server/beta-invite-export-section';
 import { requestDataExportArchive } from '@/lib/server/data-export-archive';
 import { requireCsrfToken } from '@/lib/csrf';
 import type { DataExportArchiveResponse } from '@agiworkforce/cloud-contracts';
@@ -147,12 +148,6 @@ const betaRedemptionExportSchema = z.object({
   redeemed_at: timestampSchema,
   surface: z.string().nullable(),
   source: z.string().nullable(),
-});
-
-const betaInviteExportSchema = z.object({
-  id: z.string(),
-  plan_tier: z.string().nullable(),
-  trial_days: z.number().int().nonnegative().nullable(),
 });
 
 const deviceAuthorizationExportSchema = z.object({
@@ -2284,15 +2279,12 @@ async function collectUserData(
     const inviteIds = betaRows
       .map((row) => row.invite_id)
       .filter((id): id is string => typeof id === 'string');
-    let invitesById: Record<string, z.infer<typeof betaInviteExportSchema>> = {};
+    let invitesById: Record<string, z.infer<typeof BETA_INVITE_EXPORT_SECTION.schema>> = {};
     if (inviteIds.length > 0) {
       const inviteRows = await queryExportRows({
         db,
-        sql: `select id, plan_tier, trial_days
-              from beta_invites where id = any($1::uuid[])`,
+        ...BETA_INVITE_EXPORT_SECTION,
         values: [inviteIds],
-        schema: betaInviteExportSchema,
-        section: 'beta_invites',
         userId: user.id,
         ledger,
       });

@@ -281,6 +281,7 @@ export async function fileUngrantedStoreCharge(
 
 export async function closeGrantedStoreChargeRequest(
   db: DatabaseAdapter,
+  userId: string,
   platform: MobileIapPlatform,
   storeTransactionId: string,
 ): Promise<void> {
@@ -288,8 +289,8 @@ export async function closeGrantedStoreChargeRequest(
     `update public.billing_refund_requests
         set status = 'declined', decided_by = 'automatic', decision_note = $2,
             decided_at = now(), updated_at = now()
-      where charge_id = $1 and status = 'pending'`,
-    [storeChargeId(platform, storeTransactionId), STORE_REQUEST_CLOSED_AS_GRANTED],
+      where charge_id = $1 and user_id = $3 and status = 'pending'`,
+    [storeChargeId(platform, storeTransactionId), STORE_REQUEST_CLOSED_AS_GRANTED, userId],
   );
 }
 
@@ -513,6 +514,7 @@ async function grantVerifiedMobileIapPurchase(input: {
       );
       await closeGrantedStoreChargeRequest(
         tx,
+        input.userId,
         input.verified.platform,
         input.verified.storeTransactionId,
       );
@@ -630,6 +632,7 @@ async function grantVerifiedMobileIapPurchase(input: {
     );
     await closeGrantedStoreChargeRequest(
       tx,
+      input.userId,
       input.verified.platform,
       input.verified.storeTransactionId,
     );

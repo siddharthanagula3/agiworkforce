@@ -1437,7 +1437,8 @@ html[data-contrast='more'] *:focus-visible {
   *,
   *::before,
   *::after {
-    transition: none !important;
+    transition-property: none !important;
+    transition-duration: 0s !important;
   }
 }
 /* ──────────────────────────────────────────────────────────────────────

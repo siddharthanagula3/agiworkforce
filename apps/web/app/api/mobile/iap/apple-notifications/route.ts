@@ -19,7 +19,6 @@ import {
 
 const AUTO_RENEW_OFF = 0;
 const REVOCATION_PERCENTAGE_WHOLE = 100_000;
-const ENDPOINT = '/api/mobile/iap/apple-notifications';
 
 const BodySchema = z.object({ signedPayload: z.string().min(20).max(64_000) }).strict();
 
@@ -75,7 +74,7 @@ async function handleAppleNotification(request: NextRequest): Promise<NextRespon
       storeTransactionId: transaction.transactionId,
       originalTransactionId,
       productId: transaction.productId,
-      endpoint: ENDPOINT,
+      endpoint: request.nextUrl.pathname,
     });
     return NextResponse.json({ received: true, status: 'unattributed' });
   }
@@ -106,7 +105,7 @@ async function handleAppleNotification(request: NextRequest): Promise<NextRespon
           storeTransactionId: transaction.transactionId,
           originalTransactionId,
           productId: transaction.productId,
-          endpoint: ENDPOINT,
+          endpoint: request.nextUrl.pathname,
         });
       }
     }

@@ -7,7 +7,11 @@ vi.mock('server-only', () => ({}));
 import { USER_SCOPED_TABLES } from '@/lib/server/account-erasure';
 import { UNEXPORTED_USER_TABLES } from '../route';
 
-const source = ['app/api/user/export/route.ts', 'lib/server/restricted-user-export-reader.ts']
+const source = [
+  'app/api/user/export/route.ts',
+  'lib/server/restricted-user-export-reader.ts',
+  'lib/server/beta-invite-export-section.ts',
+]
   .map((path) => readFileSync(join(process.cwd(), path), 'utf8'))
   .join('\n');
 

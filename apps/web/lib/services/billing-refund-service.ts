@@ -768,23 +768,29 @@ export interface OperatorRefundResult {
 async function readPendingRequest(
   db: DatabaseAdapter,
   requestId: string,
-  chargeId: string,
-): Promise<{ assessment: RefundAssessment; assessedCents: number | null }> {
+  chargeId?: string,
+): Promise<{ userId: string; assessment: RefundAssessment; assessedCents: number | null }> {
   const [pending] = await db.query<{
+    user_id: string;
     charge_id: string;
     status: string;
     assessment: RefundAssessment;
     assessed_refund_cents: string | number | null;
   }>(
-    `select charge_id, status, assessment, assessed_refund_cents
+    `select user_id, charge_id, status, assessment, assessed_refund_cents
        from public.billing_refund_requests
       where id = $1`,
     [requestId],
   );
-  if (!pending || pending.charge_id !== chargeId || pending.status !== 'pending') {
+  if (
+    !pending ||
+    (chargeId !== undefined && pending.charge_id !== chargeId) ||
+    pending.status !== 'pending'
+  ) {
     throw new RefundRequestRefusal('That refund request is not pending for this payment.', 409);
   }
   return {
+    userId: pending.user_id,
     assessment: pending.assessment,
     assessedCents: numberOrNull(pending.assessed_refund_cents),
   };
@@ -903,6 +909,7 @@ export async function recordStoreRefund(
   db: DatabaseAdapter,
   input: { operatorUserId: string; requestId: string; amountCents: number | null; note: string },
 ): Promise<OperatorRefundRequestView> {
+  const pending = await readPendingRequest(db, input.requestId);
   const [decided] = await db.query<RefundRequestRow>(
     `update public.billing_refund_requests
         set status = 'refunded',
@@ -914,11 +921,19 @@ export async function recordStoreRefund(
             decided_at = now(),
             updated_at = now()
       where id = $1
+        and user_id = $6
         and status = 'pending'
         and starts_with(charge_id, $5)
         and ($3::bigint is null or $3::bigint <= charge_amount_cents)
       returning ${REQUEST_COLUMNS}`,
-    [input.requestId, input.operatorUserId, input.amountCents, input.note, STORE_CHARGE_ID_PREFIX],
+    [
+      input.requestId,
+      input.operatorUserId,
+      input.amountCents,
+      input.note,
+      STORE_CHARGE_ID_PREFIX,
+      pending.userId,
+    ],
   );
   if (!decided) {
     throw new RefundRequestRefusal(

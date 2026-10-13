@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const source = ['app/api/user/export/route.ts', 'lib/server/restricted-user-export-reader.ts']
+const source = [
+  'app/api/user/export/route.ts',
+  'lib/server/restricted-user-export-reader.ts',
+  'lib/server/beta-invite-export-section.ts',
+]
   .map((path) => readFileSync(join(process.cwd(), path), 'utf8'))
   .join('\n');
 
@@ -63,6 +67,8 @@ describe('the data export covers the personal data the product holds', () => {
     const sections = exportedSections();
     for (const required of [
       'profile',
+      'beta_redemptions',
+      'beta_invites',
       'conversations',
       'messages',
       'projects',
