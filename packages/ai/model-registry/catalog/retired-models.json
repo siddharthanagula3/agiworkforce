@@ -61,7 +61,8 @@
     "gemini-3.1-flash-tts-preview",
     "minimax-m2.7",
     "kimi-k2.7-code",
-    "qwen-3.6-27b"
+    "qwen-3.6-27b",
+    "openrouter-free"
   ],
   "retiredModels": [
     {
@@ -1203,6 +1204,38 @@
       "retiredOn": "2026-10-07",
       "replacedBy": "qwen-3.8-27b",
       "metadataSource": "catalog/models.curation.json#qwen-3.6-27b"
+    },
+    {
+      "id": "openrouter-free",
+      "displayName": "OpenRouter Free Auto",
+      "provider": "open_router",
+      "developer": "openrouter",
+      "modelType": "chat",
+      "contextWindow": 200000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "February 1, 2026",
+      "retiredOn": "2026-10-13",
+      "replacedBy": "gpt-6-luna",
+      "metadataSource": "catalog/models.curation.json#openrouter-free"
     }
   ],
   "grandfatheredWithoutMetadata": [

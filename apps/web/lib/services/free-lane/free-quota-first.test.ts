@@ -7,7 +7,7 @@ import {
   FREE_QUOTA_FALLBACK_REQUEST_KEY,
   FreeLimitSchema,
 } from '@agiworkforce/cloud-contracts';
-import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
+import { getProviderOfferings, getDefaultModelFor } from '@agiworkforce/types';
 import {
   credentialSha256,
   freeQuotaEndsOn,
@@ -175,7 +175,7 @@ const { freeQuotaFallbackReplay, serveFreeQuotaFallback, serveFreeQuotaFirst } =
   await import('./free-quota-fallback');
 
 const API_KEY = 'fixture-provider-key';
-const FREE_AUTO = getRoutingSlotModel('router_zero_cost');
+const FREE_AUTO = getDefaultModelFor('free', 'chat');
 const CONVERSATION_ID = '52d14f7e-0b3d-40c7-952d-987e841033c5';
 const ASSISTANT_ID = '62d14f7e-0b3d-40c7-952d-987e841033c5';
 const USER_MESSAGE_ID = '72d14f7e-0b3d-40c7-952d-987e841033c5';
@@ -337,7 +337,7 @@ afterEach(() => {
 });
 
 describe('the shipped Free Auto route', () => {
-  it('tries the free quota lane before the free router', () => {
+  it('tries the free quota lane before the Free plan model', () => {
     expect(inventory.freeAutoRoute?.order).toBe('quota_first');
   });
 
@@ -476,7 +476,7 @@ describe('a Free Auto turn the free quota lane takes first', () => {
   });
 });
 
-describe('a Free Auto turn the free quota lane leaves to the free router', () => {
+describe('a Free Auto turn the free quota lane leaves to the Free plan model', () => {
   it.each([
     ['a turn that is not streamed', { stream: false }],
     ['web search', { web_search: true }],
@@ -529,7 +529,7 @@ describe('a Free Auto turn the free quota lane leaves to the free router', () =>
     expect(await metered(FIRST)).toBe(0);
   });
 
-  it('leaves a Health space chat, or one holding Google account data, on the free router', async () => {
+  it('leaves a Health space chat, or one holding Google account data, on the Free plan model', async () => {
     mocks.stream.mockResolvedValue(answered());
     mocks.conversationKeptToItsRoute.mockResolvedValue(true);
 
@@ -568,7 +568,7 @@ describe('a Free Auto turn the free quota lane leaves to the free router', () =>
     expectLaneUntouched();
   });
 
-  it('never starts unless its provider is recorded as keeping inputs out of training, since the opt-out is enforced on the free router', async () => {
+  it('never starts unless its provider is recorded as keeping inputs out of training, since the opt-out is enforced on the Free plan model', async () => {
     mocks.providerMayTrain = true;
     mocks.stream.mockResolvedValue(answered());
 
@@ -842,7 +842,7 @@ describe('a Free Auto turn the free quota lane ends itself', () => {
   });
 });
 
-describe('the free router refusing a turn the free quota lane already tried', () => {
+describe('the Free plan model refusing a turn the free quota lane already tried', () => {
   function refusal(): Response {
     return Response.json(
       {
@@ -908,7 +908,7 @@ describe('the free router refusing a turn the free quota lane already tried', ()
     expect(ranking).toContain(served?.headers.get('X-AGI-Resolved-Model'));
   });
 
-  it('lets the free router refusal stand for a Health space chat instead of answering from the lane', async () => {
+  it('lets the Free plan model refusal stand for a Health space chat instead of answering from the lane', async () => {
     mocks.store = createMemoryKeyValueStore();
     const first = await tryFirst();
     await attest();

@@ -352,27 +352,6 @@ describe('each admission rule, mutated one at a time', () => {
     }
   });
 
-  it('refuses the plan whose only model may train, rather than parking on it', () => {
-    const request: AutoRoutingRequest = {
-      ...baseline,
-      subscriptionTier: 'free',
-      taskType: 'simple_chat',
-    };
-    const unfiltered = resolveAutoRoute(request);
-    if (unfiltered.status !== 'selected') throw new Error('the free lane selected nothing');
-    expect(admissionFaults(unfiltered.routeId, { ...request, noTrainingOnly: true })).not.toEqual(
-      [],
-    );
-    const decision = resolveAutoRoute({
-      ...request,
-      noTrainingOnly: true,
-      availableProviderIds: new Set(
-        Object.keys(registry.governance).filter((providerId) => !mayTrainOnInputs(providerId)),
-      ),
-    });
-    expect(decision).toMatchObject({ status: 'unavailable', code: 'no_eligible_route' });
-  });
-
   it('prefers a healthy route over one the store has parked', () => {
     const routeId = selectedRouteId(baseline);
     const decision = resolveAutoRoute({

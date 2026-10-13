@@ -12,7 +12,7 @@ import {
   type FreeLimit,
 } from '@agiworkforce/cloud-contracts';
 import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
-import { getProviderOffering, getRoutingSlotModel } from '@agiworkforce/types';
+import { getDefaultModelFor, getProviderOffering } from '@agiworkforce/types';
 import {
   freeOfferingRequiresCodeExecution,
   freeOfferingRequiresWebAccess,
@@ -160,7 +160,7 @@ function freeAutoTurn<Turn extends FallbackTurn>(
   schema: z.ZodType<Turn>,
 ): { turn: Turn; assistantParentId: string | undefined } | null {
   const replayed = ReplayedFreeAutoTurnSchema.safeParse(body);
-  if (!replayed.success || replayed.data.model !== getRoutingSlotModel('router_zero_cost')) {
+  if (!replayed.success || replayed.data.model !== getDefaultModelFor('free', 'chat')) {
     return null;
   }
   const turn = schema.safeParse({
@@ -261,7 +261,7 @@ export async function serveFreeQuotaFirst(input: {
   const toRouter = (cause: string): FreeQuotaFirstAttempt => {
     logger.info(
       { userId: input.userId, model, cause, elapsedMs: Date.now() - startedAtMs },
-      '[free-lane] the free quota lane did not answer a Free Auto turn; the free router takes it',
+      '[free-lane] the free quota lane did not answer a Free Auto turn; the Free plan model takes it',
     );
     return { response: null, tried: model };
   };
@@ -322,7 +322,7 @@ export async function serveFreeQuotaFirst(input: {
   } catch (error) {
     logger.error(
       { error, userId: input.userId, model },
-      '[free-lane] the free quota lane failed before answering; the free router takes the turn',
+      '[free-lane] the free quota lane failed before answering; the Free plan model takes the turn',
     );
     return { response: null, tried: model };
   } finally {

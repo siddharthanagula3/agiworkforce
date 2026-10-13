@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getDefaultModelFor } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/app/api/llm/v1/chat/completions/lib/auth-gate');
 type ScanModule1 = typeof import('@/lib/rate-limit');
 type ScanModule2 = typeof import('@/lib/managed-compute-gate');
@@ -53,7 +53,7 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
 
 const { POST } = await import('@/app/api/llm/v1/chat/completions/route');
 
-const FREE_AUTO = getRoutingSlotModel('router_zero_cost');
+const FREE_AUTO = getDefaultModelFor('free', 'chat');
 const LANE_MODEL = 'qwen-quota-fixture';
 const BODY = {
   model: FREE_AUTO,
@@ -121,11 +121,11 @@ beforeEach(() => {
   mocks.first.mockReset().mockResolvedValue({ response: null, tried: null });
   mocks.fallback.mockReset().mockResolvedValue(null);
   mocks.router.mockReset();
-  routerAnswers(stream('from the free router', { 'X-AGI-Resolved-Model': FREE_AUTO }));
+  routerAnswers(stream('from the Free plan model', { 'X-AGI-Resolved-Model': FREE_AUTO }));
 });
 
 describe('a Free Auto turn the free quota lane is offered first', () => {
-  it('is answered by the lane alone, inside one turn slot, and never reaches the free router', async () => {
+  it('is answered by the lane alone, inside one turn slot, and never reaches the Free plan model', async () => {
     signedIn('free');
     mocks.first.mockResolvedValue({
       response: stream('from the free quota', { 'X-AGI-Resolved-Model': LANE_MODEL }),
@@ -147,7 +147,7 @@ describe('a Free Auto turn the free quota lane is offered first', () => {
     expect(mocks.slot).toHaveBeenCalledTimes(1);
   });
 
-  it('goes to the free router once when the lane hands it on, and the router answer carries no substitution notice', async () => {
+  it('goes to the Free plan model once when the lane hands it on, and the router answer carries no substitution notice', async () => {
     signedIn('free');
     mocks.first.mockResolvedValue({ response: null, tried: LANE_MODEL });
 
@@ -156,7 +156,7 @@ describe('a Free Auto turn the free quota lane is offered first', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Resolved-Model')).toBe(FREE_AUTO);
     expect(response.headers.get('X-AGI-Fallback-Reason')).toBeNull();
-    expect(await response.text()).toContain('from the free router');
+    expect(await response.text()).toContain('from the Free plan model');
     expect(mocks.first).toHaveBeenCalledTimes(1);
     expect(mocks.router).toHaveBeenCalledTimes(1);
     expect(mocks.slot).toHaveBeenCalledTimes(1);
@@ -165,7 +165,7 @@ describe('a Free Auto turn the free quota lane is offered first', () => {
     );
   });
 
-  it('tells the fallback which allocation the lane already tried when the free router refuses too', async () => {
+  it('tells the fallback which allocation the lane already tried when the Free plan model refuses too', async () => {
     signedIn('free');
     mocks.first.mockResolvedValue({ response: null, tried: LANE_MODEL });
     routerAnswers(sharedPoolSpent());
@@ -183,7 +183,7 @@ describe('a Free Auto turn the free quota lane is offered first', () => {
     expect((await response.json()).error.code).toBe('free_allowance_exhausted');
   });
 
-  it('returns a refusal the lane ends the turn with, without asking the free router', async () => {
+  it('returns a refusal the lane ends the turn with, without asking the Free plan model', async () => {
     signedIn('free');
     mocks.first.mockResolvedValue({
       response: Response.json(

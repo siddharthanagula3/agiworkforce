@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getDefaultModelFor } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/app/api/llm/v1/chat/completions/lib/auth-gate');
 type ScanModule1 = typeof import('@/lib/rate-limit');
 type ScanModule2 = typeof import('@/lib/managed-compute-gate');
@@ -32,7 +32,7 @@ vi.mock('@/lib/services/free-lane/free-quota-fallback', async (importOriginal) =
 
 const { POST } = await import('@/app/api/llm/v1/chat/completions/route');
 
-const FREE_AUTO = getRoutingSlotModel('router_zero_cost');
+const FREE_AUTO = getDefaultModelFor('free', 'chat');
 const BODY = {
   model: FREE_AUTO,
   stream: true,

@@ -355,27 +355,6 @@
         "caching": false
       },
       "speed": "medium"
-    },
-    "openrouter-free": {
-      "contextWindow": 200000,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "medium"
     }
   }
 }

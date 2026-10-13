@@ -870,12 +870,12 @@ describe('Free output budgeting', () => {
       provider: FREE_CHAT_MODEL.provider,
       model: FREE_CHAT_MODEL.id,
       estimatedInputTokens: 1_000,
-      requestedMaxOutputTokens: 8_192,
+      requestedMaxOutputTokens: 100_000,
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.maxOutputTokens).toBeLessThan(8_192);
+    expect(result.maxOutputTokens).toBeLessThan(100_000);
   });
 
   it('does not increase a caller output cap that already fits', () => {
@@ -953,7 +953,7 @@ describe('Free output budgeting', () => {
     const request = {
       model: FREE_CHAT_MODEL.id,
       messages: [{ role: 'user', content: 'Hello' }],
-      max_tokens: 8_192,
+      max_tokens: 100_000,
       usePromptCache: true,
     };
 
@@ -969,7 +969,7 @@ describe('Free output budgeting', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(request.max_tokens).toBeLessThan(8_192);
+    expect(request.max_tokens).toBeLessThan(100_000);
     expect(request.usePromptCache).toBe(false);
   });
 });

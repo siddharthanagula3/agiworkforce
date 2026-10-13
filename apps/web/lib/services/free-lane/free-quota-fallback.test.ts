@@ -7,7 +7,7 @@ import {
   FREE_QUOTA_FALLBACK_REQUEST_KEY,
   FreeLimitSchema,
 } from '@agiworkforce/cloud-contracts';
-import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
+import { getProviderOfferings, getDefaultModelFor } from '@agiworkforce/types';
 import {
   credentialSha256,
   readFreeQuotaState,
@@ -148,7 +148,7 @@ vi.mock('@agiworkforce/providers-factory', async (importOriginal) => {
 const { freeQuotaFallbackReplay, serveFreeQuotaFallback } = await import('./free-quota-fallback');
 
 const API_KEY = 'fixture-provider-key';
-const FREE_AUTO = getRoutingSlotModel('router_zero_cost');
+const FREE_AUTO = getDefaultModelFor('free', 'chat');
 const CONVERSATION_ID = '52d14f7e-0b3d-40c7-952d-987e841033c5';
 const ASSISTANT_ID = '62d14f7e-0b3d-40c7-952d-987e841033c5';
 const USER_MESSAGE_ID = '72d14f7e-0b3d-40c7-952d-987e841033c5';

@@ -179,10 +179,9 @@ fn clamps_premium_to_free_tier_maximum() {
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
 }
 
-/// Basic is a priced plan, so it keeps the priced economy pool its
-/// subscription buys while the free plan is clamped to its zero-cost slots.
-/// Both are still clamped to the economy band, which is the other half of what
-/// this pins.
+/// Basic keeps the economy pool its subscription buys while the free plan is
+/// clamped to its own slots. Both are still clamped to the economy band, which
+/// is the other half of what this pins.
 #[test]
 fn separates_basic_from_free_and_treats_max_aliases_as_max() {
     let basic = resolve_auto_route(&request(
@@ -216,9 +215,8 @@ fn separates_basic_from_free_and_treats_max_aliases_as_max() {
     let AutoRouteDecision::Selected(max_plus) = max_plus else {
         panic!("expected Max+ to select its Max route");
     };
-    assert_ne!(basic.model_key, free.model_key);
     assert_eq!(basic.model_key, slot_model("coding_fast"));
-    assert_eq!(free.model_key, slot_model("router_zero_cost"));
+    assert_eq!(free.model_key, slot_model("free_workhorse"));
     assert_eq!(basic.effective_profile, Some(RoutingProfile::Economy));
     assert_eq!(free.effective_profile, Some(RoutingProfile::Economy));
     assert_eq!(max_plus.effective_profile, Some(RoutingProfile::Premium));
@@ -253,12 +251,12 @@ fn treats_max_15x_as_max_for_auto_routing() {
     assert_eq!(max_15x.effective_profile, Some(RoutingProfile::Premium));
 }
 
-/// The free tier is granted only zero-priced slots, so a reasoning request it
+/// The free tier is granted only its own slots, so a reasoning request it
 /// sends falls back to the tier's own first allowed slot rather than to the
 /// policy-wide fallback, which free is not granted. `reasoning_economy` carries
 /// a model the free plan may not reach and is deliberately not on that list.
 #[test]
-fn routes_free_reasoning_to_a_zero_cost_slot() {
+fn routes_free_reasoning_to_a_free_slot() {
     let decision = resolve_auto_route(&request(
         "auto",
         RoutingTaskType::Reasoning,
@@ -270,7 +268,7 @@ fn routes_free_reasoning_to_a_zero_cost_slot() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected a free reasoning route");
     };
-    assert_eq!(selected.model_key, slot_model("router_zero_cost"));
+    assert_eq!(selected.model_key, slot_model("free_workhorse"));
     assert_ne!(selected.model_key, slot_model("reasoning_economy"));
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
 }

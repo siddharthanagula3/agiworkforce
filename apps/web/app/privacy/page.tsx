@@ -1075,11 +1075,11 @@ export default function PrivacyPage() {
               What we collect, what we do not, and how that changes depending on which mode you run.{' '}
               <strong>
                 AGI does not use customer conversation content to train AGI-owned models. We do not
-                sell your data. Website users can use AGI managed cloud. The Free plan runs on the
-                free models providers give away, and paid plans with more capacity are opening in
-                stages, so an upgrade needs an access code or a place on the upgrade waitlist. The
-                CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by
-                default, not invite-only.
+                sell your data. Website users can use AGI managed cloud. The Free plan runs on a
+                model AGI chooses, within a small usage allowance, and paid plans with more capacity
+                are opening in stages, so an upgrade needs an access code or a place on the upgrade
+                waitlist. The CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed
+                cloud is open by default, not invite-only.
               </strong>{' '}
               Last updated: {POLICY_LAST_UPDATED.privacy}. Managed Cloud is in public alpha.{' '}
               <PolicyVersionsLink policy="privacy" />
@@ -1157,15 +1157,13 @@ export default function PrivacyPage() {
                       not one you pick
                     </strong>
                     : Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its international
-                    endpoint in Singapore, or OpenRouter&rsquo;s free router. At Alibaba the model
-                    that answers can be a Qwen model or another developer&rsquo;s model that Alibaba
-                    hosts; OpenRouter&rsquo;s free router picks a free model from the providers it
-                    carries. Which one answers depends on what is available for that turn, and the
-                    reply shows the model that answered. A turn that needs tools, web search or code
-                    execution is answered through OpenRouter. Alibaba&rsquo;s published privacy
-                    notice says it never uses your data for model training; we rely on that
-                    statement and cannot verify it. The providers behind OpenRouter&rsquo;s free
-                    models may train on what you send.{' '}
+                    endpoint in Singapore, or OpenAI. At Alibaba the model that answers can be a
+                    Qwen model or another developer&rsquo;s model that Alibaba hosts; at OpenAI it
+                    is one of OpenAI&rsquo;s own models. Which one answers depends on what is
+                    available for that turn, and the reply shows the model that answered. A turn
+                    that needs tools, web search or code execution is answered by OpenAI.
+                    Alibaba&rsquo;s published privacy notice says it never uses your data for model
+                    training; we rely on that statement and cannot verify it.{' '}
                     <strong>
                       OpenRouter is additionally the failover for every other chat model in the
                       catalogue

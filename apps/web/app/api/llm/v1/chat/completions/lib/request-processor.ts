@@ -80,6 +80,7 @@ import {
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
   shouldOfferWebSearchForTurn,
+  webSearchToolOfferPolicyFor,
   type RequiredSearchEnforcement,
   type WebSearchRequirement,
 } from '@/lib/web-search/required-search';
@@ -4845,8 +4846,11 @@ async function processAdmittedRequest(
     placesSearchOffered: placesRequirement.offered || itineraryOffered,
   });
 
-  const ambientToolsAllowed =
-    getModelMetadataById(chatRequest.model)?.webSearchToolOfferPolicy !== 'required_only';
+  const webSearchToolOfferPolicy = webSearchToolOfferPolicyFor({
+    model: chatRequest.model,
+    planTier: subscription.plan_tier,
+  });
+  const ambientToolsAllowed = webSearchToolOfferPolicy !== 'required_only';
   applyMemoryToolCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
@@ -5531,9 +5535,6 @@ async function processAdmittedRequest(
     researchTask: chatRequest.research === true || currentTurnTaskType === 'research',
     userMessage: lastUserText,
   });
-  const webSearchToolOfferPolicy = getModelMetadataById(
-    chatRequest.model,
-  )?.webSearchToolOfferPolicy;
   const offerWebSearch = shouldOfferWebSearchForTurn({
     webSearchEnabled: chatRequest.web_search,
     requirement: searchRequirement,

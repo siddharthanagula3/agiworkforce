@@ -42,7 +42,7 @@ export const LAUNCH = {
 export const POSITIONING = {
   wedge: 'Try AGI on the web. Run Local and BYOK from the CLI. Managed cloud, open by default.',
   routeBoundary: [
-    'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity start from the pricing page, which offers the upgrade waitlist or takes an access code if upgrades are not open to your account yet.',
+    'Website users can use AGI managed cloud. The Free plan runs on a model AGI chooses, within a small usage allowance, and paid plans with more capacity start from the pricing page, which offers the upgrade waitlist or takes an access code if upgrades are not open to your account yet.',
     'The CLI supports Local and BYOK.',
     CLI_AVAILABILITY_NOTE,
     `VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}.`,

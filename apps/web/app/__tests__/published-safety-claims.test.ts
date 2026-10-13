@@ -473,7 +473,8 @@ describe('where a Free plan chat on the default model is sent', () => {
     const text = prose(page);
     expect(text).toContain(STATEMENT);
     expect(text).toContain('Alibaba Cloud Model Studio');
-    expect(text).toMatch(/OpenRouter(?:&rsquo;|\u2019)s free router/u);
+    expect(text).toMatch(/Singapore, or\s+OpenAI\./u);
+    expect(text).not.toMatch(/free router/iu);
     expect(text).not.toMatch(/tried first|goes first|is tried before|falls back to/iu);
   });
 
@@ -516,10 +517,10 @@ describe('where a Free plan chat on the default model is sent', () => {
     );
     const laneTests = read('lib/services/free-lane/free-quota-first.test.ts');
     expect(laneTests).toContain(
-      'leaves a Health space chat, or one holding Google account data, on the free router',
+      'leaves a Health space chat, or one holding Google account data, on the Free plan model',
     );
     expect(laneTests).toContain(
-      'lets the free router refusal stand for a Health space chat instead of answering from the lane',
+      'lets the Free plan model refusal stand for a Health space chat instead of answering from the lane',
     );
     expect(prose('app/privacy/page.tsx')).toContain(
       'A chat in the Health space is sent only to providers we have recorded as not training on what you send',
@@ -533,8 +534,40 @@ describe('where a Free plan chat on the default model is sent', () => {
       'return freeOfferingRequiresWebAccess(turn.data) || freeOfferingRequiresCodeExecution(turn.data)',
     );
     expect(prose('app/privacy/page.tsx')).toContain(
-      'A turn that needs tools, web search or code execution is answered through OpenRouter.',
+      'A turn that needs tools, web search or code execution is answered by OpenAI.',
     );
+  });
+
+  it('names OpenAI because the Free plan model is an OpenAI model on its direct route', () => {
+    const registry = JSON.parse(
+      readFileSync(
+        path.join(WEB_ROOT, '..', '..', 'packages/ai/model-registry/generated/registry.json'),
+        'utf8',
+      ),
+    ) as {
+      models: Record<string, { identity: { provider: string } }>;
+      routes: Record<string, { modelKey: string; provider: string; isDefault: boolean }>;
+      policies: {
+        auto: {
+          tierAllowedSlots: Record<string, string[]>;
+          slots: Record<string, { modelKey: string }>;
+        };
+      };
+    };
+    const freeModels = [
+      ...new Set(
+        (registry.policies.auto.tierAllowedSlots['free'] ?? []).map(
+          (slot) => registry.policies.auto.slots[slot]?.modelKey,
+        ),
+      ),
+    ];
+    expect(freeModels).toHaveLength(1);
+    const freeModel = freeModels[0] as string;
+    expect(registry.models[freeModel]?.identity.provider).toBe('openai');
+    const defaultRoute = Object.values(registry.routes).find(
+      (route) => route.modelKey === freeModel && route.isDefault,
+    );
+    expect(defaultRoute?.provider).toBe('openai');
   });
 
   it('gives Singapore as the region because the adapter defaults to the international endpoint', () => {
@@ -548,7 +581,7 @@ describe('where a Free plan chat on the default model is sent', () => {
     expect(subprocessors).toContain(
       'Singapore for the Alibaba Cloud Model Studio international endpoint',
     );
-    expect(subprocessors).toContain('in three situations');
+    expect(subprocessors).toContain('in two situations');
   });
 
   it('shows the model that answered', () => {

@@ -6,7 +6,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { FreeLimitSchema } from '@agiworkforce/cloud-contracts';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getDefaultModelFor } from '@agiworkforce/types';
 import { buildUpstreamErrorResponse } from './response-builder';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
@@ -71,7 +71,7 @@ describe('buildUpstreamErrorResponse', () => {
   });
 
   it('states the spent shared allowance as a typed free limit any client can read', async () => {
-    const freeAuto = getRoutingSlotModel('router_zero_cost');
+    const freeAuto = getDefaultModelFor('free', 'chat');
     vi.useFakeTimers({ now: Date.UTC(2026, 9, 2, 12), toFake: ['Date'] });
     try {
       const withReset = buildUpstreamErrorResponse(

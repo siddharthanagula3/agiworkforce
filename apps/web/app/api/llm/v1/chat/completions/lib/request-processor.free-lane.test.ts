@@ -12,25 +12,18 @@ import { FREE_LANE_MODES } from '@/lib/services/free-lane/mode';
 import { routesOf } from '@/lib/services/free-lane/plan';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
 
-const FREE_SLOTS = [
-  'free_workhorse',
-  'free_workhorse_fast',
-] as const satisfies readonly RoutingSlot[];
-
 /**
  * Every slot a pool record claims, verified or not. The Model Studio
  * allocations claim the reasoning slots and stay unverified until the founder
  * records the review, so the lane looks at those slots and refuses their
  * routes as `not_verified_free`.
  *
- * FREE_SLOTS are deliberately absent. They were claimed by the two Groq
+ * The free slots are deliberately absent. They were claimed by the two Groq
  * `gpt-oss` pools until the founder retired those models on 2026-09-11
- * (carried in 22fe3e3e8) and put the OpenRouter free router in both free
- * slots. That router may not enter the company lane: the terms workbook
- * excludes it on `promptsExcludedFromTraining`, and `check-free-pools.mjs`
- * calls its absence from the pool file the deliberate state. So no pool record
- * claims a free slot today, and the lane cannot look at one. A terms review
- * that admits a free-slot route is what puts them back here.
+ * (carried in 22fe3e3e8). Both free slots now carry the Free plan model, a
+ * priced model no pool record covers. So no pool record claims a free slot
+ * today, and the lane cannot look at one. A terms review that admits a
+ * free-slot route is what puts them back here.
  *
  * `reasoning_premium` left this list on 2026-10-07. Its pool is the Model
  * Studio allocation for the DeepSeek flash model that held the slot until the
@@ -79,8 +72,6 @@ const TASKS = [
   'research',
   'agentic',
 ] as const satisfies readonly RoutingTaskType[];
-
-const freeSlotModels = new Set(FREE_SLOTS.map((slot) => getRoutingSlotModel(slot)));
 
 function plan(
   tier: string | undefined,
@@ -144,25 +135,11 @@ describe('only an exact free plan with the lane on gets the preference', () => {
 });
 
 /**
- * Requirement: without the preference, no paid plan spends free capacity.
- *
- * The free plan itself is deliberately absent. Its own slots now carry the
- * zero-priced router it is entitled to, so reaching a free slot is what a free
- * request is supposed to do; asserting otherwise would pin the leak this file
- * exists to prevent, one tier over.
+ * The free slots carry a model the paid plans also reach through their own
+ * slots, so a paid plan is told apart from free by its slot list, which the
+ * registry contract test holds, not by the model a route names.
  */
-describe('without the preference no paid plan reaches free capacity', () => {
-  it.each([...PAID_TIERS])('never reaches a free slot for %s', (tier) => {
-    for (const taskType of TASKS) {
-      for (const routeId of plan(tier, taskType).routeIds) {
-        const modelKey = routeId.slice(routeId.indexOf('/') + 1);
-        expect(freeSlotModels.has(modelKey), `${String(tier)}/${taskType} → ${routeId}`).toBe(
-          false,
-        );
-      }
-    }
-  });
-
+describe('without the preference a defaulted tier resolves as free', () => {
   it('resolves identically for every tier the resolver defaults to free', () => {
     for (const taskType of TASKS) {
       const baseline = plan('free', taskType);
@@ -176,8 +153,8 @@ describe('without the preference no paid plan reaches free capacity', () => {
 /**
  * The preference is a REORDER WITHIN the admitted set, never a widening of it.
  *
- * Every slot a pool record claims is a reasoning slot carrying a priced model,
- * and the free tier is now granted only zero-priced slots, so `preferSlots` has
+ * Every slot a pool record claims is a reasoning slot, and the free tier is
+ * granted only its own two slots, so `preferSlots` has
  * nothing admitted to promote on the free plan and the plan does not move. That
  * is the preference behaving correctly rather than the lane being bypassed: a
  * stage that may only reorder cannot reach a slot admission withheld.

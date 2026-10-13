@@ -21,7 +21,7 @@ const CODING_BALANCED_MODEL_ID = getRoutingSlotModel('coding_balanced');
 const CODING_ESCALATION_MODEL_ID = getRoutingSlotModel('escalation_coding');
 const SEARCH_PREMIUM_MODEL_ID = getRoutingSlotModel('search_premium');
 const REASONING_ECONOMY_MODEL_ID = getRoutingSlotModel('reasoning_economy');
-const FREE_ZERO_COST_MODEL_ID = getRoutingSlotModel('router_zero_cost');
+const FREE_MODEL_ID = getRoutingSlotModel('free_workhorse');
 const REASONING_BALANCED_MODEL_ID = getRoutingSlotModel('reasoning_balanced');
 const IMAGE_MODEL_ID = getRoutingSlotModel('image_generation');
 const OPENAI_DEFAULT_MODEL_ID = requireProviderDefaultModel('openai');
@@ -99,15 +99,14 @@ describe('resolveAutoRoute', () => {
     });
 
     // The band is clamped to economy, and the model is the free tier's own
-    // zero-cost slot: `coding_fast` leads the economy band but carries a priced
-    // model, so the free tier is not granted it.
+    // slot: `coding_fast` leads the economy band, and the free tier is not
+    // granted it.
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: FREE_ZERO_COST_MODEL_ID,
+      modelKey: FREE_MODEL_ID,
       requestedProfile: 'premium',
       effectiveProfile: 'economy',
     });
-    expect(FREE_ZERO_COST_MODEL_ID).not.toBe(getRoutingSlotModel('coding_fast'));
   });
 
   it('single Auto falls back to the static balanced band for an unmapped task', () => {
@@ -235,7 +234,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: FREE_ZERO_COST_MODEL_ID,
+      modelKey: FREE_MODEL_ID,
       requestedProfile: 'premium',
       effectiveProfile: 'economy',
       reason: 'fallback_slot',
@@ -328,7 +327,7 @@ describe('resolveAutoRoute', () => {
     expect(asFree.status).toBe('selected');
     if (asBasic.status !== 'selected' || asFree.status !== 'selected') return;
     expect(asBasic.modelKey).toBe(REASONING_ECONOMY_MODEL_ID);
-    expect(asFree.modelKey).toBe(FREE_ZERO_COST_MODEL_ID);
+    expect(asFree.modelKey).toBe(FREE_MODEL_ID);
   });
 
   it('treats hobby as basic, the plan it is an alias of', () => {
@@ -354,7 +353,7 @@ describe('resolveAutoRoute', () => {
     );
   });
 
-  it('routes free-tier reasoning to the zero-cost slot, not the economy reasoning slot', () => {
+  it('routes free-tier reasoning to the free slot, not the economy reasoning slot', () => {
     const result = resolveAutoRoute({
       selection: 'auto',
       taskType: 'reasoning',
@@ -364,10 +363,10 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: FREE_ZERO_COST_MODEL_ID,
+      modelKey: FREE_MODEL_ID,
       effectiveProfile: 'economy',
     });
-    expect(FREE_ZERO_COST_MODEL_ID).not.toBe(REASONING_ECONOMY_MODEL_ID);
+    expect(FREE_MODEL_ID).not.toBe(REASONING_ECONOMY_MODEL_ID);
   });
 
   it('never resolves a flagship model for pro or basic (flagship is max/enterprise only)', () => {

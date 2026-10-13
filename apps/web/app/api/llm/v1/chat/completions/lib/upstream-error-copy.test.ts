@@ -194,7 +194,7 @@ describe('a request that is already on Auto', () => {
 });
 
 describe('a request on the free plan model', () => {
-  const FREE_ROUTER = modelRegistry.policies.auto.slots.router_zero_cost.modelKey;
+  const FREE_PLAN_MODEL = modelRegistry.policies.auto.slots.free_workhorse.modelKey;
 
   it.each([
     ['rate limit', Object.assign(new Error('rate limit exceeded'), { status: 429 })],
@@ -203,7 +203,7 @@ describe('a request on the free plan model', () => {
     ['empty answer', Object.assign(new Error('server error'), { status: 500 })],
     ['unknown model', Object.assign(new Error('model not found: nope'), { status: 404 })],
   ])('never points at Auto or a picker the free plan lacks for %s', (_label, error) => {
-    const copy = upstreamFailureCopy(error, PROVIDER, { requestedModel: FREE_ROUTER });
+    const copy = upstreamFailureCopy(error, PROVIDER, { requestedModel: FREE_PLAN_MODEL });
 
     expect(copy.message).not.toMatch(/Auto|model picker|another model/);
     expect(copy.message).toMatch(/Try again/);
@@ -211,7 +211,7 @@ describe('a request on the free plan model', () => {
 
   it('keeps the code a client branches on', () => {
     const limited = Object.assign(new Error('rate limit exceeded'), { status: 429 });
-    const free = upstreamFailureCopy(limited, PROVIDER, { requestedModel: FREE_ROUTER });
+    const free = upstreamFailureCopy(limited, PROVIDER, { requestedModel: FREE_PLAN_MODEL });
     const pinned = upstreamFailureCopy(limited, PROVIDER, { requestedModel: 'some-pinned-model' });
 
     expect(free.code).toBe(pinned.code);
@@ -315,11 +315,11 @@ function windowSpent(retryAfterSeconds?: number): Error {
   });
 }
 
-const FREE_ROUTER_MODEL = modelRegistry.policies.auto.slots.router_zero_cost.modelKey;
-const FREE_PLAN = { requestedModel: FREE_ROUTER_MODEL };
+const FREE_PLAN_MODEL = modelRegistry.policies.auto.slots.free_workhorse.modelKey;
+const FREE_PLAN = { requestedModel: FREE_PLAN_MODEL };
 
 describe('the one model the free plan has', () => {
-  it('does not describe a momentary limit and a spent shared allowance the same way', () => {
+  it('does not describe a momentary limit and a spent provider quota the same way', () => {
     const momentary = upstreamFailureCopy(rateLimited(), PROVIDER, FREE_PLAN);
     const spent = upstreamFailureCopy(windowSpent(), PROVIDER, FREE_PLAN);
 
@@ -327,11 +327,12 @@ describe('the one model the free plan has', () => {
     expect(momentary.code).not.toBe(spent.code);
   });
 
-  it('says a spent allowance is shared by the plan, not a limit on the reader', () => {
+  it('says the provider is out of capacity, without a picker the free plan lacks', () => {
     const spent = upstreamFailureCopy(windowSpent(), PROVIDER, FREE_PLAN);
 
-    expect(spent.message).toMatch(/shares?/i);
-    expect(spent.message).toMatch(/not a limit on your account/i);
+    expect(spent.message).toMatch(/capacity for this model is exhausted/i);
+    expect(spent.message).not.toMatch(/Auto|model picker|another model/);
+    expect(spent.message).not.toMatch(/your account/i);
   });
 
   it('never invents a reset the provider did not state', () => {

@@ -206,7 +206,7 @@ describe('shouldOfferWebSearchForTurn', () => {
   const optional = { required: false, source: null } as const;
   const required = { required: true, source: 'explicit_intent' } as const;
 
-  it('keeps an optional search tool off the free router on website chat', () => {
+  it('keeps an optional search tool off the Free plan model on website chat', () => {
     expect(
       shouldOfferWebSearchForTurn({
         webSearchEnabled: true,

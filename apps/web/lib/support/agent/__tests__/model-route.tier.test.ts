@@ -33,7 +33,6 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importO
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
-  getRoutingSlotModel,
 } from '@agiworkforce/types';
 import {
   admitEveryModelCall,
@@ -42,7 +41,6 @@ import {
   BYOK_QUESTION,
   modelMocks,
   queueModelJson,
-  SELECTED_ROUTE,
 } from './fixtures/model-mocks';
 import { answerSupportQuestion } from '../answer/synthesize';
 import { retrieveSupportChunks } from '../retrieval/retrieve';
@@ -103,47 +101,21 @@ describe('the support assistant routes as a company function, not a plan entitle
       expect(request.trustMode).toBe('managed_cloud');
     },
   );
-
-  it('abstains instead of answering on the zero-cost router when that is all routing offers', async () => {
-    modelMocks.resolveAutoRoute.mockReturnValue({
-      ...SELECTED_ROUTE,
-      modelKey: getRoutingSlotModel('router_zero_cost'),
-      reason: 'fallback_slot',
-    });
-    queueGroundedAnswer();
-
-    const result = await answerSupportQuestion(
-      ask({ isSignedIn: false, userId: null, planTier: null }),
-    );
-
-    expect(result.kind).toBe('abstention');
-    if (result.kind !== 'abstention') return;
-    expect(result.reason).toBe('model_unavailable');
-    expect(result.handoffOffered).toBe(true);
-    expect(modelMocks.buildServerProviderAdapter).not.toHaveBeenCalled();
-    expect(modelMocks.drainToLlmResponse).not.toHaveBeenCalled();
-  });
 });
 
 describe('the support tier against the real router', () => {
-  it('resolves a paid route that is not the zero-cost router, while the free tier resolves to exactly that router', async () => {
+  it('resolves a managed route on the lowest paid tier', async () => {
     const { resolveAutoRoute } = await vi.importActual<RoutingModule>('@agiworkforce/routing');
-    const request = {
+
+    const support = resolveAutoRoute({
       selection: 'auto',
       taskType: 'simple_chat',
       trustMode: 'managed_cloud',
       runtimeProfileId: 'web/cloud-chat',
-    } as const;
-
-    const support = resolveAutoRoute({ ...request, subscriptionTier: LOWEST_PAID_TIER });
-    const unpaid = resolveAutoRoute({ ...request, subscriptionTier: null });
+      subscriptionTier: LOWEST_PAID_TIER,
+    });
 
     expect(support.status).toBe('selected');
-    expect(unpaid.status).toBe('selected');
-    if (support.status !== 'selected' || unpaid.status !== 'selected') return;
-    expect(unpaid.modelKey).toBe(getRoutingSlotModel('router_zero_cost'));
-    expect(support.modelKey).not.toBe(getRoutingSlotModel('router_zero_cost'));
-    expect(support.modelKey).not.toBe(unpaid.modelKey);
   });
 });
 

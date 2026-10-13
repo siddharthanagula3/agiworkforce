@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getModelMetadataById,
   getProviderOfferings,
-  getRoutingSlotModel,
+  getDefaultModelFor,
   listCanonicalModels,
 } from '@agiworkforce/types';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
@@ -177,7 +177,7 @@ describe('provider-outage / credit-downgrade fallback reason reaches the streami
   });
 
   it('claims no free model answered when the server could not fall back for Free Auto', async () => {
-    const freeRouter = getRoutingSlotModel('router_zero_cost');
+    const freeRouter = getDefaultModelFor('free', 'chat');
     vi.mocked(fetch).mockResolvedValueOnce(
       Response.json(
         {

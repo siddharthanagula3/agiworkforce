@@ -406,7 +406,10 @@ test('selects the founder-approved roster and subscription bands', () => {
 
   const basicCodingModel = registry.policies.auto.slots.coding_fast.modelKey;
   assert.equal(basicRoster.has(basicCodingModel), true);
-  assert.equal(compatibility.models[basicCodingModel].tierPolicy.minTier, 'basic');
+  assert.ok(
+    ['free', 'basic'].includes(compatibility.models[basicCodingModel].tierPolicy.minTier),
+    `${basicCodingModel} must be reachable on Basic`,
+  );
   assert.equal(compatibility.models[basicCodingModel].capabilities.tools, true);
   assert.equal(compatibility.models[basicCodingModel].capabilities.codeExecution, true);
 

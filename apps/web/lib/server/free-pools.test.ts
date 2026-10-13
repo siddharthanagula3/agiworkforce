@@ -197,7 +197,7 @@ describe('the shipped configuration', () => {
     }
   });
 
-  it('names which of the free quota lane and the free router a Free Auto turn tries first', () => {
+  it('names which of the free quota lane and the Free plan model a Free Auto turn tries first', () => {
     const pools = loadFreePools();
     const inventory = pools.inventory!;
     const route = inventory.freeAutoRoute!;
@@ -225,7 +225,7 @@ describe('the shipped configuration', () => {
     }
   });
 
-  it('tries the free quota lane first only when the order says so, and the free router otherwise', () => {
+  it('tries the free quota lane first only when the order says so, and the Free plan model otherwise', () => {
     const { freeAutoRoute: route, ...unordered } = loadFreePools().inventory!;
     expect(freeAutoQuotaFirstRoute(undefined)).toBeNull();
     expect(freeAutoQuotaFirstRoute(unordered)).toBeNull();

@@ -415,12 +415,12 @@ export default function TermsPage() {
                     its response; for routed models, the request passes through OpenRouter. On the
                     Free plan, a chat on the default model goes to a provider AGI chooses, not one
                     you pick: Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its
-                    international endpoint in Singapore, or OpenRouter&rsquo;s free router. Which
-                    one answers depends on what is available for that turn, and the reply shows the
-                    model that answered. Those third parties handle that content under their
-                    applicable terms and data-use policies. Our statement that AGI does not train
-                    AGI-owned models is not a promise about a third party&rsquo;s handling. The
-                    current provider list is published at{' '}
+                    international endpoint in Singapore, or OpenAI. Which one answers depends on
+                    what is available for that turn, and the reply shows the model that answered.
+                    Those third parties handle that content under their applicable terms and
+                    data-use policies. Our statement that AGI does not train AGI-owned models is not
+                    a promise about a third party&rsquo;s handling. The current provider list is
+                    published at{' '}
                     <Link href="/subprocessors" className="agi-ds-link">
                       /subprocessors
                     </Link>

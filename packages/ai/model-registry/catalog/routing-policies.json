@@ -318,14 +318,8 @@
       "byok": "premium"
     },
     "tierAllowedSlots": {
-      "free": ["free_workhorse", "free_workhorse_fast", "router_zero_cost"],
-      "basic": [
-        "workhorse_general",
-        "reasoning_economy",
-        "coding_fast",
-        "vision_fast",
-        "router_zero_cost"
-      ],
+      "free": ["free_workhorse", "free_workhorse_fast"],
+      "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "vision_fast"],
       "pro": [
         "workhorse_general",
         "general_balanced",
@@ -340,8 +334,7 @@
         "search_premium",
         "computer_use_balanced",
         "image_generation",
-        "vision_fast",
-        "router_zero_cost"
+        "vision_fast"
       ],
       "max": [
         "workhorse_general",
@@ -361,8 +354,7 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast",
-        "router_zero_cost"
+        "vision_fast"
       ],
       "enterprise": [
         "workhorse_general",
@@ -382,8 +374,7 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast",
-        "router_zero_cost"
+        "vision_fast"
       ],
       "byok": [
         "workhorse_general",
@@ -403,8 +394,7 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast",
-        "router_zero_cost"
+        "vision_fast"
       ]
     },
     "providerPolicies": {
@@ -673,13 +663,10 @@
     },
     "slots": {
       "free_workhorse": {
-        "modelKey": "openrouter-free"
+        "modelKey": "family:openai/gpt-fast"
       },
       "free_workhorse_fast": {
-        "modelKey": "openrouter-free"
-      },
-      "router_zero_cost": {
-        "modelKey": "openrouter-free"
+        "modelKey": "family:openai/gpt-fast"
       },
       "general_fast": {
         "modelKey": "family:openai/gpt-fast"

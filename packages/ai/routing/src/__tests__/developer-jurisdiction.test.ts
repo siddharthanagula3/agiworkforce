@@ -109,19 +109,16 @@ describe('developer jurisdiction switch', () => {
     expect(developerJurisdictionAllowed('not-a-model', null)).toBe(true);
   });
 
-  it('gives Free its US-developed fallback only once the region refuses the free router', () => {
+  it('keeps Free on its own model under US-only, because that model is US-developed', () => {
     for (const taskType of ['simple_chat', 'general', 'coding', 'reasoning'] as const) {
-      const off = resolveAutoRoute(webAuto({ subscriptionTier: 'free', taskType }));
-      expect(off).toMatchObject({ status: 'selected' });
-      if (off.status === 'selected') expect(off.reason).not.toBe('jurisdiction_fallback');
       const on = resolveAutoRoute(
         webAuto({ subscriptionTier: 'free', taskType, allowedDeveloperJurisdictions: US_ONLY }),
       );
       expect(on, taskType).toMatchObject({
         status: 'selected',
-        modelKey: getRoutingSlotModel('workhorse_general'),
-        reason: 'jurisdiction_fallback',
+        modelKey: getRoutingSlotModel('free_workhorse'),
       });
+      if (on.status === 'selected') expect(on.reason).not.toBe('jurisdiction_fallback');
     }
   });
 

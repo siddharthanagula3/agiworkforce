@@ -315,7 +315,7 @@ beforeEach(() => {
 });
 
 /**
- * The founder's 2026-09-07 production turn: the free router accepted the request
+ * The founder's 2026-09-07 production turn: the Free plan model accepted the request
  * and never sent a first token, so the chat function held the whole 300 s
  * platform budget and answered 504 with no body the client could read.
  */

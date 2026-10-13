@@ -1,9 +1,4 @@
-import { planResponseBudget } from '@agiworkforce/routing';
-import {
-  getDefaultModelFor,
-  getModelMetadataById,
-  resolveMaxOutputTokens,
-} from '@agiworkforce/types';
+import { canAccessModelForSubscriptionTier, getDefaultModelFor } from '@agiworkforce/types';
 import { describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/logger');
 
@@ -35,13 +30,18 @@ describe('a free plan request that names auto', () => {
     expect(decision.modelKey).toBe(getDefaultModelFor(FREE_TIER, 'chat'));
   });
 
-  it.each(TASK_TYPES)('is never dispatched to a model that bills for %s', (taskType) => {
+  it.each(TASK_TYPES)('is never dispatched outside the free plan for %s', (taskType) => {
     const decision = resolveWebCloudModelRoute('auto', FREE_TIER, taskType);
     if (decision.status !== 'selected') return;
-    const metadata = getModelMetadataById(decision.modelKey);
-    expect(metadata?.inputCost, decision.modelKey).toBe(0);
-    expect(metadata?.outputCost, decision.modelKey).toBe(0);
-    expect(metadata?.tierPolicy?.minTier, decision.modelKey).toBe(FREE_TIER);
+    expect(canAccessModelForSubscriptionTier(decision.modelKey, FREE_TIER), decision.modelKey).toBe(
+      true,
+    );
+    for (const fallback of decision.fallbacks) {
+      expect(
+        canAccessModelForSubscriptionTier(fallback.modelKey, FREE_TIER),
+        fallback.modelKey,
+      ).toBe(true);
+    }
   });
 
   it('is not refused, which is what an unreachable fallback slot would produce', () => {
@@ -50,11 +50,12 @@ describe('a free plan request that names auto', () => {
     }
   });
 
-  it('still reaches the priced economy pool on the basic plan, which pays for it', () => {
-    const decision = resolveWebCloudModelRoute('auto', 'basic', 'general');
+  it('still reaches the economy pool on the basic plan, which the free plan may not', () => {
+    const decision = resolveWebCloudModelRoute('auto', 'basic', 'reasoning');
     expect(decision.status).toBe('selected');
     if (decision.status !== 'selected') return;
     expect(decision.modelKey).not.toBe(getDefaultModelFor(FREE_TIER, 'chat'));
+    expect(canAccessModelForSubscriptionTier(decision.modelKey, FREE_TIER)).toBe(false);
   });
 });
 
@@ -65,7 +66,7 @@ describe('a free plan request that arrives at the route still naming Auto', () =
     const chatRequest = { model: alias };
     applyFreePlanDefaultModel(chatRequest, FREE_TIER);
     expect(chatRequest.model).toBe(FREE_MODEL);
-    expect(getModelMetadataById(chatRequest.model)?.inputCost).toBe(0);
+    expect(canAccessModelForSubscriptionTier(chatRequest.model, FREE_TIER)).toBe(true);
   });
 
   it('leaves a model the reader named alone, so the tier gate still answers for it', () => {
@@ -78,22 +79,5 @@ describe('a free plan request that arrives at the route still naming Auto', () =
     const chatRequest = { model: 'auto' };
     applyFreePlanDefaultModel(chatRequest, planTier);
     expect(chatRequest.model).toBe('auto');
-  });
-});
-
-describe('the free plan model asked for a one-sentence answer', () => {
-  const FREE_MODEL = getDefaultModelFor(FREE_TIER, 'chat');
-
-  it('keeps its whole output cap, because its reasoning spends the same budget', () => {
-    const plan = planResponseBudget({
-      message: 'Hi! In one sentence, who are you, and what can you do for me?',
-      taskType: 'simple_chat',
-      modelMaxOutputTokens: resolveMaxOutputTokens(FREE_MODEL),
-      modelMinimumOutputTokens: getModelMetadataById(FREE_MODEL)?.responseBudgetFloorTokens,
-    });
-
-    expect(plan.depth).toBe('one_sentence');
-    expect(plan.instruction).toContain('Use one concise sentence.');
-    expect(plan.outputTokenBudget).toBe(resolveMaxOutputTokens(FREE_MODEL));
   });
 });

@@ -6,8 +6,8 @@ import {
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
 import {
+  getDefaultModelFor,
   getProviderDisplayLabel,
-  getRoutingSlotModel,
   isAutoModeModelId,
   normalizeModelId,
 } from '@agiworkforce/types';
@@ -116,13 +116,10 @@ export const FREE_MODEL_PROMOTION_LIMIT_MESSAGE =
   'This conversation has grown past what one free promotional message can carry. Start a new chat, or send a shorter message, to keep going.';
 
 // The free plan has one model and no Auto, so its copy names the only move left.
-const FREE_ROUTER_SHARED_CAPACITY =
-  'Free models share upstream capacity, so this happens at busy times.';
-
-function isFreeRouter(requestedModel: string | undefined): boolean {
+function isFreePlanModel(requestedModel: string | undefined): boolean {
   if (!requestedModel) return false;
   return (
-    (normalizeModelId(requestedModel) ?? requestedModel) === getRoutingSlotModel('router_zero_cost')
+    (normalizeModelId(requestedModel) ?? requestedModel) === getDefaultModelFor('free', 'chat')
   );
 }
 
@@ -284,7 +281,7 @@ function upstreamCopy(
   retryAfterSeconds: number | undefined,
 ): { status: number; type: string; code: string; message: string } {
   const onAuto = isAutoModeModelId(context?.requestedModel);
-  const onFreeRouter = isFreeRouter(context?.requestedModel);
+  const onFreePlanModel = isFreePlanModel(context?.requestedModel);
   const providerLabel = getProviderDisplayLabel(provider);
   switch (classified.category) {
     case 'aborted':
@@ -310,8 +307,8 @@ function upstreamCopy(
         status: 429,
         type: 'rate_limit_error',
         code: 'provider_rate_limited',
-        message: onFreeRouter
-          ? `The free model is busy right now. ${FREE_ROUTER_SHARED_CAPACITY} ${retryClause(retryAfterSeconds, 'Try again in a moment')}.`
+        message: onFreePlanModel
+          ? `The model is busy right now. ${retryClause(retryAfterSeconds, 'Try again in a moment')}.`
           : onAuto
             ? `${providerLabel} is temporarily at capacity. ${clause}, or ${PICK_A_MODEL}.`
             : `${providerLabel} is temporarily at capacity. ${clause}, or choose Auto to use another available model.`,
@@ -326,8 +323,8 @@ function upstreamCopy(
         status: 503,
         type: 'service_unavailable',
         code: 'provider_overloaded',
-        message: onFreeRouter
-          ? `The free model is overloaded right now. ${FREE_ROUTER_SHARED_CAPACITY} ${clause}.`
+        message: onFreePlanModel
+          ? `This model is overloaded right now. ${clause}.`
           : onAuto
             ? `This model is overloaded right now. ${clause}, or ${PICK_A_MODEL}.`
             : `This model is overloaded right now. ${clause}, or choose Auto to use another available model.`,
@@ -377,7 +374,7 @@ function upstreamCopy(
         status: 502,
         type: 'upstream_error',
         code: 'empty_response',
-        message: onFreeRouter
+        message: onFreePlanModel
           ? 'The model finished without returning a response. Try again in a moment.'
           : onAuto
             ? `The model finished without returning a response. Try again, or ${PICK_A_MODEL}.`
@@ -407,8 +404,8 @@ function upstreamCopy(
         status: 404,
         type: 'not_found',
         code: 'model_not_found',
-        message: onFreeRouter
-          ? 'The free model is not available right now. Try again in a moment.'
+        message: onFreePlanModel
+          ? 'The model is not available right now. Try again in a moment.'
           : onAuto
             ? `The model Auto selected is not available. Try again, or ${PICK_A_MODEL}.`
             : 'The selected model is not available. It may have been retired. Choose another model, or switch to Auto.',
@@ -470,7 +467,7 @@ function upstreamCopy(
     // The quota WINDOW is spent, as opposed to a momentary rate limit. Same
     // user-facing shape as a rate limit, different routing consequence upstream
     // (the pool is taken out of service until it resets rather than retried).
-    // On the free plan it is the one pool every reader on that plan shares, so
+    // A free pool is one every reader on the Free plan shares, so
     // the copy says whose limit it is: naming it "your" limit sent readers to
     // check an account that had nothing wrong with it.
     case 'quota_exhausted': {
@@ -478,15 +475,17 @@ function upstreamCopy(
       const message =
         classified.providerHint === SPENDING_CAP_PROVIDER_HINT
           ? `${providerLabel}'s spending cap for this project is exceeded, so this model is unavailable right now. Pick another model or try later.`
-          : onFreeRouter || classified.providerHint === FREE_POOL_PROVIDER_HINT
+          : classified.providerHint === FREE_POOL_PROVIDER_HINT
             ? `The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. ${
                 retryAfterSeconds === undefined
                   ? "It resets on the provider's schedule. Try again later."
                   : `${clause}.`
               }`
-            : onAuto
-              ? `${providerLabel} capacity for this model is exhausted for now. ${clause}, or ${PICK_A_MODEL}.`
-              : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or ${clause.toLowerCase()}.`;
+            : onFreePlanModel
+              ? `${providerLabel} capacity for this model is exhausted for now. ${clause}.`
+              : onAuto
+                ? `${providerLabel} capacity for this model is exhausted for now. ${clause}, or ${PICK_A_MODEL}.`
+                : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or ${clause.toLowerCase()}.`;
       // A spent free pool says nothing about the provider's paid routes, so it
       // must not take the provider out of the ready set for everyone else.
       if (
@@ -498,7 +497,7 @@ function upstreamCopy(
       }
       // The shared free pool has its own code: the remedy is not another model
       // and not the reader's account, and a client cannot tell from prose.
-      const sharedFreePool = onFreeRouter || classified.providerHint === FREE_POOL_PROVIDER_HINT;
+      const sharedFreePool = classified.providerHint === FREE_POOL_PROVIDER_HINT;
       return {
         status: 429,
         type: 'rate_limit_error',
@@ -515,7 +514,7 @@ function upstreamCopy(
         status: 502,
         type: 'upstream_error',
         code: 'provider_unreachable',
-        message: onFreeRouter
+        message: onFreePlanModel
           ? 'The model could not be reached. Try again in a moment.'
           : onAuto
             ? `The model could not be reached. Try again, or ${PICK_A_MODEL}.`
@@ -544,7 +543,7 @@ function upstreamCopy(
         status: 502,
         type: 'upstream_error',
         code: 'provider_error',
-        message: onFreeRouter
+        message: onFreePlanModel
           ? 'The model failed to produce a response. Try again in a moment.'
           : onAuto
             ? `The model failed to produce a response. Try again, or ${PICK_A_MODEL}.`

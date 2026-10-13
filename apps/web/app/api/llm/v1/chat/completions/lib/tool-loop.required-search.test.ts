@@ -47,12 +47,11 @@ import { runToolLoop, type ToolLoopApprovalCheckpoint } from './tool-loop';
 import { REQUIRED_SEARCH_RETRY_DIRECTIVE } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
-import { getModels } from '@agiworkforce/types';
+import { getDefaultModelFor, getModelMetadataById } from '@agiworkforce/types';
 
-const freeRouterModel = getModels().find(
-  (model) => model.webSearchToolOfferPolicy === 'required_only',
-);
-if (!freeRouterModel) throw new Error('The required-only search route is missing from the catalog');
+const FREE_PLAN_TIER = 'free';
+const freePlanModel = getModelMetadataById(getDefaultModelFor(FREE_PLAN_TIER, 'chat'));
+if (!freePlanModel) throw new Error('The Free plan model is missing from the catalog');
 
 const SEARCH_TOOL_CHOICE = { type: 'function', function: { name: WEB_SEARCH_TOOL } };
 
@@ -118,6 +117,7 @@ function makeProcessed(overrides: {
     } as never,
     conversationId: undefined,
     requestedModel: overrides.requestedModel ?? 'gpt-test',
+    ...(overrides.requestedModel === freePlanModel?.id ? { subscriptionTier: FREE_PLAN_TIER } : {}),
     provider: overrides.provider ?? 'openai',
     estimatedCostCents: 0,
     estimatedPromptTokens: 0,
@@ -278,8 +278,8 @@ describe('runToolLoop, required web search', () => {
       runToolLoop(
         makeProcessed({
           enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-          provider: freeRouterModel.provider,
-          requestedModel: freeRouterModel.id,
+          provider: freePlanModel.provider,
+          requestedModel: freePlanModel.id,
         }),
         { approvalMode: 'auto', userId: 'user-1' },
       ),
@@ -319,8 +319,8 @@ describe('runToolLoop, required web search', () => {
       .mockResolvedValueOnce(memoryAnswerStep('Answer from [1].'));
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
     processed.freeTrial = {} as NonNullable<ProcessedRequest['freeTrial']>;
 
@@ -352,8 +352,8 @@ describe('runToolLoop, required web search', () => {
       );
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
     processed.freeTrial = {} as NonNullable<ProcessedRequest['freeTrial']>;
 
@@ -379,8 +379,8 @@ describe('runToolLoop, required web search', () => {
       );
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
     processed.freeTrial = {} as NonNullable<ProcessedRequest['freeTrial']>;
 
@@ -403,8 +403,8 @@ describe('runToolLoop, required web search', () => {
       );
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
     processed.freeTrial = {} as NonNullable<ProcessedRequest['freeTrial']>;
 
@@ -425,8 +425,8 @@ describe('runToolLoop, required web search', () => {
       runToolLoop(
         makeProcessed({
           enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-          provider: freeRouterModel.provider,
-          requestedModel: freeRouterModel.id,
+          provider: freePlanModel.provider,
+          requestedModel: freePlanModel.id,
         }),
         {
           approvalMode: 'manual',
@@ -460,8 +460,8 @@ describe('runToolLoop, required web search', () => {
     let checkpoint: ToolLoopApprovalCheckpoint | undefined;
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
 
     await drain(
@@ -505,8 +505,8 @@ describe('runToolLoop, required web search', () => {
     let checkpoint: ToolLoopApprovalCheckpoint | undefined;
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
 
     await drain(
@@ -546,8 +546,8 @@ describe('runToolLoop, required web search', () => {
     let checkpoint: ToolLoopApprovalCheckpoint | undefined;
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
 
     await drain(
@@ -599,8 +599,8 @@ describe('runToolLoop, required web search', () => {
       runToolLoop(
         makeProcessed({
           enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-          provider: freeRouterModel.provider,
-          requestedModel: freeRouterModel.id,
+          provider: freePlanModel.provider,
+          requestedModel: freePlanModel.id,
         }),
         { approvalMode: 'auto', userId: 'user-1' },
       ),
@@ -727,8 +727,8 @@ describe('runToolLoop, required web search', () => {
       runToolLoop(
         makeProcessed({
           enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-          provider: freeRouterModel.provider,
-          requestedModel: freeRouterModel.id,
+          provider: freePlanModel.provider,
+          requestedModel: freePlanModel.id,
         }),
         { approvalMode: 'auto', userId: 'user-1' },
       ),
@@ -745,8 +745,8 @@ describe('runToolLoop, required web search', () => {
 
     const processed = makeProcessed({
       enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
-      provider: freeRouterModel.provider,
-      requestedModel: freeRouterModel.id,
+      provider: freePlanModel.provider,
+      requestedModel: freePlanModel.id,
     });
     processed.subscriptionTier = 'free';
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto', userId: 'user-1' }));
@@ -771,8 +771,8 @@ describe('runToolLoop, required web search', () => {
             attachedTool: 'generic-function',
           },
           toolChoice: SEARCH_TOOL_CHOICE,
-          provider: freeRouterModel.provider,
-          requestedModel: freeRouterModel.id,
+          provider: freePlanModel.provider,
+          requestedModel: freePlanModel.id,
         }),
         { approvalMode: 'auto', userId: 'user-1' },
       ),
@@ -791,8 +791,8 @@ describe('runToolLoop, required web search', () => {
       runToolLoop(
         makeProcessed({
           enforcement: { mode: 'none', attachedTool: null },
-          provider: freeRouterModel.provider,
-          requestedModel: freeRouterModel.id,
+          provider: freePlanModel.provider,
+          requestedModel: freePlanModel.id,
           searchRequired: false,
         }),
         { approvalMode: 'auto', userId: 'user-1' },
