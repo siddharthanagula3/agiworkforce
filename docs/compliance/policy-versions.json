@@ -13,6 +13,12 @@
       "served": "d4c600d9b23d82896ebf8938e0b1888dbe36ebe7",
       "main": "d1892b7efd77c8d0691d2bd6deb39c6b1918043a",
       "note": "On 7 October 2026 production answered /api/version with commit d4c600d9b2, which is main's head, and the live /privacy, /cookies, /referral-terms, /agent-permissions, /privacy/india and /security pages printed 2026-09-29, 2026-09-23, 2026-09-27, 2026-09-27, 2026-08-13 and 2026-08-14, read from each page that day. Those versions were therefore published on this site. d1892b7efd is the commit on this branch that moves the six dates to 2026-10-07; it had not been deployed when this was checked."
+    },
+    {
+      "checkedOn": "2026-10-13",
+      "served": "e4acfe7b80b80fd6e59490dc5c24d20bfe5e8dd9",
+      "main": "11539ecd384edb58345246bc72326426063c5aec",
+      "note": "On 13 October 2026 production answered /api/version with commit e4acfe7b80, which main holds, and the live /privacy, /privacy/india, /data-use, /subprocessors and /terms pages each printed 2026-10-08, read from each page that day. Those versions were therefore published on this site. 11539ecd38 is the commit on this branch that moves the first four dates to 2026-10-13 and leaves the terms date where it is; it had not been deployed when this was checked."
     }
   ],
   "documents": {
