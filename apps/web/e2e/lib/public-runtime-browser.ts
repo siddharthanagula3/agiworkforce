@@ -1,4 +1,4 @@
-import { expect, type Page, type CDPSession } from '@playwright/test';
+import { expect, type Page, type CDPSession, type Request } from '@playwright/test';
 import ts from 'typescript';
 import { digest, documentInputs } from '../../../../scripts/public-runtime/proof.mjs';
 import type { PublicRuntimeCase } from './public-runtime-cases';
@@ -48,6 +48,61 @@ interface CoverageScript {
   scriptId: string;
   url: string;
   functions: { ranges: { startOffset: number; endOffset: number; count: number }[] }[];
+}
+
+interface WireDocumentRequest {
+  requestId: string;
+  frameId?: string;
+  type?: string;
+  request: { url: string; method: string };
+  redirectResponse?: unknown;
+}
+
+interface WireRequestHeaders {
+  requestId: string;
+  headers: Record<string, string>;
+}
+
+export function createDocumentWireCapture(mainFrameId: string) {
+  if (!mainFrameId) throw new Error('Browser wire evidence requires a main frame');
+  const documents: {
+    requestId: string;
+    url: string;
+    method: string;
+    redirected: boolean;
+  }[] = [];
+  const headers = new Map<string, Record<string, string>[]>();
+  return {
+    requestWillBeSent(event: WireDocumentRequest) {
+      if (event.type !== 'Document' || event.frameId !== mainFrameId) return;
+      documents.push({
+        requestId: event.requestId,
+        url: event.request.url,
+        method: event.request.method,
+        redirected: event.redirectResponse !== undefined,
+      });
+    },
+    requestWillBeSentExtraInfo(event: WireRequestHeaders) {
+      const records = headers.get(event.requestId) ?? [];
+      records.push({ ...event.headers });
+      headers.set(event.requestId, records);
+    },
+    document(url: string) {
+      const candidates = documents.filter((request) => request.url === url);
+      const request = candidates[0];
+      if (candidates.length !== 1 || !request?.requestId || request.method !== 'GET')
+        throw new Error('Browser evidence needs exactly one matching wire document request');
+      if (
+        request.redirected ||
+        documents.filter((entry) => entry.requestId === request.requestId).length !== 1
+      )
+        throw new Error('Redirected wire document evidence is ambiguous');
+      const records = headers.get(request.requestId) ?? [];
+      if (records.length !== 1)
+        throw new Error('Browser evidence needs exactly one wire header record');
+      return documentInputs(url, records[0]!);
+    },
+  };
 }
 
 export function clientMarkerExecution(
@@ -126,19 +181,24 @@ export async function startBrowserObservation(
     await request.abort('blockedbyclient');
   });
   const client: CDPSession = await page.context().newCDPSession(page);
+  const { frameTree } = (await client.send('Page.getFrameTree')) as {
+    frameTree: { frame: { id: string } };
+  };
+  const wire = createDocumentWireCapture(frameTree.frame.id);
+  client.on('Network.requestWillBeSent', wire.requestWillBeSent);
+  client.on('Network.requestWillBeSentExtraInfo', wire.requestWillBeSentExtraInfo);
+  await client.send('Network.enable');
   await client.send('Debugger.enable');
   await client.send('Profiler.enable');
   await client.send('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
-  const documentRequests: Promise<ReturnType<typeof documentInputs>>[] = [];
+  const documentRequests: Request[] = [];
   page.on('request', (request) => {
     if (
       request.isNavigationRequest() &&
       request.frame() === page.mainFrame() &&
       new URL(request.url()).pathname + new URL(request.url()).search === route.path
     ) {
-      documentRequests.push(
-        request.allHeaders().then((headers) => documentInputs(request.url(), headers)),
-      );
+      documentRequests.push(request);
     }
   });
   return {
@@ -151,10 +211,10 @@ export async function startBrowserObservation(
         throw new Error(
           `Unsupported sampled browser transport: ${[...new Set(unsupportedTransports)].join(', ')}`,
         );
-      const requests = await Promise.all(documentRequests);
-      const document = requests[0];
-      if (requests.length !== 1 || !document)
+      const request = documentRequests[0];
+      if (documentRequests.length !== 1 || !request)
         throw new Error('Browser evidence needs exactly one main document navigation');
+      const document = wire.document(request.url());
       const coverage = (await client.send('Profiler.takePreciseCoverage')) as {
         result: CoverageScript[];
       };

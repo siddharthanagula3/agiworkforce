@@ -8,6 +8,7 @@ import { publicRuntimeFixtures } from '../lib/public-runtime-fixtures';
 import { publicRuntimeCases } from '../lib/public-runtime-cases';
 import { assertPublicRuntimeState, startBrowserObservation } from '../lib/public-runtime-browser';
 import { settlePublicPage } from '../lib/public-page-readiness';
+import { startPublicRuntimeFailureDiagnostics } from '../lib/public-runtime-failure-diagnostics';
 
 test('cold public runtime proof', async ({ browser }, testInfo) => {
   const revision = process.env['GITHUB_SHA'];
@@ -59,8 +60,10 @@ test('cold public runtime proof', async ({ browser }, testInfo) => {
         serviceWorkers: 'block',
         storageState: { cookies: [], origins: [] },
       });
+      let browserDiagnostics: ReturnType<typeof startPublicRuntimeFailureDiagnostics> | undefined;
       try {
         const page = await context.newPage();
+        browserDiagnostics = startPublicRuntimeFailureDiagnostics(page, handle.origin);
         const observation = await startBrowserObservation(page, route, handle.origin);
         const location = new URL(route.path, handle.origin);
         const readiness = await settlePublicPage(
@@ -93,9 +96,10 @@ test('cold public runtime proof', async ({ browser }, testInfo) => {
             error: String(diagnosticError),
           };
         }
+        const browserEvidence = browserDiagnostics ? await browserDiagnostics.capture(1000) : null;
         try {
           await testInfo.attach(`runtime-failure-${handle.state.stateId}.json`, {
-            body: JSON.stringify(diagnostics),
+            body: JSON.stringify({ ...diagnostics, browser: browserEvidence }),
             contentType: 'application/json',
           });
         } catch (attachmentError) {
@@ -106,6 +110,7 @@ test('cold public runtime proof', async ({ browser }, testInfo) => {
         }
         throw error;
       } finally {
+        browserDiagnostics?.dispose();
         await context.close();
       }
     }
