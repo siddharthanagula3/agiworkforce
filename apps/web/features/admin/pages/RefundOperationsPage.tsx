@@ -9,11 +9,13 @@ import {
   REFUND_REQUEST_REASON_LABELS,
   formatPaymentAmount,
   paymentFractionDigits,
+  refundingStoreOf,
   type OperatorAccountBilling,
   type OperatorRefundRequestView,
   type OperatorRefundStripeReason,
   type RefundAssessment,
   type RefundableChargeView,
+  type RefundingStore,
 } from '@/lib/billing/refund-requests';
 import { formatDateTime } from '../lib/operator-format';
 
@@ -101,12 +103,15 @@ function chargeTarget(charge: RefundableChargeView): RefundTarget {
 function RequestRow({
   request,
   onRefund,
+  onStoreRefund,
   onDecline,
 }: {
   request: OperatorRefundRequestView;
   onRefund: (target: RefundTarget) => void;
+  onStoreRefund: (request: OperatorRefundRequestView, store: RefundingStore) => void;
   onDecline: (request: OperatorRefundRequestView) => void;
 }) {
+  const store = refundingStoreOf(request.chargeId);
   return (
     <li className="flex flex-col gap-2 py-3 md:flex-row md:items-start md:justify-between">
       <div className="min-w-0 space-y-1 text-sm">
@@ -131,13 +136,23 @@ function RequestRow({
         </p>
       </div>
       <div className="flex shrink-0 gap-2">
-        <button
-          type="button"
-          className={ACTION_CLASS}
-          onClick={() => onRefund(requestTarget(request))}
-        >
-          Refund
-        </button>
+        {store ? (
+          <button
+            type="button"
+            className={ACTION_CLASS}
+            onClick={() => onStoreRefund(request, store)}
+          >
+            Record {store} refund
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={ACTION_CLASS}
+            onClick={() => onRefund(requestTarget(request))}
+          >
+            Refund
+          </button>
+        )}
         <button type="button" className={ACTION_CLASS} onClick={() => onDecline(request)}>
           Decline
         </button>
@@ -292,6 +307,31 @@ export default function RefundOperationsPage() {
     });
   }
 
+  function submitStoreRefund(request: OperatorRefundRequestView, store: RefundingStore) {
+    const refunded = formatPaymentAmount(request.chargeAmountCents, request.chargeCurrency);
+    confirm({
+      title: `Record this as refunded by ${store}?`,
+      description: `This closes the request as refunded for ${refunded} and tells the customer ${store} returned their money. It moves no money and cannot be reopened, so do it only after ${store} shows the refund.`,
+      confirmLabel: 'Record refund',
+      onConfirm: async () => {
+        setError(null);
+        try {
+          await post({
+            action: 'store_refund',
+            requestId: request.id,
+            amountCents: null,
+            note: `Refunded through ${store}.`,
+          });
+          setNotice(`The request is closed as refunded by ${store} and the customer was told.`);
+          await loadPending();
+          if (account) await lookUp(account.userId);
+        } catch (storeRefundError) {
+          setError(toUserMessage(storeRefundError, 'The refund was not recorded.'));
+        }
+      },
+    });
+  }
+
   function submitDecline() {
     if (!declining) return;
     const recordedNote = declineNote.trim();
@@ -328,7 +368,8 @@ export default function RefundOperationsPage() {
           <h1 className="text-h1 text-foreground">Refunds and disputes</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Refund a payment in full or in part through Stripe, and decide the refund requests
-            customers filed. Every refund and decline is written to the security audit log. The plan
+            customers filed. A charge taken by the App Store or Google Play is refunded there and
+            recorded here. Every refund and decline is written to the security audit log. The plan
             and credits follow from the Stripe refund event, not from this page.
           </p>
         </header>
@@ -365,6 +406,7 @@ export default function RefundOperationsPage() {
                     key={request.id}
                     request={request}
                     onRefund={openRefund}
+                    onStoreRefund={submitStoreRefund}
                     onDecline={(next) => {
                       setDeclining(next);
                       setDeclineNote('');

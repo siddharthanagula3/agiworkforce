@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   verify: vi.fn(),
   process: vi.fn(async (_input: unknown) => 'applied'),
   product: vi.fn(),
+  hasReceipt: vi.fn(async (..._input: unknown[]) => true),
+  grant: vi.fn(async (_input: unknown) => 'granted'),
+  unattributed: vi.fn(async (_input: unknown) => undefined),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -37,6 +40,9 @@ vi.mock('@/lib/server/mobile-iap-catalog', async (importOriginal) => ({
 vi.mock('@/lib/services/mobile-iap-notification-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule3>()),
   processMobileIapLifecycleEvent: mocks.process,
+  hasMobileIapReceipt: mocks.hasReceipt,
+  grantMobileIapPurchaseFromStore: mocks.grant,
+  recordUnattributedStoreCharge: mocks.unattributed,
 }));
 
 import { POST } from '../route';
@@ -62,7 +68,11 @@ function transaction(overrides: Record<string, unknown> = {}) {
 
 function notify(
   notificationType: NotificationTypeV2,
-  options: { subtype?: Subtype; transaction?: Record<string, unknown> | null } = {},
+  options: {
+    subtype?: Subtype;
+    transaction?: Record<string, unknown> | null;
+    renewalInfo?: Record<string, unknown>;
+  } = {},
 ) {
   mocks.verify.mockResolvedValue({
     channel: 'production',
@@ -73,6 +83,7 @@ function notify(
       data: { signedTransactionInfo: 'signed-transaction-info-fixture' },
     },
     transaction: options.transaction === null ? null : transaction(options.transaction),
+    renewalInfo: options.renewalInfo ?? null,
   });
   return POST(
     new NextRequest('http://localhost/api/mobile/iap/apple-notifications', {
@@ -92,6 +103,7 @@ describe('App Store server notifications', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.product.mockReturnValue(SUBSCRIPTION);
+    mocks.hasReceipt.mockReset().mockResolvedValue(true);
   });
 
   it('carries a renewal forward as an active entitlement to the new expiry', async () => {
@@ -134,22 +146,187 @@ describe('App Store server notifications', () => {
     });
   });
 
-  it.each([NotificationTypeV2.EXPIRED, NotificationTypeV2.GRACE_PERIOD_EXPIRED])(
-    'ends the entitlement on %s',
-    async (notificationType) => {
-      await notify(notificationType);
+  it.each([
+    Subtype.VOLUNTARY,
+    Subtype.BILLING_RETRY,
+    Subtype.PRICE_INCREASE,
+    Subtype.PRODUCT_NOT_FOR_SALE,
+  ])('ends the entitlement on EXPIRED %s', async (subtype) => {
+    await notify(NotificationTypeV2.EXPIRED, { subtype });
 
-      expect(lifecycleEvent()).toMatchObject({ entitlementStatus: 'expired' });
+    expect(lifecycleEvent()).toMatchObject({ entitlementStatus: 'expired' });
+  });
+
+  it('keeps serving through the grace period after a failed renewal', async () => {
+    const graceEnd = Date.now() + 5 * DAY_MS;
+    await notify(NotificationTypeV2.DID_FAIL_TO_RENEW, {
+      subtype: Subtype.GRACE_PERIOD,
+      transaction: { expiresDate: Date.now() - DAY_MS },
+      renewalInfo: { gracePeriodExpiresDate: graceEnd },
+    });
+
+    expect(lifecycleEvent()).toMatchObject({
+      entitlementStatus: 'grace',
+      accessUntil: new Date(graceEnd),
+    });
+    expect(mocks.grant).not.toHaveBeenCalled();
+  });
+
+  it.each([NotificationTypeV2.DID_FAIL_TO_RENEW, NotificationTypeV2.GRACE_PERIOD_EXPIRED])(
+    'stops serving on %s but leaves the subscription in billing retry',
+    async (notificationType) => {
+      await notify(notificationType, { transaction: { expiresDate: Date.now() - DAY_MS } });
+
+      expect(lifecycleEvent()).toMatchObject({ entitlementStatus: 'on_hold' });
     },
   );
 
-  it('ends an entitlement whose paid-through date has passed, whatever the notification says', async () => {
-    await notify(NotificationTypeV2.DID_CHANGE_RENEWAL_STATUS, {
-      subtype: Subtype.AUTO_RENEW_DISABLED,
+  it('restores service when billing recovers', async () => {
+    await notify(NotificationTypeV2.DID_RENEW, { subtype: Subtype.BILLING_RECOVERY });
+
+    expect(lifecycleEvent()).toMatchObject({ entitlementStatus: 'active' });
+  });
+
+  it('applies an upgrade at once with the new product', async () => {
+    await notify(NotificationTypeV2.DID_CHANGE_RENEWAL_PREF, { subtype: Subtype.UPGRADE });
+
+    expect(lifecycleEvent()).toMatchObject({
+      entitlementStatus: 'active',
+      product: SUBSCRIPTION,
+    });
+  });
+
+  it('keeps the current plan when a downgrade is scheduled for renewal', async () => {
+    await notify(NotificationTypeV2.DID_CHANGE_RENEWAL_PREF, {
+      subtype: Subtype.DOWNGRADE,
+      renewalInfo: { autoRenewStatus: 1, autoRenewProductId: 'fixture.store.cheaper' },
+    });
+
+    expect(lifecycleEvent()).toMatchObject({
+      entitlementStatus: 'active',
+      cancelAtPeriodEnd: false,
+      product: SUBSCRIPTION,
+    });
+  });
+
+  it('reinstates a subscription whose refund Apple reversed', async () => {
+    await notify(NotificationTypeV2.REFUND_REVERSED);
+
+    expect(lifecycleEvent()).toMatchObject({ entitlementStatus: 'active' });
+  });
+
+  it.each([
+    NotificationTypeV2.PRICE_INCREASE,
+    NotificationTypeV2.CONSUMPTION_REQUEST,
+    NotificationTypeV2.REFUND_DECLINED,
+  ])('acknowledges %s without moving the entitlement', async (notificationType) => {
+    const response = await notify(notificationType);
+
+    expect(await response.json()).toEqual({ received: true, status: 'ignored' });
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
+
+  it('grants a purchase approved while the app was closed, from the notification alone', async () => {
+    mocks.hasReceipt.mockResolvedValue(false);
+
+    await notify(NotificationTypeV2.SUBSCRIBED, { subtype: Subtype.INITIAL_BUY });
+
+    expect(mocks.grant).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        appAccountToken: '33333333-3333-4333-8333-333333333333',
+        verified: expect.objectContaining({
+          platform: 'ios',
+          storeTransactionId: 'store-transaction-2',
+          entitlementStatus: 'active',
+          environment: 'production',
+        }),
+      }),
+    );
+    expect(lifecycleEvent()).toMatchObject({ entitlementStatus: 'active' });
+  });
+
+  it('does not grant a second time for a purchase the ledger already holds', async () => {
+    await notify(NotificationTypeV2.SUBSCRIBED, { subtype: Subtype.INITIAL_BUY });
+
+    expect(mocks.grant).not.toHaveBeenCalled();
+  });
+
+  it('hands a sandbox notice to the ledger marked as a test purchase, for the ledger to gate', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    mocks.hasReceipt.mockResolvedValue(false);
+    mocks.verify.mockResolvedValue({
+      channel: 'sandbox',
+      notification: {
+        notificationUUID: 'notification-sandbox',
+        notificationType: NotificationTypeV2.SUBSCRIBED,
+        subtype: Subtype.INITIAL_BUY,
+        data: { signedTransactionInfo: 'signed-transaction-info-fixture' },
+      },
+      transaction: transaction(),
+      renewalInfo: null,
+    });
+
+    await POST(
+      new NextRequest('http://localhost/api/mobile/iap/apple-notifications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ signedPayload: 'x'.repeat(40) }),
+      }),
+    );
+    vi.unstubAllEnvs();
+
+    expect(mocks.grant).toHaveBeenCalledWith(
+      expect.objectContaining({ verified: expect.objectContaining({ environment: 'sandbox' }) }),
+    );
+    expect(lifecycleEvent()).toMatchObject({ environment: 'sandbox' });
+  });
+
+  it('ends an entitlement whose paid-through date has passed when a renewal is reported late', async () => {
+    await notify(NotificationTypeV2.DID_RENEW, {
       transaction: { expiresDate: Date.now() - DAY_MS },
     });
 
     expect(lifecycleEvent()).toMatchObject({ entitlementStatus: 'expired' });
+  });
+
+  it('keeps access when auto-renew is switched off during a grace period or billing retry', async () => {
+    const response = await notify(NotificationTypeV2.DID_CHANGE_RENEWAL_STATUS, {
+      subtype: Subtype.AUTO_RENEW_DISABLED,
+      transaction: { expiresDate: Date.now() - DAY_MS },
+    });
+
+    expect(await response.json()).toEqual({ received: true, status: 'ignored' });
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
+
+  it('passes on when Apple signed the notice, so a late one cannot undo a newer choice', async () => {
+    const signedDate = Date.now() - 60_000;
+    mocks.verify.mockResolvedValue({
+      channel: 'production',
+      notification: {
+        notificationUUID: 'notification-signed',
+        notificationType: NotificationTypeV2.DID_CHANGE_RENEWAL_STATUS,
+        subtype: Subtype.AUTO_RENEW_DISABLED,
+        signedDate,
+        data: { signedTransactionInfo: 'signed-transaction-info-fixture' },
+      },
+      transaction: transaction(),
+      renewalInfo: null,
+    });
+
+    await POST(
+      new NextRequest('http://localhost/api/mobile/iap/apple-notifications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ signedPayload: 'x'.repeat(40) }),
+      }),
+    );
+
+    expect(lifecycleEvent()).toMatchObject({
+      environment: 'production',
+      signedAt: new Date(signedDate),
+      cancelAtPeriodEnd: true,
+    });
   });
 
   it('marks a refund with the fraction Apple revoked', async () => {
@@ -180,12 +357,69 @@ describe('App Store server notifications', () => {
     expect(mocks.process).not.toHaveBeenCalled();
   });
 
-  it('refuses a transaction with no account token to bind it to', async () => {
-    const response = await notify(NotificationTypeV2.DID_RENEW, {
-      transaction: { appAccountToken: undefined },
+  it('refuses a transaction that charged nobody and has no account token to bind it to', async () => {
+    const response = await notify(NotificationTypeV2.EXPIRED, {
+      transaction: { appAccountToken: undefined, expiresDate: Date.now() - DAY_MS },
     });
 
     expect(response.status).toBe(400);
     expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.unattributed).not.toHaveBeenCalled();
   });
+
+  it('records a paid renewal that names no account, and grants nothing for it', async () => {
+    const response = await notify(NotificationTypeV2.DID_RENEW, {
+      transaction: { appAccountToken: undefined },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ status: 'unattributed' });
+    expect(mocks.unattributed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'ios',
+        reason: 'no_account_token',
+        storeTransactionId: 'store-transaction-2',
+        originalTransactionId: 'store-transaction-1',
+      }),
+    );
+    expect(mocks.grant).not.toHaveBeenCalled();
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
+
+  it('makes Apple retry when the record of an unattributed charge cannot be written', async () => {
+    mocks.unattributed.mockRejectedValueOnce(new Error('audit log unavailable'));
+
+    const response = await notify(NotificationTypeV2.DID_RENEW, {
+      transaction: { appAccountToken: undefined },
+    });
+
+    expect(response.status).toBe(500);
+  });
+
+  it.each(['unknown_account', 'not_grantable'] as const)(
+    'records a paid purchase the ledger answered %s for',
+    async (grant) => {
+      mocks.hasReceipt.mockResolvedValueOnce(false);
+      mocks.grant.mockResolvedValueOnce(grant);
+
+      const response = await notify(NotificationTypeV2.SUBSCRIBED);
+
+      expect(response.status).toBe(200);
+      expect(mocks.unattributed).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: grant, storeTransactionId: 'store-transaction-2' }),
+      );
+    },
+  );
+
+  it.each(['granted', 'refund_filed'] as const)(
+    'records nothing more for a purchase the ledger answered %s for',
+    async (grant) => {
+      mocks.hasReceipt.mockResolvedValueOnce(false);
+      mocks.grant.mockResolvedValueOnce(grant);
+
+      await notify(NotificationTypeV2.SUBSCRIBED);
+
+      expect(mocks.unattributed).not.toHaveBeenCalled();
+    },
+  );
 });

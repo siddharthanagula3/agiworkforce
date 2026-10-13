@@ -11,6 +11,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { requireCsrfToken } from '@/lib/csrf';
+import { UPGRADE_ACCESS_INVITE_KIND } from '@/lib/server/billing-waitlist-access';
 
 async function handleClaimOffer(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
@@ -51,8 +52,12 @@ async function handleClaimOffer(request: NextRequest) {
     // claimant owns yet. Both statements stay on the schema owner for that
     // reason; the subscription read-back below is the caller's own row.
     const [invite] = await getNeonDb().query<InviteRow>(
-      'select id, plan_tier, trial_days, discount_percent from beta_invites where code = $1 and is_active = true limit 1',
-      [trimmedCode],
+      `select id, plan_tier, trial_days, discount_percent
+         from beta_invites
+        where code = $1 and is_active = true
+          and coalesce(metadata->>'kind', '') <> $2
+        limit 1`,
+      [trimmedCode, UPGRADE_ACCESS_INVITE_KIND],
     );
 
     if (!invite) {

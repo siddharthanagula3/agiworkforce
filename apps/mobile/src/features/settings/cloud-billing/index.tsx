@@ -5,11 +5,12 @@ import { useRouter } from 'expo-router';
 import {
   CreditCard,
   ExternalLink,
-  FileText,
   RefreshCw,
   ShoppingBag,
   CircleHelp,
   Check,
+  Clock,
+  Coins,
   ListChecks,
 } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
@@ -26,11 +27,17 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import {
+  MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES,
   canUseBillingPlanCapability,
   formatCredits,
   getBillingPlanPricing,
+  getMobileIapProductDefinition,
   getNextUpgradeTier,
   isEntitledSubscriptionStatus,
+  isSelfServeIndividualPlanTier,
+  mobileIapPlanChangeDirection,
+  type MobileIapCatalogProduct,
+  type MobileIapProductKey,
 } from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
@@ -45,6 +52,7 @@ import {
   getSubscriptionOwnerGuard,
 } from '@/src/features/billing/subscriptionSource';
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
+import { storeDisplayName } from '@/src/features/release-state';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
   billingRequestMessage,
@@ -61,6 +69,9 @@ function portalErrorTitle(error: unknown): string {
   }
   return 'Billing portal unavailable';
 }
+
+type StoreSubscriptionProduct = Extract<MobileIapCatalogProduct, { kind: 'subscription' }>;
+type StoreTopUpProduct = Extract<MobileIapCatalogProduct, { kind: 'top_up' }>;
 
 function PlanBadge() {
   const colors = useThemeColors();
@@ -147,10 +158,39 @@ export default function CloudBillingScreen() {
       : nativeIap.catalog?.platform === 'android'
         ? 'google'
         : null;
+  const managedElsewhere = subscriptionGuard.blocked && billingSource !== nativeSubscriptionSource;
+  const plansWithheldReason = nativeIap.catalog?.subscriptionsUnavailableReason ?? null;
   const canBuyNativeSubscription =
     nativeIap.catalog?.enabled === true &&
     !isWorkspacePlan &&
-    (!subscriptionGuard.blocked || billingSource === nativeSubscriptionSource);
+    plansWithheldReason === null &&
+    !managedElsewhere;
+  const storeProducts = nativeIap.catalog?.enabled ? nativeIap.catalog.products : [];
+  const subscriptionProducts = storeProducts.filter(
+    (product): product is StoreSubscriptionProduct => product.kind === 'subscription',
+  );
+  const topUpProducts = storeProducts.filter(
+    (product): product is StoreTopUpProduct => product.kind === 'top_up',
+  );
+  const storeName =
+    (nativeSubscriptionSource ? storeDisplayName(nativeSubscriptionSource) : null) ?? 'the store';
+  const holdsStorePlan =
+    billingSource === nativeSubscriptionSource &&
+    !isFreeTier &&
+    isEntitled &&
+    isSelfServeIndividualPlanTier(billingTier);
+  const downgradeWaitsForRenewal =
+    nativeIap.catalog?.platform !== 'android' ||
+    (nativeIap.catalog.androidReplacementModes ?? MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES)
+      .downgrade === 'deferred';
+  const scheduledDefinition = nativeIap.scheduledProductKey
+    ? getMobileIapProductDefinition(nativeIap.scheduledProductKey)
+    : null;
+  const scheduledTier =
+    nativeIap.lastResult?.scheduledPlanTier ??
+    (scheduledDefinition?.kind === 'subscription' ? scheduledDefinition.planTier : null);
+  const scheduledTierLabel = scheduledTier ? getBillingPlanPricing(scheduledTier).label : null;
+  const isAwaitingApproval = nativeIap.awaitingApproval.size > 0;
   const paywallRecoveryAction = isFreeTier
     ? 'subscribe'
     : isEntitled
@@ -163,8 +203,25 @@ export default function CloudBillingScreen() {
   // Checklist rule 55: a plan change is either possible or it says so before the
   // tap. A row that opens a sheet whose only content is an apology is the
   // failure-after-effort this forbids (MOBILE-037).
-  const canChangePlanInApp =
-    canBuyNativeSubscription || subscriptionGuard.blocked || FEATURES.billing;
+  const canChangePlanInApp = canBuyNativeSubscription || subscriptionGuard.blocked;
+
+  const purchaseFromStore = useCallback(
+    (key: MobileIapProductKey) => {
+      if (!nativeIap.awaitingApproval.has(key)) {
+        void nativeIap.purchase(key);
+        return;
+      }
+      Alert.alert(
+        'This purchase is already waiting',
+        `${storeName.charAt(0).toUpperCase()}${storeName.slice(1)} has not finished the first request yet. It completes here on its own once it is approved or paid. Asking again can lead to a second charge.`,
+        [
+          { text: 'Keep waiting', style: 'cancel' },
+          { text: 'Ask again', onPress: () => void nativeIap.purchase(key) },
+        ],
+      );
+    },
+    [nativeIap, storeName],
+  );
 
   const showSubscriptionOwnerGuard = useCallback(() => {
     const buttons: Array<{
@@ -277,10 +334,14 @@ export default function CloudBillingScreen() {
         icon={CreditCard}
       />
 
-      {nextUpgradeTier && !isWorkspacePlan && !canChangePlanInApp && !upgradeGateVisible ? (
+      {nextUpgradeTier &&
+      !isWorkspacePlan &&
+      !canChangePlanInApp &&
+      !upgradeGateVisible &&
+      !nativeIap.loading ? (
         <SettingsInfo
-          title="Plan changes are not in this app yet"
-          body="Your plan, invoices, and payment method are managed on agiworkforce.com. Everything you already pay for keeps working here."
+          title="Plan changes are not available right now"
+          body="Everything you already pay for keeps working here."
           icon={ShoppingBag}
         />
       ) : null}
@@ -452,20 +513,33 @@ export default function CloudBillingScreen() {
         />
       ) : null}
 
-      {isActiveStripePlan && (
-        <>
-          <SettingsInfo
-            title="How plan upgrades are charged"
-            body="For this Web-billed plan, an upgrade shows the exact charge before you confirm: the new plan's price, minus a credit for the unused time on your current plan. It starts a new billing period that day, and your existing usage does not reset."
-            icon={CreditCard}
-          />
-          <SettingsInfo
-            title="Usage top-ups"
-            body="Credits are bought on the web, in Settings, Billing. Top-ups do not change your plan or renewal date, and purchased credits don't expire unless the law where you bought them sets a limit."
-            icon={CreditCard}
-          />
-        </>
-      )}
+      {isActiveStripePlan ? (
+        <SettingsInfo
+          title="This plan is billed outside the app"
+          body={`Your ${tierLabel} plan keeps its own renewal date and payment method where it was started. To change or cancel it, use the manage option above.`}
+          icon={CreditCard}
+        />
+      ) : null}
+
+      {isAwaitingApproval ? (
+        <SettingsInfo
+          title="Waiting for the store"
+          body={`A purchase is waiting for approval or payment in ${storeName}. Nothing more is needed here: it is added to your account as soon as the store confirms it, even if the app is closed.`}
+          icon={Clock}
+        />
+      ) : null}
+
+      {scheduledTierLabel ? (
+        <SettingsInfo
+          title={`Changing to ${scheduledTierLabel} at renewal`}
+          body={
+            periodEndLabel
+              ? `You keep ${tierLabel} until ${periodEndLabel}. ${scheduledTierLabel} starts then.`
+              : `You keep ${tierLabel} until your current period ends. ${scheduledTierLabel} starts then.`
+          }
+          icon={Clock}
+        />
+      ) : null}
 
       {nativeIap.loading ? (
         <SettingsInfo
@@ -481,40 +555,115 @@ export default function CloudBillingScreen() {
             icon={ShoppingBag}
           />
 
+          {canBuyNativeSubscription && holdsStorePlan ? (
+            <SettingsInfo
+              title="Changing your plan"
+              body={
+                downgradeWaitsForRenewal
+                  ? `An upgrade starts right away, and ${storeName} shows the exact charge before you confirm. A downgrade starts on your next renewal date, and you keep ${tierLabel} until then.`
+                  : `A plan change starts right away, and ${storeName} shows the exact charge before you confirm.`
+              }
+              icon={CreditCard}
+            />
+          ) : null}
+
           {canBuyNativeSubscription ? (
             <SettingsGroup>
-              {nativeIap.catalog.products
-                .filter((product) => product.kind === 'subscription')
-                .map((product, index, products) => {
+              {subscriptionProducts.map((product, index, products) => {
+                const storeProduct = nativeIap.storeProducts.get(product.productId);
+                const pricing = getBillingPlanPricing(product.planTier);
+                const busy = nativeIap.purchasingKey === product.key;
+                const waiting = nativeIap.awaitingApproval.has(product.key);
+                const direction =
+                  holdsStorePlan && isSelfServeIndividualPlanTier(billingTier)
+                    ? mobileIapPlanChangeDirection(billingTier, product.planTier)
+                    : null;
+                const isCurrentPlan = holdsStorePlan && billingTier === product.planTier;
+                const priceLabel = nativeIap.priceFor(product.key).label;
+                return (
+                  <SettingsRow
+                    key={product.key}
+                    label={`${pricing.label} · ${product.interval}`}
+                    value={
+                      busy
+                        ? 'Opening store…'
+                        : isCurrentPlan
+                          ? 'Current plan'
+                          : waiting
+                            ? 'Waiting for approval'
+                            : !priceLabel
+                              ? 'Unavailable'
+                              : direction === 'upgrade'
+                                ? `Upgrade · ${priceLabel}`
+                                : direction === 'downgrade'
+                                  ? `Downgrade · ${priceLabel}`
+                                  : priceLabel
+                    }
+                    icon={CreditCard}
+                    onPress={
+                      storeProduct &&
+                      priceLabel &&
+                      !isCurrentPlan &&
+                      !nativeIap.purchasingKey &&
+                      !nativeIap.restoring
+                        ? () => purchaseFromStore(product.key)
+                        : undefined
+                    }
+                    isLast={index === products.length - 1}
+                  />
+                );
+              })}
+            </SettingsGroup>
+          ) : managedElsewhere || plansWithheldReason ? (
+            <SettingsInfo
+              title="Subscription managed elsewhere"
+              body={
+                managedElsewhere
+                  ? `Your plan is managed through ${subscriptionGuard.sourceLabel}. Native subscription choices stay disabled to prevent a second recurring charge.`
+                  : (plansWithheldReason ?? '')
+              }
+              icon={CreditCard}
+            />
+          ) : null}
+
+          {topUpProducts.length > 0 ? (
+            <>
+              <SettingsInfo
+                title="Usage top-ups"
+                body="A top-up adds credits to the plan you already have. It does not change your plan or renewal date, and purchased credits don't expire unless the law where you bought them sets a limit."
+                icon={Coins}
+              />
+              <SettingsGroup>
+                {topUpProducts.map((product, index, products) => {
                   const storeProduct = nativeIap.storeProducts.get(product.productId);
-                  const pricing = getBillingPlanPricing(product.planTier);
                   const busy = nativeIap.purchasingKey === product.key;
+                  const priceLabel = nativeIap.priceFor(product.key).label;
                   return (
                     <SettingsRow
                       key={product.key}
-                      label={`${pricing.label} · ${product.interval}`}
+                      label={formatCredits(product.units)}
                       value={
                         busy
                           ? 'Opening store…'
-                          : (nativeIap.priceFor(product.key).label ?? 'Unavailable')
+                          : nativeIap.awaitingApproval.has(product.key)
+                            ? 'Waiting for approval'
+                            : (priceLabel ?? 'Unavailable')
                       }
-                      icon={CreditCard}
+                      icon={Coins}
                       onPress={
-                        storeProduct && !nativeIap.purchasingKey && !nativeIap.restoring
-                          ? () => void nativeIap.purchase(product.key)
+                        storeProduct &&
+                        priceLabel &&
+                        !nativeIap.purchasingKey &&
+                        !nativeIap.restoring
+                          ? () => purchaseFromStore(product.key)
                           : undefined
                       }
                       isLast={index === products.length - 1}
                     />
                   );
                 })}
-            </SettingsGroup>
-          ) : subscriptionGuard.blocked && billingSource !== nativeSubscriptionSource ? (
-            <SettingsInfo
-              title="Subscription managed elsewhere"
-              body={`Your plan is managed through ${subscriptionGuard.sourceLabel}. Native subscription choices stay disabled to prevent a second recurring charge.`}
-              icon={CreditCard}
-            />
+              </SettingsGroup>
+            </>
           ) : null}
         </>
       ) : (
@@ -523,12 +672,12 @@ export default function CloudBillingScreen() {
             title={
               upgradeGateVisible
                 ? 'Paid upgrades are opening in stages'
-                : 'Native purchases are not configured'
+                : 'Purchases are not available right now'
             }
             body={
               nativeIap.error ??
               nativeIap.catalog?.unavailableReason ??
-              'Register the App Store and Google Play products for this build before purchases can be offered.'
+              'Plans and credits cannot be bought in the app at the moment. Nothing was charged.'
             }
             icon={ShoppingBag}
           />
@@ -612,21 +761,22 @@ export default function CloudBillingScreen() {
           body={
             nativeIap.lastResult.kind === 'top_up'
               ? `${formatCredits(nativeIap.lastResult.unitsGranted ?? 0)} were added to your account.`
-              : 'Your subscription was verified and your plan has been refreshed.'
+              : nativeIap.lastResult.scheduledPlanTier
+                ? `Your change to ${getBillingPlanPricing(nativeIap.lastResult.scheduledPlanTier).label} is confirmed and starts at your next renewal.`
+                : 'Your subscription was verified and your plan has been refreshed.'
           }
           icon={Check}
         />
       ) : null}
 
-      {/* Invoices */}
       <SettingsGroup>
-        <SettingsRow
-          label={isFreeTier ? 'No invoices yet' : 'View invoices'}
-          icon={isFreeTier ? FileText : ExternalLink}
-          onPress={
-            isFreeTier ? undefined : () => void openExternalUrl('https://agiworkforce.com/billing')
-          }
-        />
+        {billingSource === 'stripe' && !isFreeTier ? (
+          <SettingsRow
+            label="View invoices"
+            icon={ExternalLink}
+            onPress={() => void openExternalUrl('https://agiworkforce.com/billing')}
+          />
+        ) : null}
         <SettingsRow
           label="Help with a purchase"
           value="Charged twice, missing credits, refunds"

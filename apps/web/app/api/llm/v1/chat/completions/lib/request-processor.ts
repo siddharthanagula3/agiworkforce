@@ -449,6 +449,7 @@ import { timePhase } from '@/lib/observability/phase-timer';
 import { assertCapabilityAvailable, readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { FAST_MODE_CAPABILITY, WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
+import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 import { CHAT_TURN_PHASE } from './turn-phases';
 
 export const ChatCompletionRequestSchema = z
@@ -2088,9 +2089,7 @@ export async function resolveRouteHealthRuntimeState(
 }
 
 const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';
-const UPGRADE_IS_INVITE_GATED =
-  'Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
-const AUTO_ROUTE_UNAVAILABLE_MESSAGE = `Auto could not find a model for this request on your plan. Choose a model from the picker. ${UPGRADE_IS_INVITE_GATED}`;
+const AUTO_ROUTE_UNAVAILABLE_MESSAGE = `Auto could not find a model for this request on your plan. Choose a model from the picker. ${PAID_UPGRADE_ACCESS_NOTE}`;
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
 const MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE =
@@ -3690,7 +3689,7 @@ async function processAdmittedRequest(
       response: NextResponse.json(
         {
           error: {
-            message: `The Free plan includes the free model only. Select it in the model picker, or use your own provider key. ${UPGRADE_IS_INVITE_GATED}`,
+            message: `The Free plan includes the free model only. Select it in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
             type: 'invalid_request_error',
             code: 'free_trial_model_only',
             ...(recovery ? { recovery } : {}),
@@ -4653,7 +4652,7 @@ async function processAdmittedRequest(
       response: NextResponse.json(
         {
           error: {
-            message: `Model ${chatRequest.model} is on the ${requiredTier} plan, not yours. Choose a model your plan includes. ${UPGRADE_IS_INVITE_GATED}`,
+            message: `Model ${chatRequest.model} is on the ${requiredTier} plan, not yours. Choose a model your plan includes. ${PAID_UPGRADE_ACCESS_NOTE}`,
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: requiredTierKey,

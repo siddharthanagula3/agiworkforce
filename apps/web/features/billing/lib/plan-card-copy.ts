@@ -25,6 +25,7 @@ import {
   type LocalizedPlanPrices,
 } from './localized-pricing';
 import { isReleased, SURFACE_NAMES } from '@/lib/surface-status';
+import { formatBytes } from '@shared/utils/format';
 import { pricingSurfaceStatus } from '@/features/marketing/components/pricing/developer-surface-presentation';
 
 export type PricingT = TFunction<'pricing'>;
@@ -112,8 +113,14 @@ function concurrencyFeature(plan: BillingPlanTier, connectorKey: string, t: Pric
   return typeof chats === 'number' ? t('chatsAtOnce', { chats }) : null;
 }
 
-function unlimitedFeature(connectorKey: string, t: PricingT) {
-  return connectorsReleased() ? t(connectorKey) : t('unlimitedProjectsAndStorage');
+function projectsAndStorageFeature(plan: BillingPlanTier, connectorKey: string, t: PricingT) {
+  const limits = getBillingPlanProductLimits(plan);
+  const storage = limits?.knowledgeStorageBytes;
+  if (limits?.projects !== 'unlimited' || typeof storage !== 'number') return null;
+  const withConnectors = connectorsReleased() && limits.customMcpServers === 'unlimited';
+  return t(withConnectors ? connectorKey : 'unlimitedProjectsWithStorage', {
+    storage: formatBytes(storage, 0),
+  });
 }
 
 export function individualPlanFeatures(
@@ -153,7 +160,7 @@ export function individualPlanFeatures(
       return presentCopy([
         ...usageComparisonCopy('max', t),
         `All ${FLAGSHIP_MODEL_COUNT} flagship models unlocked for manual selection`,
-        unlimitedFeature('maxFeature4', t),
+        projectsAndStorageFeature('max', 'maxFeature4', t),
         concurrencyFeature('max', 'maxFeature5', t),
         t('maxFeature6'),
       ]);
@@ -161,7 +168,7 @@ export function individualPlanFeatures(
       return presentCopy([
         ...usageComparisonCopy('max_15x', t),
         t('max15xFeature3'),
-        unlimitedFeature('max15xFeature4', t),
+        projectsAndStorageFeature('max_15x', 'max15xFeature4', t),
         concurrencyFeature('max_15x', 'max15xFeature5', t),
         t('max15xFeature6'),
       ]);

@@ -2,9 +2,11 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -16,7 +18,7 @@ import {
 
 import { pseudonymizeEmail as hashEmail } from '@/lib/server/email-pseudonym';
 import { BillingIntervalSchema, unsoldBillingIntervalMessage } from '@/lib/validations/checkout';
-import { isBillingUpgradeWaitlistEnabled } from '@/lib/server/billing-waitlist-access';
+import { hasBillingWaitlistAccess } from '@/lib/server/billing-waitlist-access';
 
 type WaitlistPlan = SelfServePaidPlanTier;
 
@@ -30,17 +32,23 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db: ownRows, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
-  const rows = await db.query<WaitlistPlanRow>(
+  const rows = await getNeonDb().query<WaitlistPlanRow>(
     'select distinct plan from waitlist where user_id = $1',
     [userId],
   );
 
   const joinedPlans = rows.map((row) => row.plan).filter(isWaitlistPlan);
 
-  return NextResponse.json({ joinedPlans, upgradeGateEnabled: isBillingUpgradeWaitlistEnabled() });
+  let upgradeAllowed = false;
+  try {
+    upgradeAllowed = await hasBillingWaitlistAccess(ownRows, userId);
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to read paid upgrade access; reporting the gate as on');
+  }
+
+  return NextResponse.json({ joinedPlans, upgradeGateEnabled: !upgradeAllowed });
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {

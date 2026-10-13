@@ -16,6 +16,7 @@ vi.mock('@/features/support/components/SupportHandoffQueuePanel', () => ({
 vi.mock('../components/FreeQuotaAttestationPanel', () => ({
   default: () => <div data-testid="free-quota-panel" />,
 }));
+vi.mock('../components/UpgradeAccessPanel', () => ({ default: () => <div /> }));
 vi.mock('../components/WaitlistPanel', () => ({
   default: () => <div data-testid="waitlist-panel" />,
 }));

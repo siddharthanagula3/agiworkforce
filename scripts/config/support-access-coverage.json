@@ -120,6 +120,14 @@
       "serves": "submitted_to_platform",
       "reason": "A share or artifact its owner published to the open web, looked up by the public token anyone already holds."
     },
+    "apps/web/app/api/admin/upgrade-access/codes/route.ts": {
+      "serves": "platform_only",
+      "reason": "Upgrade access codes the platform itself issues: the code, its redemption limit and count, its expiry and the operator's note. No workspace content and no customer row is read."
+    },
+    "apps/web/app/api/admin/upgrade-access/route.ts": {
+      "serves": "platform_only",
+      "reason": "The platform's own switch for whether paid upgrades are open, with the audit row naming the operator who last changed it; it reads and writes no customer data."
+    },
     "apps/web/app/api/admin/waitlist/export/route.ts": {
       "serves": "submitted_to_platform",
       "reason": "The public waitlist as a file: each address was submitted by its owner through a waitlist form so the platform could contact them."

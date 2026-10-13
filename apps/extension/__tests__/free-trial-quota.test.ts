@@ -1257,9 +1257,8 @@ describe('the sentence the reader’s own usage limit ends on', () => {
     expect(failure?.code).toBe('quota_exceeded');
     expect(failure?.message).toContain('the usage limit on your account');
     expect(failure?.message).not.toMatch(/shares|not a limit on your account/);
-    expect(failure?.message).toContain(
-      'Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
-    );
+    expect(failure?.message).toContain('agiworkforce.com/pricing');
+    expect(failure?.message).not.toMatch(/waitlist|access code/i);
     expect(failure?.message).not.toMatch(/^Usage limit reached/);
   });
 });

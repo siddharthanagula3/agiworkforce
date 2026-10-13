@@ -154,6 +154,10 @@
       "reason": "reached only from the platform-admin operator route, deliberately platform-wide aggregate reads across every tenant"
     },
     {
+      "path": "apps/web/features/admin/services/operator-upgrade-access.ts",
+      "reason": "reached only from the platform-admin upgrade-access routes gated by requirePlatformAdmin; the one security_audit_logs read is filtered to the paid upgrade switch's own feature_flag_changed rows to name the operator who last flipped it, and the rest reads and writes the platform's own access codes in beta_invites, never a customer row"
+    },
+    {
       "path": "apps/web/features/admin/services/operator-waitlist.ts",
       "reason": "reached only from the platform-admin waitlist list and export routes gated by requirePlatformAdmin, waitlist rows are captured before any account exists so there is no owner to constrain by, and each read is written to the security audit log with its row count"
     },

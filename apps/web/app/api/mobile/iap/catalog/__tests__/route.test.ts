@@ -50,6 +50,7 @@ vi.mock('@/lib/feature-flags/flag-evaluation-service', async (importOriginal) =>
 import { GET } from '../route';
 
 const PRODUCT_ID = 'com.agiworkforce.pro.monthly';
+const TOP_UP_PRODUCT_ID = 'agi_topup_10';
 const APP_ACCOUNT_TOKEN = '00000000-0000-4000-8000-000000000001';
 
 function request() {
@@ -82,7 +83,10 @@ describe('GET /api/mobile/iap/catalog', () => {
     vi.stubEnv('MOBILE_IAP_ENABLED', 'true');
     vi.stubEnv(
       'MOBILE_IAP_GOOGLE_PRODUCT_IDS_JSON',
-      JSON.stringify({ subscription_pro_monthly: PRODUCT_ID }),
+      JSON.stringify({
+        subscription_pro_monthly: { productId: PRODUCT_ID, basePlanId: 'monthly' },
+        top_up_10: TOP_UP_PRODUCT_ID,
+      }),
     );
   });
 
@@ -228,5 +232,92 @@ describe('GET /api/mobile/iap/catalog', () => {
     const response = await GET(request());
 
     expect(response.status).toBe(503);
+  });
+  it('sells top-ups in the app only to an account that holds a paid plan', async () => {
+    harness({
+      redeemed: false,
+      subscription: { plan_tier: 'pro', status: 'active', google_purchase_token: 'play-token-1' },
+    });
+    const paid = await (await GET(request())).json();
+    expect(paid.products.map((product: { productId: string }) => product.productId)).toEqual([
+      PRODUCT_ID,
+      TOP_UP_PRODUCT_ID,
+    ]);
+
+    harness({ redeemed: true });
+    const free = await (await GET(request())).json();
+    expect(free.products.map((product: { productId: string }) => product.productId)).toEqual([
+      PRODUCT_ID,
+    ]);
+
+    harness({
+      redeemed: true,
+      subscription: { plan_tier: 'pro', status: 'canceled', google_purchase_token: 'play-token-1' },
+    });
+    const lapsed = await (await GET(request())).json();
+    expect(lapsed.products.map((product: { productId: string }) => product.productId)).toEqual([
+      PRODUCT_ID,
+    ]);
+  });
+
+  it.each([
+    ['the web', { stripe_subscription_id: 'sub_live123' }, /web subscription/i],
+    [
+      'the App Store',
+      { apple_original_transaction_id: '2000000123', current_period_end: '2999-01-01T00:00:00Z' },
+      /another billing provider/i,
+    ],
+  ])(
+    'offers no plan the ledger would refuse to an account still billed through %s',
+    async (_owner, owner, reason) => {
+      harness({ subscription: { plan_tier: 'pro', status: 'active', ...owner } });
+
+      const body = await (await GET(request())).json();
+
+      expect(body.enabled).toBe(true);
+      expect(body.products.map((product: { productId: string }) => product.productId)).toEqual([
+        TOP_UP_PRODUCT_ID,
+      ]);
+      expect(body.subscriptionsUnavailableReason).toMatch(reason);
+    },
+  );
+
+  it('offers plans again once the other channel has stopped billing the account', async () => {
+    harness({
+      subscription: { plan_tier: 'free', status: 'canceled', stripe_subscription_id: 'sub_old123' },
+    });
+
+    const body = await (await GET(request())).json();
+
+    expect(body.products.map((product: { productId: string }) => product.productId)).toEqual([
+      PRODUCT_ID,
+    ]);
+    expect(body.subscriptionsUnavailableReason).toBeNull();
+  });
+
+  it('names every consumable the device must consume, including ones it is not offering', async () => {
+    harness({ redeemed: true });
+
+    const body = await (await GET(request())).json();
+
+    expect(body.products.map((product: { productId: string }) => product.productId)).toEqual([
+      PRODUCT_ID,
+    ]);
+    expect(body.consumableProductIds).toEqual([TOP_UP_PRODUCT_ID]);
+  });
+
+  it('returns the Google Play base plan and the replacement mode for each direction', async () => {
+    harness({ redeemed: true });
+
+    const body = await (await GET(request())).json();
+
+    expect(body.products[0]).toMatchObject({
+      productId: PRODUCT_ID,
+      googleOffer: { basePlanId: 'monthly', offerId: null },
+    });
+    expect(body.androidReplacementModes).toEqual({
+      upgrade: 'charge-prorated-price',
+      downgrade: 'deferred',
+    });
   });
 });

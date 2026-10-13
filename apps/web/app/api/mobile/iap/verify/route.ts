@@ -8,7 +8,12 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { resolveMobileIapProduct } from '@/lib/server/mobile-iap-catalog';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
-import { verifyMobileIapPurchase } from '@/lib/server/mobile-iap-store-verification';
+import { logger } from '@/lib/logger';
+import {
+  acknowledgeGooglePlayPurchase,
+  verifyMobileIapPurchase,
+  type VerifiedMobileIapPurchase,
+} from '@/lib/server/mobile-iap-store-verification';
 import { recordVerifiedMobileIapPurchase } from '@/lib/services/mobile-iap-ledger-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 
@@ -19,6 +24,31 @@ const VerifyRequestSchema = z
     purchaseToken: z.string().trim().min(20).max(32_000),
   })
   .strict();
+
+// Acknowledged here, after the grant is committed, so a purchase is never left to
+// Play's three-day automatic refund because the app closed before it could confirm.
+// Play accepts a repeat, and the app still acknowledges when this attempt fails.
+async function acknowledgeWithStore(
+  verified: VerifiedMobileIapPurchase,
+  purchaseToken: string,
+): Promise<boolean | undefined> {
+  if (verified.platform !== 'android') return undefined;
+  if (verified.storeAcknowledged !== false) return verified.storeAcknowledged;
+  try {
+    await acknowledgeGooglePlayPurchase({ product: verified.product, purchaseToken });
+    return true;
+  } catch (error) {
+    logger.error(
+      {
+        event: 'store_purchase_not_acknowledged',
+        error: error instanceof Error ? error.message : String(error),
+        storeTransactionId: verified.storeTransactionId,
+      },
+      'Google Play did not acknowledge a granted purchase',
+    );
+    return false;
+  }
+}
 
 async function handleVerify(request: NextRequest): Promise<NextResponse<MobileIapVerifyResponse>> {
   const rateLimitResponse = await withRateLimit(request, 'mobile-iap-verify');
@@ -59,6 +89,15 @@ async function handleVerify(request: NextRequest): Promise<NextResponse<MobileIa
     purchaseToken: parsed.data.purchaseToken,
     verified,
   });
+  const storeAcknowledged = await acknowledgeWithStore(verified, parsed.data.purchaseToken);
+  const scheduledProduct = verified.scheduledProduct;
+  const response: MobileIapVerifyResponse = {
+    ...result,
+    ...(storeAcknowledged === undefined ? {} : { storeAcknowledged }),
+    ...(scheduledProduct?.kind === 'subscription'
+      ? { scheduledPlanTier: scheduledProduct.planTier }
+      : {}),
+  };
   await recordAuditEvent({
     userId,
     eventType: 'mobile_purchase_verified',
@@ -71,7 +110,7 @@ async function handleVerify(request: NextRequest): Promise<NextResponse<MobileIa
     },
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json(response);
 }
 
 export const POST = withErrorHandler(handleVerify);

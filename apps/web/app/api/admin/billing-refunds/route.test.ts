@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getNeonDb: vi.fn(),
   isStripeConfigured: vi.fn(),
   declineRefundRequest: vi.fn(),
+  recordStoreRefund: vi.fn(),
   issueOperatorRefund: vi.fn(),
   listPendingRefundRequests: vi.fn(),
   lookupAccountBilling: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('@/lib/server/payments/stripe-provider', async (importOriginal) => ({
 vi.mock('@/lib/services/billing-refund-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule6>()),
   declineRefundRequest: mocks.declineRefundRequest,
+  recordStoreRefund: mocks.recordStoreRefund,
   issueOperatorRefund: mocks.issueOperatorRefund,
   listPendingRefundRequests: mocks.listPendingRefundRequests,
   lookupAccountBilling: mocks.lookupAccountBilling,
@@ -219,6 +221,61 @@ describe('POST /api/admin/billing-refunds', () => {
         details: expect.objectContaining({ action: 'refund_request_declined' }),
       }),
     );
+  });
+
+  it('records a store refund without Stripe or an idempotency key, and audits it', async () => {
+    mocks.isStripeConfigured.mockReturnValue(false);
+    mocks.recordStoreRefund.mockResolvedValue({
+      id: REQUEST_ID,
+      userId: 'user_1',
+      chargeId: 'mobile_iap:ios:2000000123',
+      status: 'refunded',
+      refundAmountCents: 2_000,
+    });
+
+    const response = await POST(
+      post(
+        {
+          action: 'store_refund',
+          requestId: REQUEST_ID,
+          amountCents: null,
+          note: 'Refunded through App Store.',
+        },
+        null,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.recordStoreRefund).toHaveBeenCalledWith(DB, {
+      operatorUserId: OPERATOR_ID,
+      requestId: REQUEST_ID,
+      amountCents: null,
+      note: 'Refunded through App Store.',
+    });
+    expect(mocks.issueOperatorRefund).not.toHaveBeenCalled();
+    expect(mocks.logSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: OPERATOR_ID,
+        details: expect.objectContaining({
+          action: 'store_refund_recorded',
+          chargeId: 'mobile_iap:ios:2000000123',
+          amountCents: 2_000,
+        }),
+      }),
+    );
+  });
+
+  it('answers 409 when the request is not a pending store charge', async () => {
+    mocks.recordStoreRefund.mockRejectedValue(
+      new RefundRequestRefusal('That request is not a pending store charge.', 409),
+    );
+
+    const response = await POST(
+      post({ action: 'store_refund', requestId: REQUEST_ID, amountCents: null, note: 'Done.' }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(mocks.logSecurityEvent).not.toHaveBeenCalled();
   });
 
   it('refuses a write that fails the CSRF check before resolving the operator', async () => {

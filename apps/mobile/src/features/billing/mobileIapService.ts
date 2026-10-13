@@ -1,9 +1,13 @@
 import { Platform } from 'react-native';
 import {
+  MOBILE_IAP_ANDROID_REPLACEMENT_MODES,
   getMobileIapProductDefinition,
+  type MobileIapAndroidReplacementMode,
+  type MobileIapAndroidReplacementModes,
   type MobileIapCatalogProduct,
   type MobileIapCatalogResponse,
   type MobileIapPlatform,
+  type MobileIapStoreOffer,
   type MobileIapVerifyResponse,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
@@ -34,6 +38,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function parseStoreOffer(value: unknown): MobileIapStoreOffer | null {
+  if (!isRecord(value) || typeof value['basePlanId'] !== 'string' || !value['basePlanId']) {
+    return null;
+  }
+  const offerId = value['offerId'];
+  if (offerId !== null && offerId !== undefined && typeof offerId !== 'string') return null;
+  return { basePlanId: value['basePlanId'], offerId: offerId ?? null };
+}
+
+function isReplacementMode(value: unknown): value is MobileIapAndroidReplacementMode {
+  return (MOBILE_IAP_ANDROID_REPLACEMENT_MODES as readonly unknown[]).includes(value);
+}
+
+function parseReplacementModes(value: unknown): MobileIapAndroidReplacementModes | null {
+  if (!isRecord(value)) return null;
+  const { upgrade, downgrade } = value;
+  return isReplacementMode(upgrade) && isReplacementMode(downgrade) ? { upgrade, downgrade } : null;
+}
+
 function parseCatalogProduct(value: unknown): MobileIapCatalogProduct | null {
   if (
     !isRecord(value) ||
@@ -54,7 +77,12 @@ function parseCatalogProduct(value: unknown): MobileIapCatalogProduct | null {
     ) {
       return null;
     }
-  } else if (value['amountUsd'] !== definition.amountUsd || value['units'] !== definition.units) {
+    const googleOffer = parseStoreOffer(value['googleOffer']);
+    return googleOffer
+      ? { ...definition, productId: value['productId'], googleOffer }
+      : { ...definition, productId: value['productId'] };
+  }
+  if (value['amountUsd'] !== definition.amountUsd || value['units'] !== definition.units) {
     return null;
   }
   return { ...definition, productId: value['productId'] };
@@ -87,6 +115,9 @@ export function parseMobileIapCatalogResponse(value: unknown): MobileIapCatalogR
   ) {
     throw new Error('Native billing catalog is missing its account binding.');
   }
+  const androidReplacementModes = parseReplacementModes(value['androidReplacementModes']);
+  const subscriptionsUnavailableReason = value['subscriptionsUnavailableReason'];
+  const consumableProductIds = value['consumableProductIds'];
   return {
     enabled: value['enabled'],
     platform: value['platform'] as MobileIapPlatform | null,
@@ -95,6 +126,17 @@ export function parseMobileIapCatalogResponse(value: unknown): MobileIapCatalogR
     unavailableReason: value['unavailableReason'],
     unavailableCode:
       value['unavailableCode'] === 'waitlist_access_required' ? 'waitlist_access_required' : null,
+    ...(androidReplacementModes ? { androidReplacementModes } : {}),
+    ...(typeof subscriptionsUnavailableReason === 'string' && subscriptionsUnavailableReason
+      ? { subscriptionsUnavailableReason }
+      : {}),
+    ...(Array.isArray(consumableProductIds)
+      ? {
+          consumableProductIds: consumableProductIds.filter(
+            (id): id is string => typeof id === 'string' && id.length > 0,
+          ),
+        }
+      : {}),
   };
 }
 
@@ -133,13 +175,17 @@ export async function redeemBillingUpgradeCode(code: string): Promise<void> {
   }
 }
 
+export function billingWaitlistSource(platform: MobileIapPlatform | null): string {
+  return platform ? `mobile-${platform}-billing` : 'mobile-billing';
+}
+
 export async function joinBillingUpgradeWaitlist(plan: SelfServePaidPlanTier): Promise<void> {
   const { token } = await api.get<{ token?: string }>('/api/csrf');
   if (!token)
     throw new BillingUpgradeRequestError('Could not verify this request. Please try again.');
   const result = await api.post<{ ok?: boolean; joined?: boolean }>(
     '/api/waitlist',
-    { plan, billingInterval: 'monthly', source: 'mobile-billing' },
+    { plan, billingInterval: 'monthly', source: billingWaitlistSource(currentStorePlatform()) },
     { headers: { 'x-csrf-token': token } },
   );
   if (result.ok !== true || result.joined !== true) {

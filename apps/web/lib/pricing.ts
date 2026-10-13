@@ -68,6 +68,7 @@ export const STRIPE_PRICE_POINTS: readonly StripePricePoint[] = [
   { plan: 'team', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_TEAM_MONTHLY_USD' },
   { plan: 'team', interval: 'monthly', currency: 'inr', envVar: 'STRIPE_PRICE_TEAM_MONTHLY_INR' },
   { plan: 'team', interval: 'yearly', currency: 'usd', envVar: 'STRIPE_PRICE_TEAM_YEARLY_USD' },
+  { plan: 'team', interval: 'yearly', currency: 'inr', envVar: 'STRIPE_PRICE_TEAM_YEARLY_INR' },
   {
     plan: 'team_premium',
     interval: 'monthly',

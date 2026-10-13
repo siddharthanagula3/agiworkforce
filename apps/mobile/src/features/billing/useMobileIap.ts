@@ -1,18 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import {
+  getPendingTransactionsIOS,
   useIAP,
   type Product,
   type ProductSubscription,
   type Purchase,
   type PurchaseError,
 } from 'expo-iap';
-import type {
-  MobileIapCatalogProduct,
-  MobileIapCatalogResponse,
-  MobileIapProductKey,
-  MobileIapVerifyResponse,
+import {
+  MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES,
+  mobileIapPlanChangeDirection,
+  type MobileIapCatalogProduct,
+  type MobileIapCatalogResponse,
+  type MobileIapProductKey,
+  type MobileIapVerifyResponse,
 } from '@agiworkforce/types';
+import {
+  clearAwaitingApproval,
+  markAwaitingApproval,
+  readAwaitingApproval,
+} from './awaitingApproval';
 import { useTierStore } from './store';
 import { fetchMobileIapCatalog, verifyMobileIapPurchase } from './mobileIapService';
 import { UNPRICED, storePrice, type StorePrice } from './storePricing';
@@ -21,6 +29,7 @@ import {
   isCloudAccountEpochCurrent,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { ApiHttpError } from '@/services/apiErrors';
 
 type StoreProduct = Product | ProductSubscription;
 type FinishTransaction = (input: { purchase: Purchase; isConsumable?: boolean }) => Promise<void>;
@@ -42,6 +51,10 @@ export interface MobileIapState {
   priceFor: (key: MobileIapProductKey) => StorePrice;
   error: string | null;
   lastResult: MobileIapVerifyResponse | null;
+  /** Purchases the store is holding for payment or for a family organiser's approval. */
+  awaitingApproval: ReadonlySet<MobileIapProductKey>;
+  /** The plan the store will switch to at the next renewal, when it has told us. */
+  scheduledProductKey: MobileIapProductKey | null;
   purchase: (key: MobileIapProductKey) => Promise<void>;
   restore: () => Promise<void>;
   reload: () => Promise<void>;
@@ -58,8 +71,42 @@ function purchaseErrorMessage(error: PurchaseError | Error): string {
   return 'The store could not complete this purchase. Please try again.';
 }
 
+// StoreKit reports Ask to Buy as `deferred-payment` and Play reports a payment
+// still in progress as `pending`. Neither is a failure: the transaction arrives
+// later through the purchase listener or the next unfinished-transaction sweep.
+function isAwaitingApproval(error: PurchaseError | Error): boolean {
+  const code = 'code' in error ? String(error.code) : '';
+  return code === 'deferred-payment' || code === 'pending';
+}
+
 function awaitingStoreAcknowledgement(purchase: Purchase): boolean {
   return 'isAcknowledgedAndroid' in purchase && purchase.isAcknowledgedAndroid === false;
+}
+
+// Play keeps a consumable in the buyer's library until the device consumes it,
+// and the server's acknowledgement does not: one still listed after it was
+// granted blocks buying the same top-up again.
+function awaitingConsumption(
+  purchase: Purchase,
+  consumableProductIds: readonly string[] | undefined,
+): boolean {
+  return (
+    Platform.OS === 'android' &&
+    purchase.purchaseState === 'purchased' &&
+    consumableProductIds?.includes(purchase.productId) === true
+  );
+}
+
+const PURCHASE_REFUSAL_STATUSES: ReadonlySet<number> = new Set([403, 409]);
+const UNVERIFIED_PURCHASE_MESSAGE =
+  'The purchase could not be verified yet. It has not been discarded. Try Restore purchases shortly.';
+
+// A refusal the server explains, such as a plan another channel already bills or
+// a test purchase on an account not set up for one, is shown as the server put it.
+function verificationFailureMessage(error: unknown): string {
+  return error instanceof ApiHttpError && PURCHASE_REFUSAL_STATUSES.has(error.status)
+    ? error.message
+    : UNVERIFIED_PURCHASE_MESSAGE;
 }
 
 export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState {
@@ -75,6 +122,8 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
   const restoringAccount = useRef<CloudAccountEpoch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<MobileIapVerifyResponse | null>(null);
+  const [askedApproval, setAskedApproval] = useState<readonly MobileIapProductKey[]>([]);
+  const pendingPurchaseKey = useRef<MobileIapProductKey | null>(null);
   const catalogRef = useRef<MobileIapCatalogResponse | null>(null);
   const catalogAccountRef = useRef<CloudAccountEpoch | null>(null);
   const catalogRequestRef = useRef(0);
@@ -82,8 +131,16 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
   enabledRef.current = enabled;
   const processingTokens = useRef(new Set<string>());
   const verifiedTokens = useRef(
-    new Map<string, { account: CloudAccountEpoch; kind: MobileIapVerifyResponse['kind'] }>(),
+    new Map<
+      string,
+      {
+        account: CloudAccountEpoch;
+        kind: MobileIapVerifyResponse['kind'];
+        storeAcknowledged: boolean;
+      }
+    >(),
   );
+  const sweptUnfinishedFor = useRef<CloudAccountEpoch | null>(null);
   const acknowledgedTokens = useRef(new Set<string>());
   const unacknowledgedTokens = useRef(new Set<string>());
   const finishTransactionRef = useRef<FinishTransaction | null>(null);
@@ -98,8 +155,27 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       return;
     pendingPurchaseProductId.current = null;
     pendingPurchaseAccount.current = null;
+    pendingPurchaseKey.current = null;
     purchaseInFlight.current = false;
     setPurchasingKey(null);
+  }, []);
+
+  const keyForProductId = useCallback(
+    (productId: string | null | undefined): MobileIapProductKey | null =>
+      catalogRef.current?.products.find((product) => product.productId === productId)?.key ?? null,
+    [],
+  );
+
+  const noteAwaitingApproval = useCallback((key: MobileIapProductKey | null) => {
+    const account = captureCloudAccountEpoch();
+    if (!key || !account) return;
+    setAskedApproval(markAwaitingApproval(account.ownerId, key));
+  }, []);
+
+  const settleAwaitingApproval = useCallback((key: MobileIapProductKey | null) => {
+    const account = captureCloudAccountEpoch();
+    if (!key || !account) return;
+    setAskedApproval(clearAwaitingApproval(account.ownerId, key));
   }, []);
 
   const finishRestore = useCallback((account: CloudAccountEpoch) => {
@@ -139,8 +215,12 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
         return;
       }
       if (purchase.purchaseState === 'pending') {
+        const pendingKey = keyForProductId(purchase.productId);
+        noteAwaitingApproval(pendingKey);
         releasePurchase(purchase.productId, account);
-        setError('Payment is pending in the store. Access will update after payment completes.');
+        if (!pendingKey) {
+          setError('Payment is pending in the store. Access will update after payment completes.');
+        }
         return;
       }
       const token = purchase.purchaseToken?.trim();
@@ -157,10 +237,12 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
         // The purchase token is the idempotency key: a replay is answered from the
         // server ledger as already_processed and is never credited a second time.
         const cached = verifiedTokens.current.get(token);
-        let kind =
+        const reusable =
           cached?.account.ownerId === account.ownerId && cached.account.epoch === account.epoch
-            ? cached.kind
+            ? cached
             : null;
+        let kind = reusable?.kind ?? null;
+        let storeAcknowledged = reusable?.storeAcknowledged ?? false;
         if (!kind) {
           const result = await verifyMobileIapPurchase({
             platform,
@@ -169,16 +251,24 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
           });
           if (!isCloudAccountEpochCurrent(account)) return;
           kind = result.kind;
-          verifiedTokens.current.set(token, { account, kind });
+          storeAcknowledged = result.storeAcknowledged === true;
+          verifiedTokens.current.set(token, { account, kind, storeAcknowledged });
           setLastResult(result);
+          settleAwaitingApproval(keyForProductId(purchase.productId));
         }
         if (!isCloudAccountEpochCurrent(account)) return;
-        const acknowledged = await acknowledgeOnce(
-          token,
-          purchase,
-          kind === 'top_up',
-          finishTransaction,
-        );
+        // A consumable is always finished here, because only the device can consume
+        // it. A subscription the server already acknowledged with Play needs nothing
+        // more, and asking Play to acknowledge it twice is reported as a failure.
+        const settledByServer =
+          platform === 'android' && kind === 'subscription' && storeAcknowledged;
+        if (settledByServer) {
+          acknowledgedTokens.current.add(token);
+          unacknowledgedTokens.current.delete(token);
+        }
+        const acknowledged =
+          settledByServer ||
+          (await acknowledgeOnce(token, purchase, kind === 'top_up', finishTransaction));
         if (!acknowledged) {
           setError('The store has not confirmed this purchase yet. AGI will confirm it again.');
           return;
@@ -195,17 +285,22 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
             'Purchase confirmed. Your updated plan is taking longer to load. Reopen Billing to refresh it.',
           );
         }
-      } catch {
+      } catch (verificationError) {
         if (!isCloudAccountEpochCurrent(account)) return;
-        setError(
-          'The purchase could not be verified yet. It has not been discarded. Try Restore purchases shortly.',
-        );
+        setError(verificationFailureMessage(verificationError));
       } finally {
         processingTokens.current.delete(token);
         releasePurchase(purchase.productId, account);
       }
     },
-    [acknowledgeOnce, refreshTier, releasePurchase],
+    [
+      acknowledgeOnce,
+      keyForProductId,
+      noteAwaitingApproval,
+      refreshTier,
+      releasePurchase,
+      settleAwaitingApproval,
+    ],
   );
 
   const iap = useIAP({
@@ -219,6 +314,13 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       void processPurchase(purchase, finishTransaction);
     },
     onPurchaseError: (purchaseError) => {
+      if (isAwaitingApproval(purchaseError)) {
+        noteAwaitingApproval(
+          keyForProductId(purchaseError.productId) ?? pendingPurchaseKey.current,
+        );
+        releasePurchase();
+        return;
+      }
       releasePurchase();
       setError(purchaseErrorMessage(purchaseError));
     },
@@ -229,6 +331,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     connected: storeConnected,
     fetchProducts: fetchStoreProducts,
     getAvailablePurchases: getStoreAvailablePurchases,
+    getActiveSubscriptions: getStoreActiveSubscriptions,
   } = iap;
 
   const reload = useCallback(async () => {
@@ -254,6 +357,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       catalogRef.current = nextCatalog;
       catalogAccountRef.current = account;
       setCatalog(nextCatalog);
+      setAskedApproval(readAwaitingApproval(account.ownerId));
     } catch {
       if (
         request !== catalogRequestRef.current ||
@@ -283,7 +387,10 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       const topUps = catalog.products
         .filter((product) => product.kind === 'top_up')
         .map((product) => product.productId);
-      if (subscriptions.length > 0) void fetchStoreProducts({ skus: subscriptions, type: 'subs' });
+      if (subscriptions.length > 0) {
+        void fetchStoreProducts({ skus: subscriptions, type: 'subs' });
+        void getStoreActiveSubscriptions(subscriptions);
+      }
       if (topUps.length > 0) void fetchStoreProducts({ skus: topUps, type: 'in-app' });
     }
     void getStoreAvailablePurchases({
@@ -295,9 +402,31 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     catalogLoading,
     enabled,
     fetchStoreProducts,
+    getStoreActiveSubscriptions,
     getStoreAvailablePurchases,
     storeConnected,
   ]);
+
+  // A purchase approved while the app was closed is an unfinished StoreKit
+  // transaction that no listener was mounted to receive. It is verified and
+  // finished here, once per account, the first time Billing opens.
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !enabled || !storeConnected || catalogLoading || !catalog) return;
+    const account = catalogAccountRef.current;
+    if (!account || !isCloudAccountEpochCurrent(account)) return;
+    if (sweptUnfinishedFor.current === account) return;
+    sweptUnfinishedFor.current = account;
+    const finishTransaction = iap.finishTransaction;
+    void getPendingTransactionsIOS()
+      .then((unfinished) =>
+        Promise.allSettled(
+          unfinished.map((purchase) => processPurchase(purchase, finishTransaction)),
+        ),
+      )
+      .catch(() => {
+        sweptUnfinishedFor.current = null;
+      });
+  }, [catalog, catalogLoading, enabled, iap.finishTransaction, processPurchase, storeConnected]);
 
   useEffect(() => {
     if (!enabled || !storeConnected) return;
@@ -308,7 +437,9 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       const token = purchase.purchaseToken?.trim();
       if (!token || acknowledgedTokens.current.has(token)) continue;
       const stranded =
-        awaitingStoreAcknowledgement(purchase) || unacknowledgedTokens.current.has(token);
+        awaitingStoreAcknowledgement(purchase) ||
+        unacknowledgedTokens.current.has(token) ||
+        awaitingConsumption(purchase, catalog?.consumableProductIds);
       if (!restoreScan && !stranded) continue;
       dispatched.push(processPurchase(purchase, iap.finishTransaction));
     }
@@ -319,6 +450,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       finishRestore(restoreAccount);
     }
   }, [
+    catalog,
     enabled,
     finishRestore,
     iap.availablePurchases,
@@ -342,7 +474,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       if (!isCloudAccountEpochCurrent(catalogAccountRef.current)) return UNPRICED;
       const product = catalogRef.current?.products.find((candidate) => candidate.key === key);
       if (!product) return UNPRICED;
-      return storePrice(storeProducts.get(product.productId));
+      return storePrice(storeProducts.get(product.productId), product.googleOffer);
     },
     [storeProducts],
   );
@@ -390,6 +522,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
           );
         }
         pendingPurchaseProductId.current = product.productId;
+        pendingPurchaseKey.current = product.key;
         if (product.kind === 'top_up') {
           await iap.requestPurchase({
             type: 'in-app',
@@ -407,17 +540,36 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
           return;
         }
 
-        const offerToken = storePrice(storeProduct).offerToken;
-        const existingAndroidSubscription =
+        const offerToken = storePrice(storeProduct, product.googleOffer).offerToken;
+        if (Platform.OS === 'android' && !offerToken) {
+          throw new PurchasePreflightError(
+            'The store has not returned the offer for this plan. Try again.',
+          );
+        }
+        const ownedAndroidPurchase =
           Platform.OS === 'android'
-            ? iap.availablePurchases.find((candidate) =>
-                currentCatalog.products.some(
-                  (catalogProduct) =>
-                    catalogProduct.kind === 'subscription' &&
-                    catalogProduct.productId === candidate.productId,
-                ),
+            ? iap.availablePurchases.find(
+                (candidate) =>
+                  candidate.purchaseState === 'purchased' &&
+                  currentCatalog.products.some(
+                    (catalogProduct) =>
+                      catalogProduct.kind === 'subscription' &&
+                      catalogProduct.productId === candidate.productId,
+                  ),
               )
             : undefined;
+        const ownedProduct = currentCatalog.products.find(
+          (candidate) => candidate.productId === ownedAndroidPurchase?.productId,
+        );
+        const direction =
+          ownedProduct?.kind === 'subscription'
+            ? mobileIapPlanChangeDirection(ownedProduct.planTier, product.planTier)
+            : null;
+        if (ownedProduct && !direction) {
+          throw new PurchasePreflightError('You are already on this plan.');
+        }
+        const replacementModes =
+          currentCatalog.androidReplacementModes ?? MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES;
 
         await iap.requestPurchase({
           type: 'subs',
@@ -432,13 +584,12 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
               ...(offerToken
                 ? { subscriptionOffers: [{ sku: product.productId, offerToken }] }
                 : {}),
-              ...(existingAndroidSubscription?.purchaseToken &&
-              existingAndroidSubscription.productId !== product.productId
+              ...(ownedAndroidPurchase?.purchaseToken && direction
                 ? {
-                    purchaseToken: existingAndroidSubscription.purchaseToken,
+                    purchaseToken: ownedAndroidPurchase.purchaseToken,
                     subscriptionProductReplacementParams: {
-                      oldProductId: existingAndroidSubscription.productId,
-                      replacementMode: 'charge-prorated-price' as const,
+                      oldProductId: ownedAndroidPurchase.productId,
+                      replacementMode: replacementModes[direction],
                     },
                   }
                 : {}),
@@ -483,6 +634,30 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     }
   }, [enabled, finishRestore, iap]);
 
+  const awaitingApproval = useMemo(() => {
+    const keys = new Set<MobileIapProductKey>(askedApproval);
+    for (const candidate of iap.availablePurchases) {
+      if (candidate.purchaseState !== 'pending') continue;
+      const key = catalog?.products.find(
+        (product) => product.productId === candidate.productId,
+      )?.key;
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [askedApproval, catalog, iap.availablePurchases]);
+
+  const scheduledProductKey = useMemo(() => {
+    for (const active of iap.activeSubscriptions) {
+      const next = active.renewalInfoIOS?.autoRenewPreference;
+      if (!next || next === active.productId || active.renewalInfoIOS?.willAutoRenew === false) {
+        continue;
+      }
+      const key = catalog?.products.find((product) => product.productId === next)?.key;
+      if (key) return key;
+    }
+    return null;
+  }, [catalog, iap.activeSubscriptions]);
+
   return {
     connected: iap.connected,
     loading: catalogLoading || (enabled && !storeConnected && error === null),
@@ -493,6 +668,8 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     priceFor,
     error,
     lastResult,
+    awaitingApproval,
+    scheduledProductKey,
     purchase,
     restore,
     reload,

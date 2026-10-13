@@ -7,17 +7,25 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
-import { getMobileIapCatalogState } from '@/lib/server/mobile-iap-catalog';
+import {
+  getMobileIapAndroidReplacementModes,
+  getMobileIapCatalogState,
+} from '@/lib/server/mobile-iap-catalog';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 import {
   WAITLIST_ACCESS_REQUIRED_CODE,
+  billingUpgradesOpenFor,
   hasBillingWaitlistAccess,
   hasPaidBillingHistory,
-  isBillingUpgradeWaitlistEnabled,
 } from '@/lib/server/billing-waitlist-access';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
+import {
+  resolveSubscriptionOwnerHandoff,
+  subscriptionOwnerHandoffConflictMessage,
+} from '@/lib/server/subscription-owner-handoff';
+import { ownsPaidPlanForTopUp } from '@/lib/services/mobile-iap-ledger-service';
 
 const QuerySchema = z.object({ platform: z.enum(['ios', 'android']) });
 const MOBILE_SURFACE = 'mobile';
@@ -62,7 +70,7 @@ async function handleCatalog(
     });
   }
 
-  if (!catalog.enabled && !isBillingUpgradeWaitlistEnabled()) {
+  if (!catalog.enabled && (await billingUpgradesOpenFor(userId))) {
     return NextResponse.json({
       enabled: false,
       platform: parsed.data.platform,
@@ -80,16 +88,24 @@ async function handleCatalog(
     | 'stripe_subscription_id'
     | 'apple_original_transaction_id'
     | 'google_purchase_token'
+    | 'current_period_end'
   >;
   let purchaseAllowed: boolean;
+  let holdsPaidPlan = false;
+  let subscriptionsUnavailableReason: string | null = null;
   try {
     const { db: ownRows } = await getUserScopedDb(request, { resolveOrganization: false });
     const subRows = await ownRows.query<SubRow>(
       `select plan_tier, status, stripe_subscription_id,
-              apple_original_transaction_id, google_purchase_token
+              apple_original_transaction_id, google_purchase_token, current_period_end
          from subscriptions where user_id = $1 limit 1`,
       [userId],
     );
+    holdsPaidPlan = ownsPaidPlanForTopUp(subRows[0]);
+    const handoff = resolveSubscriptionOwnerHandoff(subRows[0], parsed.data.platform);
+    if (handoff.blocked) {
+      subscriptionsUnavailableReason = subscriptionOwnerHandoffConflictMessage(handoff);
+    }
     purchaseAllowed =
       hasPaidBillingHistory(subRows[0] ?? null) ||
       (await hasBillingWaitlistAccess(ownRows, userId));
@@ -156,9 +172,20 @@ async function handleCatalog(
     enabled: true,
     platform: parsed.data.platform,
     appAccountToken: account.app_account_token,
-    products: catalog.products.filter((product) => product.kind === 'subscription'),
+    // The ledger refuses a plan while another channel still bills this account,
+    // and by then the store has charged for it, so it is never offered here.
+    products: catalog.products.filter((product) =>
+      product.kind === 'subscription' ? subscriptionsUnavailableReason === null : holdsPaidPlan,
+    ),
     unavailableReason: null,
     unavailableCode: null,
+    subscriptionsUnavailableReason,
+    consumableProductIds: catalog.products
+      .filter((product) => product.kind === 'top_up')
+      .map((product) => product.productId),
+    ...(parsed.data.platform === 'android'
+      ? { androidReplacementModes: getMobileIapAndroidReplacementModes() }
+      : {}),
   });
 }
 

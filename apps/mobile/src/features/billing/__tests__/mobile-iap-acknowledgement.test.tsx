@@ -32,6 +32,7 @@ jest.mock('expo-iap', () => ({
     mockCallbacks = callbacks;
     return mockIapState;
   }),
+  getPendingTransactionsIOS: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('@/src/features/billing/mobileIapService', () => ({
@@ -45,6 +46,7 @@ jest.mock('@/src/features/billing/store', () => ({
 }));
 
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
+import { ApiHttpError } from '@/services/apiErrors';
 
 const accountToken = '00000000-0000-4000-8000-000000000001';
 const purchaseToken = 'fixture-google-purchase-token-long-enough';
@@ -187,5 +189,117 @@ describe('native purchase acknowledgement and idempotency', () => {
 
     expect(mockFinishTransaction).toHaveBeenCalledTimes(1);
     expect(mockVerifyPurchase).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a top-up the server granted and acknowledged before the device consumed it', () => {
+    const topUp = {
+      ...MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'top_up')!,
+      productId: 'fixture.topup.acknowledgement',
+    };
+    const topUpToken = 'fixture-google-consumable-token-long-enough';
+    const ownedTopUp = {
+      productId: topUp.productId,
+      purchaseToken: topUpToken,
+      purchaseState: 'purchased',
+      isAcknowledgedAndroid: true,
+    };
+
+    function alreadyGranted() {
+      mockVerifyPurchase.mockResolvedValue({
+        success: true,
+        kind: 'top_up',
+        productKey: topUp.key,
+        status: 'already_processed',
+        unitsGranted: topUp.units,
+        storeAcknowledged: true,
+      });
+    }
+
+    it('consumes it the next time Billing opens, so it can be bought again', async () => {
+      mockFetchCatalog.mockResolvedValue({
+        ...androidCatalog(),
+        products: [subscription, topUp],
+        consumableProductIds: [topUp.productId],
+      });
+      Object.assign(mockIapState, { availablePurchases: [ownedTopUp] });
+      alreadyGranted();
+
+      const { result } = renderHook(() => useMobileIap({ enabled: true }));
+      await waitFor(() => expect(result.current.catalog?.enabled).toBe(true));
+
+      await waitFor(() => expect(mockFinishTransaction).toHaveBeenCalledTimes(1));
+      expect(mockFinishTransaction).toHaveBeenCalledWith({
+        purchase: expect.objectContaining({ purchaseToken: topUpToken }),
+        isConsumable: true,
+      });
+      expect(mockVerifyPurchase).toHaveBeenCalledTimes(1);
+      expect(result.current.lastResult?.status).toBe('already_processed');
+    });
+
+    it('consumes it even when top-ups are no longer offered to the account', async () => {
+      mockFetchCatalog.mockResolvedValue({
+        ...androidCatalog(),
+        consumableProductIds: [topUp.productId],
+      });
+      Object.assign(mockIapState, { availablePurchases: [ownedTopUp] });
+      alreadyGranted();
+
+      const { result } = renderHook(() => useMobileIap({ enabled: true }));
+      await waitFor(() => expect(result.current.catalog?.enabled).toBe(true));
+
+      await waitFor(() => expect(mockFinishTransaction).toHaveBeenCalledTimes(1));
+      expect(mockFinishTransaction.mock.calls[0]?.[0]).toMatchObject({ isConsumable: true });
+    });
+
+    it('consumes it once, however often the store lists it', async () => {
+      mockFetchCatalog.mockResolvedValue({
+        ...androidCatalog(),
+        consumableProductIds: [topUp.productId],
+      });
+      Object.assign(mockIapState, { availablePurchases: [ownedTopUp] });
+      alreadyGranted();
+
+      const { result, rerender } = renderHook(() => useMobileIap({ enabled: true }));
+      await waitFor(() => expect(result.current.catalog?.enabled).toBe(true));
+      await waitFor(() => expect(mockFinishTransaction).toHaveBeenCalledTimes(1));
+
+      Object.assign(mockIapState, { availablePurchases: [{ ...ownedTopUp }] });
+      await act(async () => {
+        rerender(undefined);
+      });
+
+      expect(mockFinishTransaction).toHaveBeenCalledTimes(1);
+      expect(mockVerifyPurchase).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows the server's reason when it refuses a purchase the store completed", async () => {
+    mockVerifyPurchase.mockRejectedValue(
+      new ApiHttpError(
+        "This purchase was made in the store's test environment, which this account is not set up to use. Nothing was charged.",
+        403,
+      ),
+    );
+
+    const { result } = renderHook(() => useMobileIap({ enabled: true }));
+    await waitFor(() => expect(result.current.catalog?.enabled).toBe(true));
+    await act(async () => {
+      mockCallbacks['onPurchaseSuccess']?.(strandedPurchase(false));
+    });
+
+    await waitFor(() => expect(result.current.error).toMatch(/test environment/i));
+    expect(mockFinishTransaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps the retry message when verification fails for a reason that may pass', async () => {
+    mockVerifyPurchase.mockRejectedValue(new ApiHttpError('Service unavailable', 503));
+
+    const { result } = renderHook(() => useMobileIap({ enabled: true }));
+    await waitFor(() => expect(result.current.catalog?.enabled).toBe(true));
+    await act(async () => {
+      mockCallbacks['onPurchaseSuccess']?.(strandedPurchase(false));
+    });
+
+    await waitFor(() => expect(result.current.error).toMatch(/could not be verified yet/i));
   });
 });

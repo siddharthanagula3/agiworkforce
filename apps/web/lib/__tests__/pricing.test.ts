@@ -174,6 +174,16 @@ describe('PRICING_CONFIG.plans', () => {
     expect(PRICING_CONFIG.getPlanFromPriceId('price_team_yearly_usd')).toBe('team');
   });
 
+  it('selects the Team yearly INR Price for an INR customer when one is configured', async () => {
+    const { getConfiguredPriceId, PRICING_CONFIG } = await importPricingWithEnv({
+      STRIPE_PRICE_TEAM_YEARLY_USD: 'price_team_yearly_usd',
+      STRIPE_PRICE_TEAM_YEARLY_INR: 'price_team_yearly_inr',
+    });
+    expect(getConfiguredPriceId('team', 'yearly', 'inr')).toBe('price_team_yearly_inr');
+    expect(getConfiguredPriceId('team', 'yearly', 'usd')).toBe('price_team_yearly_usd');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_team_yearly_inr')).toBe('team');
+  });
+
   it('offers no Team yearly Price when STRIPE_PRICE_TEAM_YEARLY_USD is unset (fail-closed)', async () => {
     const { getConfiguredPriceId } = await importPricingWithEnv({
       STRIPE_PRICE_TEAM_MONTHLY_USD: 'price_team_usd',

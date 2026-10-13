@@ -14,6 +14,7 @@ import {
 import { FREE_ALLOWANCE_EXHAUSTED_CODE } from '@agiworkforce/cloud-contracts';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import { logger } from '@/lib/logger';
+import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 import { getRequestId, getTraceContext } from '@/lib/observability/trace-context';
 
 export interface UpstreamErrorShape {
@@ -105,8 +106,7 @@ const PICK_A_MODEL = 'pick a specific model from the model picker';
 
 // The reader's OWN limit: it names their account, points at where the reset is
 // shown, and never reads as a provider's problem or a self serve upsell.
-export const FREE_USAGE_LIMIT_REACHED_MESSAGE =
-  'You have reached the free usage limit on your account. Open Usage to see when it resets, or use your own provider key to keep going. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
+export const FREE_USAGE_LIMIT_REACHED_MESSAGE = `You have reached the free usage limit on your account. Open Usage to see when it resets, or use your own provider key to keep going. ${PAID_UPGRADE_ACCESS_NOTE}`;
 
 export { FREE_ALLOWANCE_EXHAUSTED_CODE };
 

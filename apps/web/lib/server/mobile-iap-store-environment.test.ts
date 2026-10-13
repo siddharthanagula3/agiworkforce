@@ -13,14 +13,18 @@ const apple = vi.hoisted(() => ({
 vi.mock('@apple/app-store-server-library', () => ({
   Environment: { SANDBOX: 'Sandbox', PRODUCTION: 'Production' },
   SignedDataVerifier: class {
+    private readonly environment: string;
     constructor(_roots: unknown, _online: boolean, environment: string) {
+      this.environment = environment;
       apple.environments.push(environment);
     }
-    verifyAndDecodeTransaction = apple.verifyAndDecodeTransaction;
+    verifyAndDecodeTransaction = (signed: string) =>
+      apple.verifyAndDecodeTransaction(signed, this.environment);
   },
 }));
 
 import {
+  isUnfundedStorePurchase,
   verifyGooglePlayLifecyclePurchase,
   verifyMobileIapPurchase,
 } from './mobile-iap-store-verification';
@@ -122,11 +126,13 @@ describe('a store purchase made in the test environment', () => {
   });
 
   it.each(MOBILE_IAP_PRODUCT_DEFINITIONS.map((product) => [product.key, product] as const))(
-    'is refused on a production deployment for %s',
+    'is verified on production and named a test purchase for %s, so the ledger can gate it',
     async (_key, product) => {
       vi.stubEnv('VERCEL_ENV', 'production');
       stubGooglePurchase(product, true);
-      expect(await refusalMessage(verifyAndroid(product))).toMatch(/test environment/i);
+      const verified = await verifyAndroid(product);
+      expect(verified).toMatchObject({ environment: 'sandbox', entitlementStatus: 'active' });
+      expect(isUnfundedStorePurchase(verified)).toBe(true);
     },
   );
 
@@ -148,18 +154,17 @@ describe('a store purchase made in the test environment', () => {
     },
   );
 
-  it('never grants a funded purchase the test-environment refusal', async () => {
+  it('never names a funded purchase a test purchase', async () => {
     vi.stubEnv('VERCEL_ENV', 'production');
     for (const product of MOBILE_IAP_PRODUCT_DEFINITIONS) {
       stubGooglePurchase(product, false);
-      await expect(verifyAndroid(product)).resolves.toMatchObject({
-        environment: 'production',
-        entitlementStatus: 'active',
-      });
+      const verified = await verifyAndroid(product);
+      expect(verified).toMatchObject({ environment: 'production', entitlementStatus: 'active' });
+      expect(isUnfundedStorePurchase(verified)).toBe(false);
     }
   });
 
-  it('is revoked rather than renewed when the store reports its lifecycle in production', async () => {
+  it('keeps its test marking when the store reports its lifecycle in production', async () => {
     vi.stubEnv('VERCEL_ENV', 'production');
     const product = MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'subscription')!;
     stubGooglePurchase(product, true);
@@ -169,68 +174,97 @@ describe('a store purchase made in the test environment', () => {
         purchaseToken: PURCHASE_TOKEN,
         appAccountToken: ACCOUNT_TOKEN,
       }),
-    ).resolves.toMatchObject({ environment: 'sandbox', entitlementStatus: 'revoked' });
+    ).resolves.toMatchObject({ environment: 'sandbox', entitlementStatus: 'active' });
   });
 
-  it('cannot be smuggled past App Store verification by the transaction claiming production', async () => {
+  function stubAppleConfiguration(environment: 'production' | 'sandbox'): void {
     vi.stubEnv('VERCEL_ENV', 'production');
-    vi.stubEnv('APPLE_APP_STORE_ENVIRONMENT', 'sandbox');
+    vi.stubEnv('APPLE_APP_STORE_ENVIRONMENT', environment);
     vi.stubEnv('APPLE_APP_STORE_BUNDLE_ID', 'com.fixture.app');
     vi.stubEnv('APPLE_APP_STORE_APP_ID', '1234567890');
     vi.stubEnv(
       'APPLE_APP_STORE_ROOT_CA_CERTS_BASE64_JSON',
       JSON.stringify([Buffer.from('fixture-root').toString('base64')]),
     );
-    const product = MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'subscription')!;
-    apple.verifyAndDecodeTransaction.mockResolvedValue({
-      productId: storeProductId(product),
-      appAccountToken: ACCOUNT_TOKEN,
-      transactionId: 'fixture-apple-transaction',
-      purchaseDate: Date.parse('2026-08-01T00:00:00.000Z'),
-      expiresDate: Date.parse(FAR_FUTURE),
-      environment: 'Production',
-    });
+  }
 
-    expect(
-      await refusalMessage(
-        verifyMobileIapPurchase({
-          platform: 'ios',
-          product: catalogProduct(product),
-          purchaseToken: PURCHASE_TOKEN,
+  const subscription = MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'subscription')!;
+
+  // The real verifier refuses a payload whose environment is not its own.
+  function appleSigns(signedIn: 'Production' | 'Sandbox', claimed: string = signedIn): void {
+    apple.verifyAndDecodeTransaction.mockImplementation(
+      async (_signed: string, verifierEnvironment: string) => {
+        if (verifierEnvironment !== signedIn) throw new Error('INVALID_ENVIRONMENT');
+        return {
+          productId: storeProductId(subscription),
           appAccountToken: ACCOUNT_TOKEN,
-        }),
-      ),
-    ).toMatch(/test environment/i);
+          transactionId: 'fixture-apple-transaction',
+          purchaseDate: Date.parse('2026-08-01T00:00:00.000Z'),
+          expiresDate: Date.parse(FAR_FUTURE),
+          environment: claimed,
+        };
+      },
+    );
+  }
+
+  function verifyApple() {
+    return verifyMobileIapPurchase({
+      platform: 'ios',
+      product: catalogProduct(subscription),
+      purchaseToken: PURCHASE_TOKEN,
+      appAccountToken: ACCOUNT_TOKEN,
+    });
+  }
+
+  it('cannot pass as paid by claiming production inside a sandbox-signed transaction', async () => {
+    stubAppleConfiguration('sandbox');
+    appleSigns('Sandbox', 'Production');
+
+    const verified = await verifyApple();
+
+    expect(verified.environment).toBe('sandbox');
+    expect(isUnfundedStorePurchase(verified)).toBe(true);
     expect(apple.environments).toEqual(['Sandbox']);
   });
 
-  it('reads the App Store environment off deployment config, not off the transaction', async () => {
-    vi.stubEnv('VERCEL_ENV', 'production');
-    vi.stubEnv('APPLE_APP_STORE_ENVIRONMENT', 'production');
-    vi.stubEnv('APPLE_APP_STORE_BUNDLE_ID', 'com.fixture.app');
-    vi.stubEnv('APPLE_APP_STORE_APP_ID', '1234567890');
-    vi.stubEnv(
-      'APPLE_APP_STORE_ROOT_CA_CERTS_BASE64_JSON',
-      JSON.stringify([Buffer.from('fixture-root').toString('base64')]),
-    );
-    const product = MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'subscription')!;
+  it('verifies an App Review sandbox transaction on production and names it a test purchase', async () => {
+    stubAppleConfiguration('production');
+    appleSigns('Sandbox');
+
+    const verified = await verifyApple();
+
+    expect(verified).toMatchObject({ environment: 'sandbox', entitlementStatus: 'active' });
+    expect(isUnfundedStorePurchase(verified)).toBe(true);
+  });
+
+  it('names a transaction Apple signed in production as paid', async () => {
+    stubAppleConfiguration('production');
+    appleSigns('Production');
+
+    const verified = await verifyApple();
+
+    expect(verified.environment).toBe('production');
+    expect(isUnfundedStorePurchase(verified)).toBe(false);
+  });
+
+  it("refuses a transaction neither of Apple's environments signed", async () => {
+    stubAppleConfiguration('production');
+    apple.verifyAndDecodeTransaction.mockRejectedValue(new Error('not signed by Apple'));
+
+    expect(await refusalMessage(verifyApple())).toMatch(/could not verify/i);
+  });
+
+  it('treats a transaction the customer upgraded away from as no longer active', async () => {
+    stubAppleConfiguration('production');
     apple.verifyAndDecodeTransaction.mockResolvedValue({
-      productId: storeProductId(product),
+      productId: storeProductId(subscription),
       appAccountToken: ACCOUNT_TOKEN,
       transactionId: 'fixture-apple-transaction',
       purchaseDate: Date.parse('2026-08-01T00:00:00.000Z'),
       expiresDate: Date.parse(FAR_FUTURE),
-      environment: 'Sandbox',
+      isUpgraded: true,
     });
 
-    await expect(
-      verifyMobileIapPurchase({
-        platform: 'ios',
-        product: catalogProduct(product),
-        purchaseToken: PURCHASE_TOKEN,
-        appAccountToken: ACCOUNT_TOKEN,
-      }),
-    ).resolves.toMatchObject({ environment: 'production' });
-    expect(apple.environments).toEqual(['Production']);
+    await expect(verifyApple()).resolves.toMatchObject({ entitlementStatus: 'expired' });
   });
 });

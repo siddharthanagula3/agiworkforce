@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { BILLING_UPGRADES_OPEN_FLAG_KEY, billingUpgradesOpenDefinition } from '../billing-upgrades';
 import type { FlagDefinition } from '../flag-definition';
 import { FeatureFlagConfigSchema, readFeatureFlagConfig } from '../flag-config';
 import {
@@ -52,6 +53,19 @@ describe('stale flag detection', () => {
     );
 
     expect(stale[0]).toMatchObject({ reason: 'fully_rolled_out', ageDays: 120 });
+  });
+
+  it('leaves the paid upgrade switch alone however long it has been open to everyone', () => {
+    const open: FlagDefinition = {
+      ...billingUpgradesOpenDefinition(true),
+      version: 4,
+      archivedAt: null,
+      createdAt: daysAgo(400),
+      updatedAt: daysAgo(300),
+    };
+
+    expect(findStaleFlags([open], NOW, CONFIG)).toEqual([]);
+    expect(open.key).toBe(BILLING_UPGRADES_OPEN_FLAG_KEY);
   });
 
   it('names a kill switch nobody has revisited, and never archives it automatically', () => {

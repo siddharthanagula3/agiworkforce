@@ -12,6 +12,7 @@ import {
   type OperatorWaitlistCount,
   type OperatorWaitlistList,
 } from '@agiworkforce/cloud-contracts/waitlist';
+import { getBillingPlanPricing, isSelfServePaidPlanTier } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 import { formatCount, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 
@@ -37,6 +38,49 @@ async function requestWaitlist(
 
 function describeCounts(counts: readonly OperatorWaitlistCount[]): string {
   return counts.map((row) => `${row.key || NOT_RECORDED}: ${formatCount(row.count)}`).join(' · ');
+}
+
+function planLabel(plan: string | null): string {
+  if (!plan) return NOT_RECORDED;
+  return isSelfServePaidPlanTier(plan) ? getBillingPlanPricing(plan).label : plan;
+}
+
+function DemandTable({
+  caption,
+  keyHeading,
+  counts,
+  label = (key) => key || NOT_RECORDED,
+}: {
+  caption: string;
+  keyHeading: string;
+  counts: readonly OperatorWaitlistCount[];
+  label?: (key: string) => string;
+}) {
+  return (
+    <div className={TABLE_WRAP_CLASS}>
+      <table className="w-full text-sm">
+        <caption className="bg-card p-3 text-start font-medium">{caption}</caption>
+        <thead className="bg-card text-start">
+          <tr>
+            <th scope="col" className="p-3 font-medium">
+              {keyHeading}
+            </th>
+            <th scope="col" className="p-3 text-end font-medium">
+              Joins
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {counts.map((row) => (
+            <tr key={row.key} className="border-t border-border">
+              <td className="p-3">{label(row.key)}</td>
+              <td className="p-3 text-end tabular-nums">{formatCount(row.count)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function LoadingCard({ label }: { label: string }) {
@@ -236,14 +280,39 @@ export default function WaitlistPanel() {
       ) : (
         <>
           <p className="text-sm">
-            {formatCount(upgradeList.total)} recorded
-            {upgradeList.byPlan.length > 0 ? (
-              <span className="text-muted-foreground">
-                {' '}
-                by plan, {describeCounts(upgradeList.byPlan)}
-              </span>
-            ) : null}
+            {formatCount(upgradeList.people)} {upgradeList.people === 1 ? 'person' : 'people'} asked
+            for a paid plan, in {formatCount(upgradeList.total)} plan{' '}
+            {upgradeList.total === 1 ? 'request' : 'requests'}.{' '}
+            <span className="text-muted-foreground">
+              One person can ask for more than one plan, so the tables below count requests. Every
+              total is counted by the database over the whole list, not over the rows shown.
+            </span>
           </p>
+          {upgradeList.total > 0 ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <DemandTable
+                caption="By plan"
+                keyHeading="Plan"
+                counts={upgradeList.byPlan}
+                label={planLabel}
+              />
+              <DemandTable
+                caption="By billing interval"
+                keyHeading="Interval"
+                counts={upgradeList.byInterval}
+              />
+              <DemandTable
+                caption="By where they asked"
+                keyHeading="Source"
+                counts={upgradeList.bySource}
+              />
+              <DemandTable
+                caption={`By day joined, last ${formatCount(upgradeList.byDayWindowDays)} days (UTC)`}
+                keyHeading="Day"
+                counts={upgradeList.byDay}
+              />
+            </div>
+          ) : null}
           {upgradeList.entries.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No account has joined a paid plan waitlist. A row appears here when a signed-in
@@ -269,7 +338,7 @@ export default function WaitlistPanel() {
                   {upgradeList.entries.map((entry) => (
                     <tr key={entry.id} className="border-t border-border">
                       <td className="break-all p-3 font-mono">{entry.userId ?? NOT_RECORDED}</td>
-                      <td className="p-3">{entry.plan ?? NOT_RECORDED}</td>
+                      <td className="p-3">{planLabel(entry.plan)}</td>
                       <td className="p-3 text-muted-foreground">
                         {formatDateTime(entry.joinedAt)}
                       </td>

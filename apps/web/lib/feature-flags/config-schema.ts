@@ -1,6 +1,7 @@
 import { EXPERIMENT_CONTROL_VARIANT } from '@agiworkforce/types';
 import { z } from 'zod';
 
+import { BILLING_UPGRADES_OPEN_FLAG_KEY } from './billing-upgrades';
 import { EXPERIMENT_FLAG_PREFIX, parseExperimentFlagKey } from './experiments';
 import {
   ALL_KILL_SWITCH_CAPABILITIES,
@@ -25,8 +26,11 @@ import {
 } from './decision-flags';
 import { ROLLOUT_FLAG_PREFIX, parseRolloutRingFlagKey } from './rollout-rings';
 import { ROUTING_FLAG_KEYS, ROUTING_FLAG_PREFIX, canaryCohortFlagKey } from './routing-flags';
+import { STORE_TEST_PURCHASES_FLAG_KEY } from './store-test-purchases';
 
 export const FLAG_NAMESPACE_IDS = [
+  'billing_store_test_purchases',
+  'billing_upgrades',
   'capability',
   'decision_kill',
   'decision',
@@ -94,6 +98,24 @@ function slugSuffixOf(key: string, prefix: string): boolean {
 }
 
 const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSchema).parse([
+  {
+    id: 'billing_store_test_purchases',
+    prefix: STORE_TEST_PURCHASES_FLAG_KEY,
+    reader: 'lib/feature-flags/store-test-purchases (storeTestPurchasesAllowed)',
+    variants: [...GATE_VARIANTS],
+    defaultVariant: FLAG_OFF_VARIANT,
+    killSwitch: true,
+    keys: [STORE_TEST_PURCHASES_FLAG_KEY],
+  },
+  {
+    id: 'billing_upgrades',
+    prefix: BILLING_UPGRADES_OPEN_FLAG_KEY,
+    reader: 'lib/feature-flags/billing-upgrades (billingUpgradesOpen)',
+    variants: [...GATE_VARIANTS],
+    defaultVariant: null,
+    killSwitch: true,
+    keys: [BILLING_UPGRADES_OPEN_FLAG_KEY],
+  },
   {
     id: 'capability',
     prefix: CAPABILITY_FLAG_PREFIX,
@@ -181,6 +203,8 @@ const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSch
 ]);
 
 const OPEN_KEY_TESTS: Readonly<Record<FlagNamespaceId, (key: string) => boolean>> = {
+  billing_store_test_purchases: () => false,
+  billing_upgrades: () => false,
   capability: () => false,
   decision_kill: () => false,
   decision: isDecisionFlagKey,

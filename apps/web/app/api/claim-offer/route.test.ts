@@ -97,6 +97,19 @@ describe('POST /api/claim-offer', () => {
     expect(JSON.stringify(await response.json())).toContain('already claimed');
   });
 
+  it('never treats an upgrade access code as a plan offer', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+
+    const response = await POST(post());
+
+    expect(response.status).toBe(400);
+    const [sql, params] = mocks.query.mock.calls[0]!;
+    expect(sql).toContain("coalesce(metadata->>'kind', '') <> $2");
+    expect(params).toEqual([expect.any(String), 'billing_upgrade_access']);
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.allocate).not.toHaveBeenCalled();
+  });
+
   it('does not allocate credits when the claim was refused', async () => {
     mocks.query
       .mockResolvedValueOnce([INVITE])

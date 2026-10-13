@@ -5,6 +5,7 @@ import { Spinner, useConfirm } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import type { FlagDefinition, FlagOverride } from '@/lib/feature-flags/flag-definition';
+import { STORE_TEST_PURCHASES_FLAG_KEY } from '@/lib/feature-flags/store-test-purchases';
 import { formatDateTime, NONE } from '../lib/operator-format';
 
 const FLAGS_ENDPOINT = '/api/admin/feature-flags';
@@ -106,6 +107,7 @@ export default function FeatureFlagsPanel() {
   const [openFlag, setOpenFlag] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<FlagOverride[] | null>(null);
   const [overrideForm, setOverrideForm] = useState<OverrideForm>(EMPTY_OVERRIDE);
+  const [testPurchaseAccount, setTestPurchaseAccount] = useState('');
   const { confirm, dialog } = useConfirm();
 
   const load = useCallback(async () => {
@@ -209,6 +211,29 @@ export default function FeatureFlagsPanel() {
       await load();
     } catch (archiveError) {
       setError(toUserMessage(archiveError, 'Could not archive that flag.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function allowStoreTestPurchases() {
+    const subjectId = testPurchaseAccount.trim();
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await mutate(
+        `${FLAGS_ENDPOINT}/${encodeURIComponent(STORE_TEST_PURCHASES_FLAG_KEY)}/overrides`,
+        'PUT',
+        { subject: 'user', subjectId, variant: 'on', expiresAt: null },
+      );
+      setTestPurchaseAccount('');
+      setNotice(
+        `${subjectId} can now be granted store test purchases. Remove its override on ${STORE_TEST_PURCHASES_FLAG_KEY} when review or testing ends.`,
+      );
+      await load();
+    } catch (allowError) {
+      setError(toUserMessage(allowError, 'Could not allow that account.'));
     } finally {
       setBusy(false);
     }
@@ -455,6 +480,33 @@ export default function FeatureFlagsPanel() {
           </table>
         </div>
       )}
+
+      <div className={CARD_CLASS}>
+        <h3 className="text-h5">Store test purchases</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          App Review and Play license testers buy in the stores' test environments, where nothing is
+          charged. Production grants such a purchase only to an account named here, and refuses it
+          for everyone else. Name the review account before submitting a build, and remove its
+          override on <span className="font-mono">{STORE_TEST_PURCHASES_FLAG_KEY}</span> afterwards.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            Account user id
+            <input
+              className={FIELD_CLASS}
+              value={testPurchaseAccount}
+              onChange={(event) => setTestPurchaseAccount(event.target.value)}
+            />
+          </label>
+          <button
+            className={ACTION_CLASS}
+            disabled={busy || testPurchaseAccount.trim().length === 0}
+            onClick={() => void allowStoreTestPurchases()}
+          >
+            Allow test purchases
+          </button>
+        </div>
+      </div>
 
       <div className={CARD_CLASS}>
         <h3 className="text-h5">{editingVersion === null ? 'New flag' : `Editing ${form.key}`}</h3>

@@ -4,6 +4,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import {
   BILLING_ERROR_REASONS,
+  STORE_CHARGE_ID_PREFIX,
+  refundingStoreOf,
   STATUTORY_WITHDRAWAL_DAYS,
   UNUSED_REFUND_WINDOW_DAYS,
   type OperatorAccountBilling,
@@ -472,13 +474,16 @@ async function recordRefundDecision(
 
 async function notifyRefundDecision(db: DatabaseAdapter, row: RefundRequestRow): Promise<void> {
   const refunded = row.status === 'refunded';
+  const store = refundingStoreOf(row.charge_id);
   await recordNotification(db, {
     userId: row.user_id,
     category: 'billing',
     severity: refunded ? 'info' : 'warning',
     title: refunded ? 'Your refund is on its way' : 'Your refund request was declined',
     message: refunded
-      ? 'We refunded your payment to the card you paid with. Your bank usually shows it within 5 to 10 business days.'
+      ? store
+        ? `${store} refunded this purchase to the payment method you used there. ${store} sets how long it takes to show.`
+        : 'We refunded your payment to the card you paid with. Your bank usually shows it within 5 to 10 business days.'
       : `We could not refund this payment. ${row.decision_note ?? ''}`.trim(),
     target: { kind: 'settings', id: 'billing' },
     dedupeKey: `refund-request:${row.id}:${row.status}`,
@@ -887,6 +892,42 @@ export async function issueOperatorRefund(
     planEnded,
     request,
   };
+}
+
+/**
+ * Close a request for a store charge once the store has returned the money.
+ * Nothing is refunded here: the App Store and Google Play hold the payment, so
+ * this records a refund that already happened there.
+ */
+export async function recordStoreRefund(
+  db: DatabaseAdapter,
+  input: { operatorUserId: string; requestId: string; amountCents: number | null; note: string },
+): Promise<OperatorRefundRequestView> {
+  const [decided] = await db.query<RefundRequestRow>(
+    `update public.billing_refund_requests
+        set status = 'refunded',
+            decided_by = 'operator',
+            decided_by_user_id = $2,
+            refund_amount_cents = coalesce($3::bigint, charge_amount_cents),
+            stripe_refund_id = null,
+            decision_note = $4,
+            decided_at = now(),
+            updated_at = now()
+      where id = $1
+        and status = 'pending'
+        and starts_with(charge_id, $5)
+        and ($3::bigint is null or $3::bigint <= charge_amount_cents)
+      returning ${REQUEST_COLUMNS}`,
+    [input.requestId, input.operatorUserId, input.amountCents, input.note, STORE_CHARGE_ID_PREFIX],
+  );
+  if (!decided) {
+    throw new RefundRequestRefusal(
+      'That request is not a pending store charge, or the amount is more than was charged.',
+      409,
+    );
+  }
+  await notifyRefundDecision(db, decided);
+  return toOperatorRequestView(decided);
 }
 
 export async function declineRefundRequest(

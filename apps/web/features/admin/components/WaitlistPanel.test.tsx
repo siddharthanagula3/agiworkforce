@@ -57,7 +57,12 @@ function upgradePage(overrides: Record<string, unknown> = {}) {
     total: 1,
     hasMore: false,
     nextCursor: null,
+    people: 1,
     byPlan: [{ key: 'pro', count: 1 }],
+    byInterval: [{ key: 'monthly', count: 1 }],
+    bySource: [{ key: 'billing-upgrade', count: 1 }],
+    byDay: [{ key: '2026-10-02', count: 1 }],
+    byDayWindowDays: 90,
     entries: [
       { id: 'upgrade-1', userId: 'user_upgrade_1', plan: 'pro', joinedAt: '2026-10-02T09:00:00Z' },
     ],
@@ -133,7 +138,62 @@ describe('WaitlistPanel', () => {
     render(<WaitlistPanel />);
 
     const row = (await screen.findByText('user_upgrade_1')).closest('tr')!;
-    expect(within(row).getByText('pro')).toBeInTheDocument();
+    expect(within(row).getByText('Pro')).toBeInTheDocument();
+  });
+
+  it('shows upgrade demand as people and as requests by plan, interval, source and day', async () => {
+    mocks.fetch.mockImplementation(
+      respondWith({
+        public: [publicPage()],
+        upgrade: [
+          upgradePage({
+            total: 4,
+            people: 3,
+            byPlan: [
+              { key: 'pro', count: 2 },
+              { key: 'max_15x', count: 1 },
+              { key: 'team', count: 1 },
+            ],
+            byInterval: [
+              { key: 'monthly', count: 3 },
+              { key: 'yearly', count: 1 },
+            ],
+            bySource: [
+              { key: 'billing-upgrade', count: 3 },
+              { key: '', count: 1 },
+            ],
+            byDay: [
+              { key: '2026-10-05', count: 3 },
+              { key: '2026-10-03', count: 1 },
+            ],
+          }),
+        ],
+      }),
+    );
+    render(<WaitlistPanel />);
+
+    expect(
+      await screen.findByText(/3 people asked for a paid plan, in 4 plan requests/),
+    ).toBeInTheDocument();
+    const byPlan = screen.getByRole('table', { name: 'By plan' });
+    expect(within(byPlan).getByText('Max 20x').closest('tr')).toHaveTextContent('1');
+    expect(within(byPlan).queryByText('max_15x')).toBeNull();
+    expect(within(byPlan).getByText('Pro').closest('tr')).toHaveTextContent('2');
+    const byInterval = screen.getByRole('table', { name: 'By billing interval' });
+    expect(within(byInterval).getByText('yearly').closest('tr')).toHaveTextContent('1');
+    const bySource = screen.getByRole('table', { name: 'By where they asked' });
+    expect(within(bySource).getByText('not recorded').closest('tr')).toHaveTextContent('1');
+    const byDay = screen.getByRole('table', { name: 'By day joined, last 90 days (UTC)' });
+    expect(within(byDay).getByText('2026-10-05').closest('tr')).toHaveTextContent('3');
+  });
+
+  it('counts one person asking for one plan in the singular', async () => {
+    mocks.fetch.mockImplementation(respondWith({ public: [publicPage()] }));
+    render(<WaitlistPanel />);
+
+    expect(
+      await screen.findByText(/1 person asked for a paid plan, in 1 plan request\./),
+    ).toBeInTheDocument();
   });
 
   it('links the export to the operator export service as a download', async () => {
@@ -149,7 +209,17 @@ describe('WaitlistPanel', () => {
     mocks.fetch.mockImplementation(
       respondWith({
         public: [publicPage({ total: 0, bySource: [], entries: [] })],
-        upgrade: [upgradePage({ total: 0, byPlan: [], entries: [] })],
+        upgrade: [
+          upgradePage({
+            total: 0,
+            people: 0,
+            byPlan: [],
+            byInterval: [],
+            bySource: [],
+            byDay: [],
+            entries: [],
+          }),
+        ],
       }),
     );
     render(<WaitlistPanel />);
@@ -177,7 +247,17 @@ describe('WaitlistPanel', () => {
     mocks.fetch.mockImplementation(
       respondWith({
         public: [publicPage({ total: 0, bySource: [], entries: [] })],
-        upgrade: [upgradePage({ total: 0, byPlan: [], entries: [] })],
+        upgrade: [
+          upgradePage({
+            total: 0,
+            people: 0,
+            byPlan: [],
+            byInterval: [],
+            bySource: [],
+            byDay: [],
+            entries: [],
+          }),
+        ],
       }),
     );
     const { container } = render(<WaitlistPanel />);

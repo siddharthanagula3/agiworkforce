@@ -1,3 +1,4 @@
+import { BILLING_UPGRADES_OPEN_FLAG_KEY } from './billing-upgrades';
 import { isUnreadFlagKey } from './config-schema';
 import { FLAG_OFF_VARIANT, type FlagDefinition } from './flag-definition';
 import { readFeatureFlagConfig, staleAfterMs, type FeatureFlagConfig } from './flag-config';
@@ -20,6 +21,11 @@ export interface StaleFlag {
 
 const DAY_MS = 86_400_000;
 
+// Switches an operator leaves on for good and whose absence reads off. One of
+// these serving `on` to everyone is its working state, not a finished rollout,
+// and archiving it would close what it opened.
+const STANDING_SWITCH_KEYS: ReadonlySet<string> = new Set([BILLING_UPGRADES_OPEN_FLAG_KEY]);
+
 function ageDays(updatedAt: string, nowMs: number): number {
   return Math.max(0, Math.floor((nowMs - Date.parse(updatedAt)) / DAY_MS));
 }
@@ -36,7 +42,7 @@ function reasonFor(
   if (definition.killSwitch) return 'killed_and_forgotten';
   if (holdsVersionsOff(definition)) return 'version_disable_left_in_place';
   if (definition.rules.length === 0 && definition.defaultVariant !== FLAG_OFF_VARIANT) {
-    return 'fully_rolled_out';
+    return STANDING_SWITCH_KEYS.has(definition.key) ? null : 'fully_rolled_out';
   }
   return null;
 }

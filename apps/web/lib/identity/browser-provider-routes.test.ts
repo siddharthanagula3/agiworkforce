@@ -16,6 +16,8 @@ describe('browser identity provider routes', () => {
     '/gallery',
     '/invite',
     '/plugins/example',
+    '/pricing',
+    '/pricing?seats=5#pricing-team-title',
     '/skills',
     '/slack/link',
     '/slack/link?token=link-code',
@@ -23,7 +25,7 @@ describe('browser identity provider routes', () => {
     expect(needsBrowserIdentityProvider(pathname)).toBe(true);
   });
 
-  it.each(['/', '/terms', '/pricing', '/features/ai-chat', '/cookies', '/about'])(
+  it.each(['/', '/terms', '/features/ai-chat', '/cookies', '/about'])(
     'keeps identity out of %s',
     (pathname) => {
       expect(needsBrowserIdentityProvider(pathname)).toBe(false);
@@ -33,6 +35,7 @@ describe('browser identity provider routes', () => {
   it('matches whole route segments rather than lookalike prefixes', () => {
     expect(needsBrowserIdentityProvider('/chatty')).toBe(false);
     expect(needsBrowserIdentityProvider('/pluginshop')).toBe(false);
+    expect(needsBrowserIdentityProvider('/pricing-history')).toBe(false);
     expect(needsBrowserIdentityProvider('/slack/linkage')).toBe(false);
     expect(needsBrowserIdentityProvider('/slack')).toBe(false);
   });

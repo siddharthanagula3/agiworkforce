@@ -8,7 +8,9 @@ jest.mock('@/services/api', () => ({
   },
 }));
 
+import { Platform } from 'react-native';
 import {
+  billingWaitlistSource,
   joinBillingUpgradeWaitlist,
   redeemBillingUpgradeCode,
 } from '@/src/features/billing/mobileIapService';
@@ -39,15 +41,27 @@ describe('mobile billing upgrade access', () => {
     );
   });
 
-  it('joins the selected plan waitlist without starting a purchase', async () => {
-    mockPost.mockResolvedValue({ ok: true, joined: true });
+  it.each([
+    ['ios', 'mobile-ios-billing'],
+    ['android', 'mobile-android-billing'],
+  ] as const)(
+    'joins the selected plan waitlist from %s with a source that names the platform',
+    async (os, source) => {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
+      mockPost.mockResolvedValue({ ok: true, joined: true });
 
-    await joinBillingUpgradeWaitlist('max_15x');
+      await joinBillingUpgradeWaitlist('max_15x');
 
-    expect(mockPost).toHaveBeenCalledWith(
-      '/api/waitlist',
-      { plan: 'max_15x', billingInterval: 'monthly', source: 'mobile-billing' },
-      { headers: { 'x-csrf-token': 'csrf-token' } },
-    );
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/waitlist',
+        { plan: 'max_15x', billingInterval: 'monthly', source },
+        { headers: { 'x-csrf-token': 'csrf-token' } },
+      );
+    },
+  );
+
+  it('keeps a distinct source for a surface that is neither store', () => {
+    expect(billingWaitlistSource(null)).toBe('mobile-billing');
   });
 });

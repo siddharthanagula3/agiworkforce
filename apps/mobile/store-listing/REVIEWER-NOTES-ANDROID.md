@@ -278,36 +278,75 @@ Local Mode is active, verified in `__tests__/egress-guard.test.ts`.
 
 ## Billing: please read
 
-The binary contains Google Play Billing integration. New purchase offers appear
-only when the authenticated server catalog is enabled, configured with Google
-Play product IDs, and the account has upgrade access. With a disabled catalog,
-Billing shows an unavailable notice instead of new product offers. It still
-shows **Restore purchases** for earlier subscriptions and unfinished
-transactions. Registered products remain verifiable when new sales are switched
-off, and an unverified transaction is not acknowledged to Play.
+**This build sells auto-renewing subscriptions and consumable credit top-ups
+through Google Play Billing. There is no card-entry form and no other in-app
+checkout.**
 
-When offers are enabled, the app uses Play's localized price and purchase sheet,
-then grants access only after server verification. An upgrade code grants
-permission to see and buy store products; it does not grant a paid entitlement.
-The code is redeemable in Billing, and a user can also join the upgrade waitlist
-there. Existing subscriptions managed on another platform are identified to
-avoid a second recurring charge. The app has no card-entry form or alternative
-in-app checkout for these products.
+The `expo-iap` 5.8.1 integration is `src/features/billing/useMobileIap.ts`,
+rendered by `src/features/settings/cloud-billing/index.tsx`. It sells four
+subscriptions (Basic, Pro, Max 5x, Max 20x, each with one monthly base plan) and
+four consumable credit top-ups; the product and base plan IDs are listed in
+`docs/runbooks/mobile-store-products.md`.
 
-The checked-in backend environment templates keep `MOBILE_IAP_ENABLED=false`;
-this source tree cannot verify the live deployment flag or Play Console product
-registration. Before submitting a build that offers purchases, set the Play
-listing's in-app-products answer to true, update this note, give Play Review an
-account with upgrade access, and validate purchase, restore, renewal and refund
-paths with Play test purchases.
+How to buy during review:
 
-The `expo-iap` integration reads its product list from the server owner
-`mobile-iap-catalog.ts`. The disabled catalog reasons are "Native purchases are
-not enabled for this deployment." when the flag is off, and "Google Play
-products have not been registered for this build." when the flag is on but the
-Play product map is empty. Billing may first show **Loading native purchases**.
-Its plan-change row can read **Upgrade plan**, **Adjust plan**, or **Choose plan**;
-Team and Enterprise accounts may also see **Workspace administration**.
+1. Sign in with the review account and open Settings → Billing.
+2. Paid upgrades are opening in stages. The review account must either have
+   upgrade access already or use the access code given in the Play Console
+   review notes, entered under **Have an upgrade access code?**. The code only
+   lets the account see and buy store products; it grants no paid entitlement.
+   An account without access sees **Join upgrade waitlist** instead.
+3. Plans appear with Play's own localized price for the configured base plan.
+   The Play purchase sheet shows the exact charge.
+4. The app sends the purchase token to `/api/mobile/iap/verify`. Access is
+   granted only after the server verifies it with the Play Developer API. The
+   server then acknowledges the purchase with Play, and the app acknowledges or
+   consumes it on the device.
+5. With a paid plan active, **Usage top-ups** lists the consumables. Purchased
+   credits do not expire.
+
+What the Billing screen shows:
+
+- Billing may first show **Loading native purchases**. Its plan-change row can
+  read **Upgrade plan**, **Adjust plan**, or **Choose plan**; Team and
+  Enterprise accounts may also see **Workspace administration**.
+- **Changing plans.** The current plan is marked and every other plan is
+  labelled **Upgrade** or **Downgrade**. An upgrade replaces the subscription
+  at once and charges the prorated difference; a downgrade is deferred to the
+  next renewal. The screen says so before the tap.
+- **Pending payments.** A purchase Play reports as pending is shown as
+  **Waiting for approval** and is never granted early. It completes on its own
+  when Play confirms the payment, including when the app was closed.
+- **Restore purchases** is always present and never charges.
+- A subscription bought on another platform is identified as managed elsewhere
+  and the app does not offer a second recurring purchase. Such an account can
+  still buy credit top-ups here.
+
+Every purchase path is behind one server answer from the server owner
+`mobile-iap-catalog.ts`, which requires the deployment to set
+`MOBILE_IAP_ENABLED` and to map product keys to Play product IDs. If no products
+appear, the screen shows **"Purchases are not available right now"** with one of
+these reasons: "Native purchases are not enabled for this deployment." when the
+flag is off, "Google Play products have not been registered for this build."
+when the flag is on but the Play product map is empty, or "Paid upgrades are
+opening in stages. This account needs upgrade access before plans and credits
+can be bought here." when the account has no upgrade access.
+
+A purchase made with a Play license-tester account is a test purchase and is
+not charged. The production service verifies it with Google Play and grants it
+only to an AGI account that has been allowed to receive test purchases; the
+review account supplied in Play Console is one. For any other account the
+purchase is refused, the Billing screen says **"This purchase was made in the
+store's test environment, which this account is not set up to use. Nothing was
+charged."**, and it is left unacknowledged so Play cancels it.
+
+Before submitting (operator steps, not for the reviewer): the review account
+must be allowed to receive test purchases (operator dashboard, Flags, Store test
+purchases; `docs/runbooks/mobile-store-products.md` section 4.1). This tree cannot
+verify that allowance, the live deployment flag or Play Console product
+registration. All three must be in place before this build is submitted, and the
+purchase, restore, renewal, refund, plan-change and pending-payment paths
+validated with Play test purchases.
 
 ## External links
 
@@ -320,11 +359,11 @@ the signed-in account and plan.
 
 | #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
 | --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:617`       | Paid plans only; the free tier gets an inert "No invoices yet" row with no handler.                                                                                                                                     |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:377`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:176`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
+| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:777`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
+| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:483`       | Team and Enterprise plans only.                                                                                                                                                                                         |
+| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:236`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
 | A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:120` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:624`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
+| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:784`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
 | A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
 | A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:438`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
 | A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:545`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
@@ -368,7 +407,7 @@ asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
 `Linking.openURL` targets in the app.
 
 **E. Present in source but unreachable in this binary.** The Stripe
-billing-portal link (`src/features/settings/cloud-billing/index.tsx:213`), dead
+billing-portal link (`src/features/settings/cloud-billing/index.tsx:273`), dead
 behind `FEATURES.billing === false`.
 
 Users who subscribed to AGI on the web see their plan's features unlocked when

@@ -70,10 +70,85 @@ export type OperatorPublicWaitlistResponse = z.infer<typeof OperatorPublicWaitli
 export const OperatorUpgradeWaitlistResponseSchema = z.object({
   list: z.literal('upgrade'),
   ...operatorWaitlistPageFields,
+  people: z.number().int().nonnegative(),
   byPlan: z.array(OperatorWaitlistCountSchema),
+  byInterval: z.array(OperatorWaitlistCountSchema),
+  bySource: z.array(OperatorWaitlistCountSchema),
+  byDay: z.array(OperatorWaitlistCountSchema),
+  byDayWindowDays: z.number().int().positive(),
   entries: z.array(OperatorUpgradeWaitlistEntrySchema),
 });
 export type OperatorUpgradeWaitlistResponse = z.infer<typeof OperatorUpgradeWaitlistResponseSchema>;
 
 export type OperatorWaitlistResponse =
   OperatorPublicWaitlistResponse | OperatorUpgradeWaitlistResponse;
+
+export const OPERATOR_UPGRADE_ACCESS_PATH = '/api/admin/upgrade-access';
+export const OPERATOR_UPGRADE_ACCESS_CODES_PATH = '/api/admin/upgrade-access/codes';
+
+export const OperatorUpgradeAccessChangeSchema = z.object({ open: z.boolean() }).strict();
+export type OperatorUpgradeAccessChange = z.infer<typeof OperatorUpgradeAccessChangeSchema>;
+
+export const OperatorUpgradeAccessStateSchema = z.object({
+  open: z.boolean(),
+  switchOpen: z.boolean(),
+  forcedOpenByEnvironment: z.boolean(),
+  targetingRules: z.number().int().nonnegative(),
+  lastChange: z
+    .object({
+      opened: z.boolean(),
+      changedAt: z.string().min(1),
+      changedBy: z.string().nullable(),
+    })
+    .nullable(),
+});
+export type OperatorUpgradeAccessState = z.infer<typeof OperatorUpgradeAccessStateSchema>;
+
+export const UPGRADE_ACCESS_CODE_MAX_LENGTH = 50;
+export const UPGRADE_ACCESS_CODE_MIN_LENGTH = 6;
+export const UPGRADE_ACCESS_CODE_MAX_REDEMPTIONS = 100_000;
+export const UPGRADE_ACCESS_CODE_NOTE_MAX_LENGTH = 200;
+
+export const OperatorUpgradeAccessCodeCreateSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(UPGRADE_ACCESS_CODE_MIN_LENGTH)
+      .max(UPGRADE_ACCESS_CODE_MAX_LENGTH)
+      .regex(/^[A-Za-z0-9]+$/)
+      .transform((value) => value.toUpperCase())
+      .optional(),
+    maxRedemptions: z.number().int().min(1).max(UPGRADE_ACCESS_CODE_MAX_REDEMPTIONS),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    note: z.string().trim().max(UPGRADE_ACCESS_CODE_NOTE_MAX_LENGTH).optional(),
+  })
+  .strict();
+export type OperatorUpgradeAccessCodeCreate = z.infer<typeof OperatorUpgradeAccessCodeCreateSchema>;
+
+export const OperatorUpgradeAccessCodeDisableSchema = z.object({ id: z.string().uuid() }).strict();
+
+export const OperatorUpgradeAccessCodeSchema = z.object({
+  id: z.string().min(1),
+  code: z.string().min(1),
+  maxRedemptions: z.number().int().nonnegative(),
+  redemptions: z.number().int().nonnegative(),
+  expiresAt: z.string().nullable(),
+  active: z.boolean(),
+  note: z.string().nullable(),
+  createdAt: z.string().min(1),
+  createdBy: z.string().nullable(),
+});
+export type OperatorUpgradeAccessCode = z.infer<typeof OperatorUpgradeAccessCodeSchema>;
+
+export const OperatorUpgradeAccessCodesResponseSchema = z.object({
+  codes: z.array(OperatorUpgradeAccessCodeSchema),
+  truncated: z.boolean(),
+});
+export type OperatorUpgradeAccessCodesResponse = z.infer<
+  typeof OperatorUpgradeAccessCodesResponseSchema
+>;
+
+export const OperatorUpgradeAccessCodeResponseSchema = z.object({
+  code: OperatorUpgradeAccessCodeSchema,
+});

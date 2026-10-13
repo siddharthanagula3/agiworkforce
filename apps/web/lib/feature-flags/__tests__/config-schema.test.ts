@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { BILLING_UPGRADES_OPEN_FLAG_KEY, billingUpgradesOpenDefinition } from '../billing-upgrades';
 import {
   FLAG_NAMESPACES,
   FlagNamespaceSchema,
@@ -136,6 +137,13 @@ describe('what a stored definition contradicts', () => {
 
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('rollout-rings');
+  });
+
+  it('declares the paid upgrade switch and accepts it open or closed', () => {
+    expect(isDeclaredFlagKey(BILLING_UPGRADES_OPEN_FLAG_KEY)).toBe(true);
+    expect(isUnreadFlagKey(BILLING_UPGRADES_OPEN_FLAG_KEY)).toBe(false);
+    expect(flagConfigProblems(billingUpgradesOpenDefinition(true))).toEqual([]);
+    expect(flagConfigProblems(billingUpgradesOpenDefinition(false))).toEqual([]);
   });
 
   it('names a kill switch marked on a namespace that is not a gate', () => {

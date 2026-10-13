@@ -69,11 +69,20 @@ import {
 import { GET as takedownGet, POST as takedownPost } from '@/app/api/admin/takedown/route';
 import { GET as waitlistGet } from '@/app/api/admin/waitlist/route';
 import { GET as waitlistExportGet } from '@/app/api/admin/waitlist/export/route';
+import {
+  GET as upgradeAccessGet,
+  POST as upgradeAccessPost,
+} from '@/app/api/admin/upgrade-access/route';
+import {
+  DELETE as upgradeAccessCodesDelete,
+  GET as upgradeAccessCodesGet,
+  POST as upgradeAccessCodesPost,
+} from '@/app/api/admin/upgrade-access/codes/route';
 
 const ORG_ADMIN_ID = 'user_org_owner_1';
 const OPERATOR_ID = 'user_platform_operator_1';
 
-function req(url: string, method: 'GET' | 'POST', body?: unknown): NextRequest {
+function req(url: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown): NextRequest {
   return new NextRequest(url, {
     method,
     headers: { 'content-type': 'application/json' },
@@ -119,6 +128,36 @@ const CROSS_TENANT_ROUTES: RouteCall[] = [
   {
     name: 'GET /api/admin/waitlist/export',
     call: () => waitlistExportGet(req('https://app.test/api/admin/waitlist/export', 'GET')),
+  },
+  {
+    name: 'GET /api/admin/upgrade-access',
+    call: () => upgradeAccessGet(req('https://app.test/api/admin/upgrade-access', 'GET')),
+  },
+  {
+    name: 'POST /api/admin/upgrade-access',
+    call: () =>
+      upgradeAccessPost(req('https://app.test/api/admin/upgrade-access', 'POST', { open: true })),
+  },
+  {
+    name: 'GET /api/admin/upgrade-access/codes',
+    call: () =>
+      upgradeAccessCodesGet(req('https://app.test/api/admin/upgrade-access/codes', 'GET')),
+  },
+  {
+    name: 'POST /api/admin/upgrade-access/codes',
+    call: () =>
+      upgradeAccessCodesPost(
+        req('https://app.test/api/admin/upgrade-access/codes', 'POST', { maxRedemptions: 1 }),
+      ),
+  },
+  {
+    name: 'DELETE /api/admin/upgrade-access/codes',
+    call: () =>
+      upgradeAccessCodesDelete(
+        req('https://app.test/api/admin/upgrade-access/codes', 'DELETE', {
+          id: '00000000-0000-4000-8000-000000000101',
+        }),
+      ),
   },
   {
     name: 'GET /api/admin/content-reports',

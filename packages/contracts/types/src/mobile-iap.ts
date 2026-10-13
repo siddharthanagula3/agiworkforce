@@ -1,4 +1,8 @@
-import { getPlanPriceUsd, type SelfServeIndividualPlanTier } from './billing-catalog';
+import {
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  getPlanPriceUsd,
+  type SelfServeIndividualPlanTier,
+} from './billing-catalog';
 import { topUpUnitsForUsd } from './billing-topups';
 import { EEA_COUNTRY_CODES } from './country-groups';
 
@@ -121,9 +125,54 @@ export function isMobileIapProductKey(value: string): value is MobileIapProductK
   return getMobileIapProductDefinition(value) !== null;
 }
 
-export type MobileIapCatalogProduct = MobileIapProductDefinition & { productId: string };
+export interface MobileIapStoreOffer {
+  basePlanId: string;
+  offerId: string | null;
+}
+
+export type MobileIapCatalogProduct = MobileIapProductDefinition & {
+  productId: string;
+  googleOffer?: MobileIapStoreOffer | null;
+};
 
 export type MobileIapUnavailableCode = 'waitlist_access_required';
+
+export type MobileIapPlanChangeDirection = 'upgrade' | 'downgrade';
+
+export const MOBILE_IAP_ANDROID_REPLACEMENT_MODES = [
+  'with-time-proration',
+  'charge-prorated-price',
+  'charge-full-price',
+  'without-proration',
+  'deferred',
+] as const;
+
+export type MobileIapAndroidReplacementMode = (typeof MOBILE_IAP_ANDROID_REPLACEMENT_MODES)[number];
+
+export type MobileIapAndroidReplacementModes = Record<
+  MobileIapPlanChangeDirection,
+  MobileIapAndroidReplacementMode
+>;
+
+/**
+ * Google Play's own recommendation, read 2026-10-12 at
+ * https://developer.android.com/google/play/billing/subscriptions: an upgrade
+ * charges the prorated difference and starts at once, a downgrade waits for the
+ * renewal the buyer already paid for. `charge-prorated-price` is refused by Play
+ * for anything but an upgrade.
+ */
+export const MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES: MobileIapAndroidReplacementModes =
+  Object.freeze({ upgrade: 'charge-prorated-price', downgrade: 'deferred' });
+
+export function mobileIapPlanChangeDirection(
+  fromTier: SelfServeIndividualPlanTier,
+  toTier: SelfServeIndividualPlanTier,
+): MobileIapPlanChangeDirection | null {
+  const from = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.indexOf(fromTier);
+  const to = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.indexOf(toTier);
+  if (from < 0 || to < 0 || from === to) return null;
+  return to > from ? 'upgrade' : 'downgrade';
+}
 
 export interface MobileIapCatalogResponse {
   enabled: boolean;
@@ -132,6 +181,11 @@ export interface MobileIapCatalogResponse {
   products: MobileIapCatalogProduct[];
   unavailableReason: string | null;
   unavailableCode: MobileIapUnavailableCode | null;
+  androidReplacementModes?: MobileIapAndroidReplacementModes;
+  /** Why plans are withheld from an account another billing channel still charges. */
+  subscriptionsUnavailableReason?: string | null;
+  /** Every store product the device must consume once granted, offered or not. */
+  consumableProductIds?: string[];
 }
 
 export interface MobileIapVerifyRequest {
@@ -148,6 +202,8 @@ export interface MobileIapVerifyResponse {
   planTier?: SelfServeIndividualPlanTier;
   currentPeriodEnd?: string | null;
   unitsGranted?: number;
+  scheduledPlanTier?: SelfServeIndividualPlanTier;
+  storeAcknowledged?: boolean;
 }
 
 export const BASIS_POINTS_PER_WHOLE = 10_000;

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   Environment,
   SignedDataVerifier,
+  type JWSRenewalInfoDecodedPayload,
   type JWSTransactionDecodedPayload,
   type ResponseBodyV2DecodedPayload,
 } from '@apple/app-store-server-library';
@@ -17,6 +18,12 @@ import {
 } from '@agiworkforce/types';
 import { isProductionRuntime } from '@/lib/config/runtime-environment';
 import { createError } from '@/lib/errors';
+import { resolveMobileIapProduct } from '@/lib/server/mobile-iap-catalog';
+import {
+  grantsAccess,
+  resolveGoogleSubscriptionLifecycle,
+  type MobileIapEntitlementState,
+} from '@/lib/server/mobile-iap-lifecycle';
 import type { NormalizedEnvironment } from '@/lib/server/payments/domain';
 import { normalizeEnvironment, normalizeProviderTimestamp } from '@/lib/server/payments/normalize';
 
@@ -43,7 +50,7 @@ const GoogleProductPurchaseSchema = z.object({
   ),
   purchaseStateContext: z.object({ purchaseState: z.string() }),
   orderId: z.string().min(1),
-  obfuscatedExternalAccountId: z.string().min(1),
+  obfuscatedExternalAccountId: z.string().min(1).optional(),
   regionCode: z.string().optional(),
   purchaseCompletionTime: z.string().datetime({ offset: true }),
   acknowledgementState: z.string().optional(),
@@ -58,18 +65,35 @@ const GoogleSubscriptionPurchaseSchema = z.object({
   linkedPurchaseToken: z.string().optional(),
   acknowledgementState: z.string().optional(),
   testPurchase: z.unknown().optional(),
-  externalAccountIdentifiers: z.object({
-    obfuscatedExternalAccountId: z.string().min(1),
-  }),
+  externalAccountIdentifiers: z
+    .object({ obfuscatedExternalAccountId: z.string().min(1).optional() })
+    .optional(),
+  outOfAppPurchaseContext: z
+    .object({
+      expiredExternalAccountIdentifiers: z
+        .object({ obfuscatedExternalAccountId: z.string().min(1).optional() })
+        .optional(),
+    })
+    .optional(),
   lineItems: z.array(
     z.object({
       productId: z.string(),
       expiryTime: z.string().datetime({ offset: true }),
-      autoRenewingPlan: z.unknown().optional(),
+      latestSuccessfulOrderId: z.string().min(1).optional(),
+      autoRenewingPlan: z.object({ autoRenewEnabled: z.boolean().optional() }).optional(),
       prepaidPlan: z.unknown().optional(),
+      offerDetails: z
+        .object({ basePlanId: z.string().optional(), offerId: z.string().optional() })
+        .optional(),
+      deferredItemReplacement: z.object({ productId: z.string().min(1) }).optional(),
     }),
   ),
 });
+
+type GoogleSubscriptionPurchase = z.infer<typeof GoogleSubscriptionPurchaseSchema>;
+type GoogleSubscriptionLineItem = GoogleSubscriptionPurchase['lineItems'][number];
+
+const GOOGLE_ACKNOWLEDGED = 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED';
 
 export interface VerifiedMobileIapPurchase {
   platform: MobileIapPlatform;
@@ -82,6 +106,10 @@ export interface VerifiedMobileIapPurchase {
   environment: NormalizedEnvironment;
   entitlementStatus: 'active' | 'expired' | 'revoked';
   purchaseCountry?: string | null;
+  lifecycle?: MobileIapEntitlementState | 'pending';
+  cancelAtPeriodEnd?: boolean;
+  storeAcknowledged?: boolean;
+  scheduledProduct?: MobileIapCatalogProduct | null;
 }
 
 export function hashMobileIapPurchaseToken(token: string): string {
@@ -116,9 +144,6 @@ function createAppleVerifier(environment: Environment): SignedDataVerifier {
   );
 }
 
-// The trust environment must come from deployment config, never from the unverified JWS
-// payload: a Sandbox-signed transaction is a free test purchase and must not unlock
-// production entitlements.
 function configuredAppleEnvironment(): Environment {
   const raw = process.env['APPLE_APP_STORE_ENVIRONMENT']?.trim().toLowerCase() ?? '';
   if (raw === '' || raw === 'production') return Environment.PRODUCTION;
@@ -134,11 +159,9 @@ function sandboxNotificationsEnabled(): boolean {
   );
 }
 
-// Apple configures a production and a sandbox notification URL separately, and the
-// two are signed by different certificate chains. The channel a notification arrived
-// on is the caller's to state -- a route, or a second route -- and a sandbox one is
-// refused unless this deployment is itself sandbox or has opted in, so a test
-// notification can never move a production entitlement.
+// A sandbox notification is refused unless this deployment is itself sandbox or
+// has opted in. One that is accepted is marked sandbox and can only move a
+// receipt that was itself granted as a test purchase.
 export function appleNotificationEnvironment(channel: AppleNotificationChannel): Environment {
   const configured = configuredAppleEnvironment();
   if (channel === 'production') return Environment.PRODUCTION;
@@ -155,27 +178,72 @@ export function configuredAppleNotificationChannel(): AppleNotificationChannel {
 export interface VerifiedAppleStoreNotification {
   notification: ResponseBodyV2DecodedPayload;
   transaction: JWSTransactionDecodedPayload | null;
+  renewalInfo?: JWSRenewalInfoDecodedPayload | null;
   channel: AppleNotificationChannel;
 }
 
+function appleNotificationChannels(): AppleNotificationChannel[] {
+  if (configuredAppleNotificationChannel() === 'sandbox') return ['sandbox'];
+  return sandboxNotificationsEnabled() ? ['production', 'sandbox'] : ['production'];
+}
+
+// App Store Connect may send both environments to one URL. The verifier refuses
+// a payload whose environment is not its own, so the channel is whichever of
+// Apple's environments the signed payload itself names.
 export async function verifyAppleStoreNotification(
   signedPayload: string,
-  channel: AppleNotificationChannel = configuredAppleNotificationChannel(),
+  channel?: AppleNotificationChannel,
 ): Promise<VerifiedAppleStoreNotification> {
-  const verifier = createAppleVerifier(appleNotificationEnvironment(channel));
-  try {
-    const notification = await verifier.verifyAndDecodeNotification(signedPayload);
-    const signedTransaction = notification.data?.signedTransactionInfo;
-    return {
-      notification,
-      transaction: signedTransaction
-        ? await verifier.verifyAndDecodeTransaction(signedTransaction)
-        : null,
-      channel,
-    };
-  } catch {
-    throw createError.badRequest('Apple could not verify this server notification.');
+  const verifiers = (channel ? [channel] : appleNotificationChannels()).map((candidate) => ({
+    channel: candidate,
+    verifier: createAppleVerifier(appleNotificationEnvironment(candidate)),
+  }));
+  for (const candidate of verifiers) {
+    try {
+      const notification = await candidate.verifier.verifyAndDecodeNotification(signedPayload);
+      const signedTransaction = notification.data?.signedTransactionInfo;
+      const signedRenewalInfo = notification.data?.signedRenewalInfo;
+      return {
+        notification,
+        transaction: signedTransaction
+          ? await candidate.verifier.verifyAndDecodeTransaction(signedTransaction)
+          : null,
+        renewalInfo: signedRenewalInfo
+          ? await candidate.verifier.verifyAndDecodeRenewalInfo(signedRenewalInfo)
+          : null,
+        channel: candidate.channel,
+      };
+    } catch {
+      continue;
+    }
   }
+  throw createError.badRequest('Apple could not verify this server notification.');
+}
+
+// App Review and TestFlight buy in Apple's sandbox against the production
+// server, so a production deployment tries the sandbox chain second. The
+// environment is the one whose verifier accepted the signature, never one the
+// caller states, and a sandbox result is granted only to an allowed account.
+async function decodeAppleTransaction(
+  signedTransaction: string,
+): Promise<{ transaction: JWSTransactionDecodedPayload; environment: Environment }> {
+  const configured = configuredAppleEnvironment();
+  const verifiers = (
+    configured === Environment.PRODUCTION
+      ? [Environment.PRODUCTION, Environment.SANDBOX]
+      : [configured]
+  ).map((environment) => ({ environment, verifier: createAppleVerifier(environment) }));
+  for (const candidate of verifiers) {
+    try {
+      return {
+        transaction: await candidate.verifier.verifyAndDecodeTransaction(signedTransaction),
+        environment: candidate.environment,
+      };
+    } catch {
+      continue;
+    }
+  }
+  throw createError.badRequest('Apple could not verify this transaction.');
 }
 
 async function verifyApplePurchase(input: {
@@ -183,15 +251,7 @@ async function verifyApplePurchase(input: {
   purchaseToken: string;
   appAccountToken: string;
 }): Promise<VerifiedMobileIapPurchase> {
-  const environment = configuredAppleEnvironment();
-  const verifier = createAppleVerifier(environment);
-
-  let transaction;
-  try {
-    transaction = await verifier.verifyAndDecodeTransaction(input.purchaseToken);
-  } catch {
-    throw createError.badRequest('Apple could not verify this transaction.');
-  }
+  const { transaction, environment } = await decodeAppleTransaction(input.purchaseToken);
 
   if (
     transaction.productId !== input.product.productId ||
@@ -216,7 +276,8 @@ async function verifyApplePurchase(input: {
     throw createError.badRequest('App Store transaction is incomplete.');
   }
   const revoked = typeof transaction.revocationDate === 'number';
-  const expired = expiresAt !== null && expiresAt.getTime() <= Date.now();
+  const expired =
+    transaction.isUpgraded === true || (expiresAt !== null && expiresAt.getTime() <= Date.now());
 
   return {
     platform: 'ios',
@@ -283,29 +344,123 @@ async function fetchGooglePurchase(path: string): Promise<unknown> {
   return response.json();
 }
 
+function googlePurchasePath(kind: 'productsv2' | 'subscriptionsv2', purchaseToken: string): string {
+  const packageName = process.env['GOOGLE_PLAY_PACKAGE_NAME']?.trim();
+  if (!packageName)
+    throw createError.serviceUnavailable('Google Play verification is not configured.');
+  return `/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/${kind}/tokens/${encodeURIComponent(purchaseToken)}`;
+}
+
+async function readGoogleSubscription(purchaseToken: string): Promise<GoogleSubscriptionPurchase> {
+  const response = GoogleSubscriptionPurchaseSchema.safeParse(
+    await fetchGooglePurchase(googlePurchasePath('subscriptionsv2', purchaseToken)),
+  );
+  if (!response.success)
+    throw createError.badRequest('Google Play returned an invalid subscription.');
+  return response.data;
+}
+
+function googleSubscriptionAccountToken(purchase: GoogleSubscriptionPurchase): string | null {
+  return (
+    purchase.externalAccountIdentifiers?.obfuscatedExternalAccountId ??
+    purchase.outOfAppPurchaseContext?.expiredExternalAccountIdentifiers
+      ?.obfuscatedExternalAccountId ??
+    null
+  );
+}
+
+// A deferred replacement issues its new token at once with two items: the one the
+// buyer still owns, and the one that starts at renewal and has no successful order
+// yet. Entitlement follows the owned item until Play drops it.
+function ownedGoogleLineItem(
+  purchase: GoogleSubscriptionPurchase,
+): GoogleSubscriptionLineItem | undefined {
+  const scheduled = new Set(
+    purchase.lineItems.flatMap((item) =>
+      item.deferredItemReplacement ? [item.deferredItemReplacement.productId] : [],
+    ),
+  );
+  return (
+    purchase.lineItems.find(
+      (item) => item.latestSuccessfulOrderId && !scheduled.has(item.productId),
+    ) ??
+    purchase.lineItems.find((item) => !scheduled.has(item.productId)) ??
+    purchase.lineItems[0]
+  );
+}
+
+export interface GooglePlayPurchaseOwner {
+  appAccountToken: string | null;
+  productId: string | null;
+  /** The order Play took real money for, when the purchase is paid and live. */
+  chargedOrderId: string | null;
+}
+
+export async function readGooglePlayPurchaseOwner(input: {
+  kind: 'subscription' | 'top_up';
+  purchaseToken: string;
+  productId?: string;
+}): Promise<GooglePlayPurchaseOwner> {
+  if (input.kind === 'top_up') {
+    const response = GoogleProductPurchaseSchema.safeParse(
+      await fetchGooglePurchase(googlePurchasePath('productsv2', input.purchaseToken)),
+    );
+    if (!response.success)
+      throw createError.badRequest('Google Play returned an invalid purchase.');
+    return {
+      appAccountToken: response.data.obfuscatedExternalAccountId ?? null,
+      productId:
+        response.data.productLineItem.find((item) => item.productId === input.productId)
+          ?.productId ?? null,
+      chargedOrderId:
+        response.data.purchaseStateContext.purchaseState === 'PURCHASED' &&
+        !response.data.testPurchaseContext
+          ? response.data.orderId
+          : null,
+    };
+  }
+  const purchase = await readGoogleSubscription(input.purchaseToken);
+  const owned = ownedGoogleLineItem(purchase);
+  const expiresAt = owned ? normalizeProviderTimestamp(owned.expiryTime) : null;
+  const lifecycle = expiresAt
+    ? resolveGoogleSubscriptionLifecycle({
+        subscriptionState: purchase.subscriptionState,
+        expiresAt,
+        autoRenewEnabled: null,
+        notificationType: null,
+        now: new Date(),
+      })
+    : null;
+  return {
+    appAccountToken: googleSubscriptionAccountToken(purchase),
+    productId: owned?.productId ?? null,
+    chargedOrderId:
+      lifecycle?.state === 'active' && !purchase.testPurchase
+        ? (owned?.latestSuccessfulOrderId ??
+          purchase.latestSuccessfulOrderId ??
+          purchase.latestOrderId ??
+          null)
+        : null,
+  };
+}
+
 async function verifyGooglePurchase(input: {
   product: MobileIapCatalogProduct;
   purchaseToken: string;
   appAccountToken: string;
   allowInactive?: boolean;
+  notificationType?: number | null;
 }): Promise<VerifiedMobileIapPurchase> {
-  const packageName = process.env['GOOGLE_PLAY_PACKAGE_NAME']?.trim();
-  if (!packageName)
-    throw createError.serviceUnavailable('Google Play verification is not configured.');
-  const encodedPackage = encodeURIComponent(packageName);
-  const encodedToken = encodeURIComponent(input.purchaseToken);
-
   if (input.product.kind === 'top_up') {
     const response = GoogleProductPurchaseSchema.safeParse(
-      await fetchGooglePurchase(
-        `/androidpublisher/v3/applications/${encodedPackage}/purchases/productsv2/tokens/${encodedToken}`,
-      ),
+      await fetchGooglePurchase(googlePurchasePath('productsv2', input.purchaseToken)),
     );
     if (!response.success)
       throw createError.badRequest('Google Play returned an invalid purchase.');
     const lineItem = response.data.productLineItem.find(
       (item) => item.productId === input.product.productId,
     );
+    const pending = response.data.purchaseStateContext.purchaseState === 'PENDING';
     const grantable =
       response.data.purchaseStateContext.purchaseState === 'PURCHASED' &&
       (lineItem?.productOfferDetails?.quantity ?? 1) === 1 &&
@@ -330,79 +485,107 @@ async function verifyGooglePurchase(input: {
       ),
       entitlementStatus: grantable ? 'active' : 'revoked',
       purchaseCountry: normalizePurchaseCountry(response.data.regionCode),
+      lifecycle: grantable ? 'active' : pending ? 'pending' : 'revoked',
+      storeAcknowledged: response.data.acknowledgementState === GOOGLE_ACKNOWLEDGED,
     };
   }
 
-  const response = GoogleSubscriptionPurchaseSchema.safeParse(
-    await fetchGooglePurchase(
-      `/androidpublisher/v3/applications/${encodedPackage}/purchases/subscriptionsv2/tokens/${encodedToken}`,
-    ),
-  );
-  if (!response.success)
-    throw createError.badRequest('Google Play returned an invalid subscription.');
-  const lineItem = response.data.lineItems.find(
-    (item) => item.productId === input.product.productId,
-  );
-  const storeTransactionId = response.data.latestSuccessfulOrderId ?? response.data.latestOrderId;
+  const purchase = await readGoogleSubscription(input.purchaseToken);
+  const owned = ownedGoogleLineItem(purchase);
+  const scheduledProductId = owned?.deferredItemReplacement?.productId ?? null;
+  const requestedIsOwned = owned?.productId === input.product.productId;
+  const requestedIsScheduled = scheduledProductId === input.product.productId;
+  const ownedProduct = requestedIsOwned
+    ? input.product
+    : owned && (requestedIsScheduled || input.allowInactive)
+      ? resolveMobileIapProduct('android', owned.productId)
+      : null;
+  const storeTransactionId =
+    owned?.latestSuccessfulOrderId ?? purchase.latestSuccessfulOrderId ?? purchase.latestOrderId;
   if (
-    response.data.externalAccountIdentifiers.obfuscatedExternalAccountId !==
-      input.appAccountToken ||
-    !lineItem ||
+    googleSubscriptionAccountToken(purchase) !== input.appAccountToken ||
+    !owned ||
+    !ownedProduct ||
+    ownedProduct.kind !== 'subscription' ||
     !storeTransactionId
   ) {
     throw createError.forbidden('This Google Play subscription does not belong to this account.');
   }
+  const configuredBasePlan = ownedProduct.googleOffer?.basePlanId;
+  const purchasedBasePlan = owned.offerDetails?.basePlanId;
+  if (configuredBasePlan && purchasedBasePlan && configuredBasePlan !== purchasedBasePlan) {
+    throw createError.forbidden('This Google Play base plan is not sold by AGI.');
+  }
 
-  const expiresAt = normalizeProviderTimestamp(lineItem.expiryTime);
+  const expiresAt = normalizeProviderTimestamp(owned.expiryTime);
   if (!expiresAt) {
     throw createError.badRequest('Google Play returned an invalid subscription.');
   }
-  const purchasedAt = normalizeProviderTimestamp(response.data.startTime) ?? new Date();
-  const storeEnvironment = normalizeEnvironment(
-    response.data.testPurchase ? 'sandbox' : 'production',
-  );
-  const state = response.data.subscriptionState;
-  const activeState = [
-    'SUBSCRIPTION_STATE_ACTIVE',
-    'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
-    'SUBSCRIPTION_STATE_CANCELED',
-  ].includes(state);
-  const expired = expiresAt.getTime() <= Date.now() || !activeState;
-  if (expired && !input.allowInactive) {
-    return {
-      platform: 'android',
-      product: input.product,
-      storeTransactionId,
-      purchaseTokenHash: hashMobileIapPurchaseToken(input.purchaseToken),
-      originalTransactionId: response.data.linkedPurchaseToken
-        ? hashMobileIapPurchaseToken(response.data.linkedPurchaseToken)
-        : null,
-      purchasedAt,
-      expiresAt,
-      environment: storeEnvironment,
-      entitlementStatus: 'expired',
-    };
-  }
+  const purchasedAt = normalizeProviderTimestamp(purchase.startTime) ?? new Date();
+  const lifecycle = resolveGoogleSubscriptionLifecycle({
+    subscriptionState: purchase.subscriptionState,
+    expiresAt,
+    autoRenewEnabled:
+      scheduledProductId !== null ? true : (owned.autoRenewingPlan?.autoRenewEnabled ?? null),
+    notificationType: input.notificationType ?? null,
+    now: new Date(),
+  });
+  const scheduledProduct =
+    scheduledProductId === null
+      ? null
+      : requestedIsScheduled
+        ? input.product
+        : resolveMobileIapProduct('android', scheduledProductId);
 
   return {
     platform: 'android',
-    product: input.product,
+    product: ownedProduct,
     storeTransactionId,
     purchaseTokenHash: hashMobileIapPurchaseToken(input.purchaseToken),
-    originalTransactionId: response.data.linkedPurchaseToken
-      ? hashMobileIapPurchaseToken(response.data.linkedPurchaseToken)
+    originalTransactionId: purchase.linkedPurchaseToken
+      ? hashMobileIapPurchaseToken(purchase.linkedPurchaseToken)
       : null,
     purchasedAt,
     expiresAt,
-    environment: storeEnvironment,
-    entitlementStatus: expired ? 'expired' : 'active',
+    environment: normalizeEnvironment(purchase.testPurchase ? 'sandbox' : 'production'),
+    entitlementStatus: lifecycle && grantsAccess(lifecycle.state) ? 'active' : 'expired',
+    lifecycle: lifecycle?.state ?? 'pending',
+    cancelAtPeriodEnd: lifecycle?.cancelAtPeriodEnd ?? false,
+    storeAcknowledged: purchase.acknowledgementState === GOOGLE_ACKNOWLEDGED,
+    scheduledProduct,
   };
 }
 
-// A store test purchase moves no money, and both stores report it as one. A
-// production deployment refuses it rather than granting a paid plan for free.
-function isUnfundedStorePurchase(verified: VerifiedMobileIapPurchase): boolean {
-  return verified.environment === 'sandbox' && isProductionRuntime();
+export async function acknowledgeGooglePlayPurchase(input: {
+  product: MobileIapCatalogProduct;
+  purchaseToken: string;
+}): Promise<void> {
+  const packageName = process.env['GOOGLE_PLAY_PACKAGE_NAME']?.trim();
+  if (!packageName)
+    throw createError.serviceUnavailable('Google Play verification is not configured.');
+  const collection = input.product.kind === 'subscription' ? 'subscriptions' : 'products';
+  const accessToken = await getGoogleAccessToken();
+  const response = await fetch(
+    `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(packageName)}/purchases/${collection}/${encodeURIComponent(input.product.productId)}/tokens/${encodeURIComponent(input.purchaseToken)}:acknowledge`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(STORE_REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (!response.ok) {
+    throw createError.serviceUnavailable('Google Play did not acknowledge this purchase.');
+  }
+}
+
+// A store test purchase moves no money, and both stores report it as one. On a
+// production deployment the ledger grants it only to an account the operator has
+// allowed, and never counts it as revenue.
+export function isUnfundedStorePurchase(
+  purchase: Pick<VerifiedMobileIapPurchase, 'environment'>,
+): boolean {
+  return purchase.environment === 'sandbox' && isProductionRuntime();
 }
 
 export async function verifyMobileIapPurchase(input: {
@@ -411,21 +594,54 @@ export async function verifyMobileIapPurchase(input: {
   purchaseToken: string;
   appAccountToken: string;
 }): Promise<VerifiedMobileIapPurchase> {
-  const verified =
-    input.platform === 'ios' ? await verifyApplePurchase(input) : await verifyGooglePurchase(input);
-  if (isUnfundedStorePurchase(verified)) {
-    throw createError.forbidden('This store purchase was made in the test environment.');
-  }
-  return verified;
+  return input.platform === 'ios' ? verifyApplePurchase(input) : verifyGooglePurchase(input);
 }
 
 export async function verifyGooglePlayLifecyclePurchase(input: {
   product: MobileIapCatalogProduct;
   purchaseToken: string;
   appAccountToken: string;
+  notificationType?: number | null;
 }): Promise<VerifiedMobileIapPurchase> {
-  const verified = await verifyGooglePurchase({ ...input, allowInactive: true });
-  return isUnfundedStorePurchase(verified)
-    ? { ...verified, entitlementStatus: 'revoked' }
-    : verified;
+  return verifyGooglePurchase({ ...input, allowInactive: true });
+}
+
+export function applePurchaseFromNotification(input: {
+  verified: VerifiedAppleStoreNotification;
+  product: MobileIapCatalogProduct;
+}): VerifiedMobileIapPurchase | null {
+  const transaction = input.verified.transaction;
+  const signedTransaction = input.verified.notification.data?.signedTransactionInfo;
+  if (
+    !transaction?.transactionId ||
+    !transaction.purchaseDate ||
+    !signedTransaction ||
+    transaction.productId !== input.product.productId ||
+    transaction.inAppOwnershipType === 'FAMILY_SHARED' ||
+    typeof transaction.revocationDate === 'number' ||
+    transaction.isUpgraded === true ||
+    (input.product.kind === 'top_up' && transaction.quantity !== 1)
+  ) {
+    return null;
+  }
+  const purchasedAt = normalizeProviderTimestamp(transaction.purchaseDate, 'milliseconds');
+  const expiresAt = normalizeProviderTimestamp(transaction.expiresDate, 'milliseconds');
+  if (!purchasedAt) return null;
+  if (input.product.kind === 'subscription' && (!expiresAt || expiresAt.getTime() <= Date.now())) {
+    return null;
+  }
+  return {
+    platform: 'ios',
+    product: input.product,
+    storeTransactionId: transaction.transactionId,
+    purchaseTokenHash: hashMobileIapPurchaseToken(signedTransaction),
+    originalTransactionId: transaction.originalTransactionId ?? null,
+    purchasedAt,
+    expiresAt,
+    environment: normalizeEnvironment(
+      input.verified.channel === 'sandbox' ? Environment.SANDBOX : Environment.PRODUCTION,
+    ),
+    entitlementStatus: 'active',
+    purchaseCountry: purchaseCountryFromAppStoreStorefront(transaction.storefront),
+  };
 }

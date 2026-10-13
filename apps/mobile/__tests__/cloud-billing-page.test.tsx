@@ -2,6 +2,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { MOBILE_IAP_PRODUCT_DEFINITIONS, type MobileIapCatalogResponse } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockAuthState = {
@@ -432,7 +433,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/billing');
   });
 
-  it('shows exact Web proration and sends top-ups to the web for an active Stripe plan', () => {
+  it('says a web-billed plan is managed where it was started, without sending anyone to buy on the web', () => {
     Object.assign(mockTierState, {
       tier: 'pro',
       billingTier: 'pro',
@@ -443,19 +444,14 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
 
     const { getByText, queryByText } = render(<CloudBillingScreen />);
 
-    expect(getByText('How plan upgrades are charged')).toBeTruthy();
-    expect(
-      getByText(
-        /new plan's price, minus a credit for the unused time on your current plan\. It starts a new billing period that day/i,
-      ),
-    ).toBeTruthy();
-    expect(getByText('Usage top-ups')).toBeTruthy();
-    expect(getByText(/credits are bought on the web, in settings, billing/i)).toBeTruthy();
+    expect(getByText('This plan is billed outside the app')).toBeTruthy();
+    expect(queryByText(/bought on the web/i)).toBeNull();
+    expect(queryByText(/agiworkforce\.com/i)).toBeNull();
+    expect(queryByText('How plan upgrades are charged')).toBeNull();
     expect(queryByText(/minimum top-up/i)).toBeNull();
-    expect(queryByText(/buy 500 units/i)).toBeNull();
   });
 
-  it('does not advertise Web top-ups to a plan that is not actively billed by Stripe', () => {
+  it('keeps the outside-the-app line off a plan the store bills', () => {
     Object.assign(mockTierState, {
       tier: 'pro',
       billingTier: 'pro',
@@ -466,8 +462,25 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
 
     const { queryByText } = render(<CloudBillingScreen />);
 
-    expect(queryByText('How plan upgrades are charged')).toBeNull();
+    expect(queryByText('This plan is billed outside the app')).toBeNull();
     expect(queryByText('Usage top-ups')).toBeNull();
+  });
+
+  it('offers invoices only for a plan billed on the web', () => {
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'apple',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const store = render(<CloudBillingScreen />);
+    expect(store.queryByText('View invoices')).toBeNull();
+    store.unmount();
+
+    Object.assign(mockTierState, { billingSource: 'stripe' });
+    const web = render(<CloudBillingScreen />);
+    expect(web.getByText('View invoices')).toBeTruthy();
   });
 
   it('blocks a store-sourced subscription without claiming a store AGI has no listing on', () => {
@@ -567,6 +580,262 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
   });
 });
 
+const APP_ACCOUNT_TOKEN = '00000000-0000-4000-8000-000000000001';
+const storeProductId = (key: string) => `fixture.${key}`;
+const catalogProducts = MOBILE_IAP_PRODUCT_DEFINITIONS.map((definition) => ({
+  ...definition,
+  productId: storeProductId(definition.key),
+}));
+
+function disabledCatalog(): MobileIapCatalogResponse {
+  return {
+    enabled: false,
+    platform: 'ios',
+    appAccountToken: null,
+    products: [],
+    unavailableReason: 'App Store products have not been registered for this build.',
+    unavailableCode: null,
+  };
+}
+
+function sellingCatalog(
+  overrides: Partial<MobileIapCatalogResponse> = {},
+): MobileIapCatalogResponse {
+  return {
+    enabled: true,
+    platform: 'ios',
+    appAccountToken: APP_ACCOUNT_TOKEN,
+    products: catalogProducts,
+    unavailableReason: null,
+    unavailableCode: null,
+    ...overrides,
+  };
+}
+
+function iapState(
+  overrides: Partial<ReturnType<typeof mobileIapHook.useMobileIap>> = {},
+): ReturnType<typeof mobileIapHook.useMobileIap> {
+  return {
+    connected: true,
+    loading: false,
+    restoring: false,
+    purchasingKey: null,
+    catalog: sellingCatalog(),
+    storeProducts: new Map(
+      catalogProducts.map((product) => [product.productId, { id: product.productId } as never]),
+    ),
+    priceFor: (key) => ({ label: `price:${key}`, currency: 'USD', offerToken: null }),
+    error: null,
+    lastResult: null,
+    awaitingApproval: new Set(),
+    scheduledProductKey: null,
+    purchase: jest.fn().mockResolvedValue(undefined),
+    restore: jest.fn(),
+    reload: jest.fn(),
+    ...overrides,
+  };
+}
+
+describe('buying and changing plans in the app', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFeatures.billing = false;
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
+      billingSource: 'none',
+      billingCancelsAtPeriodEnd: false,
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
+  function renderWith(state: ReturnType<typeof iapState>) {
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(state);
+    const screen = render(<CloudBillingScreen />);
+    iapSpy.mockRestore();
+    return screen;
+  }
+
+  function holdStorePlan(billingTier: string) {
+    Object.assign(mockTierState, {
+      tier: billingTier,
+      billingTier,
+      billingStatus: 'active',
+      billingSource: 'apple',
+    });
+  }
+
+  it("sells every plan the catalog returns at the store's own price", () => {
+    const state = iapState();
+    const screen = renderWith(state);
+
+    for (const label of ['Basic', 'Pro', 'Max 5x', 'Max 20x']) {
+      expect(screen.getByLabelText(`${label} · monthly`)).toBeTruthy();
+    }
+    expect(screen.getByText('price:subscription_pro_monthly')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Pro · monthly'));
+    expect(state.purchase).toHaveBeenCalledWith('subscription_pro_monthly');
+  });
+
+  it('never shows a plan price that did not come from the store', () => {
+    const screen = renderWith(
+      iapState({ priceFor: () => ({ label: null, currency: null, offerToken: null }) }),
+    );
+
+    const row = screen.getByLabelText('Pro · monthly');
+    expect(row.props.accessibilityState.disabled).toBe(true);
+    expect(screen.queryByText(/\$\s?\d/)).toBeNull();
+  });
+
+  it('marks the current plan and labels each other plan as an upgrade or a downgrade', () => {
+    holdStorePlan('pro');
+    const state = iapState();
+    const screen = renderWith(state);
+
+    expect(screen.getByLabelText('Pro · monthly').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText('Current plan')).toBeTruthy();
+    expect(screen.getByText('Downgrade · price:subscription_basic_monthly')).toBeTruthy();
+    expect(screen.getByText('Upgrade · price:subscription_max_monthly')).toBeTruthy();
+    expect(screen.getByText('Upgrade · price:subscription_max_15x_monthly')).toBeTruthy();
+    expect(
+      screen.getByText(
+        /An upgrade starts right away, and the store shows the exact charge before you confirm\. A downgrade starts on your next renewal date, and you keep Pro until then\./,
+      ),
+    ).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Basic · monthly'));
+    expect(state.purchase).toHaveBeenCalledWith('subscription_basic_monthly');
+  });
+
+  it('tells an Android buyer a downgrade is immediate when the server sets it that way', () => {
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'google',
+    });
+    const screen = renderWith(
+      iapState({
+        catalog: sellingCatalog({
+          platform: 'android',
+          androidReplacementModes: {
+            upgrade: 'charge-prorated-price',
+            downgrade: 'without-proration',
+          },
+        }),
+      }),
+    );
+
+    expect(
+      screen.getByText(
+        'A plan change starts right away, and the store shows the exact charge before you confirm.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('shows a downgrade the store has scheduled and when it starts', () => {
+    holdStorePlan('pro');
+    const screen = renderWith(iapState({ scheduledProductKey: 'subscription_basic_monthly' }));
+
+    expect(screen.getByText('Changing to Basic at renewal')).toBeTruthy();
+  });
+
+  it('confirms a deferred downgrade without claiming the plan already changed', () => {
+    holdStorePlan('pro');
+    const screen = renderWith(
+      iapState({
+        lastResult: {
+          success: true,
+          kind: 'subscription',
+          productKey: 'subscription_pro_monthly',
+          status: 'already_processed',
+          planTier: 'pro',
+          scheduledPlanTier: 'basic',
+        },
+      }),
+    );
+
+    expect(
+      screen.getByText('Your change to Basic is confirmed and starts at your next renewal.'),
+    ).toBeTruthy();
+  });
+
+  it('sells top-ups in the app when the catalog returns them', () => {
+    holdStorePlan('pro');
+    const state = iapState();
+    const screen = renderWith(state);
+
+    expect(screen.getByText('Usage top-ups')).toBeTruthy();
+    expect(screen.getByText('price:top_up_10')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('500 credits'));
+    expect(state.purchase).toHaveBeenCalledWith('top_up_10');
+    expect(screen.queryByText(/bought on the web/i)).toBeNull();
+  });
+
+  it('shows no top-ups when the catalog leaves them out', () => {
+    const screen = renderWith(
+      iapState({
+        catalog: sellingCatalog({
+          products: catalogProducts.filter((product) => product.kind === 'subscription'),
+        }),
+      }),
+    );
+
+    expect(screen.queryByText('Usage top-ups')).toBeNull();
+  });
+
+  it('shows a purchase the store is holding as waiting, and asks before sending a second request', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const state = iapState({ awaitingApproval: new Set(['subscription_pro_monthly']) });
+    const screen = renderWith(state);
+
+    expect(screen.getByText('Waiting for the store')).toBeTruthy();
+    expect(screen.getByText('Waiting for approval')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Pro · monthly'));
+
+    expect(state.purchase).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'This purchase is already waiting',
+      expect.stringContaining('The store has not finished the first request yet.'),
+      expect.any(Array),
+    );
+    alertSpy.mockRestore();
+  });
+
+  it('does not sell a second subscription to a plan billed somewhere else', () => {
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'stripe',
+    });
+    const screen = renderWith(iapState());
+
+    expect(screen.queryByLabelText('Max 5x · monthly')).toBeNull();
+    expect(screen.getByText('Subscription managed elsewhere')).toBeTruthy();
+    expect(screen.getByLabelText('500 credits')).toBeTruthy();
+  });
+
+  it("says why plans are withheld when the server withholds them and the app's own plan record is stale", () => {
+    const withheld =
+      'This account already has an active web subscription. Cancel it on the web before subscribing in the app.';
+    const screen = renderWith(
+      iapState({
+        catalog: {
+          ...sellingCatalog(),
+          products: sellingCatalog().products.filter((product) => product.kind === 'top_up'),
+          subscriptionsUnavailableReason: withheld,
+        },
+      }),
+    );
+
+    expect(screen.queryByLabelText('Max 5x · monthly')).toBeNull();
+    expect(screen.getByText('Subscription managed elsewhere')).toBeTruthy();
+    expect(screen.getByText(withheld)).toBeTruthy();
+  });
+});
+
 describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -580,13 +849,18 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
-  it('marks the row unavailable before the tap and says where plans are changed', () => {
-    const { getByLabelText, getByText } = render(<CloudBillingScreen />);
+  it('marks the row unavailable before the tap without sending the buyer elsewhere', () => {
+    const iapSpy = jest
+      .spyOn(mobileIapHook, 'useMobileIap')
+      .mockReturnValue(iapState({ catalog: disabledCatalog() }));
+    const { getByLabelText, getByText, queryByText } = render(<CloudBillingScreen />);
+    iapSpy.mockRestore();
 
     const row = getByLabelText('Upgrade plan');
     expect(row.props.accessibilityState.disabled).toBe(true);
     expect(getByText('Unavailable in the app')).toBeTruthy();
-    expect(getByText('Plan changes are not in this app yet')).toBeTruthy();
+    expect(getByText('Plan changes are not available right now')).toBeTruthy();
+    expect(queryByText(/agiworkforce\.com/i)).toBeNull();
   });
 
   it('does not open a paywall whose only content is an apology', () => {
@@ -601,38 +875,39 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     );
   });
 
-  it('restores a working Upgrade row once in-app billing is on', () => {
-    mockFeatures.billing = true;
-
+  it('opens the Upgrade row as soon as the server catalog sells plans, with no build flag', () => {
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(iapState());
     const { getByLabelText, queryByText } = render(<CloudBillingScreen />);
+    iapSpy.mockRestore();
 
+    expect(mockFeatures.billing).toBe(false);
     expect(getByLabelText('Upgrade plan').props.accessibilityState.disabled).toBe(false);
     expect(queryByText('Unavailable in the app')).toBeNull();
-    expect(queryByText('Plan changes are not in this app yet')).toBeNull();
+    expect(queryByText('Plan changes are not available right now')).toBeNull();
+  });
+
+  it('keeps the Upgrade row closed while the catalog sells nothing, whatever the build flag says', () => {
+    mockFeatures.billing = true;
+    const iapSpy = jest
+      .spyOn(mobileIapHook, 'useMobileIap')
+      .mockReturnValue(iapState({ catalog: disabledCatalog() }));
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    iapSpy.mockRestore();
+
+    expect(getByLabelText('Upgrade plan').props.accessibilityState.disabled).toBe(true);
   });
 
   it('offers the waitlist and keeps upgrade API failures out of the screen', async () => {
-    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue({
-      connected: false,
-      loading: false,
-      restoring: false,
-      purchasingKey: null,
-      catalog: {
-        enabled: false,
-        platform: 'ios',
-        appAccountToken: null,
-        products: [],
-        unavailableReason: 'Paid upgrades are opening in stages.',
-        unavailableCode: 'waitlist_access_required',
-      },
-      storeProducts: new Map(),
-      priceFor: jest.fn(),
-      error: null,
-      lastResult: null,
-      purchase: jest.fn(),
-      restore: jest.fn(),
-      reload: jest.fn(),
-    });
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(
+      iapState({
+        connected: false,
+        catalog: {
+          ...disabledCatalog(),
+          unavailableReason: 'Paid upgrades are opening in stages.',
+          unavailableCode: 'waitlist_access_required',
+        },
+      }),
+    );
     const joinSpy = jest
       .spyOn(mobileIapService, 'joinBillingUpgradeWaitlist')
       .mockRejectedValue(new Error('Private waitlist route failed at /internal/billing'));
@@ -647,7 +922,7 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
         false,
       );
       expect(screen.getByText('Or enter an access code below')).toBeTruthy();
-      expect(screen.queryByText('Plan changes are not in this app yet')).toBeNull();
+      expect(screen.queryByText('Plan changes are not available right now')).toBeNull();
       await act(async () => fireEvent.press(screen.getByLabelText('Join upgrade waitlist')));
       expect(joinSpy).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Could not join the waitlist. Try again.')).toBeTruthy();
@@ -664,27 +939,16 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
   });
 
   it('shows the server reason when an access code is refused', async () => {
-    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue({
-      connected: false,
-      loading: false,
-      restoring: false,
-      purchasingKey: null,
-      catalog: {
-        enabled: false,
-        platform: 'ios',
-        appAccountToken: null,
-        products: [],
-        unavailableReason: 'Paid upgrades are opening in stages.',
-        unavailableCode: 'waitlist_access_required',
-      },
-      storeProducts: new Map(),
-      priceFor: jest.fn(),
-      error: null,
-      lastResult: null,
-      purchase: jest.fn(),
-      restore: jest.fn(),
-      reload: jest.fn(),
-    });
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(
+      iapState({
+        connected: false,
+        catalog: {
+          ...disabledCatalog(),
+          unavailableReason: 'Paid upgrades are opening in stages.',
+          unavailableCode: 'waitlist_access_required',
+        },
+      }),
+    );
     const redeemSpy = jest
       .spyOn(mobileIapService, 'redeemBillingUpgradeCode')
       .mockRejectedValue(

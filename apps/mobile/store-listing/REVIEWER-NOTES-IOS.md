@@ -30,9 +30,9 @@ SQLCipher; the key lives in the iOS Keychain.
 enables server-side chat, web search, and, on paid plans, image generation.
 Requests go to `https://agiworkforce.com` and `https://api.agiworkforce.com`.
 Cloud is in public alpha and its Free plan is open to anyone who signs in, with
-no invite code or waitlist. Paid upgrades are opening in stages and need an
-access code. Before a build with purchases is submitted, App Review must receive
-a review account with upgrade access and working StoreKit products.
+no invite code or waitlist. Paid plans and credit top-ups are sold through
+in-app purchase. Paid upgrades are opening in stages, so the review account has
+upgrade access or an access code; see "Purchases: please read" below.
 
 The two modes never mix silently. Local chats are not uploaded, and switching a
 conversation to Cloud is an explicit user action.
@@ -83,92 +83,95 @@ Health connector was removed in July 2026.
 
 ## Purchases: please read
 
-**Native store billing code ships inside this binary. The checked-in backend
-configuration switches off new purchases. Confirm the live backend switch and
-App Store Connect product state before using these notes for a submission.**
-
-We would rather over-disclose this than have you find StoreKit in the binary and
-read these notes as inaccurate metadata.
+**This build sells auto-renewing subscriptions and consumable credit top-ups
+through StoreKit in-app purchase. There is no other way to pay inside the app.**
 
 What ships:
 
-- `expo-iap` 5.6.2 is a dependency (`package.json`) and is registered as a config
+- `expo-iap` 5.8.1 is a dependency (`package.json`) and is registered as a config
   plugin (`app.config.js`), so the StoreKit 2 framework is linked into the app.
-- The purchase flow itself is compiled in:
-  `src/features/billing/useMobileIap.ts`, rendered by
+- The purchase flow is `src/features/billing/useMobileIap.ts`, rendered by
   `src/features/settings/cloud-billing/index.tsx`.
+- Four subscriptions in one subscription group (Basic, Pro, Max 5x, Max 20x,
+  each monthly) and four consumable credit top-ups. The products, their group
+  and their levels are listed in `docs/runbooks/mobile-store-products.md`.
 
-Why nothing can be bought:
+How to buy during review:
 
-- Every purchase path in the app is behind one server answer. The app asks
-  `GET /api/mobile/iap/catalog` for the product list and offers nothing unless
-  that response says `enabled: true`.
-- The server (`apps/web/lib/server/mobile-iap-catalog.ts`) reports the catalog as
-  enabled only when the deployment sets `MOBILE_IAP_ENABLED` **and** maps at
-  least one logical product key to a real store ID in
-  `MOBILE_IAP_APPLE_PRODUCT_IDS_JSON`. The gate fails closed, in separate
-  branches with different reasons, we quote them exactly because you may see any
-  of them:
-  - flag off or unset → `enabled: false`, reason **"Native purchases are not
-    enabled for this deployment."** (`mobile-iap-catalog.ts:63-69`). This is the
-    branch our deployments are in.
-  - flag on but no product key mapped → still `enabled: false`, reason **"App
-    Store products have not been registered for this build."**
-    (`mobile-iap-catalog.ts:77-86`).
-  - deployment flag on and products mapped, but the account has never bought and
-    holds no upgrade access → still `enabled: false`, reason **"Paid upgrades are
-    opening in stages. This account needs upgrade access before plans and credits
-    can be bought here."** (`apps/web/app/api/mobile/iap/catalog/route.ts`). The
-    screen then titles the same inert notice "Paid upgrades are opening in
-    stages" instead of "Native purchases are not configured".
+1. Sign in with the review account supplied in App Store Connect and open
+   Settings → Billing.
+2. Paid upgrades are opening in stages. The review account must either have
+   upgrade access already, or use the access code given in the App Store
+   Connect review notes: enter it under **Have an upgrade access code?** and tap
+   **Unlock upgrades**. The code only lets the account see and buy store
+   products; it grants no paid entitlement. An account without access sees
+   **Join upgrade waitlist** instead of products.
+3. The plans appear with the App Store's own localized prices. Tap one; the
+   StoreKit sheet shows the exact charge. The app never shows a price of its
+   own.
+4. After the purchase the app sends the signed transaction to
+   `/api/mobile/iap/verify`. Access is granted only after the server verifies
+   it with Apple, and the transaction is finished only after that.
+5. With a paid plan active, **Usage top-ups** lists the consumables. Purchased
+   credits do not expire.
 
-  The checked-in environment templates ship `MOBILE_IAP_ENABLED=false` and
-  define no product-ID map. The live deployment setting and App Store Connect
-  records must be checked before submitting this draft.
+What the Billing screen shows:
 
-- With that answer, Settings → Billing renders **"Native purchases are not
-  configured"** in place of new product offers. It still shows **Restore
-  purchases** so an existing store transaction can be recovered. StoreKit is
-  not asked for new-product pricing unless the catalog is enabled.
-- The product keys in our shared contract
-  (`packages/contracts/types/src/mobile-iap.ts`) are logical names only. This
-  repository does not establish whether App Store product IDs exist.
-- Server-side verification (`/api/mobile/iap/verify`) rejects unregistered
-  products. Previously registered products remain verifiable if new sales are
-  switched off; keep their product-ID mappings configured for transaction and
-  notification processing.
+- The plan-change row may be labelled **Upgrade plan**, **Adjust plan**, or
+  **Choose plan**, depending on the current subscription. During catalog
+  loading the screen shows **Loading native purchases**; Team and Enterprise
+  accounts may also see **Workspace administration**.
+- **Changing plans.** All four subscriptions are in one group, so a second
+  purchase is a plan change, never a second subscription. The screen marks the
+  current plan, labels every other plan **Upgrade** or **Downgrade**, and says
+  that an upgrade starts right away and a downgrade starts on the next renewal
+  date. A scheduled downgrade is shown as "Changing to … at renewal".
+- **Ask to Buy.** A purchase that needs a family organiser's approval is shown
+  as **Waiting for approval**, not as an error. When it is approved the
+  purchase completes on its own, including when the app was closed: the server
+  grants it from the App Store Server Notification, and the app finishes the
+  transaction the next time Billing opens.
+- **Restore purchases** is always present and re-sends existing transactions
+  for verification. It never charges.
+- A subscription bought on another platform is identified as managed elsewhere
+  and the app does not offer a second recurring purchase. Such an account can
+  still buy credit top-ups here.
+- **Deleting this app does not cancel your plan** is shown to store
+  subscribers, with the route to the App Store's subscription settings once the
+  listing is live.
 
-You can confirm all of this from the app: sign in and open Settings → Billing.
-The signed-in Billing screen shows the current plan, applicable plan and billing
-controls, a native-purchase status, **Restore purchases**, and invoice access.
-Its plan-change row may be labelled **Upgrade plan**, **Adjust plan**, or
-**Choose plan**, depending on the current subscription. During catalog loading
-it shows **Loading native purchases**; Team and Enterprise accounts may also
-see **Workspace administration**.
-When the server catalog is disabled, no product offer, store price, or purchase
-sheet is presented. Restore remains available for earlier subscriptions and
-unfinished transactions, and server verification still accepts registered
-product IDs after new sales are switched off. A failed verification is not
-acknowledged to the store.
+Every purchase path is behind one server answer. The app asks
+`GET /api/mobile/iap/catalog` and offers nothing unless the response says
+`enabled: true`. The server owner is `apps/web/lib/server/mobile-iap-catalog.ts`,
+which requires the deployment to set `MOBILE_IAP_ENABLED` and to map product
+keys to App Store product IDs in `MOBILE_IAP_APPLE_PRODUCT_IDS_JSON`. If you see
+no products, the screen shows **"Purchases are not available right now"** with
+one of these reasons, quoted exactly:
 
-When the catalog is enabled for an account with upgrade access, the app fetches
-store-localized prices and can present native subscriptions and consumable
-credit top-ups. It rechecks the server catalog before opening a purchase sheet.
-The upgrade code only permits an account to see and buy store products; it does
-not grant a paid entitlement. For App Review of that flow, provide a signed-in
-account with a redeemed upgrade code and registered test products in the secure
-review fields. The reviewer can also join the waitlist from Billing.
+- **"Native purchases are not enabled for this deployment."** The deployment
+  flag is off.
+- **"App Store products have not been registered for this build."** The flag is
+  on but no product is mapped.
+- **"Paid upgrades are opening in stages. This account needs upgrade access
+  before plans and credits can be bought here."** The account has no upgrade
+  access; see step 2.
 
-A subscription bought on another platform is identified as managed elsewhere;
-the app avoids offering a second recurring purchase through the native store.
-Store subscriptions are managed through the corresponding store. A web-billed
-plan may show a link to its existing billing management page. The free-tier
-invoice row is inert.
+Purchases made during review are App Store sandbox purchases and are not
+charged. The production service verifies a sandbox-signed transaction with
+Apple's sandbox certificate chain and grants it to the review account, which has
+been allowed to receive test purchases for this review. For any other account
+the same purchase is refused and the Billing screen says **"This purchase was
+made in the store's test environment, which this account is not set up to use.
+Nothing was charged."** Server-side verification (`/api/mobile/iap/verify`) also
+rejects unregistered products.
 
-This source tree cannot confirm live `MOBILE_IAP_ENABLED` deployment state or
-App Store Connect product registration. Recheck both before submission, update
-the in-app-purchase listing answer, and test the purchase, restore, renewal and
-refund paths with StoreKit sandbox accounts.
+Before submitting (operator steps, not for the reviewer): the review account
+must be allowed to receive test purchases (operator dashboard, Flags, Store test
+purchases; `docs/runbooks/mobile-store-products.md` section 4.1). This tree cannot
+confirm that allowance, the live `MOBILE_IAP_ENABLED` state or the App Store
+Connect product records; all three must be in place before this build is
+submitted, and the purchase, restore, renewal, refund, plan-change and Ask to
+Buy paths tested with sandbox accounts.
 
 ## External links
 
@@ -182,11 +185,11 @@ availability depends on the signed-in account and plan.
 
 | #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
 | --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:617`       | Paid plans only; the free tier gets an inert "No invoices yet" row with no handler.                                                                                                                                     |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:377`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:176`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For an Apple- or Google-recorded subscription the same button opens that store's own subscription page instead.         |
+| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:777`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
+| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:483`       | Team and Enterprise plans only.                                                                                                                                                                                         |
+| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:236`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For an Apple- or Google-recorded subscription the same button opens that store's own subscription page instead.         |
 | A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:120` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:624`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
+| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:784`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
 | A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
 | A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:438`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
 | A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:545`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
@@ -230,7 +233,7 @@ only other `Linking.openURL` targets in the app.
 
 **E. Present in source but not reachable in this iOS binary.** Two, named so you
 do not read them as omissions: the Stripe billing-portal link
-(`src/features/settings/cloud-billing/index.tsx:213`), dead behind
+(`src/features/settings/cloud-billing/index.tsx:273`), dead behind
 `FEATURES.billing === false`; and **Add a member** in Settings → Workspace
 (`app/(app)/settings/workspace.tsx:134`), which takes the browser branch only
 when `Platform.OS !== 'ios'` (`:132`), on iOS the same tap opens a native

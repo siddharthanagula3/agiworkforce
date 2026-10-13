@@ -1,0 +1,169 @@
+{
+  "identifier": "7A1C0000",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "10.00",
+      "familyShareable": false,
+      "internalID": "7A1C2001",
+      "localizations": [
+        {
+          "description": "Adds 500 credits to your AGI plan",
+          "displayName": "500 credits",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agiworkforce.app.topup.usd10",
+      "referenceName": "AGI Top-up 10 USD",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "20.00",
+      "familyShareable": false,
+      "internalID": "7A1C2002",
+      "localizations": [
+        {
+          "description": "Adds 1,000 credits to your AGI plan",
+          "displayName": "1,000 credits",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agiworkforce.app.topup.usd20",
+      "referenceName": "AGI Top-up 20 USD",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "50.00",
+      "familyShareable": false,
+      "internalID": "7A1C2003",
+      "localizations": [
+        {
+          "description": "Adds 2,500 credits to your AGI plan",
+          "displayName": "2,500 credits",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agiworkforce.app.topup.usd50",
+      "referenceName": "AGI Top-up 50 USD",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "100.00",
+      "familyShareable": false,
+      "internalID": "7A1C2004",
+      "localizations": [
+        {
+          "description": "Adds 5,000 credits to your AGI plan",
+          "displayName": "5,000 credits",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.agiworkforce.app.topup.usd100",
+      "referenceName": "AGI Top-up 100 USD",
+      "type": "Consumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_timeRate": 0
+  },
+  "subscriptionGroups": [
+    {
+      "id": "7A1C0001",
+      "localizations": [],
+      "name": "AGI Workforce Plans",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "7.00",
+          "familyShareable": false,
+          "groupNumber": 4,
+          "internalID": "7A1C1001",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "AGI Basic plan, billed monthly",
+              "displayName": "AGI Basic",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.agiworkforce.app.sub.basic.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "AGI Basic Monthly",
+          "subscriptionGroupID": "7A1C0001",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "20.00",
+          "familyShareable": false,
+          "groupNumber": 3,
+          "internalID": "7A1C1002",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "AGI Pro plan, billed monthly",
+              "displayName": "AGI Pro",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.agiworkforce.app.sub.pro.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "AGI Pro Monthly",
+          "subscriptionGroupID": "7A1C0001",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "100.00",
+          "familyShareable": false,
+          "groupNumber": 2,
+          "internalID": "7A1C1003",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "AGI Max 5x plan, billed monthly",
+              "displayName": "AGI Max 5x",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.agiworkforce.app.sub.max.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "AGI Max 5x Monthly",
+          "subscriptionGroupID": "7A1C0001",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "200.00",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "7A1C1004",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "AGI Max 20x plan, billed monthly",
+              "displayName": "AGI Max 20x",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.agiworkforce.app.sub.max20x.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "AGI Max 20x Monthly",
+          "subscriptionGroupID": "7A1C0001",
+          "type": "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

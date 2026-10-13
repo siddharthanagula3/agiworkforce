@@ -35,6 +35,7 @@ jest.mock('expo-iap', () => ({
     mockCallbacks = callbacks;
     return mockIapState;
   }),
+  getPendingTransactionsIOS: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('@/src/features/billing/mobileIapService', () => ({
@@ -824,7 +825,11 @@ describe('native mobile IAP hook', () => {
     const definitions = MOBILE_IAP_PRODUCT_DEFINITIONS.filter(
       (item) => item.kind === 'subscription',
     );
-    const product = { ...definitions[0]!, productId: 'fixture.subscription.offer' };
+    const product = {
+      ...definitions[0]!,
+      productId: 'fixture.subscription.offer',
+      googleOffer: { basePlanId: 'monthly', offerId: 'trial' },
+    };
     Object.assign(mockIapState, {
       subscriptions: [
         {
@@ -835,6 +840,8 @@ describe('native mobile IAP hook', () => {
           currency: 'EUR',
           subscriptionOffers: [
             {
+              id: 'trial',
+              basePlanIdAndroid: 'monthly',
               offerTokenAndroid: 'fixture-offer-token',
               displayPrice: '',
               currency: 'EUR',
@@ -941,8 +948,9 @@ describe('native mobile IAP hook', () => {
     const definitions = MOBILE_IAP_PRODUCT_DEFINITIONS.filter(
       (item) => item.kind === 'subscription',
     );
-    const oldProduct = { ...definitions[0]!, productId: 'fixture.subscription.old' };
-    const nextProduct = { ...definitions[1]!, productId: 'fixture.subscription.next' };
+    const googleOffer = { basePlanId: 'monthly', offerId: null };
+    const oldProduct = { ...definitions[0]!, productId: 'fixture.subscription.old', googleOffer };
+    const nextProduct = { ...definitions[1]!, productId: 'fixture.subscription.next', googleOffer };
     Object.assign(mockIapState, {
       subscriptions: [
         {
@@ -950,13 +958,17 @@ describe('native mobile IAP hook', () => {
           type: 'subs',
           platform: 'android',
           displayPrice: '$20.00',
-          subscriptionOffers: [{ offerTokenAndroid: 'fixture-offer-token' }],
+          subscriptionOffers: [
+            { id: '', basePlanIdAndroid: 'monthly', offerTokenAndroid: 'fixture-offer-token' },
+          ],
         },
       ],
       availablePurchases: [
         {
           productId: oldProduct.productId,
           purchaseToken: 'fixture-old-token-long-enough',
+          purchaseState: 'purchased',
+          isAcknowledgedAndroid: true,
         },
       ],
     });

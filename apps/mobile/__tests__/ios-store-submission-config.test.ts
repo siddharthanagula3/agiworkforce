@@ -10,14 +10,22 @@ const appConfig = require('../app.config.js') as {
 };
 
 const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
+  description: string;
   app_review_information: { notes_file: string };
-  pricing: { in_app_purchase_note: string; guideline_3_1_1_residual_risk?: string };
+  pricing: {
+    in_app_purchases: boolean;
+    in_app_purchase_note: string;
+    guideline_3_1_1_residual_risk?: string;
+  };
   export_compliance?: { uses_non_exempt_encryption?: boolean };
   privacy_nutrition_labels: unknown;
   age_rating: { rating: string };
 };
 
 const listingAndroid = require('../store-listing/LISTING-METADATA-ANDROID.json') as {
+  full_description: string;
+  pricing: { in_app_purchases: boolean };
+  content_rating: { questionnaire: { in_app_purchases: boolean } };
   play_console_review_notes_file: string;
   target_audience: { age_group: string; play_age_bands: string[] };
   data_safety: { data_shared: boolean; data_collected_types: Array<{ type: string }> };
@@ -195,6 +203,48 @@ describe('iOS submission config', () => {
     expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/Contact Sales/);
   });
 
+  it('declares in-app purchases on every listing answer, because the build sells them', () => {
+    const screen = readFileSync(
+      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
+      'utf8',
+    );
+    expect(screen).toContain('nativeIap.purchase(');
+    expect(listingIos.pricing.in_app_purchases).toBe(true);
+    expect(listingAndroid.pricing.in_app_purchases).toBe(true);
+    expect(listingAndroid.in_app_products.has_in_app_products).toBe(true);
+    expect(listingAndroid.content_rating.questionnaire.in_app_purchases).toBe(true);
+    for (const description of [listingIos.description, listingAndroid.full_description]) {
+      expect(description).not.toMatch(/no in-app purchases/i);
+      expect(description).toMatch(/in-app purchases/i);
+    }
+  });
+
+  it('points the buyer at no purchase outside the app from the Billing screen', () => {
+    const screen = readFileSync(
+      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
+      'utf8',
+    );
+    expect(screen).not.toMatch(/bought on the web/i);
+    expect(screen).not.toMatch(/managed on agiworkforce\.com/i);
+    expect(screen).not.toMatch(/agiworkforce\.com\/pricing/);
+  });
+
+  it('pins each billing link the reviewer notes cite to the line that opens it', () => {
+    const lines = readFileSync(
+      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
+      'utf8',
+    ).split('\n');
+    const cited: Array<[number, string]> = [
+      [777, "openExternalUrl('https://agiworkforce.com/billing')"],
+      [483, "openExternalUrl('https://agiworkforce.com/settings/team')"],
+      [236, 'openExternalUrl(managementUrl)'],
+      [784, 'openExternalUrl(PURCHASE_HELP_URL)'],
+    ];
+    for (const [line, call] of cited) {
+      expect([line, lines[line - 1]?.includes(call)]).toEqual([line, true]);
+    }
+  });
+
   it('discloses the native-purchase code that ships in the binary on every claim surface', () => {
     const NATIVE_BILLING_DISCLOSURE = [
       /\bexpo-iap\b/,
@@ -239,11 +289,11 @@ describe('iOS submission config', () => {
 
   it('discloses account and billing links reachable from the current app', () => {
     const CALL_SITES: Array<[string, RegExp]> = [
-      ['cloud-billing invoices', /cloud-billing\/index\.tsx:617/],
-      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:377/],
-      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:176/],
+      ['cloud-billing invoices', /cloud-billing\/index\.tsx:777/],
+      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:483/],
+      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:236/],
       ['paywall contact sales', /PaywallBottomSheet\.tsx:120/],
-      ['purchase help', /cloud-billing\/index\.tsx:624/],
+      ['purchase help', /cloud-billing\/index\.tsx:784/],
       ['cloud-account change email', /cloud-account\/index\.tsx:98/],
       ['workspace empty state', /workspace\.tsx:438/],
       ['workspace rename or delete', /workspace\.tsx:545/],

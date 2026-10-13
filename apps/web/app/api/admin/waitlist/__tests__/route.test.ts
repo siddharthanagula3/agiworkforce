@@ -109,9 +109,17 @@ function answer(sql: string, params: unknown[]): Row[] {
       : pageOf(db.publicRows, params);
   }
   if (sql.includes('public.waitlist')) {
-    return sql.includes('group by plan')
-      ? countBy(db.upgradeRows, 'plan')
-      : pageOf(db.upgradeRows, params);
+    if (sql.includes('count(distinct user_id)')) {
+      return [{ people: new Set(db.upgradeRows.map((row) => row['user_id'])).size }];
+    }
+    if (sql.includes('group by 1')) {
+      return countBy(
+        db.upgradeRows.map((row) => ({ day: String(row['joined_at']).slice(0, 10) })),
+        'day',
+      ).sort((a, b) => (String(a['key']) < String(b['key']) ? 1 : -1));
+    }
+    const grouped = /group by (plan|billing_interval|source)/.exec(sql);
+    return grouped ? countBy(db.upgradeRows, grouped[1]!) : pageOf(db.upgradeRows, params);
   }
   throw new Error(`Unexpected statement: ${sql}`);
 }
@@ -434,6 +442,80 @@ describe('GET /api/admin/waitlist', () => {
       count: 1,
       total: 1,
     });
+  });
+});
+
+describe('upgrade demand is counted by the database, not over a page', () => {
+  function upgradeRow(n: number, userId: string, plan: string, interval: string, day: string) {
+    return {
+      id: uuid(60 + n),
+      user_id: userId,
+      email: 'pseudonym-of-an-address',
+      plan,
+      billing_interval: interval,
+      source: n % 2 === 0 ? 'pricing' : 'billing-upgrade',
+      joined_at: `${day}T09:00:00.000Z`,
+      page_sort_key: `${day}T09:00:00.000000Z`,
+    };
+  }
+
+  beforeEach(() => {
+    db.upgradeRows = [
+      upgradeRow(1, 'user_a', 'pro', 'monthly', '2026-10-05'),
+      upgradeRow(2, 'user_a', 'max_15x', 'monthly', '2026-10-05'),
+      upgradeRow(3, 'user_b', 'pro', 'monthly', '2026-10-04'),
+      upgradeRow(4, 'user_c', 'team', 'yearly', '2026-10-03'),
+    ];
+  });
+
+  it('reports people, plan, interval, source and day totals beside a one-row page', async () => {
+    const response = await listGet(get('/api/admin/waitlist?list=upgrade&limit=1'));
+    const body = await response.json();
+
+    expect(body.entries).toHaveLength(1);
+    expect(body.hasMore).toBe(true);
+    expect(body).toMatchObject({
+      total: 4,
+      people: 3,
+      byDayWindowDays: 90,
+      byDay: [
+        { key: '2026-10-05', count: 2 },
+        { key: '2026-10-04', count: 1 },
+        { key: '2026-10-03', count: 1 },
+      ],
+    });
+    expect(body.byPlan).toEqual(
+      expect.arrayContaining([
+        { key: 'pro', count: 2 },
+        { key: 'max_15x', count: 1 },
+        { key: 'team', count: 1 },
+      ]),
+    );
+    expect(body.byInterval).toEqual(
+      expect.arrayContaining([
+        { key: 'monthly', count: 3 },
+        { key: 'yearly', count: 1 },
+      ]),
+    );
+    expect(body.bySource).toEqual(
+      expect.arrayContaining([
+        { key: 'billing-upgrade', count: 2 },
+        { key: 'pricing', count: 2 },
+      ]),
+    );
+  });
+
+  it('asks the database for each total instead of counting the rows it paged', async () => {
+    await listGet(get('/api/admin/waitlist?list=upgrade&limit=1'));
+
+    const statements = db.queries.map((query) => query.sql);
+    expect(statements.some((sql) => sql.includes('count(distinct user_id)'))).toBe(true);
+    for (const column of ['plan', 'billing_interval', 'source']) {
+      expect(statements.some((sql) => sql.includes(`group by ${column}`))).toBe(true);
+    }
+    expect(statements.some((sql) => sql.includes('make_interval(days => $1)'))).toBe(true);
+    for (const sql of statements)
+      expect(sql).not.toMatch(/select\s+[^;]*\bemail\b[^;]*from public\.waitlist/);
   });
 });
 

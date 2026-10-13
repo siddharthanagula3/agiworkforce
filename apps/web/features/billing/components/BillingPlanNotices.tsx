@@ -12,6 +12,7 @@ import {
 } from '../lib/billing-format';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const PAYMENT_FAILURE_HELP_HREF = '/payment-failure';
 
 export interface OpenInvoiceLink {
   amountCents: number;
@@ -149,7 +150,16 @@ export function BillingPlanNotices({
         </p>
         <p>
           Self-serve plans have no grace period: paid features stop at the first failed renewal and
-          come back as soon as the payment succeeds. Your chats and files stay.
+          come back as soon as the payment succeeds. Your chats and files stay. See{' '}
+          <a
+            href={PAYMENT_FAILURE_HELP_HREF}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium underline underline-offset-2"
+          >
+            why a payment fails and what to do
+          </a>
+          .
         </p>
       </Notice>,
     );

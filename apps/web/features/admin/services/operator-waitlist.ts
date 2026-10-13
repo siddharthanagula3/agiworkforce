@@ -25,6 +25,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 
 export const WAITLIST_EXPORT_ROW_LIMIT = 10_000;
 const EXPORT_BATCH_SIZE = 1_000;
+const UPGRADE_WAITLIST_DAILY_WINDOW_DAYS = 90;
 
 const PAGE_SORT_COLUMN = 'page_sort_key';
 const PAGE_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
@@ -253,19 +254,66 @@ export async function readPublicWaitlist(page: WaitlistPageRequest): Promise<
   return { ...entries, total: bySource.total, bySource: bySource.counts };
 }
 
-export async function readUpgradeWaitlist(page: WaitlistPageRequest): Promise<
-  WaitlistPage<OperatorUpgradeWaitlistEntry> & {
-    total: number;
-    byPlan: OperatorWaitlistCount[];
-  }
-> {
+export interface UpgradeWaitlistDemand {
+  total: number;
+  people: number;
+  byPlan: OperatorWaitlistCount[];
+  byInterval: OperatorWaitlistCount[];
+  bySource: OperatorWaitlistCount[];
+  byDay: OperatorWaitlistCount[];
+  byDayWindowDays: number;
+}
+
+function countUpgradeBy(column: 'plan' | 'billing_interval' | 'source'): Promise<CountRow[]> {
+  return getNeonDb().query<CountRow>(
+    `select ${column} as key, count(*)::int as count
+       from public.waitlist
+      group by ${column}
+      order by count(*) desc, ${column} asc`,
+  );
+}
+
+export async function readUpgradeWaitlistDemand(): Promise<UpgradeWaitlistDemand> {
+  const db = getNeonDb();
+  const [byPlan, byInterval, bySource, byDay, people] = await Promise.all([
+    countUpgradeBy('plan'),
+    countUpgradeBy('billing_interval'),
+    countUpgradeBy('source'),
+    db.query<CountRow>(
+      `select to_char(coalesce(joined_at, created_at) at time zone 'utc', 'YYYY-MM-DD') as key,
+              count(*)::int as count
+         from public.waitlist
+        where coalesce(joined_at, created_at) >= now() - make_interval(days => $1)
+        group by 1
+        order by 1 desc`,
+      [UPGRADE_WAITLIST_DAILY_WINDOW_DAYS],
+    ),
+    db.query<{ people: number | string }>(
+      `select count(distinct user_id)::int as people from public.waitlist`,
+    ),
+  ]);
+  const counted = toCounts(byPlan);
+  return {
+    total: counted.total,
+    people: Number(people[0]?.people) || 0,
+    byPlan: counted.counts,
+    byInterval: toCounts(byInterval).counts,
+    bySource: toCounts(bySource).counts,
+    byDay: toCounts(byDay).counts,
+    byDayWindowDays: UPGRADE_WAITLIST_DAILY_WINDOW_DAYS,
+  };
+}
+
+export async function readUpgradeWaitlist(
+  page: WaitlistPageRequest,
+): Promise<WaitlistPage<OperatorUpgradeWaitlistEntry> & UpgradeWaitlistDemand> {
   const db = getNeonDb();
   const keyset = keysetSql({
     sortColumn: PAGE_SORT_COLUMN,
     cursor: page.cursor,
     firstParamIndex: 2,
   });
-  const [rows, byPlan] = await Promise.all([
+  const [rows, demand] = await Promise.all([
     db.query<UpgradeWaitlistRow>(
       `select * from (
          select id, user_id, plan, coalesce(joined_at, created_at) as joined_at,
@@ -278,18 +326,12 @@ export async function readUpgradeWaitlist(page: WaitlistPageRequest): Promise<
        limit $1`,
       [page.limit + 1, ...keyset.params],
     ),
-    db.query<CountRow>(
-      `select plan as key, count(*)::int as count
-         from public.waitlist
-        group by plan
-        order by count(*) desc, plan asc`,
-    ),
+    readUpgradeWaitlistDemand(),
   ]);
   const built = buildPage(rows, page.limit, (row) => ({
     sortValue: row.page_sort_key,
     id: row.id,
   }));
-  const counted = toCounts(byPlan);
   return {
     entries: built.items.map((row) => ({
       id: row.id,
@@ -299,8 +341,7 @@ export async function readUpgradeWaitlist(page: WaitlistPageRequest): Promise<
     })),
     hasMore: built.hasMore,
     nextCursor: built.nextCursor,
-    total: counted.total,
-    byPlan: counted.counts,
+    ...demand,
   };
 }
 

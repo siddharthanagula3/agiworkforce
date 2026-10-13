@@ -3,7 +3,18 @@ import 'server-only';
 import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
 
-import type { FlagDefinition, FlagDefinitionInput, FlagOverrideInput } from './flag-definition';
+import { BILLING_UPGRADES_OPEN_FLAG_KEY, billingUpgradesOpenDefinition } from './billing-upgrades';
+import {
+  STORE_TEST_PURCHASES_FLAG_KEY,
+  storeTestPurchasesDefinition,
+} from './store-test-purchases';
+import {
+  FLAG_OFF_VARIANT,
+  FLAG_ON_VARIANT,
+  type FlagDefinition,
+  type FlagDefinitionInput,
+  type FlagOverrideInput,
+} from './flag-definition';
 import {
   archiveFlagDefinition,
   deleteFlagOverride,
@@ -131,6 +142,57 @@ export async function engageKillSwitch(
   return toggleFlagKillSwitch(actor, key, engaged);
 }
 
+export const BILLING_UPGRADES_OPENED_STATUS = 'upgrades_opened';
+export const BILLING_UPGRADES_CLOSED_STATUS = 'upgrades_closed';
+
+/**
+ * Open paid upgrades to every account, or put them back behind an access code.
+ * The switch is created closed if nobody has flipped it before, and opening it
+ * also releases its kill switch, since a switch left killed would read closed
+ * while this reported it open.
+ */
+export async function setBillingUpgradesOpen(
+  actor: AdminActor,
+  open: boolean,
+): Promise<FlagDefinition> {
+  const prepared = await ensureFlagDefinition(billingUpgradesOpenDefinition());
+  if (!prepared) {
+    throw createError.internal('The switch could not be prepared. Nothing was changed.');
+  }
+  const defaultVariant = open ? FLAG_ON_VARIANT : FLAG_OFF_VARIANT;
+  const killSwitch = open ? false : prepared.killSwitch;
+  if (prepared.defaultVariant === defaultVariant && prepared.killSwitch === killSwitch) {
+    return prepared;
+  }
+  const {
+    version,
+    archivedAt: _archivedAt,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...stored
+  } = prepared;
+  const updated = await updateFlagDefinition({ ...stored, defaultVariant, killSwitch }, version);
+  if (!updated) {
+    throw createError.conflict('The switch changed while it was being written. Try again.');
+  }
+  await recordAuditEvent({
+    userId: actor.userId,
+    eventType: 'feature_flag_changed',
+    severity: 'warning',
+    request: actor.request,
+    surface: FLAG_ADMIN_SURFACE,
+    detail: {
+      resourceType: FLAG_RESOURCE_TYPE,
+      resourceId: BILLING_UPGRADES_OPEN_FLAG_KEY,
+      status: open ? BILLING_UPGRADES_OPENED_STATUS : BILLING_UPGRADES_CLOSED_STATUS,
+      changedKeys: changedFields(prepared, { ...stored, defaultVariant, killSwitch }),
+      enabled: open,
+      version: String(updated.version),
+    },
+  });
+  return updated;
+}
+
 /**
  * Close one capability for one range of builds. This is the response to a
  * release that shipped broken: the affected builds stop being offered the
@@ -239,12 +301,22 @@ async function auditOverride(
   });
 }
 
+// Naming an account here is the whole operator action, so the definition it
+// needs is created off on first use: a deployment nobody has prepared would
+// otherwise report the account allowed while every purchase was still refused.
+const STANDING_OVERRIDE_DEFINITIONS: Readonly<Record<string, () => FlagDefinitionInput>> = {
+  [STORE_TEST_PURCHASES_FLAG_KEY]: storeTestPurchasesDefinition,
+};
+
 export async function setFlagOverride(
   actor: AdminActor,
   key: string,
   input: FlagOverrideInput,
 ): Promise<void> {
-  const definition = await getFlagDefinition(key);
+  const standing = STANDING_OVERRIDE_DEFINITIONS[key];
+  const definition = standing
+    ? await ensureFlagDefinition(standing())
+    : await getFlagDefinition(key);
   if (!definition || definition.archivedAt !== null) {
     throw createError.notFound('No active flag by that name');
   }

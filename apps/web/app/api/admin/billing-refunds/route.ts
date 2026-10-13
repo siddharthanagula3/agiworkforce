@@ -17,6 +17,7 @@ import {
   RefundRequestRefusal,
   declineRefundRequest,
   issueOperatorRefund,
+  recordStoreRefund,
   listPendingRefundRequests,
   lookupAccountBilling,
 } from '@/lib/services/billing-refund-service';
@@ -37,6 +38,14 @@ const OperatorRefundActionSchema = z.discriminatedUnion('action', [
       stripeReason: z.enum(OPERATOR_REFUND_STRIPE_REASONS),
       requestId: z.string().uuid().nullable(),
       endPlan: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('store_refund'),
+      requestId: z.string().uuid(),
+      amountCents: z.number().int().positive().nullable(),
+      note: Note,
     })
     .strict(),
   z
@@ -132,6 +141,31 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
         },
       });
       return NextResponse.json({ request: declined }, { headers: NO_STORE });
+    } catch (error) {
+      rethrowRefusal(error);
+    }
+  }
+
+  if (action.action === 'store_refund') {
+    try {
+      const recorded = await recordStoreRefund(db, {
+        operatorUserId,
+        requestId: action.requestId,
+        amountCents: action.amountCents,
+        note: action.note,
+      });
+      await logSecurityEvent({
+        ...auditContext,
+        details: {
+          action: 'store_refund_recorded',
+          requestId: recorded.id,
+          targetUserId: recorded.userId,
+          chargeId: recorded.chargeId,
+          amountCents: recorded.refundAmountCents,
+          reason: action.note,
+        },
+      });
+      return NextResponse.json({ request: recorded }, { headers: NO_STORE });
     } catch (error) {
       rethrowRefusal(error);
     }

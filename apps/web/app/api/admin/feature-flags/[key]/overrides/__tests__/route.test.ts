@@ -60,12 +60,15 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/feature-flags/flag-admin-service', () => ({
+  BILLING_UPGRADES_CLOSED_STATUS: 'upgrades_closed',
+  BILLING_UPGRADES_OPENED_STATUS: 'upgrades_opened',
   archiveFlag: vi.fn(),
   cleanUpStaleFlags: vi.fn(),
   clearFeatureVersionDisable: vi.fn(),
   createFlag: vi.fn(),
   disableFeatureForVersions: vi.fn(),
   engageKillSwitch: vi.fn(),
+  setBillingUpgradesOpen: vi.fn(),
   toggleFlagKillSwitch: vi.fn(),
   updateFlag: vi.fn(),
   setFlagOverride: mocks.setFlagOverride,

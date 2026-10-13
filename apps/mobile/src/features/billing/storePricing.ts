@@ -1,4 +1,5 @@
 import type { Product, ProductSubscription, SubscriptionOffer } from 'expo-iap';
+import type { MobileIapStoreOffer } from '@agiworkforce/types';
 
 export type StoreProduct = Product | ProductSubscription;
 
@@ -19,16 +20,35 @@ function isAndroidSubscription(product: StoreProduct): product is ProductSubscri
   return product.type === 'subs' && product.platform === 'android';
 }
 
+function pricingPhaseCount(offer: SubscriptionOffer): number {
+  return offer.pricingPhasesAndroid?.pricingPhaseList?.length ?? 0;
+}
+
 /**
- * The offer a purchase will actually use. Display and purchase read this same
- * function because Google prices per offer, not per product, so picking them
- * separately shows one price and charges another.
+ * The offer a purchase will actually use, which is the one the server's catalog
+ * names and never whichever the store happens to list first. Display and
+ * purchase read this same function because Google prices per offer, not per
+ * product, so picking them separately shows one price and charges another.
+ *
+ * A base plan with no offer is the entry on that base plan whose price has a
+ * single phase; every discounted offer adds a phase in front of it.
  */
-export function purchasableOffer(product: StoreProduct): SubscriptionOffer | null {
-  if (!isAndroidSubscription(product)) return null;
-  return (
-    product.subscriptionOffers.find((offer) => typeof offer.offerTokenAndroid === 'string') ?? null
+export function purchasableOffer(
+  product: StoreProduct,
+  configured: MobileIapStoreOffer | null | undefined,
+): SubscriptionOffer | null {
+  if (!isAndroidSubscription(product) || !configured) return null;
+  const onBasePlan = product.subscriptionOffers.filter(
+    (offer) =>
+      offer.basePlanIdAndroid === configured.basePlanId &&
+      typeof offer.offerTokenAndroid === 'string' &&
+      offer.offerTokenAndroid.length > 0,
   );
+  if (configured.offerId !== null) {
+    return onBasePlan.find((offer) => offer.id === configured.offerId) ?? null;
+  }
+  const undiscounted = onBasePlan.filter((offer) => pricingPhaseCount(offer) <= 1);
+  return undiscounted.length === 1 ? (undiscounted[0] ?? null) : null;
 }
 
 /**
@@ -54,11 +74,15 @@ function nonEmpty(value: string | null | undefined): string | null {
  * synthesised one: a figure built from `price` and `currency` is not the
  * store's localized string and would not match the confirmation sheet.
  */
-export function storePrice(product: StoreProduct | undefined): StorePrice {
+export function storePrice(
+  product: StoreProduct | undefined,
+  configured?: MobileIapStoreOffer | null,
+): StorePrice {
   if (!product) return UNPRICED;
 
-  const offer = purchasableOffer(product);
-  if (offer) {
+  if (isAndroidSubscription(product)) {
+    const offer = purchasableOffer(product, configured);
+    if (!offer) return UNPRICED;
     return {
       label:
         recurringPhasePrice(offer) ??

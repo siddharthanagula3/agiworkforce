@@ -32,6 +32,20 @@ export function isRefundRequestReason(value: unknown): value is RefundRequestRea
 }
 
 export type RefundChargeKind = 'plan' | 'top_up';
+
+/**
+ * A charge the App Store or Google Play took is filed as
+ * `mobile_iap:<platform>:<store transaction>`. It is refunded at the store, so
+ * it never carries a Stripe refund.
+ */
+export const STORE_CHARGE_ID_PREFIX = 'mobile_iap:';
+
+export type RefundingStore = 'App Store' | 'Google Play';
+
+export function refundingStoreOf(chargeId: string): RefundingStore | null {
+  if (!chargeId.startsWith(STORE_CHARGE_ID_PREFIX)) return null;
+  return chargeId.startsWith(`${STORE_CHARGE_ID_PREFIX}ios:`) ? 'App Store' : 'Google Play';
+}
 export type RefundAssessment = 'statutory_withdrawal' | 'unused_within_policy' | 'needs_review';
 export type RefundRequestStatus = 'pending' | 'refunded' | 'declined';
 export const OPERATOR_REFUND_STRIPE_REASONS = [

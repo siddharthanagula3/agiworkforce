@@ -1168,7 +1168,7 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     validate: oneOf('0', '1'),
     description:
-      'launch switch: 1 opens paid upgrades to every account; unset keeps the waitlist on',
+      'force-open override: 1 opens paid upgrades to every account whatever the operator switch says; unset leaves the run-time switch on the operator page in charge',
   }),
   published('NEXT_PUBLIC_CHECKOUT_ENABLED', {
     type: 'boolean',

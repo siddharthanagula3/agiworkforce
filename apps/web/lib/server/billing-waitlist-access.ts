@@ -3,6 +3,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { isFreeOfChargePlanTier } from '@agiworkforce/types';
+import { readBillingUpgradesOpen } from '@/lib/feature-flags/billing-upgrade-gate';
 import { getSubscriptionBillingOwnerPolicy } from '@/lib/server/subscription-billing-owner';
 
 export const WAITLIST_ACCESS_REQUIRED_CODE = 'waitlist_access_required';
@@ -10,9 +11,9 @@ export const WAITLIST_ACCESS_REQUIRED_CODE = 'waitlist_access_required';
 export const WAITLIST_ACCESS_REQUIRED_MESSAGE =
   'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.';
 
-export function isBillingUpgradeWaitlistEnabled(): boolean {
-  return !billingWaitlistOpen();
-}
+// Written on a beta_invites row that only opens the upgrade gate, so the trial
+// offer route can tell it from an invite that grants a plan.
+export const UPGRADE_ACCESS_INVITE_KIND = 'billing_upgrade_access';
 
 interface BillingHistoryRow {
   plan_tier: string;
@@ -24,21 +25,25 @@ interface BillingHistoryRow {
   current_period_end?: string | Date | null;
 }
 
-/**
- * Paid upgrades open in stages behind an access code. The owner opens them to
- * everyone at launch by setting AGI_BILLING_WAITLIST_OPEN=1; until then only
- * an account that redeemed a code may start checkout, the portal or a store
- * purchase.
- */
-export function billingWaitlistOpen(): boolean {
+export function billingUpgradesForcedOpen(): boolean {
   return process.env['AGI_BILLING_WAITLIST_OPEN'] === '1';
+}
+
+/**
+ * Paid upgrades open in stages behind an access code until the owner opens
+ * them to everyone. The operator switch is a run-time flag, so opening or
+ * closing takes effect without a deployment; AGI_BILLING_WAITLIST_OPEN=1
+ * forces them open whatever the switch says.
+ */
+export async function billingUpgradesOpenFor(userId: string): Promise<boolean> {
+  return billingUpgradesForcedOpen() || (await readBillingUpgradesOpen(userId));
 }
 
 export async function hasBillingWaitlistAccess(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<boolean> {
-  if (billingWaitlistOpen()) return true;
+  if (await billingUpgradesOpenFor(userId)) return true;
   const [row] = await db.query<{ granted: boolean }>(
     `select exists(
        select 1 from beta_redemptions where user_id = $1

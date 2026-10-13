@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-04
+Last updated: 2026-10-12
 
 The three administrative surfaces in `apps/web`, who each one admits, and what
 can be done from it. Read this before granting anyone access to any of them: two
@@ -123,7 +123,28 @@ pages open. This tab is the list of everyone who submitted one.
   would run as a formula are written with a leading quote.
 - **Paid plan upgrade waitlist.** Signed-in accounts that asked for a paid plan,
   by account id and plan. That table stores a pseudonym rather than an address,
-  so reach each one through its account in the `users` tab.
+  so reach each one through its account in the `users` tab. Above the rows the
+  tab shows demand counted by the database over the whole list: distinct people,
+  and plan requests by plan, by billing interval, by source and by day joined.
+  One person can ask for several plans, so people and requests differ.
+- **Paid upgrade access.** One switch decides whether paid upgrades are open to
+  everyone or held behind the waitlist and access codes. It is the
+  `billing.upgrades_open` flag, read on every checkout, portal, seat and store
+  request through `hasBillingWaitlistAccess` in
+  `apps/web/lib/server/billing-waitlist-access.ts`, so a change needs no
+  deployment and no client build and reaches every server within the flag
+  definition cache window. An absent flag and an unreadable flag store both
+  read closed. Opening and closing each ask for confirmation and write a
+  `feature_flag_changed` audit row; the card shows the last change and who made
+  it. `AGI_BILLING_WAITLIST_OPEN=1` is a force-open override that holds upgrades
+  open whatever the switch says, and the card says so when it is set.
+- **Access codes.** Create a code (typed or generated, with a redemption limit,
+  an optional expiry and a note), see how many accounts redeemed each, and
+  disable one. A code grants upgrade access only: `/api/claim-offer` refuses it,
+  so it never grants a plan or a trial. Disabling stops further redemptions;
+  accounts that already redeemed keep their access. Each creation and each
+  disabling writes an `admin_action` audit row with the invite id, never the
+  code.
 
 Nothing in the product mails either list, and joining sends no confirmation. Each
 time the tab loads and each export writes an `admin_action` row to

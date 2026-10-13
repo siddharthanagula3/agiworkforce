@@ -364,7 +364,7 @@ impl fmt::Display for CliError {
             } => {
                 write!(
                     f,
-                    "Cloud chat requires {} plan. Reason: {}\nPlans and access codes: https://agiworkforce.com/pricing?from=cli-paywall&tier={}&feature={}",
+                    "Cloud chat requires {} plan. Reason: {}\nPlans and availability: https://agiworkforce.com/pricing?from=cli-paywall&tier={}&feature={}",
                     required_tier,
                     reason,
                     urlencoding::encode(required_tier),
@@ -570,12 +570,12 @@ impl CliError {
                 Some(model) => format!(
                     "Choose a model your plan includes, such as {} (`--model {model}`), or set \
                      that provider's own key. Run `agi plans` to see what each plan includes. \
-                     {PAID_UPGRADES_ARE_STAGED}",
+                     {PLANS_AND_AVAILABILITY}",
                     crate::model_catalog::display_name(model)
                 ),
                 None => format!(
                     "Choose a model your plan includes, or set that provider's own key. Run \
-                     `agi plans` to see what each plan includes. {PAID_UPGRADES_ARE_STAGED}"
+                     `agi plans` to see what each plan includes. {PLANS_AND_AVAILABILITY}"
                 ),
             },
             CliError::ModelUnavailable { model } => match plan_alternative(model) {
@@ -591,7 +591,7 @@ impl CliError {
             CliError::Paywall { .. } => format!(
                 "Run `agi usage` to see when the limit resets, or switch to your own provider \
                  key with `--provider <name>`. Run `agi plans` to see what each plan includes. \
-                 {PAID_UPGRADES_ARE_STAGED}"
+                 {PLANS_AND_AVAILABILITY}"
             ),
             CliError::UsageLimit {
                 recovery_href,
@@ -934,10 +934,9 @@ impl CliError {
     }
 }
 
-/// Upgrades are gated by an access code or the waitlist, so no hint may read as
-/// a self serve purchase.
-const PAID_UPGRADES_ARE_STAGED: &str = "Paid upgrades are opening in stages and need an access \
-     code or a place on the waitlist: https://agiworkforce.com/pricing";
+/// Whether upgrades are open or staged is decided by the server at run time,
+/// so a compiled-in hint may state neither: it names the page that knows.
+const PLANS_AND_AVAILABILITY: &str = "Plans and availability: https://agiworkforce.com/pricing";
 
 /// The next move for a failure the gateway reported inside an open stream. A
 /// wait is stated only when the provider stated one.
@@ -1403,7 +1402,9 @@ mod tests {
             }
             .hint(),
         ] {
-            assert!(hint.contains("access code"), "{hint}");
+            assert!(hint.contains("https://agiworkforce.com/pricing"), "{hint}");
+            assert!(!hint.to_lowercase().contains("waitlist"), "{hint}");
+            assert!(!hint.to_lowercase().contains("access code"), "{hint}");
             assert!(!hint.to_lowercase().contains("upgrade to"), "{hint}");
             assert!(!hint.contains("Upgrade at"), "{hint}");
         }
@@ -1505,7 +1506,7 @@ mod tests {
             )),
             "{hint}"
         );
-        assert!(hint.ends_with(PAID_UPGRADES_ARE_STAGED), "{hint}");
+        assert!(hint.ends_with(PLANS_AND_AVAILABILITY), "{hint}");
     }
 
     #[test]

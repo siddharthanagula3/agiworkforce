@@ -1073,7 +1073,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
 // These codes are the reader's own usage limit, so the sentence names their
 // account; the shared free model allowance is a different failure with its own.
 const QUOTA_EXHAUSTED_MESSAGE =
-  'You have reached the usage limit on your account. Open Usage in AGI Cloud settings to see when it resets. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
+  'You have reached the usage limit on your account. Open Usage in AGI Cloud settings to see when it resets, or see what each plan includes at agiworkforce.com/pricing.';
 
 function bodyIndicatesFreeQuota(body: string): boolean {
   const normalized = body.toLowerCase();
