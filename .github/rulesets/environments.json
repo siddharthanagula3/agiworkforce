@@ -6,8 +6,7 @@
       "used_by": [
         ".github/workflows/deploy-production.yml",
         ".github/workflows/deploy-staging.yml",
-        ".github/workflows/env-drift.yml",
-        ".github/workflows/clerk-bot-protection.yml"
+        ".github/workflows/env-drift.yml"
       ],
       "protection": {
         "wait_timer": 0,

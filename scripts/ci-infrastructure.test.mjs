@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { parse } from 'yaml';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -118,6 +119,74 @@ test('private repositories cannot reach CodeQL extraction and retain an explicit
     'javascript-typescript',
     'ruby',
   ]);
+});
+
+test('Clerk inspects public production settings only on main without production credentials', () => {
+  const document = workflow('clerk-bot-protection.yml');
+  const logic = document.jobs['inspection-logic'];
+  const inspection = document.jobs['inspect-production'];
+  assert.equal(inspection.needs, 'inspection-logic');
+  assert.equal(logic['continue-on-error'], undefined);
+  assert.ok(
+    logic.steps.some(
+      (step) =>
+        step.run === 'node --test scripts/check-clerk-bot-protection.test.mjs' &&
+        !step['continue-on-error'],
+    ),
+  );
+  assert.deepEqual(document.permissions, { contents: 'read' });
+  assert.deepEqual(inspection.permissions ?? document.permissions, { contents: 'read' });
+  assert.equal(inspection.environment, undefined);
+  assert.equal(document.env, undefined);
+  assert.deepEqual(inspection.env, {
+    PRODUCTION_WEB_URL: "${{ vars.PRODUCTION_WEB_URL || 'https://agiworkforce.com' }}",
+  });
+  assert.doesNotMatch(
+    JSON.stringify(document),
+    /\bsecrets\s*(?:\.|\[)|VERCEL_|--unverified-users/u,
+  );
+  assert.deepEqual(
+    inspection.steps.filter((step) => step.run).map((step) => step.run),
+    ['node scripts/check-clerk-bot-protection.mjs --target production'],
+  );
+  assert.equal(inspection['continue-on-error'], undefined);
+  assert.ok(inspection.steps.every((step) => !step['continue-on-error']));
+  assert.equal(
+    inspection.if,
+    "github.event_name != 'pull_request' && github.ref == 'refs/heads/main'",
+  );
+  for (const [event, ref, expected] of [
+    ['schedule', 'refs/heads/main', true],
+    ['workflow_dispatch', 'refs/heads/main', true],
+    ['pull_request', 'refs/heads/main', false],
+    ['pull_request', 'refs/pull/1/merge', false],
+    ['workflow_dispatch', 'refs/heads/feature', false],
+    ['workflow_dispatch', 'refs/tags/main', false],
+    ['workflow_dispatch', '', false],
+    ['workflow_dispatch', undefined, false],
+  ]) {
+    assert.equal(
+      runInNewContext(inspection.if, { github: { event_name: event, ref } }, { timeout: 1000 }),
+      expected,
+      `${event} ${ref}`,
+    );
+  }
+});
+
+test('the environment consumer inventory matches Clerk’s public-only workflow', () => {
+  const manifest = JSON.parse(
+    readFileSync(path.join(ROOT, '.github/rulesets/environments.json'), 'utf8'),
+  );
+  const declared = manifest.environments
+    .filter((environment) =>
+      environment.used_by.includes('.github/workflows/clerk-bot-protection.yml'),
+    )
+    .map((environment) => environment.name);
+  const referenced = Object.values(workflow('clerk-bot-protection.yml').jobs)
+    .map((job) => job.environment?.name ?? job.environment)
+    .filter(Boolean);
+  assert.deepEqual(declared.sort(), referenced.sort());
+  assert.deepEqual(referenced, []);
 });
 
 test('the public acceptance matrix visits the canonical origin compiled into its server', () => {
