@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { StrictMode } from 'react';
+import { renderToString } from 'react-dom/server';
 import postcss from 'postcss';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocsToc, type DocsTocItem } from './DocsToc';
@@ -419,5 +421,237 @@ describe('documentation contents follows reading geometry', () => {
       heading('beta'),
       heading('gamma'),
     ]);
+  });
+
+  describe('initial document fragments', () => {
+    let resolveFonts: () => void;
+    let fontsDescriptor: PropertyDescriptor | undefined;
+    let entriesDescriptor: PropertyDescriptor | undefined;
+    const entries = vi.fn();
+    const scroll = vi.fn(function (this: HTMLElement) {
+      const delta = (tops.get(this.id) ?? 0) - margin;
+      for (const [id, top] of tops) tops.set(id, top - delta);
+      vi.stubGlobal('scrollY', delta);
+      fireEvent.scroll(window);
+    });
+
+    beforeEach(() => {
+      window.history.replaceState(null, '', '/help/local-mode#beta');
+      fontsDescriptor = Object.getOwnPropertyDescriptor(document, 'fonts');
+      entriesDescriptor = Object.getOwnPropertyDescriptor(performance, 'getEntriesByType');
+      Object.defineProperty(document, 'fonts', {
+        configurable: true,
+        value: {
+          ready: new Promise<void>((resolve) => {
+            resolveFonts = resolve;
+          }),
+        },
+      });
+      entries.mockImplementation((type: string) =>
+        type === 'navigation' ? [{ type: 'navigate' }] : [],
+      );
+      Object.defineProperty(performance, 'getEntriesByType', {
+        configurable: true,
+        value: entries,
+      });
+      vi.stubGlobal('scrollX', 0);
+      vi.stubGlobal('scrollY', 0);
+      scroll.mockClear();
+      vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(scroll);
+    });
+
+    afterEach(() => {
+      cleanup();
+      if (fontsDescriptor) Object.defineProperty(document, 'fonts', fontsDescriptor);
+      else Reflect.deleteProperty(document, 'fonts');
+      if (entriesDescriptor)
+        Object.defineProperty(performance, 'getEntriesByType', entriesDescriptor);
+      else Reflect.deleteProperty(performance, 'getEntriesByType');
+      window.history.replaceState(null, '', '/');
+    });
+
+    function hydrate(strict = false) {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const element = strict ? (
+        <StrictMode>
+          <DocsToc items={items} />
+        </StrictMode>
+      ) : (
+        <DocsToc items={items} />
+      );
+      container.innerHTML = renderToString(element);
+      return render(element, { container, hydrate: true });
+    }
+
+    async function finishFonts() {
+      await act(async () => resolveFonts());
+      flushFrames();
+      flushFrames();
+    }
+
+    it('completes a missed initial-document fragment after hydrated fonts settle', async () => {
+      hydrate();
+      flushFrames();
+      expect(scroll).not.toHaveBeenCalled();
+      await finishFonts();
+      expect(scroll).toHaveBeenCalledOnce();
+      expect(scroll.mock.contexts[0]).toBe(heading('beta'));
+      expectActive('Beta section');
+    });
+
+    it('makes one attempt and does not repeat it after geometry or props change', async () => {
+      const view = hydrate();
+      await finishFonts();
+      expect(scroll).toHaveBeenCalledOnce();
+      vi.stubGlobal('scrollY', 0);
+      tops.set('beta', 500);
+      resizeObserver().deliver();
+      view.rerender(<DocsToc items={[...items]} />);
+      flushFrames();
+      expect(scroll).toHaveBeenCalledOnce();
+    });
+
+    it('makes one attempt across StrictMode hydration effect replay', async () => {
+      hydrate(true);
+      await finishFonts();
+      expect(scroll.mock.contexts).toEqual([heading('beta')]);
+    });
+
+    it('leaves a successful native fragment position intact', async () => {
+      tops.set('alpha', -212);
+      tops.set('beta', margin);
+      vi.stubGlobal('scrollY', 412);
+      hydrate();
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+      expect(window.scrollY).toBe(412);
+      expectActive('Beta section');
+    });
+
+    it('leaves an already aligned heading alone even at the document start', async () => {
+      tops.set('alpha', -212);
+      tops.set('beta', margin);
+      hydrate();
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it.each(['reload', 'back_forward', 'missing'])(
+      'preserves %s navigation restoration',
+      async (type) => {
+        entries.mockReturnValue(type === 'missing' ? [] : [{ type }]);
+        hydrate();
+        await finishFonts();
+        expect(scroll).not.toHaveBeenCalled();
+      },
+    );
+
+    it('leaves client-side navigation to its existing router owner', async () => {
+      render(<DocsToc items={items} />);
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it.each(['', '#unknown', '#%'])('does not invent a target for fragment %s', async (hash) => {
+      window.history.replaceState(null, '', `/help/local-mode${hash}`);
+      hydrate();
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it('decodes a known fragment without changing the address or native destination', async () => {
+      window.history.replaceState(null, '', '/help/local-mode#b%65ta');
+      hydrate();
+      await finishFonts();
+      expect(scroll.mock.contexts).toEqual([heading('beta')]);
+      expect(window.location.hash).toBe('#b%65ta');
+      expect(screen.getByRole('link', { name: 'Beta section' })).toHaveAttribute('href', '#beta');
+    });
+
+    it.each(['wheel', 'touchstart', 'pointerdown', 'keydown', 'scroll', 'hashchange', 'popstate'])(
+      'cancels a pending initial fragment after %s',
+      async (event) => {
+        hydrate();
+        fireEvent(window, new Event(event));
+        await finishFonts();
+        expect(scroll).not.toHaveBeenCalled();
+      },
+    );
+
+    it('preserves a changed URL even when replaceState emits no hashchange', async () => {
+      hydrate();
+      window.history.replaceState(null, '', '/help/local-mode#gamma');
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it('cancels user input after fonts resolve but before the scheduled frame', async () => {
+      hydrate();
+      await act(async () => resolveFonts());
+      fireEvent.keyDown(window, { key: 'Home' });
+      flushFrames();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it('preserves a position reached while fonts were pending', async () => {
+      hydrate();
+      vi.stubGlobal('scrollY', 50);
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+      expect(window.scrollY).toBe(50);
+    });
+
+    it('preserves a focused control while fonts were pending', async () => {
+      hydrate();
+      screen.getByRole('button', { name: /^On this page\b/ }).focus();
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it('does not scroll a hidden or replaced target later', async () => {
+      const view = hydrate();
+      heading('beta').hidden = true;
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+      heading('beta').hidden = false;
+      resizeObserver().deliver();
+      view.rerender(<DocsToc items={[...items]} />);
+      flushFrames();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it('does not retain a target that was replaced before fonts settled', async () => {
+      hydrate();
+      const replacement = document.createElement('h2');
+      replacement.id = 'beta';
+      heading('beta').replaceWith(replacement);
+      await finishFonts();
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it.each(['before fonts', 'before frame'])(
+      'cleans up a pending attempt %s on unmount',
+      async (phase) => {
+        const remove = vi.spyOn(window, 'removeEventListener');
+        const { unmount } = hydrate();
+        if (phase === 'before frame') await act(async () => resolveFonts());
+        unmount();
+        await finishFonts();
+        expect(scroll).not.toHaveBeenCalled();
+        expect(frames.size).toBe(0);
+        for (const event of [
+          'wheel',
+          'touchstart',
+          'pointerdown',
+          'keydown',
+          'scroll',
+          'hashchange',
+          'popstate',
+        ]) {
+          expect(remove).toHaveBeenCalledWith(event, expect.any(Function), true);
+        }
+      },
+    );
   });
 });

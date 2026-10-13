@@ -34,6 +34,67 @@ import {
 import { getPublicRouteInventory } from './lib/public-route-inventory';
 import { helpArticlePath } from '../lib/support/help-paths';
 
+test('Docs hard document fragment stays visible under delayed hydration', async ({
+  browser,
+  baseURL,
+}, info) => {
+  test.setTimeout(120_000);
+  if (!baseURL) throw new Error('Docs controls require an explicit baseURL');
+  const contexts: BrowserContext[] = [];
+  const evidence: ControlsEvidence = {
+    successful: false,
+    scope:
+      'Native hard fragment navigation on the configured server with bounded CPU throttling; no scripted scrolling to the target',
+    sourceStart: controlsSnapshot(),
+    steps: [],
+    contextsClosed: false,
+  };
+  try {
+    const { article, sections } = controlsArticle();
+    const href = helpArticlePath(article.id);
+    const section = sections[2]!;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const context = await controlsContext(
+        browser,
+        { width: 390, height: 844 },
+        'light',
+        contexts,
+      );
+      const page = await context.newPage();
+      const client = await context.newCDPSession(page);
+      try {
+        await client.send('Emulation.setCPUThrottlingRate', { rate: 8 });
+        await controlsLoad(page, baseURL, href, evidence, `slow hydration ${attempt} readiness`);
+        await controlsNecessary(page, evidence);
+        const route = controlsRoute(baseURL, `${href}#${section.id}`);
+        const response = await controlsHardDocument(page, route.path);
+        expect(response).not.toBeNull();
+        expect(route.expectedHttpStatuses).toContain(response?.status());
+        await expect(page).toHaveURL(new URL(route.path, baseURL).href);
+        const heading = page.getByRole('heading', { level: 2, name: section.title, exact: true });
+        await expect(heading).toBeVisible();
+        await page.waitForLoadState('load');
+        await controlsStable(page);
+        const anchor = await controlsAnchor(page, heading);
+        evidence.steps.push({ label: `slow hydration ${attempt} native fragment`, data: anchor });
+        expect(anchor.valid).toBe(true);
+        expect(anchor.geometry.scroll.y).toBeGreaterThan(0);
+        const toc = page.getByRole('navigation', { name: 'On this page', exact: true });
+        await expect.poll(() => controlsCurrent(toc)).toEqual([`#${section.id}`]);
+      } finally {
+        await client.detach();
+        await context.close();
+      }
+    }
+    evidence.successful = true;
+  } catch (error) {
+    evidence.error = error instanceof Error ? error.message : 'Slow hydration fragment failed';
+    throw error;
+  } finally {
+    await controlsFinish(contexts, evidence, info);
+  }
+});
+
 for (const viewport of [
   { width: 320, height: 740 },
   { width: 390, height: 844 },

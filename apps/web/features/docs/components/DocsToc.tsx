@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { TextAlignStart } from 'lucide-react';
 
 export interface DocsTocItem {
@@ -8,11 +8,93 @@ export interface DocsTocItem {
   title: string;
 }
 
+const subscribeToEntry = () => () => {};
+const clientEntry = () => false;
+const documentEntry = () => true;
+
 export function DocsToc({ items }: { items: readonly DocsTocItem[] }) {
   const [active, setActive] = useState<string | null>(items[0]?.id ?? null);
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
+  const initialDocument = useRef(
+    useSyncExternalStore(subscribeToEntry, clientEntry, documentEntry),
+  );
+  const initialUrl = useRef(typeof window === 'undefined' ? '' : window.location.href);
+  const attemptedFragment = useRef(false);
+
+  useEffect(() => {
+    if (!initialDocument.current || attemptedFragment.current) return;
+    const navigation = performance.getEntriesByType?.('navigation')[0] as
+      PerformanceNavigationTiming | undefined;
+    let id: string;
+    try {
+      id = decodeURIComponent(new URL(initialUrl.current).hash.slice(1));
+    } catch {
+      attemptedFragment.current = true;
+      return;
+    }
+    const target = items.some((item) => item.id === id) ? document.getElementById(id) : null;
+    const untouched = () =>
+      window.location.href === initialUrl.current &&
+      window.scrollX === 0 &&
+      window.scrollY === 0 &&
+      (document.activeElement === document.body || document.activeElement === null);
+    const fontsReady = document.fonts?.ready;
+    if (navigation?.type !== 'navigate' || !target || !fontsReady || !untouched()) {
+      attemptedFragment.current = true;
+      return;
+    }
+
+    let disposed = false;
+    let frame: number | null = null;
+    const events = [
+      'wheel',
+      'touchstart',
+      'pointerdown',
+      'keydown',
+      'scroll',
+      'hashchange',
+      'popstate',
+    ] as const;
+    const dispose = () => {
+      if (disposed) return;
+      disposed = true;
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+        frame = null;
+      }
+      for (const event of events) window.removeEventListener(event, cancel, true);
+    };
+    const cancel = () => {
+      attemptedFragment.current = true;
+      dispose();
+    };
+    for (const event of events)
+      window.addEventListener(event, cancel, { capture: true, passive: true });
+    void fontsReady.then(() => {
+      if (disposed) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (disposed) return;
+        attemptedFragment.current = true;
+        dispose();
+        if (!target.isConnected || document.getElementById(id) !== target || !untouched()) return;
+        const rect = target.getBoundingClientRect();
+        const style = getComputedStyle(target);
+        const margin = Number.parseFloat(style.scrollMarginTop);
+        if (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility === 'visible' &&
+          !target.closest('[hidden]') &&
+          Math.round(rect.top) > Math.round(Number.isFinite(margin) ? margin : 0)
+        )
+          target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      });
+    }, cancel);
+    return dispose;
+  }, [items]);
 
   useEffect(() => {
     const headings = items
