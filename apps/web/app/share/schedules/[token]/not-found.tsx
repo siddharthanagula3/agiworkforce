@@ -4,6 +4,7 @@ export default function SharedScheduleNotFound() {
   return (
     <main
       id="main-content"
+      data-route-state="not-found"
       className="flex min-h-screen items-center justify-center bg-background px-6 text-center text-foreground"
     >
       <div className="max-w-md">

@@ -10,6 +10,10 @@ describe('SharedConversationNotFound', () => {
     const main = screen.getByRole('main');
     expect(main.tagName).toBe('MAIN');
     expect(main).toHaveAttribute('id', 'main-content');
+    const states = document.querySelectorAll('[data-route-state="not-found"]');
+    expect(states).toHaveLength(1);
+    expect(states[0]).toBe(main);
+    expect(main).toBeVisible();
     expect(
       within(main).getByRole('heading', { level: 1, name: 'Shared conversation unavailable' }),
     ).toBeVisible();
