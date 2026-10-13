@@ -6,6 +6,7 @@ import {
   RSC_SEGMENT_SUFFIX,
 } from 'next/dist/lib/constants';
 import { PRODUCT_ROUTE_PREFIXES } from '@agiworkforce/types/product-routes';
+import { getIdentityProvider } from '../lib/server/identity';
 
 /**
  * The other proxy tests replace the identity provider's route matcher with a
@@ -15,19 +16,7 @@ import { PRODUCT_ROUTE_PREFIXES } from '@agiworkforce/types/product-routes';
  * only the session step.
  */
 
-type ClerkServerModule = typeof import('@clerk/nextjs/server');
-
-const identitySession = vi.hoisted(() => ({ paths: [] as string[] }));
-
-vi.mock('@clerk/nextjs/server', async (importOriginal) => ({
-  ...(await importOriginal<ClerkServerModule>()),
-  clerkMiddleware:
-    (handler: (auth: unknown, request: NextRequest, event: unknown) => Response) =>
-    (request: NextRequest, event: unknown) => {
-      identitySession.paths.push(request.nextUrl.pathname);
-      return handler({}, request, event);
-    },
-}));
+const identitySession = { paths: [] as string[] };
 
 const ORIGIN = 'https://agiworkforce.com';
 const EVENT = {} as never;
@@ -46,6 +35,18 @@ function signInRedirectFor(pathname: string): string {
 describe('the proxy gates a product route at its path segment, not at its spelling', () => {
   beforeEach(() => {
     identitySession.paths = [];
+    vi.spyOn(getIdentityProvider().middleware, 'withSession').mockImplementation(
+      (handler) => (request) => {
+        identitySession.paths.push(request.nextUrl.pathname);
+        return handler(request);
+      },
+    );
+  });
+
+  it('preserves the provider matcher semantics behind the identity port', () => {
+    const unboundedMatcher = getIdentityProvider().middleware.createRouteMatcher(['/open(.*)']);
+
+    expect(unboundedMatcher(new NextRequest(`${ORIGIN}/openapi.json`))).toBe(true);
   });
 
   it('serves the published OpenAPI bundle to a signed-out reader', async () => {
