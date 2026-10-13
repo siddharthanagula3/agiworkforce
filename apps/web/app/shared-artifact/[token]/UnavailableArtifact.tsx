@@ -17,7 +17,7 @@ import { LockKeyhole } from 'lucide-react';
  */
 export function UnavailableArtifact() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <main id="main-content" className="flex min-h-screen items-center justify-center bg-background">
       <div className="max-w-md px-6 text-center">
         <div
           className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-muted text-muted-foreground"
@@ -37,6 +37,6 @@ export function UnavailableArtifact() {
           Open AGI
         </Link>
       </div>
-    </div>
+    </main>
   );
 }
