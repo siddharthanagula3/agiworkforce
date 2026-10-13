@@ -7,6 +7,7 @@ const IDENTITY_AWARE_PUBLIC_PREFIXES = [
   '/invite',
   '/plugins',
   '/pricing',
+  '/refund-policy',
   '/skills',
   '/slack/link',
 ] as const;

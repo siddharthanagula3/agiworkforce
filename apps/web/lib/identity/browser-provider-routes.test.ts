@@ -18,6 +18,9 @@ describe('browser identity provider routes', () => {
     '/plugins/example',
     '/pricing',
     '/pricing?seats=5#pricing-team-title',
+    '/refund-policy',
+    '/refund-policy/',
+    '/refund-policy#request',
     '/skills',
     '/slack/link',
     '/slack/link?token=link-code',
@@ -36,11 +39,16 @@ describe('browser identity provider routes', () => {
     expect(needsBrowserIdentityProvider('/chatty')).toBe(false);
     expect(needsBrowserIdentityProvider('/pluginshop')).toBe(false);
     expect(needsBrowserIdentityProvider('/pricing-history')).toBe(false);
+    expect(needsBrowserIdentityProvider('/refund-policy-history')).toBe(false);
     expect(needsBrowserIdentityProvider('/slack/linkage')).toBe(false);
     expect(needsBrowserIdentityProvider('/slack')).toBe(false);
   });
 
   it('mounts identity for the rendered Slack account-link route behind a rewrite', () => {
     expect(routeNeedsBrowserIdentity('/', ['(public)', 'slack', 'link'])).toBe(true);
+  });
+
+  it('mounts identity for the rendered refund request route behind a rewrite', () => {
+    expect(routeNeedsBrowserIdentity('/', ['(public)', 'refund-policy'])).toBe(true);
   });
 });

@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useSession } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
   BILLING_ERROR_REASONS,
@@ -90,11 +91,38 @@ function outcomeText(request: RefundRequestView): string {
   return 'Waiting for a person to decide. You will get a notification with the answer.';
 }
 
+function RefundRequestLoading() {
+  return (
+    <div className="agi-ds-stack" data-gap="tight">
+      <Spinner size="sm" />
+    </div>
+  );
+}
+
+function RefundRequestSignIn() {
+  return (
+    <p className="agi-ds-prose" data-size="sm">
+      <Link href={SIGN_IN_HREF} className="agi-ds-link">
+        Sign in
+      </Link>{' '}
+      to choose a payment and request its refund here.
+    </p>
+  );
+}
+
 export function RefundRequestForm() {
+  const { isLoaded, isSignedIn, userId } = useSession();
+  if (!isLoaded) return <RefundRequestLoading />;
+  if (!isSignedIn || !userId) return <RefundRequestSignIn />;
+  return <AccountRefundRequestForm key={userId} />;
+}
+
+function AccountRefundRequestForm() {
   const chargeId = useId();
   const reasonId = useId();
   const detailsId = useId();
   const { confirm, dialog } = useConfirmAction();
+  const mounted = useRef(false);
 
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [data, setData] = useState<RefundRequestsResponse>({ requests: [], charges: [] });
@@ -105,22 +133,30 @@ export function RefundRequestForm() {
   const [result, setResult] = useState<RefundRequestView | null>(null);
 
   const load = useCallback(async () => {
+    if (!mounted.current) return;
     try {
       const response = await fetch(ENDPOINT, { credentials: 'same-origin', cache: 'no-store' });
+      if (!mounted.current) return;
       if (response.status === 401) {
         setLoadState('signed_out');
         return;
       }
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
-      setData((await response.json()) as RefundRequestsResponse);
+      const nextData = (await response.json()) as RefundRequestsResponse;
+      if (!mounted.current) return;
+      setData(nextData);
       setLoadState('ready');
     } catch {
-      setLoadState('error');
+      if (mounted.current) setLoadState('error');
     }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void load();
+    return () => {
+      mounted.current = false;
+    };
   }, [load]);
 
   const requested = new Set(data.requests.map((request) => request.chargeId));
@@ -141,18 +177,23 @@ export function RefundRequestForm() {
       description: consequence(charge, reason),
       confirmLabel: 'Request refund',
       onConfirm: async () => {
+        if (!mounted.current) return;
         try {
+          const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+          if (!mounted.current) return;
           const response = await fetch(ENDPOINT, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+            headers,
             body: JSON.stringify({
               chargeId: charge.id,
               reason,
               ...(details.trim() ? { details: details.trim() } : {}),
             }),
           });
+          if (!mounted.current) return;
           const body = await response.json().catch(() => null);
+          if (!mounted.current) return;
           if (!response.ok) {
             throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
           }
@@ -162,31 +203,22 @@ export function RefundRequestForm() {
           setDetails('');
           await load();
         } catch (submitError) {
-          setError(
-            toUserMessage(submitError, 'Your request was not recorded. Try again, or email us.'),
-          );
+          if (mounted.current) {
+            setError(
+              toUserMessage(submitError, 'Your request was not recorded. Try again, or email us.'),
+            );
+          }
         }
       },
     });
   }
 
   if (loadState === 'loading') {
-    return (
-      <div className="agi-ds-stack" data-gap="tight">
-        <Spinner size="sm" />
-      </div>
-    );
+    return <RefundRequestLoading />;
   }
 
   if (loadState === 'signed_out') {
-    return (
-      <p className="agi-ds-prose" data-size="sm">
-        <Link href={SIGN_IN_HREF} className="agi-ds-link">
-          Sign in
-        </Link>{' '}
-        to choose a payment and request its refund here.
-      </p>
-    );
+    return <RefundRequestSignIn />;
   }
 
   if (loadState === 'error') {
