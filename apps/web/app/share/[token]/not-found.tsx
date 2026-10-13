@@ -1,5 +1,9 @@
 import { ExpiredShareBanner } from '@/features/chat/components/share/ExpiredShareBanner';
 
 export default function SharedConversationNotFound() {
-  return <ExpiredShareBanner />;
+  return (
+    <main id="main-content">
+      <ExpiredShareBanner />
+    </main>
+  );
 }
